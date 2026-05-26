@@ -44,9 +44,15 @@ const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
 beforeEach(() => {
   store.token = null;
   vi.clearAllMocks();
+  // Fix 3: GithubProvider now clamps poll interval to >= 5000ms; use fake timers.
+  // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   mockUser.mockResolvedValue({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' });
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.useRealTimers();
+});
 
 describe('GitHubConnectDialog (T057)', () => {
   it('renders the user code + verification URI after init', async () => {
@@ -68,6 +74,9 @@ describe('GitHubConnectDialog (T057)', () => {
     );
     await waitFor(() => expect(screen.getByText(/WXYZ-1234/)).toBeInTheDocument());
     expect(screen.getByRole('link', { name: /github\.com\/login\/device/i })).toBeInTheDocument();
+    // Fix 4: the no-op "check now" button is replaced with static informational copy.
+    expect(screen.queryByRole('button', { name: /check now/i })).toBeNull();
+    expect(screen.getByTestId('github-auth-checking')).toBeInTheDocument();
   });
 
   it('calls onConnected with the access token on poll success', async () => {
@@ -76,7 +85,6 @@ describe('GitHubConnectDialog (T057)', () => {
       deviceCode: 'devcode',
       userCode: 'CODE-OK',
       verificationUri: 'https://github.com/login/device',
-      // intervalSec: 0 → provider's setTimeout fires immediately
       intervalSec: 0,
       expiresInSec: 900
     });
@@ -88,7 +96,8 @@ describe('GitHubConnectDialog (T057)', () => {
         <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
       </GithubProvider>
     );
-    // Provider polls on its own with intervalSec: 0 (immediate tick).
+    // Fix 3: advance past the clamped 5 s poll interval so the timer fires.
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
     await waitFor(() => expect(onConnected).toHaveBeenCalledWith('gho_winner'));
   });
 
@@ -112,6 +121,48 @@ describe('GitHubConnectDialog (T057)', () => {
     await waitFor(() => screen.getByText(/^C$/));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('Fix 6: shows explicit error + Reconnect when connected but token is null', async () => {
+    // Provider hydrates to 'connected' from IDB, but IDB token read returns null.
+    // Simulate: IDB has a record but loadGlobalGithubToken returns null (store corrupt).
+    mockInit.mockResolvedValueOnce({
+      kind: 'ok',
+      deviceCode: 'devcode',
+      userCode: 'ABCD',
+      verificationUri: 'https://github.com/login/device',
+      intervalSec: 0,
+      expiresInSec: 900
+    });
+    mockPoll.mockResolvedValueOnce({ kind: 'ok', accessToken: 'gho_tok', scope: 'repo' });
+
+    // After connect() runs, the store has a token; but override loadGlobalGithubToken
+    // to return null for this test to simulate the "connected but null token" case.
+    const { loadGlobalGithubToken } = await import('../../src/services/github-store.js');
+    const mockedLoadToken = vi.mocked(loadGlobalGithubToken);
+    // First call (from GithubProvider hydration mount) returns null → disconnected start.
+    // connect() runs the device flow, polls → ok, saves token to store.
+    // onConnected effect then calls loadGlobalGithubToken → return null to trigger Fix 6.
+    mockedLoadToken.mockResolvedValue(null);
+
+    const onConnected = vi.fn();
+    render(
+      <GithubProvider>
+        <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
+      </GithubProvider>
+    );
+
+    // Advance past the clamped poll interval.
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+
+    // Dialog should surface the "could not retrieve token" error, not call onConnected.
+    await waitFor(() => {
+      expect(screen.getByTestId('github-token-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('github-token-error')).toHaveTextContent(/Could not retrieve the GitHub token/i);
+    expect(onConnected).not.toHaveBeenCalled();
+    // Recovery: Reconnect button is shown.
+    expect(screen.getByRole('button', { name: /Reconnect/i })).toBeInTheDocument();
   });
 });
 

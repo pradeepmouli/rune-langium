@@ -23,7 +23,6 @@ import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
 import { getGithubAuthBase } from '../services/github-authbase.js';
 import { useGithub } from '../shell/providers/github-context.js';
-import { loadGlobalGithubToken } from '../services/github-store.js';
 
 const EMPTY_FILES: ReadonlyArray<WorkspaceFile> = [];
 
@@ -70,12 +69,6 @@ export function FileLoader({
   const [isDragging, setIsDragging] = useState(false);
   const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
-  /**
-   * When the global GitHub connection is already established, this is pre-seeded
-   * from the IDB store (read at button-click time) so the device-flow dialog is
-   * skipped. Undefined → GitHubWorkspaceFlow starts at the auth phase as before.
-   */
-  const [gitHubInitialToken, setGitHubInitialToken] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
   const authBase = githubAuthBase ?? getGithubAuthBase();
@@ -196,17 +189,7 @@ export function FileLoader({
                 <Button
                   variant="secondary"
                   size="lg"
-                  onClick={async () => {
-                    if (githubStatus === 'connected') {
-                      // Global connection is live — seed the token from the IDB
-                      // store (per §4 design: token from STORE, not from context)
-                      // so the device-flow dialog is never shown.
-                      const tok = await loadGlobalGithubToken();
-                      setGitHubInitialToken(tok ?? undefined);
-                    } else {
-                      // Not connected — start with the device-flow auth phase.
-                      setGitHubInitialToken(undefined);
-                    }
+                  onClick={() => {
                     setIsGitHubOpen(true);
                   }}
                 >
@@ -227,7 +210,6 @@ export function FileLoader({
             open={isGitHubOpen}
             onOpenChange={(open) => {
               setIsGitHubOpen(open);
-              if (!open) setGitHubInitialToken(undefined);
             }}
           >
             <DialogContent className="max-w-md">
@@ -238,15 +220,13 @@ export function FileLoader({
               <GitHubWorkspaceFlow
                 authBase={authBase}
                 createWorkspace={createGitBackedWorkspace}
-                initialToken={gitHubInitialToken}
+                skipAuth={githubStatus === 'connected'}
                 onCreated={(id) => {
                   setIsGitHubOpen(false);
-                  setGitHubInitialToken(undefined);
                   onGitHubWorkspaceCreated?.(id);
                 }}
                 onCancel={() => {
                   setIsGitHubOpen(false);
-                  setGitHubInitialToken(undefined);
                 }}
               />
             </DialogContent>

@@ -19,7 +19,7 @@
  * loop and does not expose a "force poll now" hook.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { useGithub } from '../shell/providers/github-context.js';
 import { categoryCopy } from '../services/github-error-copy.js';
@@ -39,6 +39,9 @@ export function GitHubConnectDialog({
   const github = useGithub();
   const { status, deviceFlow, error, errorCategory, connect } = github;
   const connectedFiredRef = useRef(false);
+  // Fix 6: track when the provider is connected but the IDB token read returned
+  // null/empty — surfaces an explicit error instead of leaving the dialog stuck.
+  const [tokenLookupFailed, setTokenLookupFailed] = useState(false);
 
   // Trigger connect() on mount unless already connecting or connected.
   useEffect(() => {
@@ -59,15 +62,40 @@ export function GitHubConnectDialog({
       connectedFiredRef.current = true;
       void (async () => {
         const token = await loadGlobalGithubToken();
-        // Only fire onConnected when a real token is present; a null/empty
-        // token means the store is unexpectedly empty — do not start a
-        // tokenless clone.
         if (token) {
           onConnected(token);
+        } else {
+          // Fix 6: connected but IDB token is null/empty — reset the guard so
+          // a retry attempt can re-fire onConnected after reconnecting.
+          connectedFiredRef.current = false;
+          setTokenLookupFailed(true);
         }
       })();
     }
   }, [status, onConnected]);
+
+  // Fix 6: connected but token retrieval failed — surface an explicit error so
+  // the user is not trapped on the "Starting…" view with no recovery path.
+  if (status === 'connected' && tokenLookupFailed) {
+    return (
+      <div role="dialog" aria-label="Connect GitHub" data-testid="github-connect-dialog">
+        <p data-testid="github-token-error">
+          Could not retrieve the GitHub token — please reconnect.
+        </p>
+        <Button
+          onClick={() => {
+            setTokenLookupFailed(false);
+            void connect();
+          }}
+        >
+          Reconnect
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    );
+  }
 
   // Map provider status → the original phase UI.
 
@@ -95,8 +123,9 @@ export function GitHubConnectDialog({
           <p>
             <strong>{deviceFlow.userCode}</strong>
           </p>
-          {/* "Check now" is preserved for markup compatibility; provider drives its own poll loop. */}
-          <Button onClick={() => { /* no-op: provider drives polling */ }}>I&apos;ve authorised — check now</Button>
+          {/* Fix 4: Replace the misleading interactive no-op button with static
+              informational copy. The provider drives its own auto-poll loop. */}
+          <p data-testid="github-auth-checking">Waiting for authorization — checking automatically…</p>
           <Button
             variant="ghost"
             onClick={onCancel}

@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { GitHubConnectDialog } from './GitHubConnectDialog.js';
+import { loadGlobalGithubToken } from '../services/github-store.js';
 
 export interface GitHubWorkspaceFlowProps {
   authBase: string;
@@ -41,12 +42,13 @@ export interface GitHubWorkspaceFlowProps {
   }) => Promise<{ id: string }>;
   /**
    * When the global GitHub connection is already established (status ===
-   * 'connected'), the caller pre-seeds the token from the IDB store and
-   * passes it here so the device-flow dialog is skipped entirely. The
-   * per-workspace OPFS copy is still written by `createWorkspace`
+   * 'connected'), pass `skipAuth={true}` to skip the device-flow dialog
+   * and go directly to the URL form. The token is read lazily from IDB
+   * at the moment of clone (never held in React state). The per-workspace
+   * OPFS copy is still written by `createWorkspace`
    * (via `WorkspaceManager.createGitBacked → storeWorkspaceToken`).
    */
-  initialToken?: string;
+  skipAuth?: boolean;
 }
 
 interface FlowState {
@@ -115,12 +117,13 @@ export function GitHubWorkspaceFlow({
   onCreated,
   onCancel,
   createWorkspace,
-  initialToken
+  skipAuth
 }: GitHubWorkspaceFlowProps): React.ReactElement {
-  // When `initialToken` is provided (global connection already established),
+  // When `skipAuth` is true (global connection already established),
   // skip the device-flow auth phase and start directly at the URL form.
+  // No token is held in state; it is resolved lazily from IDB at clone time.
   const [state, setState] = useState<FlowState>(
-    initialToken ? { phase: 'url', token: initialToken } : { phase: 'auth' }
+    skipAuth ? { phase: 'url' } : { phase: 'auth' }
   );
   const [repoUrl, setRepoUrl] = useState('');
   const [branch, setBranch] = useState('main');
@@ -182,21 +185,34 @@ export function GitHubWorkspaceFlow({
       <Button
         disabled={!canSubmit}
         onClick={async () => {
-          if (!parsed || !state.token) return;
-          setState({ phase: 'cloning', token: state.token });
+          if (!parsed) return;
+          // Fix 1: resolve the token lazily from IDB at the moment of clone.
+          // If the flow went through device-auth, state.token was set by
+          // onConnected; if skipAuth was true, we read from IDB now (never
+          // held in React state).
+          const token = state.token ?? (await loadGlobalGithubToken());
+          if (!token) {
+            // Token is unexpectedly absent — surface error, revert to auth phase.
+            setState({
+              phase: 'error',
+              errorReason: 'No GitHub token found — please reconnect.'
+            });
+            return;
+          }
+          setState({ phase: 'cloning', token });
           try {
             const result = await createWorkspace({
               name: `${parsed.user}/${parsed.repo}`,
               repoUrl: parsed.canonicalUrl,
               branch: branch.trim() || 'main',
               user: parsed.user,
-              token: state.token
+              token
             });
             onCreated(result.id);
           } catch (err) {
             setState({
               phase: 'error',
-              token: state.token,
+              token,
               errorReason: err instanceof Error ? err.message : String(err)
             });
           }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 
 const store = { token: null as string | null, identity: undefined as any };
@@ -40,12 +40,20 @@ function Probe() {
 beforeEach(() => {
   store.token = null; store.identity = undefined;
   vi.clearAllMocks();
+  // Fix 3: GithubProvider now clamps intervalMs to >= 5000ms. Use fake timers
+  // so the poll fires without real wall-clock delay.
+  // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   loadGlobalGithub.mockImplementation(async () => (store.token ? { token: store.token, identity: store.identity } : null));
   saveGlobalGithub.mockImplementation(async (t: string, id: any) => { store.token = t; store.identity = id; });
   clearGlobalGithub.mockImplementation(async () => { store.token = null; store.identity = undefined; });
   initDeviceFlow.mockResolvedValue({ kind: 'ok', deviceCode: 'dc', userCode: 'WXYZ-1234', verificationUri: 'https://github.com/login/device', intervalSec: 0 });
   pollDeviceFlow.mockResolvedValue({ kind: 'ok', accessToken: 'ghs_tok', scope: 'repo' });
   fetchGitHubUser.mockResolvedValue({ kind: 'ok', login: 'octocat', avatarUrl: 'https://x/a.png' });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('GithubProvider', () => {
@@ -63,7 +71,9 @@ describe('GithubProvider', () => {
   it('connect() runs device flow, persists, fetches identity → connected', async () => {
     render(<GithubProvider><Probe /></GithubProvider>);
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('disconnected'));
-    await act(async () => { screen.getByText('connect').click(); });
+    screen.getByText('connect').click();
+    // Advance past the clamped 5 s poll interval so the timer fires.
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('connected'));
     expect(screen.getByTestId('login').textContent).toBe('octocat');
     expect(store.token).toBe('ghs_tok');
@@ -79,7 +89,9 @@ describe('GithubProvider', () => {
     fetchGitHubUser.mockResolvedValue({ kind: 'error', reason: 'x', category: 'misconfigured' });
     render(<GithubProvider><Probe /></GithubProvider>);
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('disconnected'));
-    await act(async () => { screen.getByText('connect').click(); });
+    screen.getByText('connect').click();
+    // Advance past the clamped 5 s poll interval so the timer fires.
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('connected'));
     expect(screen.getByTestId('login').textContent).toBe('-');
   });

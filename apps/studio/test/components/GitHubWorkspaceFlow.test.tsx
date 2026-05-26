@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // Mock github-store: a shared in-memory store so saveGlobalGithub → loadGlobalGithubToken
 // round-trips the token the way the real IDB would.
@@ -44,8 +44,9 @@ const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
 beforeEach(() => {
   store.token = null;
   vi.clearAllMocks();
-  // intervalSec: 0 → provider's setTimeout fires on the next tick so
-  // the poll result is delivered without a real delay inside tests.
+  // Fix 3: GithubProvider now clamps poll interval to >= 5000ms; use fake timers.
+  // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   mockInit.mockResolvedValue({
     kind: 'ok',
     deviceCode: 'devcode',
@@ -57,7 +58,16 @@ beforeEach(() => {
   mockPoll.mockResolvedValue({ kind: 'ok', accessToken: 'gho_test', scope: 'repo' });
   mockUser.mockResolvedValue({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' });
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.useRealTimers();
+});
+
+/** Helper: advance fake timers past the 5 s poll interval so the device-flow
+ * poll fires and the provider transitions to 'connected'. */
+async function advancePoll(): Promise<void> {
+  await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+}
 
 describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
   it('after auth, surfaces a repo-URL form (transitions auth → url)', async () => {
@@ -72,9 +82,10 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
         />
       </GithubProvider>
     );
-    // Provider polls with intervalSec: 0 (immediate), transitions to connected,
-    // which fires onConnected in the dialog, which causes the flow to show the
-    // repo-URL form.
+    // Fix 3: advance past the clamped 5 s poll interval so the provider
+    // transitions to 'connected', which fires onConnected in the dialog,
+    // which causes the flow to show the repo-URL form.
+    await advancePoll();
     await waitFor(() => {
       expect(screen.getByTestId('github-repo-form')).toBeInTheDocument();
     });
@@ -93,6 +104,7 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
         />
       </GithubProvider>
     );
+    await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
 
     const cloneBtn = screen.getByRole('button', { name: /^Clone$/ });
@@ -128,6 +140,7 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
         />
       </GithubProvider>
     );
+    await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
 
     fireEvent.change(screen.getByTestId('repo-url-input'), {
@@ -173,6 +186,7 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
         />
       </GithubProvider>
     );
+    await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
 
     fireEvent.change(screen.getByTestId('repo-url-input'), {
