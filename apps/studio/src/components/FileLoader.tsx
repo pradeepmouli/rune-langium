@@ -21,6 +21,8 @@ import {
 import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
+import { getGitHubAuthBase } from '../services/github-authbase.js';
+import { useGitHub } from '../shell/providers/github-context.js';
 
 const EMPTY_FILES: ReadonlyArray<WorkspaceFile> = [];
 
@@ -57,11 +59,6 @@ export interface FileLoaderProps {
   onGitHubWorkspaceCreated?: (workspaceId: string) => void;
 }
 
-function defaultGithubAuthBase(): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}/rune-studio/api/github-auth`;
-}
-
 export function FileLoader({
   onFilesLoaded,
   existingFiles = EMPTY_FILES,
@@ -74,7 +71,8 @@ export function FileLoader({
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
-  const authBase = githubAuthBase ?? defaultGithubAuthBase();
+  const authBase = githubAuthBase ?? getGitHubAuthBase();
+  const { status: githubStatus } = useGitHub();
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
@@ -188,7 +186,13 @@ export function FileLoader({
                 Select Folder
               </Button>
               {config.githubAuthEnabled && createGitBackedWorkspace && (
-                <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => {
+                    setIsGitHubOpen(true);
+                  }}
+                >
                   Open from GitHub repository…
                 </Button>
               )}
@@ -202,7 +206,12 @@ export function FileLoader({
           // so reaching here means the full flow is available. App.tsx
           // hasn't threaded the prop in yet → the CTA stays hidden and
           // the legacy "auth-only" stub no longer ships in production.
-          <Dialog open={isGitHubOpen} onOpenChange={setIsGitHubOpen}>
+          <Dialog
+            open={isGitHubOpen}
+            onOpenChange={(open) => {
+              setIsGitHubOpen(open);
+            }}
+          >
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Open from GitHub</DialogTitle>
@@ -211,11 +220,14 @@ export function FileLoader({
               <GitHubWorkspaceFlow
                 authBase={authBase}
                 createWorkspace={createGitBackedWorkspace}
+                skipAuth={githubStatus === 'connected'}
                 onCreated={(id) => {
                   setIsGitHubOpen(false);
                   onGitHubWorkspaceCreated?.(id);
                 }}
-                onCancel={() => setIsGitHubOpen(false)}
+                onCancel={() => {
+                  setIsGitHubOpen(false);
+                }}
               />
             </DialogContent>
           </Dialog>

@@ -13,6 +13,23 @@ import type { GitBackingRecord } from '../workspace/persistence.js';
 import { loadWorkspace, saveWorkspace } from '../workspace/persistence.js';
 import { createInteractiveConflictPolicy, type InteractiveConflictPolicy } from './interactive-conflict-policy.js';
 import { loadWorkspaceToken } from './github-auth.js';
+import { loadGlobalGitHubToken } from './github-store.js';
+
+/**
+ * Resolve the git token for a workspace: use the per-workspace OPFS token
+ * first; fall back to the globally-connected GitHub token; return '' if neither
+ * is set.
+ *
+ * Fix D: treat empty/whitespace as absent — `??` would short-circuit on a
+ * non-null empty string from an OPFS file that was written but left blank,
+ * skipping a valid global token.
+ */
+export async function resolveGitToken(fs: OpfsFs, workspaceId: string): Promise<string> {
+  const ws = (await loadWorkspaceToken(fs, workspaceId))?.trim();
+  if (ws) return ws;
+  const global = (await loadGlobalGitHubToken())?.trim();
+  return global ?? '';
+}
 
 /** Map the engine's live phase to the persisted GitBackingRecord.syncState. */
 export function phaseToSyncState(s: SyncStatus): GitBackingRecord['syncState'] {
@@ -100,7 +117,7 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
     // rotated token is always used without recreating the engine.
     onAuth: async () => ({
       username: input.gitBacking.user,
-      password: (await loadWorkspaceToken(fs, workspaceId)) ?? ''
+      password: await resolveGitToken(fs, workspaceId)
     }),
     author: { name: input.gitBacking.user, email: `${input.gitBacking.user}@users.noreply.github.com` },
     conflictPolicy: effectivePolicy

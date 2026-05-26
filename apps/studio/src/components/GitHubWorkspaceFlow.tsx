@@ -20,6 +20,7 @@ import { useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { GitHubConnectDialog } from './GitHubConnectDialog.js';
+import { loadGlobalGitHubToken } from '../services/github-store.js';
 
 export interface GitHubWorkspaceFlowProps {
   authBase: string;
@@ -39,11 +40,19 @@ export interface GitHubWorkspaceFlowProps {
     user: string;
     token: string;
   }) => Promise<{ id: string }>;
+  /**
+   * When the global GitHub connection is already established (status ===
+   * 'connected'), pass `skipAuth={true}` to skip the device-flow dialog
+   * and go directly to the URL form. The token is read lazily from IDB
+   * at the moment of clone (never held in React state). The per-workspace
+   * OPFS copy is still written by `createWorkspace`
+   * (via `WorkspaceManager.createGitBacked → storeWorkspaceToken`).
+   */
+  skipAuth?: boolean;
 }
 
 interface FlowState {
   phase: 'auth' | 'url' | 'cloning' | 'error';
-  token?: string;
   errorReason?: string;
 }
 
@@ -54,6 +63,13 @@ interface FlowState {
  */
 function friendlyCloneError(raw: string): { headline: string; hint?: string } {
   const msg = raw.trim();
+  // Auth sentinel — set locally before any clone attempt; "Clone failed" would be misleading.
+  if (/no github token/i.test(msg) || /please reconnect/i.test(msg)) {
+    return {
+      headline: 'Not connected to GitHub',
+      hint: 'Your GitHub session has expired or could not be read. Please reconnect and try again.'
+    };
+  }
   // isomorphic-git surfaces server status as "HTTP Error: 404 Not Found".
   if (/\b(HTTP\s*(Error)?:?\s*)?404\b/i.test(msg)) {
     return {
@@ -106,9 +122,15 @@ export function GitHubWorkspaceFlow({
   authBase,
   onCreated,
   onCancel,
-  createWorkspace
+  createWorkspace,
+  skipAuth
 }: GitHubWorkspaceFlowProps): React.ReactElement {
-  const [state, setState] = useState<FlowState>({ phase: 'auth' });
+  // When `skipAuth` is true (global connection already established),
+  // skip the device-flow auth phase and start directly at the URL form.
+  // No token is held in state; it is resolved lazily from IDB at clone time.
+  const [state, setState] = useState<FlowState>(
+    skipAuth ? { phase: 'url' } : { phase: 'auth' }
+  );
   const [repoUrl, setRepoUrl] = useState('');
   const [branch, setBranch] = useState('main');
 
@@ -116,7 +138,7 @@ export function GitHubWorkspaceFlow({
     return (
       <GitHubConnectDialog
         authBase={authBase}
-        onConnected={(token) => setState({ phase: 'url', token })}
+        onConnected={() => setState({ phase: 'url' })}
         onCancel={onCancel}
       />
     );
@@ -169,21 +191,33 @@ export function GitHubWorkspaceFlow({
       <Button
         disabled={!canSubmit}
         onClick={async () => {
-          if (!parsed || !state.token) return;
-          setState({ phase: 'cloning', token: state.token });
+          if (!parsed) return;
+          // Resolve the token lazily from IDB at the moment of clone.
+          // The token is NEVER stored in React state — it lives only in IDB
+          // (written by GitHubProvider.connect() via saveGlobalGitHub) and in
+          // this transient local for the duration of the clone call.
+          const token = (await loadGlobalGitHubToken())?.trim();
+          if (!token) {
+            // Token is unexpectedly absent — surface error, do NOT clone.
+            setState({
+              phase: 'error',
+              errorReason: 'No GitHub token found — please reconnect.'
+            });
+            return;
+          }
+          setState({ phase: 'cloning' });
           try {
             const result = await createWorkspace({
               name: `${parsed.user}/${parsed.repo}`,
               repoUrl: parsed.canonicalUrl,
               branch: branch.trim() || 'main',
               user: parsed.user,
-              token: state.token
+              token
             });
             onCreated(result.id);
           } catch (err) {
             setState({
               phase: 'error',
-              token: state.token,
               errorReason: err instanceof Error ? err.message : String(err)
             });
           }

@@ -7,65 +7,85 @@
  * Verifies the auth → URL form → clone → onCreated transition.
  * The `createWorkspace` prop is injected so the test doesn't need a
  * real OPFS root or a real git clone.
+ *
+ * The auth dialog is now a thin view of GitHubProvider state; tests
+ * wrap in a real <GitHubProvider> with github-store and github-auth
+ * mocked (same pattern as GitHubProvider.test.tsx).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+
+// Mock github-store: a shared in-memory store so saveGlobalGitHub → loadGlobalGitHubToken
+// round-trips the token the way the real IDB would.
+const store = { token: null as string | null };
+vi.mock('../../src/services/github-store.js', () => ({
+  loadGlobalGitHub: vi.fn(async () => (store.token ? { token: store.token } : null)),
+  loadGlobalGitHubToken: vi.fn(async () => store.token),
+  saveGlobalGitHub: vi.fn(async (t: string) => { store.token = t; }),
+  clearGlobalGitHub: vi.fn(async () => { store.token = null; })
+}));
+
+const mockInit = vi.fn();
+const mockPoll = vi.fn();
+const mockUser = vi.fn(async () => ({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' }));
+
+vi.mock('../../src/services/github-auth.js', () => ({
+  initDeviceFlow: (...args: unknown[]) => mockInit(...args),
+  pollDeviceFlow: (...args: unknown[]) => mockPoll(...args),
+  fetchGitHubUser: (...args: unknown[]) => mockUser(...args)
+}));
+
+import { GitHubProvider } from '../../src/shell/providers/GitHubProvider.js';
 import { GitHubWorkspaceFlow } from '../../src/components/GitHubWorkspaceFlow.js';
 
 const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
 
-describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    // Mock the device-flow init so the auth dialog mounts cleanly. Poll
-    // returns the access token on the first call so the click-then-poll
-    // path completes synchronously inside the test's waitFor budget;
-    // the multi-poll behaviour is covered by GitHubConnectDialog's own
-    // tests, not here.
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((url: URL | string) => {
-      const u = String(url);
-      if (u.endsWith('/device-init')) {
-        return Promise.resolve(
-          new Response(
-            JSON.stringify({
-              device_code: 'devcode',
-              user_code: 'ABCD-1234',
-              verification_uri: 'https://github.com/login/device',
-              expires_in: 900,
-              interval: 5
-            }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } }
-          )
-        );
-      }
-      if (u.endsWith('/device-poll')) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ access_token: 'gho_test', scope: 'repo' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          })
-        );
-      }
-      return Promise.resolve(new Response('{}', { status: 404 }));
-    }) as unknown as ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  store.token = null;
+  vi.clearAllMocks();
+  // Fix 3: GitHubProvider now clamps poll interval to >= 5000ms; use fake timers.
+  // shouldAdvanceTime: true so @testing-library/react's waitFor polling also works.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  mockInit.mockResolvedValue({
+    kind: 'ok',
+    deviceCode: 'devcode',
+    userCode: 'ABCD-1234',
+    verificationUri: 'https://github.com/login/device',
+    intervalSec: 0,
+    expiresInSec: 900
   });
-  afterEach(() => fetchSpy.mockRestore());
+  mockPoll.mockResolvedValue({ kind: 'ok', accessToken: 'gho_test', scope: 'repo' });
+  mockUser.mockResolvedValue({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' });
+});
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.useRealTimers();
+});
 
+/** Helper: advance fake timers past the 5 s poll interval so the device-flow
+ * poll fires and the provider transitions to 'connected'. */
+async function advancePoll(): Promise<void> {
+  await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+}
+
+describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
   it('after auth, surfaces a repo-URL form (transitions auth → url)', async () => {
     const createWorkspace = vi.fn();
     render(
-      <GitHubWorkspaceFlow
-        authBase={AUTH_BASE}
-        onCreated={() => {}}
-        onCancel={() => {}}
-        createWorkspace={createWorkspace}
-      />
+      <GitHubProvider>
+        <GitHubWorkspaceFlow
+          authBase={AUTH_BASE}
+          onCreated={() => {}}
+          onCancel={() => {}}
+          createWorkspace={createWorkspace}
+        />
+      </GitHubProvider>
     );
-    // Force the dialog out of pending by clicking "I've authorised — check now".
-    const checkBtn = await screen.findByRole('button', { name: /check now/i });
-    fireEvent.click(checkBtn);
+    // Fix 3: advance past the clamped 5 s poll interval so the provider
+    // transitions to 'connected', which fires onConnected in the dialog,
+    // which causes the flow to show the repo-URL form.
+    await advancePoll();
     await waitFor(() => {
       expect(screen.getByTestId('github-repo-form')).toBeInTheDocument();
     });
@@ -75,14 +95,16 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
   it('Clone button is disabled until a parseable repo URL is typed', async () => {
     const createWorkspace = vi.fn();
     render(
-      <GitHubWorkspaceFlow
-        authBase={AUTH_BASE}
-        onCreated={() => {}}
-        onCancel={() => {}}
-        createWorkspace={createWorkspace}
-      />
+      <GitHubProvider>
+        <GitHubWorkspaceFlow
+          authBase={AUTH_BASE}
+          onCreated={() => {}}
+          onCancel={() => {}}
+          createWorkspace={createWorkspace}
+        />
+      </GitHubProvider>
     );
-    fireEvent.click(await screen.findByRole('button', { name: /check now/i }));
+    await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
 
     const cloneBtn = screen.getByRole('button', { name: /^Clone$/ });
@@ -109,14 +131,16 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
     const onCreated = vi.fn();
 
     render(
-      <GitHubWorkspaceFlow
-        authBase={AUTH_BASE}
-        onCreated={onCreated}
-        onCancel={() => {}}
-        createWorkspace={createWorkspace}
-      />
+      <GitHubProvider>
+        <GitHubWorkspaceFlow
+          authBase={AUTH_BASE}
+          onCreated={onCreated}
+          onCancel={() => {}}
+          createWorkspace={createWorkspace}
+        />
+      </GitHubProvider>
     );
-    fireEvent.click(await screen.findByRole('button', { name: /check now/i }));
+    await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
 
     fireEvent.change(screen.getByTestId('repo-url-input'), {
@@ -153,14 +177,16 @@ describe('GitHubWorkspaceFlow (T032e / FR-012)', () => {
       .mockRejectedValue(new Error('clone failed: 404'));
 
     render(
-      <GitHubWorkspaceFlow
-        authBase={AUTH_BASE}
-        onCreated={() => {}}
-        onCancel={() => {}}
-        createWorkspace={createWorkspace}
-      />
+      <GitHubProvider>
+        <GitHubWorkspaceFlow
+          authBase={AUTH_BASE}
+          onCreated={() => {}}
+          onCancel={() => {}}
+          createWorkspace={createWorkspace}
+        />
+      </GitHubProvider>
     );
-    fireEvent.click(await screen.findByRole('button', { name: /check now/i }));
+    await advancePoll();
     await waitFor(() => screen.getByTestId('github-repo-form'));
 
     fireEvent.change(screen.getByTestId('repo-url-input'), {
