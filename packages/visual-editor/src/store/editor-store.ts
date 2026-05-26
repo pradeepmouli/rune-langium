@@ -155,6 +155,13 @@ export interface EditorState {
    * (replacement-semantics worker hydration requires sending the full set).
    */
   hydratedNamespaces: string[];
+  /**
+   * Monotonically-incrementing counter, bumped by `markNamespacesHydrated`
+   * each time new AST content reaches the worker. Consumers (e.g.
+   * ExplorePerspective) can react to this to re-link a selected node whose
+   * initial link ran before the hydration round-trip completed.
+   */
+  hydrationNonce: number;
 }
 
 export interface DeferredExportEntry {
@@ -299,9 +306,17 @@ export interface EditorActions {
   /**
    * Mark a set of namespaces as successfully hydrated: move them from
    * `pendingHydrationNamespaces` to `hydratedNamespaces`. Called by the
-   * App.tsx effect after `applyParseResult` returns.
+   * App.tsx effect after `applyParseResult` returns. Also increments
+   * `hydrationNonce` so effects that depend on it (e.g. the re-link
+   * effect in ExplorePerspective) can react to the new AST being live.
    */
   markNamespacesHydrated(names: string[]): void;
+  /**
+   * Namespaces that must be sent on EVERY parse (replacement-semantics
+   * worker): confirmed-hydrated plus in-flight pending, so a concurrent
+   * reparse can't evict a namespace mid-hydration.
+   */
+  activeHydrationNamespaces(): string[];
   /** Remove namespaces from the pending queue WITHOUT marking them hydrated —
    *  used when an on-demand hydration parse fails, so re-selecting re-queues. */
   dequeuePendingHydration(names: string[]): void;
@@ -580,7 +595,8 @@ const initialState: EditorState = {
     visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
   },
   pendingHydrationNamespaces: [],
-  hydratedNamespaces: []
+  hydratedNamespaces: [],
+  hydrationNonce: 0
 };
 
 // ---------------------------------------------------------------------------
@@ -1748,8 +1764,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         markNamespacesHydrated(names: string[]) {
           set((s) => ({
             hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
-            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
+            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n)),
+            hydrationNonce: s.hydrationNonce + 1
           }));
+        },
+
+        activeHydrationNamespaces() {
+          const s = get();
+          return [...new Set([...s.hydratedNamespaces, ...s.pendingHydrationNamespaces])];
         },
 
         dequeuePendingHydration: (names) =>
@@ -1758,7 +1780,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           })),
 
         resetHydration() {
-          set({ pendingHydrationNamespaces: [], hydratedNamespaces: [] });
+          set({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });
         },
 
         // -----------------------------------------------------------------------

@@ -766,6 +766,34 @@ export function ExplorePerspective() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
 
+  // Re-link the selected node after an on-demand hydration completes.
+  //
+  // The selection effect above fires once when the node is first selected and
+  // calls linkDocument 150ms later. If the node's namespace wasn't in the
+  // worker yet (deferred / curated), that link fails silently — the worker has
+  // no AST for the file yet. The on-demand hydration parse then completes and
+  // triggers markNamespacesHydrated, which bumps hydrationNonce. This effect
+  // reacts to that nonce change and re-links immediately (no 150ms debounce
+  // needed — we're not racing file edits here, the worker is fully ready).
+  // linkDocument is idempotent once a doc is resolved (no newModels → no
+  // store write), so re-running for an already-linked selection is safe.
+  const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
+  useEffect(() => {
+    if (hydrationNonce === 0 || !selectedNodeId || !selectedNodeData) return;
+    const filePath = resolveNodeFile(selectedNodeData);
+    if (!filePath || filePath.startsWith('system://')) return;
+    let cancelled = false;
+    void linkDocument(filePath).then((result) => {
+      if (cancelled || result.newModels.length === 0) return;
+      corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
+      useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrationNonce, selectedNodeId, selectedNodeData, models]);
+
   const functionScope: FunctionScope = useMemo(() => {
     const d = selectedNodeData as any;
     if (!d || d.$type !== 'RosettaFunction') {

@@ -402,6 +402,53 @@ describe('editor-store on-demand curated hydration', () => {
     expect(store.getState().pendingHydrationNamespaces).toEqual([]);
   });
 
+  it('markNamespacesHydrated increments hydrationNonce', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['cdm.base.math'], hydratedNamespaces: [], hydrationNonce: 0 });
+    const before = store.getState().hydrationNonce;
+    store.getState().markNamespacesHydrated(['cdm.base.math']);
+    expect(store.getState().hydrationNonce).toBe(before + 1);
+  });
+
+  it('markNamespacesHydrated increments nonce on each successive call', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['ns.a', 'ns.b'], hydratedNamespaces: [], hydrationNonce: 0 });
+    store.getState().markNamespacesHydrated(['ns.a']);
+    expect(store.getState().hydrationNonce).toBe(1);
+    store.getState().markNamespacesHydrated(['ns.b']);
+    expect(store.getState().hydrationNonce).toBe(2);
+  });
+
+  it('activeHydrationNamespaces returns the union of hydrated + pending (deduped)', () => {
+    const store = createEditorStore();
+    store.setState({
+      hydratedNamespaces: ['ns.a', 'ns.b'],
+      pendingHydrationNamespaces: ['ns.b', 'ns.c']
+    });
+    const active = store.getState().activeHydrationNamespaces();
+    expect(active).toContain('ns.a');
+    expect(active).toContain('ns.b');
+    expect(active).toContain('ns.c');
+    // Dedup: ns.b must appear exactly once
+    expect(active.filter((n) => n === 'ns.b')).toHaveLength(1);
+    expect(active).toHaveLength(3);
+  });
+
+  it('activeHydrationNamespaces returns empty array when both lists are empty', () => {
+    const store = createEditorStore();
+    store.setState({ hydratedNamespaces: [], pendingHydrationNamespaces: [] });
+    expect(store.getState().activeHydrationNamespaces()).toEqual([]);
+  });
+
+  it('resetHydration resets hydrationNonce to 0', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['ns.a'], hydratedNamespaces: [], hydrationNonce: 5 });
+    store.getState().resetHydration();
+    expect(store.getState().hydrationNonce).toBe(0);
+    expect(store.getState().hydratedNamespaces).toEqual([]);
+    expect(store.getState().pendingHydrationNamespaces).toEqual([]);
+  });
+
   it('dequeuePendingHydration removes from pending without marking hydrated; re-requesting after dequeue re-queues', () => {
     const store = createEditorStore();
     store.setState({ pendingHydrationNamespaces: ['cdm.base.math', 'cdm.base.datetime'], hydratedNamespaces: [] });

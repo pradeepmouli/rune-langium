@@ -274,7 +274,7 @@ function AppContent() {
         // `files` state it reads from useWorkspace() (filtering bundle-marker
         // and ref-only files). App only sets the files here.
 
-        const result = await parseWorkspaceFiles(mergedFiles, { hydrateNamespaces: useEditorStore.getState().hydratedNamespaces });
+        const result = await parseWorkspaceFiles(mergedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
         applyParseResult(result);
         setWorkspaceError(null);
       } finally {
@@ -639,7 +639,7 @@ function AppContent() {
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
       reparseTimerRef.current = setTimeout(async () => {
         try {
-          const result = await parseWorkspaceFiles(updatedFiles, { hydrateNamespaces: useEditorStore.getState().hydratedNamespaces });
+          const result = await parseWorkspaceFiles(updatedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
           applyParseResult(result);
         } catch (error) {
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
@@ -873,7 +873,7 @@ function AppContent() {
     // LSP doc-set sync runs in LspProvider on the `files` change it observes.
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
-    parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().hydratedNamespaces })
+    parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() })
       .then((result) => {
         if (token !== modelParseTokenRef.current) return;
         applyParseResult(result);
