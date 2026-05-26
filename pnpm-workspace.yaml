@@ -3,3 +3,21 @@ packages:
   - packages/*
   - apps/*
   - scratch/*
+
+# pnpm 10 reads dependency overrides + patches from here (NOT the package.json
+# `pnpm` field, which pnpm 10 ignores). Migrated from package.json so the
+# lockfile's overrides match the running config under pnpm@10.x.
+overrides:
+  x-to-zod: ^0.8.0
+  '@zod-to-form/core': ^0.9.1
+  '@zod-to-form/react': ^0.9.1
+  '@zod-to-form/vite': ^0.4.1
+  codemirror: 6.0.2
+  '@radix-ui/react-compose-refs': 1.1.2
+  '@radix-ui/react-primitive': 2.1.4
+  '@radix-ui/react-slot': 1.2.4
+  ws: '>=8.21.0'
+
+patchedDependencies:
+  '@radix-ui/react-slot@1.2.4': patches/@radix-ui__react-slot@1.2.4.patch
+  '@radix-ui/react-compose-refs@1.1.2': patches/@radix-ui__react-compose-refs@1.1.2.patch
