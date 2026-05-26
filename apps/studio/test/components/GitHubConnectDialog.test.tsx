@@ -163,6 +163,9 @@ describe('GitHubConnectDialog (T057)', () => {
     expect(onConnected).not.toHaveBeenCalled();
     // Recovery: Reconnect button is shown.
     expect(screen.getByRole('button', { name: /Reconnect/i })).toBeInTheDocument();
+
+    // Restore the mock so subsequent tests get the store value.
+    mockedLoadToken.mockImplementation(async () => store.token);
   });
 });
 

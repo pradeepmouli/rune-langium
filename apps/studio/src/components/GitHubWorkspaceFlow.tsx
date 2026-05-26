@@ -64,6 +64,13 @@ interface FlowState {
  */
 function friendlyCloneError(raw: string): { headline: string; hint?: string } {
   const msg = raw.trim();
+  // Auth sentinel — set locally before any clone attempt; "Clone failed" would be misleading.
+  if (/no github token/i.test(msg) || /please reconnect/i.test(msg)) {
+    return {
+      headline: 'Not connected to GitHub',
+      hint: 'Your GitHub session has expired or could not be read. Please reconnect and try again.'
+    };
+  }
   // isomorphic-git surfaces server status as "HTTP Error: 404 Not Found".
   if (/\b(HTTP\s*(Error)?:?\s*)?404\b/i.test(msg)) {
     return {
