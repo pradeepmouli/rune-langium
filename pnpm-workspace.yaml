@@ -17,6 +17,9 @@ overrides:
   '@radix-ui/react-primitive': 2.1.4
   '@radix-ui/react-slot': 1.2.4
   ws: '>=8.21.0'
+  # GHSA-w5hq-g745-h8pq: force transitive uuid off the deprecated/vulnerable
+  # 8.3.2 (uuid is purely transitive here — no first-party imports).
+  uuid: '>=11.1.1'
 
 patchedDependencies:
   '@radix-ui/react-slot@1.2.4': patches/@radix-ui__react-slot@1.2.4.patch
