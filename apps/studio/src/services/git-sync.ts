@@ -13,6 +13,16 @@ import type { GitBackingRecord } from '../workspace/persistence.js';
 import { loadWorkspace, saveWorkspace } from '../workspace/persistence.js';
 import { createInteractiveConflictPolicy, type InteractiveConflictPolicy } from './interactive-conflict-policy.js';
 import { loadWorkspaceToken } from './github-auth.js';
+import { loadGlobalGithubToken } from './github-store.js';
+
+/**
+ * Resolve the git token for a workspace: use the per-workspace OPFS token
+ * first; fall back to the globally-connected GitHub token; return '' if neither
+ * is set.
+ */
+export async function resolveGitToken(fs: OpfsFs, workspaceId: string): Promise<string> {
+  return (await loadWorkspaceToken(fs, workspaceId)) ?? (await loadGlobalGithubToken()) ?? '';
+}
 
 /** Map the engine's live phase to the persisted GitBackingRecord.syncState. */
 export function phaseToSyncState(s: SyncStatus): GitBackingRecord['syncState'] {
@@ -100,7 +110,7 @@ export function getOrCreateSyncEngine(input: SyncEngineInput): GitSyncEngine {
     // rotated token is always used without recreating the engine.
     onAuth: async () => ({
       username: input.gitBacking.user,
-      password: (await loadWorkspaceToken(fs, workspaceId)) ?? ''
+      password: await resolveGitToken(fs, workspaceId)
     }),
     author: { name: input.gitBacking.user, email: `${input.gitBacking.user}@users.noreply.github.com` },
     conflictPolicy: effectivePolicy
