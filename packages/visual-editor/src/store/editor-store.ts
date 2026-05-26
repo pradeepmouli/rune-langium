@@ -139,6 +139,29 @@ export interface EditorState {
 
   // --- Namespace visibility ---
   visibility: VisibilityState;
+
+  // --- On-demand curated hydration ---
+  /**
+   * Namespaces queued for server-side hydration. An App.tsx effect watches
+   * this list and re-parses with `hydrateNamespaces` set to the cumulative
+   * union of these + `hydratedNamespaces` so the worker receives the full
+   * closure. Cleared by `markNamespacesHydrated` once the parse completes.
+   */
+  pendingHydrationNamespaces: string[];
+  /**
+   * Namespaces that have already been hydrated in the current session.
+   * Used by `requestNamespaceHydration` to deduplicate requests and by the
+   * App.tsx re-parse effect to build the cumulative `hydrateNamespaces` set
+   * (replacement-semantics worker hydration requires sending the full set).
+   */
+  hydratedNamespaces: string[];
+  /**
+   * Monotonically-incrementing counter, bumped by `markNamespacesHydrated`
+   * each time new AST content reaches the worker. Consumers (e.g.
+   * ExplorePerspective) can react to this to re-link a selected node whose
+   * initial link ran before the hydration round-trip completed.
+   */
+  hydrationNonce: number;
 }
 
 export interface DeferredExportEntry {
@@ -272,6 +295,38 @@ export interface EditorActions {
   // --- ReactFlow integration ---
   applyReactFlowNodeChanges(changes: NodeChange<TypeGraphNode>[]): void;
   applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]): void;
+
+  // --- On-demand curated hydration ---
+  /**
+   * Queue a namespace for server-side hydration. No-op if the namespace is
+   * already hydrated or already pending. The App.tsx effect watches
+   * `pendingHydrationNamespaces` and re-parses when this list is non-empty.
+   */
+  requestNamespaceHydration(ns: string): void;
+  /**
+   * Mark a set of namespaces as successfully hydrated: move them from
+   * `pendingHydrationNamespaces` to `hydratedNamespaces`. Called by the
+   * App.tsx effect after `applyParseResult` returns. Also increments
+   * `hydrationNonce` so effects that depend on it (e.g. the re-link
+   * effect in ExplorePerspective) can react to the new AST being live.
+   */
+  markNamespacesHydrated(names: string[]): void;
+  /**
+   * Namespaces that must be sent on EVERY parse (replacement-semantics
+   * worker): confirmed-hydrated plus in-flight pending, so a concurrent
+   * reparse can't evict a namespace mid-hydration.
+   */
+  activeHydrationNamespaces(): string[];
+  /** Remove namespaces from the pending queue WITHOUT marking them hydrated —
+   *  used when an on-demand hydration parse fails, so re-selecting re-queues. */
+  dequeuePendingHydration(names: string[]): void;
+  /**
+   * Clear all hydration state. Called on workspace switch so stale browsed-
+   * namespace names from the previous workspace don't carry over into the new
+   * one (the on-demand effect won't re-fire for names already in
+   * `hydratedNamespaces`, so they must be cleared on workspace load).
+   */
+  resetHydration(): void;
 }
 
 const INHERITANCE_EDGE_KINDS = new Set<EdgeKind>(['extends', 'enum-extends']);
@@ -321,7 +376,8 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
           position: { x: 0, y: 0 },
           errors: [],
           isReadOnly: true,
-          hasExternalRefs: false
+          hasExternalRefs: false,
+          deferred: true
         } as unknown as AnyGraphNode
       });
     }
@@ -537,7 +593,10 @@ const initialState: EditorState = {
     explorerOpen: true,
     visibleNodeKinds: new Set(ALL_NODE_KINDS),
     visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
-  }
+  },
+  pendingHydrationNamespaces: [],
+  hydratedNamespaces: [],
+  hydrationNonce: 0
 };
 
 // ---------------------------------------------------------------------------
@@ -1685,6 +1744,43 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               return { ...n, data: { ...d, annotations } };
             })
           }));
+        },
+
+        // -----------------------------------------------------------------------
+        // ReactFlow integration
+        // -----------------------------------------------------------------------
+
+        // -----------------------------------------------------------------------
+        // On-demand curated hydration
+        // -----------------------------------------------------------------------
+
+        requestNamespaceHydration(ns: string) {
+          set((s) => {
+            if (s.hydratedNamespaces.includes(ns) || s.pendingHydrationNamespaces.includes(ns)) return s;
+            return { pendingHydrationNamespaces: [...s.pendingHydrationNamespaces, ns] };
+          });
+        },
+
+        markNamespacesHydrated(names: string[]) {
+          set((s) => ({
+            hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
+            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n)),
+            hydrationNonce: s.hydrationNonce + 1
+          }));
+        },
+
+        activeHydrationNamespaces() {
+          const s = get();
+          return [...new Set([...s.hydratedNamespaces, ...s.pendingHydrationNamespaces])];
+        },
+
+        dequeuePendingHydration: (names) =>
+          set((s) => ({
+            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
+          })),
+
+        resetHydration() {
+          set({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });
         },
 
         // -----------------------------------------------------------------------

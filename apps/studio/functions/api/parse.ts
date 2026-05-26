@@ -49,6 +49,10 @@ interface WorkspaceContext {
 type ParseRequestBody = {
   files: Array<{ name: string; content: string }>;
   curatedBundles?: Array<{ id: string; version: string }>;
+  /** Fully-qualified namespaces to hydrate beyond the user's import closure
+   *  (on-demand curated browsing). Unioned into the closure seeds; names not
+   *  present in a loaded bundle's manifest are ignored. */
+  hydrateNamespaces?: string[];
 };
 
 /**
@@ -175,6 +179,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // import. Hoisted here (before the bundle loop) so the manifest fast-path
     // can use them when computing which per-namespace artifacts to fetch.
     const seeds = collectUserSeedNamespaces(workspaceContext?.userDocs ?? []);
+    // On-demand hydration: the browser may request namespaces beyond the user's
+    // import closure (curated browsing). Union them into the seeds; each bundle's
+    // closure walk picks up the ones present in its own manifest and pulls their
+    // transitive deps (closeNamespacesFromManifest ignores unknown seeds).
+    const requestedHydration = Array.isArray(body.hydrateNamespaces) ? body.hydrateNamespaces : [];
+    for (const ns of requestedHydration) {
+      if (typeof ns === 'string') seeds.add(ns);
+    }
 
     // Fetch curated bundles via the CURATED_MIRROR service binding so the
     // subrequest bypasses CF same-zone routing. Falls back to global fetch

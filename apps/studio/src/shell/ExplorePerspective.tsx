@@ -766,6 +766,34 @@ export function ExplorePerspective() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, selectedNodeData]);
 
+  // Re-link the selected node after an on-demand hydration completes.
+  //
+  // The selection effect above fires once when the node is first selected and
+  // calls linkDocument 150ms later. If the node's namespace wasn't in the
+  // worker yet (deferred / curated), that link fails silently — the worker has
+  // no AST for the file yet. The on-demand hydration parse then completes and
+  // triggers markNamespacesHydrated, which bumps hydrationNonce. This effect
+  // reacts to that nonce change and re-links immediately (no 150ms debounce
+  // needed — we're not racing file edits here, the worker is fully ready).
+  // linkDocument is idempotent once a doc is resolved (no newModels → no
+  // store write), so re-running for an already-linked selection is safe.
+  const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
+  useEffect(() => {
+    if (hydrationNonce === 0 || !selectedNodeId || !selectedNodeData) return;
+    const filePath = resolveNodeFile(selectedNodeData);
+    if (!filePath || filePath.startsWith('system://')) return;
+    let cancelled = false;
+    void linkDocument(filePath).then((result) => {
+      if (cancelled || result.newModels.length === 0) return;
+      corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
+      useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrationNonce, selectedNodeId, selectedNodeData, models]);
+
   const functionScope: FunctionScope = useMemo(() => {
     const d = selectedNodeData as any;
     if (!d || d.$type !== 'RosettaFunction') {
@@ -888,8 +916,31 @@ export function ExplorePerspective() {
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
       storeSelectNode(nodeId, { reapplyFocusMode: true });
+      // On-demand curated hydration: only deferred (list-only, un-hydrated
+      // curated) nodes need a server round-trip; user types and already-
+      // hydrated curated types resolve locally.
+      const selectedNode = useEditorStore.getState().nodes.find((n) => n.id === nodeId);
+      const data = selectedNode?.data as { namespace?: string; deferred?: boolean } | undefined;
+      if (data?.deferred && data.namespace) {
+        useEditorStore.getState().requestNamespaceHydration(data.namespace);
+      }
     },
     [storeSelectNode]
+  );
+
+  // Expanding a namespace header is an equally natural browse gesture that
+  // should trigger hydration. Wrap the bare toggle action so we can also
+  // queue the namespace for on-demand hydration before toggling visibility.
+  const handleToggleNamespace = useCallback(
+    (namespace: string) => {
+      const needsHydration = useEditorStore.getState().nodes.some((n) => {
+        const d = n.data as { namespace?: string; deferred?: boolean };
+        return d.namespace === namespace && d.deferred === true;
+      });
+      if (needsHydration) useEditorStore.getState().requestNamespaceHydration(namespace);
+      storeToggleNamespace(namespace);
+    },
+    [storeToggleNamespace]
   );
 
   const shouldCenterNavigationTarget = useCallback(
@@ -1193,7 +1244,7 @@ export function ExplorePerspective() {
           expandedNamespaces={expandedNamespaces}
           hiddenNodeIds={hiddenNodeIds}
           selectedNodeId={selectedNodeId}
-          onToggleNamespace={storeToggleNamespace}
+          onToggleNamespace={handleToggleNamespace}
           onExpandAll={storeExpandAllNamespaces}
           onCollapseAll={storeCollapseAllNamespaces}
           onSelectNode={handleExplorerSelectNode}
@@ -1208,7 +1259,7 @@ export function ExplorePerspective() {
       expandedNamespaces,
       hiddenNodeIds,
       selectedNodeId,
-      storeToggleNamespace,
+      handleToggleNamespace,
       storeExpandAllNamespaces,
       storeCollapseAllNamespaces,
       handleExplorerSelectNode,

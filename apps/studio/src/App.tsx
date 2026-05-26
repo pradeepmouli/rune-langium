@@ -31,6 +31,7 @@ import { ActivityBar } from './shell/ActivityBar.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
+import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
 
@@ -207,9 +208,59 @@ function AppContent() {
     }
   }, []);
 
+  // On-demand curated namespace hydration.
+  //
+  // When the explorer selects a node in a namespace that hasn't been
+  // hydrated yet, ExplorePerspective calls `requestNamespaceHydration(ns)`.
+  // That appends to `pendingHydrationNamespaces`, which triggers this effect.
+  // We re-parse with the cumulative union of already-hydrated + pending
+  // namespaces — the worker uses replacement semantics, so the full set must
+  // be sent every time to keep previously-hydrated namespaces alive.
+  // After the parse completes, `markNamespacesHydrated` moves the names from
+  // pending → hydrated, which empties `pendingHydration` and the effect's
+  // guard (`length === 0`) short-circuits on the next run — no infinite loop.
+  // On failure, `dequeuePendingHydration` removes the failed names (without
+  // marking hydrated) so re-selecting/re-expanding them re-queues and retries.
+  const pendingHydration = useEditorStore((s) => s.pendingHydrationNamespaces);
+  useEffect(() => {
+    if (pendingHydration.length === 0) return;
+    let cancelled = false;
+    const hydratedSoFar = useEditorStore.getState().hydratedNamespaces;
+    const requested = [...new Set([...hydratedSoFar, ...pendingHydration])];
+    void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
+      .then((result) => {
+        if (cancelled) return;
+        applyParseResult(result);
+        // Mark exactly the set sent in THIS parse (not whatever is pending when
+        // the promise resolves) so a request arriving mid-flight isn't lost.
+        useEditorStore.getState().markNamespacesHydrated(pendingHydration);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        // Dequeue the failed namespaces (without marking hydrated) so the user
+        // can retry by re-selecting/re-expanding them; keep the last valid graph.
+        useEditorStore.getState().dequeuePendingHydration(pendingHydration);
+        reportWorkspaceError(
+          'Failed to hydrate the selected namespace; keeping the last valid graph',
+          err
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  // `files` in deps: an edit during an in-flight hydration re-fires this and
+  // issues a second round-trip; the `cancelled` flag discards the stale result,
+  // so it's a wasted request but correctness-safe.
+  }, [pendingHydration, files, applyParseResult, reportWorkspaceError]);
+
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {
       setLoading(true);
+      // Reset hydration state so a new workspace doesn't inherit the previous
+      // workspace's browsed-namespace set. Without this, switching workspaces
+      // leaves stale hydratedNamespaces entries that the on-demand effect won't
+      // re-fire for (they're already in hydratedNamespaces, not pending).
+      useEditorStore.getState().resetHydration();
       try {
         // Start with the built-in base types and the user's workspace files.
         let mergedFiles: WorkspaceFile[] = [...BASE_TYPE_FILES.map((file) => ({ ...file })), ...workspaceFiles];
@@ -223,7 +274,7 @@ function AppContent() {
         // `files` state it reads from useWorkspace() (filtering bundle-marker
         // and ref-only files). App only sets the files here.
 
-        const result = await parseWorkspaceFiles(mergedFiles);
+        const result = await parseWorkspaceFiles(mergedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
         applyParseResult(result);
         setWorkspaceError(null);
       } finally {
@@ -588,7 +639,7 @@ function AppContent() {
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
       reparseTimerRef.current = setTimeout(async () => {
         try {
-          const result = await parseWorkspaceFiles(updatedFiles);
+          const result = await parseWorkspaceFiles(updatedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
           applyParseResult(result);
         } catch (error) {
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
@@ -822,7 +873,7 @@ function AppContent() {
     // LSP doc-set sync runs in LspProvider on the `files` change it observes.
     modelParseTokenRef.current += 1;
     const token = modelParseTokenRef.current;
-    parseWorkspaceFiles(merged)
+    parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() })
       .then((result) => {
         if (token !== modelParseTokenRef.current) return;
         applyParseResult(result);

@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import { COMBINED_MODEL_SOURCE, SIMPLE_INHERITANCE_SOURCE } from '../helpers/fixture-loader.js';
+import { COMBINED_MODEL_SOURCE, EMPTY_MODEL_SOURCE, SIMPLE_INHERITANCE_SOURCE } from '../helpers/fixture-loader.js';
 
 describe('EditorStore', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -366,5 +366,162 @@ describe('editor-store undo for Structure View Phase 0 actions', () => {
     expect(
       store.getState().edges.find((e) => e.source === tradeId && e.data?.kind === 'attribute-ref')?.data?.label
     ).toBe('economics');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// On-demand curated namespace hydration actions
+// ---------------------------------------------------------------------------
+
+describe('editor-store on-demand curated hydration', () => {
+  it('requestNamespaceHydration queues a namespace; markNamespacesHydrated dequeues + records it', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: [], hydratedNamespaces: [] });
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toContain('cdm.base.math');
+    // idempotent — a second call for the same namespace is a no-op
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toEqual(['cdm.base.math']);
+    store.getState().markNamespacesHydrated(['cdm.base.math']);
+    expect(store.getState().pendingHydrationNamespaces).not.toContain('cdm.base.math');
+    expect(store.getState().hydratedNamespaces).toContain('cdm.base.math');
+  });
+
+  it('requestNamespaceHydration is a no-op for already-hydrated namespaces', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: [], hydratedNamespaces: ['cdm.base.math'] });
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toEqual([]);
+  });
+
+  it('markNamespacesHydrated deduplicates entries in hydratedNamespaces', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['ns.a', 'ns.b'], hydratedNamespaces: ['ns.a'] });
+    store.getState().markNamespacesHydrated(['ns.a', 'ns.b']);
+    expect(store.getState().hydratedNamespaces).toEqual(['ns.a', 'ns.b']);
+    expect(store.getState().pendingHydrationNamespaces).toEqual([]);
+  });
+
+  it('markNamespacesHydrated increments hydrationNonce', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['cdm.base.math'], hydratedNamespaces: [], hydrationNonce: 0 });
+    const before = store.getState().hydrationNonce;
+    store.getState().markNamespacesHydrated(['cdm.base.math']);
+    expect(store.getState().hydrationNonce).toBe(before + 1);
+  });
+
+  it('markNamespacesHydrated increments nonce on each successive call', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['ns.a', 'ns.b'], hydratedNamespaces: [], hydrationNonce: 0 });
+    store.getState().markNamespacesHydrated(['ns.a']);
+    expect(store.getState().hydrationNonce).toBe(1);
+    store.getState().markNamespacesHydrated(['ns.b']);
+    expect(store.getState().hydrationNonce).toBe(2);
+  });
+
+  it('activeHydrationNamespaces returns the union of hydrated + pending (deduped)', () => {
+    const store = createEditorStore();
+    store.setState({
+      hydratedNamespaces: ['ns.a', 'ns.b'],
+      pendingHydrationNamespaces: ['ns.b', 'ns.c']
+    });
+    const active = store.getState().activeHydrationNamespaces();
+    expect(active).toContain('ns.a');
+    expect(active).toContain('ns.b');
+    expect(active).toContain('ns.c');
+    // Dedup: ns.b must appear exactly once
+    expect(active.filter((n) => n === 'ns.b')).toHaveLength(1);
+    expect(active).toHaveLength(3);
+  });
+
+  it('activeHydrationNamespaces returns empty array when both lists are empty', () => {
+    const store = createEditorStore();
+    store.setState({ hydratedNamespaces: [], pendingHydrationNamespaces: [] });
+    expect(store.getState().activeHydrationNamespaces()).toEqual([]);
+  });
+
+  it('resetHydration resets hydrationNonce to 0', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['ns.a'], hydratedNamespaces: [], hydrationNonce: 5 });
+    store.getState().resetHydration();
+    expect(store.getState().hydrationNonce).toBe(0);
+    expect(store.getState().hydratedNamespaces).toEqual([]);
+    expect(store.getState().pendingHydrationNamespaces).toEqual([]);
+  });
+
+  it('dequeuePendingHydration removes from pending without marking hydrated; re-requesting after dequeue re-queues', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['cdm.base.math', 'cdm.base.datetime'], hydratedNamespaces: [] });
+
+    // Dequeue only one of the two pending namespaces
+    store.getState().dequeuePendingHydration(['cdm.base.math']);
+
+    // cdm.base.math is gone from pending…
+    expect(store.getState().pendingHydrationNamespaces).not.toContain('cdm.base.math');
+    // …but cdm.base.datetime stays
+    expect(store.getState().pendingHydrationNamespaces).toContain('cdm.base.datetime');
+    // Neither is in hydratedNamespaces (dequeue ≠ mark-hydrated)
+    expect(store.getState().hydratedNamespaces).not.toContain('cdm.base.math');
+
+    // Re-requesting after dequeue re-queues the namespace
+    store.getState().requestNamespaceHydration('cdm.base.math');
+    expect(store.getState().pendingHydrationNamespaces).toContain('cdm.base.math');
+  });
+
+  it('placeholder nodes built from deferred entries have data.deferred === true', async () => {
+    // loadDeferredExports stashes entries; buildDeferredPlaceholderNodes runs
+    // inside loadModels, so we need a loadModels call to materialise the nodes.
+    const store = createEditorStore();
+    store.getState().loadDeferredExports([
+      {
+        namespace: 'cdm.base.math',
+        filePath: 'cdm/base/math.rosetta',
+        exports: [{ name: 'QuantitySchedule', type: 'Data' }]
+      }
+    ]);
+    // Use an empty model so the only nodes are placeholders
+    const result = await parse(EMPTY_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+    const node = store.getState().nodes.find((n) => n.id === 'cdm.base.math::QuantitySchedule');
+    expect(node).toBeDefined();
+    expect((node!.data as { deferred?: boolean }).deferred).toBe(true);
+  });
+
+  it('materialized nodes from loadModels do NOT have data.deferred set', async () => {
+    const store = createEditorStore();
+    const result = await parse(COMBINED_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+    const materializedNodes = store.getState().nodes;
+    expect(materializedNodes.length).toBeGreaterThan(0);
+    for (const node of materializedNodes) {
+      expect((node.data as { deferred?: boolean }).deferred).toBeFalsy();
+    }
+  });
+
+  it('loadModels after loadDeferredExports: placeholder deferred flag absent on materialized nodes, present on remaining placeholders', async () => {
+    const store = createEditorStore();
+    // Load a deferred entry for a namespace NOT covered by the combined model
+    store.getState().loadDeferredExports([
+      {
+        namespace: 'cdm.other.ns',
+        filePath: 'cdm/other/ns.rosetta',
+        exports: [{ name: 'SomeType', type: 'Data' }]
+      }
+    ]);
+    // Now load real models — their nodes must not have deferred set
+    const result = await parse(COMBINED_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+
+    // The placeholder for the un-hydrated namespace survives the merge
+    const placeholder = store.getState().nodes.find((n) => n.id === 'cdm.other.ns::SomeType');
+    expect(placeholder).toBeDefined();
+    expect((placeholder!.data as { deferred?: boolean }).deferred).toBe(true);
+
+    // Materialized nodes from the real model must not carry the flag
+    const materialized = store.getState().nodes.filter((n) => n.id !== 'cdm.other.ns::SomeType');
+    expect(materialized.length).toBeGreaterThan(0);
+    for (const node of materialized) {
+      expect((node.data as { deferred?: boolean }).deferred).toBeFalsy();
+    }
   });
 });

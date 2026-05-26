@@ -35,7 +35,12 @@ const { editorStoreState, useEditorStore } = vi.hoisted(() => {
     collapseAllNamespaces: vi.fn(),
     setLayoutEngine: vi.fn(),
     loadModels: vi.fn(),
-    loadDeferredExports: vi.fn()
+    loadDeferredExports: vi.fn(),
+    pendingHydrationNamespaces: [] as string[],
+    hydratedNamespaces: [] as string[],
+    requestNamespaceHydration: vi.fn(),
+    markNamespacesHydrated: vi.fn(),
+    resetHydration: vi.fn()
   };
   const useEditorStore = ((selector: (s: typeof editorStoreState) => unknown) =>
     selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
