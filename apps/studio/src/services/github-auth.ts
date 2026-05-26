@@ -117,6 +117,34 @@ export async function pollDeviceFlow(authBase: string, deviceCode: string): Prom
   };
 }
 
+// ---------- user identity ----------
+
+export type UserResult =
+  | { kind: 'ok'; login: string; avatarUrl: string }
+  | { kind: 'error'; reason: string; category: GitHubAuthErrorCategory };
+
+export async function fetchGitHubUser(authBase: string, token: string): Promise<UserResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${authBase}/user`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch (err) {
+    return { kind: 'error', reason: (err as Error).message, category: 'unavailable' };
+  }
+  if (res.ok) {
+    const body = (await res.json()) as { login: string; avatarUrl: string };
+    return { kind: 'ok', login: body.login, avatarUrl: body.avatarUrl };
+  }
+  return {
+    kind: 'error',
+    reason: `user fetch failed (${res.status})`,
+    category: categoriseStatus(res.status)
+  };
+}
+
 // ---------- token storage (per workspace, OPFS only) ----------
 
 const TOKEN_PATH = '.studio/token';

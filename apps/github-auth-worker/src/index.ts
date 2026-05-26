@@ -192,6 +192,7 @@ export default {
     }
     if (url.pathname.endsWith('/device-init')) return handleInit(env, allowed);
     if (url.pathname.endsWith('/device-poll')) return handlePoll(req, env, allowed);
+    if (url.pathname.endsWith('/user')) return handleUser(req, allowed);
     return json(404, { error: 'not_found' }, allowed);
   }
 };
@@ -231,6 +232,50 @@ async function handleInit(env: Env, allowed: string): Promise<Response> {
       verification_uri: body['verification_uri'],
       expires_in: body['expires_in'],
       interval: body['interval']
+    },
+    allowed
+  );
+}
+
+const GITHUB_USER_URL = 'https://api.github.com/user';
+const WORKER_USER_AGENT = 'rune-studio-github-auth-worker/1.0';
+
+async function handleUser(req: Request, allowed: string): Promise<Response> {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return json(400, { error: 'missing_token' }, allowed);
+  }
+  const token = authHeader.slice('Bearer '.length);
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(GITHUB_USER_URL, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'User-Agent': WORKER_USER_AGENT,
+        Accept: 'application/vnd.github+json'
+      }
+    });
+  } catch {
+    return json(503, { error: 'github_unavailable' }, allowed);
+  }
+
+  const read = await readUpstream(upstream);
+  if (!read.ok) {
+    return json(
+      read.reason === 'github_misconfigured' ? 502 : 503,
+      { error: read.reason },
+      allowed
+    );
+  }
+
+  const body = read.data;
+  return json(
+    200,
+    {
+      login: body['login'],
+      avatarUrl: body['avatar_url']
     },
     allowed
   );
