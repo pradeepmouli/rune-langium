@@ -22,6 +22,8 @@ import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
 import { getGithubAuthBase } from '../services/github-authbase.js';
+import { useGithub } from '../shell/providers/github-context.js';
+import { loadGlobalGithubToken } from '../services/github-store.js';
 
 const EMPTY_FILES: ReadonlyArray<WorkspaceFile> = [];
 
@@ -68,9 +70,16 @@ export function FileLoader({
   const [isDragging, setIsDragging] = useState(false);
   const [loadProgress, setLoadProgress] = useState<WorkspaceLoadProgress | null>(null);
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
+  /**
+   * When the global GitHub connection is already established, this is pre-seeded
+   * from the IDB store (read at button-click time) so the device-flow dialog is
+   * skipped. Undefined → GitHubWorkspaceFlow starts at the auth phase as before.
+   */
+  const [gitHubInitialToken, setGitHubInitialToken] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
   const authBase = githubAuthBase ?? getGithubAuthBase();
+  const { status: githubStatus } = useGithub();
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {
@@ -184,7 +193,23 @@ export function FileLoader({
                 Select Folder
               </Button>
               {config.githubAuthEnabled && createGitBackedWorkspace && (
-                <Button variant="secondary" size="lg" onClick={() => setIsGitHubOpen(true)}>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={async () => {
+                    if (githubStatus === 'connected') {
+                      // Global connection is live — seed the token from the IDB
+                      // store (per §4 design: token from STORE, not from context)
+                      // so the device-flow dialog is never shown.
+                      const tok = await loadGlobalGithubToken();
+                      setGitHubInitialToken(tok ?? undefined);
+                    } else {
+                      // Not connected — start with the device-flow auth phase.
+                      setGitHubInitialToken(undefined);
+                    }
+                    setIsGitHubOpen(true);
+                  }}
+                >
                   Open from GitHub repository…
                 </Button>
               )}
@@ -198,7 +223,13 @@ export function FileLoader({
           // so reaching here means the full flow is available. App.tsx
           // hasn't threaded the prop in yet → the CTA stays hidden and
           // the legacy "auth-only" stub no longer ships in production.
-          <Dialog open={isGitHubOpen} onOpenChange={setIsGitHubOpen}>
+          <Dialog
+            open={isGitHubOpen}
+            onOpenChange={(open) => {
+              setIsGitHubOpen(open);
+              if (!open) setGitHubInitialToken(undefined);
+            }}
+          >
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Open from GitHub</DialogTitle>
@@ -207,11 +238,16 @@ export function FileLoader({
               <GitHubWorkspaceFlow
                 authBase={authBase}
                 createWorkspace={createGitBackedWorkspace}
+                initialToken={gitHubInitialToken}
                 onCreated={(id) => {
                   setIsGitHubOpen(false);
+                  setGitHubInitialToken(undefined);
                   onGitHubWorkspaceCreated?.(id);
                 }}
-                onCancel={() => setIsGitHubOpen(false)}
+                onCancel={() => {
+                  setIsGitHubOpen(false);
+                  setGitHubInitialToken(undefined);
+                }}
               />
             </DialogContent>
           </Dialog>

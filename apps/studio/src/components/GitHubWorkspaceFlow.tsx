@@ -39,6 +39,14 @@ export interface GitHubWorkspaceFlowProps {
     user: string;
     token: string;
   }) => Promise<{ id: string }>;
+  /**
+   * When the global GitHub connection is already established (status ===
+   * 'connected'), the caller pre-seeds the token from the IDB store and
+   * passes it here so the device-flow dialog is skipped entirely. The
+   * per-workspace OPFS copy is still written by `createWorkspace`
+   * (via `WorkspaceManager.createGitBacked → storeWorkspaceToken`).
+   */
+  initialToken?: string;
 }
 
 interface FlowState {
@@ -106,9 +114,14 @@ export function GitHubWorkspaceFlow({
   authBase,
   onCreated,
   onCancel,
-  createWorkspace
+  createWorkspace,
+  initialToken
 }: GitHubWorkspaceFlowProps): React.ReactElement {
-  const [state, setState] = useState<FlowState>({ phase: 'auth' });
+  // When `initialToken` is provided (global connection already established),
+  // skip the device-flow auth phase and start directly at the URL form.
+  const [state, setState] = useState<FlowState>(
+    initialToken ? { phase: 'url', token: initialToken } : { phase: 'auth' }
+  );
   const [repoUrl, setRepoUrl] = useState('');
   const [branch, setBranch] = useState('main');
 
