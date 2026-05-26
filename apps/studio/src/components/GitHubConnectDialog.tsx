@@ -8,7 +8,8 @@
  * GitHubProvider (app-global). This component only:
  *  1. Calls connect() on mount (if not already connecting/connected).
  *  2. Maps provider state → the original per-phase UI.
- *  3. Fires onConnected(accessToken) once when status becomes 'connected'.
+ *  3. Fires onConnected() once when status becomes 'connected' (no token arg —
+ *     the token is read from IDB at the point of use, never passed through React).
  *  4. Fires onCancel() when the user clicks Cancel/Close.
  *
  * The `authBase` prop is preserved for Props-contract compatibility but is
@@ -28,7 +29,8 @@ import { loadGlobalGitHubToken } from '../services/github-store.js';
 interface Props {
   /** Preserved for Props-contract compatibility; vestigial — provider uses getGitHubAuthBase(). */
   authBase: string;
-  onConnected: (accessToken: string) => void;
+  /** Called with no argument once auth succeeds and the token is confirmed in IDB. */
+  onConnected: () => void;
   onCancel: () => void;
 }
 
@@ -37,7 +39,7 @@ export function GitHubConnectDialog({
   onCancel
 }: Props): React.ReactElement {
   const github = useGitHub();
-  const { status, deviceFlow, error, errorCategory, connect } = github;
+  const { status, deviceFlow, error, errorCategory, connect, cancelConnect } = github;
   const connectedFiredRef = useRef(false);
   // Fix 6: track when the provider is connected but the IDB token read returned
   // null/empty — surfaces an explicit error instead of leaving the dialog stuck.
@@ -52,9 +54,10 @@ export function GitHubConnectDialog({
   }, []);
 
   // Fire onConnected exactly once when the provider reaches 'connected'.
-  // Reads the token from IDB (where GitHubProvider.connect() persisted it via
-  // saveGlobalGitHub BEFORE setting status to 'connected') so the raw token
-  // never travels through the React context value.
+  // Validates the token in IDB (where GitHubProvider.connect() persisted it
+  // via saveGlobalGitHub BEFORE setting status to 'connected') — fires
+  // onConnected() with NO arguments so the raw token never travels through
+  // the React prop chain. The clone handler reads it again from IDB lazily.
   useEffect(() => {
     if (status === 'connected' && !connectedFiredRef.current) {
       // Set the guard before the await so a double-invoke (React strict mode)
@@ -63,7 +66,7 @@ export function GitHubConnectDialog({
       void (async () => {
         const token = await loadGlobalGitHubToken();
         if (token) {
-          onConnected(token);
+          onConnected();
         } else {
           // Fix 6: connected but IDB token is null/empty — reset the guard so
           // a retry attempt can re-fire onConnected after reconnecting.
@@ -128,7 +131,7 @@ export function GitHubConnectDialog({
           <p data-testid="github-auth-checking">Waiting for authorization — checking automatically…</p>
           <Button
             variant="ghost"
-            onClick={onCancel}
+            onClick={() => { cancelConnect(); onCancel(); }}
           >
             Cancel
           </Button>

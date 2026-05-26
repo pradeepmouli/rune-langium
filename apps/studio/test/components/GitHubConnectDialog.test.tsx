@@ -5,7 +5,7 @@
  * T057 — GitHubConnectDialog component tests.
  * Drives the device-flow client through the GitHubProvider state, asserting:
  *   - the user code + verification URI render
- *   - on success it calls onConnected with the token
+ *   - on success it calls onConnected() with no argument (token stays in IDB)
  *   - onCancel fires when Cancel is clicked
  *
  * The dialog is now a thin view of GitHubProvider state; tests mock the
@@ -79,7 +79,7 @@ describe('GitHubConnectDialog (T057)', () => {
     expect(screen.getByTestId('github-auth-checking')).toBeInTheDocument();
   });
 
-  it('calls onConnected with the access token on poll success', async () => {
+  it('calls onConnected (no arg) on poll success — token validated in IDB, not passed via prop', async () => {
     mockInit.mockResolvedValueOnce({
       kind: 'ok',
       deviceCode: 'devcode',
@@ -98,10 +98,12 @@ describe('GitHubConnectDialog (T057)', () => {
     );
     // Fix 3: advance past the clamped 5 s poll interval so the timer fires.
     await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
-    await waitFor(() => expect(onConnected).toHaveBeenCalledWith('gho_winner'));
+    // onConnected is called with no arguments — the token lives only in IDB.
+    await waitFor(() => expect(onConnected).toHaveBeenCalledOnce());
+    expect(onConnected).toHaveBeenCalledWith();
   });
 
-  it('Cancel calls onCancel', async () => {
+  it('Cancel calls onCancel and aborts the in-flight connect (Fix C)', async () => {
     mockInit.mockResolvedValueOnce({
       kind: 'ok',
       deviceCode: 'd',
@@ -121,6 +123,10 @@ describe('GitHubConnectDialog (T057)', () => {
     await waitFor(() => screen.getByText(/^C$/));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalledTimes(1);
+    // pollDeviceFlow must NOT be called after cancel (poll loop bailed out).
+    // Advance timers well past the 60 s interval to confirm no late poll fires.
+    await act(async () => { await vi.advanceTimersByTimeAsync(65_000); });
+    expect(mockPoll).not.toHaveBeenCalled();
   });
 
   it('Fix 6: shows explicit error + Reconnect when connected but token is null', async () => {

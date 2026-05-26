@@ -53,7 +53,6 @@ export interface GitHubWorkspaceFlowProps {
 
 interface FlowState {
   phase: 'auth' | 'url' | 'cloning' | 'error';
-  token?: string;
   errorReason?: string;
 }
 
@@ -139,7 +138,7 @@ export function GitHubWorkspaceFlow({
     return (
       <GitHubConnectDialog
         authBase={authBase}
-        onConnected={(token) => setState({ phase: 'url', token })}
+        onConnected={() => setState({ phase: 'url' })}
         onCancel={onCancel}
       />
     );
@@ -193,20 +192,20 @@ export function GitHubWorkspaceFlow({
         disabled={!canSubmit}
         onClick={async () => {
           if (!parsed) return;
-          // Fix 1: resolve the token lazily from IDB at the moment of clone.
-          // If the flow went through device-auth, state.token was set by
-          // onConnected; if skipAuth was true, we read from IDB now (never
-          // held in React state).
-          const token = state.token ?? (await loadGlobalGitHubToken());
+          // Resolve the token lazily from IDB at the moment of clone.
+          // The token is NEVER stored in React state — it lives only in IDB
+          // (written by GitHubProvider.connect() via saveGlobalGitHub) and in
+          // this transient local for the duration of the clone call.
+          const token = (await loadGlobalGitHubToken())?.trim();
           if (!token) {
-            // Token is unexpectedly absent — surface error, revert to auth phase.
+            // Token is unexpectedly absent — surface error, do NOT clone.
             setState({
               phase: 'error',
               errorReason: 'No GitHub token found — please reconnect.'
             });
             return;
           }
-          setState({ phase: 'cloning', token });
+          setState({ phase: 'cloning' });
           try {
             const result = await createWorkspace({
               name: `${parsed.user}/${parsed.repo}`,
@@ -219,7 +218,6 @@ export function GitHubWorkspaceFlow({
           } catch (err) {
             setState({
               phase: 'error',
-              token,
               errorReason: err instanceof Error ? err.message : String(err)
             });
           }

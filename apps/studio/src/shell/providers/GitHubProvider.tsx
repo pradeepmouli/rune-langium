@@ -74,7 +74,14 @@ export function GitHubProvider({ children }: { children: React.ReactNode }): Rea
           // Fix 2: bail after user fetch if invalidated.
           if (!mountedRef.current || connectAttemptRef.current !== attempt) return;
           if (u.kind === 'ok') identity = { login: u.login, avatarUrl: u.avatarUrl };
-          await saveGlobalGitHub(poll.accessToken, identity);
+          // Fix B: wrap IDB write so a privacy-mode failure (unavailable
+          // storage) does not discard a successful OAuth. On failure the
+          // session shows connected; git ops degrade gracefully (spec §10).
+          try {
+            await saveGlobalGitHub(poll.accessToken, identity);
+          } catch {
+            console.warn('GitHubProvider: IDB write failed — token not persisted; session only');
+          }
           if (!mountedRef.current || connectAttemptRef.current !== attempt) return;
           setUser(identity);
           setDeviceFlow(undefined);
@@ -113,6 +120,16 @@ export function GitHubProvider({ children }: { children: React.ReactNode }): Rea
     setUser(undefined); setDeviceFlow(undefined); setError(undefined); setErrorCategory(undefined); setStatus('disconnected');
   }, []);
 
-  const value: GitHubContextValue = { status, user, deviceFlow, error, errorCategory, connect, disconnect };
+  // Fix C: abort an in-flight device-flow poll without clearing IDB.
+  // Increments the attempt counter so the poll loop's bail check trips on its
+  // next await; the finally block clears connectingRef automatically.
+  const cancelConnect = useCallback(() => {
+    if (status !== 'connecting') return;
+    connectAttemptRef.current++;
+    setDeviceFlow(undefined);
+    setStatus('disconnected');
+  }, [status]);
+
+  const value: GitHubContextValue = { status, user, deviceFlow, error, errorCategory, connect, disconnect, cancelConnect };
   return <GitHubContext.Provider value={value}>{children}</GitHubContext.Provider>;
 }

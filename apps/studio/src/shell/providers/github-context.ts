@@ -15,6 +15,13 @@ export interface GitHubContextValue {
   errorCategory?: GitHubAuthErrorCategory;
   connect(): Promise<void>;
   disconnect(): Promise<void>;
+  /**
+   * Abort an in-flight device-flow connect. No-op if status !== 'connecting'.
+   * Increments the attempt counter so the poll loop's bail check trips, clears
+   * deviceFlow, and returns status to 'disconnected'. Does not disturb an
+   * already-established connection.
+   */
+  cancelConnect(): void;
 }
 export const GitHubContext = createContext<GitHubContextValue | null>(null);
 export function useGitHub(): GitHubContextValue {

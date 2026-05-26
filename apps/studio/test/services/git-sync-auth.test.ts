@@ -28,4 +28,13 @@ describe('git-sync token resolution', () => {
     loadWorkspaceToken.mockResolvedValue(null); loadGlobalGitHubToken.mockResolvedValue(null);
     expect(await resolveGitToken({} as any, 'w1')).toBe('');
   });
+  // Fix D: empty/whitespace per-workspace token must fall back to global
+  it('falls back to global when per-workspace token is empty string (Fix D)', async () => {
+    loadWorkspaceToken.mockResolvedValue(''); loadGlobalGitHubToken.mockResolvedValue('global-tok');
+    expect(await resolveGitToken({} as any, 'w1')).toBe('global-tok');
+  });
+  it('falls back to global when per-workspace token is whitespace-only (Fix D)', async () => {
+    loadWorkspaceToken.mockResolvedValue('   '); loadGlobalGitHubToken.mockResolvedValue('global-tok');
+    expect(await resolveGitToken({} as any, 'w1')).toBe('global-tok');
+  });
 });

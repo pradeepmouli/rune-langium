@@ -34,6 +34,7 @@ function Probe() {
     <span data-testid="login">{g.user?.login ?? '-'}</span>
     <button onClick={() => void g.connect()}>connect</button>
     <button onClick={() => void g.disconnect()}>disconnect</button>
+    <button onClick={() => g.cancelConnect()}>cancelConnect</button>
   </div>;
 }
 
@@ -78,6 +79,17 @@ describe('GitHubProvider', () => {
     expect(screen.getByTestId('login').textContent).toBe('octocat');
     expect(store.token).toBe('ghs_tok');
   });
+  it('IDB write failure during connect → still connected for the session (Fix B, spec §10)', async () => {
+    // Privacy mode / IDB unavailable: the OAuth succeeded, so connect() must
+    // complete (session-only, token unpersisted) rather than report an error.
+    saveGlobalGitHub.mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+    render(<GitHubProvider><Probe /></GitHubProvider>);
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('disconnected'));
+    screen.getByText('connect').click();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('connected'));
+    expect(screen.getByTestId('login').textContent).toBe('octocat');
+  });
   it('device-flow error → status error', async () => {
     initDeviceFlow.mockResolvedValue({ kind: 'error', reason: 'boom', category: 'unavailable' });
     render(<GitHubProvider><Probe /></GitHubProvider>);
@@ -106,5 +118,29 @@ describe('GitHubProvider', () => {
   it('useGitHub throws outside provider', () => {
     function Bare() { useGitHub(); return null; }
     expect(() => render(<Bare />)).toThrow(/within a GitHubProvider/);
+  });
+  it('cancelConnect() aborts the in-flight poll and returns to disconnected (Fix C)', async () => {
+    // Poll always returns 'pending' so the loop never self-terminates.
+    pollDeviceFlow.mockResolvedValue({ kind: 'pending' });
+    render(<GitHubProvider><Probe /></GitHubProvider>);
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('disconnected'));
+    screen.getByText('connect').click();
+    // Advance far enough for one poll interval to fire so we confirm 'connecting'.
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); });
+    // May still be connecting (pending poll); cancel now.
+    screen.getByText('cancelConnect').click();
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('disconnected'));
+    // No further polls should fire after cancel.
+    const pollCountAfterCancel = pollDeviceFlow.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(pollDeviceFlow.mock.calls.length).toBe(pollCountAfterCancel);
+  });
+  it('cancelConnect() is a no-op when already connected', async () => {
+    store.token = 'ghs_tok'; store.identity = { login: 'octocat', avatarUrl: 'https://x/a.png' };
+    render(<GitHubProvider><Probe /></GitHubProvider>);
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('connected'));
+    await act(async () => { screen.getByText('cancelConnect').click(); });
+    // Status must remain connected — cancelConnect is a no-op when not connecting.
+    expect(screen.getByTestId('status').textContent).toBe('connected');
   });
 });
