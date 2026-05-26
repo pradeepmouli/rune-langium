@@ -424,8 +424,17 @@ export async function parseWorkspaceFiles(
     return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
   }
 
-  // User files go as raw content; curated/read-only files become bundle metadata.
-  const userFiles = files.filter((f) => !f.serializedModelJson).map((f) => ({ name: f.path, content: f.content }));
+  // User files go as raw content; curated files become bundle metadata only
+  // (via collectCuratedBundlesFromWorkspace below). A user file is one WITHOUT a
+  // `bundleId` — that's the canonical marker every curated file carries. The
+  // older `!serializedModelJson` proxy missed list-only deferredExports
+  // namespaces (bundleId + refOnly, but NO serializedModelJson): those leaked
+  // through and got POSTed to /api/parse as bogus files named
+  // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
+  // extension '.'" → 500, collapsing the curated catalog to the user closure.
+  const userFiles = files
+    .filter((f) => !f.bundleId && !f.serializedModelJson && !f.refOnly)
+    .map((f) => ({ name: f.path, content: f.content }));
   const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
   try {

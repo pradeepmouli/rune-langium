@@ -206,6 +206,45 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
     expect(body.curatedBundles[0]).toEqual({ id: 'cdm', version: '2026-04-25' });
   });
 
+  it('excludes list-only refOnly curated files (no serializedModelJson) from the POSTed user files', async () => {
+    // Regression: the loaded-status fix registers list-only deferredExports
+    // namespaces as refOnly files carrying bundleId but NO serializedModelJson.
+    // The old `!serializedModelJson` filter let them through, POSTing bogus
+    // files named `[cdm]/cdm.base.math` → /api/parse 500 ("no services for the
+    // extension '.'"). They must be treated as bundle metadata, not user files.
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: true, models: [], deferredExports: [], errors: {}, hydrationState: { documents: [] } }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    global.fetch = fetchMock;
+
+    const files: WorkspaceFile[] = [
+      { name: 'user.rosetta', path: 'user.rosetta', content: 'namespace demo\ntype Foo:\n  bar string (1..1)', dirty: false },
+      {
+        name: '[cdm]/cdm.base.math',
+        path: '[cdm]/cdm.base.math',
+        content: '',
+        dirty: false,
+        refOnly: true,
+        bundleId: 'cdm',
+        bundleVersion: 'latest'
+      }
+    ];
+
+    await parseWorkspaceFiles(files);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string) as {
+      files: Array<{ name: string }>;
+      curatedBundles: Array<{ id: string; version: string }>;
+    };
+    // The list-only file must NOT be sent as a user file…
+    expect(body.files.map((f) => f.name)).toEqual(['user.rosetta']);
+    // …but its bundle is still surfaced as metadata.
+    expect(body.curatedBundles).toEqual([{ id: 'cdm', version: 'latest' }]);
+  });
+
   it('sends an empty curatedBundles array when there are no curated files', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
