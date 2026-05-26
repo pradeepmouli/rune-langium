@@ -27,7 +27,7 @@ This spec **reframes** the slot into a real feature: an **app-global GitHub iden
 | Axis | Decision |
 |---|---|
 | Warranted? | Yes — *reframed*. App-global identity is real shared state (unlike the original "thin wrapper" premise, which traced to nothing). |
-| Token model | **Global default + per-workspace override.** `onAuth` resolves the per-workspace OPFS token first, else the global token. Existing workspaces unchanged. |
+| Token model | **Global connection seeds + backstops per-workspace tokens.** New git-backed workspaces still write a per-workspace OPFS token copy (as today) — seeded from the global connection at creation (skipping the device-flow prompt). `onAuth` resolves the per-workspace OPFS token first, else the global token. Existing workspaces unchanged. |
 | Provider placement | App-global **sibling of `WorkspaceProvider`** in `StudioProviders` (doesn't consume `useWorkspace`). |
 | Provider scope | Owns the **device-flow lifecycle** (`connect`/`disconnect`) + connection state + cached identity. `GitHubConnectDialog` becomes a thin view of provider state. |
 | Global token storage | **IndexedDB** (the studio's app-global persistence layer). Never `.runestudio`. Per-workspace OPFS tokens untouched. |
@@ -44,7 +44,13 @@ to:
 
 > per-workspace OPFS token **if present**, else the **global IDB token**.
 
-This is the only behavioral change to the git path. Existing git-backed workspaces (which carry a per-workspace token) behave identically; newly created ones with no per-workspace token transparently use the global connection. A workspace can still be pinned to a different account by storing its own token (the override) — preserving the current isolation as an opt-in.
+This is the only behavioral change to the git path. Existing git-backed workspaces (which carry a per-workspace token) behave identically.
+
+The global token plays **two** roles:
+1. **Seed at creation** — when a git-backed workspace is created while globally connected, `createGitBacked` still writes a per-workspace OPFS token copy (status quo storage), but sourced from the global connection instead of a fresh device-flow prompt. So the per-workspace token remains the *primary* credential for that workspace.
+2. **Backstop fallback** — `onAuth` uses the global token only when a workspace has no per-workspace token (e.g. a token-less git workspace, a failed/cleared copy, or a future flow).
+
+Because each workspace keeps its own token copy, **disconnecting or rotating the global connection does not disturb existing workspaces** — they keep working with their pinned copy until it is revoked server-side. A workspace can still be pinned to a different account by storing a different per-workspace token (the override) — preserving the current isolation as an opt-in.
 
 ## 5. New unit: `GithubProvider` + `useGithub()`
 
@@ -95,7 +101,7 @@ Add a `/user` endpoint to the github-auth worker (mirror of the existing device-
   - connected → avatar + `@login` + "Disconnect".
   - error → the plain-English message + retry.
 - **`GitHubConnectDialog`** — refactored to render `useGithub()` state (`deviceFlow`/`status`/`error`) instead of owning local device-flow state. Its existing English copy for error categories is reused by the provider.
-- **`FileLoader` GitHub flow** — if `useGithub().status === 'connected'`, the git-backed workspace creation uses the global token (no re-auth); otherwise it triggers `connect()` (now global). The new workspace does **not** get a per-workspace token written unless the user explicitly pins one (future; not in this spec) — it relies on the global fallback.
+- **`FileLoader` GitHub flow** — if `useGithub().status === 'connected'`, git-backed workspace creation **reuses the global token to seed the per-workspace copy** (`createGitBacked` writes the per-workspace token as today, sourced from the global connection — no device-flow prompt). If not connected, it triggers `connect()` (now global) and then seeds from the result. The per-workspace copy stays the primary credential; the global token is the seed source + backstop.
 
 ## 9. Architecture / data flow
 
@@ -114,8 +120,9 @@ StudioProviders
 | Situation | Behavior |
 |---|---|
 | No global connection, workspace has its own token | Per-workspace token used (override) — unchanged from today. |
-| Global connected, new workspace, no per-workspace token | `onAuth` falls back to the global token — connect-once achieved. |
-| `disconnect()` while a per-workspace-token workspace is open | That workspace keeps working (its own token); only the global token is cleared. |
+| Global connected, creating a new git-backed workspace | `createGitBacked` writes a per-workspace token copy seeded from the global connection (no device-flow prompt) — connect-once achieved; the copy is the primary credential. |
+| Workspace with no per-workspace token (token-less / cleared) | `onAuth` falls back to the global token (backstop). |
+| `disconnect()` / global token rotated while a per-workspace-token workspace is open | That workspace keeps working with its pinned copy (unaffected); copies are not auto-updated when the global token rotates — re-pin to refresh (deferred, §13). |
 | `/user` fetch fails but token is valid | `status='connected'` with no `user` (identity hidden); git ops still work. |
 | Token revoked on GitHub | git op fails with the engine's existing auth error; user re-connects from Settings. No silent retry. |
 | IDB unavailable (privacy mode) | `connect()` still completes for the session (token in memory), but won't persist; degrades like the OPFS privacy-mode fallback. (Document; minimal handling.) |
@@ -139,11 +146,12 @@ StudioProviders
 5. `git-sync` onAuth fallback: per-workspace token ?? global token (+ resolution test).
 6. `GitHubConnectDialog` → render provider state; extract the `authBase` helper.
 7. `SettingsPerspective` GitHub section (+ render tests).
-8. `FileLoader` git flow: reuse global connection when connected.
+8. `FileLoader` git flow + `workspace-manager.createGitBacked`: when globally connected, seed the per-workspace token copy from the global token (skip the device-flow prompt) instead of running a fresh device flow; keep writing the per-workspace copy.
 9. Full studio suite + type-check + lint green.
 
 ## 13. Open questions / deferred
 
 - **Per-workspace pin UI** (explicitly storing a different token for one workspace) — deferred; the override path exists at the storage layer, no UI yet.
+- **Refreshing per-workspace token copies on global rotation** — since each workspace pins a copy seeded at creation, rotating/reconnecting the global token does not propagate to existing workspaces. A "re-sync credentials" action (or seeding copies lazily from the global token when a workspace's copy is rejected) is deferred — the backstop fallback covers token-less workspaces, and revoked copies surface the engine's existing auth error.
 - **Token encryption at rest** — not done (consistent with the current unencrypted per-workspace OPFS tokens; same origin-isolated threat model). Revisit only if the threat model changes.
 - **Scopes / fine-grained tokens** — out of scope; uses whatever scope the device flow grants today.
