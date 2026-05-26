@@ -4,7 +4,7 @@ import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GithubContext, type GithubContextValue, type GithubIdentity } from './github-context.js';
 import { getGithubAuthBase } from '../../services/github-authbase.js';
-import { initDeviceFlow, pollDeviceFlow, fetchGitHubUser } from '../../services/github-auth.js';
+import { initDeviceFlow, pollDeviceFlow, fetchGitHubUser, type GitHubAuthErrorCategory } from '../../services/github-auth.js';
 import { loadGlobalGithub, saveGlobalGithub, clearGlobalGithub } from '../../services/github-store.js';
 
 export function GithubProvider({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -12,6 +12,7 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
   const [user, setUser] = useState<GithubIdentity | undefined>(undefined);
   const [deviceFlow, setDeviceFlow] = useState<GithubContextValue['deviceFlow']>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [errorCategory, setErrorCategory] = useState<GitHubAuthErrorCategory | undefined>(undefined);
   const connectingRef = useRef(false);
 
   useEffect(() => {
@@ -29,11 +30,17 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
     if (connectingRef.current) return;
     connectingRef.current = true;
     setError(undefined);
+    setErrorCategory(undefined);
     setStatus('connecting');
     const authBase = getGithubAuthBase();
     try {
       const init = await initDeviceFlow(authBase);
-      if (init.kind !== 'ok') { setStatus('error'); setError(init.reason); return; }
+      if (init.kind !== 'ok') {
+        setStatus('error');
+        setError(init.reason);
+        setErrorCategory(init.category);
+        return;
+      }
       setDeviceFlow({ userCode: init.userCode, verificationUri: init.verificationUri });
       // Use ?? so that intervalSec: 0 (test value) means immediate poll, not 5 s fallback.
       const intervalMs = (init.intervalSec ?? 5) * 1000;
@@ -52,13 +59,21 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
           return;
         }
         if (poll.kind === 'pending' || poll.kind === 'slow_down') continue;
+        // Terminal poll failures: 'error' carries a structured category;
+        // 'expired'/'access_denied' are terminal but not Worker-categorised.
         setStatus('error');
-        setError(poll.kind === 'error' ? poll.reason : poll.kind);
+        if (poll.kind === 'error') {
+          setError(poll.reason);
+          setErrorCategory(poll.category);
+        } else {
+          setError(poll.kind);
+          setErrorCategory(undefined);
+        }
         setDeviceFlow(undefined);
         return;
       }
     } catch (err) {
-      setStatus('error'); setError((err as Error).message); setDeviceFlow(undefined);
+      setStatus('error'); setError((err as Error).message); setErrorCategory(undefined); setDeviceFlow(undefined);
     } finally {
       connectingRef.current = false;
     }
@@ -66,9 +81,9 @@ export function GithubProvider({ children }: { children: React.ReactNode }): Rea
 
   const disconnect = useCallback(async () => {
     await clearGlobalGithub();
-    setUser(undefined); setDeviceFlow(undefined); setError(undefined); setStatus('disconnected');
+    setUser(undefined); setDeviceFlow(undefined); setError(undefined); setErrorCategory(undefined); setStatus('disconnected');
   }, []);
 
-  const value: GithubContextValue = { status, user, deviceFlow, error, connect, disconnect };
+  const value: GithubContextValue = { status, user, deviceFlow, error, errorCategory, connect, disconnect };
   return <GithubContext.Provider value={value}>{children}</GithubContext.Provider>;
 }

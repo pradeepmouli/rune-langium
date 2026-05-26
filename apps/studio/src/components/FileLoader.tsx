@@ -21,6 +21,7 @@ import {
 import { cn } from '@rune-langium/design-system/utils';
 import { GitHubWorkspaceFlow } from './GitHubWorkspaceFlow.js';
 import { config } from '../config.js';
+import { getGithubAuthBase } from '../services/github-authbase.js';
 
 const EMPTY_FILES: ReadonlyArray<WorkspaceFile> = [];
 
@@ -57,11 +58,6 @@ export interface FileLoaderProps {
   onGitHubWorkspaceCreated?: (workspaceId: string) => void;
 }
 
-function defaultGithubAuthBase(): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}/rune-studio/api/github-auth`;
-}
-
 export function FileLoader({
   onFilesLoaded,
   existingFiles = EMPTY_FILES,
@@ -74,7 +70,7 @@ export function FileLoader({
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
-  const authBase = githubAuthBase ?? defaultGithubAuthBase();
+  const authBase = githubAuthBase ?? getGithubAuthBase();
 
   const handleFiles = useCallback(
     async (fileList: FileList) => {

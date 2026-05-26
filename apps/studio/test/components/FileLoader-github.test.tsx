@@ -10,58 +10,95 @@
  * because clicking it requires the full clone path. App.tsx hasn't
  * wired that yet (T032 deferred); these tests pin both halves of that
  * contract: hidden-by-default, visible-when-wired.
+ *
+ * The auth dialog is now a thin view of GithubProvider state; tests
+ * wrap FileLoader in a <GithubProvider> with github-auth mocked.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+// Mock github-store (no-op IDB). These tests cancel before the connected
+// phase so loadGlobalGithubToken is never called, but the export must exist.
+vi.mock('../../src/services/github-store.js', () => ({
+  loadGlobalGithub: vi.fn(async () => null),
+  loadGlobalGithubToken: vi.fn(async () => null),
+  saveGlobalGithub: vi.fn(async () => {}),
+  clearGlobalGithub: vi.fn(async () => {})
+}));
+
+const mockInit = vi.fn();
+const mockPoll = vi.fn(async () => ({ kind: 'pending' as const }));
+const mockUser = vi.fn(async () => ({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' }));
+
+vi.mock('../../src/services/github-auth.js', () => ({
+  initDeviceFlow: (...args: unknown[]) => mockInit(...args),
+  pollDeviceFlow: (...args: unknown[]) => mockPoll(...args),
+  fetchGitHubUser: (...args: unknown[]) => mockUser(...args)
+}));
+
+import { GithubProvider } from '../../src/shell/providers/GithubProvider.js';
 import { FileLoader } from '../../src/components/FileLoader.js';
 
 const stubCreateGitBacked = async () => ({ id: 'STUB' });
 
 describe('FileLoader — Open from GitHub affordance (T031 / FR-012)', () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
-    // The dialog issues a device-init fetch on mount; stub it so the
-    // first render doesn't dispatch a real request.
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          device_code: 'test-code',
-          user_code: 'ABCD-1234',
-          verification_uri: 'https://github.com/login/device',
-          expires_in: 900,
-          interval: 5
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+    vi.clearAllMocks();
+    // initDeviceFlow returns a pending-style device flow by default;
+    // poll stays pending so the dialog doesn't auto-close during tests.
+    mockInit.mockResolvedValue({
+      kind: 'ok',
+      deviceCode: 'test-code',
+      userCode: 'ABCD-1234',
+      verificationUri: 'https://github.com/login/device',
+      intervalSec: 60,
+      expiresInSec: 900
+    });
+    mockPoll.mockResolvedValue({ kind: 'pending' as const });
   });
-  afterEach(() => fetchSpy.mockRestore());
+  afterEach(() => vi.clearAllMocks());
 
   it('hides the GitHub CTA when createGitBackedWorkspace is not provided', () => {
-    render(<FileLoader onFilesLoaded={() => {}} />);
+    render(
+      <GithubProvider>
+        <FileLoader onFilesLoaded={() => {}} />
+      </GithubProvider>
+    );
     expect(screen.queryByRole('button', { name: /Open from GitHub/i })).toBeNull();
   });
 
   it('renders an Open from GitHub button when createGitBackedWorkspace is provided', () => {
-    render(<FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />);
+    render(
+      <GithubProvider>
+        <FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />
+      </GithubProvider>
+    );
     const btn = screen.getByRole('button', { name: /Open from GitHub/i });
     expect(btn).toBeInTheDocument();
   });
 
   it('opens the GitHubConnectDialog when the button is clicked', () => {
-    render(<FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />);
+    render(
+      <GithubProvider>
+        <FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />
+      </GithubProvider>
+    );
     expect(screen.queryByTestId('github-connect-dialog')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Open from GitHub/i }));
     expect(screen.getByTestId('github-connect-dialog')).toBeInTheDocument();
   });
 
   it('hides the dialog when Cancel is clicked', async () => {
-    render(<FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />);
+    render(
+      <GithubProvider>
+        <FileLoader onFilesLoaded={() => {}} createGitBackedWorkspace={stubCreateGitBacked} />
+      </GithubProvider>
+    );
     fireEvent.click(screen.getByRole('button', { name: /Open from GitHub/i }));
     // Wait until the dialog moved past the synchronous 'init' phase to
-    // surface the Cancel button.
+    // surface the Cancel button (init fires connect() which triggers
+    // device-flow init; once deviceFlow is set, Cancel appears).
     const cancelBtn = await screen.findByRole('button', { name: /Cancel/i });
     fireEvent.click(cancelBtn);
     expect(screen.queryByTestId('github-connect-dialog')).not.toBeInTheDocument();

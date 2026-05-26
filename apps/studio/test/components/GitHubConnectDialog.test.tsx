@@ -3,87 +3,112 @@
 
 /**
  * T057 — GitHubConnectDialog component tests.
- * Drives the device-flow client through the dialog, asserting:
+ * Drives the device-flow client through the GithubProvider state, asserting:
  *   - the user code + verification URI render
- *   - the dialog polls in the background
  *   - on success it calls onConnected with the token
- *   - on expired it shows a re-init affordance
+ *   - onCancel fires when Cancel is clicked
+ *
+ * The dialog is now a thin view of GithubProvider state; tests mock the
+ * github-auth service module (same pattern as GithubProvider.test.tsx)
+ * and wrap the dialog in a real <GithubProvider>.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+
+// Mock github-store: a shared in-memory store so saveGlobalGithub → loadGlobalGithubToken
+// round-trips the token the way the real IDB would.
+const store = { token: null as string | null };
+vi.mock('../../src/services/github-store.js', () => ({
+  loadGlobalGithub: vi.fn(async () => (store.token ? { token: store.token } : null)),
+  loadGlobalGithubToken: vi.fn(async () => store.token),
+  saveGlobalGithub: vi.fn(async (t: string) => { store.token = t; }),
+  clearGlobalGithub: vi.fn(async () => { store.token = null; })
+}));
+
+const mockInit = vi.fn();
+const mockPoll = vi.fn();
+const mockUser = vi.fn(async () => ({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' }));
+
+vi.mock('../../src/services/github-auth.js', () => ({
+  initDeviceFlow: (...args: unknown[]) => mockInit(...args),
+  pollDeviceFlow: (...args: unknown[]) => mockPoll(...args),
+  fetchGitHubUser: (...args: unknown[]) => mockUser(...args)
+}));
+
+import { GithubProvider } from '../../src/shell/providers/GithubProvider.js';
 import { GitHubConnectDialog } from '../../src/components/GitHubConnectDialog.js';
 
 const AUTH_BASE = 'https://www.daikonic.dev/rune-studio/api/github-auth';
 
-let fetchSpy: ReturnType<typeof vi.spyOn>;
-
 beforeEach(() => {
-  fetchSpy = vi.spyOn(globalThis, 'fetch');
+  store.token = null;
+  vi.clearAllMocks();
+  mockUser.mockResolvedValue({ kind: 'ok' as const, login: 'octocat', avatarUrl: 'https://x/a.png' });
 });
-afterEach(() => fetchSpy.mockRestore());
+afterEach(() => vi.clearAllMocks());
 
 describe('GitHubConnectDialog (T057)', () => {
   it('renders the user code + verification URI after init', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          device_code: 'devcode',
-          user_code: 'WXYZ-1234',
-          verification_uri: 'https://github.com/login/device',
-          expires_in: 900,
-          interval: 60
-        }),
-        { status: 200 }
-      )
+    mockInit.mockResolvedValueOnce({
+      kind: 'ok',
+      deviceCode: 'devcode',
+      userCode: 'WXYZ-1234',
+      verificationUri: 'https://github.com/login/device',
+      intervalSec: 60,
+      expiresInSec: 900
+    });
+    // Poll stays pending so we can assert the code display.
+    mockPoll.mockResolvedValue({ kind: 'pending' });
+
+    render(
+      <GithubProvider>
+        <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />
+      </GithubProvider>
     );
-    render(<GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={() => {}} />);
     await waitFor(() => expect(screen.getByText(/WXYZ-1234/)).toBeInTheDocument());
     expect(screen.getByRole('link', { name: /github\.com\/login\/device/i })).toBeInTheDocument();
   });
 
   it('calls onConnected with the access token on poll success', async () => {
-    fetchSpy
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            device_code: 'devcode',
-            user_code: 'CODE-OK',
-            verification_uri: 'https://github.com/login/device',
-            expires_in: 900,
-            interval: 1
-          })
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ access_token: 'gho_winner', token_type: 'bearer' }), {
-          status: 200
-        })
-      );
+    mockInit.mockResolvedValueOnce({
+      kind: 'ok',
+      deviceCode: 'devcode',
+      userCode: 'CODE-OK',
+      verificationUri: 'https://github.com/login/device',
+      // intervalSec: 0 → provider's setTimeout fires immediately
+      intervalSec: 0,
+      expiresInSec: 900
+    });
+    mockPoll.mockResolvedValueOnce({ kind: 'ok', accessToken: 'gho_winner', scope: 'repo' });
+
     const onConnected = vi.fn();
     render(
-      <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
+      <GithubProvider>
+        <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
+      </GithubProvider>
     );
-    await waitFor(() => expect(screen.getByText(/CODE-OK/)).toBeInTheDocument());
-    // Click the manual "I've authorised — check now" button to skip the timer.
-    fireEvent.click(screen.getByRole('button', { name: /check now|i.ve authorised/i }));
+    // Provider polls on its own with intervalSec: 0 (immediate tick).
     await waitFor(() => expect(onConnected).toHaveBeenCalledWith('gho_winner'));
   });
 
   it('Cancel calls onCancel', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          device_code: 'd',
-          user_code: 'C',
-          verification_uri: 'https://github.com/login/device',
-          expires_in: 900,
-          interval: 5
-        })
-      )
-    );
+    mockInit.mockResolvedValueOnce({
+      kind: 'ok',
+      deviceCode: 'd',
+      userCode: 'C',
+      verificationUri: 'https://github.com/login/device',
+      intervalSec: 60,
+      expiresInSec: 900
+    });
+    mockPoll.mockResolvedValue({ kind: 'pending' });
+
     const onCancel = vi.fn();
-    render(<GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={onCancel} />);
+    render(
+      <GithubProvider>
+        <GitHubConnectDialog authBase={AUTH_BASE} onConnected={() => {}} onCancel={onCancel} />
+      </GithubProvider>
+    );
     await waitFor(() => screen.getByText(/^C$/));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalledTimes(1);
