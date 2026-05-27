@@ -1876,12 +1876,10 @@ export function ExplorePerspective() {
             Generate
           </button>
           <span className="studio-topbar__divider" />
-          <Avatar asChild className="size-7 cursor-pointer">
-            <button type="button" aria-label="Account">
-              <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-[11px] font-bold">
-                PM
-              </AvatarFallback>
-            </button>
+          <Avatar render={<button type="button" aria-label="Account" />} className="size-7 cursor-pointer">
+            <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-[11px] font-bold">
+              PM
+            </AvatarFallback>
           </Avatar>
         </div>
       </header>
