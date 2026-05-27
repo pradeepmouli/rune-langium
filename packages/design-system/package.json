@@ -51,7 +51,6 @@
   "dependencies": {
     "@base-ui-components/react": "^1.0.0-rc.0",
     "@hookform/resolvers": "^5.4.0",
-    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-toast": "^1.2.15",
     "@rune-langium/design-tokens": "workspace:*",
     "class-variance-authority": "^0.7.1",
