@@ -148,4 +148,32 @@ describe('Base UI migration regressions', () => {
     expect(trigger).toHaveTextContent('Top → Bottom');
     expect(trigger).not.toHaveTextContent('TB');
   });
+
+  it('renders select popups through a portal so panel overflow cannot clip them', async () => {
+    function ExampleSelect() {
+      const [value, setValue] = useState<string | null>(null);
+
+      return (
+        <div data-testid="panel-shell" className="overflow-hidden">
+          <Select value={value} onValueChange={setValue}>
+            <SelectTrigger aria-label="Portaled layout direction">
+              <SelectValue placeholder="Pick a direction" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TB">Top → Bottom</SelectItem>
+              <SelectItem value="LR">Left → Right</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    }
+
+    const { getByTestId } = render(<ExampleSelect />);
+    const user = userEvent.setup({ writeToClipboard: false });
+    await user.click(screen.getByRole('combobox', { name: 'Portaled layout direction' }));
+
+    const panelShell = getByTestId('panel-shell');
+    expect(panelShell.querySelector('[data-slot="select-content"]')).toBeNull();
+    expect(document.body.querySelector('[data-slot="select-content"]')).not.toBeNull();
+  });
 });
