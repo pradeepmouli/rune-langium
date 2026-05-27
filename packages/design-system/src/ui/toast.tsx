@@ -2,14 +2,23 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import * as React from 'react';
-import * as ToastPrimitive from '@radix-ui/react-toast';
+import { Toast as ToastPrimitive } from '@base-ui-components/react';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../utils';
 
-function ToastProvider(props: React.ComponentProps<typeof ToastPrimitive.Provider>) {
-  return <ToastPrimitive.Provider data-slot="toast-provider" {...props} />;
+// Re-export for consumers (e.g. StudioToastProvider) that must not import Base UI directly.
+export const useToastManager = ToastPrimitive.useToastManager;
+
+function ToastProvider({
+  duration,
+  ...props
+}: React.ComponentProps<typeof ToastPrimitive.Provider> & {
+  /** Compat alias for Base UI's `timeout` prop. */
+  duration?: number;
+}) {
+  return <ToastPrimitive.Provider data-slot="toast-provider" timeout={duration} {...props} />;
 }
 
 function ToastViewport({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Viewport>) {
@@ -26,7 +35,7 @@ function ToastViewport({ className, ...props }: React.ComponentProps<typeof Toas
 }
 
 const toastVariants = cva(
-  'group pointer-events-auto relative flex w-full items-start justify-between gap-3 overflow-hidden rounded-lg border p-4 pr-6 shadow-lg transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-80 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-bottom-full',
+  'group pointer-events-auto relative flex w-full items-start justify-between gap-3 overflow-hidden rounded-lg border p-4 pr-6 shadow-lg transition-all data-[starting-style]:animate-in data-[ending-style]:animate-out data-[ending-style]:fade-out-80 data-[starting-style]:fade-in-0 data-[ending-style]:slide-out-to-right-full data-[starting-style]:slide-in-from-bottom-full',
   {
     variants: {
       variant: {
