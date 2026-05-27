@@ -119,7 +119,9 @@ import type { DeferredExportEntry } from '../workers/parser-worker.js';
  * (Codex P2 review on PR #164). A module-level constant keeps the
  * reference stable so `useEffect`'s shallow-equality dep check works.
  */
-const EMPTY_DEFERRED_EXPORTS: DeferredExportEntry[] = Object.freeze([] as DeferredExportEntry[]) as DeferredExportEntry[];
+const EMPTY_DEFERRED_EXPORTS: DeferredExportEntry[] = Object.freeze(
+  [] as DeferredExportEntry[]
+) as DeferredExportEntry[];
 
 /**
  * Stable empty diagnostics array — stable module-level reference so that
@@ -1764,23 +1766,25 @@ export function ExplorePerspective() {
           </div>
           <span className="studio-topbar__divider" />
           <Popover onOpenChange={handleWorkspaceMenuOpenChange}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="studio-topbar__ws-btn"
-                aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
-                title="Switch / create / close workspace"
-              >
-                <span className="studio-topbar__ws-mark" aria-hidden="true">
-                  {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
-                </span>
-                <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
-                <span className="studio-topbar__ws-sub">
-                  {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-                </span>
-                <ChevronDown className="size-3" />
-              </button>
-            </PopoverTrigger>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  className="studio-topbar__ws-btn"
+                  aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
+                  title="Switch / create / close workspace"
+                >
+                  <span className="studio-topbar__ws-mark" aria-hidden="true">
+                    {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
+                  </span>
+                  <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
+                  <span className="studio-topbar__ws-sub">
+                    {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
+                  </span>
+                  <ChevronDown className="size-3" />
+                </button>
+              }
+            />
             <PopoverContent align="start" sideOffset={6} className="w-72 p-1.5">
               {/* Switch-to section — only shown when callback is provided AND
                   there are recents OTHER than the current workspace. The

@@ -300,17 +300,19 @@ function PanelHeader({
       </div>
       <div className="studio-panel-actions" aria-label="Problems panel actions">
         <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="studio-panel-action"
-              data-active={hasActiveSeverityFilters ? 'true' : undefined}
-              aria-label="Filter diagnostics"
-              title="Filter diagnostics"
-            >
-              <Filter className="size-4" />
-            </button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                className="studio-panel-action"
+                data-active={hasActiveSeverityFilters ? 'true' : undefined}
+                aria-label="Filter diagnostics"
+                title="Filter diagnostics"
+              >
+                <Filter className="size-4" />
+              </button>
+            }
+          />
           <PopoverContent className="w-56 p-2" align="end" sideOffset={6}>
             <div className="space-y-1">
               <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -349,16 +351,18 @@ function PanelHeader({
           </PopoverContent>
         </Popover>
         <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="studio-panel-action"
-              aria-label="Problem panel options"
-              title="Problem panel options"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                className="studio-panel-action"
+                aria-label="Problem panel options"
+                title="Problem panel options"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            }
+          />
           <PopoverContent className="w-52 p-2" align="end" sideOffset={6}>
             <div className="space-y-1">
               <button
