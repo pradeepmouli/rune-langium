@@ -373,10 +373,11 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     expect((nameInput as HTMLInputElement).value).toBe('Trade');
 
     // Metadata fields live in the "Doc" tab — activate it first.
-    // Radix Tabs switches on onMouseDown, not onClick, so use mouseDown event.
+    // Base UI tabs switch on click, so drive the actual interaction the user
+    // performs instead of the old Radix-specific mouseDown shortcut.
     const docTab = screen.getByRole('tab', { name: /doc/i });
     act(() => {
-      fireEvent.mouseDown(docTab);
+      fireEvent.click(docTab);
     });
 
     // The MetadataSection renders Description (definition) and Comments
@@ -471,10 +472,10 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
 
     // Pristine fields (definition) reflect nodeB's values after the swap.
     // MetadataSection lives in the "Doc" tab — activate it to render the DOM.
-    // Radix Tabs switches on onMouseDown, not onClick, so use mouseDown event.
+    // Base UI tabs switch on click, so use the real activation gesture.
     const docTab = screen.getByRole('tab', { name: /doc/i });
     act(() => {
-      fireEvent.mouseDown(docTab);
+      fireEvent.click(docTab);
     });
 
     const definitionTextarea = container.querySelector('[data-slot="metadata-description"]') as HTMLTextAreaElement;
