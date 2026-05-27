@@ -97,32 +97,25 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
     >
       {/*
        * Virtual trigger: a fixed zero-size element placed at cursor coordinates.
-       * Radix anchors the content to this element, achieving "position at cursor"
+       * Base UI anchors the content to this element, achieving "position at cursor"
        * without needing a real interactive button in the DOM flow.
        */}
-      <DropdownMenuTrigger asChild>
-        <span
-          aria-hidden
-          style={{
-            position: 'fixed',
-            left: state?.x ?? 0,
-            top: state?.y ?? 0,
-            width: 0,
-            height: 0,
-            pointerEvents: 'none'
-          }}
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={0}
-        data-testid="graph-context-menu"
-        // The trigger is a zero-size aria-hidden span (cursor anchor), so
-        // Radix's default focus-return-to-trigger would land on a
-        // non-focusable element. Prevent it; focus returns to the document
-        // naturally (Copilot #227).
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
+      <DropdownMenuTrigger
+        render={
+          <span
+            aria-hidden
+            style={{
+              position: 'fixed',
+              left: state?.x ?? 0,
+              top: state?.y ?? 0,
+              width: 0,
+              height: 0,
+              pointerEvents: 'none'
+            }}
+          />
+        }
+      />
+      <DropdownMenuContent align="start" sideOffset={0} data-testid="graph-context-menu">
         {state?.node && (
           <>
             <DropdownMenuLabel className="truncate">{nodeName}</DropdownMenuLabel>
@@ -152,7 +145,7 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
             item renders its own selected indicator. (Copilot #227) */}
         <DropdownMenuRadioGroup
           value={layoutEngine}
-          onValueChange={(v) => handleUseEngine(v as 'elk' | 'dagre')}
+          onValueChange={(v: string) => handleUseEngine(v as 'elk' | 'dagre')}
         >
           <DropdownMenuRadioItem value="elk">Use ELK layout</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="dagre">Use Dagre layout</DropdownMenuRadioItem>
