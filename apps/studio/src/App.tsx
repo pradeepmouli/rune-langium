@@ -895,12 +895,6 @@ function AppContent() {
   // imperative transitions; here we need to re-render on change.
   const activePerspective = usePerspectiveStore((s) => s.activePerspective);
 
-  useEffect(() => {
-    if (activePerspective !== 'workspaces') return;
-    if (!hasExploreContent) return;
-    usePerspectiveStore.getState().setActivePerspective('explore');
-  }, [activePerspective, hasExploreContent]);
-
   // Build the WorkspaceActionsContext value from App's handlers so
   // WorkspacesPerspective (and any future perspective) can call them
   // without prop-drilling through PerspectiveHost.
