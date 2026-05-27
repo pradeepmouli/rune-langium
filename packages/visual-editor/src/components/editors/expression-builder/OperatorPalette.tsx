@@ -74,6 +74,7 @@ export function OperatorPalette({
        * visible button.
        */}
       <PopoverTrigger
+        nativeButton={false}
         render={<span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />}
       />
       <PopoverContent className="w-64 p-0" align="start" sideOffset={4} data-testid="operator-palette">

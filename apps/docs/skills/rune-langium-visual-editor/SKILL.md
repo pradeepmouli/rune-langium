@@ -20,23 +20,23 @@ need to embed the editor in a larger application.
 **Do NOT use when:**
 - You only need a single graph — use the pre-created `useEditorStore` singleton.
 
-API surface: 49 functions, 63 types, 10 constants
+API surface: 65 functions, 88 types, 13 constants
 
 ## Configuration
 
-6 configuration interfaces — see references/config.md for details.
+8 configuration interfaces — see references/config.md for details.
 
 ## Quick Reference
 
 **Key functions:** `createEditorStore` (Create an isolated zustand editor store instance)
 
-*122 exports total — see references/ for full API.*
+*166 exports total — see references/ for full API.*
 
 ## References
 
 Load these on demand — do NOT read all at once:
 
-- When calling any function → read `references/functions.md` for full signatures, parameters, and return types
+- When calling any function → browse `references/functions/` for grouped indexes, full signatures, parameters, and return types
 - When defining typed variables or function parameters → read `references/types.md`
 - When using exported constants → read `references/variables.md`
 - When configuring options → read `references/config.md` for all settings and defaults

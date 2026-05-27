@@ -17,11 +17,9 @@
  * Recommended children:
  *   <IconButtonGroup>
  *     <Tooltip>
- *       <TooltipTrigger asChild>
- *         <Button variant="ghost" size="icon-xs" className="rounded-full" …>
+ *       <TooltipTrigger render={<Button variant="ghost" size="icon-xs" className="rounded-full" … />}>
  *           <SomeIcon className="size-3.5" />
  *           <span className="sr-only">Label</span>
- *         </Button>
  *       </TooltipTrigger>
  *       <TooltipContent>Tooltip text</TooltipContent>
  *     </Tooltip>

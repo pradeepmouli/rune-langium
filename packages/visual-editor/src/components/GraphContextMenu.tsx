@@ -101,6 +101,7 @@ export function GraphContextMenu({ state, layoutEngine, onLayoutEngineChange, on
        * without needing a real interactive button in the DOM flow.
        */}
       <DropdownMenuTrigger
+        nativeButton={false}
         render={
           <span
             aria-hidden

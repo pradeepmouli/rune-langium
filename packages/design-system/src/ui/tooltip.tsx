@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Tooltip — shadcn/ui Tooltip wrapping @base-ui-components/react Tooltip.
+ * Tooltip — shadcn/ui Tooltip wrapping @base-ui/react/tooltip.
  *
  * @module
  */
 
-import { Tooltip as TooltipPrimitive } from '@base-ui-components/react';
+import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 
 import { cn } from '../utils';
 
@@ -36,20 +36,22 @@ function TooltipContent({
 }: React.ComponentProps<typeof TooltipPrimitive.Popup> &
   Pick<React.ComponentProps<typeof TooltipPrimitive.Positioner>, 'sideOffset' | 'side' | 'align' | 'alignOffset'>) {
   return (
-    <TooltipPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} alignOffset={alignOffset}>
-      <TooltipPrimitive.Popup
-        data-slot="tooltip-content"
-        className={cn(
-          'bg-popover text-popover-foreground text-xs px-3 py-1.5 rounded-md shadow-md border border-border',
-          'z-50',
-          'animate-in fade-in-0 zoom-in-95',
-          'data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95',
-          'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-          className
-        )}
-        {...props}
-      />
-    </TooltipPrimitive.Positioner>
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} alignOffset={alignOffset}>
+        <TooltipPrimitive.Popup
+          data-slot="tooltip-content"
+          className={cn(
+            'bg-popover text-popover-foreground text-xs px-3 py-1.5 rounded-md shadow-md border border-border',
+            'z-50',
+            'animate-in fade-in-0 zoom-in-95',
+            'data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95',
+            'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+            className
+          )}
+          {...props}
+        />
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
   );
 }
 

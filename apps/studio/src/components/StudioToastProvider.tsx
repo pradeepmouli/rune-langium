@@ -29,7 +29,7 @@ const StudioToastContext = createContext<StudioToastContextValue | null>(null);
 
 export function StudioToastProvider({ children }: { children: ReactNode }) {
   return (
-    <ToastProvider timeout={4000}>
+    <ToastProvider duration={4000}>
       <StudioToastInner>{children}</StudioToastInner>
     </ToastProvider>
   );

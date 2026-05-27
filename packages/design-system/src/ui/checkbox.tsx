@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Checkbox — shadcn/ui Checkbox wrapping @base-ui-components/react Checkbox.
+ * Checkbox — shadcn/ui Checkbox wrapping @base-ui/react/checkbox.
  *
  * @module
  */
 
 import * as React from 'react';
-import { Checkbox as CheckboxPrimitive } from '@base-ui-components/react';
+import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox';
 import { Check } from 'lucide-react';
 
 import { cn } from '../utils';
@@ -17,7 +17,8 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
-      render={<button />}
+      nativeButton
+      render={<button type="button" />}
       className={cn(
         'peer size-4 shrink-0 rounded-sm border border-input shadow-sm',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',

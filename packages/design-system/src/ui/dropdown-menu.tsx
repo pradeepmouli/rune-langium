@@ -2,14 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * DropdownMenu — shadcn/ui DropdownMenu wrapping @base-ui-components/react Menu.
+ * DropdownMenu — shadcn/ui DropdownMenu wrapping @base-ui/react/menu.
  *
  * @module
  */
 
 import * as React from 'react';
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
-import { Menu } from '@base-ui-components/react';
+import { Menu } from '@base-ui/react/menu';
 
 import { cn } from '../utils';
 
@@ -28,11 +28,14 @@ function DropdownMenuTrigger({ ...props }: React.ComponentProps<typeof Menu.Trig
 function DropdownMenuContent({
   className,
   sideOffset = 4,
+  align,
+  side,
   ...props
-}: React.ComponentProps<typeof Menu.Popup> & Pick<React.ComponentProps<typeof Menu.Positioner>, 'sideOffset'>) {
+}: React.ComponentProps<typeof Menu.Popup> &
+  Pick<React.ComponentProps<typeof Menu.Positioner>, 'align' | 'side' | 'sideOffset'>) {
   return (
     <Menu.Portal>
-      <Menu.Positioner sideOffset={sideOffset}>
+      <Menu.Positioner align={align} side={side} sideOffset={sideOffset}>
         <Menu.Popup
           data-slot="dropdown-menu-content"
           className={cn(

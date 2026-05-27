@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Collapsible — shadcn/ui Collapsible wrapping @base-ui-components/react Collapsible.
+ * Collapsible — shadcn/ui Collapsible wrapping @base-ui/react/collapsible.
  *
  * @module
  */
 
-import { Collapsible as CollapsiblePrimitive } from '@base-ui-components/react';
+import { Collapsible as CollapsiblePrimitive } from '@base-ui/react/collapsible';
 
 function Collapsible({ ...props }: React.ComponentProps<typeof CollapsiblePrimitive.Root>) {
   return <CollapsiblePrimitive.Root data-slot="collapsible" {...props} />;

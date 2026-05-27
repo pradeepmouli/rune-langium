@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Tabs — shadcn/ui Tabs wrapping @base-ui-components/react Tabs.
+ * Tabs — shadcn/ui Tabs wrapping @base-ui/react/tabs.
  *
  * @module
  */
 
-import { Tabs as TabsPrimitive } from '@base-ui-components/react';
+import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
 
 import { cn } from '../utils';
 

@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Popover — shadcn/ui Popover wrapping @base-ui-components/react Popover.
+ * Popover — shadcn/ui Popover wrapping @base-ui/react/popover.
  *
  * @module
  */
 
-import { Popover as PopoverPrimitive } from '@base-ui-components/react';
+import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 
 import { cn } from '../utils';
 

@@ -1,215 +1,167 @@
 # Types & Enums
 
-## components/panels
-
-### `DetailPanelProps`
-**Properties:**
-- `nodeData: AnyGraphNode | null`
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-
-### `EditorFormPanelProps`
-**Properties:**
-- `nodeData: AnyGraphNode | null` — The selected node's data, or null if nothing is selected.
-- `nodeId: string | null` — Node ID of the selected node.
-- `isReadOnly: boolean` (optional) — Whether the node is read-only (from external/locked source).
-- `availableTypes: TypeOption[]` — Available type options for type selectors.
-- `actions: AllEditorFormActions` — All editor form actions.
-- `allNodes: TypeGraphNode[]` (optional) — All graph nodes (for inherited member resolution).
-- `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor in FunctionForm.
-When omitted, FunctionForm renders a plain `<Textarea>` fallback.
-- `onClose: () => void` (optional) — Called when the panel requests to close (e.g., Escape key).
-- `onNavigateToNode: (nodeId: string) => void` (optional) — Called when a type reference is clicked to navigate to that type's definition.
-
-### `NamespaceExplorerPanelProps`
-**Properties:**
-- `nodes: TypeGraphNode[]` — All graph nodes (full set, including hidden ones).
-- `expandedNamespaces: Set<string>` — Set of currently expanded (visible) namespaces.
-- `hiddenNodeIds: Set<string>` — Set of individually hidden node IDs.
-- `onToggleNamespace: (namespace: string) => void` — Toggle a namespace's visibility on the graph.
-- `onExpandAll: () => void` — Expand all namespaces.
-- `onCollapseAll: () => void` — Collapse all namespaces.
-- `onSelectNode: (nodeId: string) => void` (optional) — Called when a node is clicked to select it in the graph.
-- `selectedNodeId: string | null` (optional) — Currently selected node ID (for highlighting).
-- `className: string` (optional) — Optional className for outer container.
-- `hiddenRefCounts: Map<string, number>` (optional) — Total edge count for cross-namespace reference detection.
-
-## components/editors
-
-### `TypeCreatorProps`
-**Properties:**
-- `onCreateType: (kind: TypeKind, name: string, namespace: string) => void`
-- `defaultNamespace: string` (optional)
-- `onCancel: () => void` (optional)
-
-### `AttributeEditorProps`
-**Properties:**
-- `nodeId: string`
-- `onAddAttribute: (nodeId: string, name: string, typeName: string, cardinality: string) => void`
-- `onRemoveAttribute: (nodeId: string, name: string) => void`
-- `onCancel: () => void` (optional)
-
-### `CardinalityEditorProps`
-**Properties:**
-- `nodeId: string`
-- `attrName: string`
-- `currentCardinality: string`
-- `onUpdateCardinality: (nodeId: string, attrName: string, cardinality: string) => void`
-- `onCancel: () => void` (optional)
-
-### `TypeSelectorProps`
-**Properties:**
-- `value: string | null` — Currently selected type value (node ID or built-in type name).
-- `options: TypeOption[]` (optional) — Available types to choose from. May be undefined before types are loaded.
-- `placeholder: string` (optional) — Placeholder text.
-- `onSelect: (value: string | null) => void` — Called when a type is selected.
-- `disabled: boolean` (optional) — Whether the selector is disabled.
-- `allowClear: boolean` (optional) — Whether to include a "None" / clear option.
-- `filterKinds: (TypeKind | "builtin")[]` (optional) — Filter options to specific kinds.
-- `triggerClassName: string` (optional) — Additional CSS classes for the fallback trigger surface.
-- `renderTrigger: (props: TypeSelectorTriggerProps) => ReactNode` (optional) — Render-prop for the trigger (button that opens the popover).
-- `renderPopover: (props: TypeSelectorPopoverProps) => ReactNode` (optional) — Render-prop for the popover content (search + list).
-
-### `TypeSelectorTriggerProps`
-**Properties:**
-- `selected: TypeOption | null` — Currently selected option, or null.
-- `placeholder: string` — Placeholder text.
-- `open: boolean` — Whether the popover is open.
-- `onToggle: () => void` — Toggle the popover.
-- `disabled: boolean` — Whether the selector is disabled.
-
-### `TypeSelectorPopoverProps`
-**Properties:**
-- `groups: TypeSelectorGroup[]` — Grouped and filtered options ready for rendering.
-- `searchQuery: string` — Current search query.
-- `onSearchChange: (query: string) => void` — Update the search query.
-- `onSelect: (value: string | null) => void` — Handle option selection.
-- `allowClear: boolean` — Whether to show a "None" clear option.
-- `selectedValue: string | null` — The currently selected value.
-
-### `TypeSelectorGroup`
-**Properties:**
-- `label: string`
-- `options: TypeOption[]`
-
-### `CardinalityPickerProps`
-**Properties:**
-- `value: string` — Current cardinality value (e.g., "(0..*)").
-- `onChange: (cardinality: string) => void` — Called when cardinality changes.
-- `disabled: boolean` (optional) — Whether the picker is disabled.
-
-### `MetadataSectionProps`
-**Properties:**
-- `readOnly: boolean` (optional) — Whether the metadata section is read-only.
-- `onDefinitionCommit: (definition: string) => void` (optional) — Called when definition changes (debounced commit to graph).
-- `onCommentsCommit: (comments: string) => void` (optional) — Called when comments change (debounced commit to graph).
-- `onSynonymAdd: (synonym: string) => void` (optional) — Called when a synonym is added (immediate commit to graph).
-- `onSynonymRemove: (index: number) => void` (optional) — Called when a synonym is removed by index (immediate commit to graph).
-- `fields: string[]` (optional) — z2f-host-supplied list of field paths this section groups (declarative
-path). Optional and intentionally unused at render time per
-`section-component.md` §3 — the section knows its field set.
-
-### `AttributeRowProps`
-**Properties:**
-- `index: number` — Index position of this member in the useFieldArray.
-- `committedName: string` — Last-committed attribute name (for graph action diffing).
-- `availableTypes: TypeOption[]` — Available type options for the TypeSelector.
-- `onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string) => void` — Commit attribute changes to the graph.
-- `onRemove: (index: number) => void` — Remove this attribute by index.
-- `onReorder: (fromIndex: number, toIndex: number) => void` — Reorder (drag) callback; fromIndex → toIndex.
-- `disabled: boolean` (optional) — Whether the form is read-only.
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-- `isOverride: boolean` (optional) — Whether this attribute overrides an inherited member.
-- `onRevert: () => void` (optional) — Callback to revert an override (remove local, restore inherited).
-
-### `DataTypeFormProps`
-**Properties:**
-- `nodeId: string` — Node ID of the Data type being edited.
-- `data: AnyGraphNode` — Data payload for the selected node (AnyGraphNode with $type='Data').
-- `availableTypes: TypeOption[]` — Available type options for selectors.
-- `actions: DataFormActions` — Data-specific editor form action callbacks.
-- `allNodes: TypeGraphNode[]` (optional) — All graph nodes (for inherited member resolution via useEffectiveMembers).
-- `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor.
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-
-### `EnumValueRowProps`
-**Properties:**
-- `name: string` — Last-committed value name (used as oldName diff anchor in callbacks).
-- `displayName: string` — Last-committed display name (used as diff anchor in callbacks).
-- `nodeId: string` — Node ID of the parent Enum — forwarded to callbacks for store dispatch.
-- `index: number` — Index position of this member in the useFieldArray.
-- `onUpdate: (nodeId: string, oldName: string, newName: string, displayName?: string) => void` — Commit value name/displayName changes to the graph.
-- `onRemove: (nodeId: string, valueName: string) => void` — Remove this enum value.
-- `onReorder: (fromIndex: number, toIndex: number) => void` — Reorder (drag) callback; fromIndex → toIndex.
-- `disabled: boolean` (optional) — Whether the row is disabled.
-- `isOverride: boolean` (optional) — Whether this local value overrides an inherited value with the same name.
-- `onRevert: () => void` (optional) — Callback to revert this override, restoring the inherited value.
-
-### `EnumFormProps`
-**Properties:**
-- `nodeId: string` — Node ID of the Enum being edited.
-- `data: AnyGraphNode` — Data payload for the selected enum node (AnyGraphNode with $type='RosettaEnumeration').
-- `availableTypes: TypeOption[]` — Available type options for selectors.
-- `actions: EnumFormActions` — Enum-specific editor form action callbacks.
-- `allNodes: TypeGraphNode[]` (optional) — All graph nodes for inherited member resolution.
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-
-### `ChoiceOptionRowProps`
-**Properties:**
-- `typeName: string` — The type name for this choice option.
-- `nodeId: string` — Node ID owning this choice.
-- `availableTypes: TypeOption[]` — Available type options (for badge styling lookup).
-- `onRemove: (nodeId: string, typeName: string) => void` — Remove this option.
-- `disabled: boolean` (optional) — Whether the row is disabled.
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-
-### `ChoiceFormProps`
-**Properties:**
-- `nodeId: string` — Node ID of the Choice being edited.
-- `data: AnyGraphNode` — Data payload for the selected choice node (AnyGraphNode with $type='Choice').
-- `availableTypes: TypeOption[]` — Available type options for selectors.
-- `actions: ChoiceFormActions` — Choice-specific editor form action callbacks.
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-
-### `FunctionFormProps`
-**Properties:**
-- `nodeId: string` — Node ID of the Function being edited.
-- `data: AnyGraphNode` — Data payload for the selected function node (AnyGraphNode with $type='RosettaFunction').
-- `availableTypes: TypeOption[]` — Available type options for selectors.
-- `actions: FuncFormActions` — Function-specific editor form action callbacks.
-- `inheritedGroups: InheritedGroup[]` (optional) — Inherited member groups from super-function (if any).
-- `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor (e.g. CodeMirror).
-When omitted, a plain `<Textarea>` is rendered as fallback.
-
-Per FR-010 / R10, this slot is preserved verbatim through the
-z2f migration: the bespoke expression-builder UX is owned by the
-studio app and remains a controlled override.
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-
-### `ExpressionBuilderProps`
-Props provided to the expression editor render-prop slot.
-
-`packages/visual-editor` is editor-agnostic — the host app provides
-the actual editor implementation (e.g. CodeMirror, Monaco) via a
-`renderExpressionEditor` prop on `FunctionForm`.
-**Properties:**
-- `scope: FunctionScope`
-- `defaultMode: "text" | "builder"` (optional)
-- `onDragNode: (draggedNodeId: string, targetNodeId: string) => void` (optional) — Callback when a node is dragged to a placeholder target.
-- `expressionAst: unknown` (optional) — Optional raw AST expression object — when provided, used directly instead of parsing value text.
-- `value: string` — Current expression text.
-- `onChange: (value: string) => void` — Called on every keystroke / change.
-- `onBlur: () => void` — Called when the editor loses focus — triggers validation & commit.
-- `error: string | null` (optional) — Validation error message (null when valid).
-- `placeholder: string` (optional) — Placeholder text shown when the editor is empty.
-
 ## types
+
+### `TypeRefKind`
+```ts
+typeof TYPE_REF_KINDS[number]
+```
+
+### `TypeRefPayload`
+Drag payload emitted by NamespaceExplorer items and consumed by drop targets.
+
+**Field semantics:**
+- `typeId`   — canonical node id in `ns::Name` format (e.g. `cdm.trade::Trade`).
+              Used by `setInheritance` and other operations that reference nodes
+              by their fully-qualified id.
+- `typeName` — bare display/AST name (e.g. `Trade`) used in `$refText` writes,
+              e.g. `updateAttributeType`. This is what the grammar stores as the
+              unqualified cross-reference text.
+
+Drag sources MUST set both fields.
+**Properties:**
+- `rune: "type-ref"`
+- `namespaceUri: string`
+- `typeId: string` — Canonical node id in `ns::Name` format. Used by setInheritance.
+- `typeName: string` — Bare AST/display name used in $refText writes. Used by updateAttributeType.
+- `kind: "Annotation" | "Choice" | "Data" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Func"`
+
+### `StructureExpansionKey`
+Key used in the expansion map; encodes namespace + type + attribute, plus
+an optional per-instance discriminator.
+
+**Per-instance semantics (Phase 14d, spec 020).** Each visible occurrence of
+a type tracks its own expansion state — matching XmlSpy / Altova UModel /
+Liquid Studio / Oxygen XML conventions. The `instancePath` carries the chain
+of React Flow instance ids of the ancestors leading TO this row's owner (NOT
+including the owner itself). Two placements of the same type at the same
+depth produce different `instancePath`s because their parent instance ids
+differ (e.g. `Trade::buyer::Party` vs `Trade::seller::Party`), so chevrons
+inside them stay independent.
+
+The separator inside the path uses `>` (not `:`) because `:` is already the
+field separator and we need to round-trip the path through a single string.
+**Properties:**
+- `namespaceUri: string`
+- `typeId: string`
+- `attrName: string`
+- `instancePath: readonly string[]` (optional) — Chain of React Flow instance ids of ancestors leading to this row's owner,
+NOT including the owner. Empty/undefined = root-level instance (no ancestors).
+
+### `StructureRow`
+Single row inside a Data node, as the Structure View sees it.
+**Properties:**
+- `attrName: string`
+- `typeName: string`
+- `typeKind: "Choice" | "Data" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Unresolved"`
+- `targetNodeId: string` (optional)
+- `targetNamespaceUri: string` (optional)
+- `cardinality: string`
+- `isOptional: boolean`
+- `isInherited: boolean`
+- `astRange: { start: number; end: number }` (optional) — Range in the source document (for diagnostic binding + cursor sync).
+
+### `StructureDataNode`
+A Data node in the Structure View graph.
+**Properties:**
+- `id: string` — CANONICAL node id (e.g. `cdm.trade::Party`). Cells / editors look up the
+shared type description by this id. Multiple visible instances of the same
+type share the same `id` — they are distinguished by `instanceId`.
+- `instanceId: string` (optional) — Per-instance discriminator id (Phase 14e). The adapter emits one
+StructureDataNode per visible occurrence of a type; each carries its own
+`expansions` map so chevrons on different instances don't bleed into each
+other (e.g. `buyer.Party` vs `seller.Party`).
+
+For root placements this equals the canonical `id`. For nested instances
+it follows the layout's instance-id format
+(`${parentInstanceId}::${attrName}::${canonicalId}`).
+
+The `nodes` map in `StructureGraphInput` is keyed on `instanceId` when
+the adapter populates it. Layout-only test fixtures may omit `instanceId`;
+the layout falls back to `id` so existing fixtures continue to work.
+- `kind: "data"`
+- `name: string`
+- `namespaceUri: string`
+- `extendsName: string` (optional)
+- `extendsNodeId: string` (optional)
+- `rows: readonly StructureRow[]`
+- `expansions: ReadonlyMap<string, string>` — Direct expansions (attrName → child INSTANCE id). The child id keys into
+`StructureGraphInput.nodes` (which is per-instance keyed).
+
+### `StructureChoiceArm`
+A Choice arm — represents one option in a Choice. Unlike Data attributes,
+Choice arms have no `name` of their own (their identity IS their type) and
+no cardinality (they are alternatives, not multi-valued).
+**Properties:**
+- `typeName: string` — The arm's type name as written in source (e.g., "CashPayment").
+- `typeKind: "Choice" | "Data" | "Enum" | "Record" | "TypeAlias" | "Unresolved" | "Builtin"` — Classification of the referenced type, mirroring StructureRow.typeKind.
+- `targetNodeId: string` (optional) — Canonical id of the referenced node, when resolvable.
+
+### `StructureChoiceNode`
+A Choice node in the Structure View graph.
+**Properties:**
+- `id: string` — Canonical node id; see `StructureDataNode.id` for the per-instance contract.
+- `instanceId: string` (optional) — Per-instance discriminator (Phase 14e); see `StructureDataNode.instanceId`.
+- `kind: "choice"`
+- `name: string`
+- `namespaceUri: string`
+- `options: readonly StructureChoiceArm[]`
+- `expansions: ReadonlyMap<string, string>` — Per-arm expansions (Phase 14e/B). Keyed by the arm's `typeName` (since
+arms have no `attrName` — their identity IS the referenced type), value
+is the child INSTANCE id in `StructureGraphInput.nodes`. Only arms whose
+`typeKind` is `Data` or `Choice` are eligible to be expanded; terminal
+arms (Enum / Builtin / Unresolved) never appear here.
+
+Empty (default) for arms that have not been expanded by the user.
+
+### `StructureEnumNode`
+A read-only Enum node in the Structure View graph (Phase 14e/A). Materialized
+when the user focuses an Enum from the namespace explorer; lists the enum's
+values as plain rows. Enums are terminal — no per-value expansion, no
+cellComponents wiring, no chevrons.
+**Properties:**
+- `id: string`
+- `instanceId: string` (optional)
+- `kind: "enum"`
+- `name: string`
+- `namespaceUri: string`
+- `values: readonly string[]` — Enum value names in source order.
+
+### `StructureBaseContainer`
+A base-type GroupContainer wrap.
+**Properties:**
+- `id: string` — Canonical wrapper id (e.g. `cdm.trade::Trade::__base::cdm.trade::TradeBase`).
+Multiple instances of the same wrapper (one per visible occurrence of the
+outer type) share the canonical id but differ in `instanceId`.
+- `instanceId: string` (optional) — Per-instance discriminator (Phase 14e); see `StructureDataNode.instanceId`.
+- `kind: "base"`
+- `baseTypeName: string`
+- `baseTypeNamespaceUri: string`
+- `baseRows: readonly StructureRow[]`
+- `childNodeId: string` — INSTANCE id of the child Data node inside this base container.
+- `expansions: ReadonlyMap<string, string>` — Containment edges from this base level's inherited rows into expanded
+target nodes (Data/Choice that the user clicked to expand). Values are
+INSTANCE ids (mirroring StructureDataNode.expansions). Spec §3.2 — base
+level rows can carry their own expansion edges, scoped per-instance.
+
+### `StructureNode`
+```ts
+StructureDataNode | StructureChoiceNode | StructureBaseContainer | StructureEnumNode
+```
+
+### `StructureGraphInput`
+Full graph input produced by the adapter.
+**Properties:**
+- `rootNodeId: string` — INSTANCE id of the root node. Keys into `nodes`. For the root placement
+the instance id equals the canonical id of the outermost wrapper, so
+existing callers that pass canonical ids through this field continue to
+work for non-nested roots.
+
+Phase 14e/A: roots may be `data`, `choice`, or `enum` kinds — the adapter
+materializes whichever the focused type resolves to.
+- `nodes: ReadonlyMap<string, StructureNode>` — Per-instance node map. Keys are `StructureNode.instanceId`; each visible
+occurrence of a type is its own entry with its own `expansions` map.
+Look up a node's shared canonical metadata via `.id`.
 
 ### `AstNodeModel`
 Mapped type that plucks and recursively serializes fields from any
@@ -253,6 +205,8 @@ GraphNode<Data> | GraphNode<Choice> | GraphNode<RosettaEnumeration> | GraphNode<
 - `isReadOnly: boolean` (optional)
 - `hasExternalRefs: boolean`
 - `comments: string` (optional) — UI-only annotation (not from AST).
+- `deferred: boolean` (optional) — True only on deferred-export placeholder nodes (list-only curated types
+ not yet hydrated). Drives on-demand hydration gating in the explorer.
 
 ### `RootAstElement`
 Union of all top-level AST element types that appear as graph nodes.
@@ -306,5 +260,135 @@ the actual editor implementation (e.g. CodeMirror, Monaco) via a
 
 ### `TypeOption`
 A type option for searchable type selectors.
+**Properties:**
+- `value: string` — Node ID, or special ID for built-in types.
+- `label: string` — Display label (type name).
+- `kind: TypeKind | "builtin"` — Type kind for badge coloring.
+- `namespace: string` (optional) — Namespace for grouping in the dropdown.
+
+### `CommonFormActions`
+Actions shared by all type kinds.
+
+### `DataFormActions`
+Data type–specific editor actions.
+
+### `EnumFormActions`
+Enum-specific editor actions.
+
+### `ChoiceFormActions`
+Choice-specific editor actions.
+
+### `FuncFormActions`
+Function-specific editor actions.
+
+### `FormActionsKindMap`
+Maps each `TypeKind` to its form actions interface.
+**Properties:**
+- `data: DataFormActions`
+- `enum: EnumFormActions`
+- `choice: ChoiceFormActions`
+- `func: FuncFormActions`
+- `record: CommonFormActions`
+- `typeAlias: CommonFormActions`
+- `basicType: CommonFormActions`
+- `annotation: CommonFormActions`
+
+### `AllEditorFormActions`
+Intersection of all kind-specific actions (every method available).
+```ts
+DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions
+```
+
+### `EditorFormActions`
+Kind-aware editor form actions.
+
+When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
+only that kind's actions + common actions are available.
+
+When unparameterized (`EditorFormActions`), resolves to the full intersection
+of all kind-specific actions for backward compatibility.
+```ts
+[TypeKind] extends [K] ? AllEditorFormActions : FormActionsKindMap[K]
+```
+
+### `LayoutDirection`
+```ts
+"TB" | "LR" | "BT" | "RL"
+```
+
+### `TypeGraphNode`
+```ts
+Node<AnyGraphNode>
+```
+
+### `TypeGraphEdge`
+```ts
+Edge<EdgeData>
+```
+
+### `NamespaceTreeNode`
+**Properties:**
+- `namespace: string`
+- `types: NamespaceTypeEntry[]`
+- `totalCount: number`
+- `dataCount: number`
+- `choiceCount: number`
+- `enumCount: number`
+- `funcCount: number`
+
+### `NamespaceTypeEntry`
+**Properties:**
+- `nodeId: string`
+- `name: string`
+- `kind: TypeKind`
+- `isSystem: boolean` (optional) — Whether this entry is from a system/base-type file (read-only).
+
+### `VisibilityState`
+**Properties:**
+- `expandedNamespaces: Set<string>` — Namespaces whose types are currently visible on the graph.
+- `hiddenNodeIds: Set<string>` — Individual nodes hidden within expanded namespaces.
+- `explorerOpen: boolean` — Whether the explorer panel is open.
+- `visibleNodeKinds: Set<TypeKind>` — Which node kinds are visible (all visible by default).
+- `visibleEdgeKinds: Set<EdgeKind>` — Which edge kinds are visible (all visible by default).
+
+### `NavigateToNodeCallback`
+Callback for navigating to a type definition by node ID (namespace::name).
+```ts
+(nodeId: string) => void
+```
+
+## components/panels
+
+### `DetailPanelProps`
+**Properties:**
+- `nodeData: AnyGraphNode | null`
+- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
+- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
+- `refOnly: boolean` (optional) — True when the node's source file is a curated reference-only entry
+(no client-side source text). Renders a "Reference Only" pill next
+to the kind badge so users understand why the panel is non-editable.
+
+### `EditorFormPanelProps`
+**Properties:**
+- `nodeData: AnyGraphNode | null` — The selected node's data, or null if nothing is selected.
+- `nodeId: string | null` — Node ID of the selected node.
+- `isReadOnly: boolean` (optional) — Whether the node is read-only (from external/locked source).
+- `refOnly: boolean` (optional) — True when the node's source file is a refOnly curated reference (no
+client-side source text). Forces the read-only fallback view and
+surfaces a "Reference Only" pill in the panel header so the user
+understands why edits are disabled.
+- `availableTypes: TypeOption[]` — Available type options for type selectors.
+- `actions: AllEditorFormActions` — All editor form actions.
+- `allNodes: TypeGraphNode[]` (optional) — All graph nodes (for inherited member resolution).
+- `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor in FunctionForm.
+When omitted, FunctionForm renders a plain `<Textarea>` fallback.
+- `onClose: () => void` (optional) — Called when the panel requests to close (e.g., Escape key).
+- `onNavigateToNode: (nodeId: string) => void` (optional) — Called when a type reference is clicked to navigate to that type's definition.
+
+### `NamespaceExplorerPanelProps`
+**Properties:**
+- `nodes: TypeGraphNode[]` — All graph nodes (full set, including hidden ones).
+- `expandedNamespaces: Set<string>` — Set of currently expanded (visible) namespaces.
+- `hiddenNodeIds: Set<string>` — Set of individually hidden node IDs.
 
 <!-- truncated -->

@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * ScrollArea — shadcn/ui ScrollArea wrapping @base-ui-components/react ScrollArea.
+ * ScrollArea — shadcn/ui ScrollArea wrapping @base-ui/react/scroll-area.
  *
  * @module
  */
 
-import { ScrollArea as ScrollAreaPrimitive } from '@base-ui-components/react';
+import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area';
 
 import { cn } from '../utils';
 

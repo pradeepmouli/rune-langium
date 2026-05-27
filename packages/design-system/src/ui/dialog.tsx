@@ -2,14 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Dialog — shadcn/ui Dialog wrapping @base-ui-components/react Dialog.
+ * Dialog — shadcn/ui Dialog wrapping @base-ui/react/dialog.
  *
  * Provides focus-trap, Esc-to-close, scroll-lock, portal rendering, and
  * the standard fade/zoom animations.
  */
 
 import * as React from 'react';
-import { Dialog as DialogPrimitive } from '@base-ui-components/react';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 
 import { cn } from '../utils';

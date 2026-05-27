@@ -4,7 +4,7 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { cn } from '../utils';
+import { cloneElementWithMergedClassName, cn } from '../utils';
 
 const buttonVariants = cva(
   // T058 (014/FR-026) — focus-visible normalised to a single
@@ -64,7 +64,7 @@ function Button({
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
-    render?: React.ReactElement;
+    render?: React.ReactElement<{ className?: string }>;
   }) {
   const buttonProps = {
     'data-slot': 'button',
@@ -75,8 +75,7 @@ function Button({
   };
 
   if (render != null && React.isValidElement(render)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return React.cloneElement(render, buttonProps as any);
+    return cloneElementWithMergedClassName(render, buttonProps);
   }
 
   return <button {...buttonProps} />;

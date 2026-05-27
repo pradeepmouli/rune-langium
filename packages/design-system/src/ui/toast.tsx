@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import * as React from 'react';
-import { Toast as ToastPrimitive } from '@base-ui-components/react';
+import { Toast as ToastPrimitive } from '@base-ui/react/toast';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
 

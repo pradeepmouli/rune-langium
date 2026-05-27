@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
-import { Select as SelectPrimitive } from '@base-ui-components/react';
+import { Select as SelectPrimitive } from '@base-ui/react/select';
 
 import { cn } from '../utils';
 
@@ -15,15 +15,52 @@ import { cn } from '../utils';
 // data-[state=open/closed] → data-[open]/data-[closed]
 // focus:bg-accent (items) → data-[highlighted]:bg-accent
 
+type SelectRootProps = React.ComponentProps<typeof SelectPrimitive.Root>;
+type SelectItemDefinition = {
+  label: React.ReactNode;
+  value: unknown;
+};
+
+function collectSelectItems(children: React.ReactNode) {
+  const items: SelectItemDefinition[] = [];
+
+  function walk(node: React.ReactNode) {
+    React.Children.forEach(node, (child) => {
+      if (!React.isValidElement<{ children?: React.ReactNode; value?: unknown }>(child)) {
+        return;
+      }
+
+      if (child.type === SelectItem) {
+        items.push({
+          label: child.props.children,
+          value: child.props.value
+        });
+      }
+
+      if (child.props.children != null) {
+        walk(child.props.children);
+      }
+    });
+  }
+
+  walk(children);
+  return items.length > 0 ? items : undefined;
+}
+
 function Select({
   onValueChange,
+  items,
+  children,
   ...props
-}: Omit<React.ComponentProps<typeof SelectPrimitive.Root>, 'onValueChange'> & {
+}: Omit<SelectRootProps, 'onValueChange'> & {
   onValueChange?: (value: string) => void;
 }) {
+  const resolvedItems = React.useMemo(() => items ?? collectSelectItems(children), [children, items]);
+
   return (
     <SelectPrimitive.Root
       data-slot="select"
+      items={resolvedItems}
       onValueChange={
         onValueChange
           ? (v: unknown) => {
@@ -32,7 +69,9 @@ function Select({
           : undefined
       }
       {...props}
-    />
+    >
+      {children}
+    </SelectPrimitive.Root>
   );
 }
 
@@ -42,13 +81,47 @@ function SelectGroup({ ...props }: React.ComponentProps<typeof SelectPrimitive.G
 
 function SelectValue({
   placeholder,
+  className,
+  children,
+  render,
   ...props
 }: Omit<React.ComponentProps<typeof SelectPrimitive.Value>, 'children'> & {
   placeholder?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
-    <SelectPrimitive.Value data-slot="select-value" {...props}>
-      {(value: string | null) => value ?? placeholder}
+    <SelectPrimitive.Value
+      data-slot="select-value"
+      className={(state) =>
+        cn(
+          (state as { placeholder?: boolean }).placeholder && placeholder != null && 'text-muted-foreground',
+          typeof className === 'function' ? className(state) : className
+        )
+      }
+      render={(valueProps, state) => {
+        const isPlaceholder = (state as { placeholder?: boolean }).placeholder === true;
+        const nextProps = {
+          ...valueProps,
+          children: isPlaceholder ? placeholder : (children ?? valueProps.children)
+        };
+
+        if (typeof render === 'function') {
+          return render(nextProps, state);
+        }
+
+        if (render != null && React.isValidElement(render)) {
+          const renderElement = render as React.ReactElement<{ className?: string }>;
+          return React.cloneElement(renderElement, {
+            ...nextProps,
+            className: cn(renderElement.props.className, nextProps.className)
+          });
+        }
+
+        return <span {...nextProps} />;
+      }}
+      {...props}
+    >
+      {children}
     </SelectPrimitive.Value>
   );
 }
