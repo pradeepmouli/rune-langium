@@ -19,16 +19,16 @@ import { AppSwitcher } from '@rune-langium/design-system/ui/app-switcher';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import {
-  RadioGroup,
-  RadioGroupItem
-} from '@rune-langium/design-system/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@rune-langium/design-system/ui/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger
+} from '@rune-langium/design-system/ui/dropdown-menu';
+import { RadioGroup, RadioGroupItem } from '@rune-langium/design-system/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 
 describe('Heading (T085)', () => {
   it('renders the requested semantic level', () => {
@@ -82,11 +82,7 @@ describe('AppSwitcher (T085, T092)', () => {
 
 describe('Base UI migration regressions', () => {
   it('preserves custom classes when Button renders through a supplied element', () => {
-    render(
-      <Button render={<a href="/docs" className="custom-link" />}>
-        Docs
-      </Button>
-    );
+    render(<Button render={<a href="/docs" className="custom-link" />}>Docs</Button>);
 
     expect(screen.getByRole('link', { name: 'Docs' })).toHaveClass('custom-link');
   });
@@ -175,5 +171,45 @@ describe('Base UI migration regressions', () => {
     const panelShell = getByTestId('panel-shell');
     expect(panelShell.querySelector('[data-slot="select-content"]')).toBeNull();
     expect(document.body.querySelector('[data-slot="select-content"]')).not.toBeNull();
+  });
+
+  it('renders dropdown submenus through a portal so parent menu overflow cannot clip them', () => {
+    const { getByTestId } = render(
+      <div data-testid="panel-shell" className="overflow-hidden">
+        <DropdownMenu defaultOpen>
+          <DropdownMenuTrigger render={<button type="button">Actions</button>} />
+          <DropdownMenuContent>
+            <DropdownMenuSub defaultOpen>
+              <DropdownMenuSubTrigger>More tools</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuItem>Inspect</DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+
+    const panelShell = getByTestId('panel-shell');
+    expect(panelShell.querySelector('[data-slot="dropdown-menu-sub-content"]')).toBeNull();
+    expect(document.body.querySelector('[data-slot="dropdown-menu-sub-content"]')).not.toBeNull();
+  });
+
+  it('targets submenu trigger open styling with Base UI popup-open state', () => {
+    render(
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger render={<button type="button">Actions</button>} />
+        <DropdownMenuContent>
+          <DropdownMenuSub defaultOpen>
+            <DropdownMenuSubTrigger>More tools</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem>Inspect</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+
+    expect(screen.getByText('More tools')).toHaveClass('data-[popup-open]:bg-accent');
   });
 });

@@ -179,7 +179,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        'data-[highlighted]:bg-accent data-[open]:bg-accent flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden data-[inset]:pl-8',
+        'data-[highlighted]:bg-accent data-[popup-open]:bg-accent flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden data-[inset]:pl-8',
         className
       )}
       {...props}
@@ -192,17 +192,19 @@ function DropdownMenuSubTrigger({
 
 function DropdownMenuSubContent({ className, ...props }: React.ComponentProps<typeof Menu.Popup>) {
   return (
-    <Menu.Positioner>
-      <Menu.Popup
-        data-slot="dropdown-menu-sub-content"
-        className={cn(
-          'bg-popover text-popover-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border border-border p-1 shadow-lg',
-          'data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
-          className
-        )}
-        {...props}
-      />
-    </Menu.Positioner>
+    <Menu.Portal>
+      <Menu.Positioner>
+        <Menu.Popup
+          data-slot="dropdown-menu-sub-content"
+          className={cn(
+            'bg-popover text-popover-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border border-border p-1 shadow-lg',
+            'data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+            className
+          )}
+          {...props}
+        />
+      </Menu.Positioner>
+    </Menu.Portal>
   );
 }
 

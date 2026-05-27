@@ -148,7 +148,8 @@ export function CardinalityPicker({
           className={joinClasses(
             `w-[4.25rem] rounded border px-1.5 py-0.5 text-[11px] font-mono leading-none
             bg-background outline-none
-            focus:ring-1 focus:ring-ring
+            focus-visible:ring-1 focus-visible:ring-ring
+            disabled:cursor-not-allowed disabled:opacity-50
             ${customError ? 'border-destructive' : 'border-input'}`,
             inputClassName
           )}
