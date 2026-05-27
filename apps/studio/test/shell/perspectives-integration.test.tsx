@@ -36,11 +36,17 @@ vi.mock('../../src/shell/ExplorePerspective.js', async () => {
   return { ExplorePerspective: ExploreProbe };
 });
 
-function Shell({ hasWorkspace }: { hasWorkspace: boolean }) {
+function Shell({
+  hasWorkspace,
+  hasExploreContent = hasWorkspace
+}: {
+  hasWorkspace: boolean;
+  hasExploreContent?: boolean;
+}) {
   return (
     <>
-      <ActivityBar hasWorkspace={hasWorkspace} />
-      <PerspectiveHost hasWorkspace={hasWorkspace} />
+      <ActivityBar hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
+      <PerspectiveHost hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
     </>
   );
 }
@@ -78,13 +84,21 @@ describe('perspectives rail↔host integration', () => {
     expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
   });
 
+  it('enables Explore for model-only content while keeping git/export disabled', () => {
+    usePerspectiveStore.setState({ activePerspective: 'workspaces' });
+    render(<Shell hasWorkspace={false} hasExploreContent />);
+    expect((screen.getByTestId('rail-explore') as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByTestId('rail-git') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('rail-export') as HTMLButtonElement).disabled).toBe(true);
+  });
+
   // Codex P2 (#238): hasWorkspace can drop to false while the store is still on
   // a workspace-requiring perspective (e.g. last editable file deleted in
   // Explore). Without a host-level fallback the content pane goes blank and the
   // rail button is disabled — a dead-end.
   it('falls back to Workspaces when Explore is active without a workspace (no blank pane)', () => {
     usePerspectiveStore.setState({ activePerspective: 'explore' });
-    render(<PerspectiveHost hasWorkspace={false} />);
+    render(<PerspectiveHost hasWorkspace={false} hasExploreContent={false} />);
     expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
     const exploreSlot = document.querySelector('[data-perspective-slot="explore"]') as HTMLElement;
     expect(exploreSlot.style.display).toBe('none');
@@ -92,19 +106,27 @@ describe('perspectives rail↔host integration', () => {
 
   it('falls back to Workspaces from git/export without a workspace', () => {
     usePerspectiveStore.setState({ activePerspective: 'git' });
-    const { rerender } = render(<PerspectiveHost hasWorkspace={false} />);
+    const { rerender } = render(<PerspectiveHost hasWorkspace={false} hasExploreContent={false} />);
     expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
     expect(screen.queryByTestId('git-perspective')).toBeNull();
 
     usePerspectiveStore.setState({ activePerspective: 'export' });
-    rerender(<PerspectiveHost hasWorkspace={false} />);
+    rerender(<PerspectiveHost hasWorkspace={false} hasExploreContent={false} />);
     expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
     expect(screen.queryByTestId('export-perspective')).toBeNull();
   });
 
   it('does NOT fall back when the workspace is present (Explore renders)', () => {
     usePerspectiveStore.setState({ activePerspective: 'explore' });
-    render(<PerspectiveHost hasWorkspace />);
+    render(<PerspectiveHost hasWorkspace hasExploreContent />);
+    const exploreSlot = document.querySelector('[data-perspective-slot="explore"]') as HTMLElement;
+    expect(exploreSlot.style.display).toBe('');
+    expect(screen.queryByTestId('workspaces-perspective')).toBeNull();
+  });
+
+  it('does NOT fall back when Explore is active with model-only content', () => {
+    usePerspectiveStore.setState({ activePerspective: 'explore' });
+    render(<PerspectiveHost hasWorkspace={false} hasExploreContent />);
     const exploreSlot = document.querySelector('[data-perspective-slot="explore"]') as HTMLElement;
     expect(exploreSlot.style.display).toBe('');
     expect(screen.queryByTestId('workspaces-perspective')).toBeNull();

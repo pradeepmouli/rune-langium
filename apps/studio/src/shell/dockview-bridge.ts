@@ -35,6 +35,8 @@ import type {
 } from './layout-types.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_TITLES } from './layout-factory.js';
 
+const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
+
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
 
@@ -64,6 +66,16 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
   // shape === 'native'
   try {
     api.fromJSON(payload.json as Parameters<DockviewApi['fromJSON']>[0]);
+    const restoredPanels = api.panels;
+    if (restoredPanels.length === 0) {
+      throw new Error('restored layout contains no panels');
+    }
+    const unknownPanels = restoredPanels
+      .map((panel) => panel.api.component)
+      .filter((component) => !KNOWN_COMPONENTS.has(component));
+    if (unknownPanels.length > 0) {
+      throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
+    }
   } catch (err) {
     // The user just lost their saved layout. Don't be silent — log the
     // cause + a sample of the JSON so the bug is filable. layout-migrations
@@ -74,6 +86,7 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
       err: errMessage(err),
       jsonPreview: previewJson(payload.json)
     });
+    api.clear();
     applyFactoryShape(api, defaultFactoryShape(layout));
   }
 }

@@ -20,6 +20,7 @@ import type { WorkspaceFile } from '../../services/workspace.js';
 
 interface Props {
   hasWorkspace: boolean;
+  hasExploreContent: boolean;
   /** Forwarded to GitSyncPerspective for the sync-engine subscription. */
   workspaceId?: string;
   /** Forwarded to GitSyncPerspective for the sync-engine subscription. */
@@ -30,6 +31,7 @@ interface Props {
 
 export function PerspectiveHost({
   hasWorkspace,
+  hasExploreContent,
   workspaceId,
   workspaceKind,
   files
@@ -43,7 +45,9 @@ export function PerspectiveHost({
   // every such transition). Fall back to the always-available Workspaces
   // launcher rather than relying on every caller to reset the store.
   const requiresWorkspace = PERSPECTIVES.find((p) => p.id === active)?.requiresWorkspace ?? false;
-  const effective = requiresWorkspace && !hasWorkspace ? 'workspaces' : active;
+  const missingRequiredContext =
+    active === 'explore' ? !hasExploreContent : requiresWorkspace && !hasWorkspace;
+  const effective = missingRequiredContext ? 'workspaces' : active;
   return (
     <div className="flex-1 min-h-0">
       {/* Explore: kept alive — hidden via display:none, NEVER unmounted. */}

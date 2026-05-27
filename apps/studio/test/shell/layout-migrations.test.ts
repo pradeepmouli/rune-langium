@@ -231,4 +231,69 @@ describe('sanitizeLayout (T063)', () => {
       '[layout-migrations] reset invalid saved layout to defaults'
     );
   });
+
+  it('rebuilds empty native layouts instead of passing a blank shell through to dockview', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stale = {
+      version: LAYOUT_SCHEMA_VERSION,
+      writtenBy: '0.2.0',
+      dockview: {
+        shape: 'native',
+        json: {
+          grid: {
+            root: { type: 'group', data: 'group-1' },
+            height: 900,
+            width: 1440,
+            orientation: 'horizontal'
+          },
+          panels: {}
+        }
+      }
+    };
+
+    const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+
+    expect(out.dockview.columns).toHaveLength(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] reset invalid saved layout to defaults'
+    );
+  });
+
+  it('rebuilds native layouts that reference unknown content components', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stale = {
+      version: LAYOUT_SCHEMA_VERSION,
+      writtenBy: '0.2.0',
+      dockview: {
+        shape: 'native',
+        json: {
+          grid: {
+            root: { type: 'group', data: 'group-1' },
+            height: 900,
+            width: 1440,
+            orientation: 'horizontal'
+          },
+          panels: {
+            'ghost-panel': {
+              id: 'ghost-panel',
+              contentComponent: 'workspace.ghost'
+            }
+          }
+        }
+      }
+    };
+
+    const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected');
+    }
+
+    expect(out.dockview.columns).toHaveLength(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] reset invalid saved layout to defaults'
+    );
+  });
 });

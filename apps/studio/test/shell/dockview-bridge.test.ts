@@ -57,8 +57,16 @@ class FakeDockviewApi {
     if (!this.calls.some((c) => c.id === id)) return undefined;
     return { api: { setActive: () => this.activatedPanels.push(id) } };
   }
+  get panels() {
+    return this.calls.map((call) => ({
+      api: { component: call.component }
+    }));
+  }
   fromJSON() {
     this.fromJSONCalls++;
+  }
+  clear() {
+    this.calls = [];
   }
   toJSON() {
     return { panels: this.calls.map((c) => c.id) };
@@ -158,9 +166,13 @@ describe('applyLayout — native shape', () => {
       dockview: { shape: 'native' as const, json: { panels: ['workspace.editor'] } }
     };
     const api = new FakeDockviewApi();
+    api.fromJSON = () => {
+      api.fromJSONCalls++;
+      api.calls.push({ id: 'workspace.editor', component: 'workspace.editor' });
+    };
     applyLayout(api as never, native);
     expect(api.fromJSONCalls).toBe(1);
-    expect(api.calls).toHaveLength(0);
+    expect(api.calls).toHaveLength(1);
   });
 
   it('logs and falls back to factory layout when api.fromJSON throws', () => {
@@ -179,6 +191,40 @@ describe('applyLayout — native shape', () => {
     expect(errSpy).toHaveBeenCalledOnce();
     const arg0 = errSpy.mock.calls[0]?.[0];
     expect(String(arg0)).toContain('api.fromJSON rejected');
+    expect(api.calls.length).toBeGreaterThanOrEqual(6);
+    errSpy.mockRestore();
+  });
+
+  it('logs and falls back when fromJSON restores zero panels', () => {
+    const native = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: { shape: 'native' as const, json: { grid: { root: {} }, panels: {} } }
+    };
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const api = new FakeDockviewApi();
+    applyLayout(api as never, native);
+    expect(api.fromJSONCalls).toBe(1);
+    expect(errSpy).toHaveBeenCalledOnce();
+    expect(api.calls.length).toBeGreaterThanOrEqual(6);
+    errSpy.mockRestore();
+  });
+
+  it('logs and falls back when fromJSON restores unknown components', () => {
+    const native = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: { shape: 'native' as const, json: { grid: { root: {} }, panels: { ghost: {} } } }
+    };
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const api = new FakeDockviewApi();
+    api.fromJSON = () => {
+      api.fromJSONCalls++;
+      api.calls.push({ id: 'ghost', component: 'workspace.ghost' });
+    };
+    applyLayout(api as never, native);
+    expect(api.fromJSONCalls).toBe(1);
+    expect(errSpy).toHaveBeenCalledOnce();
     expect(api.calls.length).toBeGreaterThanOrEqual(6);
     errSpy.mockRestore();
   });
