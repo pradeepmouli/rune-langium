@@ -97,8 +97,18 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     // 019 Task #88 follow-up: thread `serializedModelJson` through to
     // the preview worker so curated bundle files (which ship pre-parsed
     // ASTs and an empty `content`) can be hydrated and previewed.
+    //
+    // List-only curated refs (`refOnly`, no `serializedModelJson`) are NOT
+    // parseable preview inputs: they use synthetic bundle/namespace paths and
+    // exist only so the explorer can surface deferred exports before hydration.
+    // Letting them reach the preview worker regresses into Langium's
+    // "no services for the extension ''" dead-end.
     const allFiles = files
-      .filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX))
+      .filter(
+        (f) =>
+          !f.path.endsWith(BUNDLE_MARKER_SUFFIX) &&
+          (!f.refOnly || Boolean(f.serializedModelJson))
+      )
       .map((f) => ({
         uri: pathToUri(f.path),
         content: f.content,

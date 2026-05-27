@@ -85,6 +85,16 @@ let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let cachedFuncCode = new Map<string, string>();
 
+function isPreviewUserEntryParseable(entry: FileEntry): boolean {
+  const lowerUri = entry.uri.toLowerCase();
+  // Defensive guard: preview input should only parse real source files.
+  // List-only curated refs use synthetic extensionless URIs plus empty content;
+  // routing them through Langium's parser triggers "no services for the
+  // extension ''". Hydrated curated entries are handled separately through
+  // `serializedModelJson`.
+  return lowerUri.endsWith('.rosetta') && entry.content.trim().length > 0;
+}
+
 function hasDocumentErrors(document: LangiumDocument): boolean {
   const hasDiagnostics = (document.diagnostics ?? []).some((diagnostic) => diagnostic.severity === 1);
   const hasLexerErrors = document.parseResult.lexerErrors.length > 0;
@@ -197,7 +207,9 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
   // error and the doc would be filtered out, leaving form preview
   // unable to find curated types. Hydrate them via the serializer
   // instead.
-  const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson);
+  const userEntries = currentPreviewFiles.filter(
+    (e) => !e.serializedModelJson && isPreviewUserEntryParseable(e)
+  );
   const curatedEntries = currentPreviewFiles.filter((e) => Boolean(e.serializedModelJson));
 
   const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
