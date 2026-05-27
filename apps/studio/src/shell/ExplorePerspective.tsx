@@ -957,7 +957,8 @@ export function ExplorePerspective() {
 
   const navigateToNode = useCallback(
     (nodeId: string) => {
-      const exists = storeNodes.some((n) => n.id === nodeId);
+      const targetNode = storeNodes.find((n) => n.id === nodeId);
+      const exists = Boolean(targetNode);
       if (!exists) {
         const shortName = nodeId.includes('::') ? nodeId.split('::').pop() : nodeId;
         showToast({
@@ -973,6 +974,10 @@ export function ExplorePerspective() {
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       storeSelectNode(nodeId, { reapplyFocusMode: true });
+      const targetData = targetNode?.data as { namespace?: string; deferred?: boolean } | undefined;
+      if (targetData?.deferred && targetData.namespace) {
+        useEditorStore.getState().requestNamespaceHydration(targetData.namespace);
+      }
       if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
         graphRef.current?.focusNode(nodeId);
       }
