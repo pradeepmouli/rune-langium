@@ -170,6 +170,22 @@ describe('EditorPage — Curated Models button wiring', () => {
     expect(screen.queryByTestId('model-loader')).not.toBeInTheDocument();
   });
 
+  it('mounts the Explore workbench for deferred-only curated bundles', () => {
+    renderEditorPage({
+      models: [],
+      files: [],
+      deferredExports: [
+        {
+          filePath: 'cdm/cdm.base.math',
+          namespace: 'cdm.base.math',
+          exports: [{ type: 'Data', name: 'Quantity' }]
+        }
+      ]
+    });
+
+    expect(screen.getByTestId('dock-shell')).toBeInTheDocument();
+  });
+
   // TODO(T6/WorkspacesPerspective): restore when the curated-models trigger is
   // re-homed into the WorkspacesPerspective panel. The ActivityBar Database
   // button was removed in Task 3; `showCuratedModels` state stays in EditorPage.

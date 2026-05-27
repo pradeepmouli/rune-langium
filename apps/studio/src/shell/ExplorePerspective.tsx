@@ -1744,13 +1744,13 @@ export function ExplorePerspective() {
 
   // Empty-content guard (keep-alive hazard): ExplorePerspective is ALWAYS
   // mounted by PerspectiveHost (display:none when inactive), including before
-  // any user files OR reference models exist. With neither editable files nor
-  // parsed models, the dockview/graph/structure workbench has nothing
-  // meaningful to render, and mounting DockShell against an empty corpus risks
-  // running layout/effects with no graph data. Model-only sessions are valid,
-  // though, so keep the placeholder only for the true "no explore content"
-  // case instead of gating solely on editable file count.
-  if (fileCount === 0 && models.length === 0) {
+  // any user files OR reference models exist. With neither editable files,
+  // materialized models, nor deferred curated exports, the dockview/graph/
+  // structure workbench has nothing meaningful to render, and mounting
+  // DockShell against an empty corpus risks running layout/effects with no
+  // graph data. Deferred-only curated loads are valid Explore content because
+  // loadModels([]) materializes placeholder nodes from deferredExports.
+  if (fileCount === 0 && models.length === 0 && deferredExports.length === 0) {
     return <div data-testid="explore-workbench" className="flex flex-col h-full overflow-hidden" />;
   }
 
