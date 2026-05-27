@@ -1,5 +1,6 @@
 {
   "$schema": "https://ui.shadcn.com/schema.json",
+  "_note": "All 16 UI wrappers in src/ui/ are now hand-maintained against @base-ui/react subpath imports. Do NOT run 'shadcn add' or 'shadcn update' for these components — it would restore Radix-backed versions. See docs/superpowers/plans/2026-05-26-radix-to-baseui-migration.md §4.4.",
   "style": "new-york",
   "rsc": false,
   "tsx": true,

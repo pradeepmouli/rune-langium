@@ -2,15 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Dialog — shadcn/ui Dialog wrapping radix-ui's Dialog primitive.
+ * Dialog — shadcn/ui Dialog wrapping @base-ui/react/dialog.
  *
  * Provides focus-trap, Esc-to-close, scroll-lock, portal rendering, and
- * the standard fade/zoom animations. Built on `radix-ui`'s meta package
- * (Dialog namespace) so we don't pull in a separate @radix-ui/react-dialog.
+ * the standard fade/zoom animations.
  */
 
 import * as React from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 
 import { cn } from '../utils';
@@ -31,13 +30,13 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Backdrop>) {
   return (
-    <DialogPrimitive.Overlay
+    <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
         'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0',
         className
       )}
       {...props}
@@ -51,20 +50,20 @@ function DialogContent({
   showCloseButton = true,
   overlayProps,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+}: React.ComponentProps<typeof DialogPrimitive.Popup> & {
   showCloseButton?: boolean;
   /** Forwarded to the rendered <DialogOverlay /> — useful for test ids and
    *  custom click handlers that target the backdrop. */
-  overlayProps?: React.ComponentProps<typeof DialogPrimitive.Overlay> & Record<`data-${string}`, string>;
+  overlayProps?: React.ComponentProps<typeof DialogPrimitive.Backdrop> & Record<`data-${string}`, string>;
 }) {
   return (
     <DialogPortal>
       <DialogOverlay {...overlayProps} />
-      <DialogPrimitive.Content
+      <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
           'bg-card text-card-foreground border-border fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg',
-          'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200',
+          'data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 duration-200',
           className
         )}
         {...props}
@@ -79,7 +78,7 @@ function DialogContent({
             <X className="size-4" />
           </DialogPrimitive.Close>
         )}
-      </DialogPrimitive.Content>
+      </DialogPrimitive.Popup>
     </DialogPortal>
   );
 }

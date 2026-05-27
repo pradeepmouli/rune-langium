@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Tabs — shadcn/ui Tabs wrapping @radix-ui/react-tabs.
+ * Tabs — shadcn/ui Tabs wrapping @base-ui/react/tabs.
  *
  * @module
  */
 
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
 
 import { cn } from '../utils';
 
@@ -25,13 +25,13 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   );
 }
 
-function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Tab>) {
   return (
-    <TabsPrimitive.Trigger
+    <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
         'rounded-md px-3 py-1.5 text-sm',
-        'data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm',
+        'data-[active]:bg-background data-[active]:text-foreground data-[active]:shadow-sm',
         className
       )}
       {...props}
@@ -39,9 +39,9 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
   );
 }
 
-function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Panel>) {
   return (
-    <TabsPrimitive.Content data-slot="tabs-content" className={cn('mt-2', className)} {...props} />
+    <TabsPrimitive.Panel data-slot="tabs-content" className={cn('mt-2', className)} {...props} />
   );
 }
 

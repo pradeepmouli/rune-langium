@@ -3,9 +3,8 @@
 
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Slot } from '@radix-ui/react-slot';
 
-import { cn } from '../utils';
+import { cloneElementWithMergedClassName, cn } from '../utils';
 
 const buttonVariants = cva(
   // T058 (014/FR-026) — focus-visible normalised to a single
@@ -61,23 +60,25 @@ function Button({
   className,
   variant = 'default',
   size = 'default',
-  asChild = false,
+  render,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean;
+    render?: React.ReactElement<{ className?: string }>;
   }) {
-  const Comp = asChild ? Slot : 'button';
+  const buttonProps = {
+    'data-slot': 'button',
+    'data-variant': variant,
+    'data-size': size,
+    className: cn(buttonVariants({ variant, size, className })),
+    ...props,
+  };
 
-  return (
-    <Comp
-      data-slot="button"
-      data-variant={variant}
-      data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  );
+  if (render != null && React.isValidElement(render)) {
+    return cloneElementWithMergedClassName(render, buttonProps);
+  }
+
+  return <button {...buttonProps} />;
 }
 
 export { Button, buttonVariants };

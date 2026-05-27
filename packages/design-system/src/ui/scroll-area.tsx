@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * ScrollArea — shadcn/ui ScrollArea wrapping @radix-ui/react-scroll-area.
+ * ScrollArea — shadcn/ui ScrollArea wrapping @base-ui/react/scroll-area.
  *
  * @module
  */
 
-import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area';
+import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area';
 
 import { cn } from '../utils';
 
@@ -38,9 +38,9 @@ function ScrollBar({
   className,
   orientation = 'vertical',
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Scrollbar>) {
   return (
-    <ScrollAreaPrimitive.ScrollAreaScrollbar
+    <ScrollAreaPrimitive.Scrollbar
       data-slot="scroll-area-scrollbar"
       orientation={orientation}
       className={cn(
@@ -51,8 +51,8 @@ function ScrollBar({
       )}
       {...props}
     >
-      <ScrollAreaPrimitive.ScrollAreaThumb className="bg-border relative flex-1 rounded-full" />
-    </ScrollAreaPrimitive.ScrollAreaScrollbar>
+      <ScrollAreaPrimitive.Thumb className="bg-border relative flex-1 rounded-full" />
+    </ScrollAreaPrimitive.Scrollbar>
   );
 }
 

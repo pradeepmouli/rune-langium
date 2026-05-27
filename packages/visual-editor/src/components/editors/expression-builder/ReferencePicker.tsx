@@ -55,18 +55,11 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
        * Zero-size anchor — opened programmatically by ExpressionBuilder,
        * not by direct user interaction on a visible button.
        */}
-      <PopoverTrigger asChild>
-        <span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-56 p-0"
-        align="start"
-        sideOffset={4}
-        data-testid="reference-picker"
-        // Trigger is a zero-size aria-hidden span; prevent Radix from returning
-        // focus to it on close (Copilot #227).
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
+      <PopoverTrigger
+        nativeButton={false}
+        render={<span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />}
+      />
+      <PopoverContent className="w-56 p-0" align="start" sideOffset={4} data-testid="reference-picker">
         <Command>
           <CommandList>
             <CommandEmpty>No variables in scope</CommandEmpty>

@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import {
   Toast,
   ToastClose,
   ToastDescription,
   ToastProvider,
   ToastTitle,
-  ToastViewport
+  ToastViewport,
+  useToastManager
 } from '@rune-langium/design-system/ui/toast';
 
 type StudioToastVariant = 'default' | 'destructive';
@@ -20,10 +21,6 @@ interface StudioToastInput {
   duration?: number;
 }
 
-interface StudioToastState extends StudioToastInput {
-  id: number;
-}
-
 interface StudioToastContextValue {
   showToast: (toast: StudioToastInput) => void;
 }
@@ -31,44 +28,44 @@ interface StudioToastContextValue {
 const StudioToastContext = createContext<StudioToastContextValue | null>(null);
 
 export function StudioToastProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<StudioToastState | null>(null);
-  const nextToastIdRef = useRef(0);
+  return (
+    <ToastProvider duration={4000}>
+      <StudioToastInner>{children}</StudioToastInner>
+    </ToastProvider>
+  );
+}
 
-  const showToast = useCallback((input: StudioToastInput) => {
-    nextToastIdRef.current += 1;
-    setToast({
-      id: nextToastIdRef.current,
-      variant: 'default',
-      ...input
-    });
-  }, []);
+function StudioToastInner({ children }: { children: ReactNode }) {
+  const { toasts, add } = useToastManager();
+
+  const showToast = useCallback(
+    (input: StudioToastInput) => {
+      add({
+        title: input.title,
+        description: input.description,
+        type: input.variant ?? 'default',
+        timeout: input.duration
+      });
+    },
+    [add]
+  );
 
   const contextValue = useMemo<StudioToastContextValue>(() => ({ showToast }), [showToast]);
 
   return (
     <StudioToastContext.Provider value={contextValue}>
-      <ToastProvider duration={toast?.duration ?? 4000} swipeDirection="right">
-        {children}
-        {toast && (
-          <Toast
-            key={toast.id}
-            variant={toast.variant}
-            type={toast.variant === 'destructive' ? 'foreground' : 'background'}
-            onOpenChange={(open) => {
-              if (!open) {
-                setToast((current) => (current?.id === toast.id ? null : current));
-              }
-            }}
-          >
+      {children}
+      <ToastViewport aria-label="Studio notifications">
+        {toasts.map((t) => (
+          <Toast key={t.id} toast={t} variant={t.type as StudioToastVariant}>
             <div className="grid gap-1">
-              {toast.title ? <ToastTitle>{toast.title}</ToastTitle> : null}
-              <ToastDescription>{toast.description}</ToastDescription>
+              {t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
+              <ToastDescription>{t.description}</ToastDescription>
             </div>
             <ToastClose aria-label="Dismiss notification" />
           </Toast>
-        )}
-        <ToastViewport aria-label="Studio notifications" />
-      </ToastProvider>
+        ))}
+      </ToastViewport>
     </StudioToastContext.Provider>
   );
 }

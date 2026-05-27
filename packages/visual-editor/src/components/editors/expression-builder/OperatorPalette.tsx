@@ -71,20 +71,13 @@ export function OperatorPalette({
       {/*
        * Zero-size anchor trigger — the palette is opened programmatically by
        * the ExpressionBuilder (openPalette), not by user interaction with a
-       * visible button. We use asChild on a hidden span to avoid a real button.
+       * visible button.
        */}
-      <PopoverTrigger asChild>
-        <span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-64 p-0"
-        align="start"
-        sideOffset={4}
-        data-testid="operator-palette"
-        // Trigger is a zero-size aria-hidden span; prevent Radix from returning
-        // focus to it on close (Copilot #227).
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
+      <PopoverTrigger
+        nativeButton={false}
+        render={<span aria-hidden style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }} />}
+      />
+      <PopoverContent className="w-64 p-0" align="start" sideOffset={4} data-testid="operator-palette">
         <Command>
           <CommandInput placeholder="Search operators..." data-testid="palette-search" autoFocus />
           <CommandList className="studio-scroll max-h-60">

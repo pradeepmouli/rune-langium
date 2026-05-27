@@ -78,29 +78,31 @@ export function GraphFilterMenu({ compact = false, className, align = 'start' }:
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        {compact ? (
-          <button
-            type="button"
-            className={cn('studio-panel-action', className)}
-            data-active={filtersActive ? 'true' : undefined}
-            aria-label="Filter visible types and relationships"
-            title="Filter visible types and relationships"
-          >
-            <Filter className="size-4" />
-          </button>
-        ) : (
-          <Button
-            variant={filtersActive ? 'default' : 'secondary'}
-            size="xs"
-            title="Filter visible types and relationships"
-            className={className}
-          >
-            <Filter />
-            Filter
-          </Button>
-        )}
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          compact ? (
+            <button
+              type="button"
+              className={cn('studio-panel-action', className)}
+              data-active={filtersActive ? 'true' : undefined}
+              aria-label="Filter visible types and relationships"
+              title="Filter visible types and relationships"
+            >
+              <Filter className="size-4" />
+            </button>
+          ) : (
+            <Button
+              variant={filtersActive ? 'default' : 'secondary'}
+              size="xs"
+              title="Filter visible types and relationships"
+              className={className}
+            >
+              <Filter />
+              Filter
+            </Button>
+          )
+        }
+      />
       <PopoverContent className="w-64 p-0" align={align} sideOffset={4}>
         <div className="p-3">
           {/* Node kinds section */}

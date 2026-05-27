@@ -34,12 +34,7 @@ import {
   DialogTitle
 } from '@rune-langium/design-system/ui/dialog';
 import { Separator } from '@rune-langium/design-system/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '@rune-langium/design-system/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 
 /** One layout choice rendered as a radio option. */
 export interface LayoutChoice {
@@ -202,10 +197,7 @@ export function DownloadConfigModal({
     setTargetOptions({});
   }, [open, target, namespaces, panel?.defaultLayout]);
 
-  const selection = useMemo(
-    () => computeNamespaceSelection(selected, dependencyGraph),
-    [selected, dependencyGraph]
-  );
+  const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
 
   function toggleNamespace(ns: string): void {
     setSelected((prev) => {
@@ -259,9 +251,7 @@ export function DownloadConfigModal({
           {/* Layout — only for layout-aware targets */}
           {hasLayouts && (
             <div className="flex flex-col gap-2" data-testid="download-config-modal__layout">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Layout
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Layout</span>
               <RadioGroup value={layout} onValueChange={setLayout}>
                 {panel!.layouts.map((choice) => {
                   const id = `download-layout-${choice.value}`;
@@ -290,9 +280,7 @@ export function DownloadConfigModal({
               payload. */}
           {OptionsForm !== undefined && (
             <div className="flex flex-col gap-2" data-testid="download-config-modal__options">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Options
-              </span>
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options</span>
               <OptionsForm value={targetOptions} onChange={setTargetOptions} />
             </div>
           )}
@@ -301,60 +289,59 @@ export function DownloadConfigModal({
               nothing to narrow (dep graph not populated) — Generate then
               emits everything. */}
           {hasNamespaces && (
-          <div className="flex flex-col gap-2" data-testid="download-config-modal__namespaces">
-            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
-            </span>
-            <TooltipProvider>
-              <div className="flex flex-col gap-1.5">
-                {namespaces.map((ns) => {
-                  const isSelected = selected.has(ns);
-                  const isPulled = selection.pulled.has(ns);
-                  const sources = selection.pulledBy.get(ns);
-                  const id = `download-ns-${ns}`;
-                  const row = (
-                    <div
-                      className={
-                        'flex items-center gap-2 text-sm ' +
-                        (isPulled ? 'text-muted-foreground' : 'text-foreground')
-                      }
-                      data-testid={`download-config-modal__ns-row-${ns}`}
-                      data-state={isSelected ? 'selected' : isPulled ? 'pulled' : 'unselected'}
-                    >
-                      <Checkbox
-                        id={id}
-                        // A pulled dependency is read-only: the user can only
-                        // remove it by deselecting whatever pulled it in
-                        // (§5.2 prevents partial-graph emit).
-                        checked={isSelected || isPulled}
-                        disabled={isPulled}
-                        onCheckedChange={() => toggleNamespace(ns)}
-                        data-testid={`download-config-modal__ns-${ns}`}
-                      />
-                      <label htmlFor={id} className="font-mono">
-                        {ns}
-                      </label>
-                      {isPulled && (
-                        <Badge variant="secondary" className="ml-auto text-[10px]">
-                          auto
-                        </Badge>
-                      )}
-                    </div>
-                  );
-                  // Wrap pulled rows in a tooltip explaining provenance.
-                  if (isPulled && sources && sources.length > 0) {
-                    return (
-                      <Tooltip key={ns}>
-                        <TooltipTrigger asChild>{row}</TooltipTrigger>
-                        <TooltipContent>pulled by {sources.join(', ')}</TooltipContent>
-                      </Tooltip>
+            <div className="flex flex-col gap-2" data-testid="download-config-modal__namespaces">
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
+              </span>
+              <TooltipProvider>
+                <div className="flex flex-col gap-1.5">
+                  {namespaces.map((ns) => {
+                    const isSelected = selected.has(ns);
+                    const isPulled = selection.pulled.has(ns);
+                    const sources = selection.pulledBy.get(ns);
+                    const id = `download-ns-${ns}`;
+                    const row = (
+                      <div
+                        className={
+                          'flex items-center gap-2 text-sm ' + (isPulled ? 'text-muted-foreground' : 'text-foreground')
+                        }
+                        data-testid={`download-config-modal__ns-row-${ns}`}
+                        data-state={isSelected ? 'selected' : isPulled ? 'pulled' : 'unselected'}
+                      >
+                        <Checkbox
+                          id={id}
+                          // A pulled dependency is read-only: the user can only
+                          // remove it by deselecting whatever pulled it in
+                          // (§5.2 prevents partial-graph emit).
+                          checked={isSelected || isPulled}
+                          disabled={isPulled}
+                          onCheckedChange={() => toggleNamespace(ns)}
+                          data-testid={`download-config-modal__ns-${ns}`}
+                        />
+                        <label htmlFor={id} className="font-mono">
+                          {ns}
+                        </label>
+                        {isPulled && (
+                          <Badge variant="secondary" className="ml-auto text-[10px]">
+                            auto
+                          </Badge>
+                        )}
+                      </div>
                     );
-                  }
-                  return <div key={ns}>{row}</div>;
-                })}
-              </div>
-            </TooltipProvider>
-          </div>
+                    // Wrap pulled rows in a tooltip explaining provenance.
+                    if (isPulled && sources && sources.length > 0) {
+                      return (
+                        <Tooltip key={ns}>
+                          <TooltipTrigger render={row} />
+                          <TooltipContent>pulled by {sources.join(', ')}</TooltipContent>
+                        </Tooltip>
+                      );
+                    }
+                    return <div key={ns}>{row}</div>;
+                  })}
+                </div>
+              </TooltipProvider>
+            </div>
           )}
         </div>
 

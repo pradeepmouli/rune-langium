@@ -136,6 +136,19 @@ Snapshot of visual editor state tracked by the zustand store.
 
 **Required:** yes
 
+#### deferredExports
+
+Curated-bundle deferred-export entries, stored on the store so
+`loadModels` can re-merge their placeholder graph nodes after
+replacing `nodes` with new RosettaModel-derived nodes. Without this
+state, every `loadModels` call (e.g. from EditorPage's linkDocument
+callback) would silently lose the curated namespaces that
+`loadDeferredExports` previously created.
+
+**Type:** `DeferredExportEntry[]`
+
+**Required:** yes
+
 #### selectedNodeId
 
 **Type:** `string | null`
@@ -197,5 +210,88 @@ Node kinds excluded from focus-mode related clusters (selected node is always re
 #### visibility
 
 **Type:** `VisibilityState`
+
+**Required:** yes
+
+#### pendingHydrationNamespaces
+
+Namespaces queued for server-side hydration. An App.tsx effect watches
+this list and re-parses with `hydrateNamespaces` set to the cumulative
+union of these + `hydratedNamespaces` so the worker receives the full
+closure. Cleared by `markNamespacesHydrated` once the parse completes.
+
+**Type:** `string[]`
+
+**Required:** yes
+
+#### hydratedNamespaces
+
+Namespaces that have already been hydrated in the current session.
+Used by `requestNamespaceHydration` to deduplicate requests and by the
+App.tsx re-parse effect to build the cumulative `hydrateNamespaces` set
+(replacement-semantics worker hydration requires sending the full set).
+
+**Type:** `string[]`
+
+**Required:** yes
+
+#### hydrationNonce
+
+Monotonically-incrementing counter, bumped by `markNamespacesHydrated`
+each time new AST content reaches the worker. Consumers (e.g.
+ExplorePerspective) can react to this to re-link a selected node whose
+initial link ran before the hydration round-trip completed.
+
+**Type:** `number`
+
+**Required:** yes
+
+## UseTypeRefDropOptions
+
+### Properties
+
+#### accept
+
+Kinds this drop target will accept. Drops whose `payload.kind` is not in
+this list are silently ignored (no `onDrop` call).
+
+`isOver` semantics during dragover depend on what the drag source
+registered on `dataTransfer`:
+- **Kind-specific MIME** (e.g. `application/x-rune-type-ref+data`): `isOver`
+  is set only when at least one registered kind matches this list — strict
+  accept gating during hover.
+- **Canonical MIME only** (`application/x-rune-type-ref`, no kind suffix):
+  `isOver` is set as a backward-compatibility fallback; kind filtering
+  moves to drop time via the parsed payload + `accept` check. Hover may
+  briefly show "accepting" before the drop is rejected.
+
+Drag sources following the recommended dual-MIME contract get the strict
+behavior; single-MIME sources still work but lose dragover-time filtering.
+
+**Type:** `readonly ("Annotation" | "Choice" | "Data" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Func")[]`
+
+**Required:** yes
+
+#### onDrop
+
+Called with the parsed payload when an accepted drop completes.
+
+**Type:** `(payload: TypeRefPayload) => void`
+
+**Required:** yes
+
+## BuildOptions
+
+### Properties
+
+#### focusedTypeId
+
+**Type:** `string`
+
+**Required:** yes
+
+#### expansionMap
+
+**Type:** `ReadonlyMap<string, boolean>`
 
 **Required:** yes
