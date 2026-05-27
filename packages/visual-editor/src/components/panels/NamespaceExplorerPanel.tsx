@@ -241,33 +241,37 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
           </div>
           <IconButtonGroup>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={onExpandAll}
-                  data-testid="expand-all"
-                  className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
-                >
-                  <PlusSquare className="size-3.5" />
-                  <span className="sr-only">Show all</span>
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={onExpandAll}
+                    data-testid="expand-all"
+                    className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                  >
+                    <PlusSquare className="size-3.5" />
+                    <span className="sr-only">Show all</span>
+                  </Button>
+                }
+              />
               <TooltipContent>Show all namespaces on graph</TooltipContent>
             </Tooltip>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={onCollapseAll}
-                  data-testid="collapse-all"
-                  className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
-                >
-                  <MinusSquare className="size-3.5" />
-                  <span className="sr-only">Hide all</span>
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={onCollapseAll}
+                    data-testid="collapse-all"
+                    className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                  >
+                    <MinusSquare className="size-3.5" />
+                    <span className="sr-only">Hide all</span>
+                  </Button>
+                }
+              />
               <TooltipContent>Hide all namespaces from graph</TooltipContent>
             </Tooltip>
           </IconButtonGroup>
@@ -549,12 +553,14 @@ function TypeItemRow({
 
       {refCount > 0 && (
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-              <Link className="size-3" />
-              <span className="text-[10px]">{refCount}</span>
-            </span>
-          </TooltipTrigger>
+          <TooltipTrigger
+            render={
+              <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                <Link className="size-3" />
+                <span className="text-[10px]">{refCount}</span>
+              </span>
+            }
+          />
           <TooltipContent>{refCount} hidden reference(s)</TooltipContent>
         </Tooltip>
       )}

@@ -13,9 +13,20 @@ import { Circle } from 'lucide-react';
 
 import { cn } from '../utils';
 
-function RadioGroup({ className, ...props }: React.ComponentProps<typeof RadioGroupPrimitive>) {
+function RadioGroup({
+  className,
+  onValueChange,
+  ...props
+}: Omit<React.ComponentProps<typeof RadioGroupPrimitive>, 'onValueChange'> & {
+  onValueChange?: (value: string) => void;
+}) {
   return (
-    <RadioGroupPrimitive data-slot="radio-group" className={cn('grid gap-2', className)} {...props} />
+    <RadioGroupPrimitive
+      data-slot="radio-group"
+      className={cn('grid gap-2', className)}
+      onValueChange={onValueChange ? (value) => onValueChange(value as string) : undefined}
+      {...props}
+    />
   );
 }
 
@@ -32,10 +43,7 @@ function RadioGroupItem({ className, ...props }: React.ComponentProps<typeof Rad
       )}
       {...props}
     >
-      <Radio.Indicator
-        data-slot="radio-group-indicator"
-        className="flex items-center justify-center"
-      >
+      <Radio.Indicator data-slot="radio-group-indicator" className="flex items-center justify-center">
         <Circle className="size-2 fill-primary text-primary" />
       </Radio.Indicator>
     </Radio.Root>
