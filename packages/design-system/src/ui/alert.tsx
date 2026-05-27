@@ -13,7 +13,6 @@
  */
 
 import * as React from 'react';
-import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../utils';
@@ -50,17 +49,19 @@ function Alert({
 
 function AlertTitle({
   className,
-  asChild = false,
+  render,
   ...props
-}: React.ComponentProps<'div'> & { asChild?: boolean }) {
-  const Comp: React.ElementType = asChild ? Slot : 'div';
-  return (
-    <Comp
-      data-slot="alert-title"
-      className={cn('col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight', className)}
-      {...props}
-    />
-  );
+}: React.ComponentProps<'div'> & { render?: React.ReactElement }) {
+  const alertTitleProps = {
+    'data-slot': 'alert-title',
+    className: cn('col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight', className),
+    ...props,
+  };
+  if (render != null && React.isValidElement(render)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return React.cloneElement(render, alertTitleProps as any);
+  }
+  return <div {...alertTitleProps} />;
 }
 
 function AlertDescription({ className, ...props }: React.ComponentProps<'div'>) {

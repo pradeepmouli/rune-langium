@@ -73,10 +73,8 @@ export function CuratedLoadErrorPanel({
       data-category={category}
       className={className}
     >
-      <AlertTitle asChild>
-        <h3>
-          Loading {modelName} failed: {copy.title}
-        </h3>
+      <AlertTitle render={<h3 />}>
+        Loading {modelName} failed: {copy.title}
       </AlertTitle>
       <AlertDescription>
         <p>{copy.body}</p>

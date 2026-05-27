@@ -581,9 +581,6 @@ importers:
       '@radix-ui/react-select':
         specifier: ^2.2.6
         version: 2.2.6(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      '@radix-ui/react-slot':
-        specifier: 1.2.4
-        version: 1.2.4(patch_hash=0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807)(@types/react@19.2.15)(react@19.2.6)
       '@radix-ui/react-tabs':
         specifier: ^1.1.13
         version: 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
