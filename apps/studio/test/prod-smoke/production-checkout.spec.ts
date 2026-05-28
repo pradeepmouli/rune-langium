@@ -99,6 +99,7 @@ test.describe('production checkout smoke', () => {
     // /Members \([1-9]/ ensures at least one member — DetailPanel's guard
     // `{members.length > 0 && ...}` means "Members (0)" is never rendered, but
     // being explicit here documents the intent clearly.
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 15_000 });
+    // Prod /api/parse for a cold namespace hydration can take 20-30s.
+    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 60_000 });
   });
 });
