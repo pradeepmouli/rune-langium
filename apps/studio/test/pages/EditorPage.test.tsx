@@ -159,10 +159,7 @@ const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState } =
   diagnosticsPanelMockState: {
     latestProps: undefined as
       | {
-          fileDiagnostics?: Map<
-            string,
-            Array<{ message: string; severity?: 1 | 2 | 3 | 4; source?: string }>
-          >;
+          fileDiagnostics?: Map<string, Array<{ message: string; severity?: 1 | 2 | 3 | 4; source?: string }>>;
         }
       | undefined
   }
@@ -1226,6 +1223,40 @@ describe('EditorPage workspace chrome', () => {
         message: 'Suspicious cardinality'
       })
     ]);
+  });
+
+  it('does not count info diagnostics as errors in the footer totals', () => {
+    diagnosticsState.fileDiagnostics = new Map([
+      [
+        'file:///workspace/trade.rosetta',
+        [
+          {
+            range: {
+              start: { line: 2, character: 0 },
+              end: { line: 2, character: 5 }
+            },
+            severity: 3,
+            source: 'lsp',
+            message: 'Informational hint'
+          }
+        ]
+      ]
+    ]);
+    diagnosticsState.totalErrors = 0;
+    diagnosticsState.totalWarnings = 0;
+
+    renderEditorPage({
+      files: [
+        {
+          name: 'trade.rosetta',
+          path: 'trade.rosetta',
+          content: 'namespace example\ntype Trade:\n  tradeId string (1..1)\n',
+          dirty: false
+        }
+      ]
+    });
+
+    expect(screen.queryByText(/err \/ .*warn/)).not.toBeInTheDocument();
   });
 
   it('re-centers connected navigation targets when focus mode hides nothing', () => {

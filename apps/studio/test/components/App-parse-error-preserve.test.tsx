@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import type { ReactNode } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { App } from '../../src/App.js';
 import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
@@ -124,6 +124,16 @@ class MockWorker {
   readonly terminate = vi.fn();
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 beforeEach(async () => {
   parseWorkspaceFilesMock.mockReset();
   showToastSpy.mockReset();
@@ -153,6 +163,7 @@ afterEach(() => {
       throw new Error('test opfs root not configured');
     }
   });
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   cleanup();
 });
@@ -191,12 +202,95 @@ describe('App parse recovery', () => {
       expect(screen.getByTestId('error-count').textContent).toBe('0');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'break' }));
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'break' }));
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(screen.getByTestId('model-count').textContent).toBe('1');
+    expect(screen.getByTestId('parsed-count').textContent).toBe('1');
+    expect(screen.getByTestId('error-count').textContent).toBe('1');
+  });
+
+  it('ignores stale edit-time parse results that resolve after newer content', async () => {
+    const staleInvalid = deferred<{
+      models: [];
+      parsedModels: [];
+      errors: Map<string, string[]>;
+      parseMode: 'router';
+    }>();
+    const latestValid = deferred<{
+      models: Array<{ name: string }>;
+      parsedModels: Array<{ filePath: string; model: { name: string } }>;
+      errors: Map<string, string[]>;
+      parseMode: 'router';
+    }>();
+    parseWorkspaceFilesMock
+      .mockResolvedValueOnce({
+        models: [{ name: 'restored.project' }],
+        parsedModels: [{ filePath: 'trade.rosetta', model: { name: 'restored.project' } }],
+        errors: new Map(),
+        parseMode: 'router'
+      })
+      .mockReturnValueOnce(staleInvalid.promise)
+      .mockReturnValueOnce(latestValid.promise);
+
+    await saveWorkspace(makeWorkspace('ws-parse-race', 'Parse Race'));
+    await saveWorkspaceFiles('ws-parse-race', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.project\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
+
+    render(<App />);
 
     await waitFor(() => {
       expect(screen.getByTestId('model-count').textContent).toBe('1');
-      expect(screen.getByTestId('parsed-count').textContent).toBe('1');
-      expect(screen.getByTestId('error-count').textContent).toBe('1');
+      expect(screen.getByTestId('error-count').textContent).toBe('0');
     });
+
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'break' }));
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'break' }));
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    latestValid.resolve({
+      models: [{ name: 'restored.project' }],
+      parsedModels: [{ filePath: 'trade.rosetta', model: { name: 'restored.project' } }],
+      errors: new Map(),
+      parseMode: 'router'
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('error-count').textContent).toBe('0');
+
+    staleInvalid.resolve({
+      models: [],
+      parsedModels: [],
+      errors: new Map([['trade.rosetta', ['Expected ":" after type declaration']]]),
+      parseMode: 'router'
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('model-count').textContent).toBe('1');
+    expect(screen.getByTestId('parsed-count').textContent).toBe('1');
+    expect(screen.getByTestId('error-count').textContent).toBe('0');
   });
 });

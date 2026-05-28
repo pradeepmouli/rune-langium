@@ -146,6 +146,10 @@ function AppContent() {
 
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceManagerRef = useRef<WorkspaceManager | null>(null);
+  // Incremented for every edit-time reparse request so stale async results
+  // (older syntax errors finishing after newer valid text) cannot overwrite
+  // the current Problems/status-bar state.
+  const editParseTokenRef = useRef(0);
   // Incremented before each model-merge parse; only the matching result is
   // applied, preventing stale async results from overwriting newer state.
   const modelParseTokenRef = useRef(0);
@@ -247,17 +251,14 @@ function AppContent() {
         // Dequeue the failed namespaces (without marking hydrated) so the user
         // can retry by re-selecting/re-expanding them; keep the last valid graph.
         useEditorStore.getState().dequeuePendingHydration(pendingHydration);
-        reportWorkspaceError(
-          'Failed to hydrate the selected namespace; keeping the last valid graph',
-          err
-        );
+        reportWorkspaceError('Failed to hydrate the selected namespace; keeping the last valid graph', err);
       });
     return () => {
       cancelled = true;
     };
-  // `files` in deps: an edit during an in-flight hydration re-fires this and
-  // issues a second round-trip; the `cancelled` flag discards the stale result,
-  // so it's a wasted request but correctness-safe.
+    // `files` in deps: an edit during an in-flight hydration re-fires this and
+    // issues a second round-trip; the `cancelled` flag discards the stale result,
+    // so it's a wasted request but correctness-safe.
   }, [pendingHydration, files, applyParseResult, reportWorkspaceError]);
 
   const syncWorkspaceToEditor = useCallback(
@@ -281,7 +282,9 @@ function AppContent() {
         // `files` state it reads from useWorkspace() (filtering bundle-marker
         // and ref-only files). App only sets the files here.
 
-        const result = await parseWorkspaceFiles(mergedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
+        const result = await parseWorkspaceFiles(mergedFiles, {
+          hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
+        });
         applyParseResult(result);
         setWorkspaceError(null);
       } finally {
@@ -644,11 +647,14 @@ function AppContent() {
 
       // Debounced reparse — wait for typing to settle
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
+      editParseTokenRef.current += 1;
+      const token = editParseTokenRef.current;
       reparseTimerRef.current = setTimeout(async () => {
         try {
           const result = await parseWorkspaceFiles(updatedFiles, {
             hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
           });
+          if (token !== editParseTokenRef.current) return;
           // Preserve the last valid graph/model while the user is mid-edit on
           // syntactically invalid text. The Problems panel still updates from
           // `parseErrors`, but the semantic workbench no longer flickers into a
@@ -791,7 +797,9 @@ function AppContent() {
         if (!cancelled) console.warn('[git-sync] Failed to instantiate sync engine:', err);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [getWorkspaceManager, restoredWorkspace]);
 
   const handleCreateGitBackedWorkspace = useCallback(

@@ -136,10 +136,7 @@ function normalizeDiagnosticFilePath(uri: string, files: readonly WorkspaceFile[
   const path = uriToPath(uri);
   const match = files.find(
     (file) =>
-      file.path === path ||
-      file.name === path ||
-      path.endsWith(`/${file.path}`) ||
-      path.endsWith(`/${file.name}`)
+      file.path === path || file.name === path || path.endsWith(`/${file.path}`) || path.endsWith(`/${file.name}`)
   );
   return match?.path ?? path;
 }
@@ -168,7 +165,7 @@ function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagn
     for (const diagnostic of diagnostics) {
       total += 1;
       if (diagnostic.severity === 2) warnings += 1;
-      else errors += 1;
+      else if (diagnostic.severity === 1) errors += 1;
     }
   }
   return { errors, warnings, total };
@@ -1812,10 +1809,7 @@ export function ExplorePerspective() {
   );
 
   const workspaceFileCount = fileCount;
-  const totalProblemCount = useMemo(
-    () => combinedDiagnostics.total,
-    [combinedDiagnostics.total]
-  );
+  const totalProblemCount = useMemo(() => combinedDiagnostics.total, [combinedDiagnostics.total]);
   const panelTabMeta = useMemo(
     () => ({
       'workspace.problems': { count: totalProblemCount }
