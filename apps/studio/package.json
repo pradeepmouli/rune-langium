@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:prod-smoke": "PLAYWRIGHT_PROD_SMOKE=1 playwright test --config playwright.prod.config.ts",
     "type-check": "tsgo --noEmit && tsgo --noEmit -p functions/tsconfig.json"
   },
   "dependencies": {

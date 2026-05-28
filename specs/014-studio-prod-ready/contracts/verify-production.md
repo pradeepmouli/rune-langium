@@ -1,11 +1,11 @@
-# Contract — `verify-production.sh` (extended)
+# Contract — `verify-production.sh`
 
 **Spec hooks**: FR-016, SC-003, US6.
 
 The script `scripts/verify-production.sh` already exists from the
-012 review pass. This contract describes its **full** wire shape
-after Phase 4 lands (LSP probe added). Everything below is currently
-implemented EXCEPT the LSP-health check.
+012 review pass. This contract describes its current production wire
+shape after the legacy `$BASE/api/lsp/health` probe was removed in
+favor of the same-origin Pages Function checks under `$ROOT_BASE/api/*`.
 
 ---
 
@@ -37,7 +37,7 @@ parent shell can grep / pipe / fail on `^FAIL`.
 
 ---
 
-## Probe inventory (post-Phase-4)
+## Probe inventory
 
 | # | Check | Expected | Failure points |
 |---|---|---|---|
@@ -49,7 +49,9 @@ parent shell can grep / pipe / fail on `^FAIL`.
 | 4 | `POST <BASE>/api/telemetry/v1/event` (extra field) | 400 schema_violation | Schema not `.strict()` in production |
 | 5 | `POST <BASE>/api/github-auth/device-init` | 200 with `device_code`/`user_code`, OR 502 misconfig (warn), OR 503 upstream (warn) | 405 = Worker unrouted |
 | 6 | `POST <BASE>/api/random-nonexistent-<ts>` | NOT 405 (or NOT same status as the real telemetry POST) | Catch-all is eating `/api/*` requests; tighten codegen-worker route |
-| **7** **(NEW)** | **`GET <BASE>/api/lsp/health`** | **200 with `{ok: true, langium_loaded: true}`** | 404 = LSP worker unrouted; 200 with `langium_loaded: false` = worker up but langium import failed at runtime |
+| 7a | `GET <ROOT_BASE>/api/lsp/health` | 200 with `langium_loaded:true`, OR 404 warn while Pages Functions are not yet deployed | `langium_loaded:false` = Pages Function live but langium import failed |
+| 7b | `POST <ROOT_BASE>/api/lsp/session` (no `Origin`) | 400/401/403, OR 404/405 warn while Pages Functions are not yet deployed | 200 = origin allowlist is not enforced |
+| 7c | `POST <ROOT_BASE>/api/parse` (`{}`) | 400, OR 404/405 warn while Pages Functions are not yet deployed | Any other status means parse validation is broken or unrouted |
 
 ---
 

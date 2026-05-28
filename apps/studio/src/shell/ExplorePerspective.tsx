@@ -409,8 +409,10 @@ export function ExplorePerspective() {
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
   const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Accumulates corpus models returned by linkDocument so they can be merged into
-  // the graph. Reset when a new workspace is loaded (models prop changes).
+  // the graph. Reset when a new workspace is loaded.
   const corpusModelsRef = useRef<RosettaModel[]>([]);
+  const workspaceIdRef = useRef(workspaceId);
+  const modelsRef = useRef(models);
   const navigationHistoryRef = useRef<string[]>([]);
   const { showToast } = useStudioToast();
   const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
@@ -590,19 +592,36 @@ export function ExplorePerspective() {
   }, [files, models, parsedModels]);
 
   useEffect(() => {
-    // New workspace — discard any previously accumulated corpus models.
-    corpusModelsRef.current = [];
+    workspaceIdRef.current = workspaceId;
+  }, [workspaceId]);
 
+  useEffect(() => {
+    modelsRef.current = models;
+  }, [models]);
+
+  useEffect(() => {
+    // Hydrated curated docs live only in `corpusModelsRef` (the routed parse
+    // intentionally keeps them out of workspace `models[]`). Clear that cache
+    // only when the workspace itself changes; clearing on every parse rerender
+    // makes Structure/Inspector populate for a frame and then drop back to the
+    // deferred placeholder graph.
+    if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+    corpusModelsRef.current = [];
+  }, [workspaceId]);
+
+  useEffect(() => {
     // loadDeferredExports only stashes entries on the store (no node
     // mutation) — Codex P2 review of PR #164: doing both in one set()
     // avoids the "mixed stale graph in undo history" state. Then call
     // loadModels unconditionally — even with `models: []` — so it
     // materializes the curated placeholder nodes from the stashed
-    // deferredExports. Without this, a curated-only workspace would
-    // never show its placeholder nodes.
+    // deferredExports. Hydrated curated docs merged through linkDocument live
+    // in `corpusModelsRef`; keep them in the graph across same-workspace parse
+    // rerenders because the routed parser does not echo them back in
+    // `workspace.models`.
     useEditorStore.getState().loadDeferredExports(deferredExports);
-    useEditorStore.getState().loadModels(models as unknown[]);
-  }, [models, deferredExports]);
+    useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+  }, [models, deferredExports, workspaceId]);
 
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {
     if (!selectedNodeId) return null;
@@ -747,26 +766,32 @@ export function ExplorePerspective() {
     // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
     // Skip system:// URIs (base types are always parsed, never deferred).
     // Debounced so rapid keyboard navigation doesn't queue many worker requests.
+    let cancelled = false;
     if (filePath && !filePath.startsWith('system://')) {
+      const requestWorkspaceId = workspaceId;
       if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
       linkDocumentTimerRef.current = setTimeout(() => {
         void linkDocument(filePath).then((result) => {
+          if (cancelled || workspaceIdRef.current !== requestWorkspaceId || result.newModels.length === 0) {
+            return;
+          }
           if (result.newModels.length > 0) {
             corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
             // loadModels now re-merges the deferred-export placeholder nodes
             // automatically from store state — no need to call
             // loadDeferredExports after this. The store-owned deferredExports
             // state was populated when /api/parse responded.
-            useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+            useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
           }
         });
       }, 150);
     }
     return () => {
+      cancelled = true;
       if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId, selectedNodeData]);
+  }, [selectedNodeId, selectedNodeData, workspaceId]);
 
   // Re-link the selected node after an on-demand hydration completes.
   //
@@ -784,17 +809,18 @@ export function ExplorePerspective() {
     if (hydrationNonce === 0 || !selectedNodeId || !selectedNodeData) return;
     const filePath = resolveNodeFile(selectedNodeData);
     if (!filePath || filePath.startsWith('system://')) return;
+    const requestWorkspaceId = workspaceId;
     let cancelled = false;
     void linkDocument(filePath).then((result) => {
-      if (cancelled || result.newModels.length === 0) return;
+      if (cancelled || workspaceIdRef.current !== requestWorkspaceId || result.newModels.length === 0) return;
       corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
-      useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+      useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrationNonce, selectedNodeId, selectedNodeData, models]);
+  }, [hydrationNonce, selectedNodeId, selectedNodeData, workspaceId]);
 
   const functionScope: FunctionScope = useMemo(() => {
     const d = selectedNodeData as any;

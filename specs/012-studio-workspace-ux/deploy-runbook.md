@@ -204,17 +204,17 @@ done
 curl -s -X POST \
   https://www.daikonic.dev/rune-studio/api/github-auth/device-code | jq
 
-# 7. LSP Worker health probe (feature 014, US3).
+# 7. Same-origin Pages Function health probe.
 #    Returns 200 with `{ok: true, langium_loaded: true}` when the
-#    Worker is routed AND the langium services bundle loads cleanly.
-#    404 = Worker unrouted (Step 4 not run for lsp-worker); 200 with
-#    `langium_loaded: false` = bundle regression at runtime.
-curl -s https://www.daikonic.dev/rune-studio/api/lsp/health | jq
+#    production LSP endpoint is deployed and the langium bundle loads
+#    cleanly. This now lives at the site root, not under /rune-studio/.
+curl -s https://www.daikonic.dev/api/lsp/health | jq
 
-# 8. One-shot smoke battery — runs all of the above plus catch-all + LSP
-#    health check. Exits non-zero on first FAIL so cron / CI can rely on it.
+# 8. One-shot smoke battery — runs the worker checks plus the same-origin
+#    Pages Function probes above. Exits non-zero on any FAIL so cron / CI
+#    can rely on it.
 pnpm run verify:prod
-# Expected post-Phase-4: 7/7 PASS.
+# Expected: all checks PASS, or only the explicitly documented WARN cases.
 
 # 9. Live Studio test (browser):
 #    https://www.daikonic.dev/rune-studio/studio/
