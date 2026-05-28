@@ -23,6 +23,14 @@ export interface CardinalityPickerProps {
   onChange: (cardinality: string) => void;
   /** Whether the picker is disabled. */
   disabled?: boolean;
+  /** Optional wrapper class override for host-specific layouts. */
+  wrapperClassName?: string;
+  /** Optional trigger class override for compact host-specific chrome. */
+  triggerClassName?: string;
+  /** Optional popup class override. */
+  contentClassName?: string;
+  /** Optional custom-input class override. */
+  inputClassName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,6 +47,11 @@ const PRESETS = [
 /** Sentinel value used to trigger the custom input flow. */
 const CUSTOM_VALUE = '__custom__';
 
+function joinClasses(...classNames: Array<string | undefined>): string | undefined {
+  const joined = classNames.filter((className) => Boolean(className && className.trim())).join(' ');
+  return joined.length > 0 ? joined : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -49,17 +62,26 @@ const CUSTOM_VALUE = '__custom__';
  * Preset selection commits immediately. Choosing "Custom…" shows an inline
  * input that validates with `validateCardinality()` on blur or Enter.
  */
-export function CardinalityPicker({ value, onChange, disabled = false }: CardinalityPickerProps): React.ReactNode {
+export function CardinalityPicker({
+  value,
+  onChange,
+  disabled = false,
+  wrapperClassName,
+  triggerClassName,
+  contentClassName,
+  inputClassName
+}: CardinalityPickerProps): React.ReactNode {
   const [showCustom, setShowCustom] = useState(false);
   const [customValue, setCustomValue] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
 
   // Normalize the value for display (strip parens)
   const normalizedValue = value.replace(/[()]/g, '').trim();
+  const hasValue = normalizedValue.length > 0;
 
   // Find matching preset for the Select's controlled value
   const matchingPreset = PRESETS.find((p) => p.value.replace(/[()]/g, '').trim() === normalizedValue);
-  const selectValue = matchingPreset?.value ?? CUSTOM_VALUE;
+  const selectValue = hasValue ? (matchingPreset?.value ?? CUSTOM_VALUE) : null;
 
   const handleSelectChange = useCallback(
     (newValue: string) => {
@@ -108,7 +130,7 @@ export function CardinalityPicker({ value, onChange, disabled = false }: Cardina
 
   if (showCustom) {
     return (
-      <div data-slot="cardinality-picker" className="flex items-center gap-1">
+      <div data-slot="cardinality-picker" className={joinClasses('flex items-center gap-1', wrapperClassName)}>
         <input
           type="text"
           value={customValue}
@@ -123,10 +145,14 @@ export function CardinalityPicker({ value, onChange, disabled = false }: Cardina
           aria-label="Custom cardinality"
           aria-invalid={!!customError}
           autoFocus
-          className={`w-[4.25rem] rounded border px-1.5 py-0.5 text-[11px] font-mono leading-none
+          className={joinClasses(
+            `w-[4.25rem] rounded border px-1.5 py-0.5 text-[11px] font-mono leading-none
             bg-background outline-none
-            focus:ring-1 focus:ring-ring
-            ${customError ? 'border-destructive' : 'border-input'}`}
+            focus-visible:ring-1 focus-visible:ring-ring
+            disabled:cursor-not-allowed disabled:opacity-50
+            ${customError ? 'border-destructive' : 'border-input'}`,
+            inputClassName
+          )}
         />
         {customError && <span className="text-xs text-destructive">{customError}</span>}
       </div>
@@ -134,16 +160,19 @@ export function CardinalityPicker({ value, onChange, disabled = false }: Cardina
   }
 
   return (
-    <div data-slot="cardinality-picker">
+    <div data-slot="cardinality-picker" className={wrapperClassName}>
       <Select value={selectValue} onValueChange={handleSelectChange} disabled={disabled}>
         <SelectTrigger
           size="sm"
-          className="h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-[11px] font-mono leading-none gap-0.5"
+          className={joinClasses(
+            'h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-[11px] font-mono leading-none gap-0.5',
+            triggerClassName
+          )}
           aria-label="Cardinality"
         >
-          <SelectValue>{normalizedValue || '1..1'}</SelectValue>
+          <SelectValue placeholder="1..1">{hasValue ? normalizedValue : undefined}</SelectValue>
         </SelectTrigger>
-        <SelectContent position="popper" className="min-w-[5.5rem]">
+        <SelectContent position="popper" className={joinClasses('min-w-[5.5rem]', contentClassName)}>
           {PRESETS.map((preset) => (
             <SelectItem key={preset.value} value={preset.value} className="text-xs font-mono">
               {preset.label}

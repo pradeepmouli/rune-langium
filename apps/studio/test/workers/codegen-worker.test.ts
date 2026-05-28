@@ -646,4 +646,42 @@ describe('codegen-worker code preview messages', () => {
     // Both docs reach the generator: 1 parsed user doc + 1 deserialized curated doc.
     expect(forwardedDocs).toHaveLength(2);
   });
+
+  it('ignores list-only curated refOnly entries without serializedModelJson during preview builds', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'user.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [
+        { uri: 'file:///user.rosetta', content: 'namespace user' },
+        { uri: 'file:///cdm/cdm.base.math', content: '' },
+        {
+          uri: 'file:///cdm/base/math.rosetta',
+          content: '',
+          serializedModelJson: '{"$type":"RosettaModel","name":"cdm.base.math"}'
+        }
+      ],
+      requestId: 'preview:list-only:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'user.Trade',
+      requestId: 'preview:list-only:2'
+    });
+    await flushWorker();
+
+    expect(fromStringMock).toHaveBeenCalledWith('namespace user', 'file:///user.rosetta');
+    expect(fromStringMock).not.toHaveBeenCalledWith('', 'file:///cdm/cdm.base.math');
+    expect(deserializeMock).toHaveBeenCalledWith('{"$type":"RosettaModel","name":"cdm.base.math"}');
+
+    const previewCall = generatePreviewSchemasMock.mock.calls.at(-1);
+    const [forwardedDocs] = previewCall!;
+    expect(forwardedDocs).toHaveLength(2);
+  });
 });

@@ -21,6 +21,7 @@ import type { ReactNode } from 'react';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 import { App } from '../../src/App.js';
+import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
 import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
@@ -159,6 +160,31 @@ describe('App workspace restore on mount (T027/US2)', () => {
     });
     expect(document.body).toHaveAttribute('data-workspace-active', 'true');
     expect(screen.queryByText(/Load Rune DSL Models/i)).not.toBeInTheDocument();
+  });
+
+  it('lets users return to Workspaces after a workspace restore', async () => {
+    await saveWorkspace(makeWorkspace('ws-launcher', 'Launcher Reachable'));
+    await saveWorkspaceFiles('ws-launcher', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.model\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(document.body).toHaveAttribute('data-workspace-active', 'true');
+    });
+
+    screen.getByRole('button', { name: 'Workspaces / Models' }).click();
+
+    await waitFor(() => {
+      expect(usePerspectiveStore.getState().activePerspective).toBe('workspaces');
+    });
+    expect(screen.getByText(/Load Rune DSL Models/i)).toBeInTheDocument();
   });
 
   it('falls back to start page if loadWorkspace returns nothing for the recent', async () => {

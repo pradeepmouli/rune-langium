@@ -957,7 +957,8 @@ export function ExplorePerspective() {
 
   const navigateToNode = useCallback(
     (nodeId: string) => {
-      const exists = storeNodes.some((n) => n.id === nodeId);
+      const targetNode = storeNodes.find((n) => n.id === nodeId);
+      const exists = Boolean(targetNode);
       if (!exists) {
         const shortName = nodeId.includes('::') ? nodeId.split('::').pop() : nodeId;
         showToast({
@@ -973,6 +974,10 @@ export function ExplorePerspective() {
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       storeSelectNode(nodeId, { reapplyFocusMode: true });
+      const targetData = targetNode?.data as { namespace?: string; deferred?: boolean } | undefined;
+      if (targetData?.deferred && targetData.namespace) {
+        useEditorStore.getState().requestNamespaceHydration(targetData.namespace);
+      }
       if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
         graphRef.current?.focusNode(nodeId);
       }
@@ -1737,17 +1742,15 @@ export function ExplorePerspective() {
     [inspectorFocusNonce]
   );
 
-  // Empty-workspace guard (keep-alive hazard): ExplorePerspective is ALWAYS
-  // mounted by PerspectiveHost (display:none when inactive), including before a
-  // workspace exists. With zero editable files the dockview/graph/structure
-  // workbench has nothing meaningful to render, and mounting DockShell with
-  // empty models risks running its layout/effects against an empty corpus. The
-  // host-level `requiresWorkspace` fallback already keeps Explore from being
-  // VISIBLE without a workspace, so this render is never user-facing in that
-  // state — return a lightweight placeholder so the heavy workbench (and its
-  // dockview layout) mounts exactly once a workspace is loaded, which is also
-  // what makes keep-alive meaningful.
-  if (fileCount === 0) {
+  // Empty-content guard (keep-alive hazard): ExplorePerspective is ALWAYS
+  // mounted by PerspectiveHost (display:none when inactive), including before
+  // any user files OR reference models exist. With neither editable files,
+  // materialized models, nor deferred curated exports, the dockview/graph/
+  // structure workbench has nothing meaningful to render, and mounting
+  // DockShell against an empty corpus risks running layout/effects with no
+  // graph data. Deferred-only curated loads are valid Explore content because
+  // loadModels([]) materializes placeholder nodes from deferredExports.
+  if (fileCount === 0 && models.length === 0 && deferredExports.length === 0) {
     return <div data-testid="explore-workbench" className="flex flex-col h-full overflow-hidden" />;
   }
 

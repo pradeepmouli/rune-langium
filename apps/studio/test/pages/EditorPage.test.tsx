@@ -21,7 +21,7 @@ const {
   const editorStoreState = {
     nodes: [] as Array<{
       id: string;
-      data: { namespace?: string; name?: string; $type?: string };
+      data: { namespace?: string; name?: string; $type?: string; deferred?: boolean };
     }>,
     edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
@@ -537,13 +537,13 @@ describe('EditorPage preview target identity', () => {
     const { rerenderEditorPage } = renderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -561,13 +561,13 @@ describe('EditorPage preview target identity', () => {
     rerenderEditorPage({
       models: [],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: true
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: true
+        }
+      ]
     });
 
     editorStoreState.nodes = [
@@ -579,13 +579,13 @@ describe('EditorPage preview target identity', () => {
     rerenderEditorPage({
       models: [modelWithType('RenamedTrade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: true
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: true
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -612,13 +612,13 @@ describe('EditorPage preview target identity', () => {
     const { rerenderEditorPage } = renderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -638,13 +638,13 @@ describe('EditorPage preview target identity', () => {
     rerenderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
-            dirty: true
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
+          dirty: true
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -684,13 +684,13 @@ describe('EditorPage preview target identity', () => {
     const { rerenderEditorPage } = renderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -705,13 +705,13 @@ describe('EditorPage preview target identity', () => {
     rerenderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
-            dirty: true
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha\n\ntype Trade:\n  settlementDate string (0..1)',
+          dirty: true
+        }
+      ]
     });
 
     const latestRequestId = worker.postMessage.mock.calls
@@ -776,13 +776,13 @@ describe('EditorPage preview target identity', () => {
       models: [parsedModel as never],
       parsedModels: [{ filePath: '/preview-alpha.rosetta', model: parsedModel as never }],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: '/preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: '/preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -806,13 +806,13 @@ describe('EditorPage preview target identity', () => {
     renderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -865,13 +865,13 @@ describe('EditorPage preview target identity', () => {
     renderEditorPage({
       models: [modelWithType('Trade') as never],
       files: [
-          {
-            name: 'preview-alpha.rosetta',
-            path: 'preview-alpha.rosetta',
-            content: 'namespace preview.alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'preview-alpha.rosetta',
+          path: 'preview-alpha.rosetta',
+          content: 'namespace preview.alpha',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -923,19 +923,19 @@ describe('EditorPage preview target identity', () => {
     const _view = renderEditorPage({
       models: [],
       files: [
-          {
-            path: '/workspace/alpha.rosetta',
-            name: 'alpha.rosetta',
-            content: 'namespace alpha',
-            dirty: false
-          },
-          {
-            path: '/workspace/beta.rosetta',
-            name: 'beta.rosetta',
-            content: 'namespace beta',
-            dirty: false
-          }
-        ],
+        {
+          path: '/workspace/alpha.rosetta',
+          name: 'alpha.rosetta',
+          content: 'namespace alpha',
+          dirty: false
+        },
+        {
+          path: '/workspace/beta.rosetta',
+          name: 'beta.rosetta',
+          content: 'namespace beta',
+          dirty: false
+        }
+      ],
       lspClient: lspClient as never
     });
 
@@ -989,7 +989,7 @@ describe('EditorPage workspace chrome', () => {
     const _view = renderEditorPage({
       models: [],
       files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }],
-      workspaceName: "CDM Workspace",
+      workspaceName: 'CDM Workspace',
       onClose: vi.fn()
     });
 
@@ -1018,13 +1018,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -1046,13 +1046,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     act(() => {
@@ -1078,13 +1078,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     act(() => {
@@ -1111,13 +1111,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     act(() => {
@@ -1128,6 +1128,37 @@ describe('EditorPage workspace chrome', () => {
       reapplyFocusMode: true
     });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  it('requests namespace hydration when navigating directly to a deferred curated type', () => {
+    editorStoreState.edges = [];
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime::DeferredDate',
+        data: { namespace: 'cdm.base.datetime', name: 'DeferredDate', $type: 'data', deferred: true }
+      }
+    ];
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::DeferredDate');
+    });
+
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::DeferredDate', {
+      reapplyFocusMode: true
+    });
+    expect(editorStoreState.requestNamespaceHydration).toHaveBeenCalledWith('cdm.base.datetime');
   });
 
   it('re-centers connected navigation targets when focus mode hides nothing', () => {
@@ -1149,13 +1180,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     act(() => {
@@ -1187,13 +1218,13 @@ describe('EditorPage workspace chrome', () => {
     const view = renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     act(() => {
@@ -1209,13 +1240,13 @@ describe('EditorPage workspace chrome', () => {
     view.rerenderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
@@ -1231,13 +1262,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('LR');
@@ -1260,13 +1291,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     expect(runeTypeGraphMockState.latestConfig?.layout?.direction).toBe('LR');
@@ -1291,13 +1322,13 @@ describe('EditorPage workspace chrome', () => {
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     const graphCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement | null;
@@ -1321,13 +1352,13 @@ describe('EditorPage workspace chrome', () => {
     const { rerenderEditorPage } = renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     const graphCanvas = document.querySelector('.studio-graph-canvas') as HTMLDivElement | null;
@@ -1357,13 +1388,13 @@ describe('EditorPage workspace chrome', () => {
     rerenderEditorPage({
       models: [],
       files: [
-          {
-            name: 'base-datetime-type.rosetta',
-            path: 'base-datetime-type.rosetta',
-            content: 'namespace cdm.base.datetime',
-            dirty: false
-          }
-        ]
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
     });
 
     await waitFor(() => {
@@ -1433,13 +1464,13 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
     renderEditorPage({
       models: [],
       files: [
-          {
-            name: 'trade.rosetta',
-            path: 'trade.rosetta',
-            content: 'namespace alpha',
-            dirty: false
-          }
-        ]
+        {
+          name: 'trade.rosetta',
+          path: 'trade.rosetta',
+          content: 'namespace alpha',
+          dirty: false
+        }
+      ]
     });
 
     expect(screen.getByTestId('structure-view-mock')).toBeInTheDocument();

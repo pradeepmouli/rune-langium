@@ -36,7 +36,7 @@ describe('PerspectiveHost', () => {
   });
 
   it('keeps Explore mounted (never remounts) across a switch away and back', () => {
-    render(<PerspectiveHost hasWorkspace />);
+    render(<PerspectiveHost hasWorkspace hasExploreContent />);
     const slot = () => screen.getByTestId('explore-probe').closest('[data-perspective-slot="explore"]') as HTMLElement;
     expect(exploreMounts.count).toBe(1);
     expect(slot().style.display).not.toBe('none'); // visible when active
@@ -55,7 +55,7 @@ describe('PerspectiveHost', () => {
 
   it('git/export fall back to the Workspaces launcher without a workspace (no blank pane, Codex P2 #238)', () => {
     usePerspectiveStore.setState({ activePerspective: 'git' });
-    render(<PerspectiveHost hasWorkspace={false} />);
+    render(<PerspectiveHost hasWorkspace={false} hasExploreContent={false} />);
     // git is workspace-requiring, so with no workspace it must NOT render…
     expect(screen.queryByTestId('git-perspective')).toBeNull();
     // …and the host falls back to the always-available Workspaces launcher.

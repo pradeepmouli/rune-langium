@@ -888,6 +888,7 @@ function AppContent() {
 
   const userFiles = files.filter((f) => !f.readOnly);
   const hasWorkspace = userFiles.length > 0;
+  const hasExploreContent = hasWorkspace || loadedModels.size > 0;
   // Reactive perspective read — the global brand header is shown for every
   // perspective EXCEPT Explore (which renders its own studio-topbar inside
   // ExplorePerspective). Other call sites in this file use `.getState()` for
@@ -956,7 +957,7 @@ function AppContent() {
          * too: PerspectiveHost's requiresWorkspace fallback renders the
          * Workspaces launcher when the store still says 'explore' but no
          * workspace is loaded, and that launcher needs the brand header. */}
-        {!(hasWorkspace && activePerspective === 'explore') && (
+        {!(hasExploreContent && activePerspective === 'explore') && (
           <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
             <div className="studio-brand">
               <div className="studio-brand__mark">R</div>
@@ -1002,9 +1003,10 @@ function AppContent() {
            * useWorkspaceActions) — all provided by StudioProviders. */}
           {bootState !== 'checking' && bootState !== 'restoring' && !loading && (
             <div className="flex h-full w-full min-h-0">
-              <ActivityBar hasWorkspace={hasWorkspace} />
+              <ActivityBar hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
               <PerspectiveHost
                 hasWorkspace={hasWorkspace}
+                hasExploreContent={hasExploreContent}
                 workspaceId={restoredWorkspace?.id}
                 workspaceKind={restoredWorkspace?.kind}
                 files={files}

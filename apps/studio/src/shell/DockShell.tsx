@@ -201,6 +201,7 @@ export function DockShell({
   );
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
+  const suppressLayoutPersistenceRef = useRef(false);
   const onLayoutChangeRef = useRef(onLayoutChange);
   onLayoutChangeRef.current = onLayoutChange;
 
@@ -266,6 +267,11 @@ export function DockShell({
       // factory-shape layout so subsequent mounts go through fromJSON.
       layoutChangeDisposableRef.current = event.api.onDidLayoutChange(() => {
         if (!onLayoutChangeRef.current) return;
+        if (suppressLayoutPersistenceRef.current) return;
+        if (event.api.panels.length === 0) {
+          console.warn('[DockShell] Skipping persistence of empty dock layout');
+          return;
+        }
         try {
           const dockviewJson = serializeLayout(event.api);
           onLayoutChangeRef.current({
@@ -283,6 +289,17 @@ export function DockShell({
   );
 
   const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
+
+  const suppressLayoutPersistence = useCallback((work: () => void) => {
+    suppressLayoutPersistenceRef.current = true;
+    try {
+      work();
+    } finally {
+      queueMicrotask(() => {
+        suppressLayoutPersistenceRef.current = false;
+      });
+    }
+  }, []);
 
   const setUtilitiesCollapsed = useCallback((collapsed: boolean) => {
     setUtilitiesCollapsedState(collapsed);
@@ -330,9 +347,12 @@ export function DockShell({
     setUtilitiesCollapsedState(fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false);
     if (apiRef.current) {
       try {
-        apiRef.current.clear();
-        applyLayout(apiRef.current, fresh);
-        applyPanelTabMeta(apiRef.current, panelTabMetaRef.current);
+        suppressLayoutPersistence(() => {
+          apiRef.current?.clear();
+          if (!apiRef.current) return;
+          applyLayout(apiRef.current, fresh);
+          applyPanelTabMeta(apiRef.current, panelTabMetaRef.current);
+        });
       } catch (err) {
         console.error('[DockShell] Failed to reset layout', err);
       }
@@ -344,7 +364,7 @@ export function DockShell({
     <div
       role="application"
       aria-label="Studio dock shell"
-      className="relative flex h-full flex-col"
+      className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
       data-testid="dock-shell"
       data-workspace-id={workspaceId}
     >
@@ -419,12 +439,12 @@ export function DockShell({
       >
         <PanelRegistryContext.Provider value={panelRegistry}>
           <UtilityTrayContext.Provider value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}>
-            <div className="min-h-0 flex-1">
+            <div className="min-h-0 min-w-0 flex-1">
               <DockviewReact
                 components={DOCKVIEW_COMPONENTS}
                 defaultTabComponent={StudioDockTab}
                 onReady={onReady}
-                className="dockview-theme-abyss"
+                className="dockview-theme-abyss h-full min-w-0 w-full"
               />
             </div>
           </UtilityTrayContext.Provider>

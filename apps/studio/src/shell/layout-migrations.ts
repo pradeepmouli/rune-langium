@@ -36,6 +36,38 @@ export interface LayoutSanitizationResult {
   notice?: string;
 }
 
+function validateNativeLayout(json: unknown): 'ok' | 'invalid-shape' | 'unknown-panel' | 'empty-panels' {
+  if (!json || typeof json !== 'object') {
+    return 'invalid-shape';
+  }
+  const record = json as Record<string, unknown>;
+  const grid = record['grid'];
+  const panels = record['panels'];
+  if (!grid || typeof grid !== 'object' || !('root' in grid)) {
+    return 'invalid-shape';
+  }
+  if (!panels || typeof panels !== 'object' || Array.isArray(panels)) {
+    return 'invalid-shape';
+  }
+  const entries = Object.values(panels as Record<string, unknown>);
+  if (entries.length === 0) {
+    return 'empty-panels';
+  }
+  for (const panel of entries) {
+    if (!panel || typeof panel !== 'object') {
+      return 'invalid-shape';
+    }
+    const contentComponent = (panel as Record<string, unknown>)['contentComponent'];
+    if (typeof contentComponent !== 'string') {
+      return 'invalid-shape';
+    }
+    if (!KNOWN_COMPONENTS.has(contentComponent)) {
+      return 'unknown-panel';
+    }
+  }
+  return 'ok';
+}
+
 export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayoutRecord {
   return sanitizeLayoutWithDiagnostics(input, ctx).layout;
 }
@@ -91,6 +123,16 @@ export function sanitizeLayoutWithDiagnostics(
       };
     }
     normalizedActive = activeResult;
+  } else if (cloned.dockview?.shape === 'native') {
+    const nativeResult = validateNativeLayout(cloned.dockview.json);
+    if (nativeResult !== 'ok') {
+      // eslint-disable-next-line no-console
+      console.warn('[layout-migrations] reset invalid saved layout to defaults');
+      return {
+        layout: buildDefaultLayout(ctx),
+        notice: INVALID_LAYOUT_RESET_NOTICE
+      };
+    }
   }
   if (droppedAny) {
     // eslint-disable-next-line no-console

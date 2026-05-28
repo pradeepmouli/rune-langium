@@ -48,8 +48,14 @@ class FakeApi {
   cleared = 0;
   groups = new Map<string, FakeGroupSpy>();
   panelStates = new Map<string, FakePanelSpy>();
-  onDidLayoutChange = () => {
-    return { dispose: () => {} };
+  private layoutChangeListener: (() => void) | null = null;
+  onDidLayoutChange = (listener: () => void) => {
+    this.layoutChangeListener = listener;
+    return { dispose: () => {
+      if (this.layoutChangeListener === listener) {
+        this.layoutChangeListener = null;
+      }
+    } };
   };
   addPanel = (opts: { id: string; component: string }) => {
     this.panels.push(opts);
@@ -82,6 +88,7 @@ class FakeApi {
   clear = () => {
     this.cleared++;
     this.panels = [];
+    this.layoutChangeListener?.();
   };
   getPanel = (id: string) => {
     const panel = this.panelStates.get(id);
@@ -157,6 +164,11 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByRole('application', { name: /studio dock shell/i })).toBeInTheDocument();
   });
 
+  it('keeps the shell stretched in flex layouts instead of shrinking to content width', () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    expect(screen.getByRole('application', { name: /studio dock shell/i })).toHaveClass('flex-1', 'min-w-0');
+  });
+
   it('renders utility actions in the layout toolbar', () => {
     render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
     expect(screen.getByTestId('toggle-utilities')).toBeInTheDocument();
@@ -185,6 +197,21 @@ describe('DockShell — dockview integration (T065)', () => {
     const last = onChange.mock.calls.at(-1)?.[0];
     expect(last.writtenBy).toBe('9.9.9');
     expect(last.dockview).toHaveProperty('columns');
+  });
+
+  it('does not persist an intermediate empty native layout while reset is rebuilding panels', async () => {
+    const onChange = vi.fn();
+    render(<DockShell studioVersion="9.9.9" workspaceId="ws-1" onLayoutChange={onChange} />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    fireEvent.click(screen.getByTestId('reset-layout'));
+
+    const nativeLayouts = onChange.mock.calls
+      .map((call) => call[0])
+      .filter((layout) => layout?.dockview?.shape === 'native');
+    expect(nativeLayouts).toHaveLength(0);
+    const last = onChange.mock.calls.at(-1)?.[0];
+    expect(last?.dockview).toHaveProperty('columns');
   });
 
   it('activates a requested dockview panel when focusPanel changes', async () => {

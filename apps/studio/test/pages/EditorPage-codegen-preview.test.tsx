@@ -68,7 +68,7 @@ vi.mock('../../src/utils/uri.js', () => ({ pathToUri: (path: string) => `file://
 
 const WS_FILES = [{ name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false }];
 
-function wsState(files: typeof WS_FILES): WorkspaceState {
+function wsState(files: WorkspaceState['files']): WorkspaceState {
   return {
     workspaceId: 'ws-A',
     workspaceKind: 'browser-only',
@@ -82,7 +82,7 @@ function wsState(files: typeof WS_FILES): WorkspaceState {
 }
 
 /** Render CodegenProvider (the worker owner) wrapped in workspace context. */
-function renderProvider(files: typeof WS_FILES = WS_FILES) {
+function renderProvider(files: WorkspaceState['files'] = WS_FILES) {
   return render(
     <WorkspaceStateContext.Provider value={wsState(files)}>
       <CodegenProvider>
@@ -97,6 +97,23 @@ function lastCodegenGenerate(worker: MockWorker): { type: string; target: string
   return worker.postMessage.mock.calls
     .map(([m]) => m as { type?: string; target?: string; requestId?: string })
     .filter((m): m is { type: string; target: string; requestId: string } => m.type === 'codegen:generate')
+    .at(-1);
+}
+
+function lastPreviewSetFiles(
+  worker: MockWorker
+): { type: string; files: Array<{ uri: string; content: string; serializedModelJson?: string }>; requestId?: string } | undefined {
+  return worker.postMessage.mock.calls
+    .map(([m]) => m as { type?: string; files?: Array<{ uri: string; content: string; serializedModelJson?: string }>; requestId?: string })
+    .filter(
+      (
+        m
+      ): m is {
+        type: string;
+        files: Array<{ uri: string; content: string; serializedModelJson?: string }>;
+        requestId?: string;
+      } => m.type === 'preview:setFiles' && Array.isArray(m.files)
+    )
     .at(-1);
 }
 
@@ -295,5 +312,49 @@ describe('CodegenProvider — codegen worker→store path', () => {
     // Snapshot must NOT reflect the stale payload — still waiting.
     const afterStale = useCodegenStore.getState().snapshot;
     expect(afterStale.status).toBe('waiting');
+  });
+
+  it('drops list-only refOnly curated entries from preview:setFiles but keeps hydrated curated files', async () => {
+    const files: WorkspaceState['files'] = [
+      { name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false },
+      {
+        name: 'cdm.base.math',
+        path: '[cdm]/cdm.base.math',
+        content: '',
+        dirty: false,
+        readOnly: true,
+        refOnly: true,
+        bundleId: 'cdm',
+        bundleVersion: 'latest'
+      },
+      {
+        name: 'Trade.rosetta',
+        path: '[cdm]/Trade.rosetta',
+        content: '',
+        dirty: false,
+        readOnly: true,
+        refOnly: true,
+        bundleId: 'cdm',
+        bundleVersion: 'latest',
+        serializedModelJson: '{"$type":"RosettaModel","name":"cdm.Trade"}'
+      }
+    ];
+
+    renderProvider(files);
+
+    await waitFor(() => expect(MockWorker.instances).toHaveLength(1));
+    const worker = MockWorker.instances[0]!;
+
+    await waitFor(() => expect(lastPreviewSetFiles(worker)).toBeDefined());
+    const message = lastPreviewSetFiles(worker)!;
+
+    expect(message.files).toEqual([
+      { uri: 'file://a.rosetta', content: 'namespace a' },
+      {
+        uri: 'file://[cdm]/Trade.rosetta',
+        content: '',
+        serializedModelJson: '{"$type":"RosettaModel","name":"cdm.Trade"}'
+      }
+    ]);
   });
 });

@@ -13,15 +13,17 @@ import { usePerspectiveStore } from '../store/perspective-store.js';
 
 interface Props {
   hasWorkspace: boolean;
+  hasExploreContent: boolean;
 }
 
-export function ActivityBar({ hasWorkspace }: Props): React.ReactElement {
+export function ActivityBar({ hasWorkspace, hasExploreContent }: Props): React.ReactElement {
   const active = usePerspectiveStore((s) => s.activePerspective);
   const setActive = usePerspectiveStore((s) => s.setActivePerspective);
 
   const renderButton = (p: Perspective) => {
     const Icon = p.icon;
-    const disabled = p.requiresWorkspace && !hasWorkspace;
+    const disabled =
+      p.id === 'explore' ? !hasExploreContent : p.requiresWorkspace && !hasWorkspace;
     const isActive = active === p.id;
     return (
       <button
