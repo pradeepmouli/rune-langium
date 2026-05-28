@@ -855,8 +855,9 @@ export function ExplorePerspective() {
   useEffect(() => {
     if (hydrationNonce === 0 || !selectedNodeId) return;
     const nodeData = selectedNodeDataRef.current;
-    if (!nodeData) return;
-    const filePath = resolveNodeFileRef.current(nodeData);
+    // Deferred curated types have no storeNode stub until linkDocument succeeds,
+    // so nodeData is null on the first hydration. Fall back to the raw map.
+    const filePath = nodeData ? resolveNodeFileRef.current(nodeData) : nodeIdToFilePathRef.current.get(selectedNodeId);
     if (!filePath || filePath.startsWith('system://')) return;
     const requestWorkspaceId = workspaceId;
     let cancelled = false;
@@ -996,6 +997,12 @@ export function ExplorePerspective() {
   // file path, missing the entry in deferredModelJson.
   const resolveNodeFileRef = useRef(resolveNodeFile);
   resolveNodeFileRef.current = resolveNodeFile;
+  // Parallel ref for the raw map — used as a fallback in the hydration relink
+  // effect when nodeData is null (deferred curated types have no storeNode stub
+  // until after linkDocument succeeds, so selectedNodeDataRef.current is null
+  // on first hydration and resolveNodeFile can't be called).
+  const nodeIdToFilePathRef = useRef(nodeIdToFilePath);
+  nodeIdToFilePathRef.current = nodeIdToFilePath;
 
   const openFileInSource = useCallback((filePath: string) => {
     setActiveEditorFile(filePath);
