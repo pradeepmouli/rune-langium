@@ -854,16 +854,30 @@ export function ExplorePerspective() {
   const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
   useEffect(() => {
     if (hydrationNonce === 0 || !selectedNodeId) return;
-    const nodeData = selectedNodeDataRef.current;
-    // Deferred curated types have no storeNode stub until linkDocument succeeds,
-    // so nodeData is null on the first hydration. Fall back to the raw map.
-    const filePath = nodeData ? resolveNodeFileRef.current(nodeData) : nodeIdToFilePathRef.current.get(selectedNodeId);
-    if (!filePath || filePath.startsWith('system://')) return;
+    // Link ALL files for the selected node's namespace. The curated artifact
+    // format aggregates namespace-level exports onto the first document's export
+    // list, so per-type file mapping (nodeIdToFilePath) is unreliable — it may
+    // resolve to the enum file even when a data type is selected. Linking every
+    // deferred file in the namespace ensures every model (enum, data, choice)
+    // gets deserialized and merged into the graph.
+    const [namespace] = selectedNodeId.split('::');
+    if (!namespace) return;
+    const filePaths = [
+      ...new Set(
+        deferredExportsRef.current
+          .filter((e) => e.namespace === namespace)
+          .map((e) => e.filePath)
+          .filter((fp) => fp && !fp.startsWith('system://'))
+      )
+    ];
+    if (filePaths.length === 0) return;
     const requestWorkspaceId = workspaceId;
     let cancelled = false;
-    void linkDocument(filePath).then((result) => {
-      if (cancelled || workspaceIdRef.current !== requestWorkspaceId || result.newModels.length === 0) return;
-      corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
+    void Promise.all(filePaths.map((fp) => linkDocument(fp))).then((results) => {
+      if (cancelled || workspaceIdRef.current !== requestWorkspaceId) return;
+      const newModels = results.flatMap((r) => r.newModels);
+      if (newModels.length === 0) return;
+      corpusModelsRef.current = [...corpusModelsRef.current, ...newModels];
       useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
     });
     return () => {
@@ -997,12 +1011,17 @@ export function ExplorePerspective() {
   // file path, missing the entry in deferredModelJson.
   const resolveNodeFileRef = useRef(resolveNodeFile);
   resolveNodeFileRef.current = resolveNodeFile;
-  // Parallel ref for the raw map — used as a fallback in the hydration relink
-  // effect when nodeData is null (deferred curated types have no storeNode stub
-  // until after linkDocument succeeds, so selectedNodeDataRef.current is null
-  // on first hydration and resolveNodeFile can't be called).
+  // Parallel ref for the raw map — kept for resolveNodeFile fallback in other
+  // contexts; the hydration relink effect now uses deferredExportsRef instead.
   const nodeIdToFilePathRef = useRef(nodeIdToFilePath);
   nodeIdToFilePathRef.current = nodeIdToFilePath;
+  // Ref for the full deferredExports list so the hydration relink effect can
+  // link ALL files for the selected namespace, not just the one the per-type
+  // map points to. The curated artifacts aggregate namespace-level exports onto
+  // the first document, so per-type file mapping is unreliable — linking every
+  // file in the namespace ensures the right model is deserialized.
+  const deferredExportsRef = useRef(deferredExports);
+  deferredExportsRef.current = deferredExports;
 
   const openFileInSource = useCallback((filePath: string) => {
     setActiveEditorFile(filePath);
