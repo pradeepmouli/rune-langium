@@ -7,6 +7,9 @@ import { expect, test } from '@playwright/test';
 const CDM_BUTTON = 'CDM (Common Domain Model)';
 const ENUM_NODE_ID = 'cdm.base.datetime::BusinessCenterEnum';
 const DATA_NODE_ID = 'cdm.base.datetime::BusinessCenters';
+// Regression: cdm.base.staticdata.party is never pre-hydrated at load time.
+// First navigation to it must populate Inspector members (resolveNodeFileRef fix).
+const COUNTERPARTY_NODE_ID = 'cdm.base.staticdata.party::Counterparty';
 const WORKSPACE_FILE_NAME = 'starter.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace example\n';
 
@@ -63,5 +66,36 @@ test.describe('production checkout smoke', () => {
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Source' }).click();
     await expect(centerStack.getByText('namespace example', { exact: false })).toBeVisible();
+  });
+
+  test('Inspector populates members on first navigation to a never-hydrated curated namespace', async ({ page }) => {
+    // Regression for fix/source-parse-recovery (resolveNodeFileRef, commit f6a64029).
+    //
+    // Before the fix: the hydration relink effect captured a stale resolveNodeFile
+    // closure. On the first navigation to an unvisited namespace, linkDocument
+    // received the synthetic ${bundleId}/${namespace} path instead of the real
+    // deferred-model path, returned newModels:[], and Inspector stayed as a bare
+    // header stub with no members.
+    //
+    // This test navigates directly to cdm.base.staticdata.party::Counterparty
+    // without first visiting any other namespace, then asserts that the Inspector
+    // shows a populated "Members (N)" list. An empty inspector would mean the bug
+    // regressed.
+    await loadCdm(page);
+    const centerStack = page.getByTestId('center-stack');
+
+    await page.getByTestId('rail-explore').click();
+    await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20_000 });
+
+    const namespaceSearch = page.getByTestId('namespace-search');
+    await namespaceSearch.fill('Counterparty');
+
+    await page.getByTestId(`ns-type-nav-${COUNTERPARTY_NODE_ID}`).click();
+    await expect(page.getByText(COUNTERPARTY_NODE_ID, { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Inspector' }).click();
+    await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
+    await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
+    await expect(centerStack.getByText(/Members \(\d+\)/)).toBeVisible({ timeout: 15_000 });
   });
 });
