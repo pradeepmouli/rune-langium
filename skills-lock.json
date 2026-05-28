@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "3bca45167617f547e97454ae16d271ba3aeb2550d89e6ef1942057bd122c0061"
     },
+    "caveman": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "computedHash": "934433479903febc585bf6deb5f0cebc63137e3f86b7babe0aab1ecb94d6d7a4"
+    },
     "cloudflare": {
       "source": "cloudflare/skills",
       "sourceType": "github",
