@@ -20,6 +20,9 @@ overrides:
   # GHSA-w5hq-g745-h8pq: force transitive uuid off the deprecated/vulnerable
   # 8.3.2 (uuid is purely transitive here — no first-party imports).
   uuid: '>=11.1.1'
+  # GHSA-ph9p-34f9-6g65 / CVE-2026-44705: path traversal via unsanitized prefix/postfix
+  # in tmp < 0.2.6; purely transitive (no first-party imports).
+  tmp: '>=0.2.6'
 
 patchedDependencies:
   '@radix-ui/react-slot@1.2.4': patches/@radix-ui__react-slot@1.2.4.patch
