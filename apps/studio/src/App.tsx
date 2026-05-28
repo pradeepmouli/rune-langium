@@ -122,7 +122,7 @@ function AppContent() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [models, setModels] = useState<RosettaModel[]>([]);
   const [parsedModels, setParsedModels] = useState<Array<{ filePath: string; model: RosettaModel }>>([]);
-  const [, setErrors] = useState<Map<string, string[]>>(new Map());
+  const [parseErrors, setParseErrors] = useState<Map<string, string[]>>(new Map());
   const [deferredExports, setDeferredExports] = useState<
     Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>
   >([]);
@@ -187,26 +187,33 @@ function AppContent() {
     });
   }, [showToast, workspaceNotice]);
 
-  const applyParseResult = useCallback((result: Awaited<ReturnType<typeof parseWorkspaceFiles>>) => {
-    setModels(result.models);
-    setParsedModels(result.parsedModels);
-    setErrors(result.errors);
-    setWorkspaceNotice(result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null);
-    // Store deferred corpus types — they'll be registered in the editor
-    // store by the ExplorePerspective effect that watches models + deferredExports.
-    setDeferredExports(result.deferredExports ?? []);
-    // Surface curated bundle contents into the model-store so ModelLoader's
-    // "(N files)" badge + the curated file picker reflect what /api/parse
-    // hydrated. The routed parse path is the only place the studio learns
-    // which docs belong to each curated bundle (the curated-loader stays
-    // metadata-only by design — see model-store.buildArchiveLoader).
-    if (result.curatedRefOnlyFiles) {
-      const setCuratedFiles = useModelStore.getState().setCuratedFiles;
-      for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
-        setCuratedFiles(bundleId, files);
+  const applyParseResult = useCallback(
+    (
+      result: Awaited<ReturnType<typeof parseWorkspaceFiles>>,
+      options: { preserveSemanticModelOnErrors?: boolean } = {}
+    ) => {
+      setParseErrors(result.errors);
+      const hasParseErrors = result.errors.size > 0;
+      if (!hasParseErrors || !options.preserveSemanticModelOnErrors) {
+        setModels(result.models);
+        setParsedModels(result.parsedModels);
+        setDeferredExports(result.deferredExports ?? []);
+        // Surface curated bundle contents into the model-store so ModelLoader's
+        // "(N files)" badge + the curated file picker reflect what /api/parse
+        // hydrated. The routed parse path is the only place the studio learns
+        // which docs belong to each curated bundle (the curated-loader stays
+        // metadata-only by design — see model-store.buildArchiveLoader).
+        if (result.curatedRefOnlyFiles) {
+          const setCuratedFiles = useModelStore.getState().setCuratedFiles;
+          for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
+            setCuratedFiles(bundleId, files);
+          }
+        }
       }
-    }
-  }, []);
+      setWorkspaceNotice(result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null);
+    },
+    []
+  );
 
   // On-demand curated namespace hydration.
   //
@@ -230,7 +237,7 @@ function AppContent() {
     void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
       .then((result) => {
         if (cancelled) return;
-        applyParseResult(result);
+        applyParseResult(result, { preserveSemanticModelOnErrors: true });
         // Mark exactly the set sent in THIS parse (not whatever is pending when
         // the promise resolves) so a request arriving mid-flight isn't lost.
         useEditorStore.getState().markNamespacesHydrated(pendingHydration);
@@ -347,7 +354,7 @@ function AppContent() {
         setFiles([]);
         setModels([]);
         setParsedModels([]);
-        setErrors(new Map());
+        setParseErrors(new Map());
         setDeferredExports([]);
         setCuratedSyncedWorkspaceId(null);
         return false;
@@ -639,8 +646,14 @@ function AppContent() {
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
       reparseTimerRef.current = setTimeout(async () => {
         try {
-          const result = await parseWorkspaceFiles(updatedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
-          applyParseResult(result);
+          const result = await parseWorkspaceFiles(updatedFiles, {
+            hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
+          });
+          // Preserve the last valid graph/model while the user is mid-edit on
+          // syntactically invalid text. The Problems panel still updates from
+          // `parseErrors`, but the semantic workbench no longer flickers into a
+          // partial recovery state for transient CodeMirror transactions.
+          applyParseResult(result, { preserveSemanticModelOnErrors: true });
         } catch (error) {
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
         }
@@ -658,7 +671,7 @@ function AppContent() {
     setFiles([]);
     setModels([]);
     setParsedModels([]);
-    setErrors(new Map());
+    setParseErrors(new Map());
     // Return to the start page so the user can open or create a workspace.
     // Without this, bootState stays 'restored' and the "Workspace ready."
     // placeholder is shown with no way to load new files.
@@ -841,7 +854,7 @@ function AppContent() {
           setFiles([]);
           setModels([]);
           setParsedModels([]);
-          setErrors(new Map());
+          setParseErrors(new Map());
           setBootState('start');
           // Return to the launcher perspective when the active workspace is deleted.
           usePerspectiveStore.getState().setActivePerspective('workspaces');
@@ -876,7 +889,7 @@ function AppContent() {
     parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() })
       .then((result) => {
         if (token !== modelParseTokenRef.current) return;
-        applyParseResult(result);
+        applyParseResult(result, { preserveSemanticModelOnErrors: true });
       })
       .catch((err) => {
         reportWorkspaceError(
@@ -937,9 +950,10 @@ function AppContent() {
       files,
       models,
       parsedModels,
-      deferredExports
+      deferredExports,
+      parseErrors
     }),
-    [restoredWorkspace, files, models, parsedModels, deferredExports]
+    [restoredWorkspace, files, models, parsedModels, deferredExports, parseErrors]
   );
 
   return (

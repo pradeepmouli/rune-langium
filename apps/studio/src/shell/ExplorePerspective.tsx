@@ -98,7 +98,6 @@ import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
-import { pathToUri } from '../utils/uri.js';
 import { mergeSerializedIntoSource } from '../utils/source-merge.js';
 import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
@@ -110,6 +109,8 @@ import { useWorkspace } from './providers/workspace-context.js';
 import { useLsp } from './providers/lsp-context.js';
 import { useWorkspaceActions } from './perspectives/workspace-actions-context.js';
 import type { DeferredExportEntry } from '../workers/parser-worker.js';
+import type { LspDiagnostic } from '../store/diagnostics-store.js';
+import { uriToPath, pathToUri } from '../utils/uri.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -122,6 +123,7 @@ import type { DeferredExportEntry } from '../workers/parser-worker.js';
 const EMPTY_DEFERRED_EXPORTS: DeferredExportEntry[] = Object.freeze(
   [] as DeferredExportEntry[]
 ) as DeferredExportEntry[];
+const EMPTY_PARSE_ERRORS: ReadonlyMap<string, string[]> = new Map();
 
 /**
  * Stable empty diagnostics array — stable module-level reference so that
@@ -129,6 +131,48 @@ const EMPTY_DEFERRED_EXPORTS: DeferredExportEntry[] = Object.freeze(
  * there are no diagnostics for the focused file.
  */
 const EMPTY_RANGE_DIAGNOSTICS: readonly RangeDiagnostic[] = Object.freeze([]);
+
+function normalizeDiagnosticFilePath(uri: string, files: readonly WorkspaceFile[]): string {
+  const path = uriToPath(uri);
+  const match = files.find(
+    (file) =>
+      file.path === path ||
+      file.name === path ||
+      path.endsWith(`/${file.path}`) ||
+      path.endsWith(`/${file.name}`)
+  );
+  return match?.path ?? path;
+}
+
+function toParserDiagnostics(messages: readonly string[]): LspDiagnostic[] {
+  return messages.map((message, index) => ({
+    range: {
+      start: { line: index, character: 0 },
+      end: { line: index, character: 0 }
+    },
+    severity: 1,
+    source: 'parser',
+    message
+  }));
+}
+
+function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>): {
+  errors: number;
+  warnings: number;
+  total: number;
+} {
+  let errors = 0;
+  let warnings = 0;
+  let total = 0;
+  for (const diagnostics of fileDiagnostics.values()) {
+    for (const diagnostic of diagnostics) {
+      total += 1;
+      if (diagnostic.severity === 2) warnings += 1;
+      else errors += 1;
+    }
+  }
+  return { errors, warnings, total };
+}
 
 // ---------------------------------------------------------------------------
 // Adapter: TypeGraphNode[] → AdapterDocument
@@ -355,6 +399,7 @@ export function ExplorePerspective() {
   const workspace = useWorkspace();
   const { models, parsedModels, files } = workspace;
   const deferredExports: DeferredExportEntry[] = workspace.deferredExports ?? EMPTY_DEFERRED_EXPORTS;
+  const parseErrors = workspace.parseErrors ?? EMPTY_PARSE_ERRORS;
   const workspaceId = workspace.workspaceId ?? 'default';
   const workspaceKind = workspace.workspaceKind;
   const workspaceName = workspace.workspaceName;
@@ -1081,7 +1126,20 @@ export function ExplorePerspective() {
   useModelSourceSync(storeNodes, storeEdges, handleModelChanged);
 
   useLspDiagnosticsBridge(lspClient);
-  const { fileDiagnostics, totalErrors, totalWarnings } = useDiagnosticsStore();
+  const { fileDiagnostics } = useDiagnosticsStore();
+  const combinedFileDiagnostics = useMemo(() => {
+    const merged = new Map<string, LspDiagnostic[]>();
+    for (const [uri, diagnostics] of fileDiagnostics) {
+      merged.set(normalizeDiagnosticFilePath(uri, files), [...diagnostics]);
+    }
+    for (const [filePath, messages] of parseErrors) {
+      if (messages.length === 0) continue;
+      const existing = merged.get(filePath) ?? [];
+      merged.set(filePath, [...toParserDiagnostics(messages), ...existing]);
+    }
+    return merged;
+  }, [fileDiagnostics, files, parseErrors]);
+  const combinedDiagnostics = useMemo(() => countDiagnostics(combinedFileDiagnostics), [combinedFileDiagnostics]);
 
   useEffect(() => {
     if (!lspClient) return;
@@ -1162,15 +1220,16 @@ export function ExplorePerspective() {
 
   const validateModelForExport = useCallback((): string[] => {
     const warnings: string[] = [];
-    const { totalErrors: terr, totalWarnings: twarn } = useDiagnosticsStore.getState();
-    if (terr > 0) {
-      warnings.push(`Model has ${terr} error(s) that may affect code generation output quality.`);
+    if (combinedDiagnostics.errors > 0) {
+      warnings.push(`Model has ${combinedDiagnostics.errors} error(s) that may affect code generation output quality.`);
     }
-    if (twarn > 0) warnings.push(`Model has ${twarn} warning(s).`);
+    if (combinedDiagnostics.warnings > 0) {
+      warnings.push(`Model has ${combinedDiagnostics.warnings} warning(s).`);
+    }
     const serialized = getSerializedFiles();
     if (serialized.size === 0) warnings.push('No user-authored files found to export.');
     return warnings;
-  }, [getSerializedFiles]);
+  }, [combinedDiagnostics.errors, combinedDiagnostics.warnings, getSerializedFiles]);
 
   const availableTypes: TypeOption[] = useMemo(() => {
     const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
@@ -1312,7 +1371,7 @@ export function ExplorePerspective() {
   const ProblemsPanelMounted = useCallback(
     () => (
       <DiagnosticsPanel
-        fileDiagnostics={fileDiagnostics}
+        fileDiagnostics={combinedFileDiagnostics}
         onNavigate={(uri) => {
           const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
           const fileName = normPath.split('/').pop() ?? normPath;
@@ -1321,7 +1380,7 @@ export function ExplorePerspective() {
         }}
       />
     ),
-    [fileDiagnostics, files, openFileInSource]
+    [combinedFileDiagnostics, files, openFileInSource]
   );
 
   // Stable adapter for CodePreviewPanel cross-file source-map navigation.
@@ -1754,8 +1813,8 @@ export function ExplorePerspective() {
 
   const workspaceFileCount = fileCount;
   const totalProblemCount = useMemo(
-    () => Array.from(fileDiagnostics.values()).reduce((sum, diagnostics) => sum + diagnostics.length, 0),
-    [fileDiagnostics]
+    () => combinedDiagnostics.total,
+    [combinedDiagnostics.total]
   );
   const panelTabMeta = useMemo(
     () => ({
@@ -1932,9 +1991,9 @@ export function ExplorePerspective() {
         </span>
         <span>{files.filter((f) => f.dirty).length} modified</span>
         {selectedNodeId && <span>{selectedNodeId}</span>}
-        {(totalErrors > 0 || totalWarnings > 0) && (
+        {(combinedDiagnostics.errors > 0 || combinedDiagnostics.warnings > 0) && (
           <span>
-            {totalErrors} err / {totalWarnings} warn
+            {combinedDiagnostics.errors} err / {combinedDiagnostics.warnings} warn
           </span>
         )}
         {transportState && <LspConnectionBadge state={transportState} onRetry={onReconnect} />}

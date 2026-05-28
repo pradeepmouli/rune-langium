@@ -77,7 +77,8 @@ function wsState(files: WorkspaceState['files']): WorkspaceState {
     files,
     models: [],
     parsedModels: [],
-    deferredExports: []
+    deferredExports: [],
+    parseErrors: new Map()
   };
 }
 

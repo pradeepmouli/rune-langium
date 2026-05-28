@@ -27,7 +27,7 @@ import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/p
 function wsState(id: string): WorkspaceState {
   return { workspaceId: id, workspaceKind: 'browser-only', workspaceName: id, fileCount: 1,
     files: [{ name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false }],
-    models: [], parsedModels: [], deferredExports: [] };
+    models: [], parsedModels: [], deferredExports: [], parseErrors: new Map() };
 }
 
 describe('CodegenProvider', () => {

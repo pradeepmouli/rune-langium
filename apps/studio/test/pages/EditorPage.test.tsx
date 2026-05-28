@@ -11,6 +11,7 @@ import { setRuneStudioTestApi } from '../../src/test-api.js';
 const {
   editorStoreState,
   useEditorStore,
+  diagnosticsState,
   useDiagnosticsStore,
   runeTypeGraphMockState,
   resizeObserverMockState,
@@ -139,7 +140,7 @@ const {
   };
 });
 
-const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
+const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
     latestProps: undefined as
       | {
@@ -152,6 +153,16 @@ const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
     latestProps: undefined as
       | {
           focusPanel?: { component: string; nonce: number } | null;
+        }
+      | undefined
+  },
+  diagnosticsPanelMockState: {
+    latestProps: undefined as
+      | {
+          fileDiagnostics?: Map<
+            string,
+            Array<{ message: string; severity?: 1 | 2 | 3 | 4; source?: string }>
+          >;
         }
       | undefined
   }
@@ -280,7 +291,12 @@ vi.mock('../../src/components/ConnectionStatus.js', () => ({
 }));
 
 vi.mock('../../src/components/DiagnosticsPanel.js', () => ({
-  DiagnosticsPanel: () => React.createElement('div')
+  DiagnosticsPanel: (props: {
+    fileDiagnostics: Map<string, Array<{ message: string; severity?: 1 | 2 | 3 | 4; source?: string }>>;
+  }) => {
+    diagnosticsPanelMockState.latestProps = props;
+    return React.createElement('div');
+  }
 }));
 
 vi.mock('../../src/components/ExportMenu.js', () => ({
@@ -375,6 +391,9 @@ vi.mock('../../src/shell/DockShell.js', () => ({
         : null,
       panelComponents?.['workspace.visualPreview']
         ? React.createElement(panelComponents['workspace.visualPreview'], { key: 'visual' })
+        : null,
+      panelComponents?.['workspace.problems']
+        ? React.createElement(panelComponents['workspace.problems'], { key: 'problems' })
         : null
     ]);
   }
@@ -426,7 +445,8 @@ vi.mock('../../src/components/FormPreviewPanel.js', () => ({
 }));
 
 vi.mock('../../src/utils/uri.js', () => ({
-  pathToUri: (path: string) => `file://${path}`
+  pathToUri: (path: string) => `file://${path}`,
+  uriToPath: (uri: string) => uri.replace(/^file:\/\/\/?workspace\//, '').replace(/^file:\/\//, '')
 }));
 
 import { renderEditorPage } from './editor-page-harness.js';
@@ -1159,6 +1179,53 @@ describe('EditorPage workspace chrome', () => {
       reapplyFocusMode: true
     });
     expect(editorStoreState.requestNamespaceHydration).toHaveBeenCalledWith('cdm.base.datetime');
+  });
+
+  it('merges workspace parse errors into the Problems panel alongside LSP diagnostics', () => {
+    diagnosticsState.fileDiagnostics = new Map([
+      [
+        'file:///workspace/trade.rosetta',
+        [
+          {
+            range: {
+              start: { line: 2, character: 0 },
+              end: { line: 2, character: 5 }
+            },
+            severity: 2,
+            source: 'lsp',
+            message: 'Suspicious cardinality'
+          }
+        ]
+      ]
+    ]);
+    diagnosticsState.totalErrors = 0;
+    diagnosticsState.totalWarnings = 1;
+
+    renderEditorPage({
+      parseErrors: new Map([['trade.rosetta', ['Expected ":" after type declaration']]]),
+      files: [
+        {
+          name: 'trade.rosetta',
+          path: 'trade.rosetta',
+          content: 'namespace example\ntype Trade\n  tradeId string (1..1)\n',
+          dirty: true
+        }
+      ]
+    });
+
+    const merged = diagnosticsPanelMockState.latestProps?.fileDiagnostics;
+    expect(merged?.get('trade.rosetta')).toEqual([
+      expect.objectContaining({
+        severity: 1,
+        source: 'parser',
+        message: 'Expected ":" after type declaration'
+      }),
+      expect.objectContaining({
+        severity: 2,
+        source: 'lsp',
+        message: 'Suspicious cardinality'
+      })
+    ]);
   });
 
   it('re-centers connected navigation targets when focus mode hides nothing', () => {
