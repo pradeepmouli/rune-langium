@@ -856,7 +856,7 @@ export function ExplorePerspective() {
     if (hydrationNonce === 0 || !selectedNodeId) return;
     const nodeData = selectedNodeDataRef.current;
     if (!nodeData) return;
-    const filePath = resolveNodeFile(nodeData);
+    const filePath = resolveNodeFileRef.current(nodeData);
     if (!filePath || filePath.startsWith('system://')) return;
     const requestWorkspaceId = workspaceId;
     let cancelled = false;
@@ -985,6 +985,15 @@ export function ExplorePerspective() {
     },
     [files, nodeIdToFilePath]
   );
+  // Escape stale-closure re-fires in the hydration relink effect — same
+  // pattern as selectedNodeDataRef. deferredExports (and therefore
+  // nodeIdToFilePath / resolveNodeFile) updates in the same React render
+  // that bumps hydrationNonce; the effect dep array only lists hydrationNonce
+  // so it would capture the pre-update resolveNodeFile and call linkDocument
+  // with the synthetic ${bundleId}/${namespace} path instead of the real
+  // file path, missing the entry in deferredModelJson.
+  const resolveNodeFileRef = useRef(resolveNodeFile);
+  resolveNodeFileRef.current = resolveNodeFile;
 
   const openFileInSource = useCallback((filePath: string) => {
     setActiveEditorFile(filePath);
