@@ -96,6 +96,9 @@ test.describe('production checkout smoke', () => {
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
-    await expect(centerStack.getByText(/Members \(\d+\)/)).toBeVisible({ timeout: 15_000 });
+    // /Members \([1-9]/ ensures at least one member — DetailPanel's guard
+    // `{members.length > 0 && ...}` means "Members (0)" is never rendered, but
+    // being explicit here documents the intent clearly.
+    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 15_000 });
   });
 });
