@@ -1483,4 +1483,84 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
     expect(cellComponents?.type).toBe(structureViewMockState.SENTINEL_TYPE_CELL);
     expect(cellComponents?.card).toBe(structureViewMockState.SENTINEL_CARD_CELL);
   });
+
+  it('keeps hydrated curated models alive across same-workspace rerenders and clears them on workspace switch', async () => {
+    vi.useFakeTimers();
+    try {
+      const hydratedModel = {
+        name: 'cdm.base.datetime',
+        elements: []
+      } as unknown as import('@rune-langium/core').RosettaModel;
+      const deferredEntry = {
+        filePath: 'cdm/cdm.base.datetime',
+        namespace: 'cdm.base.datetime',
+        exports: [{ type: 'Data', name: 'BusinessCenters' }]
+      };
+      const workspaceService = await import('../../src/services/workspace.js');
+      const linkDocumentMock = vi.mocked(workspaceService.linkDocument);
+      linkDocumentMock.mockReset();
+      linkDocumentMock.mockResolvedValueOnce({ linked: true, errors: [], newModels: [hydratedModel] });
+      linkDocumentMock.mockResolvedValue({ linked: false, errors: [], newModels: [] });
+
+      editorStoreState.nodes = [
+        {
+          id: 'cdm.base.datetime::BusinessCenters',
+          data: {
+            namespace: 'cdm.base.datetime',
+            name: 'BusinessCenters',
+            $type: 'Data',
+            deferred: true
+          }
+        }
+      ];
+      editorStoreState.selectedNodeId = 'cdm.base.datetime::BusinessCenters';
+
+      const { rerenderEditorPage } = renderEditorPage({
+        workspaceId: 'ws-curated',
+        models: [],
+        deferredExports: [deferredEntry],
+        files: [],
+        fileCount: 0
+      });
+
+      expect(editorStoreState.loadModels).toHaveBeenCalledWith([]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
+      expect(linkDocumentMock).toHaveBeenCalledWith('cdm/cdm.base.datetime');
+      expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([hydratedModel]);
+
+      editorStoreState.loadModels.mockClear();
+
+      await act(async () => {
+        rerenderEditorPage({
+          workspaceId: 'ws-curated',
+          models: [],
+          deferredExports: [deferredEntry],
+          files: [],
+          fileCount: 0
+        });
+      });
+
+      expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([hydratedModel]);
+
+      editorStoreState.loadModels.mockClear();
+
+      await act(async () => {
+        rerenderEditorPage({
+          workspaceId: 'ws-next',
+          models: [],
+          deferredExports: [deferredEntry],
+          files: [],
+          fileCount: 0
+        });
+      });
+
+      expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

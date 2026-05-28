@@ -590,19 +590,27 @@ export function ExplorePerspective() {
   }, [files, models, parsedModels]);
 
   useEffect(() => {
-    // New workspace — discard any previously accumulated corpus models.
+    // Hydrated curated docs live only in `corpusModelsRef` (the routed parse
+    // intentionally keeps them out of workspace `models[]`). Clear that cache
+    // only when the workspace itself changes; clearing on every parse rerender
+    // makes Structure/Inspector populate for a frame and then drop back to the
+    // deferred placeholder graph.
     corpusModelsRef.current = [];
+  }, [workspaceId]);
 
+  useEffect(() => {
     // loadDeferredExports only stashes entries on the store (no node
     // mutation) — Codex P2 review of PR #164: doing both in one set()
     // avoids the "mixed stale graph in undo history" state. Then call
     // loadModels unconditionally — even with `models: []` — so it
     // materializes the curated placeholder nodes from the stashed
-    // deferredExports. Without this, a curated-only workspace would
-    // never show its placeholder nodes.
+    // deferredExports. Hydrated curated docs merged through linkDocument live
+    // in `corpusModelsRef`; keep them in the graph across same-workspace parse
+    // rerenders because the routed parser does not echo them back in
+    // `workspace.models`.
     useEditorStore.getState().loadDeferredExports(deferredExports);
-    useEditorStore.getState().loadModels(models as unknown[]);
-  }, [models, deferredExports]);
+    useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+  }, [models, deferredExports, workspaceId]);
 
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {
     if (!selectedNodeId) return null;
