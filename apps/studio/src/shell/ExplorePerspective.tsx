@@ -988,8 +988,10 @@ export function ExplorePerspective() {
   // Escape stale-closure re-fires in the hydration relink effect — same
   // pattern as selectedNodeDataRef. deferredExports (and therefore
   // nodeIdToFilePath / resolveNodeFile) updates in the same React render
-  // that bumps hydrationNonce; the effect dep array only lists hydrationNonce
-  // so it would capture the pre-update resolveNodeFile and call linkDocument
+  // that bumps hydrationNonce; the effect dep array is
+  // [hydrationNonce, selectedNodeId, workspaceId] — resolveNodeFile /
+  // nodeIdToFilePath are intentionally omitted to avoid spurious re-runs,
+  // but without the ref the captured resolveNodeFile would call linkDocument
   // with the synthetic ${bundleId}/${namespace} path instead of the real
   // file path, missing the entry in deferredModelJson.
   const resolveNodeFileRef = useRef(resolveNodeFile);
