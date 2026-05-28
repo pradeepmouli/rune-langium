@@ -19,8 +19,8 @@
 # Env:
 #   BASE         override the public origin path. Default:
 #                https://www.daikonic.dev/rune-studio
-#   STRICT       1 = treat warnings as failures (telemetry rate-limit,
-#                github-auth misconfig). Default: 0.
+#   STRICT       1 = treat warnings as failures. Default: 0.
+#   ENABLE_TELEMETRY 1 = include /api/telemetry/* probes. Default: 0.
 #
 # Exit codes:
 #   0  all checks passed
@@ -33,6 +33,7 @@ set -o pipefail
 BASE="${BASE:-https://www.daikonic.dev/rune-studio}"
 ROOT_BASE="${BASE%/rune-studio}"
 STRICT="${STRICT:-0}"
+ENABLE_TELEMETRY="${ENABLE_TELEMETRY:-0}"
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "FATAL: curl not found in PATH"
@@ -76,13 +77,19 @@ http_status() {
   fi
 }
 
-# http_body <method> <url> [data]
+# http_body <method> <url> [data] [extra_header]
 http_body() {
-  local method=$1 url=$2 data=${3:-}
+  local method=$1 url=$2 data=${3:-} extra=${4:-}
   if [ -n "$data" ]; then
-    curl -s -X "$method" -H 'Content-Type: application/json' --data "$data" "$url"
+    curl -s -X "$method" \
+      -H 'Content-Type: application/json' \
+      ${extra:+-H "$extra"} \
+      --data "$data" \
+      "$url"
   else
-    curl -s -X "$method" "$url"
+    curl -s -X "$method" \
+      ${extra:+-H "$extra"} \
+      "$url"
   fi
 }
 
@@ -90,6 +97,9 @@ echo "Verifying production deploy at:"
 echo "  Studio:        $BASE/studio/"
 echo "  Curated mirror: $ROOT_BASE/curated/"
 echo "  Worker API:    $BASE/api/"
+if [ "$ENABLE_TELEMETRY" != "1" ]; then
+  echo "  Telemetry:     skipped (set ENABLE_TELEMETRY=1 to include)"
+fi
 echo
 
 # ---------- 1. Studio HTML reachable ----------
@@ -113,9 +123,9 @@ for model in cdm fpml rune-dsl; do
     200)
       body=$(http_body GET "$url")
       # Sanity-check manifest shape.
-      if printf '%s' "$body" | grep -q '"schemaVersion"' \
-         && printf '%s' "$body" | grep -q '"modelId"' \
-         && printf '%s' "$body" | grep -q '"sha256"'; then
+      if grep -Eq '"schemaVersion"[[:space:]]*:' <<<"$body" \
+         && grep -Eq '"modelId"[[:space:]]*:' <<<"$body" \
+         && grep -Eq '"sha256"[[:space:]]*:' <<<"$body"; then
         pass "Curated /$model/manifest.json ($status, valid shape)"
       else
         fail "Curated /$model/manifest.json shape" \
@@ -127,7 +137,7 @@ for model in cdm fpml rune-dsl; do
       ;;
     404)
       body=$(http_body GET "$url")
-      if [ -n "$body" ] && printf '%s' "$body" | grep -q '"error"'; then
+      if [ -n "$body" ] && grep -q '"error"' <<<"$body"; then
         # Worker is deployed but R2 is empty for this modelId.
         warn "Curated /$model/manifest.json" \
              "Worker reports 404 with body — Worker live, R2 empty for $model. Run the first cron."
@@ -144,65 +154,89 @@ for model in cdm fpml rune-dsl; do
   esac
 done
 
-# ---------- 3. Telemetry Worker — accepts a valid event ----------
-# A real telemetry Worker returns 204 on a valid POST with the same-
-# origin Origin header. A catch-all 405 means the Worker is not bound.
+# ---------- 3. Curated mirror — latest archive endpoints ----------
+# HEAD is enough here: we only need to prove the latest archive object exists
+# and is reachable without downloading the full tarball.
 
-valid_event='{"event":"workspace_open_success","studio_version":"verify-prod","ua_class":"smoke"}'
-status=$(http_status POST "$BASE/api/telemetry/v1/event" "$valid_event" "Origin: $ROOT_BASE")
-case "$status" in
-  204)
-    pass "Telemetry POST /v1/event ($status)"
-    ;;
-  403)
-    fail "Telemetry POST /v1/event" \
-         "403 — Worker live but ALLOWED_ORIGIN doesn't include $ROOT_BASE. Fix env binding."
-    ;;
-  400)
-    fail "Telemetry POST /v1/event" \
-         "400 schema_violation — schema drift between client and Worker (e.g. ErrorCategory enum)"
-    ;;
-  405)
-    fail "Telemetry POST /v1/event" \
-         "405 — telemetry Worker is not routed (catch-all). Run runbook Step 4."
-    ;;
-  404)
-    fail "Telemetry POST /v1/event" \
-         "404 — route is wrong; check apps/telemetry-worker/wrangler.toml [[routes]]"
-    ;;
-  *)
-    fail "Telemetry POST /v1/event" \
-         "expected 204, got $status"
-    ;;
-esac
+for model in cdm fpml rune-dsl; do
+  url="$ROOT_BASE/curated/$model/latest.tar.gz"
+  status=$(http_status HEAD "$url")
+  case "$status" in
+    200)
+      pass "Curated /$model/latest.tar.gz ($status)"
+      ;;
+    404)
+      fail "Curated /$model/latest.tar.gz" \
+           "404 — latest archive missing or curated-mirror Worker is not serving the tarball for $model."
+      ;;
+    *)
+      fail "Curated /$model/latest.tar.gz" \
+           "expected 200, got $status"
+      ;;
+  esac
+done
 
-# ---------- 4. Telemetry Worker — closed-schema rejection ----------
-# A schema-violation should yield 400 — proves the schema is wired.
+if [ "$ENABLE_TELEMETRY" = "1" ]; then
+  # ---------- 4. Telemetry Worker — accepts a valid event ----------
+  # A real telemetry Worker returns 204 on a valid POST with the same-
+  # origin Origin header. A catch-all 405 means the Worker is not bound.
 
-bad_event='{"event":"workspace_open_success","studio_version":"vp","ua_class":"smoke","leak":"no"}'
-status=$(http_status POST "$BASE/api/telemetry/v1/event" "$bad_event" "Origin: $ROOT_BASE")
-if [ "$status" = "400" ]; then
-  pass "Telemetry rejects unknown field ($status)"
-elif [ "$status" = "204" ]; then
-  fail "Telemetry rejects unknown field" \
-       "expected 400, got 204 — schema is not .strict() in production"
-elif [ "$status" = "405" ]; then
-  : # already reported above
-else
-  fail "Telemetry rejects unknown field" \
-       "expected 400, got $status"
+  valid_event='{"event":"workspace_open_success","studio_version":"verify-prod","ua_class":"smoke"}'
+  status=$(http_status POST "$BASE/api/telemetry/v1/event" "$valid_event" "Origin: $ROOT_BASE")
+  case "$status" in
+    204)
+      pass "Telemetry POST /v1/event ($status)"
+      ;;
+    403)
+      fail "Telemetry POST /v1/event" \
+           "403 — Worker live but ALLOWED_ORIGIN doesn't include $ROOT_BASE. Fix env binding."
+      ;;
+    400)
+      fail "Telemetry POST /v1/event" \
+           "400 schema_violation — schema drift between client and Worker (e.g. ErrorCategory enum)"
+      ;;
+    405)
+      fail "Telemetry POST /v1/event" \
+           "405 — telemetry Worker is not routed (catch-all). Run runbook Step 4."
+      ;;
+    404)
+      fail "Telemetry POST /v1/event" \
+           "404 — route is wrong; check apps/telemetry-worker/wrangler.toml [[routes]]"
+      ;;
+    *)
+      fail "Telemetry POST /v1/event" \
+           "expected 204, got $status"
+      ;;
+  esac
+
+  # ---------- 5. Telemetry Worker — closed-schema rejection ----------
+  # A schema-violation should yield 400 — proves the schema is wired.
+
+  bad_event='{"event":"workspace_open_success","studio_version":"vp","ua_class":"smoke","leak":"no"}'
+  status=$(http_status POST "$BASE/api/telemetry/v1/event" "$bad_event" "Origin: $ROOT_BASE")
+  if [ "$status" = "400" ]; then
+    pass "Telemetry rejects unknown field ($status)"
+  elif [ "$status" = "204" ]; then
+    fail "Telemetry rejects unknown field" \
+         "expected 400, got 204 — schema is not .strict() in production"
+  elif [ "$status" = "405" ]; then
+    : # already reported above
+  else
+    fail "Telemetry rejects unknown field" \
+         "expected 400, got $status"
+  fi
 fi
 
-# ---------- 5. github-auth Worker — device-init reachable ----------
+# ---------- 6. github-auth Worker — device-init reachable ----------
 # A real Worker returns 200 with device_code/user_code, OR 502 if the
 # GitHub App client_id is the placeholder, OR 503 if upstream is down.
 
 status=$(http_status POST "$BASE/api/github-auth/device-init" "" "Origin: $ROOT_BASE")
 case "$status" in
   200)
-    body=$(http_body POST "$BASE/api/github-auth/device-init")
-    if printf '%s' "$body" | grep -q '"user_code"' \
-       && printf '%s' "$body" | grep -q '"device_code"'; then
+    body=$(http_body POST "$BASE/api/github-auth/device-init" "" "Origin: $ROOT_BASE")
+    if grep -q '"user_code"' <<<"$body" \
+       && grep -q '"device_code"' <<<"$body"; then
       pass "github-auth POST /device-init ($status)"
     else
       fail "github-auth POST /device-init" \
@@ -235,57 +269,46 @@ case "$status" in
     ;;
 esac
 
-# ---------- 6. Sanity: catch-all detection ----------
-# If a randomly-named POST under /api/* returns the same status as the
-# real telemetry POST, we're hitting a catch-all rather than the real
-# Workers.
+# ---------- 7. Codegen Worker — /generate/health ----------
+# 200 = warm or cached-health path works. 503 = worker routed but upstream
+# container unavailable. 404/405 indicate the route is wrong or missing.
 
-random_status=$(http_status POST "$BASE/api/random-nonexistent-$(date +%s)" '{}')
-real_status=$(http_status POST "$BASE/api/telemetry/v1/event" "$valid_event" "Origin: $ROOT_BASE")
-if [ "$random_status" = "$real_status" ] && [ "$random_status" = "405" ]; then
-  fail "Worker route precedence" \
-       "POST to a random unknown path returned the same 405 as the telemetry endpoint — every /api/* is being eaten by a catch-all (likely codegen-worker's parent route pattern). Tighten route patterns in apps/{telemetry,github-auth}-worker/wrangler.toml."
-fi
-
-# ---------- 7. LSP Worker — /health probe (feature 014, US3) ----------
-# A live LSP Worker returns 200 with {ok:true, langium_loaded:true}.
-# 404 = unrouted (T043 deploy not yet run); 200 with langium_loaded:false
-# = Worker live but the langium import failed at runtime (bundle regression).
-
-status=$(http_status GET "$BASE/api/lsp/health")
+status=$(http_status GET "$BASE/api/generate/health")
 case "$status" in
   200)
-    body=$(http_body GET "$BASE/api/lsp/health")
-    if printf '%s' "$body" | grep -q '"langium_loaded":true'; then
-      pass "LSP /health ($status, langium_loaded:true)"
-    elif printf '%s' "$body" | grep -q '"langium_loaded":false'; then
-      fail "LSP /health" \
-           "200 but langium_loaded:false — LSP Worker live but langium import failed at runtime (bundle regression). Check apps/lsp-worker/src/index.ts module resolution."
+    body=$(http_body GET "$BASE/api/generate/health")
+    if grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' <<<"$body"; then
+      pass "Codegen /generate/health ($status)"
     else
-      fail "LSP /health" \
-           "200 but body missing langium_loaded: ${body:0:160}"
+      fail "Codegen /generate/health" \
+           "200 but body missing status=ok: ${body:0:160}"
     fi
     ;;
-  404)
-    fail "LSP /health" \
-         "404 — LSP Worker is not routed (T043 deploy pending). Run \`pnpm --filter @rune-langium/lsp-worker exec wrangler deploy\` and confirm route /rune-studio/api/lsp/* in apps/lsp-worker/wrangler.toml."
+  503)
+    body=$(http_body GET "$BASE/api/generate/health")
+    if grep -q '"status"[[:space:]]*:[[:space:]]*"unavailable"' <<<"$body"; then
+      pass "Codegen /generate/health ($status, routed but unavailable)"
+    else
+      fail "Codegen /generate/health" \
+           "503 but body missing status=unavailable: ${body:0:160}"
+    fi
     ;;
-  405)
-    fail "LSP /health" \
-         "405 — every /api/* is being eaten by a catch-all (route-precedence bug). Tighten route patterns in apps/{telemetry,github-auth,codegen}-worker/wrangler.toml."
+  404|405)
+    fail "Codegen /generate/health" \
+         "$status — codegen Worker route missing or misconfigured; expected /rune-studio/api/generate/*."
     ;;
   *)
-    fail "LSP /health" \
-         "expected 200, got $status from $BASE/api/lsp/health"
+    fail "Codegen /generate/health" \
+         "expected 200/503, got $status"
     ;;
 esac
 
-# ---------- 8. Spec 019 Pages Functions — same-origin LSP + parse (Phase 1) ----------
+# ---------- 8. Spec 019 Pages Functions — same-origin LSP + parse ----------
 # These probes target the NEW endpoints deployed via apps/docs/.vitepress/dist/
 # functions/ (see apps/docs/scripts/build-combined.mjs). They run at the ROOT
 # of the origin (not under /rune-studio/), since CF Pages mounts functions at
-# the project root. The OLD apps/lsp-worker at $BASE/api/lsp/* is still
-# checked above and remains the active production LSP until Phase 3.
+# the project root. The legacy apps/lsp-worker probe was intentionally removed:
+# production now verifies the same-origin Pages Functions directly.
 #
 # Skip this section when targeting a non-daikonic.dev BASE (e.g. a staging
 # preview URL with a different routing prefix) by setting SKIP_019=1.
@@ -295,7 +318,7 @@ if [ "${SKIP_019:-0}" != "1" ]; then
   case "$status" in
     200)
       body=$(http_body GET "$ROOT_BASE/api/lsp/health")
-      if printf '%s' "$body" | grep -q '"langium_loaded":true'; then
+      if grep -q '"langium_loaded":true' <<<"$body"; then
         pass "019 /api/lsp/health ($status, langium_loaded:true)"
       else
         fail "019 /api/lsp/health" \

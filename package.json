@@ -68,7 +68,9 @@
     "codegen:start": "node packages/codegen/dist/serve.js",
     "docs:dev": "pnpm --filter @rune-langium/docs dev",
     "docs:build": "pnpm --filter @rune-langium/docs build",
-    "verify:prod": "bash scripts/verify-production.sh"
+    "verify:prod": "bash scripts/verify-production.sh",
+    "verify:prod:ui": "pnpm --filter @rune-langium/studio run test:prod-smoke",
+    "verify:prod:all": "pnpm run verify:prod && pnpm run verify:prod:ui"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

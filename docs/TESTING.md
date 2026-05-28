@@ -1,6 +1,68 @@
 # Testing Guide
 
-This template includes comprehensive testing setup with Vitest for unit/integration tests and Playwright for E2E tests.
+This repo uses Vitest for unit/integration coverage, Playwright for browser
+coverage, and a dedicated production verification flow for deployed endpoints
+and post-deploy UI smoke tests.
+
+## Production Verification
+
+### Endpoint smoke checks
+
+```bash
+# Default production endpoint checks.
+pnpm run verify:prod
+
+# Include telemetry once that worker is expected to be live.
+ENABLE_TELEMETRY=1 pnpm run verify:prod
+
+# Target a staging or preview deployment.
+BASE=https://staging.example/rune-studio pnpm run verify:prod
+```
+
+What `verify:prod` covers:
+
+- Studio HTML reachability
+- Curated mirror manifests for `cdm`, `fpml`, and `rune-dsl`
+- Curated `latest.tar.gz` archive reachability for those same models
+- GitHub auth `device-init`
+- Codegen worker `/api/generate/health`
+- Same-origin Pages Function probes for `/api/lsp/health`, `/api/lsp/session`, and `/api/parse`
+
+Telemetry probes are currently **optional** and are only included when
+`ENABLE_TELEMETRY=1`.
+
+### Browser smoke checks
+
+```bash
+# Run the dedicated production Playwright smoke against the default deploy.
+pnpm run verify:prod:ui
+
+# Override the deployed Studio origin explicitly.
+PLAYWRIGHT_BASE_URL=https://www.daikonic.dev/rune-studio/studio/ pnpm run verify:prod:ui
+
+# Run both endpoint and browser production checks.
+pnpm run verify:prod:all
+```
+
+The prod Playwright smoke is isolated from the normal E2E suite. It uses
+`apps/studio/playwright.prod.config.ts` and only runs specs under
+`apps/studio/test/prod-smoke/`, so setting `PLAYWRIGHT_BASE_URL` for a prod
+check does **not** accidentally point the full local E2E suite at production.
+
+The current smoke flow:
+
+1. Opens the deployed Studio in a fresh browser context
+2. Loads the CDM curated bundle
+3. Navigates one enum and one data type from the namespace explorer
+4. Verifies Structure and Inspector update
+5. Verifies Source stays on the workspace file for reference-only curated types
+
+### Operational note
+
+If we want a published status page later, the clean next step is to have
+`verify:prod` / `verify:prod:ui` emit machine-readable summaries (JSON or
+Markdown) and publish those from CI. For now, `docs/TESTING.md` is the primary
+operator entrypoint and the spec markdown remains historical/spec context.
 
 ## Unit & Integration Testing
 
