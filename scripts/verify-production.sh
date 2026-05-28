@@ -64,7 +64,11 @@ warn() {
 # http_status <method> <url> [data] [extra_header]
 http_status() {
   local method=$1 url=$2 data=${3:-} extra=${4:-}
-  if [ -n "$data" ]; then
+  if [ "$method" = "HEAD" ]; then
+    curl -s -o /dev/null -w '%{http_code}' -I \
+      ${extra:+-H "$extra"} \
+      "$url"
+  elif [ -n "$data" ]; then
     curl -s -o /dev/null -w '%{http_code}' -X "$method" \
       -H 'Content-Type: application/json' \
       ${extra:+-H "$extra"} \
@@ -271,7 +275,8 @@ esac
 
 # ---------- 7. Codegen Worker — /generate/health ----------
 # 200 = warm or cached-health path works. 503 = worker routed but upstream
-# container unavailable. 404/405 indicate the route is wrong or missing.
+# container unavailable, which is a failed prod verification. 404/405 indicate
+# the route is wrong or missing.
 
 status=$(http_status GET "$BASE/api/generate/health")
 case "$status" in
@@ -287,7 +292,8 @@ case "$status" in
   503)
     body=$(http_body GET "$BASE/api/generate/health")
     if grep -q '"status"[[:space:]]*:[[:space:]]*"unavailable"' <<<"$body"; then
-      pass "Codegen /generate/health ($status, routed but unavailable)"
+      fail "Codegen /generate/health" \
+           "503 status=unavailable — worker route is live but the backing container/cache is unavailable."
     else
       fail "Codegen /generate/health" \
            "503 but body missing status=unavailable: ${body:0:160}"
@@ -342,7 +348,7 @@ if [ "${SKIP_019:-0}" != "1" ]; then
   status=$(http_status POST "$ROOT_BASE/api/lsp/session" '{"workspaceId":"verify"}')
   case "$status" in
     200)
-      warn "019 /api/lsp/session origin gating" \
+      fail "019 /api/lsp/session origin gate" \
            "200 with no Origin header — token mint should reject cross-origin / null-origin requests (lsp-auth.ts). Check ALLOWED_ORIGIN var in CF dashboard."
       ;;
     400|401|403)

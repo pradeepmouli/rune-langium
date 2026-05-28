@@ -1563,4 +1563,88 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
       vi.useRealTimers();
     }
   });
+
+  it('ignores stale curated link results that resolve after the workspace changes', async () => {
+    vi.useFakeTimers();
+    try {
+      const hydratedModel = {
+        name: 'cdm.base.datetime',
+        elements: []
+      } as unknown as import('@rune-langium/core').RosettaModel;
+      const deferredEntry = {
+        filePath: 'cdm/cdm.base.datetime',
+        namespace: 'cdm.base.datetime',
+        exports: [{ type: 'Data', name: 'BusinessCenters' }]
+      };
+      const workspaceService = await import('../../src/services/workspace.js');
+      const linkDocumentMock = vi.mocked(workspaceService.linkDocument);
+      linkDocumentMock.mockReset();
+
+      let resolveLinkDocument:
+        | ((value: { linked: boolean; errors: []; newModels: (typeof hydratedModel)[] }) => void)
+        | undefined;
+      linkDocumentMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLinkDocument = resolve;
+          })
+      );
+      linkDocumentMock.mockResolvedValue({ linked: false, errors: [], newModels: [] });
+
+      editorStoreState.nodes = [
+        {
+          id: 'cdm.base.datetime::BusinessCenters',
+          data: {
+            namespace: 'cdm.base.datetime',
+            name: 'BusinessCenters',
+            $type: 'Data',
+            deferred: true
+          }
+        }
+      ];
+      editorStoreState.selectedNodeId = 'cdm.base.datetime::BusinessCenters';
+
+      const { rerenderEditorPage } = renderEditorPage({
+        workspaceId: 'ws-curated',
+        models: [],
+        deferredExports: [deferredEntry],
+        files: [],
+        fileCount: 0
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+
+      expect(linkDocumentMock).toHaveBeenCalledWith('cdm/cdm.base.datetime');
+
+      editorStoreState.nodes = [];
+      editorStoreState.selectedNodeId = undefined;
+      editorStoreState.loadModels.mockClear();
+
+      await act(async () => {
+        rerenderEditorPage({
+          workspaceId: 'ws-next',
+          models: [],
+          deferredExports: [deferredEntry],
+          files: [],
+          fileCount: 0
+        });
+      });
+
+      expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([]);
+      const callCountAfterWorkspaceSwitch = editorStoreState.loadModels.mock.calls.length;
+
+      resolveLinkDocument?.({ linked: true, errors: [], newModels: [hydratedModel] });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(editorStoreState.loadModels.mock.calls).toHaveLength(callCountAfterWorkspaceSwitch);
+      expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
