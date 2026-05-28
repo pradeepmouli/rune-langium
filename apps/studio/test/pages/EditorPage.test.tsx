@@ -11,6 +11,7 @@ import { setRuneStudioTestApi } from '../../src/test-api.js';
 const {
   editorStoreState,
   useEditorStore,
+  diagnosticsState,
   useDiagnosticsStore,
   runeTypeGraphMockState,
   resizeObserverMockState,
@@ -41,6 +42,7 @@ const {
     loadDeferredExports: vi.fn(),
     pendingHydrationNamespaces: [] as string[],
     hydratedNamespaces: [] as string[],
+    hydrationNonce: 0,
     requestNamespaceHydration: vi.fn(),
     markNamespacesHydrated: vi.fn(),
     resetHydration: vi.fn()
@@ -139,7 +141,7 @@ const {
   };
 });
 
-const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
+const { sourceEditorMockState, dockShellMockState, diagnosticsPanelMockState } = vi.hoisted(() => ({
   sourceEditorMockState: {
     latestProps: undefined as
       | {
@@ -152,6 +154,13 @@ const { sourceEditorMockState, dockShellMockState } = vi.hoisted(() => ({
     latestProps: undefined as
       | {
           focusPanel?: { component: string; nonce: number } | null;
+        }
+      | undefined
+  },
+  diagnosticsPanelMockState: {
+    latestProps: undefined as
+      | {
+          fileDiagnostics?: Map<string, Array<{ message: string; severity?: 1 | 2 | 3 | 4; source?: string }>>;
         }
       | undefined
   }
@@ -280,7 +289,12 @@ vi.mock('../../src/components/ConnectionStatus.js', () => ({
 }));
 
 vi.mock('../../src/components/DiagnosticsPanel.js', () => ({
-  DiagnosticsPanel: () => React.createElement('div')
+  DiagnosticsPanel: (props: {
+    fileDiagnostics: Map<string, Array<{ message: string; severity?: 1 | 2 | 3 | 4; source?: string }>>;
+  }) => {
+    diagnosticsPanelMockState.latestProps = props;
+    return React.createElement('div');
+  }
 }));
 
 vi.mock('../../src/components/ExportMenu.js', () => ({
@@ -375,6 +389,9 @@ vi.mock('../../src/shell/DockShell.js', () => ({
         : null,
       panelComponents?.['workspace.visualPreview']
         ? React.createElement(panelComponents['workspace.visualPreview'], { key: 'visual' })
+        : null,
+      panelComponents?.['workspace.problems']
+        ? React.createElement(panelComponents['workspace.problems'], { key: 'problems' })
         : null
     ]);
   }
@@ -426,7 +443,8 @@ vi.mock('../../src/components/FormPreviewPanel.js', () => ({
 }));
 
 vi.mock('../../src/utils/uri.js', () => ({
-  pathToUri: (path: string) => `file://${path}`
+  pathToUri: (path: string) => `file://${path}`,
+  uriToPath: (uri: string) => uri.replace(/^file:\/\/\/?workspace\//, '').replace(/^file:\/\//, '')
 }));
 
 import { renderEditorPage } from './editor-page-harness.js';
@@ -478,6 +496,7 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [];
     editorStoreState.edges = [];
     editorStoreState.selectedNodeId = undefined;
+    editorStoreState.hydrationNonce = 0;
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
@@ -1161,6 +1180,87 @@ describe('EditorPage workspace chrome', () => {
     expect(editorStoreState.requestNamespaceHydration).toHaveBeenCalledWith('cdm.base.datetime');
   });
 
+  it('merges workspace parse errors into the Problems panel alongside LSP diagnostics', () => {
+    diagnosticsState.fileDiagnostics = new Map([
+      [
+        'file:///workspace/trade.rosetta',
+        [
+          {
+            range: {
+              start: { line: 2, character: 0 },
+              end: { line: 2, character: 5 }
+            },
+            severity: 2,
+            source: 'lsp',
+            message: 'Suspicious cardinality'
+          }
+        ]
+      ]
+    ]);
+    diagnosticsState.totalErrors = 0;
+    diagnosticsState.totalWarnings = 1;
+
+    renderEditorPage({
+      parseErrors: new Map([['trade.rosetta', ['Expected ":" after type declaration']]]),
+      files: [
+        {
+          name: 'trade.rosetta',
+          path: 'trade.rosetta',
+          content: 'namespace example\ntype Trade\n  tradeId string (1..1)\n',
+          dirty: true
+        }
+      ]
+    });
+
+    const merged = diagnosticsPanelMockState.latestProps?.fileDiagnostics;
+    expect(merged?.get('trade.rosetta')).toEqual([
+      expect.objectContaining({
+        severity: 1,
+        source: 'parser',
+        message: 'Expected ":" after type declaration'
+      }),
+      expect.objectContaining({
+        severity: 2,
+        source: 'lsp',
+        message: 'Suspicious cardinality'
+      })
+    ]);
+  });
+
+  it('does not count info diagnostics as errors in the footer totals', () => {
+    diagnosticsState.fileDiagnostics = new Map([
+      [
+        'file:///workspace/trade.rosetta',
+        [
+          {
+            range: {
+              start: { line: 2, character: 0 },
+              end: { line: 2, character: 5 }
+            },
+            severity: 3,
+            source: 'lsp',
+            message: 'Informational hint'
+          }
+        ]
+      ]
+    ]);
+    diagnosticsState.totalErrors = 0;
+    diagnosticsState.totalWarnings = 0;
+
+    renderEditorPage({
+      files: [
+        {
+          name: 'trade.rosetta',
+          path: 'trade.rosetta',
+          content: 'namespace example\ntype Trade:\n  tradeId string (1..1)\n',
+          dirty: false
+        }
+      ]
+    });
+
+    expect(screen.queryByText(/err \/ .*warn/)).not.toBeInTheDocument();
+  });
+
   it('re-centers connected navigation targets when focus mode hides nothing', () => {
     editorStoreState.nodes = [
       {
@@ -1559,6 +1659,77 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
       });
 
       expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not re-link the selected curated node when only its object identity changes after hydration', async () => {
+    vi.useFakeTimers();
+    try {
+      const deferredEntry = {
+        filePath: 'cdm/cdm.base.staticdata.party',
+        namespace: 'cdm.base.staticdata.party',
+        exports: [{ type: 'Data', name: 'Counterparty' }]
+      };
+      const workspaceService = await import('../../src/services/workspace.js');
+      const linkDocumentMock = vi.mocked(workspaceService.linkDocument);
+      linkDocumentMock.mockReset();
+      linkDocumentMock.mockResolvedValue({ linked: true, errors: [], newModels: [] });
+
+      editorStoreState.nodes = [
+        {
+          id: 'cdm.base.staticdata.party::Counterparty',
+          data: {
+            namespace: 'cdm.base.staticdata.party',
+            name: 'Counterparty',
+            $type: 'Data',
+            deferred: true
+          }
+        }
+      ];
+      editorStoreState.selectedNodeId = 'cdm.base.staticdata.party::Counterparty';
+      editorStoreState.hydrationNonce = 1;
+
+      const { rerenderEditorPage } = renderEditorPage({
+        workspaceId: 'ws-curated',
+        models: [],
+        deferredExports: [deferredEntry],
+        files: [],
+        fileCount: 0
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(linkDocumentMock).toHaveBeenCalledTimes(1);
+      expect(linkDocumentMock).toHaveBeenLastCalledWith('cdm/cdm.base.staticdata.party');
+
+      editorStoreState.nodes = [
+        {
+          id: 'cdm.base.staticdata.party::Counterparty',
+          data: {
+            namespace: 'cdm.base.staticdata.party',
+            name: 'Counterparty',
+            $type: 'Data',
+            deferred: true
+          }
+        }
+      ];
+
+      await act(async () => {
+        rerenderEditorPage({
+          workspaceId: 'ws-curated',
+          models: [],
+          deferredExports: [deferredEntry],
+          files: [],
+          fileCount: 0
+        });
+        await Promise.resolve();
+      });
+
+      expect(linkDocumentMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

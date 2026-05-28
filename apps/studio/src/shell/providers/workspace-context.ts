@@ -17,6 +17,7 @@ export interface WorkspaceState {
   models: RosettaModel[];
   parsedModels: ParsedWorkspaceModel[];
   deferredExports: DeferredExportEntry[];
+  parseErrors: Map<string, string[]>;
 }
 
 export const WorkspaceStateContext = createContext<WorkspaceState | null>(null);

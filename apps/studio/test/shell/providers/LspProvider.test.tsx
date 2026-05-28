@@ -23,7 +23,7 @@ import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/p
 
 function wsState(files: WorkspaceState['files']): WorkspaceState {
   return { workspaceId: 'w', workspaceKind: 'browser-only', workspaceName: 'w', fileCount: files.length,
-    files, models: [], parsedModels: [], deferredExports: [] };
+    files, models: [], parsedModels: [], deferredExports: [], parseErrors: new Map() };
 }
 function LspProbe() { const { lspClient } = useLsp(); return <span data-testid="c">{lspClient ? 'client' : 'none'}</span>; }
 

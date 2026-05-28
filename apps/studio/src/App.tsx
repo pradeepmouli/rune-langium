@@ -122,7 +122,7 @@ function AppContent() {
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [models, setModels] = useState<RosettaModel[]>([]);
   const [parsedModels, setParsedModels] = useState<Array<{ filePath: string; model: RosettaModel }>>([]);
-  const [, setErrors] = useState<Map<string, string[]>>(new Map());
+  const [parseErrors, setParseErrors] = useState<Map<string, string[]>>(new Map());
   const [deferredExports, setDeferredExports] = useState<
     Array<{ filePath: string; namespace: string; exports: Array<{ type: string; name: string }> }>
   >([]);
@@ -146,6 +146,10 @@ function AppContent() {
 
   const reparseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceManagerRef = useRef<WorkspaceManager | null>(null);
+  // Incremented for every edit-time reparse request so stale async results
+  // (older syntax errors finishing after newer valid text) cannot overwrite
+  // the current Problems/status-bar state.
+  const editParseTokenRef = useRef(0);
   // Incremented before each model-merge parse; only the matching result is
   // applied, preventing stale async results from overwriting newer state.
   const modelParseTokenRef = useRef(0);
@@ -187,26 +191,33 @@ function AppContent() {
     });
   }, [showToast, workspaceNotice]);
 
-  const applyParseResult = useCallback((result: Awaited<ReturnType<typeof parseWorkspaceFiles>>) => {
-    setModels(result.models);
-    setParsedModels(result.parsedModels);
-    setErrors(result.errors);
-    setWorkspaceNotice(result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null);
-    // Store deferred corpus types — they'll be registered in the editor
-    // store by the ExplorePerspective effect that watches models + deferredExports.
-    setDeferredExports(result.deferredExports ?? []);
-    // Surface curated bundle contents into the model-store so ModelLoader's
-    // "(N files)" badge + the curated file picker reflect what /api/parse
-    // hydrated. The routed parse path is the only place the studio learns
-    // which docs belong to each curated bundle (the curated-loader stays
-    // metadata-only by design — see model-store.buildArchiveLoader).
-    if (result.curatedRefOnlyFiles) {
-      const setCuratedFiles = useModelStore.getState().setCuratedFiles;
-      for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
-        setCuratedFiles(bundleId, files);
+  const applyParseResult = useCallback(
+    (
+      result: Awaited<ReturnType<typeof parseWorkspaceFiles>>,
+      options: { preserveSemanticModelOnErrors?: boolean } = {}
+    ) => {
+      setParseErrors(result.errors);
+      const hasParseErrors = result.errors.size > 0;
+      if (!hasParseErrors || !options.preserveSemanticModelOnErrors) {
+        setModels(result.models);
+        setParsedModels(result.parsedModels);
+        setDeferredExports(result.deferredExports ?? []);
+        // Surface curated bundle contents into the model-store so ModelLoader's
+        // "(N files)" badge + the curated file picker reflect what /api/parse
+        // hydrated. The routed parse path is the only place the studio learns
+        // which docs belong to each curated bundle (the curated-loader stays
+        // metadata-only by design — see model-store.buildArchiveLoader).
+        if (result.curatedRefOnlyFiles) {
+          const setCuratedFiles = useModelStore.getState().setCuratedFiles;
+          for (const [bundleId, files] of Object.entries(result.curatedRefOnlyFiles)) {
+            setCuratedFiles(bundleId, files);
+          }
+        }
       }
-    }
-  }, []);
+      setWorkspaceNotice(result.parseMode === 'main-thread-fallback' ? (result.fallbackMessage ?? null) : null);
+    },
+    []
+  );
 
   // On-demand curated namespace hydration.
   //
@@ -230,7 +241,7 @@ function AppContent() {
     void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
       .then((result) => {
         if (cancelled) return;
-        applyParseResult(result);
+        applyParseResult(result, { preserveSemanticModelOnErrors: true });
         // Mark exactly the set sent in THIS parse (not whatever is pending when
         // the promise resolves) so a request arriving mid-flight isn't lost.
         useEditorStore.getState().markNamespacesHydrated(pendingHydration);
@@ -240,17 +251,14 @@ function AppContent() {
         // Dequeue the failed namespaces (without marking hydrated) so the user
         // can retry by re-selecting/re-expanding them; keep the last valid graph.
         useEditorStore.getState().dequeuePendingHydration(pendingHydration);
-        reportWorkspaceError(
-          'Failed to hydrate the selected namespace; keeping the last valid graph',
-          err
-        );
+        reportWorkspaceError('Failed to hydrate the selected namespace; keeping the last valid graph', err);
       });
     return () => {
       cancelled = true;
     };
-  // `files` in deps: an edit during an in-flight hydration re-fires this and
-  // issues a second round-trip; the `cancelled` flag discards the stale result,
-  // so it's a wasted request but correctness-safe.
+    // `files` in deps: an edit during an in-flight hydration re-fires this and
+    // issues a second round-trip; the `cancelled` flag discards the stale result,
+    // so it's a wasted request but correctness-safe.
   }, [pendingHydration, files, applyParseResult, reportWorkspaceError]);
 
   const syncWorkspaceToEditor = useCallback(
@@ -274,7 +282,9 @@ function AppContent() {
         // `files` state it reads from useWorkspace() (filtering bundle-marker
         // and ref-only files). App only sets the files here.
 
-        const result = await parseWorkspaceFiles(mergedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
+        const result = await parseWorkspaceFiles(mergedFiles, {
+          hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
+        });
         applyParseResult(result);
         setWorkspaceError(null);
       } finally {
@@ -347,7 +357,7 @@ function AppContent() {
         setFiles([]);
         setModels([]);
         setParsedModels([]);
-        setErrors(new Map());
+        setParseErrors(new Map());
         setDeferredExports([]);
         setCuratedSyncedWorkspaceId(null);
         return false;
@@ -637,10 +647,19 @@ function AppContent() {
 
       // Debounced reparse — wait for typing to settle
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
+      editParseTokenRef.current += 1;
+      const token = editParseTokenRef.current;
       reparseTimerRef.current = setTimeout(async () => {
         try {
-          const result = await parseWorkspaceFiles(updatedFiles, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() });
-          applyParseResult(result);
+          const result = await parseWorkspaceFiles(updatedFiles, {
+            hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
+          });
+          if (token !== editParseTokenRef.current) return;
+          // Preserve the last valid graph/model while the user is mid-edit on
+          // syntactically invalid text. The Problems panel still updates from
+          // `parseErrors`, but the semantic workbench no longer flickers into a
+          // partial recovery state for transient CodeMirror transactions.
+          applyParseResult(result, { preserveSemanticModelOnErrors: true });
         } catch (error) {
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
         }
@@ -658,7 +677,7 @@ function AppContent() {
     setFiles([]);
     setModels([]);
     setParsedModels([]);
-    setErrors(new Map());
+    setParseErrors(new Map());
     // Return to the start page so the user can open or create a workspace.
     // Without this, bootState stays 'restored' and the "Workspace ready."
     // placeholder is shown with no way to load new files.
@@ -778,7 +797,9 @@ function AppContent() {
         if (!cancelled) console.warn('[git-sync] Failed to instantiate sync engine:', err);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [getWorkspaceManager, restoredWorkspace]);
 
   const handleCreateGitBackedWorkspace = useCallback(
@@ -841,7 +862,7 @@ function AppContent() {
           setFiles([]);
           setModels([]);
           setParsedModels([]);
-          setErrors(new Map());
+          setParseErrors(new Map());
           setBootState('start');
           // Return to the launcher perspective when the active workspace is deleted.
           usePerspectiveStore.getState().setActivePerspective('workspaces');
@@ -876,7 +897,7 @@ function AppContent() {
     parseWorkspaceFiles(merged, { hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces() })
       .then((result) => {
         if (token !== modelParseTokenRef.current) return;
-        applyParseResult(result);
+        applyParseResult(result, { preserveSemanticModelOnErrors: true });
       })
       .catch((err) => {
         reportWorkspaceError(
@@ -937,9 +958,10 @@ function AppContent() {
       files,
       models,
       parsedModels,
-      deferredExports
+      deferredExports,
+      parseErrors
     }),
-    [restoredWorkspace, files, models, parsedModels, deferredExports]
+    [restoredWorkspace, files, models, parsedModels, deferredExports, parseErrors]
   );
 
   return (

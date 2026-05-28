@@ -38,6 +38,7 @@ export interface EditorPageHarnessProps {
   models?: RosettaModel[];
   parsedModels?: ParsedWorkspaceModel[];
   deferredExports?: DeferredExportEntry[];
+  parseErrors?: Map<string, string[]>;
   files?: WorkspaceFile[];
   onFilesChange?: (files: WorkspaceFile[]) => void;
   lspClient?: LspClientService;
@@ -64,7 +65,8 @@ export function EditorPageHarness(props: EditorPageHarnessProps): React.ReactEle
     files,
     models: props.models ?? [],
     parsedModels: props.parsedModels ?? [],
-    deferredExports: props.deferredExports ?? []
+    deferredExports: props.deferredExports ?? [],
+    parseErrors: props.parseErrors ?? new Map()
   };
 
   const lspValue: LspContextValue = {

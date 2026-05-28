@@ -11,7 +11,7 @@ function Probe() {
 
 const value: WorkspaceState = {
   workspaceId: 'ws-1', workspaceKind: 'browser-only', workspaceName: 'P', fileCount: 2,
-  files: [], models: [], parsedModels: [], deferredExports: []
+  files: [], models: [], parsedModels: [], deferredExports: [], parseErrors: new Map()
 };
 
 describe('useWorkspace', () => {
