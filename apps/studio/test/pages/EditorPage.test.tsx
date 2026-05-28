@@ -42,6 +42,7 @@ const {
     loadDeferredExports: vi.fn(),
     pendingHydrationNamespaces: [] as string[],
     hydratedNamespaces: [] as string[],
+    hydrationNonce: 0,
     requestNamespaceHydration: vi.fn(),
     markNamespacesHydrated: vi.fn(),
     resetHydration: vi.fn()
@@ -495,6 +496,7 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [];
     editorStoreState.edges = [];
     editorStoreState.selectedNodeId = undefined;
+    editorStoreState.hydrationNonce = 0;
     vi.clearAllMocks();
     sourceEditorMockState.latestProps = undefined;
     dockShellMockState.latestProps = undefined;
@@ -1657,6 +1659,77 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
       });
 
       expect(editorStoreState.loadModels).toHaveBeenLastCalledWith([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not re-link the selected curated node when only its object identity changes after hydration', async () => {
+    vi.useFakeTimers();
+    try {
+      const deferredEntry = {
+        filePath: 'cdm/cdm.base.staticdata.party',
+        namespace: 'cdm.base.staticdata.party',
+        exports: [{ type: 'Data', name: 'Counterparty' }]
+      };
+      const workspaceService = await import('../../src/services/workspace.js');
+      const linkDocumentMock = vi.mocked(workspaceService.linkDocument);
+      linkDocumentMock.mockReset();
+      linkDocumentMock.mockResolvedValue({ linked: true, errors: [], newModels: [] });
+
+      editorStoreState.nodes = [
+        {
+          id: 'cdm.base.staticdata.party::Counterparty',
+          data: {
+            namespace: 'cdm.base.staticdata.party',
+            name: 'Counterparty',
+            $type: 'Data',
+            deferred: true
+          }
+        }
+      ];
+      editorStoreState.selectedNodeId = 'cdm.base.staticdata.party::Counterparty';
+      editorStoreState.hydrationNonce = 1;
+
+      const { rerenderEditorPage } = renderEditorPage({
+        workspaceId: 'ws-curated',
+        models: [],
+        deferredExports: [deferredEntry],
+        files: [],
+        fileCount: 0
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(linkDocumentMock).toHaveBeenCalledTimes(1);
+      expect(linkDocumentMock).toHaveBeenLastCalledWith('cdm/cdm.base.staticdata.party');
+
+      editorStoreState.nodes = [
+        {
+          id: 'cdm.base.staticdata.party::Counterparty',
+          data: {
+            namespace: 'cdm.base.staticdata.party',
+            name: 'Counterparty',
+            $type: 'Data',
+            deferred: true
+          }
+        }
+      ];
+
+      await act(async () => {
+        rerenderEditorPage({
+          workspaceId: 'ws-curated',
+          models: [],
+          deferredExports: [deferredEntry],
+          files: [],
+          fileCount: 0
+        });
+        await Promise.resolve();
+      });
+
+      expect(linkDocumentMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

@@ -670,6 +670,8 @@ export function ExplorePerspective() {
     const node = storeNodes.find((n) => n.id === selectedNodeId);
     return (node?.data as unknown as AnyGraphNode) ?? null;
   }, [selectedNodeId, storeNodes]);
+  const selectedNodeDataRef = useRef<AnyGraphNode | null>(selectedNodeData);
+  selectedNodeDataRef.current = selectedNodeData;
 
   const previewTargets: FormPreviewTarget[] = useMemo(() => {
     const sourceByTargetId = new Map<string, Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>>();
@@ -844,12 +846,17 @@ export function ExplorePerspective() {
   // triggers markNamespacesHydrated, which bumps hydrationNonce. This effect
   // reacts to that nonce change and re-links immediately (no 150ms debounce
   // needed — we're not racing file edits here, the worker is fully ready).
-  // linkDocument is idempotent once a doc is resolved (no newModels → no
-  // store write), so re-running for an already-linked selection is safe.
+  // linkDocument is safe to re-run for an already-linked selection, but this
+  // effect must not depend on the selected node object's identity. `loadModels`
+  // can rebuild placeholder node objects during hydration, and keying this
+  // effect on `selectedNodeData` would cancel the first successful re-link and
+  // immediately issue a second one that returns `newModels: []`.
   const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
   useEffect(() => {
-    if (hydrationNonce === 0 || !selectedNodeId || !selectedNodeData) return;
-    const filePath = resolveNodeFile(selectedNodeData);
+    if (hydrationNonce === 0 || !selectedNodeId) return;
+    const nodeData = selectedNodeDataRef.current;
+    if (!nodeData) return;
+    const filePath = resolveNodeFile(nodeData);
     if (!filePath || filePath.startsWith('system://')) return;
     const requestWorkspaceId = workspaceId;
     let cancelled = false;
@@ -862,7 +869,7 @@ export function ExplorePerspective() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrationNonce, selectedNodeId, selectedNodeData, workspaceId]);
+  }, [hydrationNonce, selectedNodeId, workspaceId]);
 
   const functionScope: FunctionScope = useMemo(() => {
     const d = selectedNodeData as any;
