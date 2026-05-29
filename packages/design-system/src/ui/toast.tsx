@@ -72,7 +72,14 @@ function ToastDescription({ className, ...props }: React.ComponentProps<typeof T
   return (
     <ToastPrimitive.Description
       data-slot="toast-description"
-      className={cn('text-sm leading-relaxed', className)}
+      className={cn(
+        'text-sm leading-relaxed',
+        // Destructive description: inherit the red for title (bold → 3:1 ok),
+        // but description is normal-weight 14px → needs 4.5:1. Override to
+        // foreground/75 which easily clears 4.5:1 on the dark toast background.
+        'data-[type=destructive]:text-foreground/75',
+        className
+      )}
       {...props}
     />
   );
