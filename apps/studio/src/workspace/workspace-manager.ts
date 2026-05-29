@@ -27,6 +27,7 @@ import { WorkspaceOwnership } from '../services/multi-tab-broadcast.js';
 import { cloneRepository } from '../services/git-backing.js';
 import { storeWorkspaceToken } from '../services/github-auth.js';
 import { LAYOUT_SCHEMA_VERSION } from '../shell/layout-factory.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 export interface WorkspaceManagerOptions {
   opfsRoot: FileSystemDirectoryHandle;
@@ -204,6 +205,10 @@ export class WorkspaceManager {
       if (err instanceof Error && err.name !== 'NotFoundError') {
         // eslint-disable-next-line no-console
         console.error(`[workspace-manager] delete: OPFS removeEntry(${id}) failed:`, err);
+        useOutputStore.getState().addLine(
+          fmtLine('workspace', `OPFS removeEntry(${id}) failed`, err.message),
+          'error'
+        );
       }
     }
   }

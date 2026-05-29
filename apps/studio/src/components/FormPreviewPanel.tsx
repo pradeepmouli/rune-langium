@@ -18,6 +18,7 @@ import {
   type PreviewSampleState,
   type PreviewStatus
 } from '../store/preview-store.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
@@ -196,6 +197,10 @@ export function FormPreviewPanel({
       setCopyFeedback('Sample data copied.');
     } catch (error) {
       console.error('[FormPreviewPanel] Failed to copy sample data:', error);
+      useOutputStore.getState().addLine(
+        fmtLine('preview', 'copy sample data failed', error instanceof Error ? error.message : String(error)),
+        'error'
+      );
       setCopyFeedback('Copy failed. Check clipboard permissions and try again.');
     }
   }, [activeSample]);

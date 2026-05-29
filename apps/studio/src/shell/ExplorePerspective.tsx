@@ -111,6 +111,7 @@ import { useWorkspaceActions } from './perspectives/workspace-actions-context.js
 import type { DeferredExportEntry } from '../workers/parser-worker.js';
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
 import { uriToPath, pathToUri } from '../utils/uri.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -1197,6 +1198,10 @@ export function ExplorePerspective() {
       if (!file) {
         // eslint-disable-next-line no-console
         console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
+        useOutputStore.getState().addLine(
+          fmtLine('editor', `file not found for URI`, fileName),
+          'warn'
+        );
         return null;
       }
       openFileInSource(file.path);
@@ -1210,6 +1215,10 @@ export function ExplorePerspective() {
             pendingDisplayFileRef.current.delete(file.path);
             // eslint-disable-next-line no-console
             console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
+            useOutputStore.getState().addLine(
+              fmtLine('editor', 'editor view timeout', file.path),
+              'warn'
+            );
             resolve(null);
           }
         }, 2000);
