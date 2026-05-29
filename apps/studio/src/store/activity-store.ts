@@ -17,6 +17,7 @@ interface ActivityState {
 }
 
 let _id = 0;
+const MAX_ENTRIES = 200;
 
 function nowHHMMSS(): string {
   const d = new Date();
@@ -28,8 +29,9 @@ function nowHHMMSS(): string {
 export const useActivityStore = create<ActivityState>((set) => ({
   entries: [],
   addActivity: (tag, ok, msg) =>
-    set((s) => ({
-      entries: [...s.entries, { id: ++_id, time: nowHHMMSS(), tag, ok, msg }]
-    })),
+    set((s) => {
+      const next = [...s.entries, { id: ++_id, time: nowHHMMSS(), tag, ok, msg }];
+      return { entries: next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next };
+    }),
   clearEntries: () => set({ entries: [] }),
 }));

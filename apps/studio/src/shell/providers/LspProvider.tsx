@@ -19,6 +19,8 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
   const [transportState, setTransportState] = useState<TransportState>({ mode: 'disconnected', status: 'disconnected' });
   const { showToast } = useStudioToast();
+  const showToastRef = useRef(showToast);
+  useEffect(() => { showToastRef.current = showToast; }, [showToast]);
   const prevStatusRef = useRef<TransportState['status']>('disconnected');
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
       console.error('[LspProvider] LSP connect failed:', err);
       useOutputStore.getState().addLine(fmtLine('lsp', 'connect failed', msg), 'error');
       useActivityStore.getState().addActivity('lsp', false, `connect failed · ${msg}`);
-      showToast({ title: 'Language server unavailable', description: err instanceof Error ? err.message : 'LSP connection failed. Diagnostics and completions will not work.', variant: 'destructive' });
+      showToastRef.current({ title: 'Language server unavailable', description: err instanceof Error ? err.message : 'LSP connection failed. Diagnostics and completions will not work.', variant: 'destructive' });
     });
     return () => { unsub(); client.dispose(); provider.dispose(); };
   }, []);

@@ -853,6 +853,12 @@ export function ExplorePerspective() {
   // effect on `selectedNodeData` would cancel the first successful re-link and
   // immediately issue a second one that returns `newModels: []`.
   const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
+  // Track which (nonce, namespace) pairs have already been re-linked so that
+  // switching between nodes in the same namespace on the same nonce doesn't
+  // issue redundant linkDocument round-trips.
+  const relinkedRef = useRef(new Set<string>());
+  useEffect(() => { relinkedRef.current = new Set(); }, [hydrationNonce, workspaceId]);
+
   useEffect(() => {
     if (hydrationNonce === 0 || !selectedNodeId) return;
     // Link ALL files for the selected node's namespace. The curated artifact
@@ -863,6 +869,9 @@ export function ExplorePerspective() {
     // gets deserialized and merged into the graph.
     const [namespace] = selectedNodeId.split('::');
     if (!namespace) return;
+    const relinkedKey = `${hydrationNonce}:${namespace}`;
+    if (relinkedRef.current.has(relinkedKey)) return;
+    relinkedRef.current.add(relinkedKey);
     const filePaths = [
       ...new Set(
         deferredExportsRef.current
