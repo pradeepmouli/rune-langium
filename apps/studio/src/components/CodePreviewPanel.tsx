@@ -30,7 +30,9 @@ import { CodegenTargetsTable } from './CodegenTargetsTable.js';
 import { DownloadConfigModal, type DownloadConfig } from './DownloadConfigModal.js';
 import { ExcelOptionsFormAdapter } from '../codegen-forms/ExcelOptionsFormAdapter.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { usePreviewStore } from '../store/preview-store.js';
+import { useStudioToast } from './StudioToastProvider.js';
 import { CODE_PREVIEW_PANEL_ID, TARGET_LABELS } from './codegen-ui.js';
 import { uriToPath } from '../utils/uri.js';
 
@@ -139,6 +141,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
   // its row buttons for a spinner on the targets table while the POST
   // to /api/codegen is outstanding. Panel-local state because no other
   // component needs to observe it.
+  const { showToast } = useStudioToast();
   const [downloadingTarget, setDownloadingTarget] = useState<Target | undefined>(undefined);
   // 019 §5.1 — which target's Download config modal is open (undefined =
   // closed). Clicking Download opens the modal; the modal's Generate fires
@@ -192,11 +195,20 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
         await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
+          const detail = err.diagnostics.length > 0
+            ? err.diagnostics.map((d) => d.message).join('; ')
+            : err.message;
+          showToast({ title: 'Code generation failed', description: detail, variant: 'destructive' });
+          useOutputStore.getState().addLine(fmtLine('codegen', err.message), 'error');
+          err.diagnostics.forEach(d => useOutputStore.getState().addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn'));
           console.error(
             `[CodePreviewPanel] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
             err.diagnostics
           );
         } else {
+          const msg = err instanceof Error ? err.message : 'Unexpected error during download.';
+          showToast({ title: 'Download failed', description: msg, variant: 'destructive' });
+          useOutputStore.getState().addLine(fmtLine('codegen', msg), 'error');
           console.error('[CodePreviewPanel] Download failed for target', newTarget, err);
         }
       } finally {

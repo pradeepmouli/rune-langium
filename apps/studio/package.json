@@ -9,6 +9,7 @@
     "bundle-size": "node scripts/check-bundle-size.mjs",
     "check-env": "node scripts/check-env.mjs",
     "clean": "rm -rf dist",
+    "predev": "pnpm dev:cleanup",
     "dev": "vite",
     "dev:pages": "wrangler pages dev --proxy 5173 --port 8788 --compatibility-date 2025-09-23 --compatibility-flags nodejs_compat",
     "dev:cleanup": "sh scripts/dev-cleanup.sh",

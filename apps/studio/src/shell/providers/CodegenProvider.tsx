@@ -2,9 +2,11 @@
 // Copyright (c) 2026 Pradeep Mouli
 import type React from 'react';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useWorkspace } from './workspace-context.js';
 import { usePreviewStore } from '../../store/preview-store.js';
 import { useCodegenStore } from '../../store/codegen-store.js';
+import { useOutputStore, fmtLine } from '../../store/output-store.js';
 import {
   createPreviewGenerateMessage,
   createPreviewSetFilesMessage,
@@ -35,6 +37,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
   const currentPreviewRequestIdRef = useRef<string | undefined>(undefined);
   const codegenCurrentRequestIdRef = useRef<string>('');
 
+  const { showToast } = useStudioToast();
   const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
   const setWorkerRef = usePreviewStore((s) => s.setWorkerRef);
   const receivePreviewResult = usePreviewStore((s) => s.receivePreviewResult);
@@ -234,6 +237,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
           store.markCodePreviewStale({ target: msg.target, message: msg.message });
           break;
         case 'codegen:error':
+          useOutputStore.getState().addLine(fmtLine('codegen', msg.message), 'error');
           store.markCodePreviewUnavailable({ target: msg.target, message: msg.message });
           break;
       }
@@ -246,6 +250,8 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         target: store.codePreviewTarget,
         message: 'Code preview worker crashed — reload Studio.'
       });
+      useOutputStore.getState().addLine(fmtLine('codegen', 'worker crashed', event.message), 'error');
+      showToast({ title: 'Code preview worker crashed', description: 'Reload Studio to restore code preview.', variant: 'destructive' });
     }
 
     codegenWorker.addEventListener('message', handleCodegenMessage as EventListener);
@@ -272,6 +278,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         target: codegenPreviewTarget,
         message: 'Code preview worker is unavailable.'
       });
+      showToast({ title: 'Code preview unavailable', description: err instanceof Error ? err.message : 'Could not reach the code preview worker.', variant: 'destructive' });
     }
   }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
 

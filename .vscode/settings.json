@@ -15,7 +15,7 @@
   "files.associations": {
     "*.css": "tailwindcss"
 },
-"builder.serverUrl": "http://localhost:5173/",
+"builder.serverUrl": "http://localhost:8788",
 "builder.command": "",
 "builder.runDevServer": false,
 "builder.autoDetectDevServer": true,
