@@ -58,7 +58,7 @@ jobs:
         continue-on-error: true
 
       - name: Build
-        run: pnpm run build
+        run: pnpm run build:ci
 
       - name: Type check
         run: pnpm run type-check
