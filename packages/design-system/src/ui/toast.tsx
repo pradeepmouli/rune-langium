@@ -58,14 +58,30 @@ function Toast({
     <ToastPrimitive.Root
       data-slot="toast"
       data-variant={variant}
-      className={cn(toastVariants({ variant }), className)}
+      className={cn('group', toastVariants({ variant }), className)}
       {...props}
     />
   );
 }
 
 function ToastTitle({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Title>) {
-  return <ToastPrimitive.Title data-slot="toast-title" className={cn('text-sm font-semibold', className)} {...props} />;
+  return (
+    <ToastPrimitive.Title
+      data-slot="toast-title"
+      className={cn(
+        'text-sm font-semibold',
+        // Destructive title: text-sm (14px) semi-bold does NOT qualify as large
+        // text under WCAG (needs ≥18.67px at 700+ weight), so the 4.5:1 threshold
+        // applies. text-destructive (#f03630) on the dark toast bg is ~4.13:1 —
+        // just below AA. Override to near-white using the group-data variant keyed
+        // on data-variant (which we control) so the fix is reliable regardless of
+        // what attributes Base UI propagates to child slots.
+        'group-data-[variant=destructive]:text-foreground/90',
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 function ToastDescription({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Description>) {
@@ -74,10 +90,10 @@ function ToastDescription({ className, ...props }: React.ComponentProps<typeof T
       data-slot="toast-description"
       className={cn(
         'text-sm leading-relaxed',
-        // Destructive description: inherit the red for title (bold → 3:1 ok),
-        // but description is normal-weight 14px → needs 4.5:1. Override to
-        // foreground/75 which easily clears 4.5:1 on the dark toast background.
-        'data-[type=destructive]:text-foreground/75',
+        // Same contrast problem as the title — normal-weight 14px needs 4.5:1.
+        // Use group-data-[variant=destructive] (keyed on data-variant which we
+        // set on the root) so this works regardless of what Base UI propagates.
+        'group-data-[variant=destructive]:text-foreground/75',
         className
       )}
       {...props}
