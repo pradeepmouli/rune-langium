@@ -10,7 +10,6 @@
  */
 
 import type { NamespaceRegistry } from './namespace-registry.js';
-import { resolveImportPath } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
@@ -24,7 +23,6 @@ import {
   isData as _isData,
   type Data,
   type Attribute,
-  type Condition,
   type RosettaEnumeration,
   type RosettaCardinality,
   type RosettaTypeAlias,
@@ -34,7 +32,15 @@ import {
   type RosettaExternalFunction
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
-import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import {
+  RUNTIME_HELPER_SOURCE,
+  decodeCardinality,
+  buildAttributeTypesMap,
+  activeConditions,
+  mergeProfileTypeMaps,
+  buildReportRulesLines,
+  buildCrossNsImportLines
+} from '../helpers.js';
 import {
   transpileCondition,
   transpileExpression,
@@ -131,20 +137,7 @@ const _RESERVED_WORDS = new Set([
   'yield'
 ]);
 
-/**
- * Build the merged builtin type map for the Zod profile.
- * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
- * Used to populate EmissionContext.builtinTypeMap at build time.
- */
-function buildZodBuiltinTypeMap(): Record<string, string> {
-  return {
-    ...zodProfile.basicTypeMap,
-    ...zodProfile.recordTypeMap,
-    ...zodProfile.typeAliasMap
-  } as Record<string, string>;
-}
-
-const ZOD_BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = buildZodBuiltinTypeMap();
+const ZOD_BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = mergeProfileTypeMaps(zodProfile) as Record<string, string>;
 
 /**
  * Collect cross-namespace import statements needed for the schemas and type aliases
@@ -199,16 +192,7 @@ function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
     }
   }
 
-  // Build import statements
-  const lines: string[] = [];
-  const sortedNamespaces = Array.from(imports.keys()).sort();
-  for (const ns of sortedNamespaces) {
-    const symbols = Array.from(imports.get(ns)!).sort();
-    const importPath = resolveImportPath(ctx.namespace, ns, ctx.registry);
-    lines.push(`import { ${symbols.join(', ')} } from '${importPath}.zod.js';`);
-  }
-
-  return lines;
+  return buildCrossNsImportLines(imports, ctx.namespace, ctx.registry, '.zod.js');
 }
 
 /**
@@ -243,8 +227,7 @@ function escapeDisplayName(name: string): string {
  * @returns The full Zod expression with cardinality encoding.
  */
 function applyCardinality(card: RosettaCardinality, baseZodExpr: string): string {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
+  const { lower, upper } = decodeCardinality(card);
 
   if (upper === null) {
     // (lower..*)
@@ -398,8 +381,7 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
   const name = data.name;
   const schemaName = `${name}Schema`;
   const isLazy = ctx.lazyTypes.has(name);
-  const conditions = data.conditions ?? [];
-  const hasConditions = conditions.some((c) => c.expression != null);
+  const hasConditions = activeConditions(data).length > 0;
 
   let schemaExpr: string;
 
@@ -422,7 +404,7 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
     // For cyclic types: add explicit ZodType annotation so TS can infer recursive schemas.
     // Conditions inside lazy: wrap the condition inside the lazy callback.
     if (hasConditions) {
-      const condBlock = emitConditionBlock(conditions, data, ctx);
+      const condBlock = emitConditionBlock(data, ctx);
       const innerExpr = `${schemaExpr}\n${condBlock}`;
       const indented = innerExpr
         .split('\n')
@@ -438,7 +420,7 @@ function emitTypeSchema(data: Data, ctx: EmissionContext): string {
   }
 
   if (hasConditions) {
-    const condBlock = emitConditionBlock(conditions, data, ctx);
+    const condBlock = emitConditionBlock(data, ctx);
     // Format as oxfmt-style method chain:
     //   export const Schema = z
     //     .object({
@@ -581,8 +563,7 @@ function resolveTypeExprAsTs(attr: Attribute, ctx: EmissionContext): string {
  * Apply cardinality to a TypeScript type expression for interface fields.
  */
 function applyCardinalityTs(card: RosettaCardinality, baseType: string, name: string): string {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
+  const { lower, upper } = decodeCardinality(card);
   const key = quoteKey(name);
 
   if (upper === null) {
@@ -623,21 +604,7 @@ function buildTranspilerContext(
   conditionName: string,
   ctx: EmissionContext
 ): ExpressionTranspilerContext {
-  const attributeTypes = new Map<string, string>();
-  for (const attr of data.attributes) {
-    attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
-  }
-  // Also include inherited attributes if the type extends a parent
-  if (data.superType?.ref) {
-    const parent = data.superType.ref;
-    if (isData(parent)) {
-      for (const attr of (parent as Data).attributes) {
-        if (!attributeTypes.has(attr.name)) {
-          attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
-        }
-      }
-    }
-  }
+  const attributeTypes = buildAttributeTypesMap(data);
   return {
     selfName: 'data',
     emitMode,
@@ -656,9 +623,9 @@ function buildTranspilerContext(
  * Returns a string like `.refine(...)` or `.superRefine(...)` to be appended
  * to the schema expression. Returns empty string if no conditions.
  */
-function emitConditionBlock(conditions: Condition[], data: Data, ctx: EmissionContext): string {
+function emitConditionBlock(data: Data, ctx: EmissionContext): string {
   // Filter out conditions that have no expression or are unsupported
-  const activeConds = conditions.filter((c) => c.expression != null);
+  const activeConds = activeConditions(data);
   if (activeConds.length === 0) return '';
 
   if (activeConds.length === 1) {
@@ -824,20 +791,8 @@ function buildMetaSuffix(data: Data): string {
  * Returns an empty string when there are no rules in the namespace.
  */
 function emitReportMetadata(ctx: EmissionContext): string {
-  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
-  if (ruleNames.length === 0) return '';
-
-  const lines: string[] = [];
-  lines.push('export const runeReportRules = {');
-  for (const name of ruleNames) {
-    const rule = ctx.rulesByName.get(name)!;
-    const kind = rule.eligibility ? 'eligibility' : 'reporting';
-    const inputRef = rule.input?.type?.ref;
-    const inputName = inputRef ? inputRef.name : 'unknown';
-    lines.push(`  '${name}': { kind: '${kind}' as const, inputType: '${inputName}' },`);
-  }
-  lines.push('} as const;');
-  return lines.join('\n');
+  const lines = buildReportRulesLines(ctx.rulesByName);
+  return lines.length === 0 ? '' : lines.join('\n');
 }
 
 /**

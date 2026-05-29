@@ -54,6 +54,7 @@ import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
+import { mergeProfileTypeMaps, decodeCardinality } from '../helpers.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
@@ -156,20 +157,7 @@ interface PendingSourceMapEntry {
   sourceChar: number;
 }
 
-/**
- * Merged builtin type map from the JSON Schema profile.
- * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
- * Populated once at module load; used as a default for buildEmissionContext.
- */
-function buildJsonBuiltinTypeMap(): Record<string, object> {
-  return {
-    ...jsonSchemaProfile.basicTypeMap,
-    ...jsonSchemaProfile.recordTypeMap,
-    ...jsonSchemaProfile.typeAliasMap
-  } as Record<string, object>;
-}
-
-const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = buildJsonBuiltinTypeMap();
+const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = mergeProfileTypeMaps(jsonSchemaProfile) as Record<string, object>;
 
 /**
  * Resolve the item schema for a scalar type reference.
@@ -254,8 +242,7 @@ function resolveItemSchema(attr: Attribute, ctx: EmissionContext): object {
  *   (n..n) n>1 → { "type": "array", "items": itemSchema, "minItems": n, "maxItems": n }
  */
 function applyCardinality(card: RosettaCardinality, itemSchema: object): object {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
+  const { lower, upper } = decodeCardinality(card);
 
   // Scalar forms: (1..1) or (0..1)
   if (upper !== null && upper <= 1) {
@@ -295,8 +282,7 @@ function emitTypeDef(data: Data, ctx: EmissionContext): object {
 
   for (const attr of data.attributes) {
     const card = attr.card;
-    const lower = card.inf;
-    const upper = card.unbounded ? null : (card.sup ?? lower);
+    const { lower, upper } = decodeCardinality(card);
 
     const itemSchema = resolveItemSchema(attr, ctx);
     const attrSchema = applyCardinality(card, itemSchema);

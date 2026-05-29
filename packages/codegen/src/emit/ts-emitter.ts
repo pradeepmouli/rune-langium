@@ -47,9 +47,16 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
-import { resolveImportPath } from './namespace-registry.js';
 import { getElementNamespace } from '@rune-langium/core';
-import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import {
+  RUNTIME_HELPER_SOURCE,
+  decodeCardinality,
+  buildAttributeTypesMap,
+  activeConditions,
+  mergeProfileTypeMaps,
+  buildReportRulesLines,
+  buildCrossNsImportLines
+} from '../helpers.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
 import {
@@ -93,20 +100,7 @@ interface EmissionContext {
 // Built-in type maps (derived from typescriptProfile at module load)
 // ---------------------------------------------------------------------------
 
-/**
- * Merged builtin type map from the TypeScript profile.
- * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
- * Populated once at module load; used as a default for buildEmissionContext.
- */
-function buildTsBuiltinTypeMap(): Record<string, string> {
-  return {
-    ...typescriptProfile.basicTypeMap,
-    ...typescriptProfile.recordTypeMap,
-    ...typescriptProfile.typeAliasMap
-  } as Record<string, string>;
-}
-
-const TS_BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = buildTsBuiltinTypeMap();
+const TS_BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = mergeProfileTypeMaps(typescriptProfile) as Record<string, string>;
 
 /**
  * Derive a JS typeof string for each TS type expression.
@@ -198,16 +192,7 @@ function collectCrossNamespaceImports(ctx: EmissionContext): string[] {
     }
   }
 
-  // Build import statements
-  const lines: string[] = [];
-  const sortedNamespaces = Array.from(imports.keys()).sort();
-  for (const ns of sortedNamespaces) {
-    const symbols = Array.from(imports.get(ns)!).sort();
-    const importPath = resolveImportPath(ctx.namespace, ns, ctx.registry);
-    lines.push(`import { ${symbols.join(', ')} } from '${importPath}.js';`);
-  }
-
-  return lines;
+  return buildCrossNsImportLines(imports, ctx.namespace, ctx.registry, '.js');
 }
 
 /**
@@ -313,8 +298,7 @@ function resolveBuiltinTsType(attr: Attribute, ctx: EmissionContext): string | u
  * T105.
  */
 function applyCardinalityTs(card: RosettaCardinality, baseType: string, fieldName: string): string {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
+  const { lower, upper } = decodeCardinality(card);
 
   if (upper === null) {
     // (lower..*)
@@ -333,8 +317,7 @@ function applyCardinalityTs(card: RosettaCardinality, baseType: string, fieldNam
  * Determine whether a cardinality describes an array field.
  */
 function isArrayCardinality(card: RosettaCardinality): boolean {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
+  const { lower, upper } = decodeCardinality(card);
   if (upper === null) return true; // (n..*)
   if (upper === 1 && lower === 1) return false; // (1..1) scalar
   if (upper === 1 && lower === 0) return false; // (0..1) optional scalar
@@ -346,8 +329,7 @@ function isArrayCardinality(card: RosettaCardinality): boolean {
  * Determine whether a cardinality is optional (can be absent).
  */
 function isOptionalCardinality(card: RosettaCardinality): boolean {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
+  const { lower, upper } = decodeCardinality(card);
   if (upper === null && lower === 0) return true; // (0..*) — present but empty ok
   if (upper === 1 && lower === 0) return true;
   if (upper === 0 && lower === 0) return true;
@@ -451,8 +433,7 @@ function emitClass(data: Data, ctx: EmissionContext): string {
   lines.push(emitFromFactory(data, ctx));
 
   // validate methods (T110)
-  const conditions = (data.conditions ?? []).filter((c) => c.expression != null);
-  if (conditions.length > 0) {
+  if (activeConditions(data).length > 0) {
     lines.push('');
     lines.push(emitValidateMethods(data, ctx));
   }
@@ -650,20 +631,7 @@ function buildTsTranspilerContext(
   conditionName: string,
   ctx: EmissionContext
 ): ExpressionTranspilerContext {
-  const attributeTypes = new Map<string, string>();
-  for (const attr of data.attributes) {
-    attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
-  }
-  if (data.superType?.ref) {
-    const parent = data.superType.ref;
-    if (isData(parent)) {
-      for (const attr of (parent as Data).attributes) {
-        if (!attributeTypes.has(attr.name)) {
-          attributeTypes.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
-        }
-      }
-    }
-  }
+  const attributeTypes = buildAttributeTypesMap(data);
   return {
     selfName: 'this',
     emitMode: 'ts-method',
@@ -679,7 +647,7 @@ function buildTsTranspilerContext(
  * T110.
  */
 function emitValidateMethods(data: Data, ctx: EmissionContext): string {
-  const conditions = (data.conditions ?? []).filter((c) => c.expression != null);
+  const conditions = activeConditions(data);
   if (conditions.length === 0) return '';
 
   const methodBlocks: string[] = [];
@@ -722,20 +690,8 @@ function emitValidateMethods(data: Data, ctx: EmissionContext): string {
  * on.  A namespace with no rules produces an empty string.
  */
 function emitReportMetadata(ctx: EmissionContext): string {
-  const ruleNames = Array.from(ctx.rulesByName.keys()).sort();
-  if (ruleNames.length === 0) return '';
-
-  const lines: string[] = [];
-  lines.push('export const runeReportRules = {');
-  for (const name of ruleNames) {
-    const rule = ctx.rulesByName.get(name)!;
-    const kind = rule.eligibility ? 'eligibility' : 'reporting';
-    const inputRef = rule.input?.type?.ref;
-    const inputName = inputRef ? inputRef.name : 'unknown';
-    lines.push(`  '${name}': { kind: '${kind}' as const, inputType: '${inputName}' },`);
-  }
-  lines.push('} as const;');
-  return lines.join('\n');
+  const lines = buildReportRulesLines(ctx.rulesByName);
+  return lines.length === 0 ? '' : lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------
