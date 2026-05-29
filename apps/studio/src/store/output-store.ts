@@ -19,6 +19,7 @@ interface OutputState {
 }
 
 let _idCounter = 0;
+const MAX_LINES = 500;
 
 export const useOutputStore = create<OutputState>((set) => ({
   lines: [],
@@ -30,7 +31,10 @@ export const useOutputStore = create<OutputState>((set) => ({
       severity,
       ts: performance.now() as number,
     };
-    set((state) => ({ lines: [...state.lines, line] }));
+    set((state) => {
+      const next = [...state.lines, line];
+      return { lines: next.length > MAX_LINES ? next.slice(-MAX_LINES) : next };
+    });
   },
 
   clearLines(): void {
