@@ -7,6 +7,7 @@ import { useWorkspace } from './workspace-context.js';
 import { usePreviewStore } from '../../store/preview-store.js';
 import { useCodegenStore } from '../../store/codegen-store.js';
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
+import { useActivityStore } from '../../store/activity-store.js';
 import {
   createPreviewGenerateMessage,
   createPreviewSetFilesMessage,
@@ -232,12 +233,14 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       switch (msg.type) {
         case 'codegen:result':
           store.receiveCodePreviewResult({ target: msg.target, files: msg.files });
+          useActivityStore.getState().addActivity('gen', true, `${msg.target} · ${msg.files.length} file${msg.files.length === 1 ? '' : 's'}`);
           break;
         case 'codegen:outdated':
           store.markCodePreviewStale({ target: msg.target, message: msg.message });
           break;
         case 'codegen:error':
           useOutputStore.getState().addLine(fmtLine('codegen', msg.message), 'error');
+          useActivityStore.getState().addActivity('gen', false, msg.message);
           store.markCodePreviewUnavailable({ target: msg.target, message: msg.message });
           break;
       }

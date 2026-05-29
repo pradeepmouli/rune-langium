@@ -70,10 +70,8 @@ function StudioToastInner({ children }: { children: ReactNode }) {
   );
 }
 
+const NOOP_TOAST: StudioToastContextValue = { showToast: () => {} };
+
 export function useStudioToast(): StudioToastContextValue {
-  const context = useContext(StudioToastContext);
-  if (!context) {
-    throw new Error('useStudioToast must be used within StudioToastProvider');
-  }
-  return context;
+  return useContext(StudioToastContext) ?? NOOP_TOAST;
 }

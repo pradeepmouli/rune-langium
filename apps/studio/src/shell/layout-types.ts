@@ -6,6 +6,7 @@ export const PANEL_COMPONENT_NAMES = [
   'workspace.editor',
   'workspace.inspector',
   'workspace.problems',
+  'workspace.activity',
   'workspace.output',
   'workspace.visualPreview',
   'workspace.formPreview',
@@ -15,7 +16,7 @@ export const PANEL_COMPONENT_NAMES = [
 export type PanelComponentName = (typeof PANEL_COMPONENT_NAMES)[number];
 export type EditorTabName = 'workspace.editor' | 'workspace.inspector';
 export type PreviewTabName = 'workspace.formPreview' | 'workspace.codePreview';
-export type UtilityTabName = 'workspace.problems' | 'workspace.output';
+export type UtilityTabName = 'workspace.problems' | 'workspace.activity' | 'workspace.output';
 export type LayoutPreset = 'navigate' | 'edit' | 'preview';
 
 export interface LayoutNode<TComponent extends PanelComponentName = PanelComponentName> {

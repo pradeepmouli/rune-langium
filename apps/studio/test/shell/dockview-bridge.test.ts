@@ -98,7 +98,7 @@ describe('applyLayout — factory shape', () => {
     // First two are fileTree + visualPreview; remaining calls include preview + bottom tabs.
     expect(ids.slice(0, 2)).toEqual(['workspace.fileTree', 'workspace.visualPreview']);
     expect(ids.slice(2)).toEqual(
-      expect.arrayContaining(['workspace.problems', 'workspace.output', 'workspace.formPreview'])
+      expect.arrayContaining(['workspace.problems', 'workspace.activity', 'workspace.output', 'workspace.formPreview'])
     );
     // workspace.editor and workspace.inspector are NOT added as dockview panels
     expect(ids).not.toContain('workspace.editor');
@@ -112,7 +112,8 @@ describe('applyLayout — factory shape', () => {
     const titleById = new Map(api.calls.map((c) => [c.id, c.title]));
     expect(titleById.get('workspace.fileTree')).toBe('Types');
     expect(titleById.get('workspace.problems')).toBe('Problems');
-    expect(titleById.get('workspace.output')).toBe('Messages');
+    expect(titleById.get('workspace.output')).toBe('Output');
+    expect(titleById.get('workspace.activity')).toBe('Activity');
     expect(titleById.get('workspace.visualPreview')).toBe('Graph');
     expect(titleById.get('workspace.formPreview')).toBe('Form');
     expect(titleById.get('workspace.codePreview')).toBe('Code');
@@ -144,7 +145,7 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const bottomCalls = api.calls.filter((c) =>
-      ['workspace.problems', 'workspace.output'].includes(c.id)
+      ['workspace.problems', 'workspace.activity', 'workspace.output'].includes(c.id)
     );
     expect(bottomCalls[0]?.position?.direction).toBe('below');
     expect(bottomCalls[1]?.position?.direction).toBe('within');
