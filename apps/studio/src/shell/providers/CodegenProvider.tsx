@@ -278,6 +278,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         target: codegenPreviewTarget,
         message: 'Code preview worker is unavailable.'
       });
+      useOutputStore.getState().addLine(fmtLine('codegen', 'generation request failed', err instanceof Error ? err.message : String(err)), 'error');
       showToast({ title: 'Code preview unavailable', description: err instanceof Error ? err.message : 'Could not reach the code preview worker.', variant: 'destructive' });
     }
   }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
