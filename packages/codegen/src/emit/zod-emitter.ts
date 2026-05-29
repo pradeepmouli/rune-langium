@@ -10,7 +10,6 @@
  */
 
 import type { NamespaceRegistry } from './namespace-registry.js';
-import { resolveImportPath } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
@@ -39,7 +38,8 @@ import {
   buildAttributeTypesMap,
   activeConditions,
   mergeProfileTypeMaps,
-  buildReportRulesLines
+  buildReportRulesLines,
+  buildCrossNsImportLines
 } from '../helpers.js';
 import {
   transpileCondition,
@@ -339,16 +339,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       }
     }
 
-    // Build import statements
-    const lines: string[] = [];
-    const sortedNamespaces = Array.from(imports.keys()).sort();
-    for (const ns of sortedNamespaces) {
-      const symbols = Array.from(imports.get(ns)!).sort();
-      const importPath = resolveImportPath(this.ctx.namespace, ns, this.ctx.registry);
-      lines.push(`import { ${symbols.join(', ')} } from '${importPath}.zod.js';`);
-    }
-
-    return lines;
+    return buildCrossNsImportLines(imports, this.ctx.namespace, this.ctx.registry, '.zod.js');
   }
 
   /**
