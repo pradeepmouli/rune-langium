@@ -31,6 +31,7 @@ import {
   type ErrorCategory
 } from '@rune-langium/curated-schema';
 import { inflate } from 'pako';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 export type { CuratedSerializedWorkspaceArtifact, CuratedModelId, CuratedManifest, ErrorCategory };
 
@@ -269,6 +270,10 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
         console.warn(
           '[curated-loader] serialized workspace artifact unavailable; falling back to source parse',
           err
+        );
+        useOutputStore.getState().addLine(
+          fmtLine('curated', 'serialized workspace unavailable, falling back to source parse', err instanceof Error ? err.message : String(err)),
+          'warn'
         );
       }
     }

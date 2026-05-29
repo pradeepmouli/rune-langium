@@ -11,6 +11,7 @@
 
 import { useRef, useCallback, useEffect } from 'react';
 import { semanticDiff, type TypeDeclaration } from './semantic-diff.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -71,6 +72,10 @@ export function useDebouncedReparse({
           console.warn(
             '[useDebouncedReparse] parseContent failed; skipping structural re-layout',
             error
+          );
+          useOutputStore.getState().addLine(
+            fmtLine('parse', 'structural re-layout skipped', error instanceof Error ? error.message : String(error)),
+            'warn'
           );
         }
       }, delay);
