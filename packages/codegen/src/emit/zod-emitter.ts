@@ -11,7 +11,8 @@
 
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
-import { emitNamespaceWithContract, type NamespaceEmitter, type NamespaceEmitterOptions } from './namespace-emitter.js';
+import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
+import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
@@ -955,18 +956,17 @@ export function emitNamespace(
   return emitNamespaceWithContract(model, options, registry, ZodNamespaceEmitter);
 }
 
-export class ZodNamespaceEmitter implements NamespaceEmitter {
+export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
   private readonly sections: string[] = [];
-  private readonly suppressBoilerplate: boolean;
 
   constructor(
-    private readonly model: NamespaceWalkResult,
+    model: NamespaceWalkResult,
     options: NamespaceEmitterOptions,
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
+    super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry);
-    this.suppressBoilerplate = options.suppressBoilerplate ?? false;
   }
 
   emitHeader(): void {

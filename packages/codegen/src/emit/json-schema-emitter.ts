@@ -48,7 +48,9 @@ import {
   type RosettaExternalFunction
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
-import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
+import { emitNamespaceWithContract } from './namespace-emitter.js';
+import type { NamespaceEmitterOptions } from './namespace-emitter.js';
+import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
@@ -470,7 +472,7 @@ export function emitNamespace(
   return emitNamespaceWithContract(model, options, registry, JsonSchemaNamespaceEmitter);
 }
 
-export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
+export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
   private readonly $defs: Record<string, object> = {};
   private readonly pendingSourceMapEntries: PendingSourceMapEntry[] = [];
@@ -478,10 +480,11 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
   private readonly rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
 
   constructor(
-    private readonly model: NamespaceWalkResult,
-    _options: GeneratorOptions,
+    model: NamespaceWalkResult,
+    options: NamespaceEmitterOptions,
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
+    super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry);
     this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
   }

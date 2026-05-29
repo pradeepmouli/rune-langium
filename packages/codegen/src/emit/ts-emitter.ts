@@ -44,7 +44,8 @@ import type {
   GeneratedFunc
 } from '../types.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
-import { emitNamespaceWithContract, type NamespaceEmitter, type NamespaceEmitterOptions } from './namespace-emitter.js';
+import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
+import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { resolveImportPath } from './namespace-registry.js';
 import { getElementNamespace } from '@rune-langium/core';
@@ -1143,21 +1144,20 @@ export function emitNamespace(
   return emitNamespaceWithContract(model, options, registry, TsNamespaceEmitter);
 }
 
-export class TsNamespaceEmitter implements NamespaceEmitter {
+export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
   private readonly sections: string[] = [];
   private readonly relativePath: string;
   private readonly generatedFuncs: GeneratedFunc[] = [];
-  private readonly suppressBoilerplate: boolean;
 
   constructor(
-    private readonly model: NamespaceWalkResult,
+    model: NamespaceWalkResult,
     options: NamespaceEmitterOptions,
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
+    super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry);
     this.relativePath = getTargetRelativePath(model.namespace, 'typescript');
-    this.suppressBoilerplate = options.suppressBoilerplate ?? false;
   }
 
   emitHeader(): void {
