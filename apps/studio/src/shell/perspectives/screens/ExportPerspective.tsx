@@ -33,7 +33,9 @@ import {
   type WorkspaceFile
 } from '../../../services/workspace.js';
 import { useCodegenStore } from '../../../store/codegen-store.js';
+import { useOutputStore, fmtLine } from '../../../store/output-store.js';
 import { TARGET_LABELS } from '../../../components/codegen-ui.js';
+import { useStudioToast } from '../../../components/StudioToastProvider.js';
 
 export interface ExportPerspectiveProps {
   /**
@@ -50,6 +52,8 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
   const snapshot = useCodegenStore((s) => s.snapshot);
   const dependencyGraph = useCodegenStore((s) => s.dependencyGraph);
   const namespaceList = useMemo(() => Object.keys(dependencyGraph).sort(), [dependencyGraph]);
+
+  const { showToast } = useStudioToast();
 
   // Download modal state (mirrors CodePreviewPanel's download flow).
   const [downloadModalTarget, setDownloadModalTarget] = useState<Target | undefined>(undefined);
@@ -102,11 +106,20 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
         await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
+          const detail = err.diagnostics.length > 0
+            ? err.diagnostics.map((d) => d.message).join('; ')
+            : err.message;
+          showToast({ title: 'Code generation failed', description: detail, variant: 'destructive' });
+          useOutputStore.getState().addLine(fmtLine('codegen', err.message), 'error');
+          err.diagnostics.forEach(d => useOutputStore.getState().addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn'));
           console.error(
             `[ExportPerspective] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
             err.diagnostics
           );
         } else {
+          const msg = err instanceof Error ? err.message : 'Unexpected error during download.';
+          showToast({ title: 'Download failed', description: msg, variant: 'destructive' });
+          useOutputStore.getState().addLine(fmtLine('codegen', msg), 'error');
           console.error('[ExportPerspective] Download failed for target', newTarget, err);
         }
       } finally {

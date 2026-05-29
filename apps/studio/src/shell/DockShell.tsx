@@ -45,6 +45,8 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { UtilityTrayContext } from './utility-tray-context.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
+import { useStudioToast } from '../components/StudioToastProvider.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 const DEFAULT_UTILITY_HEIGHT = 220;
@@ -199,6 +201,7 @@ export function DockShell({
       }),
     [studioVersion]
   );
+  const { showToast } = useStudioToast();
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const suppressLayoutPersistenceRef = useRef(false);
@@ -252,6 +255,8 @@ export function DockShell({
           viewportWidth: getViewportWidth()
         });
         console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
+        useOutputStore.getState().addLine(fmtLine('layout', 'failed to apply saved layout, using default', err instanceof Error ? err.message : String(err)), 'warn');
+        showToast({ title: 'Layout restored to default', description: 'Your saved layout could not be applied.', variant: 'default' });
         appliedLayout = fallback;
         setLayout(fallback);
         setLayoutPreset(fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit');
@@ -281,6 +286,8 @@ export function DockShell({
           });
         } catch (err) {
           console.error('[DockShell] Failed to serialize layout change', err);
+          useOutputStore.getState().addLine(fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)), 'warn');
+          showToast({ title: 'Layout not saved', description: 'Could not persist the current panel arrangement.', variant: 'destructive' });
         }
       });
       onLayoutChangeRef.current?.(appliedLayout);
@@ -355,6 +362,7 @@ export function DockShell({
         });
       } catch (err) {
         console.error('[DockShell] Failed to reset layout', err);
+        showToast({ title: 'Layout reset failed', description: err instanceof Error ? err.message : 'Could not reset the panel layout.', variant: 'destructive' });
       }
     }
     onLayoutChangeRef.current?.(fresh);
