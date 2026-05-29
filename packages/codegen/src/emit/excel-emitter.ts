@@ -44,79 +44,59 @@ const HEADER_FILL: ExcelJS.Fill = {
 };
 const HEADER_FONT: Partial<ExcelJS.Font> = { bold: true };
 
-function addSheet(
-  workbook: ExcelJS.Workbook,
-  name: string,
-  columns: Array<{ header: string; key: string; width?: number }>
-): ExcelJS.Worksheet {
-  const sheet = workbook.addWorksheet(name);
-  sheet.columns = columns;
-  // ExcelJS treats row 1 as the header when `columns` is set, so the
-  // formatting below targets that row.
-  const header = sheet.getRow(1);
-  header.font = HEADER_FONT;
-  header.fill = HEADER_FILL;
-  header.commit();
-  return sheet;
-}
-
-function attributeCount(data: { attributes?: { length?: number } }): number {
-  return data.attributes?.length ?? 0;
-}
-
-function conditionCount(data: { conditions?: { length?: number } }): number {
-  return data.conditions?.length ?? 0;
-}
-
-function superTypeName(data: { superType?: { ref?: { name?: unknown } | null; $refText?: string } | null }): string {
-  const refName = data.superType?.ref?.name;
-  if (typeof refName === 'string') return refName;
-  // Fall back to the source-text spelling when the ref didn't resolve to
-  // an in-scope AST node (e.g., a primitive parent type or a curated-
-  // bundle hydration that left $refText set). Mirrors what zod/ts
-  // emitters already do for unresolved refs.
-  return data.superType?.$refText ?? '';
-}
-
-function enumMemberNames(enumNode: { enumValues?: ReadonlyArray<{ name?: unknown }> }): string[] {
-  return (enumNode.enumValues ?? []).map((v) => (typeof v.name === 'string' ? v.name : '')).filter((s) => s.length > 0);
-}
-
-function typeAliasBaseName(alias: {
-  typeCall?: {
-    type?: { ref?: { name?: unknown } | null; $refText?: string } | null;
-  } | null;
-}): string {
-  const refName = alias.typeCall?.type?.ref?.name;
-  if (typeof refName === 'string') return refName;
-  // Codex review on PR #167 — primitive aliases like `typeAlias Label: string`
-  // don't resolve `ref` (string has no AST node), so `ref.name` is undefined
-  // and the Base Type cell would be blank. The source-text spelling lives on
-  // the reference as `$refText`; other emitters already use this fallback.
-  return alias.typeCall?.type?.$refText ?? '';
-}
-
-/**
- * Best-effort extraction of the raw source text for a condition's
- * expression. Copilot review on PR #167: previously read the condition
- * node's `$cstNode.text`, which includes the `condition <name>:` header
- * — useful for source location but misleading in a column labeled
- * "Expression". The expression node's own CST text gives just the
- * expression body, which is what the column advertises.
- *
- * Falls back to the condition's name if the expression CST is missing
- * (e.g. deserialized AST without text-regions on a curated bundle).
- */
-function conditionExpressionText(condition: {
-  name?: unknown;
-  expression?: { $cstNode?: { text?: string } } | null;
-}): string {
-  const exprText = condition.expression?.$cstNode?.text;
-  if (typeof exprText === 'string' && exprText.length > 0) return exprText;
-  return typeof condition.name === 'string' ? condition.name : '';
-}
-
 export class ExcelWholeModelEmitter implements WholeModelEmitter {
+  private static addSheet(
+    workbook: ExcelJS.Workbook,
+    name: string,
+    columns: Array<{ header: string; key: string; width?: number }>
+  ): ExcelJS.Worksheet {
+    const sheet = workbook.addWorksheet(name);
+    sheet.columns = columns;
+    // ExcelJS treats row 1 as the header when `columns` is set, so the
+    // formatting below targets that row.
+    const header = sheet.getRow(1);
+    header.font = HEADER_FONT;
+    header.fill = HEADER_FILL;
+    header.commit();
+    return sheet;
+  }
+
+  private static attributeCount(data: { attributes?: { length?: number } }): number {
+    return data.attributes?.length ?? 0;
+  }
+
+  private static conditionCount(data: { conditions?: { length?: number } }): number {
+    return data.conditions?.length ?? 0;
+  }
+
+  private static superTypeName(data: { superType?: { ref?: { name?: unknown } | null; $refText?: string } | null }): string {
+    const refName = data.superType?.ref?.name;
+    if (typeof refName === 'string') return refName;
+    return data.superType?.$refText ?? '';
+  }
+
+  private static enumMemberNames(enumNode: { enumValues?: ReadonlyArray<{ name?: unknown }> }): string[] {
+    return (enumNode.enumValues ?? []).map((v) => (typeof v.name === 'string' ? v.name : '')).filter((s) => s.length > 0);
+  }
+
+  private static typeAliasBaseName(alias: {
+    typeCall?: { type?: { ref?: { name?: unknown } | null; $refText?: string } | null } | null;
+  }): string {
+    const refName = alias.typeCall?.type?.ref?.name;
+    if (typeof refName === 'string') return refName;
+    return alias.typeCall?.type?.$refText ?? '';
+  }
+
+  /** Best-effort extraction of the raw source text for a condition's expression. */
+  private static conditionExpressionText(condition: {
+    name?: unknown;
+    expression?: { $cstNode?: { text?: string } } | null;
+  }): string {
+    const exprText = condition.expression?.$cstNode?.text;
+    if (typeof exprText === 'string' && exprText.length > 0) return exprText;
+    return typeof condition.name === 'string' ? condition.name : '';
+  }
+
   async emit(
     walks: ReadonlyMap<string, NamespaceWalkResult>,
     _registry: NamespaceRegistry,
@@ -137,7 +117,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     workbook.modified = epoch;
 
     const typesSheet = sheets.types
-      ? addSheet(workbook, 'Types', [
+      ? ExcelWholeModelEmitter.addSheet(workbook, 'Types', [
           { header: 'Namespace', key: 'namespace', width: 28 },
           { header: 'Name', key: 'name', width: 28 },
           { header: 'Super Type', key: 'superType', width: 24 },
@@ -146,7 +126,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
         ])
       : undefined;
     const enumsSheet = sheets.enums
-      ? addSheet(workbook, 'Enums', [
+      ? ExcelWholeModelEmitter.addSheet(workbook, 'Enums', [
           { header: 'Namespace', key: 'namespace', width: 28 },
           { header: 'Name', key: 'name', width: 28 },
           { header: 'Members', key: 'memberCount', width: 12 },
@@ -154,14 +134,14 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
         ])
       : undefined;
     const aliasSheet = sheets.typeAliases
-      ? addSheet(workbook, 'TypeAliases', [
+      ? ExcelWholeModelEmitter.addSheet(workbook, 'TypeAliases', [
           { header: 'Namespace', key: 'namespace', width: 28 },
           { header: 'Name', key: 'name', width: 28 },
           { header: 'Base Type', key: 'baseType', width: 28 }
         ])
       : undefined;
     const conditionsSheet = sheets.conditions
-      ? addSheet(workbook, 'Conditions', [
+      ? ExcelWholeModelEmitter.addSheet(workbook, 'Conditions', [
           { header: 'Namespace', key: 'namespace', width: 28 },
           { header: 'Owning Type', key: 'owningType', width: 28 },
           { header: 'Condition', key: 'condition', width: 28 },
@@ -175,7 +155,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     // 500. (The modal disables Generate when no sheet is selected, so this
     // is a defensive floor, not a routine path.)
     if (!typesSheet && !enumsSheet && !aliasSheet && !conditionsSheet) {
-      addSheet(workbook, 'Model', [{ header: 'Namespace', key: 'namespace', width: 28 }]);
+      ExcelWholeModelEmitter.addSheet(workbook, 'Model', [{ header: 'Namespace', key: 'namespace', width: 28 }]);
     }
 
     // Sort namespaces for deterministic output (SC-007). Within each
@@ -209,9 +189,9 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
           typesSheet?.addRow({
             namespace,
             name,
-            superType: superTypeName(data as { superType?: { ref?: { name?: unknown } | null } | null }),
-            attrCount: attributeCount(data as { attributes?: { length?: number } }),
-            condCount: conditionCount(data as { conditions?: { length?: number } })
+            superType: ExcelWholeModelEmitter.superTypeName(data as { superType?: { ref?: { name?: unknown } | null } | null }),
+            attrCount: ExcelWholeModelEmitter.attributeCount(data as { attributes?: { length?: number } }),
+            condCount: ExcelWholeModelEmitter.conditionCount(data as { conditions?: { length?: number } })
           });
           if (conditionsSheet) {
             const conditions = (
@@ -228,7 +208,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
                   namespace,
                   owningType: name,
                   condition: typeof condition.name === 'string' ? condition.name : '',
-                  expression: conditionExpressionText(condition)
+                  expression: ExcelWholeModelEmitter.conditionExpressionText(condition)
                 });
               }
             }
@@ -238,7 +218,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
 
       if (enumsSheet) {
         for (const [name, enumNode] of walk.enumByName) {
-          const members = enumMemberNames(enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> });
+          const members = ExcelWholeModelEmitter.enumMemberNames(enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> });
           enumsSheet.addRow({
             namespace,
             name,
@@ -253,7 +233,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
           aliasSheet.addRow({
             namespace,
             name,
-            baseType: typeAliasBaseName(
+            baseType: ExcelWholeModelEmitter.typeAliasBaseName(
               alias as { typeCall?: { type?: { ref?: { name?: unknown } | null } | null } | null }
             )
           });
