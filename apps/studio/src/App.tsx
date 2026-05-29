@@ -26,6 +26,8 @@ import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
 import { deleteWorkspaceFiles, loadWorkspaceFiles, saveWorkspaceFiles } from './workspace/workspace-files.js';
 import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
+import { useOutputStore, fmtLine } from './store/output-store.js';
+import { useActivityStore } from './store/activity-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
@@ -166,6 +168,8 @@ function AppContent() {
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
     console.warn(`[App] ${message}:`, error);
     setWorkspaceError(message);
+    useOutputStore.getState().addLine(fmtLine('workspace', message, error instanceof Error ? error.message : undefined), 'error');
+    useActivityStore.getState().addActivity('workspace', false, message);
   }, []);
 
   useEffect(() => {
@@ -794,7 +798,10 @@ function AppContent() {
         // lazily on each isomorphic-git call so rotated tokens are always used.
         getOrCreateSyncEngine({ fs, workspaceId, gitBacking });
       } catch (err) {
-        if (!cancelled) console.warn('[git-sync] Failed to instantiate sync engine:', err);
+        if (!cancelled) {
+          console.warn('[git-sync] Failed to instantiate sync engine:', err);
+          useOutputStore.getState().addLine(fmtLine('git', 'sync engine failed', err instanceof Error ? err.message : String(err)), 'warn');
+        }
       }
     })();
     return () => {

@@ -22,6 +22,7 @@ import type {
 } from '../workers/parser-worker.js';
 import { isParseResponse, isParseWorkspaceResponse, isLinkDocumentResponse } from '../workers/parser-worker.js';
 import { useCodegenStore } from '../store/codegen-store.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 /** Known curated bundle ids — guards deferredExports filePath prefixes so user
  *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
@@ -345,6 +346,7 @@ export async function parseFile(content: string, uri?: string): Promise<ParseFil
   } catch (error) {
     // Fallback to main thread
     console.warn('[workspace] parseFile worker fallback:', error);
+    useOutputStore.getState().addLine(fmtLine('parse', 'worker unavailable, using main thread'), 'warn');
   }
 
   // Main-thread fallback
@@ -455,6 +457,7 @@ export async function parseWorkspaceFiles(
     // Router failed (network error, Pages Function unavailable, etc.) — fall back
     // to synchronous main-thread parsing so the editor stays functional.
     console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
+    useOutputStore.getState().addLine(fmtLine('parse', 'router unavailable, falling back to browser parse', error instanceof Error ? error.message : String(error)), 'warn');
     // Layer 1 filter: only hand user-authored .rosetta files to the in-browser
     // Langium parser.  Two conditions are checked:
     //   1. `!f.serializedModelJson` — excludes curated entries (which may have a
@@ -703,6 +706,7 @@ export async function linkDocument(
     return { linked: false, errors: ['Unexpected response'], newModels: [] };
   } catch (error) {
     console.warn('[workspace] linkDocument failed:', error);
+    useOutputStore.getState().addLine(fmtLine('parse', 'link failed', error instanceof Error ? error.message : String(error)), 'error');
     return { linked: false, errors: [(error as Error).message], newModels: [] };
   }
 }
