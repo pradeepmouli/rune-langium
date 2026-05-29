@@ -48,15 +48,15 @@ import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './names
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { getElementNamespace } from '@rune-langium/core';
+import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
-  RUNTIME_HELPER_SOURCE,
   decodeCardinality,
   buildAttributeTypesMap,
   activeConditions,
   mergeProfileTypeMaps,
   buildReportRulesLines,
   buildCrossNsImportLines
-} from '../helpers.js';
+} from './base-namespace-emitter.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
 import {

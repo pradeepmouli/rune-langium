@@ -54,7 +54,7 @@ import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
-import { mergeProfileTypeMaps, decodeCardinality } from '../helpers.js';
+import { mergeProfileTypeMaps, decodeCardinality } from './base-namespace-emitter.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';

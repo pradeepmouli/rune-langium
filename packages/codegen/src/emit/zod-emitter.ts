@@ -32,15 +32,15 @@ import {
   type RosettaExternalFunction
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
+import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
-  RUNTIME_HELPER_SOURCE,
   decodeCardinality,
   buildAttributeTypesMap,
   activeConditions,
   mergeProfileTypeMaps,
   buildReportRulesLines,
   buildCrossNsImportLines
-} from '../helpers.js';
+} from './base-namespace-emitter.js';
 import {
   transpileCondition,
   transpileExpression,

@@ -16,73 +16,17 @@ import {
   isRosettaTypeAlias,
   type Data,
   type RosettaEnumeration,
-  type RosettaCardinality,
   type RosettaTypeAlias
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, GeneratorDiagnostic, SqlOptions } from '../types.js';
-import { type NamespaceEmitter, emitNamespaceWithContract } from './namespace-emitter.js';
+import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { dialectFor, type Dialect } from './sql-dialect.js';
+import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
+import { decodeCardinality } from './base-namespace-emitter.js';
 
-/** Read (lower, upper) from a cardinality; upper === null means unbounded. */
-function bounds(card: RosettaCardinality): { lower: number; upper: number | null } {
-  return { lower: card.inf, upper: card.unbounded ? null : (card.sup ?? card.inf) };
-}
-
-/**
- * Walk a user-defined type-alias chain to its underlying basic-type name
- * (e.g. `Amount: number` → 'number'). Handles the case where the Langium
- * cross-reference to a RosettaBasicType is unresolved (ref===undefined) by
- * falling back to `$refText`. Returns undefined for non-alias / non-builtin.
- */
-function resolveAliasBuiltin(ref: unknown, depth = 0): string | undefined {
-  if (!ref || depth > 16) return undefined;
-  if (isRosettaBasicType(ref as never)) return (ref as { name: string }).name;
-  if (isRosettaTypeAlias(ref as never)) {
-    const typeCallType = (ref as { typeCall?: { type?: { ref?: unknown; $refText?: string } } }).typeCall?.type;
-    // ref may be undefined for built-in types (e.g. `number`) that are not
-    // normal AST nodes in the Langium index — fall back to $refText.
-    const innerRef = typeCallType?.ref;
-    if (innerRef) return resolveAliasBuiltin(innerRef, depth + 1);
-    const innerRefText = typeCallType?.$refText;
-    if (innerRefText) return innerRefText; // e.g. 'number' → caller passes to columnType()
-    return undefined;
-  }
-  return undefined;
-}
-
-/**
- * Collect an enum's value names INCLUDING inherited members. Rune enums can
- * `extend` a parent enum (`enumNode.parent`), and a field typed as the child
- * accepts parent literals too — so the SQL CHECK list must include them.
- * Walks the resolved parent chain (cycle-safe), preserving order (own first),
- * deduped.
- */
-function allEnumValueNames(enumNode: RosettaEnumeration): string[] {
-  const names: string[] = [];
-  const seen = new Set<string>();
-  let current: RosettaEnumeration | undefined = enumNode;
-  const visited = new Set<RosettaEnumeration>();
-  while (current && !visited.has(current)) {
-    visited.add(current);
-    for (const v of current.enumValues ?? []) {
-      if (v?.name && !seen.has(v.name)) {
-        seen.add(v.name);
-        names.push(v.name);
-      }
-    }
-    current = (current as { parent?: { ref?: RosettaEnumeration } }).parent?.ref;
-  }
-  return names;
-}
-
-/** SQL-escape + quote a list of enum value literals for a CHECK (...) clause. */
-function sqlEnumLiterals(names: readonly string[]): string {
-  return names.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
-}
-
-export class SqlNamespaceEmitter implements NamespaceEmitter {
+export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly dialect: Dialect;
   private readonly inheritance: 'single-table' | 'table-per-type';
   private readonly enumStrategy: 'check' | 'table';
@@ -93,12 +37,52 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
   private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly relativePath: string;
 
+  /**
+   * Walk a user-defined type-alias chain to its underlying basic-type name.
+   * Returns undefined for non-alias / non-builtin.
+   */
+  private static resolveAliasBuiltin(ref: unknown, depth = 0): string | undefined {
+    if (!ref || depth > 16) return undefined;
+    if (isRosettaBasicType(ref as never)) return (ref as { name: string }).name;
+    if (isRosettaTypeAlias(ref as never)) {
+      const typeCallType = (ref as { typeCall?: { type?: { ref?: unknown; $refText?: string } } }).typeCall?.type;
+      const innerRef = typeCallType?.ref;
+      if (innerRef) return SqlNamespaceEmitter.resolveAliasBuiltin(innerRef, depth + 1);
+      const innerRefText = typeCallType?.$refText;
+      if (innerRefText) return innerRefText;
+      return undefined;
+    }
+    return undefined;
+  }
+
+  /** Collect enum value names including inherited members (cycle-safe, own first). */
+  private static allEnumValueNames(enumNode: RosettaEnumeration): string[] {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    let current: RosettaEnumeration | undefined = enumNode;
+    const visited = new Set<RosettaEnumeration>();
+    while (current && !visited.has(current)) {
+      visited.add(current);
+      for (const v of current.enumValues ?? []) {
+        if (v?.name && !seen.has(v.name)) { seen.add(v.name); names.push(v.name); }
+      }
+      current = (current as { parent?: { ref?: RosettaEnumeration } }).parent?.ref;
+    }
+    return names;
+  }
+
+  /** SQL-escape + quote enum value literals for a CHECK (...) clause. */
+  private static sqlEnumLiterals(names: readonly string[]): string {
+    return names.map((n) => `'${n.replace(/'/g, "''")}'`).join(', ');
+  }
+
   constructor(
-    private readonly model: NamespaceWalkResult,
-    options: GeneratorOptions,
-    _registry: NamespaceRegistry = { namespaces: new Map() }
+    model: NamespaceWalkResult,
+    options: NamespaceEmitterOptions,
+    registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
-    const sql: SqlOptions = options.sql ?? {};
+    super(model, options, registry);
+    const sql: SqlOptions = (options as GeneratorOptions).sql ?? {};
     this.dialect = dialectFor(sql.dialect ?? 'postgres');
     this.inheritance = sql.inheritance ?? 'table-per-type';
     this.enumStrategy = sql.enumStrategy ?? 'check';
@@ -169,7 +153,7 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
     };
 
     for (const attr of data.attributes) {
-      const { lower, upper } = bounds(attr.card);
+      const { lower, upper } = decodeCardinality(attr.card);
       const ref = attr.typeCall?.type?.ref;
       const refText = attr.typeCall?.type?.$refText ?? '';
       const notNull = lower >= 1 ? ' NOT NULL' : '';
@@ -198,14 +182,14 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
         cols.push(`${q(col)} ${this.dialect.columnType('string')}${notNull}`);
         // Include inherited enum members; skip the CHECK entirely for a valueless
         // enum (CHECK (... IN ()) is invalid SQL in both dialects).
-        const names = allEnumValueNames(enumNode);
+        const names = SqlNamespaceEmitter.allEnumValueNames(enumNode);
         if (names.length > 0) {
-          constraints.push(`CHECK (${q(col)} IN (${sqlEnumLiterals(names)}))`);
+          constraints.push(`CHECK (${q(col)} IN (${SqlNamespaceEmitter.sqlEnumLiterals(names)}))`);
         } else {
           this.flagEmptyEnum(enumNode.name);
         }
       } else {
-        const aliasBuiltin = resolveAliasBuiltin(ref);
+        const aliasBuiltin = SqlNamespaceEmitter.resolveAliasBuiltin(ref);
         const builtin = isRosettaBasicType(ref) ? ref.name : (aliasBuiltin ?? refText);
         // Resolved = a real basic type OR a name the dialect actually knows. Do NOT
         // trust aliasBuiltin alone: resolveAliasBuiltin returns the inner $refText
@@ -264,16 +248,16 @@ export class SqlNamespaceEmitter implements NamespaceEmitter {
       this.flagEnumTableFallback();
       cols.push(`${q('value')} ${this.dialect.columnType('string')} NOT NULL`);
       // Inherited members included; skip CHECK for a valueless enum (IN () is invalid).
-      const names = allEnumValueNames(enumNode);
+      const names = SqlNamespaceEmitter.allEnumValueNames(enumNode);
       if (names.length > 0) {
-        constraints.push(`CHECK (${q('value')} IN (${sqlEnumLiterals(names)}))`);
+        constraints.push(`CHECK (${q('value')} IN (${SqlNamespaceEmitter.sqlEnumLiterals(names)}))`);
       } else {
         this.flagEmptyEnum(enumNode.name);
       }
     } else {
       const builtin = isRosettaBasicType(ref as never)
         ? (ref as { name: string }).name
-        : (resolveAliasBuiltin(ref) ?? refText);
+        : (SqlNamespaceEmitter.resolveAliasBuiltin(ref) ?? refText);
       cols.push(`${q('value')} ${this.dialect.columnType(builtin || 'string')} NOT NULL`);
     }
 
