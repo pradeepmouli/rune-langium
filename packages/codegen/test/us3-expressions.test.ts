@@ -116,3 +116,10 @@ describe('US3: conditional fixture', () => {
     await assertFixture('conditional');
   });
 });
+
+// T066
+describe('US3: then-operation fixture', () => {
+  it('generates byte-identical output for then pipeline conditions', async () => {
+    await assertFixture('then-operation');
+  });
+});

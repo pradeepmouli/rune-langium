@@ -54,8 +54,10 @@ import {
   isRosettaImplicitVariable,
   isRosettaConstructorExpression,
   isListLiteral,
+  isThenOperation,
   type Condition,
-  type RosettaExpression
+  type RosettaExpression,
+  type ThenOperation
 } from '@rune-langium/core';
 import type { GeneratorDiagnostic } from '../types.js';
 
@@ -893,6 +895,29 @@ export function transpileHigherOrder(
 }
 
 /**
+ * Transpile a ThenOperation (pipeline/pipe operator).
+ *
+ * Grammar: `argument then [ImplicitInlineFunction]`
+ * Semantics: apply the inline function to the argument.
+ *   No function → identity (return argument unchanged).
+ *   With function → `((param) => body)(arg)`
+ */
+export function transpileThenOperation(
+  expr: ThenOperation,
+  ctx: ExpressionTranspilerContext
+): string {
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  if (!expr.function) {
+    return arg;
+  }
+  // Pipe: evaluate body with the argument as the implicit self.
+  // e.g. `items then flatten` → `(items ?? []).flat()`
+  //      `items then field`   → `items?.field`
+  const childCtx: ExpressionTranspilerContext = { ...ctx, selfName: arg };
+  return transpileExpression(expr.function.body, childCtx);
+}
+
+/**
  * T074: Transpile conditional expressions (if antecedent then consequent [else alternative]).
  *
  * In zod-refine mode (returns boolean expression):
@@ -1091,6 +1116,11 @@ export function transpileExpression(
   // Higher-order (T073)
   if (isFilterOperation(expr) || isMapOperation(expr)) {
     return transpileHigherOrder(expr, ctx);
+  }
+
+  // ThenOperation — pipeline/pipe: `arg then fn`
+  if (isThenOperation(expr)) {
+    return transpileThenOperation(expr, ctx);
   }
 
   // Exists / absent (delegates to Phase 4 logic but as boolean expressions)

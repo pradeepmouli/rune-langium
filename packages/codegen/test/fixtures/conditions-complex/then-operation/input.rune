@@ -1,0 +1,7 @@
+namespace "test.cond.then"
+version "1"
+
+type ThenCheck:
+    items int (0..*)
+    condition HasDistinct:
+        items then distinct count > 0
