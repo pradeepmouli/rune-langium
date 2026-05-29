@@ -953,6 +953,65 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   // ---------------------------------------------------------------------------
+  // T109: emitDiscriminatorPredicate
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Emit `export function is<Child>(x: <Parent>): x is <Child>` discriminator predicate.
+   * T109.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private emitDiscriminatorPredicate(child: Data, parent: Data): string {
+    const childName = child.name;
+    const parentName = parent.name;
+
+    const childFields = child.attributes;
+
+    if (childFields.length === 0) {
+      return [
+        `export function is${childName}(x: ${parentName}): x is ${childName} {`,
+        `  return is${childName}(x as unknown);`,
+        `}`
+      ].join('\n');
+    }
+
+    const checks: string[] = [];
+    for (const attr of childFields) {
+      const card = attr.card;
+      const typeofStr = this.resolveTypeofStr(attr);
+      const isArray = TsNamespaceEmitter.isArrayCardinality(card);
+      const isOpt = TsNamespaceEmitter.isOptionalCardinality(card);
+      const obj = '(x as Record<string, unknown>)';
+
+      if (isArray) {
+        checks.push(`Array.isArray(${obj}.${attr.name})`);
+      } else if (isOpt) {
+        if (typeofStr) {
+          const tsType = this.resolveBuiltinTsType(attr);
+          checks.push(
+            `(${obj}.${attr.name} === undefined || ${TsNamespaceEmitter.posTypeofGuard(`${obj}.${attr.name}`, typeofStr, tsType)})`
+          );
+        }
+      } else {
+        if (typeofStr) {
+          const tsType = this.resolveBuiltinTsType(attr);
+          checks.push(TsNamespaceEmitter.posTypeofGuard(`${obj}.${attr.name}`, typeofStr, tsType));
+        } else {
+          checks.push(`${obj}.${attr.name} !== undefined`);
+        }
+      }
+    }
+
+    const condition = checks.length === 0 ? 'true' : checks.join(' && ');
+
+    return [
+      `export function is${childName}(x: ${parentName}): x is ${childName} {`,
+      `  return ${condition};`,
+      `}`
+    ].join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
   // T107: emitFromFactory (static — no ctx needed)
   // ---------------------------------------------------------------------------
 
