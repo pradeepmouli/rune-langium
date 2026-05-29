@@ -36,6 +36,7 @@ describe('buildDefaultLayout (T061)', () => {
     ]);
     expect(layout.dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
       'workspace.problems',
+      'workspace.activity',
       'workspace.output'
     ]);
   });

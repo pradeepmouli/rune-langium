@@ -30,6 +30,7 @@ import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
 import { ProblemsPanel } from './panels/ProblemsPanel.js';
+import { ActivityPanel } from './panels/ActivityPanel.js';
 import { OutputPanel } from './panels/OutputPanel.js';
 // VisualPreviewPanel removed in Phase 7.5 — structure view is now a peer
 // segment in CenterStackPanel wired from EditorPage.
@@ -73,6 +74,7 @@ type PanelOverrides = Partial<{
   'workspace.editor': ZeroArgRenderer;
   'workspace.inspector': ZeroArgRenderer;
   'workspace.problems': ZeroArgRenderer;
+  'workspace.activity': ZeroArgRenderer;
   'workspace.output': ZeroArgRenderer;
   'workspace.visualPreview': ZeroArgRenderer;
   'workspace.formPreview': ZeroArgRenderer;
@@ -104,7 +106,8 @@ const DEFAULT_PANEL_REGISTRY: PanelRegistry = {
   'workspace.fileTree': () => FileTreePanel({}),
   'workspace.editor': () => EditorPanel({}),
   'workspace.inspector': () => InspectorPanel({}),
-  'workspace.problems': () => ProblemsPanel({}),
+  'workspace.problems': () => ProblemsPanel(),
+  'workspace.activity': () => ActivityPanel(),
   'workspace.output': () => OutputPanel(),
   'workspace.visualPreview': () => null,
   'workspace.formPreview': () => FormPreviewPanel(),

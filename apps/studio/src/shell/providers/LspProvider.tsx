@@ -11,6 +11,7 @@ import { config } from '../../config.js';
 import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
 import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
+import { useActivityStore } from '../../store/activity-store.js';
 
 export function LspProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const { files } = useWorkspace();
@@ -33,16 +34,20 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
       setTransportState(state);
       if (state.status === 'connected') {
         useOutputStore.getState().addLine(fmtLine('lsp', 'connected'), 'success');
+        useActivityStore.getState().addActivity('lsp', true, 'connected');
       } else if (state.status === 'disconnected' && prevStatusRef.current === 'connected') {
         useOutputStore.getState().addLine(fmtLine('lsp', 'disconnected'), 'warn');
+        useActivityStore.getState().addActivity('lsp', false, 'disconnected');
       }
       prevStatusRef.current = state.status;
     });
     const client = createLspClientService({ transportProvider: provider });
     lspClientRef.current = client;
     client.connect().catch((err) => {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error('[LspProvider] LSP connect failed:', err);
-      useOutputStore.getState().addLine(fmtLine('lsp', 'connect failed', err instanceof Error ? err.message : String(err)), 'error');
+      useOutputStore.getState().addLine(fmtLine('lsp', 'connect failed', msg), 'error');
+      useActivityStore.getState().addActivity('lsp', false, `connect failed · ${msg}`);
       showToast({ title: 'Language server unavailable', description: err instanceof Error ? err.message : 'LSP connection failed. Diagnostics and completions will not work.', variant: 'destructive' });
     });
     return () => { unsub(); client.dispose(); provider.dispose(); };
@@ -59,8 +64,10 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     void (async () => {
       try { await lspClientRef.current?.reconnect(); }
       catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         console.error('[LspProvider] LSP reconnect failed:', err);
-        useOutputStore.getState().addLine(fmtLine('lsp', 'reconnect failed', err instanceof Error ? err.message : String(err)), 'error');
+        useOutputStore.getState().addLine(fmtLine('lsp', 'reconnect failed', msg), 'error');
+        useActivityStore.getState().addActivity('lsp', false, `reconnect failed · ${msg}`);
         showToast({ title: 'LSP reconnect failed', description: err instanceof Error ? err.message : 'Could not reconnect to the language server.', variant: 'destructive' });
       }
     })();

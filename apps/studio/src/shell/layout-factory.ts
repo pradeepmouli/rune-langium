@@ -46,7 +46,8 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.editor': 'Source',
   'workspace.inspector': 'Inspector',
   'workspace.problems': 'Problems',
-  'workspace.output': 'Messages',
+  'workspace.activity': 'Activity',
+  'workspace.output': 'Output',
   'workspace.visualPreview': 'Graph',
   'workspace.formPreview': 'Form',
   'workspace.codePreview': 'Code'
@@ -88,7 +89,7 @@ export function buildDefaultLayout(input: BuildLayoutInput): PanelLayoutRecord {
     bottomGroup: {
       active: 'workspace.problems',
       collapsed: true,
-      tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
+      tabs: [{ component: 'workspace.problems' }, { component: 'workspace.activity' }, { component: 'workspace.output' }]
     }
   };
 
