@@ -362,6 +362,7 @@ export function DockShell({
         });
       } catch (err) {
         console.error('[DockShell] Failed to reset layout', err);
+        useOutputStore.getState().addLine(fmtLine('layout', 'failed to reset layout', err instanceof Error ? err.message : String(err)), 'error');
         showToast({ title: 'Layout reset failed', description: err instanceof Error ? err.message : 'Could not reset the panel layout.', variant: 'destructive' });
       }
     }

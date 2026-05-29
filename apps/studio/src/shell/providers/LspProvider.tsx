@@ -60,6 +60,7 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
       try { await lspClientRef.current?.reconnect(); }
       catch (err) {
         console.error('[LspProvider] LSP reconnect failed:', err);
+        useOutputStore.getState().addLine(fmtLine('lsp', 'reconnect failed', err instanceof Error ? err.message : String(err)), 'error');
         showToast({ title: 'LSP reconnect failed', description: err instanceof Error ? err.message : 'Could not reconnect to the language server.', variant: 'destructive' });
       }
     })();
