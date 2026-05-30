@@ -9,6 +9,7 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v6
@@ -59,6 +60,7 @@ jobs:
 
       - name: Build
         run: pnpm run build:ci
+        timeout-minutes: 15
 
       - name: Type check
         run: pnpm run type-check
