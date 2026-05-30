@@ -48,76 +48,16 @@ import {
   type RosettaExternalFunction
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
-import { emitNamespaceWithContract, type NamespaceEmitter } from './namespace-emitter.js';
+import { emitNamespaceWithContract } from './namespace-emitter.js';
+import type { NamespaceEmitterOptions } from './namespace-emitter.js';
+import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
+import { mergeProfileTypeMaps, decodeCardinality } from './base-namespace-emitter.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
-
-/**
- * oxfmt-compatible JSON serializer.
- *
- * oxfmt collapses short arrays onto a single line when they fit within
- * the print width (100 chars). We replicate this behaviour so that
- * committed `expected.schema.json` fixture files are byte-identical to the
- * formatter's output. Specifically:
- *   - Arrays of primitives (strings, numbers, booleans) that fit on one
- *     line within the given indent level are serialised inline.
- *   - Arrays of objects are always expanded.
- *   - Objects are always expanded (one key per line).
- *
- * @param value - The JSON value to serialise.
- * @param indent - Current indent level (0 = top level).
- * @param printWidth - Maximum column width (default 100, matching oxfmt).
- */
-function serializeJson(value: unknown, indent: number = 0, printWidth: number = 100): string {
-  const spaces = '  '.repeat(indent);
-  const innerSpaces = '  '.repeat(indent + 1);
-
-  if (value === null) return 'null';
-  if (typeof value === 'boolean') return String(value);
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'string') return JSON.stringify(value);
-
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '[]';
-
-    // Try compact (inline) form — only for primitive arrays
-    const allPrimitives = value.every(
-      (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null
-    );
-    if (allPrimitives) {
-      const compact = '[' + value.map((v) => serializeJson(v, 0, printWidth)).join(', ') + ']';
-      // Check if it fits within the line budget at the current indentation level
-      const lineLength = spaces.length + compact.length;
-      if (lineLength <= printWidth) {
-        return compact;
-      }
-    }
-
-    // Expanded form
-    const items = value.map((v) => innerSpaces + serializeJson(v, indent + 1, printWidth));
-    return '[\n' + items.join(',\n') + '\n' + spaces + ']';
-  }
-
-  if (typeof value === 'object') {
-    const keys = Object.keys(value as Record<string, unknown>);
-    if (keys.length === 0) return '{}';
-
-    const entries = keys.map(
-      (k) =>
-        innerSpaces +
-        JSON.stringify(k) +
-        ': ' +
-        serializeJson((value as Record<string, unknown>)[k], indent + 1, printWidth)
-    );
-    return '{\n' + entries.join(',\n') + '\n' + spaces + '}';
-  }
-
-  return JSON.stringify(value);
-}
 
 /**
  * Internal emission context for one namespace.
@@ -154,282 +94,10 @@ interface PendingSourceMapEntry {
   sourceChar: number;
 }
 
-/**
- * Merged builtin type map from the JSON Schema profile.
- * Combines basicTypeMap ∪ recordTypeMap ∪ typeAliasMap.
- * Populated once at module load; used as a default for buildEmissionContext.
- */
-function buildJsonBuiltinTypeMap(): Record<string, object> {
-  return {
-    ...jsonSchemaProfile.basicTypeMap,
-    ...jsonSchemaProfile.recordTypeMap,
-    ...jsonSchemaProfile.typeAliasMap
-  } as Record<string, object>;
-}
-
-const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = buildJsonBuiltinTypeMap();
-
-/**
- * Resolve the item schema for a scalar type reference.
- * Returns a JSON Schema object for the base (non-array) type.
- */
-function resolveItemSchema(attr: Attribute, ctx: EmissionContext): object {
-  const typeRef = attr.typeCall?.type?.ref;
-  const refText = attr.typeCall?.type?.$refText;
-
-  if (!typeRef) {
-    if (refText) {
-      const builtinSchema = ctx.builtinTypeMap[refText];
-      if (builtinSchema) return builtinSchema;
-
-      // Check if it's an enum or data type in the current namespace
-      if (ctx.enumByName.has(refText)) {
-        return { $ref: `#/$defs/${refText}` };
-      }
-      if (ctx.dataByName.has(refText)) {
-        return { $ref: `#/$defs/${refText}` };
-      }
-
-      ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unresolved-ref',
-        message: `Attribute '${attr.name}': type '${refText}' is not resolved; emitting {}`
-      });
-      return {};
-    }
-    ctx.diagnostics.push({
-      severity: 'warning',
-      code: 'unresolved-ref',
-      message: `Attribute '${attr.name}' has an unresolved type reference`
-    });
-    return {};
-  }
-
-  if (isRosettaBasicType(typeRef)) {
-    const mapped = ctx.builtinTypeMap[typeRef.name];
-    if (mapped) return mapped;
-    ctx.diagnostics.push({
-      severity: 'warning',
-      code: 'unmapped-builtin',
-      message: `Builtin type '${typeRef.name}' has no JSON Schema mapping; emitting {}`
-    });
-    return {};
-  }
-
-  if (isRosettaEnumeration(typeRef)) {
-    return { $ref: `#/$defs/${typeRef.name}` };
-  }
-
-  if (isData(typeRef)) {
-    return { $ref: `#/$defs/${typeRef.name}` };
-  }
-
-  // Fallback with $refText
-  if (refText) {
-    const builtinSchema = ctx.builtinTypeMap[refText];
-    if (builtinSchema) return builtinSchema;
-  }
-
-  ctx.diagnostics.push({
-    severity: 'warning',
-    code: 'unresolved-ref',
-    message: `Unknown type reference kind for attribute '${attr.name}'`
-  });
-  return {};
-}
-
-/**
- * Apply cardinality encoding to a base item schema.
- * Returns the JSON Schema representation of the attribute type + cardinality.
- * FR-019 / T095.
- *
- * Cardinality map:
- *   (1..1) → base item schema (no wrapping); field listed in "required"
- *   (0..1) → base item schema (no wrapping); field NOT in "required"
- *   (0..*) → { "type": "array", "items": itemSchema }
- *   (1..*) → { "type": "array", "items": itemSchema, "minItems": 1 }
- *   (n..m) → { "type": "array", "items": itemSchema, "minItems": n, "maxItems": m }
- *   (n..n) n>1 → { "type": "array", "items": itemSchema, "minItems": n, "maxItems": n }
- */
-function applyCardinality(card: RosettaCardinality, itemSchema: object): object {
-  const lower = card.inf;
-  const upper = card.unbounded ? null : (card.sup ?? lower);
-
-  // Scalar forms: (1..1) or (0..1)
-  if (upper !== null && upper <= 1) {
-    return itemSchema;
-  }
-
-  // Array forms
-  const arraySchema: Record<string, unknown> = {
-    type: 'array',
-    items: itemSchema
-  };
-
-  if (upper === null) {
-    // (n..*)
-    if (lower > 0) {
-      arraySchema['minItems'] = lower;
-    }
-    // (0..*) → no minItems
-  } else {
-    // Fixed upper bound
-    if (lower > 0) arraySchema['minItems'] = lower;
-    arraySchema['maxItems'] = upper;
-  }
-
-  return arraySchema;
-}
-
-/**
- * Emit the JSON Schema definition for a single Data type.
- * T094, T095.
- *
- * Returns a JSON Schema object for the type.
- */
-function emitTypeDef(data: Data, ctx: EmissionContext): object {
-  const required: string[] = [];
-  const properties: Record<string, object> = {};
-
-  for (const attr of data.attributes) {
-    const card = attr.card;
-    const lower = card.inf;
-    const upper = card.unbounded ? null : (card.sup ?? lower);
-
-    const itemSchema = resolveItemSchema(attr, ctx);
-    const attrSchema = applyCardinality(card, itemSchema);
-
-    properties[attr.name] = attrSchema;
-
-    // Field is required if lower === 1 and upper === 1 (scalar mandatory)
-    if (lower === 1 && upper === 1) {
-      required.push(attr.name);
-    }
-  }
-
-  // Collect condition metadata (x-rune-conditions extension).
-  // JSON Schema cannot express Rune conditions beyond "exists" (required),
-  // so we emit them as opaque extension metadata per the spec comment above.
-  const conditions = data.conditions ?? [];
-  const conditionMeta = conditions
-    .filter((c) => c.name != null)
-    .map((c) => ({
-      name: c.name,
-      // Include a best-effort kind description based on what we can detect
-      kind: 'condition'
-    }));
-
-  if (data.superType?.ref) {
-    // Inheritance: use allOf pattern
-    const parentName = data.superType.ref.name;
-    const parentRef: object = { $ref: `#/$defs/${parentName}` };
-
-    const ownSchema: Record<string, unknown> = {
-      type: 'object',
-      properties,
-      additionalProperties: false
-    };
-    if (required.length > 0) ownSchema['required'] = required;
-    if (conditionMeta.length > 0) ownSchema['x-rune-conditions'] = conditionMeta;
-
-    return {
-      allOf: [parentRef, ownSchema]
-    };
-  }
-
-  // No inheritance
-  const def: Record<string, unknown> = {
-    type: 'object',
-    properties,
-    additionalProperties: false
-  };
-
-  if (required.length > 0) def['required'] = required;
-  if (conditionMeta.length > 0) def['x-rune-conditions'] = conditionMeta;
-
-  return def;
-}
-
-/**
- * Emit the JSON Schema definition for a type alias.
- */
-function emitTypeAliasDef(alias: RosettaTypeAlias, ctx: EmissionContext): object {
-  const typeRef = alias.typeCall?.type?.ref;
-  const refText = alias.typeCall?.type?.$refText;
-
-  // Resolve to a JSON Schema type
-  if (typeRef && isRosettaBasicType(typeRef)) {
-    const typeMap: Record<string, object> = {
-      string: { type: 'string' },
-      int: { type: 'integer' },
-      number: { type: 'number' },
-      boolean: { type: 'boolean' },
-      date: { type: 'string', format: 'date' },
-      dateTime: { type: 'string', format: 'date-time' },
-      zonedDateTime: { type: 'string', format: 'date-time' },
-      time: { type: 'string', format: 'time' }
-    };
-    return typeMap[typeRef.name] ?? { type: 'string' };
-  }
-
-  if (typeRef && isRosettaEnumeration(typeRef)) {
-    return { $ref: `#/$defs/${typeRef.name}` };
-  }
-
-  if (typeRef && isData(typeRef)) {
-    return { $ref: `#/$defs/${typeRef.name}` };
-  }
-
-  if (refText) {
-    const builtinMap: Record<string, object> = {
-      string: { type: 'string' },
-      int: { type: 'integer' },
-      number: { type: 'number' },
-      boolean: { type: 'boolean' },
-      date: { type: 'string', format: 'date' },
-      dateTime: { type: 'string', format: 'date-time' },
-      zonedDateTime: { type: 'string', format: 'date-time' },
-      time: { type: 'string', format: 'time' }
-    };
-    if (builtinMap[refText]) return builtinMap[refText];
-    if (ctx.enumByName.has(refText) || ctx.dataByName.has(refText)) {
-      return { $ref: `#/$defs/${refText}` };
-    }
-  }
-
-  return { type: 'string' };
-}
-
-/**
- * Emit the JSON Schema definition for an enumeration.
- * T095.
- *
- * Emits: `{ "type": "string", "enum": ["Val1", "Val2", ...] }`
- *
- * Note: Display-name maps are not standardized in JSON Schema. Enum display names
- * are documented as `x-rune-enum-display` extension entries so consumers know they
- * exist, but they are not added to the `"enum"` array itself.
- */
-function emitEnumDef(enumNode: RosettaEnumeration): object {
-  const memberNames = enumNode.enumValues.map((v) => v.name);
-
-  const def: Record<string, unknown> = {
-    type: 'string',
-    enum: memberNames
-  };
-
-  // Display names as optional x- extension (not standardized in JSON Schema)
-  const hasDisplayNames = enumNode.enumValues.some((v) => v.display != null);
-  if (hasDisplayNames) {
-    const displayMap: Record<string, string> = {};
-    for (const v of enumNode.enumValues) {
-      displayMap[v.name] = v.display ?? v.name;
-    }
-    def['x-rune-enum-display'] = displayMap;
-  }
-
-  return def;
-}
+const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = mergeProfileTypeMaps(jsonSchemaProfile) as Record<
+  string,
+  object
+>;
 
 function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
   return {
@@ -470,7 +138,7 @@ export function emitNamespace(
   return emitNamespaceWithContract(model, options, registry, JsonSchemaNamespaceEmitter);
 }
 
-export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
+export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
   private readonly $defs: Record<string, object> = {};
   private readonly pendingSourceMapEntries: PendingSourceMapEntry[] = [];
@@ -478,10 +146,11 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
   private readonly rulesMetadata: Record<string, { kind: string; inputType: string }> = {};
 
   constructor(
-    private readonly model: NamespaceWalkResult,
-    _options: GeneratorOptions,
+    model: NamespaceWalkResult,
+    options: NamespaceEmitterOptions,
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
+    super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry);
     this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
   }
@@ -518,17 +187,17 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
   }
 
   emitEnumeration(enumNode: RosettaEnumeration): void {
-    this.$defs[enumNode.name] = emitEnumDef(enumNode);
+    this.$defs[enumNode.name] = JsonSchemaNamespaceEmitter.emitEnumDef(enumNode);
     this.trackDefinitionSourceMap(enumNode);
   }
 
   emitTypeAlias(typeAlias: RosettaTypeAlias): void {
-    this.$defs[typeAlias.name] = emitTypeAliasDef(typeAlias, this.ctx);
+    this.$defs[typeAlias.name] = this.emitTypeAliasDef(typeAlias);
     this.trackDefinitionSourceMap(typeAlias);
   }
 
   emitData(data: Data): void {
-    this.$defs[data.name] = emitTypeDef(data, this.ctx);
+    this.$defs[data.name] = this.emitTypeDef(data);
     this.trackDefinitionSourceMap(data);
   }
 
@@ -548,7 +217,7 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
     if (Object.keys(this.rulesMetadata).length > 0) {
       schema['x-rune-rules'] = this.rulesMetadata;
     }
-    const content = serializeJson(schema) + '\n';
+    const content = JsonSchemaNamespaceEmitter.serializeJson(schema) + '\n';
     this.flushSourceMap(content);
     return {
       relativePath: this.ctx.relativePath,
@@ -557,5 +226,324 @@ export class JsonSchemaNamespaceEmitter implements NamespaceEmitter {
       diagnostics: this.ctx.diagnostics,
       funcs: []
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private instance methods (ctx-taking helpers)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolve the item schema for a scalar type reference.
+   * Returns a JSON Schema object for the base (non-array) type.
+   */
+  private resolveItemSchema(attr: Attribute): object {
+    const typeRef = attr.typeCall?.type?.ref;
+    const refText = attr.typeCall?.type?.$refText;
+
+    if (!typeRef) {
+      if (refText) {
+        const builtinSchema = this.ctx.builtinTypeMap[refText];
+        if (builtinSchema) return builtinSchema;
+
+        if (this.ctx.enumByName.has(refText)) {
+          return { $ref: `#/$defs/${refText}` };
+        }
+        if (this.ctx.dataByName.has(refText)) {
+          return { $ref: `#/$defs/${refText}` };
+        }
+
+        this.ctx.diagnostics.push({
+          severity: 'warning',
+          code: 'unresolved-ref',
+          message: `Attribute '${attr.name}': type '${refText}' is not resolved; emitting {}`
+        });
+        return {};
+      }
+      this.ctx.diagnostics.push({
+        severity: 'warning',
+        code: 'unresolved-ref',
+        message: `Attribute '${attr.name}' has an unresolved type reference`
+      });
+      return {};
+    }
+
+    if (isRosettaBasicType(typeRef)) {
+      const mapped = this.ctx.builtinTypeMap[typeRef.name];
+      if (mapped) return mapped;
+      this.ctx.diagnostics.push({
+        severity: 'warning',
+        code: 'unmapped-builtin',
+        message: `Builtin type '${typeRef.name}' has no JSON Schema mapping; emitting {}`
+      });
+      return {};
+    }
+
+    if (isRosettaEnumeration(typeRef)) {
+      return { $ref: `#/$defs/${typeRef.name}` };
+    }
+
+    if (isData(typeRef)) {
+      return { $ref: `#/$defs/${typeRef.name}` };
+    }
+
+    if (refText) {
+      const builtinSchema = this.ctx.builtinTypeMap[refText];
+      if (builtinSchema) return builtinSchema;
+    }
+
+    this.ctx.diagnostics.push({
+      severity: 'warning',
+      code: 'unresolved-ref',
+      message: `Unknown type reference kind for attribute '${attr.name}'`
+    });
+    return {};
+  }
+
+  /**
+   * Emit the JSON Schema definition for a single Data type.
+   * T094, T095.
+   */
+  private emitTypeDef(data: Data): object {
+    const required: string[] = [];
+    const properties: Record<string, object> = {};
+
+    for (const attr of data.attributes) {
+      const card = attr.card;
+      const { lower, upper } = decodeCardinality(card);
+
+      const itemSchema = this.resolveItemSchema(attr);
+      const attrSchema = JsonSchemaNamespaceEmitter.applyCardinality(card, itemSchema);
+
+      properties[attr.name] = attrSchema;
+
+      if (lower === 1 && upper === 1) {
+        required.push(attr.name);
+      }
+    }
+
+    // Collect condition metadata (x-rune-conditions extension).
+    const conditions = data.conditions ?? [];
+    const conditionMeta = conditions
+      .filter((c) => c.name != null)
+      .map((c) => ({
+        name: c.name,
+        kind: 'condition'
+      }));
+
+    if (data.superType?.ref) {
+      const parentName = data.superType.ref.name;
+      const parentRef: object = { $ref: `#/$defs/${parentName}` };
+
+      const ownSchema: Record<string, unknown> = {
+        type: 'object',
+        properties,
+        additionalProperties: false
+      };
+      if (required.length > 0) ownSchema['required'] = required;
+      if (conditionMeta.length > 0) ownSchema['x-rune-conditions'] = conditionMeta;
+
+      return {
+        allOf: [parentRef, ownSchema]
+      };
+    }
+
+    const def: Record<string, unknown> = {
+      type: 'object',
+      properties,
+      additionalProperties: false
+    };
+
+    if (required.length > 0) def['required'] = required;
+    if (conditionMeta.length > 0) def['x-rune-conditions'] = conditionMeta;
+
+    return def;
+  }
+
+  /**
+   * Emit the JSON Schema definition for a type alias.
+   */
+  private emitTypeAliasDef(alias: RosettaTypeAlias): object {
+    const typeRef = alias.typeCall?.type?.ref;
+    const refText = alias.typeCall?.type?.$refText;
+
+    if (typeRef && isRosettaBasicType(typeRef)) {
+      const typeMap: Record<string, object> = {
+        string: { type: 'string' },
+        int: { type: 'integer' },
+        number: { type: 'number' },
+        boolean: { type: 'boolean' },
+        date: { type: 'string', format: 'date' },
+        dateTime: { type: 'string', format: 'date-time' },
+        zonedDateTime: { type: 'string', format: 'date-time' },
+        time: { type: 'string', format: 'time' }
+      };
+      return typeMap[typeRef.name] ?? { type: 'string' };
+    }
+
+    if (typeRef && isRosettaEnumeration(typeRef)) {
+      return { $ref: `#/$defs/${typeRef.name}` };
+    }
+
+    if (typeRef && isData(typeRef)) {
+      return { $ref: `#/$defs/${typeRef.name}` };
+    }
+
+    if (refText) {
+      const builtinMap: Record<string, object> = {
+        string: { type: 'string' },
+        int: { type: 'integer' },
+        number: { type: 'number' },
+        boolean: { type: 'boolean' },
+        date: { type: 'string', format: 'date' },
+        dateTime: { type: 'string', format: 'date-time' },
+        zonedDateTime: { type: 'string', format: 'date-time' },
+        time: { type: 'string', format: 'time' }
+      };
+      if (builtinMap[refText]) return builtinMap[refText];
+      if (this.ctx.enumByName.has(refText) || this.ctx.dataByName.has(refText)) {
+        return { $ref: `#/$defs/${refText}` };
+      }
+    }
+
+    return { type: 'string' };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private static helpers (pure utilities, no ctx)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Apply cardinality encoding to a base item schema.
+   * Returns the JSON Schema representation of the attribute type + cardinality.
+   * FR-019 / T095.
+   *
+   * Cardinality map:
+   *   (1..1) → base item schema (no wrapping); field listed in "required"
+   *   (0..1) → base item schema (no wrapping); field NOT in "required"
+   *   (0..*) → { "type": "array", "items": itemSchema }
+   *   (1..*) → { "type": "array", "items": itemSchema, "minItems": 1 }
+   *   (n..m) → { "type": "array", "items": itemSchema, "minItems": n, "maxItems": m }
+   *   (n..n) n>1 → { "type": "array", "items": itemSchema, "minItems": n, "maxItems": n }
+   */
+  private static applyCardinality(card: RosettaCardinality, itemSchema: object): object {
+    const { lower, upper } = decodeCardinality(card);
+
+    // Scalar forms: (1..1) or (0..1)
+    if (upper !== null && upper <= 1) {
+      return itemSchema;
+    }
+
+    const arraySchema: Record<string, unknown> = {
+      type: 'array',
+      items: itemSchema
+    };
+
+    if (upper === null) {
+      if (lower > 0) {
+        arraySchema['minItems'] = lower;
+      }
+    } else {
+      if (lower > 0) arraySchema['minItems'] = lower;
+      arraySchema['maxItems'] = upper;
+    }
+
+    return arraySchema;
+  }
+
+  /**
+   * Emit the JSON Schema definition for an enumeration.
+   * T095.
+   *
+   * Emits: `{ "type": "string", "enum": ["Val1", "Val2", ...] }`
+   *
+   * Note: Display-name maps are not standardized in JSON Schema. Enum display names
+   * are documented as `x-rune-enum-display` extension entries so consumers know they
+   * exist, but they are not added to the `"enum"` array itself.
+   */
+  private static emitEnumDef(enumNode: RosettaEnumeration): object {
+    const memberNames = enumNode.enumValues.map((v) => v.name);
+
+    const def: Record<string, unknown> = {
+      type: 'string',
+      enum: memberNames
+    };
+
+    const hasDisplayNames = enumNode.enumValues.some((v) => v.display != null);
+    if (hasDisplayNames) {
+      const displayMap: Record<string, string> = {};
+      for (const v of enumNode.enumValues) {
+        displayMap[v.name] = v.display ?? v.name;
+      }
+      def['x-rune-enum-display'] = displayMap;
+    }
+
+    return def;
+  }
+
+  /**
+   * oxfmt-compatible JSON serializer.
+   *
+   * oxfmt collapses short arrays onto a single line when they fit within
+   * the print width (100 chars). We replicate this behaviour so that
+   * committed `expected.schema.json` fixture files are byte-identical to the
+   * formatter's output. Specifically:
+   *   - Arrays of primitives (strings, numbers, booleans) that fit on one
+   *     line within the given indent level are serialised inline.
+   *   - Arrays of objects are always expanded.
+   *   - Objects are always expanded (one key per line).
+   *
+   * @param value - The JSON value to serialise.
+   * @param indent - Current indent level (0 = top level).
+   * @param printWidth - Maximum column width (default 100, matching oxfmt).
+   */
+  private static serializeJson(value: unknown, indent: number = 0, printWidth: number = 100): string {
+    const spaces = '  '.repeat(indent);
+    const innerSpaces = '  '.repeat(indent + 1);
+
+    if (value === null) return 'null';
+    if (typeof value === 'boolean') return String(value);
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') return JSON.stringify(value);
+
+    if (Array.isArray(value)) {
+      if (value.length === 0) return '[]';
+
+      const allPrimitives = value.every(
+        (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null
+      );
+      if (allPrimitives) {
+        const compact =
+          '[' + value.map((v) => JsonSchemaNamespaceEmitter.serializeJson(v, 0, printWidth)).join(', ') + ']';
+        const lineLength = spaces.length + compact.length;
+        if (lineLength <= printWidth) {
+          return compact;
+        }
+      }
+
+      const items = value.map(
+        (v) => innerSpaces + JsonSchemaNamespaceEmitter.serializeJson(v, indent + 1, printWidth)
+      );
+      return '[\n' + items.join(',\n') + '\n' + spaces + ']';
+    }
+
+    if (typeof value === 'object') {
+      const keys = Object.keys(value as Record<string, unknown>);
+      if (keys.length === 0) return '{}';
+
+      const entries = keys.map(
+        (k) =>
+          innerSpaces +
+          JSON.stringify(k) +
+          ': ' +
+          JsonSchemaNamespaceEmitter.serializeJson(
+            (value as Record<string, unknown>)[k],
+            indent + 1,
+            printWidth
+          )
+      );
+      return '{\n' + entries.join(',\n') + '\n' + spaces + '}';
+    }
+
+    return JSON.stringify(value);
   }
 }
