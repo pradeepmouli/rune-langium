@@ -53,7 +53,7 @@ export const PANEL_TITLES: Record<PanelComponentName, string> = {
   'workspace.codePreview': 'Code'
 };
 
-export const LAYOUT_SCHEMA_VERSION = 6;
+export const LAYOUT_SCHEMA_VERSION = 7;
 
 const _SMALL_VIEWPORT_BREAKPOINT_PX = 1280;
 

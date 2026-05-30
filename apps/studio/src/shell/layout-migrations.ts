@@ -91,10 +91,15 @@ export function sanitizeLayoutWithDiagnostics(
       notice: INVALID_LAYOUT_RESET_NOTICE
     };
   }
-  // v5→v6: dockview 6.x changed its internal toJSON format. Native-shape
-  // snapshots saved under v5 will load silently but panels can't be resized.
-  // Force a factory reset so users get a clean layout after the upgrade.
-  if (input.version <= 5 && input.dockview?.shape === 'native') {
+  // Native (api.toJSON) snapshots can't be patched in place when the default
+  // layout gains a panel, so any native layout older than the current schema
+  // is force-reset to the factory default:
+  //   • v5→v6: dockview 6.x changed its toJSON format (panels couldn't resize).
+  //   • v6→v7: workspace.activity was added to the default bottom group; a
+  //     pre-v7 native snapshot has no way to surface it without a reset.
+  if (input.version <= 6 && input.dockview?.shape === 'native') {
+    // eslint-disable-next-line no-console
+    console.warn('[layout-migrations] reset pre-v7 native layout to surface new default panels');
     return {
       layout: buildDefaultLayout(ctx),
       notice: INVALID_LAYOUT_RESET_NOTICE
