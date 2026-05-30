@@ -23,7 +23,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260525.1",
     "vitest": "^4.1.7",
-    "wrangler": "^4.93.1"
+    "wrangler": "^4.95.0"
   },
   "engines": {
     "node": ">=20.0.0"
