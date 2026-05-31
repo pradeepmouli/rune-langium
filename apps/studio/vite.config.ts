@@ -1,12 +1,46 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import z2fVite from '@zod-to-form/vite';
 import { fileURLToPath } from 'url';
 import type { Z2FViteConfig } from '@zod-to-form/vite';
+
+/**
+ * Force the build process to terminate once the bundle is written.
+ *
+ * rolldown-vite (the Vite 8 preview this studio runs on) intermittently
+ * leaves an esbuild service process alive after a *successful* `vite build`,
+ * so Node's event loop never drains and the process hangs forever. Under
+ * `pnpm -r run build` this manifested as studio being the one package that
+ * built (`✓ built in N s`) but never returned control to pnpm — running CI's
+ * Build step to its 15-minute timeout (previously a 6-hour job ceiling). The
+ * orphaned `esbuild` PID is killed at job cleanup, confirming the dangling
+ * handle.
+ *
+ * `closeBundle` fires only after every chunk + sourcemap has been flushed to
+ * `dist/`, so exiting here cannot truncate output. Build *failures* throw
+ * before `closeBundle`, so non-zero exit codes are preserved. Restricted to
+ * `apply: 'build'` and guarded against `--watch`, so dev/watch is untouched.
+ * Deferred a tick so Vite's reporter summary flushes first.
+ */
+function forceExitAfterBuild(): Plugin {
+  let isWatch = false;
+  return {
+    name: 'studio:force-exit-after-build',
+    apply: 'build',
+    enforce: 'post',
+    configResolved(config) {
+      isWatch = Boolean(config.build.watch);
+    },
+    closeBundle() {
+      if (isWatch) return;
+      setTimeout(() => process.exit(0), 0);
+    }
+  };
+}
 
 export default defineConfig({
   base: process.env.VITE_BASE_URL || (process.env.CF_PAGES === '1' ? '/rune-studio/studio/' : '/'),
@@ -31,7 +65,8 @@ export default defineConfig({
       } satisfies Z2FViteConfig
     }),
     tailwindcss(),
-    react()
+    react(),
+    forceExitAfterBuild()
   ],
   optimizeDeps: {
     include: ['buffer']
