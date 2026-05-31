@@ -25,8 +25,16 @@ Open `package.json`. Find the `"build"` script (line 36):
 Add `build:ci` immediately after it:
 ```json
 "build": "pnpm -r run build",
-"build:ci": "pnpm -r --filter=!@rune-langium/docs run build",
+"build:ci": "pnpm -r --filter=!@rune-langium/docs --filter=!rune-langium run build",
 ```
+
+> **Both exclusions are required.** `pnpm-workspace.yaml` lists `'.'` as a
+> workspace package, so the repo root `rune-langium` is part of the `-r`
+> recursion — and its own `build` script is `pnpm -r run build` (unfiltered).
+> Excluding only docs leaves the root in scope; the root then re-runs the full
+> unfiltered build, rebuilding docs anyway and building every leaf twice. The
+> `--filter=!rune-langium` exclusion is what actually keeps docs out and avoids
+> the nested double-build (see PR #263).
 
 - [ ] **Step 2: Verify the script works locally**
 

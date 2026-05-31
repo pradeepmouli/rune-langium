@@ -25,6 +25,13 @@ import type { Z2FViteConfig } from '@zod-to-form/vite';
  * before `closeBundle`, so non-zero exit codes are preserved. Restricted to
  * `apply: 'build'` and guarded against `--watch`, so dev/watch is untouched.
  * Deferred a tick so Vite's reporter summary flushes first.
+ *
+ * Crucially this must NOT mask a failed build: rolldown calls `closeBundle`
+ * even on error (with an error argument), so we bail when one is present, and
+ * we exit with the current `process.exitCode` rather than a hardcoded 0 so any
+ * non-zero status set elsewhere still fails CI. On error we deliberately don't
+ * force-exit — if the failed build then hangs, CI times out red, which is the
+ * correct outcome (never a false green).
  */
 function forceExitAfterBuild(): Plugin {
   let isWatch = false;
@@ -35,9 +42,9 @@ function forceExitAfterBuild(): Plugin {
     configResolved(config) {
       isWatch = Boolean(config.build.watch);
     },
-    closeBundle() {
-      if (isWatch) return;
-      setTimeout(() => process.exit(0), 0);
+    closeBundle(error?: unknown) {
+      if (isWatch || error) return;
+      setTimeout(() => process.exit(process.exitCode ?? 0), 0);
     }
   };
 }
