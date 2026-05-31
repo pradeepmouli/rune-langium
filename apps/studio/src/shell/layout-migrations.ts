@@ -91,10 +91,15 @@ export function sanitizeLayoutWithDiagnostics(
       notice: INVALID_LAYOUT_RESET_NOTICE
     };
   }
-  // v5→v6: dockview 6.x changed its internal toJSON format. Native-shape
-  // snapshots saved under v5 will load silently but panels can't be resized.
-  // Force a factory reset so users get a clean layout after the upgrade.
-  if (input.version <= 5 && input.dockview?.shape === 'native') {
+  // Native (api.toJSON) snapshots can't be patched in place when the default
+  // layout gains a panel, so any native layout older than the current schema
+  // is force-reset to the factory default:
+  //   • v5→v6: dockview 6.x changed its toJSON format (panels couldn't resize).
+  //   • v6→v7: workspace.activity was added to the default bottom group; a
+  //     pre-v7 native snapshot has no way to surface it without a reset.
+  if (input.version <= 6 && input.dockview?.shape === 'native') {
+    // eslint-disable-next-line no-console
+    console.warn('[layout-migrations] reset pre-v7 native layout to surface new default panels');
     return {
       layout: buildDefaultLayout(ctx),
       notice: INVALID_LAYOUT_RESET_NOTICE
@@ -109,6 +114,7 @@ export function sanitizeLayoutWithDiagnostics(
   }
   let droppedAny = false;
   let normalizedActive = false;
+  let injectedPanel = false;
   walkAndDrop(cloned.dockview, () => {
     droppedAny = true;
   });
@@ -123,6 +129,12 @@ export function sanitizeLayoutWithDiagnostics(
       };
     }
     normalizedActive = activeResult;
+    // A factory snapshot persisted before a panel joined the default bottom
+    // group (e.g. workspace.activity) upgrades cleanly above but would never
+    // surface the new tab. Native snapshots get a full reset for this; factory
+    // ones are structured, so patch in place — inject any missing default
+    // bottom-group panels rather than discarding the user's arrangement.
+    injectedPanel = ensureDefaultBottomPanels(cloned.dockview, ctx);
   } else if (cloned.dockview?.shape === 'native') {
     const nativeResult = validateNativeLayout(cloned.dockview.json);
     if (nativeResult !== 'ok') {
@@ -142,7 +154,33 @@ export function sanitizeLayoutWithDiagnostics(
     // eslint-disable-next-line no-console
     console.warn('[layout-migrations] normalized invalid active tabs in saved layout');
   }
+  if (injectedPanel) {
+    // eslint-disable-next-line no-console
+    console.warn('[layout-migrations] injected missing default panels into saved factory layout');
+  }
   return { layout: cloned };
+}
+
+/**
+ * Ensure a factory layout's bottom group contains every panel the current
+ * default places there, inserting any missing ones at their default position.
+ * Returns true if anything was injected. Idempotent: a layout that already
+ * matches the default is left untouched.
+ */
+function ensureDefaultBottomPanels(shape: FactoryShape, ctx: BuildLayoutInput): boolean {
+  const defaults = buildDefaultLayout(ctx);
+  if (defaults.dockview?.shape !== 'factory') return false;
+  const defaultComponents = defaults.dockview.bottomGroup.tabs.map((tab) => tab.component);
+  const present = new Set(shape.bottomGroup.tabs.map((tab) => tab.component));
+  let injected = false;
+  defaultComponents.forEach((component, index) => {
+    if (present.has(component)) return;
+    const insertAt = Math.min(index, shape.bottomGroup.tabs.length);
+    shape.bottomGroup.tabs.splice(insertAt, 0, { component });
+    present.add(component);
+    injected = true;
+  });
+  return injected;
 }
 
 function isPlausibleLayout(input: unknown): input is PanelLayoutRecord {

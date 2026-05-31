@@ -263,6 +263,115 @@ describe('sanitizeLayout (T063)', () => {
     );
   });
 
+  it('resets a valid pre-Activity v6 native layout so returning users gain the Activity tab', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A returning user's layout: valid, all-known components, but written
+    // under schema v6 — before workspace.activity was added to the default
+    // bottom group. Native (api.toJSON) snapshots can't be patched in place,
+    // so the sanitiser must force a factory reset to introduce the new tab.
+    const stale = {
+      version: 6,
+      writtenBy: '0.2.0',
+      dockview: {
+        shape: 'native',
+        json: {
+          grid: {
+            root: { type: 'group', data: 'group-1' },
+            height: 900,
+            width: 1440,
+            orientation: 'horizontal'
+          },
+          panels: {
+            'p-tree': { id: 'p-tree', contentComponent: 'workspace.fileTree' },
+            'p-problems': { id: 'p-problems', contentComponent: 'workspace.problems' },
+            'p-output': { id: 'p-output', contentComponent: 'workspace.output' }
+          }
+        }
+      }
+    };
+
+    const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected after v6 native reset');
+    }
+    expect(out.version).toBe(LAYOUT_SCHEMA_VERSION);
+    expect(out.dockview.bottomGroup.tabs.map((tab) => tab.component)).toContain('workspace.activity');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] reset pre-v7 native layout to surface new default panels'
+    );
+  });
+
+  it('preserves a valid current-version native layout (no reset loop after upgrade)', () => {
+    const valid = {
+      version: LAYOUT_SCHEMA_VERSION,
+      writtenBy: '0.2.0',
+      dockview: {
+        shape: 'native',
+        json: {
+          grid: {
+            root: { type: 'group', data: 'group-1' },
+            height: 900,
+            width: 1440,
+            orientation: 'horizontal'
+          },
+          panels: {
+            'p-activity': { id: 'p-activity', contentComponent: 'workspace.activity' }
+          }
+        }
+      }
+    };
+
+    const out = sanitizeLayout(valid, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    expect(out.dockview?.shape).toBe('native');
+  });
+
+  it('patches a pre-Activity v6 factory layout in place so it gains the Activity tab without a reset', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A returning user's FACTORY snapshot from before workspace.activity joined
+    // the default bottom group. Unlike native snapshots (which are reset), this
+    // is patched in place: the missing Activity tab is injected while the user's
+    // own arrangement (here, an uncollapsed bottom group) is preserved.
+    const stale = {
+      version: 6,
+      writtenBy: '0.2.0',
+      dockview: {
+        shape: 'factory',
+        preset: 'edit',
+        columns: [
+          { component: 'workspace.fileTree', size: 200 },
+          { active: 'workspace.visualPreview', tabs: [{ component: 'workspace.visualPreview' }] },
+          {
+            active: 'workspace.formPreview',
+            tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
+          }
+        ],
+        bottomGroup: {
+          active: 'workspace.problems',
+          collapsed: false,
+          tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
+        }
+      }
+    };
+
+    const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected (patched, not reset)');
+    }
+    expect(out.version).toBe(LAYOUT_SCHEMA_VERSION);
+    // Activity injected at its default position (between Problems and Output).
+    expect(out.dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
+      'workspace.problems',
+      'workspace.activity',
+      'workspace.output'
+    ]);
+    // Patched, not reset: the user's uncollapsed bottom group survives
+    // (the factory default is collapsed: true).
+    expect(out.dockview.bottomGroup.collapsed).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] injected missing default panels into saved factory layout'
+    );
+  });
+
   it('rebuilds native layouts that reference unknown content components', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const stale = {
