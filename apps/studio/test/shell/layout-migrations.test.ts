@@ -325,6 +325,53 @@ describe('sanitizeLayout (T063)', () => {
     expect(out.dockview?.shape).toBe('native');
   });
 
+  it('patches a pre-Activity v6 factory layout in place so it gains the Activity tab without a reset', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A returning user's FACTORY snapshot from before workspace.activity joined
+    // the default bottom group. Unlike native snapshots (which are reset), this
+    // is patched in place: the missing Activity tab is injected while the user's
+    // own arrangement (here, an uncollapsed bottom group) is preserved.
+    const stale = {
+      version: 6,
+      writtenBy: '0.2.0',
+      dockview: {
+        shape: 'factory',
+        preset: 'edit',
+        columns: [
+          { component: 'workspace.fileTree', size: 200 },
+          { active: 'workspace.visualPreview', tabs: [{ component: 'workspace.visualPreview' }] },
+          {
+            active: 'workspace.formPreview',
+            tabs: [{ component: 'workspace.formPreview' }, { component: 'workspace.codePreview' }]
+          }
+        ],
+        bottomGroup: {
+          active: 'workspace.problems',
+          collapsed: false,
+          tabs: [{ component: 'workspace.problems' }, { component: 'workspace.output' }]
+        }
+      }
+    };
+
+    const out = sanitizeLayout(stale, { studioVersion: '0.2.0', viewportWidth: 1440 });
+    if (!out.dockview || out.dockview.shape !== 'factory') {
+      throw new Error('factory layout expected (patched, not reset)');
+    }
+    expect(out.version).toBe(LAYOUT_SCHEMA_VERSION);
+    // Activity injected at its default position (between Problems and Output).
+    expect(out.dockview.bottomGroup.tabs.map((tab) => tab.component)).toEqual([
+      'workspace.problems',
+      'workspace.activity',
+      'workspace.output'
+    ]);
+    // Patched, not reset: the user's uncollapsed bottom group survives
+    // (the factory default is collapsed: true).
+    expect(out.dockview.bottomGroup.collapsed).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[layout-migrations] injected missing default panels into saved factory layout'
+    );
+  });
+
   it('rebuilds native layouts that reference unknown content components', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const stale = {
