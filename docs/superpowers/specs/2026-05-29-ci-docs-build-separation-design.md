@@ -18,25 +18,30 @@ No separate docs CI job is needed. Cloudflare Pages serves as the docs build val
 
 ## Architecture
 
-Single change in `.github/workflows/ci.yml`, `lint-and-test` job:
+Two coordinated changes: add a `build:ci` script to `package.json`, and point
+the `lint-and-test` job in `.github/workflows/ci.yml` at it.
 
-**Before:**
+**Before** (`ci.yml`, `lint-and-test` job):
 ```yaml
 - name: Build
   run: pnpm run build
 ```
 
 **After:**
-```yaml
-- name: Build
-  run: pnpm run build --filter=!@rune-langium/docs
+
+Add a root script to `package.json` and use `pnpm run build:ci` in CI:
+```json
+"build:ci": "pnpm -r --filter=!@rune-langium/docs --filter=!rune-langium run build"
 ```
 
-Or equivalently, add a root script to `package.json`:
-```json
-"build:ci": "pnpm -r --filter=!@rune-langium/docs run build"
-```
-and use `pnpm run build:ci` in CI. This is preferred — self-documenting, easier to grep.
+**Both exclusions are required, not just `!docs`.** `pnpm-workspace.yaml` lists
+`'.'` as a workspace package, so the repo root `rune-langium` is in the `-r`
+recursion, and the root's own `build` script is `pnpm -r run build`
+(unfiltered). With only `--filter=!@rune-langium/docs`, the root stays in scope
+and re-runs the full unfiltered build — rebuilding docs anyway and building
+every leaf package twice (a nested parallel wave that also fed an intermittent
+CI hang). `--filter=!rune-langium` removes the root, so only the leaf packages
+build, once, with docs excluded. See PR #263.
 
 ## What stays the same
 
