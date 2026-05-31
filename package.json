@@ -34,7 +34,7 @@
   ],
   "scripts": {
     "build": "pnpm -r run build",
-    "build:ci": "pnpm -r --filter=!@rune-langium/docs run build",
+    "build:ci": "pnpm -r --filter=!@rune-langium/docs --filter=!rune-langium run build",
     "build:core": "pnpm --filter @rune-langium/core build",
     "build:visual-editor": "pnpm --filter @rune-langium/visual-editor build",
     "build:studio": "pnpm --filter @rune-langium/studio build",
