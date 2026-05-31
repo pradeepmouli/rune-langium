@@ -18,9 +18,10 @@ No separate docs CI job is needed. Cloudflare Pages serves as the docs build val
 
 ## Architecture
 
-Single change in `.github/workflows/ci.yml`, `lint-and-test` job:
+Two coordinated changes: add a `build:ci` script to `package.json`, and point
+the `lint-and-test` job in `.github/workflows/ci.yml` at it.
 
-**Before:**
+**Before** (`ci.yml`, `lint-and-test` job):
 ```yaml
 - name: Build
   run: pnpm run build

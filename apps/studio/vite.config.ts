@@ -21,8 +21,7 @@ import type { Z2FViteConfig } from '@zod-to-form/vite';
  * handle.
  *
  * `closeBundle` fires only after every chunk + sourcemap has been flushed to
- * `dist/`, so exiting here cannot truncate output. Build *failures* throw
- * before `closeBundle`, so non-zero exit codes are preserved. Restricted to
+ * `dist/`, so exiting here cannot truncate output. Restricted to
  * `apply: 'build'` and guarded against `--watch`, so dev/watch is untouched.
  * Deferred a tick so Vite's reporter summary flushes first.
  *

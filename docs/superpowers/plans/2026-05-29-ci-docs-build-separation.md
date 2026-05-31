@@ -4,7 +4,7 @@
 
 **Goal:** Remove `@rune-langium/docs` from the PR CI critical path by adding a `build:ci` root script and wiring it into the `lint-and-test` job.
 
-**Architecture:** Add one root script to `package.json` that mirrors `build` but excludes `@rune-langium/docs`. Update `ci.yml` to call `build:ci` instead of `build`. Cloudflare Pages continues to build docs at deploy time via `build:combined` — no CI docs job needed.
+**Architecture:** Add one root script to `package.json` that mirrors `build` but excludes both `@rune-langium/docs` **and** the root workspace package `rune-langium` (whose own `build` re-runs the unfiltered recursion — see Step 1). Update `ci.yml` to call `build:ci` instead of `build`. Cloudflare Pages continues to build docs at deploy time via `build:combined` — no CI docs job needed.
 
 **Tech Stack:** pnpm workspace filters, GitHub Actions YAML.
 
@@ -67,7 +67,9 @@ pnpm run build is pnpm -r run build which includes @rune-langium/docs
 (typedoc + vitepress) on every PR. Docs are already built by Cloudflare
 Pages at deploy time via build:combined — no need to build them in CI.
 
-Add build:ci script that mirrors build but filters out @rune-langium/docs.
+Add build:ci script that mirrors build but filters out @rune-langium/docs
+AND the root package rune-langium (whose build re-runs the unfiltered
+recursion, which would otherwise rebuild docs and every leaf twice).
 Wire ci.yml lint-and-test job to use build:ci."
 ```
 
