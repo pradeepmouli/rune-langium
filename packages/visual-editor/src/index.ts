@@ -18,6 +18,10 @@
 // Main component
 export { RuneTypeGraph } from './components/RuneTypeGraph.js';
 
+// Canonical kind badge (single color source for all four surfaces)
+export { KindBadge, KIND_LABEL, KIND_LETTER } from './components/KindBadge.js';
+export type { KindBadgeProps } from './components/KindBadge.js';
+
 // Panel components (for custom layouts)
 export { DetailPanel } from './components/panels/DetailPanel.js';
 export type { DetailPanelProps } from './components/panels/DetailPanel.js';
