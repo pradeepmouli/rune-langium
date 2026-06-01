@@ -53,7 +53,7 @@
     "codemirror": "6.0.2",
     "dockview-react": "^6.5.0",
     "idb": "^8.0.3",
-    "isomorphic-git": "^1.38.1",
+    "isomorphic-git": "^1.38.3",
     "jszip": "^3.10.1",
     "langium": "^4.2.4",
     "lucide-react": "^1.16.0",
