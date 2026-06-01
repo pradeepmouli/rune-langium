@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Node.js 22+ and pnpm 10+
+- Node.js 22+ and pnpm 11+
 - Repository cloned and dependencies installed (`pnpm install`)
 - Familiarity with React 19, Zustand 5, shadcn/ui, Tailwind CSS v4
 

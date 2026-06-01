@@ -16,7 +16,7 @@ Build a code generation utility (`@rune-langium/langium-zod`) that reads a Langi
 - `commander` 13.x (CLI)
 **Testing**: Vitest
 **Build**: tsgo
-**Target Platform**: Node.js 20+
+**Target Platform**: Node.js 22+
 
 ## Constitution Check
 

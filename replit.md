@@ -14,8 +14,8 @@ A Langium-based parser and visual editor for the Rune DSL (.rosetta files). This
 - `apps/studio` - Vite React standalone web application (the frontend)
 
 ### Tech Stack
-- **Runtime**: Node.js 20+
-- **Package Manager**: pnpm 10.28.0
+- **Runtime**: Node.js 22+
+- **Package Manager**: pnpm 11.5.0
 - **Build**: Vite 7.x (studio), tsgo/tsc (packages)
 - **Frontend**: React 19, Tailwind CSS 4, Radix UI, ReactFlow, Zustand, CodeMirror
 - **Language**: TypeScript 5.9
