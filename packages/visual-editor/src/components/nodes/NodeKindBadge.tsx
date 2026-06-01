@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
-
-import { cn } from '@rune-langium/design-system/utils';
+import * as React from 'react';
+import { KindBadge } from '../KindBadge.js';
 import type { TypeKind } from '../../types.js';
 
 export interface NodeKindBadgeProps {
@@ -9,21 +9,7 @@ export interface NodeKindBadgeProps {
   className?: string;
 }
 
-const COMPACT_KIND_LABELS: Record<TypeKind, string> = {
-  data: 'Data',
-  choice: 'Choice',
-  enum: 'Enum',
-  func: 'Function',
-  record: 'Record',
-  typeAlias: 'Alias',
-  basicType: 'Basic',
-  annotation: 'Annotation'
-};
-
+/** @deprecated Use <KindBadge>. Retained as a thin alias for existing node components. */
 export function NodeKindBadge({ kind, className }: NodeKindBadgeProps): React.ReactElement {
-  return (
-    <span className={cn('rune-node-kind-badge', `rune-kind-badge--${kind}`, className)}>
-      {COMPACT_KIND_LABELS[kind]}
-    </span>
-  );
+  return <KindBadge kind={kind} shape="label" className={className} />;
 }
