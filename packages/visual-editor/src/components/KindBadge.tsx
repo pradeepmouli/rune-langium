@@ -7,8 +7,9 @@
  * Wraps the design-system <Badge> (token-backed CVA variants) so color is
  * sourced once. `shape="label"` is the text pill used in the graph + inspector;
  * `shape="glyph"` is the compact single-letter box used in dense tree rows.
- * Replaces NodeKindBadge, NamespaceExplorerPanel's inline KIND_COLOR_VAR glyph,
- * and TypeSelector's getKindLabel.
+ * Intended to replace (as call sites migrate) NodeKindBadge,
+ * NamespaceExplorerPanel's inline KIND_COLOR_VAR glyph, and TypeSelector's
+ * getKindLabel.
  */
 import * as React from 'react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
