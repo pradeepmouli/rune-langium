@@ -4,9 +4,24 @@ packages:
   - apps/*
   - scratch/*
 
-# pnpm 10 reads dependency overrides + patches from here (NOT the package.json
-# `pnpm` field, which pnpm 10 ignores). Migrated from package.json so the
-# lockfile's overrides match the running config under pnpm@10.x.
+# pnpm 11 requires an explicit build-script decision per dependency, where
+# pnpm 10 silently ignored them. All of these were already unbuilt under
+# pnpm 10 and CI/builds passed, so keep them off to preserve that behavior:
+#   - esbuild / sharp: ship prebuilt platform binaries via optional deps; no
+#     postinstall build is needed.
+#   - workerd: its binary is fetched on demand by wrangler/miniflare.
+#   - msw: the postinstall is a no-op (worker is set up via `msw init`).
+#   - simple-git-hooks: hooks are installed by the root `prepare` script.
+allowBuilds:
+  esbuild: false
+  msw: false
+  sharp: false
+  simple-git-hooks: false
+  workerd: false
+
+# pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
+# `pnpm` field, which they ignore). Migrated from package.json so the
+# lockfile's overrides match the running config under pnpm@11.x.
 overrides:
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.9.1

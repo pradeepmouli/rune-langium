@@ -17,7 +17,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 10.32.0
+          version: 11.5.0
 
       - name: Use Node.js 22.x
         # Pinned to Node 22 to match Cloudflare Workers/Pages `nodejs_compat`
@@ -121,7 +121,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 10.32.0
+          version: 11.5.0
 
       - name: Use Node.js 22.x
         uses: actions/setup-node@v6
@@ -176,7 +176,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 10.32.0
+          version: 11.5.0
 
       - name: Use Node.js 22.x
         uses: actions/setup-node@v6

@@ -12,7 +12,7 @@ git clone https://github.com/pradeepmouli/rune-langium.git
 cd rune-langium
 
 # Install pnpm if not already installed
-npm install -g pnpm@10
+npm install -g pnpm@11
 
 # Install dependencies
 pnpm install
