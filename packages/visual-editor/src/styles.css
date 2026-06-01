@@ -269,42 +269,6 @@
   margin-left: auto;
 }
 
-.rune-kind-badge--data {
-  background: var(--color-data-badge, #bee3f8);
-  color: var(--color-data-text, #2a69ac);
-}
-
-.rune-kind-badge--choice {
-  background: var(--color-choice-badge, #feebc8);
-  color: var(--color-choice-text, #c05621);
-}
-
-.rune-kind-badge--enum {
-  background: var(--color-enum-badge, #c6f6d5);
-  color: var(--color-enum-text, #276749);
-}
-
-.rune-kind-badge--func {
-  background: var(--color-func-badge, rgba(168, 85, 247, 0.25));
-  color: var(--color-func-text, #d8b4fe);
-}
-
-.rune-kind-badge--record {
-  background: color-mix(in oklch, var(--color-data, #00D4AA) 18%, transparent);
-  color: color-mix(in oklch, var(--color-data, #00D4AA) 75%, white 25%);
-}
-
-.rune-kind-badge--typeAlias,
-.rune-kind-badge--basicType {
-  background: color-mix(in oklch, var(--muted-foreground, #8A8A96) 18%, transparent);
-  color: color-mix(in oklch, var(--muted-foreground, #8A8A96) 92%, white 8%);
-}
-
-.rune-kind-badge--annotation {
-  background: color-mix(in oklch, var(--color-choice, #E8913A) 18%, transparent);
-  color: color-mix(in oklch, var(--color-choice, #E8913A) 72%, white 28%);
-}
-
 /* Visual reference for the studio-wide `.studio-scroll` rule (defined in
  * apps/studio/src/styles.css). The tokens below intentionally duplicate
  * that rule so the package works standalone (visual-editor used outside
