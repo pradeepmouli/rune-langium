@@ -12,6 +12,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { TypeOption, TypeKind } from '../../types.js';
+import { KIND_LABEL } from '../KindBadge.js';
 import { badgeVariants } from '@rune-langium/design-system/ui/badge';
 import {
   Select,
@@ -143,20 +144,12 @@ export function getKindBadgeClasses(kind: TypeKind | 'builtin'): string {
 
 /**
  * Returns a human-readable label for a type kind.
+ * Delegates to the canonical KIND_LABEL map from KindBadge; handles the
+ * 'builtin' pseudo-kind (not a TypeKind) locally since KIND_LABEL only
+ * covers TypeKind values.
  */
 export function getKindLabel(kind: TypeKind | 'builtin'): string {
-  const labels: Record<TypeKind | 'builtin', string> = {
-    data: 'Data',
-    choice: 'Choice',
-    enum: 'Enum',
-    func: 'Function',
-    record: 'Record',
-    typeAlias: 'Type Alias',
-    basicType: 'Basic Type',
-    annotation: 'Annotation',
-    builtin: 'Built-in'
-  };
-  return labels[kind] ?? 'Unknown';
+  return kind === 'builtin' ? 'Built-in' : KIND_LABEL[kind];
 }
 
 // ---------------------------------------------------------------------------
