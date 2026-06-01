@@ -44,7 +44,7 @@
     "@rune-langium/design-system": "workspace:*",
     "@tanstack/react-virtual": "^3.13.25",
     "@xyflow/react": "^12.10.2",
-    "@zod-to-form/core": "^0.9.1",
+    "@zod-to-form/core": "^0.11.0",
     "@zod-to-form/react": "^0.9.1",
     "elkjs": "^0.11.1",
     "lucide-react": "^1.16.0",
