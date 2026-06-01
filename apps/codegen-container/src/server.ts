@@ -7,8 +7,8 @@
  * ⚠️ LEGACY — the JVM (rosetta-code-generators) backend behind the legacy
  * `rune-codegen-worker`. Superseded by the Langium-native `@rune-langium/codegen`,
  * which the studio runs server-side in its `/api/codegen` Pages Function
- * (apps/studio/functions/api/codegen.ts). NOT deployed in production (see
- * specs/_deferred/012-production-gaps.md). Kept for reference.
+ * (apps/studio/functions/api/codegen.ts). NOT deployed in production. See
+ * specs/011-export-code-cf/. Kept for reference.
  *
  * Owns the new public contract expected by the Worker fronting this container:
  *   - GET  /api/generate/health

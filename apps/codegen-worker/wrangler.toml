@@ -5,9 +5,10 @@
 # (feature 011-export-code-cf). Superseded by the Langium-native
 # `@rune-langium/codegen`, which the studio runs server-side in its
 # `/api/codegen` Pages Function (apps/studio/functions/api/codegen.ts).
-# Intentionally NOT deployed in production (see
-# specs/_deferred/012-production-gaps.md). Left here for reference only; do not
-# re-enable without revisiting that decision.
+# Intentionally NOT deployed in production: the legacy Export Code dialog
+# (`codegen-service.ts` → `/api/generate`) still targets this Worker and 503s as
+# a result — the fix is to migrate that dialog to `/api/codegen`, not to
+# re-enable this Worker. See specs/011-export-code-cf/.
 
 name = "rune-codegen-worker"
 main = "src/index.ts"
