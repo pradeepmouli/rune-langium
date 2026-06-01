@@ -1,8 +1,13 @@
 # SPDX-License-Identifier: FSL-1.1-ALv2
 # Copyright (c) 2026 Pradeep Mouli
 #
-# Cloudflare Worker config for the hosted codegen service (feature 011-export-code-cf).
-# Deploys to the same account that hosts the `daikonic-dev` Pages project.
+# LEGACY — Cloudflare Worker config for the hosted JVM codegen service
+# (feature 011-export-code-cf). Superseded by the Langium-native
+# `@rune-langium/codegen`, which the studio runs server-side in its
+# `/api/codegen` Pages Function (apps/studio/functions/api/codegen.ts).
+# Intentionally NOT deployed in production (see
+# specs/_deferred/012-production-gaps.md). Left here for reference only; do not
+# re-enable without revisiting that decision.
 
 name = "rune-codegen-worker"
 main = "src/index.ts"

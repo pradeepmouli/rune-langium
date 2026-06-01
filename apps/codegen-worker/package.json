@@ -2,7 +2,7 @@
   "name": "@rune-langium/codegen-worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare Worker that fronts the hosted codegen container for the Studio deployment (feature 011-export-code-cf)",
+  "description": "Legacy Cloudflare Worker fronting the JVM rosetta-code-generators container (feature 011-export-code-cf). Superseded by the Langium-native @rune-langium/codegen, which the studio runs server-side in its /api/codegen Pages Function (apps/studio/functions/api/codegen.ts). Retained for reference and NOT deployed in prod.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
