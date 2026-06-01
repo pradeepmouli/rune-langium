@@ -398,6 +398,6 @@ else
   echo
   echo "Most likely cause: deploy-runbook Steps 4–5 not yet executed."
   echo "  See specs/012-studio-workspace-ux/deploy-runbook.md"
-  echo "  See specs/_deferred/012-production-gaps.md (B1b)"
+  echo "  For the codegen Worker gap: specs/011-export-code-cf/deploy-runbook.md"
   exit 1
 fi
