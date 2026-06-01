@@ -14,7 +14,8 @@ import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { resolveNodeKind, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from '../editors/TypeLink.js';
-import type { AnyGraphNode, ValidationError, NavigateToNodeCallback } from '../../types.js';
+import { KindBadge } from '../KindBadge.js';
+import type { AnyGraphNode, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
 
 export interface DetailPanelProps {
   nodeData: AnyGraphNode | null;
@@ -85,7 +86,7 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }:
         {/* Header */}
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold truncate">{d.name}</h3>
-          <Badge variant={kind as 'data' | 'enum' | 'choice' | 'func'}>{kind}</Badge>
+          <KindBadge kind={kind as TypeKind} />
           {refOnly && (
             <Badge variant="outline" className="text-xs text-muted-foreground">
               Reference Only
