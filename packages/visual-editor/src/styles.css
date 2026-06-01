@@ -1348,11 +1348,9 @@ button[data-navigable]:focus-visible {
   padding-left: var(--rune-row-indent);
 }
 
-/* Row modifier — row with an expand/collapse control (no additional geometry) */
-.rune-node-row.has-expansion {
-  /* visual expansion indicator is rendered inside the row;
-   * no extra layout geometry needed here */
-}
+/* Row modifier — `.rune-node-row.has-expansion` intentionally has no rule:
+ * the visual expand/collapse indicator is rendered inside the row and needs
+ * no extra layout geometry. (No empty ruleset — keeps the CSS linter quiet.) */
 
 /* Drop-over highlight states — outline does not reflow, so bare px is OK */
 .rune-cell-type-wrap--over .rune-cell-type-chip,
