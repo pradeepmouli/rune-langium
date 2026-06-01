@@ -2,7 +2,7 @@
   "name": "@rune-langium/codegen-container",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare Container image: Java 21 + rosetta-code-generators + Node HTTP wrapper. Hosts the codegen CLI behind the same JSON contract as the local codegen server (feature 011-export-code-cf)",
+  "description": "Legacy Cloudflare Container image (Java 21 + rosetta-code-generators + Node HTTP wrapper) — the JVM backend behind the legacy rune-codegen-worker (feature 011-export-code-cf). Superseded by the Langium-native @rune-langium/codegen in the studio's /api/codegen Pages Function. Retained for reference and NOT deployed in prod.",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
