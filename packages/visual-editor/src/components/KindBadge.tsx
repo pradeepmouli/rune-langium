@@ -59,7 +59,7 @@ export function KindBadge({ kind, shape = 'label', className }: KindBadgeProps):
     );
   }
   return (
-    <Badge variant={kind} className={cn('rune-node-kind-badge', className)}>
+    <Badge variant={kind} className={cn('rune-node-kind-badge uppercase tracking-[0.5px]', className)}>
       {KIND_LABEL[kind]}
     </Badge>
   );

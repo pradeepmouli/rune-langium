@@ -15,6 +15,11 @@ describe('KindBadge', () => {
     expect(screen.getByText('C')).toBeInTheDocument();
   });
 
+  it('renders the label shape uppercase (matches graph/structure-view look)', () => {
+    const { container } = render(<KindBadge kind="data" />);
+    expect(container.querySelector('.uppercase')).not.toBeNull();
+  });
+
   it('applies the token-backed kind variant class (one color source)', () => {
     const { container } = render(<KindBadge kind="enum" />);
     expect(container.querySelector('.text-enum')).not.toBeNull();
