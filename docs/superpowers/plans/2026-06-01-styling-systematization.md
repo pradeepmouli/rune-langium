@@ -101,10 +101,11 @@ separate kind→style maps:
 Both shapes read color from the **same** `--color-{kind}` tokens via `<Badge>`'s
 variant classes, so no kind color is defined twice.
 
-> **Visual decision flagged for review:** this keeps the tree as a compact glyph
-> and the graph/inspector as label pills, all sharing one color source. If you
-> want the tree to also use the label pill (fully identical shape), that's a
-> one-line change at the call site (`shape="label"`). Confirm before Task 6.
+> **Visual decision — CONFIRMED (user, 2026-06-01):** the **structure view**
+> (React Flow canvas nodes) uses `shape="label"` (full name, e.g. "Data"); the
+> **explorer tree** (`NamespaceExplorerPanel`) keeps `shape="glyph"` (compact
+> letter, e.g. "D"). Shapes stay differentiated by surface; *color* is shared
+> (both read `--color-{kind}`), so they cannot drift. Not an open question.
 
 **Files:**
 - Create: `packages/visual-editor/src/components/KindBadge.tsx`
