@@ -210,6 +210,15 @@ badge become the *same* component reading the *same* tokens.
 Each slice is independently shippable and reviewable. Slice 1 is
 invisible-by-design; the visible consolidation lands in slices 2 & 4.
 
+**Sequencing note:** the numbering is logical, not a hard dependency order.
+Slice 1 (token foundation) is **not a prerequisite** for the component slices —
+`<Badge>` and friends already read the live semantic tokens (`--color-data`
+resolves under the default daikonic theme today). Slice 1 is the riskiest and
+invisible-by-design, so **recommended implementation order leads with Slice 2**
+(pills — low-risk, the headline pain), proving the canonical-component pattern
+before the high-risk token-tier refactor. Slices 2, 3, 4 operate on the current
+token layer; Slice 1 can land whenever token-DRY is the focus.
+
 ### Slice 1 — Token foundation (color tiers + spacing generation)
 
 - **Do:** Restructure `tokens.json` into Tier-1 primitives + Tier-2 semantic
