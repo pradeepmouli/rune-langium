@@ -4,6 +4,17 @@
 /**
  * Codegen Worker entry (T018 — full orchestration).
  *
+ * ⚠️ LEGACY — this Worker fronts the JVM `rosetta-code-generators` container
+ * (feature 011-export-code-cf). It is superseded by the Langium-native
+ * `@rune-langium/codegen`, which the studio runs server-side in its
+ * `/api/codegen` Pages Function (apps/studio/functions/api/codegen.ts), with
+ * live preview in a browser worker. This Worker is NOT deployed in production,
+ * so the still-wired Export Code dialog (`codegen-service.ts` → `/api/generate`,
+ * with `VITE_CODEGEN_URL` baked by build-combined.mjs) 503s. The forward fix is
+ * to migrate that dialog to `/api/codegen`, NOT to redeploy this Worker. See
+ * specs/011-export-code-cf/. Kept for reference; do not build new functionality
+ * on this path.
+ *
  * POST /api/generate pipeline:
  *   1. Parse body
  *   2. If session cookie present & valid → skip Turnstile
