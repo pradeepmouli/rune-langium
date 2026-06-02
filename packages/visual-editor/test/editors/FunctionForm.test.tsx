@@ -255,7 +255,8 @@ describe('FunctionForm', () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(actions.updateInputParam).toHaveBeenCalledWith('fn1', 'trade', 'instrument', 'Trade', '(1..1)');
+    // targetTypeId is undefined when the update originates from a name change (no type re-selection).
+    expect(actions.updateInputParam).toHaveBeenCalledWith('fn1', 'trade', 'instrument', 'Trade', '(1..1)', undefined);
   });
 
   it('calls reorderInputParam when handleReorderInput is invoked via drag', () => {

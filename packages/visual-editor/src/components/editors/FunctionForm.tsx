@@ -256,10 +256,10 @@ function FunctionForm({
   // ---- Input param callbacks -----------------------------------------------
 
   const handleUpdateInput = useCallback(
-    (index: number, oldName: string, newName: string, typeName: string, cardinality: string) => {
+    (index: number, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) => {
       // `index` unused here — action uses name-based diffing (mirrors updateAttribute).
       void index;
-      actions.updateInputParam(nodeId, oldName, newName, typeName, cardinality);
+      actions.updateInputParam(nodeId, oldName, newName, typeName, cardinality, targetTypeId);
     },
     [nodeId, actions]
   );

@@ -60,7 +60,7 @@ export interface AttributeRowProps {
   /** Available type options for the TypeSelector. */
   availableTypes: TypeOption[];
   /** Commit attribute changes to the graph. */
-  onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string) => void;
+  onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) => void;
   /** Remove this attribute by index. */
   onRemove: (index: number) => void;
   /** Reorder (drag) callback; fromIndex → toIndex. */
@@ -150,9 +150,13 @@ function AttributeRow({
       if (!value) return;
       const option = availableTypes.find((o) => o.value === value);
       const newTypeName = option?.label ?? value;
+      // Pass option.value (the canonical `namespace::Name` id) as targetTypeId
+      // so the store can qualify the $refText when the bare name collides across
+      // namespaces (mirrors the attribute-type-update path — DRY).
+      const targetTypeId = option?.value;
       setValue(`${prefix}.typeCall.type.$refText`, newTypeName, { shouldDirty: true });
       const name: string = getValues(`${prefix}.name`);
-      onUpdate(index, committedName, name, newTypeName, cardinalityString);
+      onUpdate(index, committedName, name, newTypeName, cardinalityString, targetTypeId);
     },
     [index, committedName, prefix, availableTypes, getValues, setValue, cardinalityString, onUpdate]
   );

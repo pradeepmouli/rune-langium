@@ -257,7 +257,24 @@ export interface EditorActions {
   // --- Function operations ---
   addInputParam(nodeId: string, paramName: string, typeName: string): void;
   removeInputParam(nodeId: string, paramName: string): void;
-  updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
+  /**
+   * Update name, type, and cardinality for a function input parameter.
+   *
+   * @param targetTypeId Canonical node id of the resolved target
+   *   (`namespace::Name`). Mirrors `updateAttributeType`'s qualification
+   *   contract: when provided, the store calls `disambiguateTypeRef` and
+   *   writes a fully-qualified `$refText` when another node shares the bare
+   *   name across namespaces. When omitted (or unknown), the bare `typeName`
+   *   is written as before (backward-compatible).
+   */
+  updateInputParam(
+    nodeId: string,
+    oldName: string,
+    newName: string,
+    typeName: string,
+    cardinality: string,
+    targetTypeId?: string
+  ): void;
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
@@ -1515,9 +1532,25 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           }));
         },
 
-        updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
+        updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) {
           const card = parseCardinalityString(cardinality);
           set((state) => {
+            // Resolve the qualified $refText using the same disambiguation logic
+            // as updateAttributeType (spec 020 Phase 13, Finding 3).  When a
+            // canonical targetTypeId is supplied and the node exists, qualify the
+            // name if any OTHER node shares the same bare name.  Fall back to the
+            // bare typeName when the id is absent or stale (backward-compatible).
+            const targetNode = targetTypeId
+              ? state.nodes.find((n) => n.id === targetTypeId)
+              : undefined;
+            const targetNamespace = targetNode
+              ? ((targetNode.data as AnyGraphNode) as { namespace?: string }).namespace
+              : undefined;
+            const refText =
+              targetNode && targetNamespace
+                ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, state.nodes)
+                : typeName;
+
             const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
@@ -1532,7 +1565,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                         // reference and cardinality are overwritten.
                         typeCall: {
                           ...(inp.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                          type: { $refText: typeName }
+                          type: { $refText: refText }
                         },
                         card: { $type: 'RosettaCardinality', ...card }
                       }
@@ -1550,7 +1583,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             );
 
             // Add a new attribute-ref edge if the target type node exists.
-            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            // Prefer id-based lookup (avoids resolving to the wrong same-named
+            // node in a different namespace); fall back to name-based lookup for
+            // built-in / string types that have no graph node.
+            const targetNodeId =
+              targetNode?.id ??
+              state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
             if (targetNodeId && targetNodeId !== nodeId) {
               const newEdge: TypeGraphEdge = {
                 id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
