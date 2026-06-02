@@ -4,84 +4,86 @@
 /**
  * Rune DSL Design System — TypeScript token exports.
  *
- * These match the CSS custom properties in theme.css (Daikon palette).
- * Use for JS-side color references (e.g., ReactFlow config, chart colors).
+ * JS-side color/font/radius references (ReactFlow config, chart colors) that
+ * cannot read CSS `@theme`/`var(--*)` at runtime. Mirror the primitive values
+ * in `tokens.css` (the base palette). This is the one irreducible bit of
+ * duplication a CSS-first token source leaves — keep the two in sync by hand
+ * (the values rarely change; the daikonic theme retunes via CSS, not here).
+ *
+ * Formerly derived from `@rune-langium/design-tokens/tokens.json` (package
+ * retired). Values are preserved verbatim from that source.
  */
-
-import canonicalTokens from '@rune-langium/design-tokens/tokens.json' with { type: 'json' };
-
-const palette = canonicalTokens.color;
 
 export const colors = {
   data: {
-    DEFAULT: palette.kind.data.base,
-    bg: palette.kind.data.bg,
-    text: palette.kind.data.text,
-    badge: palette.kind.data.badge
+    DEFAULT: '#00D4AA',
+    bg: 'rgba(0, 212, 170, 0.12)',
+    text: '#00D4AA',
+    badge: 'rgba(0, 212, 170, 0.20)'
   },
   choice: {
-    DEFAULT: palette.kind.choice.base,
-    bg: palette.kind.choice.bg,
-    text: palette.kind.choice.text,
-    badge: palette.kind.choice.badge
+    DEFAULT: '#E8913A',
+    bg: 'rgba(232, 145, 58, 0.12)',
+    text: '#E8913A',
+    badge: 'rgba(232, 145, 58, 0.20)'
   },
   enum: {
-    DEFAULT: palette.kind.enum.base,
-    bg: palette.kind.enum.bg,
-    text: palette.kind.enum.text,
-    badge: palette.kind.enum.badge
+    DEFAULT: '#8B7BF4',
+    bg: 'rgba(139, 123, 244, 0.12)',
+    text: '#8B7BF4',
+    badge: 'rgba(139, 123, 244, 0.20)'
   },
   func: {
-    DEFAULT: palette.kind.func.base,
-    bg: palette.kind.func.bg,
-    text: palette.kind.func.text,
-    badge: palette.kind.func.badge
+    DEFAULT: '#82AAFF',
+    bg: 'rgba(130, 170, 255, 0.12)',
+    text: '#82AAFF',
+    badge: 'rgba(130, 170, 255, 0.20)'
   },
   edge: {
-    ref: palette.kind.edge.ref
+    ref: '#5C5C6A'
   },
   status: {
-    success: palette.status.success,
-    warning: palette.status.warning,
-    error: palette.status.error,
-    info: palette.status.info
+    success: '#00D4AA',
+    warning: '#E8913A',
+    error: '#FF6058',
+    info: '#82AAFF'
   },
   expr: {
-    arithmetic: { DEFAULT: palette.expr.arithmetic.base, bg: palette.expr.arithmetic.bg },
-    comparison: { DEFAULT: palette.expr.comparison.base, bg: palette.expr.comparison.bg },
-    logic: { DEFAULT: palette.expr.logic.base, bg: palette.expr.logic.bg },
-    navigation: { DEFAULT: palette.expr.navigation.base, bg: palette.expr.navigation.bg },
-    collection: { DEFAULT: palette.expr.collection.base, bg: palette.expr.collection.bg },
-    control: { DEFAULT: palette.expr.control.base, bg: palette.expr.control.bg },
-    literal: { DEFAULT: palette.expr.literal.base, bg: palette.expr.literal.bg },
-    reference: { DEFAULT: palette.expr.reference.base, bg: palette.expr.reference.bg },
-    placeholder: { DEFAULT: palette.expr.placeholder.base, bg: palette.expr.placeholder.bg }
+    arithmetic: { DEFAULT: '#82AAFF', bg: 'rgba(130, 170, 255, 0.12)' },
+    comparison: { DEFAULT: '#00D4AA', bg: 'rgba(0, 212, 170, 0.12)' },
+    logic: { DEFAULT: '#C792EA', bg: 'rgba(199, 146, 234, 0.12)' },
+    navigation: { DEFAULT: '#00D4AA', bg: 'rgba(0, 212, 170, 0.12)' },
+    collection: { DEFAULT: '#E8913A', bg: 'rgba(232, 145, 58, 0.12)' },
+    control: { DEFAULT: '#C792EA', bg: 'rgba(199, 146, 234, 0.12)' },
+    literal: { DEFAULT: '#8A8A96', bg: 'rgba(138, 138, 150, 0.12)' },
+    reference: { DEFAULT: '#8B7BF4', bg: 'rgba(139, 123, 244, 0.12)' },
+    placeholder: { DEFAULT: '#5C5C6A', bg: 'rgba(92, 92, 106, 0.10)' }
   }
 } as const;
 
 export const fonts = {
-  display: canonicalTokens.font.display,
-  sans: canonicalTokens.font.family.sans,
-  mono: canonicalTokens.font.mono
+  display: "'Outfit', system-ui, sans-serif",
+  sans: 'Inter, system-ui, -apple-system, sans-serif',
+  mono: "'JetBrains Mono', ui-monospace, monospace"
 } as const;
 
 export const radii = {
-  sm: canonicalTokens.radius.sm,
-  md: canonicalTokens.radius.md,
-  lg: canonicalTokens.radius.lg
+  sm: '0.25rem',
+  md: '8px',
+  lg: '0.75rem'
 } as const;
 
 export const syntax = {
-  keyword: canonicalTokens.syntax.keyword,
-  type: canonicalTokens.syntax.type,
-  attribute: canonicalTokens.syntax.attribute,
-  string: canonicalTokens.syntax.string,
-  comment: canonicalTokens.syntax.comment,
-  number: canonicalTokens.syntax.number,
-  function: canonicalTokens.syntax.function,
-  operator: canonicalTokens.syntax.operator,
-  constant: canonicalTokens.syntax.constant,
-  variable: canonicalTokens.syntax.variable
+  keyword: '#C792EA',
+  type: '#00D4AA',
+  attribute: '#82AAFF',
+  string: '#C3E88D',
+  comment: '#5C5C6A',
+  number: '#E8913A',
+  function: '#82AAFF',
+  operator: '#8A8A96',
+  constant: '#E8913A',
+  variable: '#00D4AA'
 } as const;
 
 export type Colors = typeof colors;

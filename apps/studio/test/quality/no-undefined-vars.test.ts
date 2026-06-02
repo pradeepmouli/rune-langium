@@ -26,7 +26,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 //      surface palette, the `--color-warning` / `--color-info` semantic
 //      colours, the per-domain (data/choice/enum/func) palette, etc.)
 const STUDIO_STYLES = resolve(__dirname, '../../src/styles.css');
-const TOKENS_CSS = resolve(__dirname, '../../../../packages/design-tokens/dist/tokens.css');
+const TOKENS_CSS = resolve(__dirname, '../../../../packages/design-system/src/tokens.css');
 const DS_THEME_CSS = resolve(__dirname, '../../../../packages/design-system/src/theme.css');
 
 /** Captures `--name` from `var(--name…)` (ignores fallback values). */
@@ -85,7 +85,7 @@ describe('Studio CSS uses only defined custom properties (T062 / FR-025)', () =>
       // Fail with the offending names listed so CI output points at the fix.
       throw new Error(
         `Undefined var(--…) refs in apps/studio/src/styles.css:\n  ${undefinedVars.sort().join(', ')}\n\n` +
-          'Each name MUST be defined in either packages/design-tokens/src/tokens.json (preferred) ' +
+          'Each name MUST be defined in either packages/design-system/src/tokens.css (primitive layer) ' +
           'or packages/design-system/src/theme.css (Studio-specific alias). ' +
           'See specs/014-studio-prod-ready/spec.md FR-025.'
       );

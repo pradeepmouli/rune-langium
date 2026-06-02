@@ -12,12 +12,14 @@
  *  5. Base layer defaults (typography, borders)
  */
 
-/* T052 — pull the canonical token tree in so consumers (apps + design-
- * system tests) get every --space-*, --text-md, --sidebar-width-*,
- * --syntax-*, --focus-ring-*, --brand-mark-* without relying on the
- * Studio app to import them first. FR-025: every var(--…) the Studio
- * uses now resolves. */
-@import '@rune-langium/design-tokens/tokens.css';
+/* Primitive token layer (CSS-first, hand-owned) — every --space-*, --text-md,
+ * --sidebar-width-*, --syntax-*, --focus-ring-*, --brand-mark-*, kind palette,
+ * etc. in scope before the @theme bridge + theme blocks below. Replaces the
+ * former generated `@rune-langium/design-tokens/tokens.css` (package retired;
+ * token SSoT is now CSS, no build step). The old `[data-theme="dark"]` block
+ * was a no-op (identical values to :root, and `data-theme` is never "dark" —
+ * the studio uses "daikonic"), so it's dropped. */
+@import './tokens.css';
 
 @custom-variant dark (&:is(.dark *));
 
