@@ -255,7 +255,15 @@ function FunctionForm({
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="func" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Function name" nameAriaLabel="Function type name" className="-mx-4 -mt-4" />
+          <TypeHeader
+            kind="func"
+            namespace={d.namespace}
+            control={form.control}
+            onNameChange={debouncedName}
+            placeholder="Function name"
+            nameAriaLabel="Function type name"
+            className="-mx-4 -mt-4"
+          />
 
           {/* Input Parameters */}
           <FieldSet className="gap-1">
@@ -281,40 +289,42 @@ function FunctionForm({
               )}
             </FieldGroup>
 
-            {/* Inline add input */}
-            <div className="flex items-center gap-1 mt-1">
-              <Input
-                data-slot="add-param-name"
-                type="text"
-                value={addParamName}
-                onChange={(e) => setAddParamName(e.target.value)}
-                placeholder="Name"
-                className="text-xs w-24 h-6 px-1.5"
-                aria-label="New input parameter name"
-              />
-              <div className="flex-1">
-                <TypeSelector
-                  value={addParamType}
-                  options={availableTypes}
-                  onSelect={(v) => setAddParamType(v ?? '')}
-                  placeholder="Type..."
+            {/* Inline add input — hidden in read-only mode */}
+            {!d.isReadOnly && (
+              <div className="flex items-center gap-1 mt-1">
+                <Input
+                  data-slot="add-param-name"
+                  type="text"
+                  value={addParamName}
+                  onChange={(e) => setAddParamName(e.target.value)}
+                  placeholder="Name"
+                  className="text-xs w-24 h-6 px-1.5"
+                  aria-label="New input parameter name"
                 />
-              </div>
-              {/* Icon-only add button matches FormPreviewPanel; see
+                <div className="flex-1">
+                  <TypeSelector
+                    value={addParamType}
+                    options={availableTypes}
+                    onSelect={(v) => setAddParamType(v ?? '')}
+                    placeholder="Type..."
+                  />
+                </div>
+                {/* Icon-only add button matches FormPreviewPanel; see
                   DataTypeForm for the rationale. */}
-              <Button
-                data-slot="add-input-btn"
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleAddInput}
-                aria-label="Add input"
-                title="Add input"
-                className="shrink-0"
-              >
-                <Plus className="size-3" />
-              </Button>
-            </div>
+                <Button
+                  data-slot="add-input-btn"
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleAddInput}
+                  aria-label="Add input"
+                  title="Add input"
+                  className="shrink-0"
+                >
+                  <Plus className="size-3" />
+                </Button>
+              </div>
+            )}
           </FieldSet>
 
           {/* Output Type */}
@@ -331,6 +341,7 @@ function FunctionForm({
               emptyLabel="No output type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={Boolean(d.isReadOnly)}
             />
           </FieldSet>
 
@@ -448,6 +459,7 @@ function FunctionForm({
                         data-slot="expression-editor"
                         aria-invalid={fieldState.invalid}
                         aria-label="Function expression"
+                        disabled={Boolean(d.isReadOnly)}
                         onBlur={() => {
                           field.onBlur();
                           handleExpressionBlur();
