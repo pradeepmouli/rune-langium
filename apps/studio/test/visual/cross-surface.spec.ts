@@ -4,9 +4,11 @@
 /**
  * T063 (014/Phase-8 / US7) — visual cross-surface assertions.
  *
- * Phase 8's spec promises the Studio start page renders with the same
- * primitives as the landing site and the docs theme: Outfit body font,
- * 8px primary-button radius, transparent secondary buttons (NOT amber).
+ * The Studio start page renders with the canonical primitives: the UI
+ * sans body font (Inter) — the brand display font (Outfit) is opt-in for
+ * brand surfaces (e.g. the wordmark), NOT the body default, since making it
+ * the default leaked Outfit into portaled overlays — plus an 8px
+ * primary-button radius and transparent secondary buttons (NOT amber).
  * This Playwright spec asserts those properties via `page.evaluate`
  * against the live computed style — independent of the form-baseline
  * screenshot suite, which is for component-level regressions.
@@ -32,9 +34,11 @@ test.describe('Cross-surface UX consistency (T063 / US7)', () => {
       await page.goto('./');
       await page.waitForLoadState('domcontentloaded');
 
-      // 1. body font-family includes Outfit (FR-022)
+      // 1. body font-family is the UI sans stack (Inter), not the display
+      //    font (Outfit). Display is opt-in (brand wordmark) — making it the
+      //    body default leaked Outfit into portaled overlays (dialogs/toasts).
       const bodyFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
-      expect(bodyFont).toMatch(/Outfit/i);
+      expect(bodyFont).toMatch(/Inter/i);
 
       // 2. The primary "New blank workspace" button has 8px border-radius
       //    (FR-024 — landing/docs/Studio canonical primary radius).
