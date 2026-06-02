@@ -18,12 +18,8 @@ overrides:
   tmp: '>=0.2.6'
 
 patchedDependencies:
-  '@radix-ui/react-compose-refs@1.1.2':
-    hash: 8e5e08a1552a2380c169c4af7c0682cf3baf9bfc4462c2a5d1bd75d28519128c
-    path: patches/@radix-ui__react-compose-refs@1.1.2.patch
-  '@radix-ui/react-slot@1.2.4':
-    hash: 0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807
-    path: patches/@radix-ui__react-slot@1.2.4.patch
+  '@radix-ui/react-compose-refs@1.1.2': 8e5e08a1552a2380c169c4af7c0682cf3baf9bfc4462c2a5d1bd75d28519128c
+  '@radix-ui/react-slot@1.2.4': 0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807
 
 importers:
 
@@ -559,8 +555,8 @@ importers:
   packages/design-system:
     dependencies:
       '@base-ui/react':
-        specifier: 1.0.0
-        version: 1.0.0(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        specifier: 1.5.0
+        version: 1.5.0(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.76.0(react@19.2.6))
@@ -943,19 +939,25 @@ packages:
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
 
-  '@base-ui/react@1.0.0':
-    resolution: {integrity: sha512-4USBWz++DUSLTuIYpbYkSgy1F9ZmNG9S/lXvlUN6qMK0P0RlW+6eQmDUB4DgZ7HVvtXl4pvi4z5J2fv6Z3+9hg==}
+  '@base-ui/react@1.5.0':
+    resolution: {integrity: sha512-z1gSAlced1yY+iM+mHDEtIkD8UI3Ebs52MuBPxvV6f5hRutk+xvCH/wuB7hDqDzK9JG5FoMz5nhrqtSs1wjt1A==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
+      '@date-fns/tz': ^1.2.0
       '@types/react': ^17 || ^18 || ^19
+      date-fns: ^4.0.0
       react: ^17 || ^18 || ^19
       react-dom: ^17 || ^18 || ^19
     peerDependenciesMeta:
+      '@date-fns/tz':
+        optional: true
       '@types/react':
         optional: true
+      date-fns:
+        optional: true
 
-  '@base-ui/utils@0.2.3':
-    resolution: {integrity: sha512-/CguQ2PDaOzeVOkllQR8nocJ0FFIDqsWIcURsVmm53QGo8NhFNpePjNlyPIB41luxfOqnG7PU0xicMEw3ls7XQ==}
+  '@base-ui/utils@0.2.9':
+    resolution: {integrity: sha512-x/PDDCYzoqPpjrdyb3VcyylTI2IjUXEtYDGi5foh7KsnmNJIIaVwA2GLgDH1dps1GgXiJbA60hM+AyuTfQzIvw==}
     peerDependencies:
       '@types/react': ^17 || ^18 || ^19
       react: ^17 || ^18 || ^19
@@ -6617,21 +6619,19 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@base-ui/react@1.0.0(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
+  '@base-ui/react@1.5.0(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@babel/runtime': 7.29.2
-      '@base-ui/utils': 0.2.3(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@base-ui/utils': 0.2.9(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@floating-ui/react-dom': 2.1.8(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@floating-ui/utils': 0.2.11
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
-      reselect: 5.2.0
-      tabbable: 6.4.0
       use-sync-external-store: 1.6.0(react@19.2.6)
     optionalDependencies:
       '@types/react': 19.2.15
 
-  '@base-ui/utils@0.2.3(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
+  '@base-ui/utils@0.2.9(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:
       '@babel/runtime': 7.29.2
       '@floating-ui/utils': 0.2.11
