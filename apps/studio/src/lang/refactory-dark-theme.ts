@@ -38,6 +38,15 @@ export const refactoryDarkTheme = EditorView.theme(
       backgroundColor: '#181824'
     },
     '.cm-gutters': {
+      // Match .cm-content's mono font, size, and line-height so the line
+      // numbers are monospace and vertically aligned with the code lines.
+      // The gutter is a sibling of (not nested in) .cm-content, so it does
+      // NOT inherit the content font — without this it falls back to the body
+      // UI font (Inter), rendering proportional and misaligned against the
+      // JetBrains Mono content.
+      fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
+      fontSize: '13px',
+      lineHeight: '1.6',
       backgroundColor: '#0C0C14',
       color: '#5C5C6A',
       border: 'none',

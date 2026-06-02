@@ -93,4 +93,11 @@ describe('refactory-dark theme uses design-system syntax tokens', () => {
     expect(THEME_SRC).not.toMatch(/#C792EA/i);
     expect(THEME_SRC).not.toMatch(/#C3E88D/i);
   });
+
+  // The line-number gutter is a sibling of .cm-content and does NOT inherit
+  // its font, so it must set the mono font itself — otherwise line numbers
+  // fall back to the body UI font (Inter) and render proportional/misaligned.
+  it('the .cm-gutters block sets the mono font', () => {
+    expect(THEME_SRC).toMatch(/'\.cm-gutters':\s*\{[\s\S]*?font-mono/);
+  });
 });
