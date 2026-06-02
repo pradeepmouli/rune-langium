@@ -5,14 +5,14 @@
  * T093 — Cross-app snapshot test.
  *
  * Pins that the design-system primitives' rendered class names match the
- * tokens emitted by `@rune-langium/design-tokens`. A drift in either side
- * (token rename, primitive class change) breaks this test, which is the
- * point: every visual change must be intentional.
+ * primitive tokens in `packages/design-system/src/tokens.css` (the CSS-first
+ * token SSoT; the former `@rune-langium/design-tokens` package was retired).
+ * A drift in either side (token rename, primitive class change) breaks this
+ * test, which is the point: every visual change must be intentional.
  */
 
 import { describe, it, expect } from 'vitest';
-import { execSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
@@ -21,24 +21,14 @@ import { Heading } from '@rune-langium/design-system/ui/heading';
 import { AppSwitcher } from '@rune-langium/design-system/ui/app-switcher';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DESIGN_TOKENS_DIR = resolve(__dirname, '../../../../packages/design-tokens');
-const TOKENS_CSS = resolve(DESIGN_TOKENS_DIR, 'dist/tokens.css');
-
-function ensureTokensBuilt(): void {
-  if (existsSync(TOKENS_CSS)) return;
-  execSync('node --experimental-strip-types src/build.ts', {
-    cwd: DESIGN_TOKENS_DIR,
-    stdio: 'inherit'
-  });
-}
+const TOKENS_CSS = resolve(__dirname, '../../../../packages/design-system/src/tokens.css');
 
 describe('cross-app snapshot (T093)', () => {
-  it('design-tokens emits every variable family the primitives consume', () => {
-    ensureTokensBuilt();
+  it('the primitive token layer defines every variable family the primitives consume', () => {
     const css = readFileSync(TOKENS_CSS, 'utf8');
 
     // The primitives use these token families. Every one MUST be present
-    // in the emitted CSS — otherwise the styling cascade silently drops
+    // in the token layer — otherwise the styling cascade silently drops
     // to the browser default.
     const required = [
       '--color-accent-base',

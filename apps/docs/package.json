@@ -11,7 +11,7 @@
     "preview": "vitepress preview"
   },
   "dependencies": {
-    "@rune-langium/design-tokens": "workspace:*"
+    "@rune-langium/design-system": "workspace:*"
   },
   "devDependencies": {
     "typedoc": "0.28.19",

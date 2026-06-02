@@ -37,16 +37,16 @@
   --input: oklch(1 0 0 / 18%);
 
   /* Primary = Sandy brown; ring matches so focus halos read warm */
-  --primary: #fa994a;
+  --primary: oklch(0.7694 0.1486 56.99);
   --primary-foreground: oklch(0.18 0.04 220);
-  --ring: #fa994a;
+  --ring: oklch(0.7694 0.1486 56.99);
 
   /* Secondary = Keppel teal */
-  --secondary: #41b8aa;
+  --secondary: oklch(0.713 0.1068 184.12);
   --secondary-foreground: oklch(0.18 0.04 220);
 
   /* Destructive = Vermilion */
-  --destructive: #f03630;
+  --destructive: oklch(0.6245 0.222 27.81);
   --destructive-foreground: oklch(0.97 0.005 200);
 
   /* Sidebar */
@@ -55,46 +55,46 @@
   --sidebar-border: oklch(1 0 0 / 10%);
 
   /* Type-kind palette — remap onto brand swatches where possible */
-  --color-data: #41b8aa;
-  --color-data-bg: rgba(65, 184, 170, 0.12);
-  --color-data-text: #41b8aa;
-  --color-data-badge: rgba(65, 184, 170, 0.22);
+  --color-data: oklch(0.713 0.1068 184.12);
+  --color-data-bg: oklch(0.713 0.1068 184.12 / 0.12);
+  --color-data-text: oklch(0.713 0.1068 184.12);
+  --color-data-badge: oklch(0.713 0.1068 184.12 / 0.22);
 
-  --color-choice: #fa994a;
-  --color-choice-bg: rgba(250, 153, 74, 0.12);
-  --color-choice-text: #fa994a;
-  --color-choice-badge: rgba(250, 153, 74, 0.22);
+  --color-choice: oklch(0.7694 0.1486 56.99);
+  --color-choice-bg: oklch(0.7694 0.1486 56.99 / 0.12);
+  --color-choice-text: oklch(0.7694 0.1486 56.99);
+  --color-choice-badge: oklch(0.7694 0.1486 56.99 / 0.22);
 
-  --color-enum: #b89de0;
-  --color-enum-bg: rgba(184, 157, 224, 0.12);
-  --color-enum-text: #b89de0;
-  --color-enum-badge: rgba(184, 157, 224, 0.22);
+  --color-enum: oklch(0.7439 0.0988 302.54);
+  --color-enum-bg: oklch(0.7439 0.0988 302.54 / 0.12);
+  --color-enum-text: oklch(0.7439 0.0988 302.54);
+  --color-enum-badge: oklch(0.7439 0.0988 302.54 / 0.22);
 
-  --color-func: #6bb8dd;
-  --color-func-bg: rgba(107, 184, 221, 0.12);
-  --color-func-text: #6bb8dd;
-  --color-func-badge: rgba(107, 184, 221, 0.22);
+  --color-func: oklch(0.7469 0.0931 230.6);
+  --color-func-bg: oklch(0.7469 0.0931 230.6 / 0.12);
+  --color-func-text: oklch(0.7469 0.0931 230.6);
+  --color-func-badge: oklch(0.7469 0.0931 230.6 / 0.22);
 
-  --color-error: #f03630;
-  --color-warning: #e8b25a;
-  --color-success: #41b8aa;
-  --color-info: #6bb8dd;
+  --color-error: oklch(0.6245 0.222 27.81);
+  --color-warning: oklch(0.7961 0.1226 77.63);
+  --color-success: oklch(0.713 0.1068 184.12);
+  --color-info: oklch(0.7469 0.0931 230.6);
 }
 
 /* ─── Brand mark — banded daikon stripes when Daikonic is active ─── */
 [data-theme='daikonic'] .studio-brand__mark {
   background: linear-gradient(
     180deg,
-    #194454 0 18%,
-    #41b8aa 18% 42%,
-    #fa994a 42% 66%,
-    #f03630 66% 100%
+    oklch(0.3642 0.0543 225.84) 0 18%,
+    oklch(0.713 0.1068 184.12) 18% 42%,
+    oklch(0.7694 0.1486 56.99) 42% 66%,
+    oklch(0.6245 0.222 27.81) 66% 100%
   );
   color: transparent;
   border-color: transparent;
   box-shadow:
-    inset 0 0 0 0.5px rgba(255, 255, 255, 0.12),
-    0 10px 24px -18px rgba(250, 153, 74, 0.55);
+    inset 0 0 0 0.5px oklch(1 0 0 / 0.12),
+    0 10px 24px -18px oklch(0.7694 0.1486 56.99 / 0.55);
   position: relative;
 }
 
@@ -105,7 +105,7 @@
   top: -3px;
   width: 5px;
   height: 5px;
-  background: #1f6b3a;
+  background: oklch(0.4689 0.1076 151.36);
   border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
   transform: translateX(-50%) rotate(-12deg);
 }
@@ -130,10 +130,10 @@
 }
 
 [data-theme='daikonic'] .studio-topbar__ws-mark {
-  color: #fa994a;
+  color: oklch(0.7694 0.1486 56.99);
   background:
-    linear-gradient(160deg, rgba(65, 184, 170, 0.18), rgba(250, 153, 74, 0.22));
-  border-color: rgba(250, 153, 74, 0.32);
+    linear-gradient(160deg, oklch(0.713 0.1068 184.12 / 0.18), oklch(0.7694 0.1486 56.99 / 0.22));
+  border-color: oklch(0.7694 0.1486 56.99 / 0.32);
 }
 
 /* ─── Soft brand glow on primary buttons ─── */
