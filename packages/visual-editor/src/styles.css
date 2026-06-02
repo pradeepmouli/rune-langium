@@ -1443,3 +1443,35 @@ button[data-navigable]:focus-visible {
   border-left: 3px solid var(--info, #63b3ed);
   padding-left: var(--rune-row-indent, 6px);
 }
+
+/* ── Type-name field (shared TypeHeader) ─────────────────────────────
+ * The editable type name reads as a borderless title until interacted
+ * with: no box border by default, a muted bottom underline on hover, and
+ * an accent underline on focus. Declared as an explicit, UNLAYERED rule on
+ * the `data-slot` so it beats the design-system Input's Tailwind border
+ * utilities (which live in `@layer utilities`) regardless of CSS source
+ * order — the source-order ambiguity is exactly why a `border-transparent`
+ * utility on the component didn't reliably hide the box. */
+[data-slot='type-name-input'] {
+  border: 0;
+  border-bottom: 1.5px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: border-color var(--motion-fast, 140ms ease);
+}
+
+[data-slot='type-name-input']:hover {
+  border-bottom-color: var(--border);
+}
+
+[data-slot='type-name-input']:focus,
+[data-slot='type-name-input']:focus-visible {
+  border-bottom-color: var(--primary);
+  outline: none;
+  box-shadow: none;
+}
+
+[data-slot='type-name-input'][aria-invalid='true'] {
+  border-bottom-color: var(--destructive);
+}
