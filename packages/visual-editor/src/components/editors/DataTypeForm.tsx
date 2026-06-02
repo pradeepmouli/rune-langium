@@ -73,6 +73,12 @@ export interface DataTypeFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. When true the form renders in read-only
+   * mode even if the node's own `isReadOnly` flag is false (e.g. panel prop
+   * lock from a curated refOnly file). ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +93,8 @@ function DataTypeForm({
   allNodes = EMPTY_NODES,
   renderExpressionEditor,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema. Per R11 the editor
@@ -363,7 +370,7 @@ function DataTypeForm({
 
   // ---- Render --------------------------------------------------------------
 
-  const isReadOnly = Boolean(d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
 
   return (
     <FormProvider {...form}>
@@ -478,7 +485,7 @@ function DataTypeForm({
             <ConditionSection
               label="Conditions"
               conditions={d.conditions}
-              readOnly={d.isReadOnly}
+              readOnly={isReadOnly}
               onAdd={handleAddCondition}
               onRemove={handleRemoveCondition}
               onUpdate={handleUpdateCondition}

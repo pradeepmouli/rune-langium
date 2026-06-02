@@ -114,6 +114,10 @@ export interface FunctionFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // Phase 8 (US6) extracted the inline `InputParamRow` to
@@ -134,7 +138,8 @@ function FunctionForm({
   inheritedGroups = EMPTY_GROUPS,
   renderExpressionEditor,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: FunctionFormProps) {
   const d = data as any;
 
@@ -250,8 +255,10 @@ function FunctionForm({
   // from <EditorActionsProvider> via `useEditorActionsContext()` per the
   // Phase 7 / US5 contract.
 
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+
   return (
-    <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={d.isReadOnly}>
+    <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={isReadOnly}>
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
@@ -290,7 +297,7 @@ function FunctionForm({
             </FieldGroup>
 
             {/* Inline add input — hidden in read-only mode */}
-            {!d.isReadOnly && (
+            {!isReadOnly && (
               <div className="flex items-center gap-1 mt-1">
                 <Input
                   data-slot="add-param-name"
@@ -341,7 +348,7 @@ function FunctionForm({
               emptyLabel="No output type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
-              disabled={Boolean(d.isReadOnly)}
+              disabled={isReadOnly}
             />
           </FieldSet>
 
@@ -459,7 +466,7 @@ function FunctionForm({
                         data-slot="expression-editor"
                         aria-invalid={fieldState.invalid}
                         aria-label="Function expression"
-                        disabled={Boolean(d.isReadOnly)}
+                        disabled={isReadOnly}
                         onBlur={() => {
                           field.onBlur();
                           handleExpressionBlur();
