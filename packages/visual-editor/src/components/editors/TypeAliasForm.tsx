@@ -34,7 +34,7 @@ import { useCallback, useRef } from 'react';
 import { FormProvider, Controller, useWatch } from 'react-hook-form';
 import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
+import { KindBadge } from '../KindBadge.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
@@ -204,7 +204,7 @@ function TypeAliasForm({
                 </Field>
               )}
             />
-            <Badge variant="typeAlias">TypeAlias</Badge>
+            <KindBadge kind="typeAlias" />
           </div>
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}

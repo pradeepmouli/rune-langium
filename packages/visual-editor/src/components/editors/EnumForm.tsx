@@ -33,8 +33,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { KindBadge } from '../KindBadge.js';
 import { Plus } from 'lucide-react';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -263,7 +263,7 @@ function EnumForm({
                 </Field>
               )}
             />
-            <Badge variant="enum">Enum</Badge>
+            <KindBadge kind="enum" />
           </div>
 
           {/* Parent Enum */}

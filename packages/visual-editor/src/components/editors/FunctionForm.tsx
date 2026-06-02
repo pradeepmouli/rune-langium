@@ -38,8 +38,8 @@ import { FormProvider, Controller } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
-import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { KindBadge } from '../KindBadge.js';
 import { Plus } from 'lucide-react';
 import { TypeSelector } from './TypeSelector.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -283,7 +283,7 @@ function FunctionForm({
                 </Field>
               )}
             />
-            <Badge variant="func">Function</Badge>
+            <KindBadge kind="func" />
           </div>
 
           {/* Input Parameters */}
