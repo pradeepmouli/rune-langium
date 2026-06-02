@@ -27,8 +27,8 @@ export { TypeHeader } from './components/TypeHeader.js';
 export type { TypeHeaderProps } from './components/TypeHeader.js';
 
 // Panel components (for custom layouts)
-export { DetailPanel } from './components/panels/DetailPanel.js';
-export type { DetailPanelProps } from './components/panels/DetailPanel.js';
+export { OtherForm } from './components/panels/OtherForm.js';
+export type { OtherFormProps } from './components/panels/OtherForm.js';
 export { EditorFormPanel } from './components/panels/EditorFormPanel.js';
 export type { EditorFormPanelProps } from './components/panels/EditorFormPanel.js';
 export { NamespaceExplorerPanel } from './components/panels/NamespaceExplorerPanel.js';

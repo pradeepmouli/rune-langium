@@ -7,7 +7,7 @@
  *
  * Renders:
  * - DataTypeForm when kind='data'
- * - DetailPanel when isReadOnly=true or kind is unsupported
+ * - OtherForm when isReadOnly=true or kind is unsupported
  * - Empty state when no node is selected
  *
  * Features:
@@ -25,7 +25,7 @@ import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
 import { FunctionForm } from '../editors/FunctionForm.js';
 import { TypeAliasForm } from '../editors/TypeAliasForm.js';
-import { DetailPanel } from './DetailPanel.js';
+import { OtherForm } from './OtherForm.js';
 import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
 import type {
   AnyGraphNode,
@@ -130,7 +130,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   onClose,
   onNavigateToNode
 }: EditorFormPanelProps) {
-  // refOnly entries always render the read-only DetailPanel — there's no
+  // refOnly entries always render the read-only OtherForm — there's no
   // source text to back form edits even if the kind would otherwise have
   // a full editor (DataTypeForm, FunctionForm, etc.).
   const effectivelyReadOnly = isReadOnly || refOnly;
@@ -186,7 +186,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
         className="flex flex-col h-full overflow-hidden"
         tabIndex={-1}
       >
-        <DetailPanel
+        <OtherForm
           nodeData={nodeData}
           onNavigateToNode={onNavigateToNode}
           allNodeIds={allNodeIds}
@@ -278,10 +278,10 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'record':
       case 'basicType':
       case 'annotation':
-        return <DetailPanel nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
+        return <OtherForm nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
 
       default:
-        return <DetailPanel nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
+        return <OtherForm nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
     }
   }
 

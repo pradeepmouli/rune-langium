@@ -4,7 +4,7 @@
 /**
  * TypeHeader — the single shared header for a model type: a namespace eyebrow,
  * the type name, and the canonical KindBadge. Used by the type-specific form
- * editors (name EDITABLE via react-hook-form) and the read-only DetailPanel
+ * editors (name EDITABLE via react-hook-form) and the read-only OtherForm
  * (static name). Pass `control` (+ onNameChange/placeholder/nameAriaLabel) for
  * the editable variant, or `name` for the read-only variant.
  */
@@ -20,7 +20,7 @@ export interface TypeHeaderProps {
   kind: TypeKind;
   namespace?: string;
   className?: string;
-  /** Rendered after the KindBadge (e.g. a "Reference Only" badge in DetailPanel). */
+  /** Rendered after the KindBadge (e.g. a "Reference Only" badge in OtherForm). */
   trailing?: React.ReactNode;
   /** Editable variant: react-hook-form control bound to the "name" field. */
   control?: Control<any>;
