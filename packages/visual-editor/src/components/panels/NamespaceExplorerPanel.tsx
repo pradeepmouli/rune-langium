@@ -34,12 +34,16 @@ import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure
 import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js';
 
 // ---------------------------------------------------------------------------
-// Tree indentation — kept tight so deeply-nested namespaces
-// (e.g. com.rosetta.model.base) don't eat the sidebar width. Baseline left
-// padding + per-depth-level step (px). Set both to 0 to flatten entirely.
+// Tree indentation — the tree renders FLAT: every sub-namespace level is its
+// own header row, but headers do NOT step right with depth. Hierarchy is
+// conveyed by the aggregated full-path label (cdm, cdm.base, cdm.base.datetime)
+// plus the header separator band, not by horizontal indentation. There is no
+// per-depth step, so every header sits at the same baseline (TREE_INDENT_BASE).
+// Type rows get a single fixed membership indent (TREE_TYPE_INDENT) so they read
+// as belonging to the header above them — the one intentional, non-depth indent.
 // ---------------------------------------------------------------------------
 const TREE_INDENT_BASE = 8;
-const TREE_INDENT_PER_DEPTH = 8;
+const TREE_TYPE_INDENT = 16;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -426,13 +430,17 @@ interface SegmentHeaderRowProps {
 }
 
 function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): JSX.Element {
-  const indentPx = row.depth * TREE_INDENT_PER_DEPTH;
   const totalCount = row.typeCount + (row.childCount > 0 ? row.childCount : 0);
   return (
     <div data-testid={`ns-seg-${row.fullPath}`} className="group">
+      {/* Header band: separator + muted background mark this row as a
+          namespace header (vs. a type row), since the flat layout drops the
+          depth indent that would otherwise distinguish them. The label is the
+          aggregated full path (cdm, cdm.base, cdm.base.datetime) so the
+          hierarchy stays legible without indentation. */}
       <div
-        className="flex items-center gap-1 px-2 py-1 text-sm hover:bg-accent/50 cursor-default text-foreground"
-        style={{ paddingLeft: `${TREE_INDENT_BASE + indentPx}px` }}
+        className="flex items-center gap-1 border-t border-border/60 bg-muted/40 px-2 py-1 text-sm hover:bg-accent/50 cursor-default text-foreground"
+        style={{ paddingLeft: `${TREE_INDENT_BASE}px` }}
       >
         <Button
           variant="ghost"
@@ -444,8 +452,11 @@ function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): J
           {row.expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </Button>
 
-        <span className="flex-1 truncate text-xs font-medium cursor-pointer" onClick={onToggleTreeExpand}>
-          {row.segment || '(default)'}
+        <span
+          className="flex-1 truncate text-xs font-semibold tracking-wide cursor-pointer"
+          onClick={onToggleTreeExpand}
+        >
+          {row.fullPath || '(default)'}
         </span>
 
         <span className="number-chiclet shrink-0">{totalCount}</span>
@@ -554,18 +565,16 @@ function TypeItemRow({
     }
   }, []);
 
-  // Depth-aware indentation: segment tree rows carry a `depth` field (0 = root).
-  // A tight per-level indent keeps deep namespaces from eating the sidebar; a
-  // type row sits one level under its segment via its own depth.
-  // Rows from the old flat tree have depth=undefined → baseline indent only.
-  const depthIndentPx = (row.depth ?? 0) * TREE_INDENT_PER_DEPTH;
-
+  // Flat layout: the tree carries `depth` for structure/expansion, but type
+  // rows do NOT step right with depth. They get a single fixed membership
+  // indent past the segment header's baseline so they read as belonging to the
+  // header above — independent of how deep that header sits in the hierarchy.
   return (
     <div
       className={`studio-type-row group relative flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
         isSelected ? ' studio-type-row--selected' : ''
       }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
-      style={{ paddingLeft: `${TREE_INDENT_BASE + depthIndentPx}px` }}
+      style={{ paddingLeft: `${TREE_INDENT_BASE + TREE_TYPE_INDENT}px` }}
       data-testid={`ns-type-${row.nodeId}`}
       // Row is a drag source only — click no longer marks anything; the
       // only operation is dragging (visual cursor: grab signals it) or
