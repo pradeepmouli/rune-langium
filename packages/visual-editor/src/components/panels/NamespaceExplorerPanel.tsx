@@ -34,6 +34,14 @@ import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure
 import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js';
 
 // ---------------------------------------------------------------------------
+// Tree indentation — kept tight so deeply-nested namespaces
+// (e.g. com.rosetta.model.base) don't eat the sidebar width. Baseline left
+// padding + per-depth-level step (px). Set both to 0 to flatten entirely.
+// ---------------------------------------------------------------------------
+const TREE_INDENT_BASE = 8;
+const TREE_INDENT_PER_DEPTH = 8;
+
+// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -418,13 +426,13 @@ interface SegmentHeaderRowProps {
 }
 
 function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): JSX.Element {
-  const indentPx = row.depth * 12;
+  const indentPx = row.depth * TREE_INDENT_PER_DEPTH;
   const totalCount = row.typeCount + (row.childCount > 0 ? row.childCount : 0);
   return (
     <div data-testid={`ns-seg-${row.fullPath}`} className="group">
       <div
         className="flex items-center gap-1 px-2 py-1 text-sm hover:bg-accent/50 cursor-default text-foreground"
-        style={{ paddingLeft: `${8 + indentPx}px` }}
+        style={{ paddingLeft: `${TREE_INDENT_BASE + indentPx}px` }}
       >
         <Button
           variant="ghost"
@@ -547,16 +555,17 @@ function TypeItemRow({
   }, []);
 
   // Depth-aware indentation: segment tree rows carry a `depth` field (0 = root).
-  // We add 12px per level on top of the baseline 16px (ml-4) left padding.
+  // A tight per-level indent keeps deep namespaces from eating the sidebar; a
+  // type row sits one level under its segment via its own depth.
   // Rows from the old flat tree have depth=undefined → baseline indent only.
-  const depthIndentPx = (row.depth ?? 0) * 12;
+  const depthIndentPx = (row.depth ?? 0) * TREE_INDENT_PER_DEPTH;
 
   return (
     <div
       className={`studio-type-row group relative flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
         isSelected ? ' studio-type-row--selected' : ''
       }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
-      style={{ paddingLeft: `${16 + depthIndentPx}px` }}
+      style={{ paddingLeft: `${TREE_INDENT_BASE + depthIndentPx}px` }}
       data-testid={`ns-type-${row.nodeId}`}
       // Row is a drag source only — click no longer marks anything; the
       // only operation is dragging (visual cursor: grab signals it) or
