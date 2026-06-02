@@ -2,7 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * DetailPanel — Type detail sidebar panel.
+ * OtherForm — Read-only fallback form for type kinds that do not yet have a
+ * dedicated editor form (record, basicType, annotation) as well as the
+ * default renderer used when a node is read-only (e.g. curated reference-only
+ * entries).
  *
  * Shows detailed information about the currently selected type node
  * using shadcn/ui primitives and lucide-react icons.
@@ -17,7 +20,7 @@ import { TypeLink } from '../editors/TypeLink.js';
 import { TypeHeader } from '../TypeHeader.js';
 import type { AnyGraphNode, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
 
-export interface DetailPanelProps {
+export interface OtherFormProps {
   nodeData: AnyGraphNode | null;
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
@@ -71,7 +74,7 @@ function extractMembers(d: any): Array<{ name: string; typeName?: string; cardin
   }
 }
 
-export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }: DetailPanelProps) {
+export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: OtherFormProps) {
   if (!nodeData) return null;
 
   const d = nodeData as any;

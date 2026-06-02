@@ -5,7 +5,7 @@
  * Integration tests for EditorFormPanel (T048).
  *
  * Covers:
- * - Dispatch by kind (data -> DataTypeForm, readOnly -> DetailPanel, null -> empty)
+ * - Dispatch by kind (data -> DataTypeForm, readOnly -> OtherForm, null -> empty)
  * - Accessibility attributes (role, aria-label)
  * - Escape key closes panel
  * - Sticky header renders name + kind badge
@@ -197,7 +197,7 @@ describe('EditorFormPanel', () => {
     expect(screen.getByLabelText('Add attribute')).toBeInTheDocument();
   });
 
-  it('renders DetailPanel for read-only nodes', () => {
+  it('renders OtherForm for read-only nodes', () => {
     render(
       <EditorFormPanel
         nodeData={makeNodeData({ isReadOnly: true })}
@@ -210,13 +210,13 @@ describe('EditorFormPanel', () => {
 
     const panel = screen.getByRole('complementary');
     expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
-    // DetailPanel shows namespace in the type-header eyebrow
+    // OtherForm shows namespace in the type-header eyebrow
     const nsSpan = panel.querySelector('[data-slot="type-header-namespace"]');
     expect(nsSpan).not.toBeNull();
     expect(nsSpan!.textContent).toBe('test.model');
   });
 
-  it('renders DetailPanel for view-only kinds (e.g. Annotation)', () => {
+  it('renders OtherForm for view-only kinds (e.g. Annotation)', () => {
     render(
       <EditorFormPanel
         nodeData={makeNodeData({ $type: 'Annotation' })}
@@ -226,7 +226,7 @@ describe('EditorFormPanel', () => {
       />
     );
 
-    // Falls through to DetailPanel for annotation kind — shows namespace in type-header eyebrow
+    // Falls through to OtherForm for annotation kind — shows namespace in type-header eyebrow
     const nsSpan = document.querySelector('[data-slot="type-header-namespace"]');
     expect(nsSpan).not.toBeNull();
     expect(nsSpan!.textContent).toBe('test.model');

@@ -2,10 +2,10 @@
 
 ## components/panels
 
-### `DetailPanel`
+### `OtherForm`
 ```ts
-DetailPanel(__namedParameters: DetailPanelProps): Element | null
+OtherForm(__namedParameters: OtherFormProps): Element | null
 ```
 **Parameters:**
-- `__namedParameters: DetailPanelProps`
+- `__namedParameters: OtherFormProps`
 **Returns:** `Element | null`
