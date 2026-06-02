@@ -21,12 +21,26 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { KindBadge, KIND_LABEL } from '../KindBadge.js';
+import {
+  NamespaceSegmentHeaderRow,
+  NAMESPACE_TREE_INDENT_BASE as TREE_INDENT_BASE,
+  NAMESPACE_TREE_TYPE_INDENT as TREE_TYPE_INDENT
+} from '../NamespaceSegmentHeaderRow.js';
 import type { TypeGraphNode, TypeKind } from '../../types.js';
-import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-tree.js';
+import {
+  buildSegmentedNamespaceTree,
+  flattenSegmentedTree,
+  filterSegmentedTree,
+  ancestorPathsForMatches
+} from '../../utils/namespace-tree.js';
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
 import { useVirtualTree } from '../../hooks/useVirtualTree.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure-view.js';
 import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js';
+
+// Flat-tree indent geometry is shared with the inspector tree picker; the SSoT
+// lives in NamespaceSegmentHeaderRow. Aliased to the original local names to
+// keep the call sites below unchanged.
 
 // ---------------------------------------------------------------------------
 // Props
@@ -138,36 +152,61 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   onClearDragSource
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
-  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => new Set(nodes.map((n) => n.data.namespace)));
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Build namespace tree
-  const fullTree = useMemo(() => buildNamespaceTree(nodes), [nodes]);
+  // Build the segmented namespace tree.
+  const segmentedRoots = useMemo(() => buildSegmentedNamespaceTree(nodes), [nodes]);
 
-  // Compute effective tree expansion (auto-expand all when searching)
+  // Default expansion: expand all depth-0 and depth-1 segments so the tree is
+  // usable on first render without collapsing all the way to bare root segments.
+  const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => {
+    const roots = buildSegmentedNamespaceTree(nodes);
+    const initial = new Set<string>();
+    for (const root of roots) {
+      initial.add(root.fullPath);
+      for (const child of root.children) {
+        initial.add(child.fullPath);
+      }
+    }
+    return initial;
+  });
+
+  // Compute effective tree expansion (auto-expand all ancestor paths when searching).
   const effectiveTreeExpanded = useMemo(() => {
     if (searchQuery.trim()) {
-      return new Set(fullTree.map((e) => e.namespace));
+      return ancestorPathsForMatches(segmentedRoots, searchQuery);
     }
     return treeExpanded;
-  }, [searchQuery, treeExpanded, fullTree]);
+  }, [searchQuery, treeExpanded, segmentedRoots]);
 
-  // Flatten for virtualization
-  const flatRows = useMemo(
-    () => flattenNamespaceTree(fullTree, effectiveTreeExpanded, hiddenNodeIds, searchQuery || undefined),
-    [fullTree, effectiveTreeExpanded, hiddenNodeIds, searchQuery]
-  );
+  // Apply search filter to the segmented tree.
+  const filteredRoots = useMemo(() => {
+    if (!searchQuery.trim()) return segmentedRoots;
+    return filterSegmentedTree(segmentedRoots, searchQuery);
+  }, [segmentedRoots, searchQuery]);
+
+  // Flatten for virtualization.
+  const flatRows = useMemo((): FlatTreeRow[] => {
+    const rows = flattenSegmentedTree(filteredRoots, effectiveTreeExpanded);
+    // Re-apply hidden flag to type rows (flattenSegmentedTree always sets hidden=false).
+    return rows.map((row) => {
+      if (row.kind === 'type' && hiddenNodeIds.has(row.nodeId)) {
+        return { ...row, hidden: true };
+      }
+      return row;
+    });
+  }, [filteredRoots, effectiveTreeExpanded, hiddenNodeIds]);
 
   const virtualizer = useVirtualTree(flatRows, scrollRef);
 
-  // Toggle tree expansion (UI-only, not visibility)
-  const toggleTreeExpand = useCallback((namespace: string) => {
+  // Toggle tree expansion (UI-only, not graph visibility).
+  const toggleTreeExpand = useCallback((fullPath: string) => {
     setTreeExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(namespace)) {
-        next.delete(namespace);
+      if (next.has(fullPath)) {
+        next.delete(fullPath);
       } else {
-        next.add(namespace);
+        next.add(fullPath);
       }
       return next;
     });
@@ -287,7 +326,12 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
                         onToggleTreeExpand={() => toggleTreeExpand(row.namespace)}
                       />
-                    ) : (
+                    ) : row.kind === 'segment' ? (
+                      <SegmentHeaderRow
+                        row={row}
+                        onToggleTreeExpand={() => toggleTreeExpand(row.fullPath)}
+                      />
+                    ) : row.kind === 'type' ? (
                       <TypeItemRow
                         row={row}
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
@@ -299,7 +343,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         // onClearDragSource is intentionally NOT forwarded — the TypeItemRow
                         // no longer uses it. The panel-level prop is kept for back-compat only.
                       />
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
@@ -370,6 +414,28 @@ function NamespaceHeaderRow({ row, isGraphVisible, onToggleTreeExpand }: Namespa
         <span className="number-chiclet">{row.typeCount}</span>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SegmentHeaderRow — a nested segment header in the segmented tree
+// ---------------------------------------------------------------------------
+
+interface SegmentHeaderRowProps {
+  row: Extract<FlatTreeRow, { kind: 'segment' }>;
+  onToggleTreeExpand: () => void;
+}
+
+function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): JSX.Element {
+  return (
+    <NamespaceSegmentHeaderRow
+      data-testid={`ns-seg-${row.fullPath}`}
+      fullPath={row.fullPath}
+      expanded={row.expanded}
+      count={row.totalCount}
+      onToggle={onToggleTreeExpand}
+      indentPx={TREE_INDENT_BASE}
+    />
   );
 }
 
@@ -473,11 +539,16 @@ function TypeItemRow({
     }
   }, []);
 
+  // Flat layout: the tree carries `depth` for structure/expansion, but type
+  // rows do NOT step right with depth. They get a single fixed membership
+  // indent past the segment header's baseline so they read as belonging to the
+  // header above — independent of how deep that header sits in the hierarchy.
   return (
     <div
-      className={`studio-type-row group relative ml-4 flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
+      className={`studio-type-row group relative flex cursor-grab items-center gap-1.5 px-2 py-0.5 text-xs text-foreground hover:bg-accent/50${
         isSelected ? ' studio-type-row--selected' : ''
       }${justNavigated ? ' studio-type-row--just-navigated' : ''}`}
+      style={{ paddingLeft: `${TREE_INDENT_BASE + TREE_TYPE_INDENT}px` }}
       data-testid={`ns-type-${row.nodeId}`}
       // Row is a drag source only — click no longer marks anything; the
       // only operation is dragging (visual cursor: grab signals it) or

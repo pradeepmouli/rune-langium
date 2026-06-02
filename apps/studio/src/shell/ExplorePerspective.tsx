@@ -1328,6 +1328,8 @@ export function ExplorePerspective() {
       removeChoiceOption: (nodeId, type) => s().removeChoiceOption(nodeId, type),
       addInputParam: (nodeId, name, type) => s().addInputParam(nodeId, name, type),
       removeInputParam: (nodeId, name) => s().removeInputParam(nodeId, name),
+      updateInputParam: (nodeId, oldN, newN, type, card) => s().updateInputParam(nodeId, oldN, newN, type, card),
+      reorderInputParam: (nodeId, from, to) => s().reorderInputParam(nodeId, from, to),
       updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
       updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
       addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),

@@ -336,11 +336,13 @@ describe('row renderer registry (Phase 8 / US6)', () => {
 
     it('registers a function-input row against AttributeSchema (function inputs share AttributeSchema)', () => {
       // AttributeSchema is the item schema both for Data attributes and
-      // RosettaFunction inputs (see generated zod-schemas.ts:640). A single
-      // registration covers both surfaces; the renderer dispatches by
-      // context (which form is mounted). The function-input renderer is
-      // exposed as a separate export so consumers can wire it explicitly
-      // when they need function-specific behaviour.
+      // RosettaFunction inputs (see generated zod-schemas.ts:640). The
+      // FunctionInputRowRender export is still registered in functionFormRegistry
+      // for backwards compatibility / consumers that drive the registry path
+      // directly. FunctionForm itself now renders inputs as <AttributeRow>
+      // (data-slot="attribute-row") via its own useFieldArray .map() — the same
+      // pattern DataTypeForm uses — rather than going through the z2f registry
+      // path, so the observable slot is "attribute-row".
       expect(typeof FunctionInputRowRender).toBe('function');
 
       render(
@@ -352,7 +354,10 @@ describe('row renderer registry (Phase 8 / US6)', () => {
         />
       );
 
-      const rows = Array.from(document.querySelectorAll('[data-slot="input-param-row"]'));
+      // Each input is now rendered as an editable <AttributeRow>
+      // (data-slot="attribute-row"). The old read-only FunctionInputRow
+      // (data-slot="input-param-row") is no longer used by FunctionForm.
+      const rows = Array.from(document.querySelectorAll('[data-slot="attribute-row"]'));
       expect(rows.length).toBe(1);
     });
   });

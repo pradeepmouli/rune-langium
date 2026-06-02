@@ -33,7 +33,7 @@
 import { useCallback, useRef } from 'react';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { TypeHeader } from '../TypeHeader.js';
+import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
@@ -183,7 +183,7 @@ function TypeAliasForm({
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="typeAlias" namespace={(data as any).namespace} control={form.control} onNameChange={debouncedName} placeholder="Type alias name" nameAriaLabel="Type alias name" className="-mx-4 -mt-4" />
+          <TypeHeader kind="typeAlias" namespace={(data as any).namespace} control={form.control} onNameChange={debouncedName} placeholder="Type alias name" nameAriaLabel="Type alias name" className={INSPECTOR_FORM_HEADER_CLASS} />
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}
           <FieldSet className="gap-1.5">

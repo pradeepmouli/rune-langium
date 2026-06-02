@@ -495,6 +495,8 @@ function makeFuncActions(): EditorFormActions<'func'> {
     removeSynonym: vi.fn(),
     addInputParam: vi.fn(),
     removeInputParam: vi.fn(),
+    updateInputParam: vi.fn(),
+    reorderInputParam: vi.fn(),
     updateOutputType: vi.fn(),
     updateExpression: vi.fn(),
     addAnnotation: vi.fn(),
@@ -592,17 +594,15 @@ describe('FunctionForm – read-only mode contract', () => {
         actions={makeFuncActions()}
       />
     );
-    const rows = container.querySelectorAll('[data-slot="input-param-row"]');
+    // Function inputs now render as <AttributeRow> (data-slot="attribute-row")
+    // rather than the old read-only FunctionInputRow (data-slot="input-param-row").
+    const rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(1);
     for (const row of rows) {
-      // TypeLink nav arrows are navigation-only — filter to remove buttons.
-      const enabledRemoveBtns = Array.from(row.querySelectorAll('button:not([disabled])')).filter((b) =>
-        b.getAttribute('aria-label')?.toLowerCase().includes('remove')
-      );
-      expect(
-        enabledRemoveBtns.length,
-        `Enabled remove buttons in input-param row: ${enabledRemoveBtns.map((b) => b.getAttribute('aria-label')).join(', ')}`
-      ).toBe(0);
+      // All buttons inside the attribute row must be disabled in read-only mode.
+      const enabledButtons = row.querySelectorAll('button:not([disabled])');
+      const labels = Array.from(enabledButtons).map((b) => b.getAttribute('aria-label') ?? b.textContent);
+      expect(labels, `Enabled buttons in input attribute row: ${JSON.stringify(labels)}`).toHaveLength(0);
     }
   });
 

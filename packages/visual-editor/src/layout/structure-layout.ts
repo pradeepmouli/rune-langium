@@ -80,6 +80,28 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
   NODE_PADDING: 4
 } as const;
 
+/**
+ * The `--rune-*` geometry custom properties, DERIVED from
+ * `STRUCTURE_LAYOUT_CONSTANTS` so the layout math (this module) is the single
+ * source of truth and the structure-view CSS reads its geometry from JS. Apply
+ * this map as an inline `style` on each structure-pane root (RuneTypeGraph,
+ * StructureView); descendant `.rune-node-*` rules consume the vars. Replaces the
+ * hand-declared `:root` block in styles.css and its parity test — there is now
+ * one source, not two kept in sync.
+ *
+ * Only LAYOUT-bearing vars live here; ornament vars (chip/pill padding, row
+ * indent) and the design-system token bridges stay declared in styles.css.
+ */
+export const STRUCTURE_LAYOUT_CSS_VARS = {
+  '--rune-row-height': `${STRUCTURE_LAYOUT_CONSTANTS.ROW_HEIGHT}px`,
+  '--rune-header-height': `${STRUCTURE_LAYOUT_CONSTANTS.HEADER_HEIGHT}px`,
+  '--rune-col-width': `${STRUCTURE_LAYOUT_CONSTANTS.COL_WIDTH}px`,
+  '--rune-col-gap': `${STRUCTURE_LAYOUT_CONSTANTS.COL_GAP}px`,
+  '--rune-row-gap': `${STRUCTURE_LAYOUT_CONSTANTS.ROW_GAP}px`,
+  '--rune-base-padding': `${STRUCTURE_LAYOUT_CONSTANTS.BASE_PADDING}px`,
+  '--rune-node-padding': `${STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING}px`
+} as const satisfies Record<`--rune-${string}`, string>;
+
 // Internal aliases — keep call sites inside this module readable.
 const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_WIDTH_MAX, COL_GAP, ROW_GAP, BASE_PADDING, NODE_PADDING } =
   STRUCTURE_LAYOUT_CONSTANTS;

@@ -4,8 +4,11 @@
 /**
  * Cross-file SSoT enforcement for Structure View layout constants.
  *
- * Part A: verifies that every CSS custom property in the `:root` block
- * of `styles.css` matches the numeric value in `STRUCTURE_LAYOUT_CONSTANTS`.
+ * Part A: the geometry `--rune-*` vars are now EMITTED from
+ * `STRUCTURE_LAYOUT_CONSTANTS` as `STRUCTURE_LAYOUT_CSS_VARS` (applied inline on
+ * the structure-pane roots), not hand-declared in CSS. We verify the emitted map
+ * matches the constants AND that the geometry vars are no longer declared in
+ * `styles.css` (so there is exactly one source).
  *
  * Note: the companion check that geometry-bearing CSS classes do not use
  * literal pixel values for layout-coupled properties is now owned by the
@@ -17,15 +20,15 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { STRUCTURE_LAYOUT_CONSTANTS } from '../../src/layout/structure-layout.js';
+import { STRUCTURE_LAYOUT_CONSTANTS, STRUCTURE_LAYOUT_CSS_VARS } from '../../src/layout/structure-layout.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cssPath = join(__dirname, '../../src/styles.css');
 const css = readFileSync(cssPath, 'utf-8');
 
-// ── Part A: parity between TS constants and CSS custom properties ─────────
+// ── Part A: emitted CSS vars derive from the TS constants (one source) ────
 
-describe('Structure layout SSoT — CSS custom props match TS constants', () => {
+describe('Structure layout SSoT — emitted CSS vars derive from TS constants', () => {
   const cases: Array<[keyof typeof STRUCTURE_LAYOUT_CONSTANTS, string]> = [
     ['ROW_HEIGHT', '--rune-row-height'],
     ['HEADER_HEIGHT', '--rune-header-height'],
@@ -37,14 +40,19 @@ describe('Structure layout SSoT — CSS custom props match TS constants', () => 
   ];
 
   for (const [tsKey, cssVar] of cases) {
-    it(`${cssVar} matches STRUCTURE_LAYOUT_CONSTANTS.${tsKey}`, () => {
-      const expectedPx = `${STRUCTURE_LAYOUT_CONSTANTS[tsKey]}px`;
-      // Match: `--rune-row-height: 28px;`  (allow optional whitespace)
-      const re = new RegExp(`${cssVar}\\s*:\\s*([^;]+);`);
-      const match = css.match(re);
-      expect(match, `expected to find "${cssVar}:" in styles.css`).not.toBeNull();
-      const value = match![1].trim();
-      expect(value).toBe(expectedPx);
+    it(`${cssVar} is emitted as STRUCTURE_LAYOUT_CONSTANTS.${tsKey}px`, () => {
+      expect(STRUCTURE_LAYOUT_CSS_VARS[cssVar as keyof typeof STRUCTURE_LAYOUT_CSS_VARS]).toBe(
+        `${STRUCTURE_LAYOUT_CONSTANTS[tsKey]}px`
+      );
+    });
+
+    it(`${cssVar} is NOT hand-declared in styles.css (JS is the single source)`, () => {
+      // A declaration is `--rune-foo:`; a usage is `var(--rune-foo)`. Only the
+      // declaration form has the trailing colon, so this won't match usages.
+      expect(
+        css.includes(`${cssVar}:`),
+        `${cssVar} should be emitted from STRUCTURE_LAYOUT_CSS_VARS, not declared in styles.css`
+      ).toBe(false);
     });
   }
 });

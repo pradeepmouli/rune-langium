@@ -257,6 +257,25 @@ export interface EditorActions {
   // --- Function operations ---
   addInputParam(nodeId: string, paramName: string, typeName: string): void;
   removeInputParam(nodeId: string, paramName: string): void;
+  /**
+   * Update name, type, and cardinality for a function input parameter.
+   *
+   * @param targetTypeId Canonical node id of the resolved target
+   *   (`namespace::Name`). Mirrors `updateAttributeType`'s qualification
+   *   contract: when provided, the store calls `disambiguateTypeRef` and
+   *   writes a fully-qualified `$refText` when another node shares the bare
+   *   name across namespaces. When omitted (or unknown), the bare `typeName`
+   *   is written as before (backward-compatible).
+   */
+  updateInputParam(
+    nodeId: string,
+    oldName: string,
+    newName: string,
+    typeName: string,
+    cardinality: string,
+    targetTypeId?: string
+  ): void;
+  reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
@@ -1506,6 +1525,100 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               const d = n.data as AnyGraphNode;
               if (d.$type === 'RosettaFunction') {
                 const inputs = ((d as any).inputs ?? []).filter((i: any) => i.name !== paramName);
+                return { ...n, data: { ...d, inputs } };
+              }
+              return n;
+            })
+          }));
+        },
+
+        updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) {
+          const card = parseCardinalityString(cardinality);
+          set((state) => {
+            // Resolve the qualified $refText using the same disambiguation logic
+            // as updateAttributeType (spec 020 Phase 13, Finding 3).  When a
+            // canonical targetTypeId is supplied and the node exists, qualify the
+            // name if any OTHER node shares the same bare name.  Fall back to the
+            // bare typeName when the id is absent or stale (backward-compatible).
+            const targetNode = targetTypeId
+              ? state.nodes.find((n) => n.id === targetTypeId)
+              : undefined;
+            const targetNamespace = targetNode
+              ? ((targetNode.data as AnyGraphNode) as { namespace?: string }).namespace
+              : undefined;
+            const refText =
+              targetNode && targetNamespace
+                ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, state.nodes)
+                : typeName;
+
+            const updatedNodes = state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const inputs = ((d as any).inputs ?? []).map((inp: any) =>
+                  inp.name === oldName
+                    ? {
+                        ...inp,
+                        name: newName,
+                        // Spread existing typeCall so pre-existing TypeCall.arguments
+                        // (parameterized type calls) are preserved; only the type
+                        // reference and cardinality are overwritten.
+                        typeCall: {
+                          ...(inp.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                          type: { $refText: refText }
+                        },
+                        card: { $type: 'RosettaCardinality', ...card }
+                      }
+                    : inp
+                );
+                return { ...n, data: { ...d, inputs } };
+              }
+              return n;
+            });
+
+            // Remove the old attribute-ref edge for this input (keyed by old name).
+            const filteredEdges = state.edges.filter(
+              (e) =>
+                !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
+            );
+
+            // Add a new attribute-ref edge if the target type node exists.
+            // Prefer id-based lookup (avoids resolving to the wrong same-named
+            // node in a different namespace); fall back to name-based lookup for
+            // built-in / string types that have no graph node.
+            const targetNodeId =
+              targetNode?.id ??
+              state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            if (targetNodeId && targetNodeId !== nodeId) {
+              const newEdge: TypeGraphEdge = {
+                id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
+                source: nodeId,
+                target: targetNodeId,
+                type: 'attribute-ref',
+                data: {
+                  kind: 'attribute-ref' as const,
+                  label: newName,
+                  cardinality: formatCardinalityString(cardinality)
+                } as EdgeData
+              };
+              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
+            }
+
+            return { nodes: updatedNodes, edges: filteredEdges };
+          });
+        },
+
+        reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const inputs = [...((d as any).inputs ?? [])];
+                const [moved] = inputs.splice(fromIndex, 1);
+                if (moved) {
+                  inputs.splice(toIndex, 0, moved);
+                }
                 return { ...n, data: { ...d, inputs } };
               }
               return n;

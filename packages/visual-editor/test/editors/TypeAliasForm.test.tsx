@@ -26,18 +26,19 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { AnyGraphNode, EditorFormActions, TypeOption } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
-// Mock TypeSelector to expose its `onSelect` via a deterministic test
-// affordance. The real TypeSelector falls back to a Radix Select which
-// renders inside a Portal and is awkward to drive with fireEvent in jsdom.
-// The mock keeps the same `data-slot="type-selector"` so visual-shape
-// assertions (TAT1) remain meaningful, and adds per-option buttons keyed
-// by `data-slot="type-selector-option-<value>"` so TAT4 can dispatch a
-// real selection.
+// Mock TypeReferenceField — the inspector type surface — with a deterministic
+// affordance. The real field now opens a base-ui Popover hosting a virtualized
+// NamespaceTreePicker, which is awkward to drive in jsdom (portal + virtual
+// list with no layout). This form unit test only cares that selecting a wrapped
+// type flows through `onSelect` into the form, so we stub the field to a flat
+// list. It keeps `data-slot="type-selector"` so the visual-shape assertion
+// (TAT1) stays meaningful, plus per-option buttons keyed by
+// `data-slot="type-selector-option-<value>"` so TAT4 can dispatch a selection.
+// The picker UI itself is covered by NamespaceTreePicker's own tests.
 // ---------------------------------------------------------------------------
 
-vi.mock('../../src/components/editors/TypeSelector.js', () => ({
-  getKindDotClass: () => 'bg-muted-foreground',
-  TypeSelector: ({
+vi.mock('../../src/components/editors/TypeReferenceField.js', () => ({
+  TypeReferenceField: ({
     value,
     options = [],
     onSelect

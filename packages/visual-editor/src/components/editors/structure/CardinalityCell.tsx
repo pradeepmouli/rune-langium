@@ -29,8 +29,8 @@ export function CardinalityCell({ value, nodeId, attrName, disabled }: Cardinali
         value={value.startsWith('(') ? value : `(${value})`}
         onChange={handleChange}
         disabled={disabled}
+        variant="chip"
         wrapperClassName="inline-flex"
-        triggerClassName="rune-cell-card h-auto min-w-0 border-0 bg-muted px-[var(--rune-pill-padding-x)] py-[var(--rune-chip-padding-y)] text-[11px] text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring"
         contentClassName="min-w-[5rem]"
         inputClassName="w-[4rem]"
       />

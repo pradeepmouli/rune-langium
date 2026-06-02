@@ -7,10 +7,15 @@
  * Reads/writes form state via `useFormContext` (provided by the parent
  * FormProvider) at the **canonical AST paths** for an `Attribute`:
  *
- *   attributes.${index}.name                    → string
- *   attributes.${index}.typeCall.type.$refText  → string (display name)
- *   attributes.${index}.card                    → RosettaCardinality { inf, sup?, unbounded? }
- *   attributes.${index}.override                → boolean
+ *   {fieldArrayName}.${index}.name                    → string
+ *   {fieldArrayName}.${index}.typeCall.type.$refText  → string (display name)
+ *   {fieldArrayName}.${index}.card                    → RosettaCardinality { inf, sup?, unbounded? }
+ *   {fieldArrayName}.${index}.override                → boolean
+ *
+ * `fieldArrayName` defaults to `'attributes'` so all existing DataTypeForm
+ * and AnnotationForm usages continue to work unchanged. FunctionForm passes
+ * `fieldArrayName="inputs"` so the same row can power function inputs without
+ * any logic duplication (DRY / Task R-func-input).
  *
  * Per R11 of `specs/013-z2f-editor-migration/research.md`, the editor
  * consumes the AST graph node directly — no projection layer. The bespoke
@@ -45,12 +50,17 @@ import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 export interface AttributeRowProps {
   /** Index position of this member in the useFieldArray. */
   index: number;
+  /**
+   * Name of the `useFieldArray` field (form path prefix).
+   * Defaults to `'attributes'`; pass `'inputs'` for function input rows.
+   */
+  fieldArrayName?: string;
   /** Last-committed attribute name (for graph action diffing). */
   committedName: string;
   /** Available type options for the TypeSelector. */
   availableTypes: TypeOption[];
   /** Commit attribute changes to the graph. */
-  onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string) => void;
+  onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) => void;
   /** Remove this attribute by index. */
   onRemove: (index: number) => void;
   /** Reorder (drag) callback; fromIndex → toIndex. */
@@ -67,8 +77,13 @@ export interface AttributeRowProps {
   onRevert?: () => void;
 }
 
+// Grid columns: handle | name (takes all flex) | type (sizes to its chip,
+// capped so a long type-ref truncates instead of starving the name) |
+// cardinality (content) | trailing. The type column is `fit-content` rather
+// than a fraction so the type field hugs its chip — no full-width "phantom box"
+// pushing the name to ~half width.
 const ATTRIBUTE_ROW_LAYOUT =
-  'grid w-full items-center gap-x-1 [grid-template-columns:12px_minmax(0,1.18fr)_minmax(7.5rem,1fr)_auto_minmax(0,max-content)]';
+  'grid w-full items-center gap-x-1 [grid-template-columns:12px_minmax(0,1fr)_fit-content(11rem)_auto_minmax(0,max-content)]';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -76,6 +91,7 @@ const ATTRIBUTE_ROW_LAYOUT =
 
 function AttributeRow({
   index,
+  fieldArrayName = 'attributes',
   committedName,
   availableTypes,
   onUpdate,
@@ -90,7 +106,7 @@ function AttributeRow({
   const { control, getValues, setValue, watch } = useFormContext();
   const editorCtx = useEditorActionsContext();
   const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
-  const prefix = `attributes.${index}`;
+  const prefix = `${fieldArrayName}.${index}`;
 
   // AST-canonical reads (R11 / row-renderer contract §2). The picker still
   // talks in `(inf..sup)` strings, so we adapt at the row boundary rather
@@ -134,9 +150,13 @@ function AttributeRow({
       if (!value) return;
       const option = availableTypes.find((o) => o.value === value);
       const newTypeName = option?.label ?? value;
+      // Pass option.value (the canonical `namespace::Name` id) as targetTypeId
+      // so the store can qualify the $refText when the bare name collides across
+      // namespaces (mirrors the attribute-type-update path — DRY).
+      const targetTypeId = option?.value;
       setValue(`${prefix}.typeCall.type.$refText`, newTypeName, { shouldDirty: true });
       const name: string = getValues(`${prefix}.name`);
-      onUpdate(index, committedName, name, newTypeName, cardinalityString);
+      onUpdate(index, committedName, name, newTypeName, cardinalityString, targetTypeId);
     },
     [index, committedName, prefix, availableTypes, getValues, setValue, cardinalityString, onUpdate]
   );
@@ -262,7 +282,12 @@ function AttributeRow({
 
       {/* Cardinality */}
       <div data-slot="attribute-cardinality" className="shrink-0">
-        <CardinalityPicker value={cardinalityString} onChange={handleCardinalityChange} disabled={effectiveReadOnly} />
+        <CardinalityPicker
+          value={cardinalityString}
+          onChange={handleCardinalityChange}
+          disabled={effectiveReadOnly}
+          variant="pill"
+        />
       </div>
 
       <div className="min-w-0 justify-self-end flex items-center gap-1">

@@ -33,7 +33,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { TypeHeader } from '../TypeHeader.js';
+import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -241,7 +241,7 @@ function EnumForm({
       <EditorActionsProvider {...editorActionsValue}>
         <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="enum" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Enum name" nameAriaLabel="Enum type name" className="-mx-4 -mt-4" />
+          <TypeHeader kind="enum" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Enum name" nameAriaLabel="Enum type name" className={INSPECTOR_FORM_HEADER_CLASS} />
 
           {/* Parent Enum */}
           <FieldSet className="gap-1.5">

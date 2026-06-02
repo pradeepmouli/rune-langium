@@ -19,8 +19,10 @@
  *
  * Sections:
  * 1. Header: editable name + "Function" purple badge
- * 2. Input parameters: rows with name + TypeSelector, "Add Input" button
- * 3. Output type: TypeSelector for the return type
+ * 2. Input parameters: editable `<AttributeRow>` list via useFieldArray
+ *    (mirrors DataTypeForm's attribute section — DRY / Task R-func-input),
+ *    plus an inline "add input" row that uses `<TypeReferenceField>`.
+ * 3. Output type: TypeReferenceField for the return type
  * 4. Function Body: aliases + operations rendered through the
  *    `renderExpressionEditor` slot, falling back to a plain `<Textarea>`
  *    when the slot is not provided. This is the bespoke editor UX that
@@ -34,24 +36,23 @@
 
 import { useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
+import { FormProvider, useFieldArray, Controller, type Control } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { TypeHeader } from '../TypeHeader.js';
+import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
-import { TypeSelector } from './TypeSelector.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
+import { AttributeRow } from './AttributeRow.js';
 import { MetadataSection } from './MetadataSection.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
-import { getTypeRefText } from '../../adapters/model-helpers.js';
+import { getTypeRefText, parseCardinality } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
-import { FunctionInputRow } from './FunctionInputRow.js';
 import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
@@ -120,12 +121,6 @@ export interface FunctionFormProps {
   readOnly?: boolean;
 }
 
-// Phase 8 (US6) extracted the inline `InputParamRow` to
-// `./FunctionInputRow.tsx` so it can be registered as a `FormMeta.render`
-// override against `AttributeSchema` (function inputs share that schema).
-// `<FunctionInputRow>` below is byte-equivalent to the prior inline
-// component.
-
 // ---------------------------------------------------------------------------
 // FunctionForm
 // ---------------------------------------------------------------------------
@@ -162,13 +157,24 @@ function FunctionForm({
     keepDirty: true
   });
 
-  // The `inputs` array remains a graph-side collection rendered from the
-  // data prop; bespoke add/remove affordances dispatch graph actions
-  // directly (no `useFieldArray` needed for inputs because the row
-  // identity is owned by the graph node, not by the form's internal
-  // field-array state).
+  // ---- useFieldArray for `inputs` (mirrors DataTypeForm's `attributes`) ----
+  // `RosettaFunctionSchema` is a z.looseObject; the inferred output type does
+  // not expose `inputs` as a typed array path RHF's overloaded `useFieldArray`
+  // can latch onto. Widen the control type so the AST key is accepted —
+  // runtime behaviour is unchanged.
+  type AttributeFieldShape = {
+    $type: 'Attribute';
+    name: string;
+    typeCall: { $type: 'TypeCall'; type: { $refText: string } };
+    card: { inf: number; sup?: number; unbounded?: boolean };
+    override?: boolean;
+  };
+  const { fields, append, remove, move } = useFieldArray({
+    control: form.control as unknown as Control<{ inputs: AttributeFieldShape[] }>,
+    name: 'inputs'
+  });
 
-  // Track the committed data for diffing
+  // Track the committed (graph-confirmed) data for diffing
   const committedRef = useRef(data);
   committedRef.current = data;
 
@@ -220,8 +226,11 @@ function FunctionForm({
   const outputType = getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '';
   const outputValue = outputType ? (availableTypes.find((o) => o.label === outputType)?.value ?? '') : '';
 
-  // ---- Input param callbacks -----------------------------------------------
+  // ---- Input param helpers -------------------------------------------------
 
+  // Derive the read-only display projection for useExpressionAutocomplete.
+  // This keeps the autocomplete hook working correctly even though we now
+  // drive visual rendering from `fields` (the RHF field array).
   const inputParams = (d.inputs ?? []).map((p: any) => ({
     name: p.name ?? '',
     typeName: getTypeRefText(p.typeCall)
@@ -230,7 +239,57 @@ function FunctionForm({
   // Autocomplete hook (available for future autocompletion popup integration)
   const { getCompletions: _getCompletions } = useExpressionAutocomplete(availableTypes, inputParams);
 
-  // Inline add-input state
+  // Build an AST-shaped Attribute literal for `useFieldArray.append`. Same
+  // shape as DataTypeForm.makeAttributeAstItem — function inputs and data
+  // attributes share the `Attribute` AST schema.
+  const makeInputAstItem = useCallback(
+    (name: string, typeName: string, cardinality = '(1..1)', override = false) => ({
+      $type: 'Attribute' as const,
+      name,
+      typeCall: { $type: 'TypeCall' as const, type: { $refText: typeName }, arguments: [] as never[] },
+      card: parseCardinality(cardinality),
+      override
+    }),
+    []
+  );
+
+  // ---- Input param callbacks -----------------------------------------------
+
+  const handleUpdateInput = useCallback(
+    (index: number, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) => {
+      // `index` unused here — action uses name-based diffing (mirrors updateAttribute).
+      void index;
+      actions.updateInputParam(nodeId, oldName, newName, typeName, cardinality, targetTypeId);
+    },
+    [nodeId, actions]
+  );
+
+  const handleRemoveInputByIndex = useCallback(
+    (index: number) => {
+      // Resolve the committed name so the store can find the entry by name.
+      // If `committedInputs[index]` is missing (e.g. the committed snapshot is
+      // behind the field array), the remove is skipped — no fallback is
+      // performed because the store uses name-keyed lookup.
+      const committedInputs = ((committedRef.current as any).inputs ?? []) as Array<any>;
+      const committed = committedInputs[index];
+      if (committed) {
+        remove(index);
+        actions.removeInputParam(nodeId, committed.name);
+      }
+    },
+    [nodeId, actions, remove]
+  );
+
+  const handleReorderInput = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      move(fromIndex, toIndex);
+      actions.reorderInputParam(nodeId, fromIndex, toIndex);
+    },
+    [nodeId, actions, move]
+  );
+
+  // ---- Inline add-input state + handler ------------------------------------
+
   const [addParamName, setAddParamName] = useState('');
   const [addParamType, setAddParamType] = useState('');
 
@@ -240,17 +299,14 @@ function FunctionForm({
     const typeName = addParamType
       ? (availableTypes.find((o) => o.value === addParamType)?.label ?? addParamType)
       : 'string';
+    // Update both form state (field array) and the graph store — mirrors
+    // DataTypeForm.handleAddAttribute which calls both append() and
+    // actions.addAttribute().
+    append(makeInputAstItem(name, typeName));
     actions.addInputParam(nodeId, name, typeName);
     setAddParamName('');
     setAddParamType('');
-  }, [nodeId, actions, availableTypes, addParamName, addParamType]);
-
-  const handleRemoveInput = useCallback(
-    (nId: string, paramName: string) => {
-      actions.removeInputParam(nId, paramName);
-    },
-    [actions]
-  );
+  }, [nodeId, actions, availableTypes, addParamName, addParamType, append, makeInputAstItem]);
 
   // ---- Render --------------------------------------------------------------
   // Section components (Annotation, Condition, Metadata) are invoked
@@ -272,29 +328,34 @@ function FunctionForm({
             onNameChange={debouncedName}
             placeholder="Function name"
             nameAriaLabel="Function type name"
-            className="-mx-4 -mt-4"
+            className={INSPECTOR_FORM_HEADER_CLASS}
           />
 
-          {/* Input Parameters */}
+          {/* Input Parameters — editable AttributeRow list via useFieldArray,
+              mirrors the Members section in DataTypeForm (DRY / R-func-input). */}
           <FieldSet className="gap-1">
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
-              Inputs ({inputParams.length})
+              Inputs ({fields.length})
             </FieldLegend>
 
             <FieldGroup className="gap-0.5">
-              {inputParams.map((member: { name: string; typeName?: string }, i: number) => (
-                <FunctionInputRow
-                  key={`${nodeId}-param-${member.name}:${i}`}
-                  member={member}
-                  nodeId={nodeId}
+              {fields.map((field, index) => (
+                <AttributeRow
+                  key={field.id}
+                  index={index}
+                  fieldArrayName="inputs"
+                  committedName={((committedRef.current as any).inputs ?? [])[index]?.name ?? ''}
                   availableTypes={availableTypes}
-                  onRemove={handleRemoveInput}
+                  onUpdate={handleUpdateInput}
+                  onRemove={handleRemoveInputByIndex}
+                  onReorder={handleReorderInput}
                   onNavigateToNode={onNavigateToNode}
                   allNodeIds={allNodeIds}
+                  disabled={isReadOnly}
                 />
               ))}
 
-              {inputParams.length === 0 && (
+              {fields.length === 0 && (
                 <p className="text-xs text-muted-foreground italic py-2 text-center">No input parameters defined.</p>
               )}
             </FieldGroup>
@@ -308,15 +369,18 @@ function FunctionForm({
                   value={addParamName}
                   onChange={(e) => setAddParamName(e.target.value)}
                   placeholder="Name"
-                  className="text-xs w-24 h-6 px-1.5"
+                  className="text-xs h-6 px-1.5 flex-1 min-w-0"
                   aria-label="New input parameter name"
                 />
-                <div className="flex-1">
-                  <TypeSelector
-                    value={addParamType}
+                <div className="min-w-0 shrink-0">
+                  <TypeReferenceField
+                    value={addParamType || null}
                     options={availableTypes}
                     onSelect={(v) => setAddParamType(v ?? '')}
                     placeholder="Type..."
+                    emptyLabel="Type"
+                    onNavigateToNode={onNavigateToNode}
+                    allNodeIds={allNodeIds}
                   />
                 </div>
                 {/* Icon-only add button matches FormPreviewPanel; see

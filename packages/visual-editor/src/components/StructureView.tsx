@@ -22,7 +22,7 @@ import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
 import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
-import { layoutStructureGraph } from '../layout/structure-layout.js';
+import { layoutStructureGraph, STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
 import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
 import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
@@ -461,7 +461,10 @@ function StructureFlowInner({
   }, [focusedTypeId, expansionSignature, nodes.length, rf]);
 
   return (
-    <div data-testid="structure-view-flow" style={{ width: '100%', height: '100%', minHeight: 320 }}>
+    <div
+      data-testid="structure-view-flow"
+      style={{ width: '100%', height: '100%', minHeight: 320, ...STRUCTURE_LAYOUT_CSS_VARS }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}

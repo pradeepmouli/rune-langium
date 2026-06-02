@@ -33,6 +33,8 @@ function makeActions(): EditorFormActions<'func'> {
     removeSynonym: vi.fn(),
     addInputParam: vi.fn(),
     removeInputParam: vi.fn(),
+    updateInputParam: vi.fn(),
+    reorderInputParam: vi.fn(),
     updateOutputType: vi.fn(),
     updateExpression: vi.fn(),
     validate: vi.fn().mockReturnValue([])
@@ -119,7 +121,9 @@ describe('FunctionForm', () => {
     const actions = makeActions();
     render(<FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
-    const removeButtons = screen.getAllByLabelText(/Remove input/);
+    // AttributeRow uses aria-label "Remove attribute {name}" (the generic
+    // remove affordance shared with DataTypeForm rows).
+    const removeButtons = screen.getAllByLabelText(/Remove attribute/i);
     fireEvent.click(removeButtons[0]!);
 
     expect(actions.removeInputParam).toHaveBeenCalledWith('fn1', 'trade');
@@ -211,6 +215,78 @@ describe('FunctionForm', () => {
     );
 
     expect(screen.getByText('No input parameters defined.')).toBeInTheDocument();
+  });
+
+  it('input rows render an editable name input and type-picker trigger', () => {
+    const actions = makeActions();
+    const { container } = render(
+      <FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+    );
+
+    // Each input renders as an AttributeRow (data-slot="attribute-row").
+    const rows = container.querySelectorAll('[data-slot="attribute-row"]');
+    expect(rows.length).toBe(2);
+
+    // The first row has an enabled name input (not disabled).
+    const firstRow = rows[0]!;
+    const nameInput = firstRow.querySelector('[data-slot="attribute-name"]') as HTMLInputElement | null;
+    expect(nameInput).not.toBeNull();
+    expect(nameInput!.disabled).toBe(false);
+
+    // The first row has a type-picker trigger (TypeReferenceField chip).
+    const typePicker = firstRow.querySelector('[data-slot="type-picker-trigger"], [data-slot="type-selector"]');
+    expect(typePicker).not.toBeNull();
+  });
+
+  it('calls updateInputParam when an input row name changes (after debounce)', () => {
+    const actions = makeActions();
+    const { container } = render(
+      <FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+    );
+
+    const rows = container.querySelectorAll('[data-slot="attribute-row"]');
+    const nameInput = rows[0]!.querySelector('[data-slot="attribute-name"]') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'instrument' } });
+
+    // Not fired yet (debounce window)
+    expect(actions.updateInputParam).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // targetTypeId is undefined when the update originates from a name change (no type re-selection).
+    expect(actions.updateInputParam).toHaveBeenCalledWith('fn1', 'trade', 'instrument', 'Trade', '(1..1)', undefined);
+  });
+
+  it('calls reorderInputParam when handleReorderInput is invoked via drag', () => {
+    const actions = makeActions();
+    const { container } = render(
+      <FunctionForm nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+    );
+
+    // Simulate drag-drop: drag first row onto the second.
+    const rows = container.querySelectorAll('[data-slot="attribute-row"]');
+    const sourceRow = rows[0]!;
+    const targetRow = rows[1]!;
+
+    fireEvent.dragStart(sourceRow, { dataTransfer: { setData: vi.fn(), effectAllowed: '' } });
+    // Set the transfer data so the drop handler can read it.
+    const dt = { data: {} as Record<string, string> };
+    fireEvent.dragStart(sourceRow, {
+      dataTransfer: {
+        setData: (k: string, v: string) => { dt.data[k] = v; },
+        effectAllowed: 'move'
+      }
+    });
+    fireEvent.dragOver(targetRow, { dataTransfer: { dropEffect: '' } });
+    fireEvent.drop(targetRow, {
+      dataTransfer: {
+        getData: (k: string) => (k === 'text/plain' ? '0' : '')
+      }
+    });
+
+    expect(actions.reorderInputParam).toHaveBeenCalledWith('fn1', 0, 1);
   });
 });
 
@@ -364,7 +440,9 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     expect(actions.updateExpression).not.toHaveBeenCalled();
 
     // ---- Edit an input row: remove a parameter --------------------------
-    const removeButtons = screen.getAllByLabelText(/remove input/i);
+    // AttributeRow uses aria-label "Remove attribute {name}" (shared with
+    // DataTypeForm — DRY / R-func-input).
+    const removeButtons = screen.getAllByLabelText(/remove attribute/i);
     fireEvent.click(removeButtons[0]!);
 
     expect(actions.removeInputParam).toHaveBeenCalledTimes(1);

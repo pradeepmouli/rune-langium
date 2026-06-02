@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import { COMBINED_MODEL_SOURCE, ENUM_MODEL_SOURCE, CHOICE_MODEL_SOURCE } from '../helpers/fixture-loader.js';
+import { COMBINED_MODEL_SOURCE, ENUM_MODEL_SOURCE, CHOICE_MODEL_SOURCE, FUNCTION_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 
 describe('EditorStore — new actions', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -953,5 +953,200 @@ describe('EditorStore — setInheritance (Finding 3: cross-namespace qualificati
     const node = store.getState().nodes.find((n) => n.id === childId)!;
     const superType = (node.data as any).superType;
     expect(superType?.$refText).toBe(beforeRefText);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Function input param operations (R-func-input)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — updateInputParam / reorderInputParam', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(FUNCTION_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  // -----------------------------------------------------------------------
+  // updateInputParam
+  // -----------------------------------------------------------------------
+
+  describe('updateInputParam', () => {
+    it('updates name, type, and cardinality of an existing input', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+      expect(addNode).toBeDefined();
+
+      store.getState().updateInputParam(addNode!.id, 'a', 'first', 'Money', '0..1');
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const inputs = ((updated!.data as any).inputs ?? []) as Array<any>;
+      const renamed = inputs.find((inp: any) => inp.name === 'first');
+      expect(renamed).toBeDefined();
+      expect(renamed!.typeCall?.type?.$refText).toBe('Money');
+      expect(renamed!.card).toMatchObject({ inf: 0, sup: 1, unbounded: false });
+    });
+
+    it('does not affect other inputs', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+
+      store.getState().updateInputParam(addNode!.id, 'a', 'first', 'Money', '0..1');
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const inputs = ((updated!.data as any).inputs ?? []) as Array<any>;
+      // 'b' input is unchanged
+      const bInput = inputs.find((inp: any) => inp.name === 'b');
+      expect(bInput).toBeDefined();
+      expect(bInput!.typeCall?.type?.$refText).toBe('number');
+    });
+
+    it('is a no-op when oldName does not match any input', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+      const before = ((addNode!.data as any).inputs ?? []) as Array<any>;
+      const beforeNames = before.map((i: any) => i.name);
+
+      store.getState().updateInputParam(addNode!.id, 'nonexistent', 'x', 'string', '(1..1)');
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const after = ((updated!.data as any).inputs ?? []) as Array<any>;
+      expect(after.map((i: any) => i.name)).toEqual(beforeNames);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // reorderInputParam
+  // -----------------------------------------------------------------------
+
+  describe('reorderInputParam', () => {
+    it('moves an input from one position to another', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+      const inputs = ((addNode!.data as any).inputs ?? []) as Array<any>;
+      expect(inputs.length).toBeGreaterThanOrEqual(2);
+
+      const originalFirst = inputs[0]!.name;
+      const originalSecond = inputs[1]!.name;
+
+      // Move first to second position (splice-move: remove from 0, insert at 1)
+      store.getState().reorderInputParam(addNode!.id, 0, 1);
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const updatedInputs = ((updated!.data as any).inputs ?? []) as Array<any>;
+      expect(updatedInputs[0]!.name).toBe(originalSecond);
+      expect(updatedInputs[1]!.name).toBe(originalFirst);
+    });
+
+    it('is a no-op on a non-function node', () => {
+      // Money is a Data type — reorderInputParam should not mutate it.
+      const nodes = store.getState().nodes;
+      const moneyNode = nodes.find((n) => n.data.name === 'Money');
+      expect(moneyNode).toBeDefined();
+
+      const before = JSON.stringify(moneyNode!.data);
+      store.getState().reorderInputParam(moneyNode!.id, 0, 1);
+      const after = JSON.stringify(store.getState().nodes.find((n) => n.id === moneyNode!.id)!.data);
+
+      expect(after).toBe(before);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// updateInputParam — cross-namespace qualification (mirrors Finding 3)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — updateInputParam (cross-namespace qualification)', () => {
+  it('writes a QUALIFIED $refText when two namespaces have a type with the same bare name', () => {
+    const store = createEditorStore();
+    const funcId = store.getState().createType('func', 'CalcFunc', 'cdm.calc');
+    store.getState().addInputParam(funcId, 'payment', 'string', '(1..1)');
+
+    // Two "Amount" types in different namespaces — the canonical id identifies which one.
+    store.getState().createType('data', 'Amount', 'ns.a');
+    const bAmountId = store.getState().createType('data', 'Amount', 'ns.b');
+
+    // Update the input with the id of ns.b::Amount.
+    store.getState().updateInputParam(funcId, 'payment', 'payment', 'Amount', '(1..1)', bAmountId);
+
+    const node = store.getState().nodes.find((n) => n.id === funcId)!;
+    const inputs = ((node.data as any).inputs ?? []) as Array<any>;
+    const inp = inputs.find((i: any) => i.name === 'payment')!;
+    // Must be qualified — bare "Amount" is ambiguous across two namespaces.
+    expect(inp.typeCall.type.$refText).toBe('ns.b.Amount');
+
+    // The edge must point at the correct (ns.b) node, not the ns.a homonym.
+    const edge = store
+      .getState()
+      .edges.find((e) => e.source === funcId && e.data?.kind === 'attribute-ref' && e.data?.label === 'payment');
+    expect(edge).toBeDefined();
+    expect(edge!.target).toBe(bAmountId);
+  });
+
+  it('writes the BARE $refText when the type name is unambiguous (single namespace)', () => {
+    const store = createEditorStore();
+    const funcId = store.getState().createType('func', 'CalcFunc', 'cdm.calc');
+    store.getState().addInputParam(funcId, 'payment', 'string', '(1..1)');
+    const amountId = store.getState().createType('data', 'Amount', 'cdm.calc');
+
+    store.getState().updateInputParam(funcId, 'payment', 'payment', 'Amount', '(1..1)', amountId);
+
+    const node = store.getState().nodes.find((n) => n.id === funcId)!;
+    const inputs = ((node.data as any).inputs ?? []) as Array<any>;
+    const inp = inputs.find((i: any) => i.name === 'payment')!;
+    // No collision — bare name is correct.
+    expect(inp.typeCall.type.$refText).toBe('Amount');
+  });
+
+  it('falls back to the bare typeName when targetTypeId is absent (backward-compatible)', () => {
+    const store = createEditorStore();
+    const funcId = store.getState().createType('func', 'CalcFunc', 'cdm.calc');
+    store.getState().addInputParam(funcId, 'x', 'string', '(1..1)');
+
+    // No targetTypeId — legacy call path (name-only).
+    store.getState().updateInputParam(funcId, 'x', 'x', 'number', '(1..1)');
+
+    const node = store.getState().nodes.find((n) => n.id === funcId)!;
+    const inputs = ((node.data as any).inputs ?? []) as Array<any>;
+    const inp = inputs.find((i: any) => i.name === 'x')!;
+    expect(inp.typeCall.type.$refText).toBe('number');
+  });
+
+  it('preserves existing typeCall.arguments when retyping (no-reset regression)', () => {
+    const store = createEditorStore();
+    const funcId = store.getState().createType('func', 'Fn', 'cdm.fn');
+    store.getState().addInputParam(funcId, 'p', 'string', '(1..1)');
+    const targetId = store.getState().createType('data', 'Wrapper', 'cdm.fn');
+
+    // Inject a parameterized typeCall to simulate an existing parameterized type call.
+    store.setState((prev: any) => ({
+      nodes: prev.nodes.map((n: any) =>
+        n.id === funcId
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                inputs: (n.data.inputs ?? []).map((inp: any) =>
+                  inp.name === 'p'
+                    ? { ...inp, typeCall: { $type: 'TypeCall', type: { $refText: 'string' }, arguments: ['T'] } }
+                    : inp
+                )
+              }
+            }
+          : n
+      )
+    }));
+
+    store.getState().updateInputParam(funcId, 'p', 'p', 'Wrapper', '(1..1)', targetId);
+
+    const node = store.getState().nodes.find((n) => n.id === funcId)!;
+    const inputs = ((node.data as any).inputs ?? []) as Array<any>;
+    const inp = inputs.find((i: any) => i.name === 'p')!;
+    expect(inp.typeCall.type.$refText).toBe('Wrapper');
+    // arguments must be preserved — the spread ensures this.
+    expect(inp.typeCall.arguments).toEqual(['T']);
   });
 });
