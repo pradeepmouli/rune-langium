@@ -206,8 +206,8 @@
   /* Dockview sash defaults — overridden per-theme in styles.css.
    * Declared here so the no-undefined-vars quality gate (FR-025) can
    * resolve every var(--dv-*) reference in apps/studio/src/styles.css. */
-  --dv-sash-color: rgba(124, 140, 172, 0.2);
-  --dv-active-sash-color: rgba(94, 234, 212, 0.9);
+  --dv-sash-color: oklch(0.6389 0.0517 264.11 / 0.2);
+  --dv-active-sash-color: oklch(0.8549 0.1251 181.07 / 0.9);
 
   /* Studio scrollbar chrome — consumed by the shared `.studio-scroll`
    * rule (apps/studio/src/styles.css) and by per-element rules in both
@@ -393,10 +393,10 @@
    * card shadow at 0.08 / 0.10 reads the same in every theme. */
   .studio-card {
     border-radius: var(--radius-lg, 12px);
-    border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--border, oklch(1 0 0 / 0.06));
     background: var(--card, var(--background));
     box-shadow:
-      0 1px 2px rgba(0, 0, 0, 0.08),
-      0 2px 6px rgba(0, 0, 0, 0.10);
+      0 1px 2px oklch(0 0 0 / 0.08),
+      0 2px 6px oklch(0 0 0 / 0.1);
   }
 }
