@@ -26,6 +26,12 @@ export type { KindBadgeProps } from './components/KindBadge.js';
 export { TypeHeader } from './components/TypeHeader.js';
 export type { TypeHeaderProps } from './components/TypeHeader.js';
 
+// Shared read-only field components (for panel surfaces)
+export { DefinitionField } from './components/DefinitionField.js';
+export type { DefinitionFieldProps } from './components/DefinitionField.js';
+export { ExtendsField } from './components/ExtendsField.js';
+export type { ExtendsFieldProps } from './components/ExtendsField.js';
+
 // Panel components (for custom layouts)
 export { OtherForm } from './components/panels/OtherForm.js';
 export type { OtherFormProps } from './components/panels/OtherForm.js';
