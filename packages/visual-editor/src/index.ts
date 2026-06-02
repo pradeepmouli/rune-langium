@@ -22,6 +22,10 @@ export { RuneTypeGraph } from './components/RuneTypeGraph.js';
 export { KindBadge, KIND_LABEL, KIND_LETTER } from './components/KindBadge.js';
 export type { KindBadgeProps } from './components/KindBadge.js';
 
+// Shared type header (namespace eyebrow + editable/read-only name + KindBadge)
+export { TypeHeader } from './components/TypeHeader.js';
+export type { TypeHeaderProps } from './components/TypeHeader.js';
+
 // Panel components (for custom layouts)
 export { DetailPanel } from './components/panels/DetailPanel.js';
 export type { DetailPanelProps } from './components/panels/DetailPanel.js';

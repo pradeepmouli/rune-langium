@@ -31,10 +31,9 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { FormProvider, Controller, useWatch } from 'react-hook-form';
-import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
-import { KindBadge } from '../KindBadge.js';
+import { FormProvider, useWatch } from 'react-hook-form';
+import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
+import { TypeHeader } from '../TypeHeader.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
@@ -175,37 +174,8 @@ function TypeAliasForm({
     >
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Type alias name"
-                    aria-label="Type alias name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <KindBadge kind="typeAlias" />
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader kind="typeAlias" namespace={(data as any).namespace} control={form.control} onNameChange={debouncedName} placeholder="Type alias name" nameAriaLabel="Type alias name" className="-mx-4 -mt-4" />
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}
           <FieldSet className="gap-1.5">

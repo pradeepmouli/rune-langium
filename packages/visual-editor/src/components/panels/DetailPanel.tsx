@@ -14,7 +14,7 @@ import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { resolveNodeKind, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from '../editors/TypeLink.js';
-import { KindBadge } from '../KindBadge.js';
+import { TypeHeader } from '../TypeHeader.js';
 import type { AnyGraphNode, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
 
 export interface DetailPanelProps {
@@ -83,21 +83,20 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }:
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-3 p-4">
-        {/* Header */}
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold truncate">{d.name}</h3>
-          <KindBadge kind={kind as TypeKind} />
-          {refOnly && (
+        {/* Header: Namespace + Name + Badge */}
+        <TypeHeader
+          kind={kind as TypeKind}
+          namespace={d.namespace}
+          name={d.name}
+          className="-mx-4 -mt-4"
+          trailing={refOnly ? (
             <Badge variant="outline" className="text-xs text-muted-foreground">
               Reference Only
             </Badge>
-          )}
-        </div>
+          ) : undefined}
+        />
 
         <Separator />
-
-        {/* Namespace */}
-        <DetailField label="Namespace" value={d.namespace ?? ''} />
 
         {/* Definition */}
         {d.definition && <DetailField label="Definition" value={d.definition} />}

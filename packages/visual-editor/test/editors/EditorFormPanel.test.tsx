@@ -210,8 +210,10 @@ describe('EditorFormPanel', () => {
 
     const panel = screen.getByRole('complementary');
     expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
-    // DetailPanel shows namespace label
-    expect(screen.getByText('Namespace')).toBeDefined();
+    // DetailPanel shows namespace in the type-header eyebrow
+    const nsSpan = panel.querySelector('[data-slot="type-header-namespace"]');
+    expect(nsSpan).not.toBeNull();
+    expect(nsSpan!.textContent).toBe('test.model');
   });
 
   it('renders DetailPanel for view-only kinds (e.g. Annotation)', () => {
@@ -224,8 +226,10 @@ describe('EditorFormPanel', () => {
       />
     );
 
-    // Falls through to DetailPanel for annotation kind — shows Namespace label
-    expect(screen.getByText('Namespace')).toBeDefined();
+    // Falls through to DetailPanel for annotation kind — shows namespace in type-header eyebrow
+    const nsSpan = document.querySelector('[data-slot="type-header-namespace"]');
+    expect(nsSpan).not.toBeNull();
+    expect(nsSpan!.textContent).toBe('test.model');
   });
 
   it('forwards available types and navigation props to TypeAliasForm', () => {
@@ -291,7 +295,7 @@ describe('EditorFormPanel', () => {
       />
     );
 
-    const header = document.querySelector('[data-slot="form-header"]');
+    const header = document.querySelector('[data-slot="type-header"]');
     expect(header).toBeDefined();
     expect(screen.getByDisplayValue('Trade')).toBeInTheDocument();
     expect(header!.textContent).toContain('Data');

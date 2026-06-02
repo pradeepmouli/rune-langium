@@ -33,10 +33,9 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { FormProvider, Controller } from 'react-hook-form';
-import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
-import { KindBadge } from '../KindBadge.js';
+import { FormProvider } from 'react-hook-form';
+import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
+import { TypeHeader } from '../TypeHeader.js';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -180,37 +179,8 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
     <FormProvider {...form}>
       <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions}>
         <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Choice name"
-                    aria-label="Choice type name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <KindBadge kind="choice" />
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader kind="choice" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Choice name" nameAriaLabel="Choice type name" className="-mx-4 -mt-4" />
 
           {/* Options */}
           <FieldSet className="gap-1">

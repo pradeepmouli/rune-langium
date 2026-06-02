@@ -39,7 +39,7 @@ import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-lang
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { KindBadge } from '../KindBadge.js';
+import { TypeHeader } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { TypeSelector } from './TypeSelector.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -254,37 +254,8 @@ function FunctionForm({
     <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={d.isReadOnly}>
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name={'name' as never}
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Function name"
-                    aria-label="Function type name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <KindBadge kind="func" />
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader kind="func" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Function name" nameAriaLabel="Function type name" className="-mx-4 -mt-4" />
 
           {/* Input Parameters */}
           <FieldSet className="gap-1">

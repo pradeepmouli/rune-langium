@@ -176,7 +176,7 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
     );
 
     // Name must be the first text input in the form-header slot.
-    const header = container.querySelector('[data-slot="form-header"]')!;
+    const header = container.querySelector('[data-slot="type-header"]')!;
     const nameInput = header.querySelector('input[data-slot="type-name-input"]');
     expect(nameInput).not.toBeNull();
     expect((nameInput as HTMLInputElement).value).toBe('CurrencyEnum');
