@@ -11,8 +11,19 @@
  * imports from the same token source.
  */
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { syntax } from '@rune-langium/design-system/tokens';
+
+/** The theme module source — used to assert it references the syntax tokens
+ * (rather than hardcoded hex), since the compiled HighlightStyle doesn't
+ * expose per-tag colors at runtime. */
+const THEME_SRC = readFileSync(
+  resolve(dirname(fileURLToPath(import.meta.url)), '../../src/lang/refactory-dark-theme.ts'),
+  'utf8'
+);
 
 describe('design-system syntax tokens (canonical values)', () => {
   it('syntax.keyword is #C792EA', () => {
@@ -62,5 +73,24 @@ describe('refactory-dark theme uses design-system syntax tokens', () => {
     expect(mod.refactoryDarkTheme).toBeDefined();
     expect(mod.refactoryDarkHighlightStyle).toBeDefined();
     expect(mod.refactoryDark).toBeDefined();
+  });
+
+  // Source-level: the HighlightStyle rules must reference a syntax.* token for
+  // every remapped tag (proves the theme USES the tokens, not just that they
+  // exist — the compiled style hides colors at runtime).
+  it('references a syntax.* token for each remapped highlight tag', () => {
+    for (const key of [
+      'keyword', 'type', 'attribute', 'string', 'comment', 'number', 'function', 'operator', 'constant'
+    ] as const) {
+      expect(THEME_SRC).toContain(`syntax.${key}`);
+    }
+  });
+
+  // Anti-regression: #C792EA (keyword) and #C3E88D (string) are unique to the
+  // syntax palette; if either reappears as a literal, someone reverted to
+  // hardcoded hex.
+  it('does not reintroduce the hardcoded syntax hex it replaced', () => {
+    expect(THEME_SRC).not.toMatch(/#C792EA/i);
+    expect(THEME_SRC).not.toMatch(/#C3E88D/i);
   });
 });
