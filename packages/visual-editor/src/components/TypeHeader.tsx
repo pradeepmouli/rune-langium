@@ -68,7 +68,7 @@ export function TypeHeader({
                     field.onChange(e);
                     onNameChange?.(e.target.value);
                   }}
-                  className="h-auto rounded-none border-b border-transparent bg-transparent px-1 py-0.5 text-lg font-semibold shadow-none focus-visible:border-input focus-visible:ring-0"
+                  className="h-auto px-1 py-0.5 text-lg font-semibold"
                   placeholder={placeholder}
                   aria-label={nameAriaLabel}
                 />
