@@ -171,6 +171,7 @@ function TypeAliasForm({
       // present on `CommonFormActions` (definition / comments /
       // synonyms / annotations / conditions).
       actions={actions as unknown as EditorFormActions}
+      readOnly={(data as any).isReadOnly}
     >
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
@@ -191,6 +192,7 @@ function TypeAliasForm({
               emptyLabel="No wrapped type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={(data as any).isReadOnly}
             />
           </FieldSet>
         </div>

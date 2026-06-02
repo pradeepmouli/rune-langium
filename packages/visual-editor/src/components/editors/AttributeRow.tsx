@@ -35,6 +35,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { CardinalityPicker } from './CardinalityPicker.js';
 import { formatCardinality, parseCardinality } from '../../adapters/model-helpers.js';
+import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +88,8 @@ function AttributeRow({
   onRevert
 }: AttributeRowProps) {
   const { control, getValues, setValue, watch } = useFormContext();
+  const editorCtx = useEditorActionsContext();
+  const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
   const prefix = `attributes.${index}`;
 
   // AST-canonical reads (R11 / row-renderer contract §2). The picker still
@@ -204,7 +207,7 @@ function AttributeRow({
       data-index={index}
       className={`${ATTRIBUTE_ROW_LAYOUT} rounded border border-transparent px-1 py-0.5
         hover:border-border hover:bg-background/50 ${isOverride ? 'opacity-60' : ''}`}
-      draggable={!disabled}
+      draggable={!effectiveReadOnly}
       onDragStart={handleDragStart}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -232,7 +235,7 @@ function AttributeRow({
               debouncedName(e.target.value);
             }}
             onBlur={field.onBlur}
-            disabled={disabled}
+            disabled={effectiveReadOnly}
             className="w-full min-w-0 px-1.5 py-0.5 text-xs border border-transparent rounded
               focus:border-input focus:outline-none bg-transparent"
             placeholder="name"
@@ -248,7 +251,7 @@ function AttributeRow({
           displayName={typeName}
           options={availableTypes}
           onSelect={handleTypeSelect}
-          disabled={disabled}
+          disabled={effectiveReadOnly}
           placeholder="Select type..."
           emptyLabel="Type"
           onNavigateToNode={onNavigateToNode}
@@ -259,7 +262,7 @@ function AttributeRow({
 
       {/* Cardinality */}
       <div data-slot="attribute-cardinality" className="shrink-0">
-        <CardinalityPicker value={cardinalityString} onChange={handleCardinalityChange} disabled={disabled} />
+        <CardinalityPicker value={cardinalityString} onChange={handleCardinalityChange} disabled={effectiveReadOnly} />
       </div>
 
       <div className="min-w-0 justify-self-end flex items-center gap-1">
@@ -275,7 +278,7 @@ function AttributeRow({
             data-slot="attribute-revert"
             type="button"
             onClick={onRevert}
-            disabled={disabled}
+            disabled={effectiveReadOnly}
             className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
               text-muted-foreground transition-colors hover:text-foreground hover:border-input
               disabled:opacity-30 disabled:cursor-not-allowed"
@@ -297,7 +300,7 @@ function AttributeRow({
             variant="ghost"
             size="icon-xs"
             onClick={() => onRemove(index)}
-            disabled={disabled}
+            disabled={effectiveReadOnly}
             aria-label={`Remove attribute ${committedName || 'unnamed'}`}
             title={`Remove attribute ${committedName || 'unnamed'}`}
             className="shrink-0 text-muted-foreground hover:text-destructive"

@@ -15,6 +15,7 @@
 import { X } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { TypeLink } from './TypeLink.js';
+import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,8 @@ function FunctionInputRow({
   onNavigateToNode,
   allNodeIds
 }: FunctionInputRowProps) {
+  const editorCtx = useEditorActionsContext();
+  const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
   return (
     <div
       data-slot="input-param-row"
@@ -82,7 +85,7 @@ function FunctionInputRow({
         variant="ghost"
         size="icon-xs"
         onClick={() => onRemove(nodeId, member.name)}
-        disabled={disabled}
+        disabled={effectiveReadOnly}
         className="ml-auto shrink-0 text-destructive hover:text-destructive/80"
         aria-label={`Remove input ${member.name}`}
         title={`Remove input ${member.name}`}

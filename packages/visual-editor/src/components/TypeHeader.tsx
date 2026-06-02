@@ -14,6 +14,7 @@ import { Field, FieldError } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { cn } from '@rune-langium/design-system/utils';
 import { KindBadge } from './KindBadge.js';
+import { useEditorActionsContext } from './forms/sections/EditorActionsContext.js';
 import type { TypeKind } from '../types.js';
 
 export interface TypeHeaderProps {
@@ -42,6 +43,8 @@ export function TypeHeader({
   nameAriaLabel,
   name
 }: TypeHeaderProps): React.ReactElement {
+  const editorCtx = useEditorActionsContext();
+  const nameReadOnly = editorCtx?.readOnly ?? false;
   return (
     <div
       data-slot="type-header"
@@ -57,24 +60,30 @@ export function TypeHeader({
           <Controller
             control={control}
             name="name"
-            render={({ field, fieldState }) => (
-              <Field>
-                <Input
-                  {...field}
-                  id={field.name}
-                  data-slot="type-name-input"
-                  aria-invalid={fieldState.invalid}
-                  onChange={(e) => {
-                    field.onChange(e);
-                    onNameChange?.(e.target.value);
-                  }}
-                  className="h-auto px-1 py-0.5 text-lg font-semibold"
-                  placeholder={placeholder}
-                  aria-label={nameAriaLabel}
-                />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )}
+            render={({ field, fieldState }) =>
+              nameReadOnly ? (
+                <h3 data-slot="type-name" className="truncate px-1 text-lg font-semibold">
+                  {field.value}
+                </h3>
+              ) : (
+                <Field>
+                  <Input
+                    {...field}
+                    id={field.name}
+                    data-slot="type-name-input"
+                    aria-invalid={fieldState.invalid}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      onNameChange?.(e.target.value);
+                    }}
+                    className="h-auto px-1 py-0.5 text-lg font-semibold"
+                    placeholder={placeholder}
+                    aria-label={nameAriaLabel}
+                  />
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                </Field>
+              )
+            }
           />
         ) : (
           <h3 data-slot="type-name" className="truncate px-1 text-lg font-semibold">

@@ -223,8 +223,8 @@ function EnumForm({
   // accepts the enum-kind action set without narrowing.
 
   const editorActionsValue = useMemo(
-    () => ({ nodeId, actions: actions as unknown as EditorFormActions }),
-    [nodeId, actions]
+    () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: Boolean(d.isReadOnly) }),
+    [nodeId, actions, d.isReadOnly]
   );
 
   // ---- Render --------------------------------------------------------------
@@ -251,6 +251,7 @@ function EnumForm({
               emptyLabel="No parent enum"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={Boolean(d.isReadOnly)}
             />
           </FieldSet>
 
@@ -260,6 +261,7 @@ function EnumForm({
               <span>Values ({fields.length + inheritedCount})</span>
               {/* Icon-only add button matches FormPreviewPanel; see
                   DataTypeForm for the rationale. */}
+              {!d.isReadOnly && (
               <Button
                 data-slot="add-value-btn"
                 type="button"
@@ -271,6 +273,7 @@ function EnumForm({
               >
                 <Plus className="size-3" />
               </Button>
+              )}
             </FieldLegend>
 
             <PaginatedEnumValues
