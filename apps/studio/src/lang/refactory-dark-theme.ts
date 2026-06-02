@@ -10,6 +10,7 @@
 import { EditorView } from '@codemirror/view';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
+import { syntax } from '@rune-langium/design-system/tokens';
 
 export const refactoryDarkTheme = EditorView.theme(
   {
@@ -85,30 +86,30 @@ export const refactoryDarkTheme = EditorView.theme(
 );
 
 export const refactoryDarkHighlightStyle = HighlightStyle.define([
-  { tag: t.keyword, color: '#C792EA' },
+  { tag: t.keyword, color: syntax.keyword },
   { tag: [t.name, t.deleted, t.character, t.macroName], color: '#E8E6E1' },
-  { tag: [t.function(t.variableName), t.labelName], color: '#82AAFF' },
-  { tag: [t.propertyName], color: '#82AAFF' },
+  { tag: [t.function(t.variableName), t.labelName], color: syntax.function },
+  { tag: [t.propertyName], color: syntax.attribute },
   { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: '#00D4AA' },
   { tag: [t.definition(t.name), t.separator], color: '#E8E6E1' },
   {
     tag: [t.typeName, t.className, t.changed, t.annotation, t.modifier, t.self, t.namespace],
-    color: '#00D4AA'
+    color: syntax.type
   },
   {
     tag: [t.operator, t.operatorKeyword, t.url, t.escape, t.regexp, t.link, t.special(t.string)],
-    color: '#8A8A96'
+    color: syntax.operator
   },
-  { tag: [t.meta, t.comment], color: '#5C5C6A', fontStyle: 'italic' },
+  { tag: [t.meta, t.comment], color: syntax.comment, fontStyle: 'italic' },
   { tag: t.strong, fontWeight: 'bold' },
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.strikethrough, textDecoration: 'line-through' },
   { tag: t.link, color: '#00D4AA', textDecoration: 'underline' },
   { tag: t.heading, fontWeight: 'bold', color: '#E8E6E1' },
-  { tag: [t.atom, t.bool, t.special(t.variableName)], color: '#E8913A' },
-  { tag: [t.processingInstruction, t.string, t.inserted], color: '#C3E88D' },
+  { tag: [t.atom, t.bool, t.special(t.variableName)], color: syntax.constant },
+  { tag: [t.processingInstruction, t.string, t.inserted], color: syntax.string },
   { tag: t.invalid, color: '#FF6058' },
-  { tag: t.number, color: '#E8913A' }
+  { tag: t.number, color: syntax.number }
 ]);
 
 export const refactoryDark = [refactoryDarkTheme, syntaxHighlighting(refactoryDarkHighlightStyle)];
