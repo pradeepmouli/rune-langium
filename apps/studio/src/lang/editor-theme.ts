@@ -119,7 +119,10 @@ export const studioEditorHighlightStyle = HighlightStyle.define([
   { tag: t.heading, fontWeight: 'bold', color: 'var(--foreground)' },
   { tag: [t.atom, t.bool, t.special(t.variableName)], color: syntax.constant },
   { tag: [t.processingInstruction, t.string, t.inserted], color: syntax.string },
-  { tag: t.invalid, color: 'var(--color-error)' },
+  // --destructive (not --color-error): the latter is only defined under
+  // [data-theme='daikonic'], so it wouldn't resolve under ?theme=default.
+  // --destructive is defined in the base palette AND overridden per-theme.
+  { tag: t.invalid, color: 'var(--destructive)' },
   { tag: t.number, color: syntax.number }
 ]);
 

@@ -109,4 +109,11 @@ describe('studio editor theme uses design-system syntax tokens', () => {
   it('the .cm-gutters block sets the mono font', () => {
     expect(THEME_SRC).toMatch(/'\.cm-gutters':\s*\{[\s\S]*?font-mono/);
   });
+
+  // Only use tokens defined in the BASE palette so the theme resolves under
+  // every theme (incl. ?theme=default). --color-error is daikonic-only — use
+  // --destructive (base + per-theme) instead.
+  it('does not use daikonic-only tokens (e.g. --color-error)', () => {
+    expect(THEME_SRC).not.toMatch(/var\(--color-error\)/);
+  });
 });
