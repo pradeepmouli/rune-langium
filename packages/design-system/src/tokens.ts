@@ -71,5 +71,19 @@ export const radii = {
   lg: canonicalTokens.radius.lg
 } as const;
 
+export const syntax = {
+  keyword: canonicalTokens.syntax.keyword,
+  type: canonicalTokens.syntax.type,
+  attribute: canonicalTokens.syntax.attribute,
+  string: canonicalTokens.syntax.string,
+  comment: canonicalTokens.syntax.comment,
+  number: canonicalTokens.syntax.number,
+  function: canonicalTokens.syntax.function,
+  operator: canonicalTokens.syntax.operator,
+  constant: canonicalTokens.syntax.constant,
+  variable: canonicalTokens.syntax.variable
+} as const;
+
 export type Colors = typeof colors;
 export type Fonts = typeof fonts;
+export type Syntax = typeof syntax;
