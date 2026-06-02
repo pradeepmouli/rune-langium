@@ -18,6 +18,7 @@ vi.mock('../../../src/components/editors/CardinalityPicker.js', () => ({
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
+    variant?: 'default' | 'chip';
     wrapperClassName?: string;
     triggerClassName?: string;
     contentClassName?: string;
@@ -51,6 +52,7 @@ describe('CardinalityCell', () => {
 
     expect(pickerProps.current).toMatchObject({
       value: '(0..1)',
+      variant: 'chip',
       wrapperClassName: 'inline-flex'
     });
   });
