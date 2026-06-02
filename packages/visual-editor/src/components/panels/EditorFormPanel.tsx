@@ -6,9 +6,15 @@
  * form based on the selected node's type kind.
  *
  * Renders:
- * - DataTypeForm when kind='data'
- * - OtherForm when isReadOnly=true or kind is unsupported
- * - Empty state when no node is selected
+ * - DataTypeForm / EnumForm / ChoiceForm / FunctionForm / TypeAliasForm
+ *   for their respective kinds — in both editable and read-only mode.
+ * - OtherForm for kinds without a dedicated form (record, basicType,
+ *   annotation, default fallback) and for refOnly curated reference entries.
+ * - Empty state when no node is selected.
+ *
+ * Read-only routing: covered kinds always render their own form (with zero
+ * editable controls when locked). OtherForm is used ONLY for uncovered kinds
+ * and refOnly entries.
  *
  * Features:
  * - Scrollable content with sticky header (name + kind badge)
@@ -175,9 +181,12 @@ const EditorFormPanel = memo(function EditorFormPanel({
     );
   }
 
-  // ---- Read-only fallback --------------------------------------------------
+  // ---- refOnly → OtherForm (lowest-risk: no source text, Reference Only badge) ----
+  // refOnly curated entries are truly non-editable (no source to back edits)
+  // even for covered kinds. Route them to OtherForm with the "Reference Only"
+  // pill so the user understands why the panel is non-editable.
 
-  if (effectivelyReadOnly || (nodeData as any).isReadOnly) {
+  if (refOnly) {
     return (
       <aside
         ref={panelRef}
@@ -197,8 +206,12 @@ const EditorFormPanel = memo(function EditorFormPanel({
   }
 
   // ---- Dispatch by $type → kind --------------------------------------------
+  // Covered kinds render their own form (read-only when locked).
+  // OtherForm is used only for uncovered kinds (record/basicType/annotation/default).
 
   const kind = resolveNodeKind(nodeData);
+  // Combined lock: panel-prop lock OR node-data flag.
+  const readOnly = effectivelyReadOnly || Boolean((nodeData as any).isReadOnly);
 
   function renderForm() {
     switch (kind) {
@@ -214,6 +227,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             renderExpressionEditor={renderExpressionEditor}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            readOnly={readOnly}
           />
         );
 
@@ -228,6 +242,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             allNodes={allNodes}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            readOnly={readOnly}
           />
         );
 
@@ -241,6 +256,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             actions={actions}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            readOnly={readOnly}
           />
         );
 
@@ -256,6 +272,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             renderExpressionEditor={renderExpressionEditor}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            readOnly={readOnly}
           />
         );
 
@@ -270,6 +287,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             renderExpressionEditor={renderExpressionEditor}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            readOnly={readOnly}
           />
         );
 

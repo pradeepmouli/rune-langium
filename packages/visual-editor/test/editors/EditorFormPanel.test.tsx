@@ -197,7 +197,9 @@ describe('EditorFormPanel', () => {
     expect(screen.getByLabelText('Add attribute')).toBeInTheDocument();
   });
 
-  it('renders OtherForm for read-only nodes', () => {
+  it('renders DataTypeForm (not OtherForm) for a read-only covered type (data)', () => {
+    // A read-only Data node must now render DataTypeForm in read-only mode,
+    // NOT OtherForm. Covered kinds always use their dedicated form.
     render(
       <EditorFormPanel
         nodeData={makeNodeData({ isReadOnly: true })}
@@ -209,11 +211,38 @@ describe('EditorFormPanel', () => {
     );
 
     const panel = screen.getByRole('complementary');
-    expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
-    // OtherForm shows namespace in the type-header eyebrow
-    const nsSpan = panel.querySelector('[data-slot="type-header-namespace"]');
-    expect(nsSpan).not.toBeNull();
-    expect(nsSpan!.textContent).toBe('test.model');
+    // Panel aria-label is "Edit <name>" (covered kind, not OtherForm's "Details for").
+    expect(panel.getAttribute('aria-label')).toBe('Edit Trade');
+    // DataTypeForm renders [data-slot="data-type-form"] inside the panel.
+    const dataForm = panel.querySelector('[data-slot="data-type-form"]');
+    expect(dataForm).not.toBeNull();
+    // In read-only mode the name field is a static heading, not an input.
+    expect(panel.querySelector('[data-slot="type-name-input"]')).toBeNull();
+    expect(panel.querySelector('[data-slot="type-name"]')).not.toBeNull();
+    // The "Add attribute" button must be absent in read-only mode.
+    expect(panel.querySelector('[data-slot="add-attribute-btn"]')).toBeNull();
+  });
+
+  it('renders DataTypeForm in read-only mode when only the panel isReadOnly prop is set (node flag unset)', () => {
+    // This is the discriminating case for the independent panel-level lock:
+    // nodeData.isReadOnly is absent/false, but the panel isReadOnly prop is true.
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({ isReadOnly: false })}
+        nodeId="node-1"
+        isReadOnly={true}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    const dataForm = panel.querySelector('[data-slot="data-type-form"]');
+    expect(dataForm).not.toBeNull();
+    // Read-only mode: no add-attribute button, no editable name input.
+    expect(panel.querySelector('[data-slot="add-attribute-btn"]')).toBeNull();
+    expect(panel.querySelector('[data-slot="type-name-input"]')).toBeNull();
+    expect(panel.querySelector('[data-slot="type-name"]')).not.toBeNull();
   });
 
   it('renders OtherForm for view-only kinds (e.g. Annotation)', () => {
@@ -340,5 +369,30 @@ describe('EditorFormPanel', () => {
     const panel = screen.getByRole('complementary');
     fireEvent.keyDown(panel, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  // ---- refOnly routing -------------------------------------------------------
+
+  it('renders OtherForm with "Details for" label for a refOnly covered type (data)', () => {
+    // refOnly entries (curated reference-only, no source text) always route to
+    // OtherForm with the "Reference Only" pill regardless of their kind.
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({ $type: 'Data' })}
+        nodeId="node-1"
+        refOnly={true}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
+    // OtherForm renders [data-slot="type-header-namespace"], DataTypeForm does not.
+    const nsSpan = panel.querySelector('[data-slot="type-header-namespace"]');
+    expect(nsSpan).not.toBeNull();
+    expect(nsSpan!.textContent).toBe('test.model');
+    // DataTypeForm must NOT be rendered for refOnly entries.
+    expect(panel.querySelector('[data-slot="data-type-form"]')).toBeNull();
   });
 });

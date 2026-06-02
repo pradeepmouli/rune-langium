@@ -70,6 +70,10 @@ export interface TypeAliasFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +86,8 @@ function TypeAliasForm({
   actions,
   availableTypes = EMPTY_TYPES,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: TypeAliasFormProps) {
   // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -160,6 +165,8 @@ function TypeAliasForm({
 
   // ---- Render --------------------------------------------------------------
 
+  const isReadOnly = Boolean(readOnlyProp || (data as any).isReadOnly);
+
   return (
     <EditorActionsProvider
       nodeId={nodeId}
@@ -171,7 +178,7 @@ function TypeAliasForm({
       // present on `CommonFormActions` (definition / comments /
       // synonyms / annotations / conditions).
       actions={actions as unknown as EditorFormActions}
-      readOnly={(data as any).isReadOnly}
+      readOnly={isReadOnly}
     >
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
@@ -192,7 +199,7 @@ function TypeAliasForm({
               emptyLabel="No wrapped type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
-              disabled={(data as any).isReadOnly}
+              disabled={isReadOnly}
             />
           </FieldSet>
         </div>

@@ -76,6 +76,10 @@ export interface EnumFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,7 +93,8 @@ function EnumForm({
   actions,
   allNodes = EMPTY_NODES,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: EnumFormProps) {
   const d = data as any;
   // ---- Form setup (R11: AST schema + identity projection) -----------------
@@ -222,9 +227,11 @@ function EnumForm({
   // host's `EditorFormActions` + `nodeId`. The intersection-typed context
   // accepts the enum-kind action set without narrowing.
 
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+
   const editorActionsValue = useMemo(
-    () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: Boolean(d.isReadOnly) }),
-    [nodeId, actions, d.isReadOnly]
+    () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: isReadOnly }),
+    [nodeId, actions, isReadOnly]
   );
 
   // ---- Render --------------------------------------------------------------
@@ -251,7 +258,7 @@ function EnumForm({
               emptyLabel="No parent enum"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
-              disabled={Boolean(d.isReadOnly)}
+              disabled={isReadOnly}
             />
           </FieldSet>
 
@@ -261,7 +268,7 @@ function EnumForm({
               <span>Values ({fields.length + inheritedCount})</span>
               {/* Icon-only add button matches FormPreviewPanel; see
                   DataTypeForm for the rationale. */}
-              {!d.isReadOnly && (
+              {!isReadOnly && (
               <Button
                 data-slot="add-value-btn"
                 type="button"
