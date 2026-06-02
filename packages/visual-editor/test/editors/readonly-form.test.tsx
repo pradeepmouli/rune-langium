@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 
@@ -102,7 +102,7 @@ describe('DataTypeForm – read-only mode contract', () => {
     vi.useRealTimers();
   });
 
-  it('renders zero enabled inputs or selects inside the Members tab area', () => {
+  it('renders zero enabled inputs, textareas, or selects in the form', () => {
     const { container } = render(
       <DataTypeForm
         nodeId="test::LockedTrade"
@@ -112,10 +112,10 @@ describe('DataTypeForm – read-only mode contract', () => {
       />
     );
 
-    // The Members tab is mounted by default.
+    // The Members tab is mounted by default; Doc/Meta tabs are lazy.
     // Query all interactive controls that should NOT be editable.
     const enabledInputs = container.querySelectorAll(
-      'input:not([disabled]), select:not([disabled])'
+      'input:not([disabled]), textarea:not([disabled]), select:not([disabled])'
     );
 
     // The type-name field should be a static <h3> not an <input> in read-only.
@@ -125,6 +125,21 @@ describe('DataTypeForm – read-only mode contract', () => {
       (el) => el.getAttribute('data-slot') ?? el.tagName.toLowerCase()
     );
     expect(slots, `Unexpected enabled inputs: ${JSON.stringify(slots)}`).toHaveLength(0);
+
+    // Also assert the Extends TypeReferenceField picker trigger (a <button>)
+    // is disabled — the selector trigger is a shadcn <button disabled>.
+    const extendsField = container.querySelector('[data-slot="type-reference"]');
+    expect(extendsField).not.toBeNull();
+    const extendsTrigger = extendsField!.querySelector('[data-slot="type-selector"]');
+    if (extendsTrigger) {
+      // When a value is present, the trigger renders as a disabled button
+      expect((extendsTrigger as HTMLButtonElement).disabled).toBe(true);
+    }
+    // When no value (as in this fixture with no superType), the TypeSelector
+    // trigger still renders disabled — confirm no enabled button exists inside
+    // the Extends area.
+    const enabledExtendsButtons = extendsField!.querySelectorAll('button:not([disabled])');
+    expect(enabledExtendsButtons, 'Extends field should have no enabled buttons').toHaveLength(0);
   });
 
   it('renders zero enabled buttons inside the attribute rows', () => {
