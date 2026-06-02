@@ -1517,8 +1517,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
           const card = parseCardinalityString(cardinality);
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
+          set((state) => {
+            const updatedNodes = state.nodes.map((n) => {
               if (n.id !== nodeId) return n;
               const d = n.data as AnyGraphNode;
               if (d.$type === 'RosettaFunction') {
@@ -1527,7 +1527,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                     ? {
                         ...inp,
                         name: newName,
-                        typeCall: { $type: 'TypeCall', type: { $refText: typeName }, arguments: [] },
+                        // Spread existing typeCall so pre-existing TypeCall.arguments
+                        // (parameterized type calls) are preserved; only the type
+                        // reference and cardinality are overwritten.
+                        typeCall: {
+                          ...(inp.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                          type: { $refText: typeName }
+                        },
                         card: { $type: 'RosettaCardinality', ...card }
                       }
                     : inp
@@ -1535,8 +1541,33 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                 return { ...n, data: { ...d, inputs } };
               }
               return n;
-            })
-          }));
+            });
+
+            // Remove the old attribute-ref edge for this input (keyed by old name).
+            const filteredEdges = state.edges.filter(
+              (e) =>
+                !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
+            );
+
+            // Add a new attribute-ref edge if the target type node exists.
+            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            if (targetNodeId && targetNodeId !== nodeId) {
+              const newEdge: TypeGraphEdge = {
+                id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
+                source: nodeId,
+                target: targetNodeId,
+                type: 'attribute-ref',
+                data: {
+                  kind: 'attribute-ref' as const,
+                  label: newName,
+                  cardinality: formatCardinalityString(cardinality)
+                } as EdgeData
+              };
+              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
+            }
+
+            return { nodes: updatedNodes, edges: filteredEdges };
+          });
         },
 
         reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
