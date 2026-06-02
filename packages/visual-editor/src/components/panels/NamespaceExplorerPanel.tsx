@@ -287,7 +287,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
                         onToggleTreeExpand={() => toggleTreeExpand(row.namespace)}
                       />
-                    ) : (
+                    ) : row.kind === 'type' ? (
                       <TypeItemRow
                         row={row}
                         isGraphVisible={expandedNamespaces.has(row.namespace)}
@@ -299,7 +299,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         // onClearDragSource is intentionally NOT forwarded — the TypeItemRow
                         // no longer uses it. The panel-level prop is kept for back-compat only.
                       />
-                    )}
+                    ) : null /* 'segment' rows are not emitted by flattenNamespaceTree */}
                   </div>
                 );
               })}
