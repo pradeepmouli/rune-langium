@@ -256,6 +256,7 @@ function EnumForm({
               placeholder="Select parent enum..."
               allowClear
               emptyLabel="No parent enum"
+              filterKinds={['enum']}
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
               disabled={isReadOnly}
@@ -269,17 +270,17 @@ function EnumForm({
               {/* Icon-only add button matches FormPreviewPanel; see
                   DataTypeForm for the rationale. */}
               {!isReadOnly && (
-              <Button
-                data-slot="add-value-btn"
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleAddValue}
-                aria-label="Add value"
-                title="Add value"
-              >
-                <Plus className="size-3" />
-              </Button>
+                <Button
+                  data-slot="add-value-btn"
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleAddValue}
+                  aria-label="Add value"
+                  title="Add value"
+                >
+                  <Plus className="size-3" />
+                </Button>
               )}
             </FieldLegend>
 
