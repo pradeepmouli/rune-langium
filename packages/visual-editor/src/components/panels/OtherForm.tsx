@@ -11,13 +11,15 @@
  * using shadcn/ui primitives and lucide-react icons.
  */
 
-import { AlertCircle, GitFork } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { resolveNodeKind, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from '../editors/TypeLink.js';
 import { TypeHeader } from '../TypeHeader.js';
+import { DefinitionField } from '../DefinitionField.js';
+import { ExtendsField } from '../ExtendsField.js';
 import type { AnyGraphNode, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
 
 export interface OtherFormProps {
@@ -102,22 +104,15 @@ export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: O
         <Separator />
 
         {/* Definition */}
-        {d.definition && <DetailField label="Definition" value={d.definition} />}
+        {d.definition && <DefinitionField value={d.definition} />}
 
         {/* Extends */}
         {parentName && (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">Extends</span>
-            <span className="inline-flex items-center gap-1.5 text-sm">
-              <GitFork className="size-3.5 text-muted-foreground" />
-              <TypeLink
-                typeName={parentName}
-                onNavigateToNode={onNavigateToNode}
-                allNodeIds={allNodeIds}
-                className="text-sm"
-              />
-            </span>
-          </div>
+          <ExtendsField
+            parentName={parentName}
+            onNavigateToNode={onNavigateToNode}
+            allNodeIds={allNodeIds}
+          />
         )}
 
         {/* Members */}
@@ -172,15 +167,3 @@ export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: O
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function DetailField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-sm">{value}</span>
-    </div>
-  );
-}
