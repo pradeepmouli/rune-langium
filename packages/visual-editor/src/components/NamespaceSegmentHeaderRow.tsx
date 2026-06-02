@@ -70,12 +70,15 @@ export function NamespaceSegmentHeaderRow({
           {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </Button>
 
-        <span
-          className="flex-1 truncate text-xs font-semibold tracking-wide cursor-pointer"
+        {/* Use a real <button> so keyboard users can toggle the segment with
+            Enter/Space and assistive tech announces it as interactive. */}
+        <button
+          type="button"
+          className="flex-1 truncate text-xs font-semibold tracking-wide cursor-pointer bg-transparent border-0 p-0 text-left text-inherit hover:text-inherit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={onToggle}
         >
           {fullPath || '(default)'}
-        </span>
+        </button>
 
         <span className="number-chiclet shrink-0">{count}</span>
       </div>
