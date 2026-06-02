@@ -378,145 +378,154 @@ function DataTypeForm({
   return (
     <FormProvider {...form}>
       <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
-      <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full gap-4 p-4">
-        {/* Header: Namespace + Name + Badge — always visible above tabs */}
-        <TypeHeader kind="data" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Type name" nameAriaLabel="Data type name" className={INSPECTOR_FORM_HEADER_CLASS} />
+        <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full gap-4 p-4">
+          {/* Header: Namespace + Name + Badge — always visible above tabs */}
+          <TypeHeader
+            kind="data"
+            namespace={d.namespace}
+            control={form.control}
+            onNameChange={debouncedName}
+            placeholder="Type name"
+            nameAriaLabel="Data type name"
+            className={INSPECTOR_FORM_HEADER_CLASS}
+          />
 
-        {/* Inheritance — always visible above tabs */}
-        <div className="shrink-0">
-          <FieldSet className="gap-1.5">
-            <FieldLegend variant="label" className="mb-0 text-muted-foreground">
-              Extends
-            </FieldLegend>
-            <TypeReferenceField
-              value={parentValue ?? null}
-              displayName={parentName}
-              options={parentOptions}
-              onSelect={handleParentSelect}
-              placeholder="Select parent type..."
-              allowClear
-              emptyLabel="No parent type"
-              onNavigateToNode={onNavigateToNode}
-              allNodeIds={allNodeIds}
-              disabled={isReadOnly}
-            />
-          </FieldSet>
-        </div>
+          {/* Inheritance — always visible above tabs */}
+          <div className="shrink-0">
+            <FieldSet className="gap-1.5">
+              <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+                Extends
+              </FieldLegend>
+              <TypeReferenceField
+                value={parentValue ?? null}
+                displayName={parentName}
+                options={parentOptions}
+                onSelect={handleParentSelect}
+                placeholder="Select parent type..."
+                allowClear
+                emptyLabel="No parent type"
+                filterKinds={['data', 'builtin']}
+                onNavigateToNode={onNavigateToNode}
+                allNodeIds={allNodeIds}
+                disabled={isReadOnly}
+              />
+            </FieldSet>
+          </div>
 
-        {/* Tabbed sections */}
-        <Tabs defaultValue="members" className="-mx-4 flex-1 flex flex-col min-h-0">
-          <TabsList className="studio-insp-tabs px-4">
-            <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="conditions">Conditions</TabsTrigger>
-            <TabsTrigger value="doc">Doc</TabsTrigger>
-            <TabsTrigger value="meta">Meta</TabsTrigger>
-          </TabsList>
+          {/* Tabbed sections */}
+          <Tabs defaultValue="members" className="-mx-4 flex-1 flex flex-col min-h-0">
+            <TabsList className="studio-insp-tabs px-4">
+              <TabsTrigger value="members">Members</TabsTrigger>
+              <TabsTrigger value="conditions">Conditions</TabsTrigger>
+              <TabsTrigger value="doc">Doc</TabsTrigger>
+              <TabsTrigger value="meta">Meta</TabsTrigger>
+            </TabsList>
 
-          {/* Members tab — attributes */}
-          <TabsContent value="members" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-            <FieldSet className="gap-1">
-              <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
-                <span>Attributes ({fields.length + inheritedCount})</span>
-                {/* Icon-only add button to match FormPreviewPanel's
+            {/* Members tab — attributes */}
+            <TabsContent value="members" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
+              <FieldSet className="gap-1">
+                <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
+                  <span>Attributes ({fields.length + inheritedCount})</span>
+                  {/* Icon-only add button to match FormPreviewPanel's
                     +/- treatment for optional sections and array adds.
                     The legend already names the section ("Attributes"),
                     so the button only conveys the operation. aria-label
                     preserves the full phrasing for screen readers. */}
-                {!isReadOnly && (
-                <Button
-                  data-slot="add-attribute-btn"
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleAddAttribute}
-                  aria-label="Add attribute"
-                  title="Add attribute"
-                >
-                  <Plus className="size-3" />
-                </Button>
-                )}
-              </FieldLegend>
+                  {!isReadOnly && (
+                    <Button
+                      data-slot="add-attribute-btn"
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={handleAddAttribute}
+                      aria-label="Add attribute"
+                      title="Add attribute"
+                    >
+                      <Plus className="size-3" />
+                    </Button>
+                  )}
+                </FieldLegend>
 
-              <FieldGroup className="gap-1">
-                {/* Inherited rows via z2f's `arrayConfig.before` ghost-row primitive
+                <FieldGroup className="gap-1">
+                  {/* Inherited rows via z2f's `arrayConfig.before` ghost-row primitive
                     (R6 / US4). Rendered above local rows; do not participate in
                     form state, validation, or submission. */}
-                {ghostRowsBefore.map((row, i) => (
-                  <div key={`ghost-before-${row.id}`}>
-                    {
-                      row.render({
-                        isFirst: i === 0,
-                        isLast: i === ghostRowsBefore.length - 1
-                      }) as ReactNode
-                    }
-                  </div>
-                ))}
+                  {ghostRowsBefore.map((row, i) => (
+                    <div key={`ghost-before-${row.id}`}>
+                      {
+                        row.render({
+                          isFirst: i === 0,
+                          isLast: i === ghostRowsBefore.length - 1
+                        }) as ReactNode
+                      }
+                    </div>
+                  ))}
 
-                {/* Local rows from RHF's useFieldArray — the form-state surface. */}
-                {fields.map((field, index) => {
-                  const meta = localMeta[index];
-                  const isOverride = meta?.isOverride ?? false;
-                  const localName = meta?.name ?? '';
-                  return (
-                    <AttributeRow
-                      key={field.id}
-                      index={index}
-                      committedName={((committedRef.current as any).attributes ?? [])[index]?.name ?? ''}
-                      availableTypes={availableTypes}
-                      onUpdate={handleUpdateAttribute}
-                      onRemove={handleRemoveAttribute}
-                      onReorder={handleReorderAttribute}
-                      onNavigateToNode={onNavigateToNode}
-                      allNodeIds={allNodeIds}
-                      isOverride={isOverride}
-                      onRevert={isOverride ? () => handleRevertOverride(localName) : undefined}
-                    />
-                  );
-                })}
+                  {/* Local rows from RHF's useFieldArray — the form-state surface. */}
+                  {fields.map((field, index) => {
+                    const meta = localMeta[index];
+                    const isOverride = meta?.isOverride ?? false;
+                    const localName = meta?.name ?? '';
+                    return (
+                      <AttributeRow
+                        key={field.id}
+                        index={index}
+                        committedName={((committedRef.current as any).attributes ?? [])[index]?.name ?? ''}
+                        availableTypes={availableTypes}
+                        onUpdate={handleUpdateAttribute}
+                        onRemove={handleRemoveAttribute}
+                        onReorder={handleReorderAttribute}
+                        onNavigateToNode={onNavigateToNode}
+                        allNodeIds={allNodeIds}
+                        isOverride={isOverride}
+                        onRevert={isOverride ? () => handleRevertOverride(localName) : undefined}
+                      />
+                    );
+                  })}
 
-                {fields.length === 0 && ghostRowsBefore.length === 0 && (
-                  <p className="text-xs text-muted-foreground italic py-2 text-center">
-                    No attributes defined. Use the + button above to add one.
-                  </p>
-                )}
-              </FieldGroup>
-            </FieldSet>
-          </TabsContent>
+                  {fields.length === 0 && ghostRowsBefore.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic py-2 text-center">
+                      No attributes defined. Use the + button above to add one.
+                    </p>
+                  )}
+                </FieldGroup>
+              </FieldSet>
+            </TabsContent>
 
-          {/* Conditions tab */}
-          <TabsContent value="conditions" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-            <ConditionSection
-              label="Conditions"
-              conditions={d.conditions}
-              readOnly={isReadOnly}
-              onAdd={handleAddCondition}
-              onRemove={handleRemoveCondition}
-              onUpdate={handleUpdateCondition}
-              onReorder={handleReorderCondition}
-              renderExpressionEditor={renderExpressionEditor}
-            />
-          </TabsContent>
+            {/* Conditions tab */}
+            <TabsContent value="conditions" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
+              <ConditionSection
+                label="Conditions"
+                conditions={d.conditions}
+                readOnly={isReadOnly}
+                onAdd={handleAddCondition}
+                onRemove={handleRemoveCondition}
+                onUpdate={handleUpdateCondition}
+                onReorder={handleReorderCondition}
+                renderExpressionEditor={renderExpressionEditor}
+              />
+            </TabsContent>
 
-          {/* Doc tab — description, comments, synonyms */}
-          <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-            <MetadataSection
-              onDefinitionCommit={commitDefinition}
-              onCommentsCommit={commitComments}
-              onSynonymAdd={handleAddSynonym}
-              onSynonymRemove={handleRemoveSynonym}
-            />
-          </TabsContent>
+            {/* Doc tab — description, comments, synonyms */}
+            <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
+              <MetadataSection
+                onDefinitionCommit={commitDefinition}
+                onCommentsCommit={commitComments}
+                onSynonymAdd={handleAddSynonym}
+                onSynonymRemove={handleRemoveSynonym}
+              />
+            </TabsContent>
 
-          {/* Meta tab — annotations */}
-          <TabsContent value="meta" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
-            <AnnotationSection
-              annotations={d.annotations}
-              onAdd={handleAddAnnotation}
-              onRemove={handleRemoveAnnotation}
-            />
-          </TabsContent>
-        </Tabs>
-      </div>
+            {/* Meta tab — annotations */}
+            <TabsContent value="meta" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
+              <AnnotationSection
+                annotations={d.annotations}
+                onAdd={handleAddAnnotation}
+                onRemove={handleRemoveAnnotation}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
       </EditorActionsProvider>
     </FormProvider>
   );

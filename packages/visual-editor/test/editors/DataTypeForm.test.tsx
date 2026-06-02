@@ -15,6 +15,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
+import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
+import type { TypeRefPayload } from '../../src/types/structure-view.js';
 
 function makeActions(overrides: Partial<EditorFormActions<'data'>> = {}): EditorFormActions<'data'> {
   return {
@@ -930,5 +932,110 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     expect(slots.slice(0, 2)).toEqual(['inherited-attribute-row', 'inherited-attribute-row']);
     expect(slots.slice(2).every((s) => s === 'attribute-row')).toBe(true);
     expect(slots).toHaveLength(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-b — Extends field drop validation
+// The Extends TypeReferenceField must only accept Data/builtin drops and
+// reject wrong-kind drops (Enum, Func, etc.) so setInheritance is never
+// called with an invalid parent kind.
+// ---------------------------------------------------------------------------
+
+function buildDataTransfer(payload: TypeRefPayload): DataTransfer {
+  const store = new Map<string, string>();
+  store.set(TYPE_REF_PAYLOAD_MIME, JSON.stringify(payload));
+  store.set(typeRefMimeForKind(payload.kind), '');
+  return {
+    types: Array.from(store.keys()),
+    getData: (mime: string) => store.get(mime) ?? '',
+    setData: () => {},
+    dropEffect: '' as DataTransfer['dropEffect'],
+    effectAllowed: 'link' as DataTransfer['effectAllowed']
+  } as unknown as DataTransfer;
+}
+
+const EXTENDS_TYPES: TypeOption[] = [
+  { value: 'builtin::string', label: 'string', kind: 'builtin' },
+  { value: 'test::BaseType', label: 'BaseType', kind: 'data', namespace: 'test' },
+  { value: 'test::Side', label: 'Side', kind: 'enum', namespace: 'test' }
+];
+
+function makeSimpleDataNode(): AnyGraphNode {
+  return {
+    $type: 'Data',
+    name: 'Trade',
+    namespace: 'test',
+    definition: '',
+    attributes: [],
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
+}
+
+describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
+  it('rejects an Enum drop on the Extends TypeReferenceField (does not call setInheritance)', () => {
+    const setInheritance = vi.fn();
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={makeSimpleDataNode()}
+        availableTypes={EXTENDS_TYPES}
+        actions={makeActions({ setInheritance })}
+      />
+    );
+
+    // The Extends TypeReferenceField contains one [data-slot="type-reference"] drop target.
+    const dropTargets = container.querySelectorAll('[data-slot="type-reference"]');
+    // The first drop target belongs to the Extends field (it appears before attribute rows).
+    expect(dropTargets.length).toBeGreaterThan(0);
+    const extendsDropTarget = dropTargets[0]!;
+
+    const enumPayload: TypeRefPayload = {
+      rune: 'type-ref',
+      namespaceUri: 'test',
+      typeId: 'test::Side',
+      typeName: 'Side',
+      kind: 'Enum'
+    };
+
+    act(() => {
+      fireEvent.drop(extendsDropTarget, { dataTransfer: buildDataTransfer(enumPayload) });
+    });
+
+    expect(setInheritance).not.toHaveBeenCalled();
+  });
+
+  it('accepts a Data drop on the Extends TypeReferenceField (calls setInheritance)', () => {
+    const setInheritance = vi.fn();
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={makeSimpleDataNode()}
+        availableTypes={EXTENDS_TYPES}
+        actions={makeActions({ setInheritance })}
+      />
+    );
+
+    const dropTargets = container.querySelectorAll('[data-slot="type-reference"]');
+    const extendsDropTarget = dropTargets[0]!;
+
+    const dataPayload: TypeRefPayload = {
+      rune: 'type-ref',
+      namespaceUri: 'test',
+      typeId: 'test::BaseType',
+      typeName: 'BaseType',
+      kind: 'Data'
+    };
+
+    act(() => {
+      fireEvent.drop(extendsDropTarget, { dataTransfer: buildDataTransfer(dataPayload) });
+    });
+
+    expect(setInheritance).toHaveBeenCalledWith('test::Trade', 'test::BaseType');
   });
 });

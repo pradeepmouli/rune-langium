@@ -16,12 +16,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
+import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
+import type { TypeRefPayload } from '../../src/types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeActions(): EditorFormActions<'enum'> {
+function makeActions(overrides: Partial<EditorFormActions<'enum'>> = {}): EditorFormActions<'enum'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -34,7 +36,8 @@ function makeActions(): EditorFormActions<'enum'> {
     updateEnumValue: vi.fn(),
     reorderEnumValue: vi.fn(),
     setEnumParent: vi.fn(),
-    validate: vi.fn().mockReturnValue([])
+    validate: vi.fn().mockReturnValue([]),
+    ...overrides
   };
 }
 
@@ -451,5 +454,105 @@ describe('EnumForm – merged inherited enum value list', () => {
     );
     const inheritedRow = container.querySelector('[data-slot="inherited-enum-value-row"]')!;
     expect(inheritedRow.querySelector('button[aria-label*="Remove"]')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2-b — Extends field drop validation
+// The Extends TypeReferenceField must only accept Enum drops and reject
+// wrong-kind drops (Data, Func, etc.) so setEnumParent is never called
+// with an invalid parent kind.
+// ---------------------------------------------------------------------------
+
+function buildEnumDataTransfer(payload: TypeRefPayload): DataTransfer {
+  const store = new Map<string, string>();
+  store.set(TYPE_REF_PAYLOAD_MIME, JSON.stringify(payload));
+  store.set(typeRefMimeForKind(payload.kind), '');
+  return {
+    types: Array.from(store.keys()),
+    getData: (mime: string) => store.get(mime) ?? '',
+    setData: () => {},
+    dropEffect: '' as DataTransfer['dropEffect'],
+    effectAllowed: 'link' as DataTransfer['effectAllowed']
+  } as unknown as DataTransfer;
+}
+
+const EXTENDS_TYPES: TypeOption[] = [
+  { value: 'test.enums::CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test.enums' },
+  { value: 'test::Trade', label: 'Trade', kind: 'data', namespace: 'test' }
+];
+
+function makeSimpleEnumData(): AnyGraphNode {
+  return {
+    $type: 'RosettaEnumeration',
+    name: 'PaymentEnum',
+    namespace: 'test',
+    enumValues: [],
+    synonyms: [],
+    annotations: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
+}
+
+describe('EnumForm – Extends field drop validation (P2-b)', () => {
+  it('rejects a Data drop on the Extends TypeReferenceField (does not call setEnumParent)', () => {
+    const setEnumParent = vi.fn();
+    const { container } = render(
+      <EnumForm
+        nodeId="test::PaymentEnum"
+        data={makeSimpleEnumData()}
+        availableTypes={EXTENDS_TYPES}
+        actions={makeActions({ setEnumParent })}
+      />
+    );
+
+    const dropTargets = container.querySelectorAll('[data-slot="type-reference"]');
+    expect(dropTargets.length).toBeGreaterThan(0);
+    const extendsDropTarget = dropTargets[0]!;
+
+    const dataPayload: TypeRefPayload = {
+      rune: 'type-ref',
+      namespaceUri: 'test',
+      typeId: 'test::Trade',
+      typeName: 'Trade',
+      kind: 'Data'
+    };
+
+    act(() => {
+      fireEvent.drop(extendsDropTarget, { dataTransfer: buildEnumDataTransfer(dataPayload) });
+    });
+
+    expect(setEnumParent).not.toHaveBeenCalled();
+  });
+
+  it('accepts an Enum drop on the Extends TypeReferenceField (calls setEnumParent)', () => {
+    const setEnumParent = vi.fn();
+    const { container } = render(
+      <EnumForm
+        nodeId="test::PaymentEnum"
+        data={makeSimpleEnumData()}
+        availableTypes={EXTENDS_TYPES}
+        actions={makeActions({ setEnumParent })}
+      />
+    );
+
+    const dropTargets = container.querySelectorAll('[data-slot="type-reference"]');
+    const extendsDropTarget = dropTargets[0]!;
+
+    const enumPayload: TypeRefPayload = {
+      rune: 'type-ref',
+      namespaceUri: 'test.enums',
+      typeId: 'test.enums::CurrencyEnum',
+      typeName: 'CurrencyEnum',
+      kind: 'Enum'
+    };
+
+    act(() => {
+      fireEvent.drop(extendsDropTarget, { dataTransfer: buildEnumDataTransfer(enumPayload) });
+    });
+
+    expect(setEnumParent).toHaveBeenCalledWith('test::PaymentEnum', 'test.enums::CurrencyEnum');
   });
 });
