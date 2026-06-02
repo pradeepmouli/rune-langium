@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Verifies that the refactoryDarkHighlightStyle derives its syntax palette
+ * Verifies that the studioEditorHighlightStyle derives its syntax palette
  * from the canonical design tokens rather than hardcoding hex values.
  *
  * The CodeMirror HighlightStyle API does not expose per-tag color values
@@ -21,7 +21,7 @@ import { syntax } from '@rune-langium/design-system/tokens';
  * (rather than hardcoded hex), since the compiled HighlightStyle doesn't
  * expose per-tag colors at runtime. */
 const THEME_SRC = readFileSync(
-  resolve(dirname(fileURLToPath(import.meta.url)), '../../src/lang/refactory-dark-theme.ts'),
+  resolve(dirname(fileURLToPath(import.meta.url)), '../../src/lang/editor-theme.ts'),
   'utf8'
 );
 
@@ -67,12 +67,12 @@ describe('design-system syntax tokens (canonical values)', () => {
   });
 });
 
-describe('refactory-dark theme uses design-system syntax tokens', () => {
+describe('studio editor theme uses design-system syntax tokens', () => {
   it('re-exports the theme without error', async () => {
-    const mod = await import('../../src/lang/refactory-dark-theme.js');
-    expect(mod.refactoryDarkTheme).toBeDefined();
-    expect(mod.refactoryDarkHighlightStyle).toBeDefined();
-    expect(mod.refactoryDark).toBeDefined();
+    const mod = await import('../../src/lang/editor-theme.js');
+    expect(mod.studioEditorTheme).toBeDefined();
+    expect(mod.studioEditorHighlightStyle).toBeDefined();
+    expect(mod.studioEditorExtensions).toBeDefined();
   });
 
   // Source-level: the HighlightStyle rules must reference a syntax.* token for
@@ -94,10 +94,10 @@ describe('refactory-dark theme uses design-system syntax tokens', () => {
     expect(THEME_SRC).not.toMatch(/#C3E88D/i);
   });
 
-  // Chrome anti-regression: the Refactory Dark surface hex must be gone from
+  // Chrome anti-regression: the legacy surface hex must be gone from
   // the EditorView.theme({}) block; all chrome colors must now use var(--*)
   // or color-mix() so the editor adapts to the active theme (daikonic).
-  it('does not contain the Refactory Dark background hex in the chrome', () => {
+  it('does not contain the legacy background hex in the chrome', () => {
     expect(THEME_SRC).not.toMatch(/#0C0C14/i);
     expect(THEME_SRC).not.toMatch(/#181824/i);
     expect(THEME_SRC).not.toMatch(/#12121C/i);

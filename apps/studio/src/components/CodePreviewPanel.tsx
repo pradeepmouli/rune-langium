@@ -19,7 +19,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
-import { refactoryDark } from '../lang/refactory-dark-theme.js';
+import { studioEditorExtensions } from '../lang/editor-theme.js';
 import {
   downloadTargetViaRouter,
   CodegenDownloadError,
@@ -243,7 +243,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
         EditorState.readOnly.of(true),
         EditorView.lineWrapping,
         langExtension,
-        ...refactoryDark,
+        ...studioEditorExtensions,
         EditorView.domEventHandlers({
           click: (event, view) => {
             const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });

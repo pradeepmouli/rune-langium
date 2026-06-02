@@ -101,10 +101,10 @@ vi.mock('../../src/lang/rune-dsl.js', () => ({
   runeDslLanguage: vi.fn().mockReturnValue([])
 }));
 
-vi.mock('../../src/lang/refactory-dark-theme.js', () => ({
-  refactoryDark: [],
-  refactoryDarkTheme: [],
-  refactoryDarkHighlightStyle: []
+vi.mock('../../src/lang/editor-theme.js', () => ({
+  studioEditorExtensions: [],
+  studioEditorTheme: [],
+  studioEditorHighlightStyle: []
 }));
 
 const sampleFiles: SourceEditorProps['files'] = [

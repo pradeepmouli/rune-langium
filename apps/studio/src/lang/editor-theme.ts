@@ -2,11 +2,11 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * CodeMirror 6 theme for Rune Studio — token-driven, adapts to the active
- * design-system theme (daikonic by default). The chrome (gutters, selection,
- * search, autocomplete, tooltips) uses semantic CSS design tokens so it stays
- * consistent with whatever theme is active; syntax highlighting derives its
- * palette from the `syntax.*` tokens.
+ * Studio editor theme — token-driven CodeMirror 6 theme that adapts to the
+ * active design-system theme (daikonic by default). The chrome (gutters,
+ * selection, search, autocomplete, tooltips) uses semantic CSS design tokens so
+ * it stays consistent with whatever theme is active; syntax highlighting derives
+ * its palette from the `syntax.*` tokens.
  */
 
 import { EditorView } from '@codemirror/view';
@@ -14,7 +14,7 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { syntax } from '@rune-langium/design-system/tokens';
 
-export const refactoryDarkTheme = EditorView.theme(
+export const studioEditorTheme = EditorView.theme(
   {
     '&': {
       backgroundColor: 'var(--background)',
@@ -96,7 +96,7 @@ export const refactoryDarkTheme = EditorView.theme(
   { dark: true }
 );
 
-export const refactoryDarkHighlightStyle = HighlightStyle.define([
+export const studioEditorHighlightStyle = HighlightStyle.define([
   { tag: t.keyword, color: syntax.keyword },
   { tag: [t.name, t.deleted, t.character, t.macroName], color: 'var(--foreground)' },
   { tag: [t.function(t.variableName), t.labelName], color: syntax.function },
@@ -123,4 +123,4 @@ export const refactoryDarkHighlightStyle = HighlightStyle.define([
   { tag: t.number, color: syntax.number }
 ]);
 
-export const refactoryDark = [refactoryDarkTheme, syntaxHighlighting(refactoryDarkHighlightStyle)];
+export const studioEditorExtensions = [studioEditorTheme, syntaxHighlighting(studioEditorHighlightStyle)];

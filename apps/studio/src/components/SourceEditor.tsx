@@ -27,7 +27,7 @@ import { EditorState, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
-import { refactoryDark } from '../lang/refactory-dark-theme.js';
+import { studioEditorExtensions } from '../lang/editor-theme.js';
 import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
 import { cn } from '@rune-langium/design-system/utils';
@@ -393,7 +393,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
         basicSetup,
         keymap.of(defaultKeymap),
         EditorView.lineWrapping,
-        ...refactoryDark,
+        ...studioEditorExtensions,
         runeDslLanguage()
       ];
 
