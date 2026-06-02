@@ -190,6 +190,9 @@ function FunctionForm({
   const [expressionError, setExpressionError] = useState<string | null>(null);
 
   const handleExpressionBlur = useCallback(() => {
+    // Guard: a readOnly textarea cannot produce new content, so blur should
+    // never trigger a mutation. Early-return to be explicit.
+    if (Boolean(readOnlyProp || (data as any).isReadOnly)) return;
     const currentExpression = form.getValues('expressionText' as never) as unknown as string;
     const result = validateExpression(currentExpression);
     if (!result.valid) {
@@ -200,7 +203,7 @@ function FunctionForm({
         actions.updateExpression(nodeId, currentExpression);
       }
     }
-  }, [nodeId, actions, form]);
+  }, [nodeId, actions, form, readOnlyProp, data]);
 
   // ---- Output type ---------------------------------------------------------
 
@@ -423,7 +426,9 @@ function FunctionForm({
                   ) : (
                     <Textarea
                       value={opText}
+                      readOnly={isReadOnly}
                       onChange={(e) => {
+                        if (isReadOnly) return;
                         form.setValue('expressionText' as never, e.target.value as never, {
                           shouldDirty: true
                         });

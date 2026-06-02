@@ -327,6 +327,8 @@ export interface InheritedAttributeRowProps {
   onOverride: () => void;
   onNavigateToNode?: NavigateToNodeCallback;
   allNodeIds?: string[];
+  /** When true, hide the Override button to prevent mutations on locked types. */
+  disabled?: boolean;
 }
 
 function InheritedAttributeRow({
@@ -336,8 +338,12 @@ function InheritedAttributeRow({
   ancestorName,
   onOverride,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  disabled
 }: InheritedAttributeRowProps) {
+  const editorCtx = useEditorActionsContext();
+  const effectiveDisabled = Boolean(disabled || editorCtx?.readOnly);
+
   return (
     <div
       data-slot="inherited-attribute-row"
@@ -378,16 +384,18 @@ function InheritedAttributeRow({
           inherited from {ancestorName}
         </span>
 
-        <button
-          data-slot="attribute-override"
-          type="button"
-          onClick={onOverride}
-          aria-label={`Override inherited attribute ${name} from ${ancestorName}`}
-          className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
-            text-muted-foreground transition-colors hover:text-foreground hover:border-input"
-        >
-          Override
-        </button>
+        {!effectiveDisabled && (
+          <button
+            data-slot="attribute-override"
+            type="button"
+            onClick={onOverride}
+            aria-label={`Override inherited attribute ${name} from ${ancestorName}`}
+            className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
+              text-muted-foreground transition-colors hover:text-foreground hover:border-input"
+          >
+            Override
+          </button>
+        )}
       </div>
     </div>
   );
