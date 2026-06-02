@@ -13,6 +13,8 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSegmentedNamespaceTree,
   flattenSegmentedTree,
+  filterSegmentedTree,
+  ancestorPathsForMatches,
   type SegmentNode
 } from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode } from '../../src/types.js';
@@ -476,5 +478,191 @@ describe('flattenSegmentedTree (compressSingleChild: true)', () => {
     const childRows = rows.filter((r) => r.kind === 'segment' && (r as any).depth === 1);
     const childSegments = childRows.map((r) => (r as any).segment).sort();
     expect(childSegments).toEqual(['model', 'party']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// filterSegmentedTree
+// ---------------------------------------------------------------------------
+
+describe('filterSegmentedTree', () => {
+  it('returns full tree for empty/whitespace query', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(filterSegmentedTree(roots, '')).toBe(roots);
+    expect(filterSegmentedTree(roots, '   ')).toBe(roots);
+  });
+
+  it('returns [] when nothing matches', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(filterSegmentedTree(roots, 'zzzznonexistent')).toHaveLength(0);
+  });
+
+  it('type name match: only matching type is kept, siblings pruned', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    const filtered = filterSegmentedTree(roots, 'Trade');
+
+    // Only the "com" root should survive (Trade lives in com.rosetta.model)
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]!.segment).toBe('com');
+
+    // Walk down to com.rosetta.model — it must have only Trade, not Event
+    const rosetta = filtered[0]!.children[0]!;
+    expect(rosetta.segment).toBe('rosetta');
+    const model = rosetta.children.find((c) => c.segment === 'model')!;
+    expect(model).toBeDefined();
+    expect(model.types).toHaveLength(1);
+    expect(model.types[0]!.name).toBe('Trade');
+  });
+
+  it('fullPath match: includes entire subtree unchanged', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    // "rosetta" matches com.rosetta's fullPath → entire subtree kept intact
+    const filtered = filterSegmentedTree(roots, 'rosetta');
+
+    expect(filtered).toHaveLength(1);
+    const com = filtered[0]!;
+    expect(com.segment).toBe('com');
+
+    // The matched rosetta node is returned as-is (all types/children present)
+    const rosetta = com.children[0]!;
+    expect(rosetta.segment).toBe('rosetta');
+    // model + party still present
+    const childSegments = rosetta.children.map((c) => c.segment).sort();
+    expect(childSegments).toEqual(['model', 'party']);
+  });
+
+  it('case-insensitive match', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    const upper = filterSegmentedTree(roots, 'TRADE');
+    const lower = filterSegmentedTree(roots, 'trade');
+    // Both should produce the same structure
+    expect(upper).toHaveLength(lower.length);
+    const findTrade = (arr: SegmentNode[]): boolean => {
+      for (const n of arr) {
+        if (n.types.some((t) => t.name === 'Trade')) return true;
+        if (findTrade(n.children)) return true;
+      }
+      return false;
+    };
+    expect(findTrade(upper)).toBe(true);
+    expect(findTrade(lower)).toBe(true);
+  });
+
+  it('regex metacharacters in query are treated as literals (no crash)', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(() => filterSegmentedTree(roots, '[')).not.toThrow();
+    expect(() => filterSegmentedTree(roots, '.*')).not.toThrow();
+    expect(() => filterSegmentedTree(roots, '(test)')).not.toThrow();
+  });
+
+  it('prunes empty intermediate segments (no stale ancestors)', () => {
+    // Party is "com.rosetta.party::Party". Searching "Party" should NOT
+    // include the model branch (model has no matching types).
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    const filtered = filterSegmentedTree(roots, 'Party');
+
+    const rosetta = filtered[0]!.children[0]!;
+    // model branch must be pruned
+    const modelBranch = rosetta.children.find((c) => c.segment === 'model');
+    expect(modelBranch).toBeUndefined();
+    // party branch present with Party type
+    const partyBranch = rosetta.children.find((c) => c.segment === 'party');
+    expect(partyBranch).toBeDefined();
+    expect(partyBranch!.types[0]!.name).toBe('Party');
+  });
+
+  it('does not mutate the original tree', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    const originalModelTypes = [...(roots.find(r => r.segment === 'com')
+      ?.children[0]
+      ?.children.find(c => c.segment === 'model')
+      ?.types ?? [])];
+
+    filterSegmentedTree(roots, 'Trade');
+
+    const modelAfter = roots.find(r => r.segment === 'com')
+      ?.children[0]
+      ?.children.find(c => c.segment === 'model');
+    expect(modelAfter?.types).toHaveLength(originalModelTypes.length);
+  });
+
+  it('totalCount on filtered nodes reflects only matching content', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    // Searching "Trade" → only 1 type matches in com subtree
+    const filtered = filterSegmentedTree(roots, 'Trade');
+    const com = filtered[0]!;
+    // Filtered totalCount = 1 (just Trade)
+    expect(com.totalCount).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ancestorPathsForMatches
+// ---------------------------------------------------------------------------
+
+describe('ancestorPathsForMatches', () => {
+  it('returns empty set for empty/whitespace query', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(ancestorPathsForMatches(roots, '')).toEqual(new Set());
+    expect(ancestorPathsForMatches(roots, '   ')).toEqual(new Set());
+  });
+
+  it('returns empty set when nothing matches', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(ancestorPathsForMatches(roots, 'zzzznonexistent')).toEqual(new Set());
+  });
+
+  it('includes the leaf segment and all its ancestors for a type-name match', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    // "Trade" is in com.rosetta.model — ancestors: com, com.rosetta, com.rosetta.model
+    const paths = ancestorPathsForMatches(roots, 'Trade');
+    expect(paths.has('com')).toBe(true);
+    expect(paths.has('com.rosetta')).toBe(true);
+    expect(paths.has('com.rosetta.model')).toBe(true);
+  });
+
+  it('does NOT include paths for non-matching branches', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    // "Trade" is only in com.rosetta.model — com.rosetta.party should NOT appear
+    const paths = ancestorPathsForMatches(roots, 'Trade');
+    expect(paths.has('com.rosetta.party')).toBe(false);
+  });
+
+  it('match on fullPath includes that node and its ancestors', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    // "party" matches fullPath "com.rosetta.party"
+    const paths = ancestorPathsForMatches(roots, 'party');
+    expect(paths.has('com')).toBe(true);
+    expect(paths.has('com.rosetta')).toBe(true);
+    expect(paths.has('com.rosetta.party')).toBe(true);
+  });
+
+  it('search that matches types in two branches includes ancestors for both', () => {
+    // Both com.rosetta.model::Trade and cdm.trade::Trade — use a fixture with both
+    const nodes = [
+      makeNode('com.rosetta.model', 'Trade'),
+      makeNode('cdm.trade', 'Trade')
+    ];
+    const roots = buildSegmentedNamespaceTree(nodes);
+    const paths = ancestorPathsForMatches(roots, 'Trade');
+    // com branch
+    expect(paths.has('com')).toBe(true);
+    expect(paths.has('com.rosetta')).toBe(true);
+    expect(paths.has('com.rosetta.model')).toBe(true);
+    // cdm branch
+    expect(paths.has('cdm')).toBe(true);
+    expect(paths.has('cdm.trade')).toBe(true);
+  });
+
+  it('returned set contains enough paths to reveal all matching type rows', () => {
+    // The explorer uses ancestorPathsForMatches as the full expanded set during
+    // search. Every path in the set must be expanded so matched types are visible.
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    const paths = ancestorPathsForMatches(roots, 'Date'); // Date is in com.rosetta.model.base
+    // To see Date, we need com, com.rosetta, com.rosetta.model, com.rosetta.model.base all expanded
+    expect(paths.has('com')).toBe(true);
+    expect(paths.has('com.rosetta')).toBe(true);
+    expect(paths.has('com.rosetta.model')).toBe(true);
+    expect(paths.has('com.rosetta.model.base')).toBe(true);
   });
 });

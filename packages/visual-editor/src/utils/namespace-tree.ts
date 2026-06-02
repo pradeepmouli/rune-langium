@@ -304,6 +304,112 @@ export function buildSegmentedNamespaceTree(nodes: TypeGraphNode[]): SegmentNode
 }
 
 /**
+ * Filter a segmented namespace tree by a search query.
+ *
+ * Returns a pruned copy of the tree where:
+ *  - A segment node is kept if ANY of the following are true:
+ *      (a) The segment's `fullPath` matches the query (keep all descendants).
+ *      (b) Any descendant type's `name` matches the query.
+ *      (c) The segment has at least one matching direct type (subset kept).
+ *  - Empty segments (no matching types in subtree) are pruned.
+ *  - The caller receives modified nodes (copied, not mutated) with only
+ *    matching types when a full-namespace match is absent.
+ *
+ * The function does NOT mutate the input tree.
+ *
+ * Returns the full tree unmodified when `query.trim()` is empty.
+ */
+export function filterSegmentedTree(roots: SegmentNode[], query: string): SegmentNode[] {
+  if (!query.trim()) return roots;
+
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedQuery, 'i');
+
+  function visitNode(node: SegmentNode): SegmentNode | null {
+    // If the segment's full path matches, include the entire subtree.
+    if (regex.test(node.fullPath)) {
+      return node;
+    }
+
+    // Filter direct types by name.
+    const matchingTypes = node.types.filter((t) => regex.test(t.name));
+
+    // Recurse into children.
+    const matchingChildren: SegmentNode[] = [];
+    for (const child of node.children) {
+      const filtered = visitNode(child);
+      if (filtered !== null) matchingChildren.push(filtered);
+    }
+
+    if (matchingTypes.length === 0 && matchingChildren.length === 0) {
+      return null; // prune
+    }
+
+    // Return a shallow copy with only matching contents.
+    const filteredTotalCount =
+      matchingTypes.length + matchingChildren.reduce((s, c) => s + c.totalCount, 0);
+
+    return {
+      ...node,
+      types: matchingTypes,
+      children: matchingChildren,
+      totalCount: filteredTotalCount
+    };
+  }
+
+  const result: SegmentNode[] = [];
+  for (const root of roots) {
+    const filtered = visitNode(root);
+    if (filtered !== null) result.push(filtered);
+  }
+  return result;
+}
+
+/**
+ * Compute the set of all segment `fullPath`s that are ancestors of nodes that
+ * contain matching types. Used by the explorer to auto-expand ancestor segments
+ * so that filtered results are immediately visible.
+ *
+ * The returned set includes every ancestor's `fullPath` (NOT the leaf itself).
+ */
+export function ancestorPathsForMatches(roots: SegmentNode[], query: string): Set<string> {
+  if (!query.trim()) return new Set();
+
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedQuery, 'i');
+  const ancestorPaths = new Set<string>();
+
+  function visitNode(node: SegmentNode, ancestors: string[]): boolean {
+    // Check if this node's fullPath itself matches (include all children visible)
+    const selfMatch = regex.test(node.fullPath);
+
+    let subtreeHasMatch = selfMatch || node.types.some((t) => regex.test(t.name));
+
+    for (const child of node.children) {
+      if (visitNode(child, [...ancestors, node.fullPath])) {
+        subtreeHasMatch = true;
+      }
+    }
+
+    if (subtreeHasMatch) {
+      for (const ancestor of ancestors) {
+        ancestorPaths.add(ancestor);
+      }
+      // Also include this node's fullPath so its types/children are revealed.
+      ancestorPaths.add(node.fullPath);
+    }
+
+    return subtreeHasMatch;
+  }
+
+  for (const root of roots) {
+    visitNode(root, []);
+  }
+
+  return ancestorPaths;
+}
+
+/**
  * Flatten a segmented namespace tree into rows suitable for virtualized rendering.
  *
  * Each `SegmentNode` emits a `'segment'` row. When the segment is expanded
