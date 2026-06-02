@@ -39,6 +39,7 @@ import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { identityProjection } from './identity-projection.js';
+import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
   TypeGraphNode,
@@ -362,8 +363,11 @@ function DataTypeForm({
 
   // ---- Render --------------------------------------------------------------
 
+  const isReadOnly = Boolean(d.isReadOnly);
+
   return (
     <FormProvider {...form}>
+      <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
       <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full">
         {/* Header: Namespace + Name + Badge — always visible above tabs */}
         <TypeHeader kind="data" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Type name" nameAriaLabel="Data type name" className="shrink-0" />
@@ -384,6 +388,7 @@ function DataTypeForm({
               emptyLabel="No parent type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={isReadOnly}
             />
           </FieldSet>
         </div>
@@ -407,6 +412,7 @@ function DataTypeForm({
                     The legend already names the section ("Attributes"),
                     so the button only conveys the operation. aria-label
                     preserves the full phrasing for screen readers. */}
+                {!isReadOnly && (
                 <Button
                   data-slot="add-attribute-btn"
                   type="button"
@@ -418,6 +424,7 @@ function DataTypeForm({
                 >
                   <Plus className="size-3" />
                 </Button>
+                )}
               </FieldLegend>
 
               <FieldGroup className="gap-1">
@@ -500,6 +507,7 @@ function DataTypeForm({
           </TabsContent>
         </Tabs>
       </div>
+      </EditorActionsProvider>
     </FormProvider>
   );
 }

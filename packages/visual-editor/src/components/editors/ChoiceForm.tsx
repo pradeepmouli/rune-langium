@@ -177,7 +177,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
 
   return (
     <FormProvider {...form}>
-      <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions}>
+      <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={d.isReadOnly}>
         <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader kind="choice" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Choice name" nameAriaLabel="Choice type name" className="-mx-4 -mt-4" />
@@ -208,10 +208,12 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
               )}
             </FieldGroup>
 
-            {/* Add Option via TypeSelector */}
+            {/* Add Option via TypeSelector — hidden in read-only mode */}
+            {!d.isReadOnly && (
             <div data-slot="add-option" className="mt-1">
               <TypeSelector value="" options={addableTypes} onSelect={handleAddOption} placeholder="Add option..." />
             </div>
+            )}
           </FieldSet>
 
           {/* Metadata */}

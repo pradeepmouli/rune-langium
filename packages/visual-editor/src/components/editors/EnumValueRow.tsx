@@ -23,6 +23,7 @@ import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -68,6 +69,8 @@ function EnumValueRow({
   onRevert
 }: EnumValueRowProps) {
   const { control, getValues } = useFormContext();
+  const editorCtx = useEditorActionsContext();
+  const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
   // AST-canonical paths (R11): `enumValues[].name` and `enumValues[].display`.
   // Pre-migration this row read `members.${index}.{name,displayName}` from a
   // hand-authored projection schema; the projection layer is gone now.
@@ -124,7 +127,7 @@ function EnumValueRow({
       data-slot="enum-value-row"
       className="flex items-center gap-1.5 py-1"
       role="listitem"
-      draggable={!disabled}
+      draggable={!effectiveReadOnly}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -153,7 +156,7 @@ function EnumValueRow({
                 debouncedName(e.target.value);
               }}
               onBlur={field.onBlur}
-              disabled={disabled}
+              disabled={effectiveReadOnly}
               aria-label={`Value name for ${name || 'new value'}`}
               placeholder="Value name"
               className={`flex-1 min-w-0 px-2 py-1 text-sm rounded
@@ -178,7 +181,7 @@ function EnumValueRow({
               debouncedDisplayName(e.target.value);
             }}
             onBlur={field.onBlur}
-            disabled={disabled}
+            disabled={effectiveReadOnly}
             placeholder="Display name (optional)"
             className="flex-1 min-w-0 px-2 py-1 text-sm rounded
               bg-transparent border border-border
@@ -199,7 +202,7 @@ function EnumValueRow({
         <button
           type="button"
           onClick={onRevert}
-          disabled={disabled}
+          disabled={effectiveReadOnly}
           aria-label={`Revert override for value ${name || 'unnamed'}`}
           className="shrink-0 text-xs px-2 py-0.5 border border-border rounded
             text-muted-foreground hover:text-foreground hover:border-input transition-colors
@@ -216,7 +219,7 @@ function EnumValueRow({
           variant="ghost"
           size="icon-xs"
           onClick={() => onRemove(nodeId, name)}
-          disabled={disabled}
+          disabled={effectiveReadOnly}
           aria-label={`Remove value ${name || 'unnamed'}`}
           title={`Remove value ${name || 'unnamed'}`}
           className="shrink-0 text-muted-foreground hover:text-destructive"
