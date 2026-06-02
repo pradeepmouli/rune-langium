@@ -30,11 +30,10 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
-import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
+import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
+import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { KindBadge } from '../KindBadge.js';
+import { TypeHeader } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -234,37 +233,8 @@ function EnumForm({
     <FormProvider {...form}>
       <EditorActionsProvider {...editorActionsValue}>
         <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Enum name"
-                    aria-label="Enum type name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <KindBadge kind="enum" />
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader kind="enum" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Enum name" nameAriaLabel="Enum type name" className="-mx-4 -mt-4" />
 
           {/* Parent Enum */}
           <FieldSet className="gap-1.5">

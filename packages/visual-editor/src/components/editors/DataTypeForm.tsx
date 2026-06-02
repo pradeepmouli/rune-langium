@@ -19,12 +19,11 @@
  */
 
 import { useCallback, useMemo, useRef } from 'react';
-import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
+import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
-import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
+import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { KindBadge } from '../KindBadge.js';
+import { TypeHeader } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
@@ -366,37 +365,8 @@ function DataTypeForm({
   return (
     <FormProvider {...form}>
       <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full">
-        {/* Header: Name + Badge — always visible above tabs */}
-        <div
-          data-slot="form-header"
-          className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 shrink-0 border-b bg-muted"
-        >
-          <Controller
-            control={form.control}
-            name="name"
-            render={({ field, fieldState }) => (
-              <Field className="flex-1">
-                <Input
-                  {...field}
-                  id={field.name}
-                  data-slot="type-name-input"
-                  aria-invalid={fieldState.invalid}
-                  onChange={(e) => {
-                    field.onChange(e);
-                    debouncedName(e.target.value);
-                  }}
-                  className="text-lg font-semibold bg-transparent border-b border-transparent
-                    focus-visible:border-input focus-visible:ring-0 shadow-none
-                    px-1 py-0.5 h-auto rounded-none"
-                  placeholder="Type name"
-                  aria-label="Data type name"
-                />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )}
-          />
-          <KindBadge kind="data" />
-        </div>
+        {/* Header: Namespace + Name + Badge — always visible above tabs */}
+        <TypeHeader kind="data" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Type name" nameAriaLabel="Data type name" className="shrink-0" />
 
         {/* Inheritance — always visible above tabs */}
         <div className="px-4 pb-3 shrink-0">
