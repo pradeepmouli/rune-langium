@@ -25,7 +25,7 @@ import { EnumForm } from '../../src/components/editors/EnumForm.js';
 import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
 import { TypeAliasForm } from '../../src/components/editors/TypeAliasForm.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
+import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -750,5 +750,290 @@ describe('TypeAliasForm – read-only mode contract', () => {
         .map((b) => b.getAttribute('aria-label'))
         .join(', ')}`
     ).toBe(0);
+  });
+});
+
+// ===========================================================================
+// DataTypeForm – read-only mode with inherited attributes (regression coverage)
+//
+// These tests exercise the exact bug path: a read-only Data type whose parent
+// has attributes, which triggers the ghostRowsBefore useMemo to render
+// InheritedAttributeRow with the Override button. Before the fix the button
+// appeared unconditionally; after the fix it must be absent.
+// ===========================================================================
+
+function makeAttrFixture(name: string, refText = 'string'): Record<string, unknown> {
+  return {
+    $type: 'Attribute',
+    name,
+    typeCall: { $type: 'TypeCall', type: { $refText: refText } },
+    card: { inf: 1, sup: 1, unbounded: false },
+    override: false
+  };
+}
+
+function makeReadOnlyDataNodeWithParent(): AnyGraphNode {
+  return {
+    $type: 'Data',
+    name: 'LockedChild',
+    namespace: 'test.model',
+    definition: 'A locked type that extends a parent',
+    isReadOnly: true,
+    attributes: [],
+    superType: { $refText: 'BaseParent' },
+    conditions: [],
+    annotations: [],
+    synonyms: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
+}
+
+function makeParentNodes(childData: AnyGraphNode, parentAttrs: Record<string, unknown>[]): TypeGraphNode[] {
+  const parentNode: TypeGraphNode = {
+    id: 'test::BaseParent',
+    type: 'data',
+    position: { x: 0, y: 0 },
+    data: {
+      $type: 'Data',
+      name: 'BaseParent',
+      namespace: 'test',
+      attributes: parentAttrs,
+      conditions: [],
+      annotations: [],
+      synonyms: [],
+      position: { x: 0, y: 0 },
+      hasExternalRefs: false,
+      errors: []
+    } as AnyGraphNode
+  } as TypeGraphNode;
+  const childNode: TypeGraphNode = {
+    id: 'test::LockedChild',
+    type: 'data',
+    position: { x: 0, y: 0 },
+    data: childData
+  } as TypeGraphNode;
+  return [childNode, parentNode];
+}
+
+describe('DataTypeForm – read-only mode with inherited attributes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not render any Override button when form is read-only and parent has attributes', () => {
+    const childData = makeReadOnlyDataNodeWithParent();
+    const allNodes = makeParentNodes(childData, [
+      makeAttrFixture('id', 'string'),
+      makeAttrFixture('createdDate', 'date')
+    ]);
+
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::LockedChild"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+
+    // Inherited rows must be present (sanity) — the bug only manifests when
+    // inherited rows are actually rendered.
+    const inheritedRows = container.querySelectorAll('[data-slot="inherited-attribute-row"]');
+    expect(inheritedRows.length, 'Expected inherited attribute rows to be rendered').toBe(2);
+
+    // The Override button must be ABSENT in every inherited row.
+    const overrideBtns = container.querySelectorAll('[data-slot="attribute-override"]');
+    expect(
+      overrideBtns.length,
+      'Override buttons must be absent in read-only mode — they bypass the read-only guard'
+    ).toBe(0);
+  });
+
+  it('does not render any enabled button inside inherited attribute rows when read-only', () => {
+    const childData = makeReadOnlyDataNodeWithParent();
+    const allNodes = makeParentNodes(childData, [makeAttrFixture('id', 'string')]);
+
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::LockedChild"
+        data={childData}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+
+    const inheritedRows = container.querySelectorAll('[data-slot="inherited-attribute-row"]');
+    expect(inheritedRows.length).toBe(1);
+
+    for (const row of inheritedRows) {
+      const enabledBtns = row.querySelectorAll('button:not([disabled])');
+      const labels = Array.from(enabledBtns).map((b) => b.getAttribute('aria-label') ?? b.textContent);
+      expect(labels, `Enabled buttons in inherited attribute row: ${JSON.stringify(labels)}`).toHaveLength(0);
+    }
+  });
+
+  it('still shows Override button in EDITABLE mode with inherited attributes', () => {
+    const editableChild: AnyGraphNode = {
+      ...(makeReadOnlyDataNodeWithParent() as any),
+      isReadOnly: false
+    } as AnyGraphNode;
+    const allNodes = makeParentNodes(editableChild, [makeAttrFixture('id', 'string')]);
+
+    const { container } = render(
+      <DataTypeForm
+        nodeId="test::LockedChild"
+        data={editableChild}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        allNodes={allNodes}
+      />
+    );
+
+    const overrideBtns = container.querySelectorAll('[data-slot="attribute-override"]');
+    expect(overrideBtns.length, 'Override button must be present in editable mode').toBe(1);
+  });
+});
+
+// ===========================================================================
+// EnumForm – read-only mode with inherited enum values (regression coverage)
+//
+// Same bug path: read-only Enum whose parent has values triggers
+// InheritedEnumValueRow with the Override button. Before the fix the button
+// was unconditional; after the fix it must be absent.
+// ===========================================================================
+
+function makeReadOnlyEnumNodeWithParent(): AnyGraphNode {
+  return {
+    $type: 'RosettaEnumeration',
+    name: 'LockedChildEnum',
+    namespace: 'test.enums',
+    isReadOnly: true,
+    enumValues: [],
+    parent: { $refText: 'BaseEnum' },
+    synonyms: [],
+    annotations: [],
+    position: { x: 0, y: 0 },
+    hasExternalRefs: false,
+    errors: []
+  } as AnyGraphNode;
+}
+
+function makeParentEnumNodes(childData: AnyGraphNode, parentValues: Record<string, unknown>[]): TypeGraphNode[] {
+  const parentNode: TypeGraphNode = {
+    id: 'test.enums::BaseEnum',
+    type: 'enum',
+    position: { x: 0, y: 0 },
+    data: {
+      $type: 'RosettaEnumeration',
+      name: 'BaseEnum',
+      namespace: 'test.enums',
+      enumValues: parentValues,
+      synonyms: [],
+      annotations: [],
+      position: { x: 0, y: 0 },
+      hasExternalRefs: false,
+      errors: []
+    } as AnyGraphNode
+  } as TypeGraphNode;
+  const childNode: TypeGraphNode = {
+    id: 'test.enums::LockedChildEnum',
+    type: 'enum',
+    position: { x: 0, y: 0 },
+    data: childData
+  } as TypeGraphNode;
+  return [childNode, parentNode];
+}
+
+describe('EnumForm – read-only mode with inherited enum values', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not render any Override button when form is read-only and parent has values', () => {
+    const childData = makeReadOnlyEnumNodeWithParent();
+    const allNodes = makeParentEnumNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'ALPHA', display: 'Alpha' },
+      { $type: 'RosettaEnumValue', name: 'BETA', display: 'Beta' }
+    ]);
+
+    const { container } = render(
+      <EnumForm
+        nodeId="test.enums::LockedChildEnum"
+        data={childData}
+        availableTypes={ENUM_AVAILABLE_TYPES}
+        actions={makeEnumActions()}
+        allNodes={allNodes}
+      />
+    );
+
+    // Inherited value rows must render (sanity) before we check for the button.
+    const inheritedRows = container.querySelectorAll('[data-slot="inherited-enum-value-row"]');
+    expect(inheritedRows.length, 'Expected inherited enum value rows to be rendered').toBe(2);
+
+    // The Override button must be ABSENT.
+    const overrideBtns = container.querySelectorAll('[data-slot="enum-value-override"]');
+    expect(
+      overrideBtns.length,
+      'Override buttons must be absent in read-only mode — they bypass the read-only guard'
+    ).toBe(0);
+  });
+
+  it('does not render any enabled button inside inherited enum value rows when read-only', () => {
+    const childData = makeReadOnlyEnumNodeWithParent();
+    const allNodes = makeParentEnumNodes(childData, [
+      { $type: 'RosettaEnumValue', name: 'ALPHA', display: 'Alpha' }
+    ]);
+
+    const { container } = render(
+      <EnumForm
+        nodeId="test.enums::LockedChildEnum"
+        data={childData}
+        availableTypes={ENUM_AVAILABLE_TYPES}
+        actions={makeEnumActions()}
+        allNodes={allNodes}
+      />
+    );
+
+    const inheritedRows = container.querySelectorAll('[data-slot="inherited-enum-value-row"]');
+    expect(inheritedRows.length).toBe(1);
+
+    for (const row of inheritedRows) {
+      const enabledBtns = row.querySelectorAll('button:not([disabled])');
+      const labels = Array.from(enabledBtns).map((b) => b.getAttribute('aria-label') ?? b.textContent);
+      expect(labels, `Enabled buttons in inherited enum value row: ${JSON.stringify(labels)}`).toHaveLength(0);
+    }
+  });
+
+  it('still shows Override button in EDITABLE mode with inherited enum values', () => {
+    const editableChild: AnyGraphNode = {
+      ...(makeReadOnlyEnumNodeWithParent() as any),
+      isReadOnly: false
+    } as AnyGraphNode;
+    const allNodes = makeParentEnumNodes(editableChild, [
+      { $type: 'RosettaEnumValue', name: 'ALPHA', display: 'Alpha' }
+    ]);
+
+    const { container } = render(
+      <EnumForm
+        nodeId="test.enums::LockedChildEnum"
+        data={editableChild}
+        availableTypes={ENUM_AVAILABLE_TYPES}
+        actions={makeEnumActions()}
+        allNodes={allNodes}
+      />
+    );
+
+    const overrideBtns = container.querySelectorAll('[data-slot="enum-value-override"]');
+    expect(overrideBtns.length, 'Override button must be present in editable mode').toBe(1);
   });
 });

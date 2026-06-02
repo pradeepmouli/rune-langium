@@ -326,6 +326,19 @@ function DataTypeForm({
     return meta;
   }, [effectiveAttributes]);
 
+  const d = data as any;
+  const parentName = getRefText(d.superType);
+
+  const parentOptions = availableTypes.filter(
+    (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
+  );
+
+  const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
+
+  // ---- Compute isReadOnly before ghost rows so it is in scope for the memo --
+
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+
   // ---- Inherited rows as ghost-row primitives (US4 / R6) -------------------
   // Per upstream `arrayConfig.before` (zod-to-form/core: `GhostRow[]`), build
   // one self-contained renderable per inherited entry. Ghost rows do not
@@ -343,6 +356,7 @@ function DataTypeForm({
             typeName={entry.typeName ?? 'string'}
             cardinality={entry.cardinality ?? '(1..1)'}
             ancestorName={entry.ancestorName ?? ''}
+            disabled={isReadOnly}
             onOverride={() =>
               handleOverrideInherited({
                 name: entry.name,
@@ -355,22 +369,11 @@ function DataTypeForm({
           />
         )
       }));
-  }, [effectiveAttributes, handleOverrideInherited, onNavigateToNode, allNodeIds]);
+  }, [effectiveAttributes, isReadOnly, handleOverrideInherited, onNavigateToNode, allNodeIds]);
 
   const inheritedCount = ghostRowsBefore.length;
 
-  const d = data as any;
-  const parentName = getRefText(d.superType);
-
-  const parentOptions = availableTypes.filter(
-    (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
-  );
-
-  const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
-
   // ---- Render --------------------------------------------------------------
-
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
 
   return (
     <FormProvider {...form}>

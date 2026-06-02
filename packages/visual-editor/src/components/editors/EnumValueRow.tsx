@@ -242,9 +242,14 @@ export interface InheritedEnumValueRowProps {
   displayName?: string;
   ancestorName: string;
   onOverride: () => void;
+  /** When true, hide the Override button to prevent mutations on locked types. */
+  disabled?: boolean;
 }
 
-function InheritedEnumValueRow({ name, displayName, ancestorName, onOverride }: InheritedEnumValueRowProps) {
+function InheritedEnumValueRow({ name, displayName, ancestorName, onOverride, disabled }: InheritedEnumValueRowProps) {
+  const editorCtx = useEditorActionsContext();
+  const effectiveDisabled = Boolean(disabled || editorCtx?.readOnly);
+
   return (
     <div
       data-slot="inherited-enum-value-row"
@@ -266,16 +271,18 @@ function InheritedEnumValueRow({ name, displayName, ancestorName, onOverride }: 
         inherited from {ancestorName}
       </span>
 
-      <button
-        data-slot="enum-value-override"
-        type="button"
-        onClick={onOverride}
-        aria-label={`Override inherited value ${name} from ${ancestorName}`}
-        className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
-          text-muted-foreground hover:text-foreground hover:border-input transition-colors"
-      >
-        Override
-      </button>
+      {!effectiveDisabled && (
+        <button
+          data-slot="enum-value-override"
+          type="button"
+          onClick={onOverride}
+          aria-label={`Override inherited value ${name} from ${ancestorName}`}
+          className="ml-auto shrink-0 text-xs px-2 py-0.5 border border-border rounded
+            text-muted-foreground hover:text-foreground hover:border-input transition-colors"
+        >
+          Override
+        </button>
+      )}
     </div>
   );
 }

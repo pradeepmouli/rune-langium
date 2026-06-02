@@ -292,6 +292,7 @@ function EnumForm({
               onReorder={handleReorderValue}
               onRevertOverride={handleRevertEnumOverride}
               onOverrideInherited={handleOverrideInheritedValue}
+              isReadOnly={isReadOnly}
             />
           </FieldSet>
 
@@ -331,6 +332,8 @@ interface PaginatedEnumValuesProps {
   onReorder: (from: number, to: number) => void;
   onRevertOverride: (name: string) => void;
   onOverrideInherited: (name: string, displayName: string) => void;
+  /** When true, hides Override buttons on inherited rows to prevent mutations on locked types. */
+  isReadOnly?: boolean;
 }
 
 function PaginatedEnumValues({
@@ -341,7 +344,8 @@ function PaginatedEnumValues({
   onRemove,
   onReorder,
   onRevertOverride,
-  onOverrideInherited
+  onOverrideInherited,
+  isReadOnly
 }: PaginatedEnumValuesProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -378,6 +382,7 @@ function PaginatedEnumValues({
             name={entry.name}
             displayName={entry.displayName}
             ancestorName={entry.ancestorName!}
+            disabled={isReadOnly}
             onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
           />
         )
