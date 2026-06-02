@@ -155,7 +155,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     );
 
     // Name input is the first interactive element in the form-header slot.
-    const header = container.querySelector('[data-slot="form-header"]')!;
+    const header = container.querySelector('[data-slot="type-header"]')!;
     expect(header).not.toBeNull();
     const nameInput = header.querySelector('input[data-slot="type-name-input"]');
     expect(nameInput).not.toBeNull();

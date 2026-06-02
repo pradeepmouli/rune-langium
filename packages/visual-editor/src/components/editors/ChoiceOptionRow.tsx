@@ -14,6 +14,7 @@ import { getKindBadgeClasses } from './TypeSelector.js';
 import { TypeLink } from './TypeLink.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { X } from 'lucide-react';
+import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,8 @@ function ChoiceOptionRow({
   onNavigateToNode,
   allNodeIds
 }: ChoiceOptionRowProps) {
+  const editorCtx = useEditorActionsContext();
+  const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
   const matchedType = availableTypes.find((opt) => opt.label === typeName);
   const kind = matchedType?.kind ?? 'data';
 
@@ -80,7 +83,7 @@ function ChoiceOptionRow({
         variant="ghost"
         size="icon-xs"
         onClick={handleRemove}
-        disabled={disabled}
+        disabled={effectiveReadOnly}
         aria-label={`Remove option ${typeName}`}
         title={`Remove option ${typeName}`}
         className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"

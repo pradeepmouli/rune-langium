@@ -31,10 +31,9 @@
  */
 
 import { useCallback, useRef } from 'react';
-import { FormProvider, Controller, useWatch } from 'react-hook-form';
-import { Field, FieldError, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
+import { FormProvider, useWatch } from 'react-hook-form';
+import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
+import { TypeHeader } from '../TypeHeader.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
@@ -71,6 +70,10 @@ export interface TypeAliasFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,7 +86,8 @@ function TypeAliasForm({
   actions,
   availableTypes = EMPTY_TYPES,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: TypeAliasFormProps) {
   // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -161,6 +165,8 @@ function TypeAliasForm({
 
   // ---- Render --------------------------------------------------------------
 
+  const isReadOnly = Boolean(readOnlyProp || (data as any).isReadOnly);
+
   return (
     <EditorActionsProvider
       nodeId={nodeId}
@@ -172,40 +178,12 @@ function TypeAliasForm({
       // present on `CommonFormActions` (definition / comments /
       // synonyms / annotations / conditions).
       actions={actions as unknown as EditorFormActions}
+      readOnly={isReadOnly}
     >
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Type alias name"
-                    aria-label="Type alias name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <Badge variant="typeAlias">TypeAlias</Badge>
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader kind="typeAlias" namespace={(data as any).namespace} control={form.control} onNameChange={debouncedName} placeholder="Type alias name" nameAriaLabel="Type alias name" className="-mx-4 -mt-4" />
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}
           <FieldSet className="gap-1.5">
@@ -221,6 +199,7 @@ function TypeAliasForm({
               emptyLabel="No wrapped type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={isReadOnly}
             />
           </FieldSet>
         </div>

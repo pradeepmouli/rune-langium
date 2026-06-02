@@ -269,42 +269,6 @@
   margin-left: auto;
 }
 
-.rune-kind-badge--data {
-  background: var(--color-data-badge, #bee3f8);
-  color: var(--color-data-text, #2a69ac);
-}
-
-.rune-kind-badge--choice {
-  background: var(--color-choice-badge, #feebc8);
-  color: var(--color-choice-text, #c05621);
-}
-
-.rune-kind-badge--enum {
-  background: var(--color-enum-badge, #c6f6d5);
-  color: var(--color-enum-text, #276749);
-}
-
-.rune-kind-badge--func {
-  background: var(--color-func-badge, rgba(168, 85, 247, 0.25));
-  color: var(--color-func-text, #d8b4fe);
-}
-
-.rune-kind-badge--record {
-  background: color-mix(in oklch, var(--color-data, #00D4AA) 18%, transparent);
-  color: color-mix(in oklch, var(--color-data, #00D4AA) 75%, white 25%);
-}
-
-.rune-kind-badge--typeAlias,
-.rune-kind-badge--basicType {
-  background: color-mix(in oklch, var(--muted-foreground, #8A8A96) 18%, transparent);
-  color: color-mix(in oklch, var(--muted-foreground, #8A8A96) 92%, white 8%);
-}
-
-.rune-kind-badge--annotation {
-  background: color-mix(in oklch, var(--color-choice, #E8913A) 18%, transparent);
-  color: color-mix(in oklch, var(--color-choice, #E8913A) 72%, white 28%);
-}
-
 /* Visual reference for the studio-wide `.studio-scroll` rule (defined in
  * apps/studio/src/styles.css). The tokens below intentionally duplicate
  * that rule so the package works standalone (visual-editor used outside
@@ -1384,11 +1348,9 @@ button[data-navigable]:focus-visible {
   padding-left: var(--rune-row-indent);
 }
 
-/* Row modifier — row with an expand/collapse control (no additional geometry) */
-.rune-node-row.has-expansion {
-  /* visual expansion indicator is rendered inside the row;
-   * no extra layout geometry needed here */
-}
+/* Row modifier — `.rune-node-row.has-expansion` intentionally has no rule:
+ * the visual expand/collapse indicator is rendered inside the row and needs
+ * no extra layout geometry. (No empty ruleset — keeps the CSS linter quiet.) */
 
 /* Drop-over highlight states — outline does not reflow, so bare px is OK */
 .rune-cell-type-wrap--over .rune-cell-type-chip,
@@ -1480,4 +1442,36 @@ button[data-navigable]:focus-visible {
 .rune-node-row--diagnostic-info {
   border-left: 3px solid var(--info, #63b3ed);
   padding-left: var(--rune-row-indent, 6px);
+}
+
+/* ── Type-name field (shared TypeHeader) ─────────────────────────────
+ * The editable type name reads as a borderless title until interacted
+ * with: no box border by default, a muted bottom underline on hover, and
+ * an accent underline on focus. Declared as an explicit, UNLAYERED rule on
+ * the `data-slot` so it beats the design-system Input's Tailwind border
+ * utilities (which live in `@layer utilities`) regardless of CSS source
+ * order — the source-order ambiguity is exactly why a `border-transparent`
+ * utility on the component didn't reliably hide the box. */
+[data-slot='type-name-input'] {
+  border: 0;
+  border-bottom: 1.5px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: border-color var(--motion-fast, 140ms ease);
+}
+
+[data-slot='type-name-input']:hover {
+  border-bottom-color: var(--border);
+}
+
+[data-slot='type-name-input']:focus,
+[data-slot='type-name-input']:focus-visible {
+  border-bottom-color: var(--primary);
+  outline: none;
+  box-shadow: none;
+}
+
+[data-slot='type-name-input'][aria-invalid='true'] {
+  border-bottom-color: var(--destructive);
 }

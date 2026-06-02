@@ -20,6 +20,7 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
+import { KindBadge, KIND_LABEL } from '../KindBadge.js';
 import type { TypeGraphNode, TypeKind } from '../../types.js';
 import { buildNamespaceTree, flattenNamespaceTree } from '../../utils/namespace-tree.js';
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
@@ -70,43 +71,6 @@ export interface NamespaceExplorerPanelProps {
    */
   onClearDragSource?: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// Kind glyph components
-// ---------------------------------------------------------------------------
-
-const KIND_LETTER: Record<TypeKind, string> = {
-  data: 'D',
-  choice: 'C',
-  enum: 'E',
-  func: 'F',
-  record: 'R',
-  typeAlias: 'A',
-  basicType: 'B',
-  annotation: '@'
-};
-
-const KIND_COLOR_VAR: Record<TypeKind, string> = {
-  data: 'var(--color-data)',
-  choice: 'var(--color-choice)',
-  enum: 'var(--color-enum)',
-  func: 'var(--color-func)',
-  record: 'var(--color-data)',
-  typeAlias: 'var(--color-data)',
-  basicType: 'var(--muted-foreground)',
-  annotation: 'var(--color-enum)'
-};
-
-const KIND_LABELS: Record<TypeKind, string> = {
-  data: 'Data',
-  choice: 'Choice',
-  enum: 'Enum',
-  func: 'Function',
-  record: 'Record',
-  typeAlias: 'Type Alias',
-  basicType: 'Basic Type',
-  annotation: 'Annotation'
-};
 
 // ---------------------------------------------------------------------------
 // typeKind → TypeRefPayload.kind mapping
@@ -529,16 +493,7 @@ function TypeItemRow({
     >
       {isSelected && <span className="studio-type-pip" />}
 
-      <span
-        className="studio-type-glyph"
-        style={{
-          color: KIND_COLOR_VAR[row.typeKind],
-          background: `color-mix(in oklch, ${KIND_COLOR_VAR[row.typeKind]}, transparent 82%)`,
-          borderColor: `color-mix(in oklch, ${KIND_COLOR_VAR[row.typeKind]}, transparent 60%)`
-        }}
-      >
-        {KIND_LETTER[row.typeKind]}
-      </span>
+      <KindBadge kind={row.typeKind} shape="glyph" />
 
       {/* Plain span — no click handler, no hover underline. The only
           link-like affordance in the row is the nav arrow on the right.
@@ -546,7 +501,7 @@ function TypeItemRow({
           the arrow. */}
       <span
         className="flex-1 truncate text-left"
-        title={`${row.name} [${KIND_LABELS[row.typeKind]}] — drag to add as a type ref, or click the arrow to open`}
+        title={`${row.name} [${KIND_LABEL[row.typeKind]}] — drag to add as a type ref, or click the arrow to open`}
       >
         {row.name}
       </span>

@@ -30,11 +30,10 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
-import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
+import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
+import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { TypeHeader } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -77,6 +76,10 @@ export interface EnumFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +93,8 @@ function EnumForm({
   actions,
   allNodes = EMPTY_NODES,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: EnumFormProps) {
   const d = data as any;
   // ---- Form setup (R11: AST schema + identity projection) -----------------
@@ -223,9 +227,11 @@ function EnumForm({
   // host's `EditorFormActions` + `nodeId`. The intersection-typed context
   // accepts the enum-kind action set without narrowing.
 
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+
   const editorActionsValue = useMemo(
-    () => ({ nodeId, actions: actions as unknown as EditorFormActions }),
-    [nodeId, actions]
+    () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: isReadOnly }),
+    [nodeId, actions, isReadOnly]
   );
 
   // ---- Render --------------------------------------------------------------
@@ -234,37 +240,8 @@ function EnumForm({
     <FormProvider {...form}>
       <EditorActionsProvider {...editorActionsValue}>
         <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name="name"
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Enum name"
-                    aria-label="Enum type name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <Badge variant="enum">Enum</Badge>
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader kind="enum" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Enum name" nameAriaLabel="Enum type name" className="-mx-4 -mt-4" />
 
           {/* Parent Enum */}
           <FieldSet className="gap-1.5">
@@ -281,6 +258,7 @@ function EnumForm({
               emptyLabel="No parent enum"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={isReadOnly}
             />
           </FieldSet>
 
@@ -290,6 +268,7 @@ function EnumForm({
               <span>Values ({fields.length + inheritedCount})</span>
               {/* Icon-only add button matches FormPreviewPanel; see
                   DataTypeForm for the rationale. */}
+              {!isReadOnly && (
               <Button
                 data-slot="add-value-btn"
                 type="button"
@@ -301,6 +280,7 @@ function EnumForm({
               >
                 <Plus className="size-3" />
               </Button>
+              )}
             </FieldLegend>
 
             <PaginatedEnumValues
@@ -312,6 +292,7 @@ function EnumForm({
               onReorder={handleReorderValue}
               onRevertOverride={handleRevertEnumOverride}
               onOverrideInherited={handleOverrideInheritedValue}
+              isReadOnly={isReadOnly}
             />
           </FieldSet>
 
@@ -351,6 +332,8 @@ interface PaginatedEnumValuesProps {
   onReorder: (from: number, to: number) => void;
   onRevertOverride: (name: string) => void;
   onOverrideInherited: (name: string, displayName: string) => void;
+  /** When true, hides Override buttons on inherited rows to prevent mutations on locked types. */
+  isReadOnly?: boolean;
 }
 
 function PaginatedEnumValues({
@@ -361,7 +344,8 @@ function PaginatedEnumValues({
   onRemove,
   onReorder,
   onRevertOverride,
-  onOverrideInherited
+  onOverrideInherited,
+  isReadOnly
 }: PaginatedEnumValuesProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -398,6 +382,7 @@ function PaginatedEnumValues({
             name={entry.name}
             displayName={entry.displayName}
             ancestorName={entry.ancestorName!}
+            disabled={isReadOnly}
             onOverride={() => onOverrideInherited(entry.name, entry.displayName ?? '')}
           />
         )

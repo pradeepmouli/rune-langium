@@ -2,15 +2,15 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Unit tests for DetailPanel component rendering.
+ * Unit tests for OtherForm component rendering.
  */
 
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { DetailPanel } from '../../src/components/panels/DetailPanel.js';
+import { OtherForm } from '../../src/components/panels/OtherForm.js';
 import type { AnyGraphNode } from '../../src/types.js';
 
-describe('DetailPanel', () => {
+describe('OtherForm', () => {
   const mockNodeData: AnyGraphNode = {
     $type: 'Data',
     name: 'Trade',
@@ -42,7 +42,7 @@ describe('DetailPanel', () => {
   } as AnyGraphNode;
 
   it('renders nothing when nodeData is null', () => {
-    const { container } = render(<DetailPanel nodeData={null} />);
+    const { container } = render(<OtherForm nodeData={null} />);
     expect(container.textContent).toBe('');
   });
 
@@ -51,7 +51,7 @@ describe('DetailPanel', () => {
       ...mockNodeData,
       errors: [{ nodeId: 'test', severity: 'error', message: 'Circular inheritance detected' }]
     } as AnyGraphNode;
-    render(<DetailPanel nodeData={dataWithErrors} />);
+    render(<OtherForm nodeData={dataWithErrors} />);
     expect(screen.getByText('Circular inheritance detected')).toBeTruthy();
   });
 });

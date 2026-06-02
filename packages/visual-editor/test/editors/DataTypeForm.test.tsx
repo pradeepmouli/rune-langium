@@ -367,7 +367,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     );
 
     // Name must be the first text input in the form-header slot.
-    const header = container.querySelector('[data-slot="form-header"]')!;
+    const header = container.querySelector('[data-slot="type-header"]')!;
     const nameInput = header.querySelector('input[type="text"], input:not([type])');
     expect(nameInput).not.toBeNull();
     expect((nameInput as HTMLInputElement).value).toBe('Trade');

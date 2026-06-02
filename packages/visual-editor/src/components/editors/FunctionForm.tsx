@@ -38,8 +38,8 @@ import { FormProvider, Controller } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
-import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { TypeHeader } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { TypeSelector } from './TypeSelector.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -114,6 +114,10 @@ export interface FunctionFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // Phase 8 (US6) extracted the inline `InputParamRow` to
@@ -134,7 +138,8 @@ function FunctionForm({
   inheritedGroups = EMPTY_GROUPS,
   renderExpressionEditor,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: FunctionFormProps) {
   const d = data as any;
 
@@ -185,6 +190,9 @@ function FunctionForm({
   const [expressionError, setExpressionError] = useState<string | null>(null);
 
   const handleExpressionBlur = useCallback(() => {
+    // Guard: a readOnly textarea cannot produce new content, so blur should
+    // never trigger a mutation. Early-return to be explicit.
+    if (Boolean(readOnlyProp || (data as any).isReadOnly)) return;
     const currentExpression = form.getValues('expressionText' as never) as unknown as string;
     const result = validateExpression(currentExpression);
     if (!result.valid) {
@@ -195,7 +203,7 @@ function FunctionForm({
         actions.updateExpression(nodeId, currentExpression);
       }
     }
-  }, [nodeId, actions, form]);
+  }, [nodeId, actions, form, readOnlyProp, data]);
 
   // ---- Output type ---------------------------------------------------------
 
@@ -250,41 +258,22 @@ function FunctionForm({
   // from <EditorActionsProvider> via `useEditorActionsContext()` per the
   // Phase 7 / US5 contract.
 
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+
   return (
-    <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={d.isReadOnly}>
+    <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={isReadOnly}>
       <FormProvider {...form}>
         <div data-slot="function-form" className="flex flex-col gap-4 p-4">
-          {/* Header: Name + Badge */}
-          <div
-            data-slot="form-header"
-            className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center gap-2 px-3 py-2 border-b bg-muted"
-          >
-            <Controller
-              control={form.control}
-              name={'name' as never}
-              render={({ field, fieldState }) => (
-                <Field className="flex-1">
-                  <Input
-                    {...field}
-                    id={field.name}
-                    data-slot="type-name-input"
-                    aria-invalid={fieldState.invalid}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      debouncedName(e.target.value);
-                    }}
-                    className="text-lg font-semibold bg-transparent border-b border-transparent
-                      focus-visible:border-input focus-visible:ring-0 shadow-none
-                      px-1 py-0.5 h-auto rounded-none"
-                    placeholder="Function name"
-                    aria-label="Function type name"
-                  />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <Badge variant="func">Function</Badge>
-          </div>
+          {/* Header: Namespace + Name + Badge */}
+          <TypeHeader
+            kind="func"
+            namespace={d.namespace}
+            control={form.control}
+            onNameChange={debouncedName}
+            placeholder="Function name"
+            nameAriaLabel="Function type name"
+            className="-mx-4 -mt-4"
+          />
 
           {/* Input Parameters */}
           <FieldSet className="gap-1">
@@ -310,40 +299,42 @@ function FunctionForm({
               )}
             </FieldGroup>
 
-            {/* Inline add input */}
-            <div className="flex items-center gap-1 mt-1">
-              <Input
-                data-slot="add-param-name"
-                type="text"
-                value={addParamName}
-                onChange={(e) => setAddParamName(e.target.value)}
-                placeholder="Name"
-                className="text-xs w-24 h-6 px-1.5"
-                aria-label="New input parameter name"
-              />
-              <div className="flex-1">
-                <TypeSelector
-                  value={addParamType}
-                  options={availableTypes}
-                  onSelect={(v) => setAddParamType(v ?? '')}
-                  placeholder="Type..."
+            {/* Inline add input — hidden in read-only mode */}
+            {!isReadOnly && (
+              <div className="flex items-center gap-1 mt-1">
+                <Input
+                  data-slot="add-param-name"
+                  type="text"
+                  value={addParamName}
+                  onChange={(e) => setAddParamName(e.target.value)}
+                  placeholder="Name"
+                  className="text-xs w-24 h-6 px-1.5"
+                  aria-label="New input parameter name"
                 />
-              </div>
-              {/* Icon-only add button matches FormPreviewPanel; see
+                <div className="flex-1">
+                  <TypeSelector
+                    value={addParamType}
+                    options={availableTypes}
+                    onSelect={(v) => setAddParamType(v ?? '')}
+                    placeholder="Type..."
+                  />
+                </div>
+                {/* Icon-only add button matches FormPreviewPanel; see
                   DataTypeForm for the rationale. */}
-              <Button
-                data-slot="add-input-btn"
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleAddInput}
-                aria-label="Add input"
-                title="Add input"
-                className="shrink-0"
-              >
-                <Plus className="size-3" />
-              </Button>
-            </div>
+                <Button
+                  data-slot="add-input-btn"
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleAddInput}
+                  aria-label="Add input"
+                  title="Add input"
+                  className="shrink-0"
+                >
+                  <Plus className="size-3" />
+                </Button>
+              </div>
+            )}
           </FieldSet>
 
           {/* Output Type */}
@@ -360,6 +351,7 @@ function FunctionForm({
               emptyLabel="No output type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={isReadOnly}
             />
           </FieldSet>
 
@@ -434,7 +426,9 @@ function FunctionForm({
                   ) : (
                     <Textarea
                       value={opText}
+                      readOnly={isReadOnly}
                       onChange={(e) => {
+                        if (isReadOnly) return;
                         form.setValue('expressionText' as never, e.target.value as never, {
                           shouldDirty: true
                         });
@@ -477,6 +471,7 @@ function FunctionForm({
                         data-slot="expression-editor"
                         aria-invalid={fieldState.invalid}
                         aria-label="Function expression"
+                        disabled={isReadOnly}
                         onBlur={() => {
                           field.onBlur();
                           handleExpressionBlur();

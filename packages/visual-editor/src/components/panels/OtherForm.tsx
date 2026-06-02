@@ -2,7 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * DetailPanel — Type detail sidebar panel.
+ * OtherForm — Read-only fallback form for type kinds that do not yet have a
+ * dedicated editor form (record, basicType, annotation) as well as the
+ * default renderer used when a node is read-only (e.g. curated reference-only
+ * entries).
  *
  * Shows detailed information about the currently selected type node
  * using shadcn/ui primitives and lucide-react icons.
@@ -14,9 +17,10 @@ import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
 import { resolveNodeKind, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
 import { TypeLink } from '../editors/TypeLink.js';
-import type { AnyGraphNode, ValidationError, NavigateToNodeCallback } from '../../types.js';
+import { TypeHeader } from '../TypeHeader.js';
+import type { AnyGraphNode, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
 
-export interface DetailPanelProps {
+export interface OtherFormProps {
   nodeData: AnyGraphNode | null;
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
@@ -70,7 +74,7 @@ function extractMembers(d: any): Array<{ name: string; typeName?: string; cardin
   }
 }
 
-export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }: DetailPanelProps) {
+export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: OtherFormProps) {
   if (!nodeData) return null;
 
   const d = nodeData as any;
@@ -82,21 +86,20 @@ export function DetailPanel({ nodeData, onNavigateToNode, allNodeIds, refOnly }:
   return (
     <ScrollArea className="h-full">
       <div className="flex flex-col gap-3 p-4">
-        {/* Header */}
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold truncate">{d.name}</h3>
-          <Badge variant={kind as 'data' | 'enum' | 'choice' | 'func'}>{kind}</Badge>
-          {refOnly && (
+        {/* Header: Namespace + Name + Badge */}
+        <TypeHeader
+          kind={kind as TypeKind}
+          namespace={d.namespace}
+          name={d.name}
+          className="-mx-4 -mt-4"
+          trailing={refOnly ? (
             <Badge variant="outline" className="text-xs text-muted-foreground">
               Reference Only
             </Badge>
-          )}
-        </div>
+          ) : undefined}
+        />
 
         <Separator />
-
-        {/* Namespace */}
-        <DetailField label="Namespace" value={d.namespace ?? ''} />
 
         {/* Definition */}
         {d.definition && <DetailField label="Definition" value={d.definition} />}

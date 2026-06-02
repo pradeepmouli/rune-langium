@@ -19,12 +19,11 @@
  */
 
 import { useCallback, useMemo, useRef } from 'react';
-import { FormProvider, Controller, useFieldArray, type Control } from 'react-hook-form';
+import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
-import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
+import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { TypeHeader } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
@@ -40,6 +39,7 @@ import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { identityProjection } from './identity-projection.js';
+import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
   TypeGraphNode,
@@ -73,6 +73,12 @@ export interface DataTypeFormProps {
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
+  /**
+   * Panel-level read-only override. When true the form renders in read-only
+   * mode even if the node's own `isReadOnly` flag is false (e.g. panel prop
+   * lock from a curated refOnly file). ORed with `data.isReadOnly`.
+   */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +93,8 @@ function DataTypeForm({
   allNodes = EMPTY_NODES,
   renderExpressionEditor,
   onNavigateToNode,
-  allNodeIds
+  allNodeIds,
+  readOnly: readOnlyProp
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema. Per R11 the editor
@@ -319,6 +326,19 @@ function DataTypeForm({
     return meta;
   }, [effectiveAttributes]);
 
+  const d = data as any;
+  const parentName = getRefText(d.superType);
+
+  const parentOptions = availableTypes.filter(
+    (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
+  );
+
+  const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
+
+  // ---- Compute isReadOnly before ghost rows so it is in scope for the memo --
+
+  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+
   // ---- Inherited rows as ghost-row primitives (US4 / R6) -------------------
   // Per upstream `arrayConfig.before` (zod-to-form/core: `GhostRow[]`), build
   // one self-contained renderable per inherited entry. Ghost rows do not
@@ -336,6 +356,7 @@ function DataTypeForm({
             typeName={entry.typeName ?? 'string'}
             cardinality={entry.cardinality ?? '(1..1)'}
             ancestorName={entry.ancestorName ?? ''}
+            disabled={isReadOnly}
             onOverride={() =>
               handleOverrideInherited({
                 name: entry.name,
@@ -348,55 +369,18 @@ function DataTypeForm({
           />
         )
       }));
-  }, [effectiveAttributes, handleOverrideInherited, onNavigateToNode, allNodeIds]);
+  }, [effectiveAttributes, isReadOnly, handleOverrideInherited, onNavigateToNode, allNodeIds]);
 
   const inheritedCount = ghostRowsBefore.length;
-
-  const d = data as any;
-  const parentName = getRefText(d.superType);
-
-  const parentOptions = availableTypes.filter(
-    (opt) => (opt.kind === 'data' || opt.kind === 'builtin') && opt.label !== d.name
-  );
-
-  const parentValue = parentName ? (availableTypes.find((opt) => opt.label === parentName)?.value ?? null) : null;
 
   // ---- Render --------------------------------------------------------------
 
   return (
     <FormProvider {...form}>
+      <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
       <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full">
-        {/* Header: Name + Badge — always visible above tabs */}
-        <div
-          data-slot="form-header"
-          className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 shrink-0 border-b bg-muted"
-        >
-          <Controller
-            control={form.control}
-            name="name"
-            render={({ field, fieldState }) => (
-              <Field className="flex-1">
-                <Input
-                  {...field}
-                  id={field.name}
-                  data-slot="type-name-input"
-                  aria-invalid={fieldState.invalid}
-                  onChange={(e) => {
-                    field.onChange(e);
-                    debouncedName(e.target.value);
-                  }}
-                  className="text-lg font-semibold bg-transparent border-b border-transparent
-                    focus-visible:border-input focus-visible:ring-0 shadow-none
-                    px-1 py-0.5 h-auto rounded-none"
-                  placeholder="Type name"
-                  aria-label="Data type name"
-                />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )}
-          />
-          <Badge variant="data">Data</Badge>
-        </div>
+        {/* Header: Namespace + Name + Badge — always visible above tabs */}
+        <TypeHeader kind="data" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Type name" nameAriaLabel="Data type name" className="shrink-0" />
 
         {/* Inheritance — always visible above tabs */}
         <div className="px-4 pb-3 shrink-0">
@@ -414,6 +398,7 @@ function DataTypeForm({
               emptyLabel="No parent type"
               onNavigateToNode={onNavigateToNode}
               allNodeIds={allNodeIds}
+              disabled={isReadOnly}
             />
           </FieldSet>
         </div>
@@ -437,6 +422,7 @@ function DataTypeForm({
                     The legend already names the section ("Attributes"),
                     so the button only conveys the operation. aria-label
                     preserves the full phrasing for screen readers. */}
+                {!isReadOnly && (
                 <Button
                   data-slot="add-attribute-btn"
                   type="button"
@@ -448,6 +434,7 @@ function DataTypeForm({
                 >
                   <Plus className="size-3" />
                 </Button>
+                )}
               </FieldLegend>
 
               <FieldGroup className="gap-1">
@@ -501,7 +488,7 @@ function DataTypeForm({
             <ConditionSection
               label="Conditions"
               conditions={d.conditions}
-              readOnly={d.isReadOnly}
+              readOnly={isReadOnly}
               onAdd={handleAddCondition}
               onRemove={handleRemoveCondition}
               onUpdate={handleUpdateCondition}
@@ -530,6 +517,7 @@ function DataTypeForm({
           </TabsContent>
         </Tabs>
       </div>
+      </EditorActionsProvider>
     </FormProvider>
   );
 }
