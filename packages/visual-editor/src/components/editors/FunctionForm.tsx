@@ -367,10 +367,10 @@ function FunctionForm({
                   value={addParamName}
                   onChange={(e) => setAddParamName(e.target.value)}
                   placeholder="Name"
-                  className="text-xs w-24 h-6 px-1.5"
+                  className="text-xs h-6 px-1.5 flex-1 min-w-0"
                   aria-label="New input parameter name"
                 />
-                <div className="flex-1">
+                <div className="min-w-0 shrink-0">
                   <TypeReferenceField
                     value={addParamType || null}
                     options={availableTypes}

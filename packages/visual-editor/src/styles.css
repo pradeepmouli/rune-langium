@@ -643,38 +643,58 @@ button[data-navigable]:focus-visible {
 
 /* ── Shared type reference field ─────────────────────────────── */
 
-.rune-type-reference {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  width: 100%;
+/* ── Inspector pill box — the shared "muted rounded field" aesthetic ──
+   SSoT for an inspector selector's chrome: 8px radius, muted fill, transparent
+   border that lights up on hover, primary ring on focus. Worn by the
+   cardinality pill (variant="pill") and any future inspector selector. The
+   type-reference field does NOT use this — its colored chip is the pill. */
+.rune-inspector-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: auto;
   min-width: 0;
-  padding: 2px 3px 2px 4px;
+  padding: 2px 8px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: color-mix(in oklch, var(--muted, #2a2a33) 20%, transparent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.1;
+  color: var(--muted-foreground, #8a8a96);
   transition:
     border-color var(--motion-fast, 140ms ease),
     background-color var(--motion-fast, 140ms ease),
     box-shadow var(--motion-fast, 140ms ease);
-  font-size: 12px;
-  line-height: 10px;
 }
 
-.rune-type-reference:hover {
+.rune-inspector-pill:hover {
   border-color: color-mix(in oklch, var(--border, #454552) 78%, transparent);
   background: color-mix(in oklch, var(--muted, #2a2a33) 32%, transparent);
 }
 
-.rune-type-reference:focus-within {
+.rune-inspector-pill:focus-within {
   border-color: color-mix(in oklch, var(--primary, #00d4aa) 42%, transparent);
   background: color-mix(in oklch, var(--muted, #2a2a33) 42%, transparent);
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary, #00d4aa) 18%, transparent);
 }
 
-.rune-type-reference[data-readonly='true'] {
-  padding-inline: 7px;
-  background: color-mix(in oklch, var(--muted, #2a2a33) 14%, transparent);
+/* Type-reference field — a BARE layout wrapper + drop target. The colored chip
+   is the pill (structure-view idiom); no outer box, no padding, so the chip is
+   not double-nested or compressed inside a second container. */
+.rune-type-reference {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.rune-type-reference[data-drop-over='true'] {
+  outline: 1px dashed color-mix(in oklch, var(--primary, #00d4aa) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 .rune-type-reference[data-empty='true'] {
@@ -785,6 +805,41 @@ button[data-navigable]:focus-visible {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Inspector type-picker trigger: the chip sizes to its content (not flex-grow)
+   and gets a touch more pill padding than the tight structure-cell chip, since
+   it stands alone as the field's primary affordance. `inline-block` + ellipsis
+   so a type-ref capped by the grid column truncates with "…" rather than
+   overflowing. */
+.rune-type-reference [data-slot='type-picker-trigger'].rune-cell-type-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding-inline: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Nav arrow — reuses the structure-view `.rune-row-glyph` idiom so the inspector
+   matches the canvas. Neutral (muted) variant with a subtle box + hover tint,
+   so the arrow reads as a button that coordinates with the chip pill. */
+.rune-row-glyph--nav {
+  background: color-mix(in oklch, var(--muted, #2a2a33) 32%, transparent);
+  border: 1px solid color-mix(in oklch, var(--border, #454552) 55%, transparent);
+  border-radius: 4px;
+  color: var(--muted-foreground, #8a8a96);
+  cursor: pointer;
+  transition:
+    color var(--motion-fast, 140ms ease),
+    background-color var(--motion-fast, 140ms ease),
+    border-color var(--motion-fast, 140ms ease);
+}
+
+.rune-row-glyph--nav:hover {
+  color: var(--foreground, #e8e6e1);
+  background: color-mix(in oklch, var(--muted, #2a2a33) 64%, transparent);
+  border-color: color-mix(in oklch, var(--border, #454552) 85%, transparent);
 }
 
 /* ── Detail panel ─────────────────────────────────────────────── */

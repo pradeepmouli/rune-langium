@@ -77,8 +77,13 @@ export interface AttributeRowProps {
   onRevert?: () => void;
 }
 
+// Grid columns: handle | name (takes all flex) | type (sizes to its chip,
+// capped so a long type-ref truncates instead of starving the name) |
+// cardinality (content) | trailing. The type column is `fit-content` rather
+// than a fraction so the type field hugs its chip — no full-width "phantom box"
+// pushing the name to ~half width.
 const ATTRIBUTE_ROW_LAYOUT =
-  'grid w-full items-center gap-x-1 [grid-template-columns:12px_minmax(0,1.18fr)_minmax(7.5rem,1fr)_auto_minmax(0,max-content)]';
+  'grid w-full items-center gap-x-1 [grid-template-columns:12px_minmax(0,1fr)_fit-content(11rem)_auto_minmax(0,max-content)]';
 
 // ---------------------------------------------------------------------------
 // Component
@@ -273,7 +278,12 @@ function AttributeRow({
 
       {/* Cardinality */}
       <div data-slot="attribute-cardinality" className="shrink-0">
-        <CardinalityPicker value={cardinalityString} onChange={handleCardinalityChange} disabled={effectiveReadOnly} />
+        <CardinalityPicker
+          value={cardinalityString}
+          onChange={handleCardinalityChange}
+          disabled={effectiveReadOnly}
+          variant="pill"
+        />
       </div>
 
       <div className="min-w-0 justify-self-end flex items-center gap-1">

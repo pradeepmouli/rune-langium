@@ -27,8 +27,10 @@ export interface CardinalityPickerProps {
    * Visual variant for the trigger.
    * - `'default'`: compact input-box look (h-5, rounded).
    * - `'chip'`: pill/chip look matching the structure-view cardinality cell.
+   * - `'pill'`: rounded muted-box look matching the inspector type-reference
+   *   field, so the cardinality selector and the type picker share an aesthetic.
    */
-  variant?: 'default' | 'chip';
+  variant?: 'default' | 'chip' | 'pill';
   /** Optional wrapper class override for host-specific layouts. */
   wrapperClassName?: string;
   /** Optional trigger class override for compact host-specific chrome. */
@@ -71,6 +73,14 @@ function joinClasses(...classNames: Array<string | undefined>): string | undefin
 /** Canonical chip trigger class for the structure-view cardinality cell look. */
 const CHIP_TRIGGER_CLASS =
   'rune-cell-card h-auto min-w-0 border-0 bg-muted px-[var(--rune-pill-padding-x)] py-[var(--rune-chip-padding-y)] text-[11px] text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring';
+
+/**
+ * Inspector pill trigger — wears the shared `.rune-inspector-pill` box (the same
+ * SSoT muted-rounded-field aesthetic as the type-reference field), so the
+ * cardinality selector and the type picker stay visually in sync from one place.
+ * `shadow-none` cancels the shadcn SelectTrigger default ring/shadow.
+ */
+const PILL_TRIGGER_CLASS = 'rune-inspector-pill shadow-none';
 
 export function CardinalityPicker({
   value,
@@ -178,7 +188,9 @@ export function CardinalityPicker({
           className={joinClasses(
             variant === 'chip'
               ? CHIP_TRIGGER_CLASS
-              : 'h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-[11px] font-mono leading-none gap-0.5',
+              : variant === 'pill'
+                ? PILL_TRIGGER_CLASS
+                : 'h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-[11px] font-mono leading-none gap-0.5',
             triggerClassName
           )}
           aria-label="Cardinality"

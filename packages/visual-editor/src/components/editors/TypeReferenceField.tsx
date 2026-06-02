@@ -142,7 +142,7 @@ export function TypeReferenceField({
       onClick={handleNavigate}
       title={`Go to ${typeLabel}`}
       aria-label={`Go to ${typeLabel}`}
-      className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground opacity-50 transition hover:bg-accent/50 hover:text-foreground hover:opacity-100"
+      className="rune-row-glyph rune-row-glyph--nav nodrag nopan shrink-0"
     >
       <ArrowUpRight className="size-3.5" aria-hidden="true" />
     </button>
@@ -164,7 +164,7 @@ export function TypeReferenceField({
             typeKind={chipKind}
             disabled
             data-slot="type-picker-trigger"
-            className="min-w-0 max-w-full truncate"
+            className="truncate"
           />
         ) : (
           <span className="rune-type-reference__placeholder">{emptyLabel ?? placeholder}</span>
@@ -179,7 +179,7 @@ export function TypeReferenceField({
                   typeName={typeLabel}
                   typeKind={chipKind}
                   data-slot="type-picker-trigger"
-                  className="min-w-0 max-w-full truncate"
+                  className="truncate"
                 />
               ) : (
                 <button type="button" data-slot="type-picker-trigger" className="rune-type-reference__placeholder">
