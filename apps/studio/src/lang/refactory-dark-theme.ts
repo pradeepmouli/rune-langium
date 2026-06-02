@@ -2,9 +2,11 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Refactory Dark — CodeMirror 6 theme for Rune Studio.
- *
- * Matches the Refactory Dark design system palette.
+ * CodeMirror 6 theme for Rune Studio — token-driven, adapts to the active
+ * design-system theme (daikonic by default). The chrome (gutters, selection,
+ * search, autocomplete, tooltips) uses semantic CSS design tokens so it stays
+ * consistent with whatever theme is active; syntax highlighting derives its
+ * palette from the `syntax.*` tokens.
  */
 
 import { EditorView } from '@codemirror/view';
@@ -15,27 +17,27 @@ import { syntax } from '@rune-langium/design-system/tokens';
 export const refactoryDarkTheme = EditorView.theme(
   {
     '&': {
-      backgroundColor: '#0C0C14',
-      color: '#E8E6E1',
+      backgroundColor: 'var(--background)',
+      color: 'var(--foreground)',
       height: '100%'
     },
     '.cm-scroller': {
       overflow: 'auto'
     },
     '.cm-content': {
-      caretColor: '#00D4AA',
+      caretColor: 'var(--primary)',
       fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
       fontSize: '13px',
       lineHeight: '1.6'
     },
     '.cm-cursor, .cm-dropCursor': {
-      borderLeftColor: '#00D4AA'
+      borderLeftColor: 'var(--primary)'
     },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-      backgroundColor: 'rgba(0, 212, 170, 0.15)'
+      backgroundColor: 'color-mix(in srgb, var(--primary) 15%, transparent)'
     },
     '.cm-activeLine': {
-      backgroundColor: '#181824'
+      backgroundColor: 'color-mix(in srgb, var(--accent) 34%, transparent)'
     },
     '.cm-gutters': {
       // Match .cm-content's mono font, size, and line-height so the line
@@ -47,48 +49,48 @@ export const refactoryDarkTheme = EditorView.theme(
       fontFamily: 'var(--font-mono, "JetBrains Mono", monospace)',
       fontSize: '13px',
       lineHeight: '1.6',
-      backgroundColor: '#0C0C14',
-      color: '#5C5C6A',
+      backgroundColor: 'color-mix(in srgb, var(--card) 92%, var(--background))',
+      color: 'var(--muted-foreground)',
       border: 'none',
-      borderRight: '1px solid rgba(255, 255, 255, 0.06)'
+      borderRight: '1px solid var(--border)'
     },
     '.cm-activeLineGutter': {
-      backgroundColor: '#181824',
-      color: '#8A8A96'
+      backgroundColor: 'color-mix(in srgb, var(--accent) 42%, var(--card))',
+      color: 'var(--muted-foreground)'
     },
     '.cm-lineNumbers .cm-gutterElement': {
       padding: '0 8px 0 16px'
     },
     '.cm-foldGutter .cm-gutterElement': {
-      color: '#5C5C6A'
+      color: 'var(--muted-foreground)'
     },
     '.cm-tooltip': {
-      backgroundColor: '#12121C',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
+      backgroundColor: 'color-mix(in srgb, var(--card) 88%, var(--background))',
+      border: '1px solid var(--border)',
       borderRadius: '8px'
     },
     '.cm-tooltip-autocomplete': {
       '& > ul > li[aria-selected]': {
-        backgroundColor: '#1E1E2C'
+        backgroundColor: 'var(--accent)'
       }
     },
     '.cm-searchMatch': {
-      backgroundColor: 'rgba(232, 145, 58, 0.15)',
-      outline: '1px solid rgba(232, 145, 58, 0.3)'
+      backgroundColor: 'color-mix(in srgb, var(--color-warning) 22%, transparent)',
+      outline: '1px solid color-mix(in srgb, var(--color-warning) 45%, transparent)'
     },
     '.cm-searchMatch.cm-searchMatch-selected': {
-      backgroundColor: 'rgba(232, 145, 58, 0.25)'
+      backgroundColor: 'color-mix(in srgb, var(--color-warning) 35%, transparent)'
     },
     '.cm-matchingBracket': {
-      backgroundColor: 'rgba(0, 212, 170, 0.1)',
-      outline: '1px solid rgba(0, 212, 170, 0.25)'
+      backgroundColor: 'color-mix(in srgb, var(--primary) 14%, transparent)',
+      outline: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)'
     },
     '.cm-panels': {
-      backgroundColor: '#12121C',
-      color: '#E8E6E1'
+      backgroundColor: 'var(--popover)',
+      color: 'var(--foreground)'
     },
     '.cm-panel.cm-search': {
-      backgroundColor: '#12121C'
+      backgroundColor: 'var(--popover)'
     }
   },
   { dark: true }
@@ -96,11 +98,11 @@ export const refactoryDarkTheme = EditorView.theme(
 
 export const refactoryDarkHighlightStyle = HighlightStyle.define([
   { tag: t.keyword, color: syntax.keyword },
-  { tag: [t.name, t.deleted, t.character, t.macroName], color: '#E8E6E1' },
+  { tag: [t.name, t.deleted, t.character, t.macroName], color: 'var(--foreground)' },
   { tag: [t.function(t.variableName), t.labelName], color: syntax.function },
   { tag: [t.propertyName], color: syntax.attribute },
-  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: '#00D4AA' },
-  { tag: [t.definition(t.name), t.separator], color: '#E8E6E1' },
+  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: syntax.variable },
+  { tag: [t.definition(t.name), t.separator], color: 'var(--foreground)' },
   {
     tag: [t.typeName, t.className, t.changed, t.annotation, t.modifier, t.self, t.namespace],
     color: syntax.type
@@ -113,11 +115,11 @@ export const refactoryDarkHighlightStyle = HighlightStyle.define([
   { tag: t.strong, fontWeight: 'bold' },
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.strikethrough, textDecoration: 'line-through' },
-  { tag: t.link, color: '#00D4AA', textDecoration: 'underline' },
-  { tag: t.heading, fontWeight: 'bold', color: '#E8E6E1' },
+  { tag: t.link, color: syntax.variable, textDecoration: 'underline' },
+  { tag: t.heading, fontWeight: 'bold', color: 'var(--foreground)' },
   { tag: [t.atom, t.bool, t.special(t.variableName)], color: syntax.constant },
   { tag: [t.processingInstruction, t.string, t.inserted], color: syntax.string },
-  { tag: t.invalid, color: '#FF6058' },
+  { tag: t.invalid, color: 'var(--color-error)' },
   { tag: t.number, color: syntax.number }
 ]);
 
