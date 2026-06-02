@@ -257,6 +257,8 @@ export interface EditorActions {
   // --- Function operations ---
   addInputParam(nodeId: string, paramName: string, typeName: string): void;
   removeInputParam(nodeId: string, paramName: string): void;
+  updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
+  reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
@@ -1506,6 +1508,48 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               const d = n.data as AnyGraphNode;
               if (d.$type === 'RosettaFunction') {
                 const inputs = ((d as any).inputs ?? []).filter((i: any) => i.name !== paramName);
+                return { ...n, data: { ...d, inputs } };
+              }
+              return n;
+            })
+          }));
+        },
+
+        updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
+          const card = parseCardinalityString(cardinality);
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const inputs = ((d as any).inputs ?? []).map((inp: any) =>
+                  inp.name === oldName
+                    ? {
+                        ...inp,
+                        name: newName,
+                        typeCall: { $type: 'TypeCall', type: { $refText: typeName }, arguments: [] },
+                        card: { $type: 'RosettaCardinality', ...card }
+                      }
+                    : inp
+                );
+                return { ...n, data: { ...d, inputs } };
+              }
+              return n;
+            })
+          }));
+        },
+
+        reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
+          set((state) => ({
+            nodes: state.nodes.map((n) => {
+              if (n.id !== nodeId) return n;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                const inputs = [...((d as any).inputs ?? [])];
+                const [moved] = inputs.splice(fromIndex, 1);
+                if (moved) {
+                  inputs.splice(toIndex, 0, moved);
+                }
                 return { ...n, data: { ...d, inputs } };
               }
               return n;

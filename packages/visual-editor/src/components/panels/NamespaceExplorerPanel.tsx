@@ -21,6 +21,11 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { KindBadge, KIND_LABEL } from '../KindBadge.js';
+import {
+  NamespaceSegmentHeaderRow,
+  NAMESPACE_TREE_INDENT_BASE as TREE_INDENT_BASE,
+  NAMESPACE_TREE_TYPE_INDENT as TREE_TYPE_INDENT
+} from '../NamespaceSegmentHeaderRow.js';
 import type { TypeGraphNode, TypeKind } from '../../types.js';
 import {
   buildSegmentedNamespaceTree,
@@ -33,17 +38,9 @@ import { useVirtualTree } from '../../hooks/useVirtualTree.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../types/structure-view.js';
 import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js';
 
-// ---------------------------------------------------------------------------
-// Tree indentation — the tree renders FLAT: every sub-namespace level is its
-// own header row, but headers do NOT step right with depth. Hierarchy is
-// conveyed by the aggregated full-path label (cdm, cdm.base, cdm.base.datetime)
-// plus the header separator band, not by horizontal indentation. There is no
-// per-depth step, so every header sits at the same baseline (TREE_INDENT_BASE).
-// Type rows get a single fixed membership indent (TREE_TYPE_INDENT) so they read
-// as belonging to the header above them — the one intentional, non-depth indent.
-// ---------------------------------------------------------------------------
-const TREE_INDENT_BASE = 8;
-const TREE_TYPE_INDENT = 16;
+// Flat-tree indent geometry is shared with the inspector tree picker; the SSoT
+// lives in NamespaceSegmentHeaderRow. Aliased to the original local names to
+// keep the call sites below unchanged.
 
 // ---------------------------------------------------------------------------
 // Props
@@ -430,38 +427,15 @@ interface SegmentHeaderRowProps {
 }
 
 function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): JSX.Element {
-  const totalCount = row.typeCount + (row.childCount > 0 ? row.childCount : 0);
   return (
-    <div data-testid={`ns-seg-${row.fullPath}`} className="group">
-      {/* Header band: separator + muted background mark this row as a
-          namespace header (vs. a type row), since the flat layout drops the
-          depth indent that would otherwise distinguish them. The label is the
-          aggregated full path (cdm, cdm.base, cdm.base.datetime) so the
-          hierarchy stays legible without indentation. */}
-      <div
-        className="flex items-center gap-1 border-t border-border/60 bg-muted/40 px-2 py-1 text-sm hover:bg-accent/50 cursor-default text-foreground"
-        style={{ paddingLeft: `${TREE_INDENT_BASE}px` }}
-      >
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onToggleTreeExpand}
-          aria-label={row.expanded ? 'Collapse segment' : 'Expand segment'}
-          className="shrink-0"
-        >
-          {row.expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-        </Button>
-
-        <span
-          className="flex-1 truncate text-xs font-semibold tracking-wide cursor-pointer"
-          onClick={onToggleTreeExpand}
-        >
-          {row.fullPath || '(default)'}
-        </span>
-
-        <span className="number-chiclet shrink-0">{totalCount}</span>
-      </div>
-    </div>
+    <NamespaceSegmentHeaderRow
+      data-testid={`ns-seg-${row.fullPath}`}
+      fullPath={row.fullPath}
+      expanded={row.expanded}
+      count={row.totalCount}
+      onToggle={onToggleTreeExpand}
+      indentPx={TREE_INDENT_BASE}
+    />
   );
 }
 

@@ -12,7 +12,14 @@
  *      Foundation for the shared hierarchical NamespaceTree picker.
  */
 
-import type { TypeGraphNode, TypeKind, NamespaceTreeNode, NamespaceTypeEntry, AnyGraphNode } from '../types.js';
+import type {
+  TypeGraphNode,
+  TypeKind,
+  NamespaceTreeNode,
+  NamespaceTypeEntry,
+  AnyGraphNode,
+  TypeOption
+} from '../types.js';
 import { resolveNodeKind } from '../adapters/model-helpers.js';
 
 /**
@@ -49,6 +56,9 @@ export type FlatTreeRow =
       typeCount: number;
       /** Number of direct child segment nodes. */
       childCount: number;
+      /** Aggregate type count across this segment's entire subtree (all
+       *  descendant leaves) — what the header count pill displays. */
+      totalCount: number;
       expanded: boolean;
       depth: number;
     };
@@ -243,13 +253,48 @@ function extractTypeEntry(node: TypeGraphNode): NamespaceTypeEntry {
 export function buildSegmentedNamespaceTree(nodes: TypeGraphNode[]): SegmentNode[] {
   if (nodes.length === 0) return [];
 
-  // 1. Group TypeGraphNodes by their full namespace string.
+  // Group TypeGraphNodes by their full namespace string, then defer to the
+  // shared core. The graph-node and TypeOption builders differ ONLY in how
+  // they normalize their input into this `namespace → entries` map; the tree
+  // construction (nesting, totals, sorting) is identical, so it lives once.
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
   for (const node of nodes) {
     const ns: string = node.data.namespace ?? '';
     if (!nsMap.has(ns)) nsMap.set(ns, []);
     nsMap.get(ns)!.push(extractTypeEntry(node));
   }
+  return buildSegmentsFromEntries(nsMap);
+}
+
+/**
+ * Build a sub-namespace-segmented tree from `TypeOption[]` (the inspector's
+ * type-picker shape) so the inspector tree picker and the namespace explorer
+ * render from one builder. Built-in types carry no namespace and a `'builtin'`
+ * pseudo-kind: we group them under a synthetic `"Built-in"` namespace and map
+ * the kind to `'basicType'` (matching the dropdown's `kindToBadgeVariant`), so
+ * they appear as their own header in the tree instead of an empty-string root.
+ */
+export function buildSegmentedNamespaceTreeFromOptions(options: TypeOption[]): SegmentNode[] {
+  if (options.length === 0) return [];
+
+  const nsMap = new Map<string, NamespaceTypeEntry[]>();
+  for (const opt of options) {
+    const isBuiltin = opt.kind === 'builtin';
+    const ns = opt.namespace ?? (isBuiltin ? 'Built-in' : '');
+    const kind = (isBuiltin ? 'basicType' : opt.kind) as TypeKind;
+    if (!nsMap.has(ns)) nsMap.set(ns, []);
+    nsMap.get(ns)!.push({ nodeId: opt.value, name: opt.label, kind });
+  }
+  return buildSegmentsFromEntries(nsMap);
+}
+
+/**
+ * Shared core: turn a `namespace → entries` map into a sorted, totalled
+ * `SegmentNode[]`. Both public builders normalize their domain input into this
+ * map and delegate here, so the nesting/total/sort logic has a single home.
+ */
+function buildSegmentsFromEntries(nsMap: Map<string, NamespaceTypeEntry[]>): SegmentNode[] {
+  if (nsMap.size === 0) return [];
 
   // Sort each namespace's types by name.
   for (const entries of nsMap.values()) {
@@ -458,6 +503,7 @@ export function flattenSegmentedTree(
         fullPath: cursor.fullPath,
         typeCount: cursor.types.length,
         childCount: cursor.children.length,
+        totalCount: cursor.totalCount,
         expanded: isExpanded,
         depth
       });
@@ -487,6 +533,7 @@ export function flattenSegmentedTree(
       fullPath: node.fullPath,
       typeCount: node.types.length,
       childCount: node.children.length,
+      totalCount: node.totalCount,
       expanded: isExpanded,
       depth
     });

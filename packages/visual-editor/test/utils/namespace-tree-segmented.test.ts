@@ -12,12 +12,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildSegmentedNamespaceTree,
+  buildSegmentedNamespaceTreeFromOptions,
   flattenSegmentedTree,
   filterSegmentedTree,
   ancestorPathsForMatches,
   type SegmentNode
 } from '../../src/utils/namespace-tree.js';
-import type { TypeGraphNode } from '../../src/types.js';
+import type { TypeGraphNode, TypeOption } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers (mirror the pattern from namespace-tree.test.ts)
@@ -664,5 +665,71 @@ describe('ancestorPathsForMatches', () => {
     expect(paths.has('com.rosetta')).toBe(true);
     expect(paths.has('com.rosetta.model')).toBe(true);
     expect(paths.has('com.rosetta.model.base')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSegmentedNamespaceTreeFromOptions — the inspector-picker entry point.
+// Must produce the SAME tree as the graph-node builder for equivalent input,
+// since both delegate to the shared buildSegmentsFromEntries core.
+// ---------------------------------------------------------------------------
+
+describe('buildSegmentedNamespaceTreeFromOptions', () => {
+  function opt(namespace: string | undefined, label: string, kind: TypeOption['kind'] = 'data'): TypeOption {
+    return { value: `${namespace ?? ''}::${label}`, label, kind, namespace };
+  }
+
+  it('returns [] for empty options', () => {
+    expect(buildSegmentedNamespaceTreeFromOptions([])).toEqual([]);
+  });
+
+  it('produces the same tree shape as the node builder for equivalent input', () => {
+    const nodes = [
+      makeNode('com.rosetta.model', 'Trade', 'data'),
+      makeNode('com.rosetta.model.base', 'Date', 'data'),
+      makeNode('cdm.event', 'Event', 'choice')
+    ];
+    const options: TypeOption[] = [
+      opt('com.rosetta.model', 'Trade', 'data'),
+      opt('com.rosetta.model.base', 'Date', 'data'),
+      opt('cdm.event', 'Event', 'choice')
+    ];
+    const fromNodes = buildSegmentedNamespaceTree(nodes);
+    const fromOptions = buildSegmentedNamespaceTreeFromOptions(options);
+    // nodeId is `${ns}::${name}` in both fixtures, so the trees are deep-equal.
+    expect(fromOptions).toEqual(fromNodes);
+  });
+
+  it('nests sub-namespaces into segment chains', () => {
+    const roots = buildSegmentedNamespaceTreeFromOptions([
+      opt('cdm.base.datetime', 'BusinessCenters', 'data')
+    ]);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.fullPath).toBe('cdm');
+    expect(roots[0]!.children[0]!.fullPath).toBe('cdm.base');
+    expect(roots[0]!.children[0]!.children[0]!.fullPath).toBe('cdm.base.datetime');
+    expect(roots[0]!.children[0]!.children[0]!.types.map((t) => t.name)).toEqual(['BusinessCenters']);
+  });
+
+  it('groups builtin types under a synthetic "Built-in" namespace with basicType kind', () => {
+    const roots = buildSegmentedNamespaceTreeFromOptions([
+      { value: 'string', label: 'string', kind: 'builtin' },
+      { value: 'int', label: 'int', kind: 'builtin' }
+    ]);
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.fullPath).toBe('Built-in');
+    expect(roots[0]!.types.map((t) => t.name).sort()).toEqual(['int', 'string']);
+    // builtin → basicType so the type-row dot/badge resolves to a real TypeKind.
+    expect(roots[0]!.types.every((t) => t.kind === 'basicType')).toBe(true);
+  });
+
+  it('sorts types within a namespace by name and roots by segment', () => {
+    const roots = buildSegmentedNamespaceTreeFromOptions([
+      opt('zeta', 'Zebra', 'data'),
+      opt('alpha', 'Beta', 'data'),
+      opt('alpha', 'Apple', 'data')
+    ]);
+    expect(roots.map((r) => r.segment)).toEqual(['alpha', 'zeta']);
+    expect(roots[0]!.types.map((t) => t.name)).toEqual(['Apple', 'Beta']);
   });
 });

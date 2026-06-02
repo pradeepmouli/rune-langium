@@ -17,6 +17,15 @@ import { KindBadge } from './KindBadge.js';
 import { useEditorActionsContext } from './forms/sections/EditorActionsContext.js';
 import type { TypeKind } from '../types.js';
 
+/**
+ * Shared className for the type-form header across ALL inspector forms — one
+ * full-bleed band reaching the panel edges (negative margins cancel the form's
+ * `p-4` wrapper). The header's own `px-4` then re-insets its content so it
+ * aligns with the body content below. Every type form uses this identical class
+ * with an identical `p-4` wrapper, so the header looks the same everywhere.
+ */
+export const INSPECTOR_FORM_HEADER_CLASS = '-mx-4 -mt-4';
+
 export interface TypeHeaderProps {
   kind: TypeKind;
   namespace?: string;
@@ -48,7 +57,7 @@ export function TypeHeader({
   return (
     <div
       data-slot="type-header"
-      className={cn('sticky top-0 z-10 flex items-center gap-2 border-b bg-muted px-3 py-2', className)}
+      className={cn('sticky top-0 z-10 flex items-center gap-2 border-b bg-muted px-4 py-2', className)}
     >
       <div className="flex min-w-0 flex-1 flex-col">
         {namespace && (

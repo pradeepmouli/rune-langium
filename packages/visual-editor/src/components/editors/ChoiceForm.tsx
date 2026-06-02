@@ -35,7 +35,7 @@
 import { useCallback, useRef } from 'react';
 import { FormProvider } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
-import { TypeHeader } from '../TypeHeader.js';
+import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -186,7 +186,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
       <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
         <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="choice" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Choice name" nameAriaLabel="Choice type name" className="-mx-4 -mt-4" />
+          <TypeHeader kind="choice" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Choice name" nameAriaLabel="Choice type name" className={INSPECTOR_FORM_HEADER_CLASS} />
 
           {/* Options */}
           <FieldSet className="gap-1">

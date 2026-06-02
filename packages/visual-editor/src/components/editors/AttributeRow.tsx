@@ -7,10 +7,15 @@
  * Reads/writes form state via `useFormContext` (provided by the parent
  * FormProvider) at the **canonical AST paths** for an `Attribute`:
  *
- *   attributes.${index}.name                    → string
- *   attributes.${index}.typeCall.type.$refText  → string (display name)
- *   attributes.${index}.card                    → RosettaCardinality { inf, sup?, unbounded? }
- *   attributes.${index}.override                → boolean
+ *   {fieldArrayName}.${index}.name                    → string
+ *   {fieldArrayName}.${index}.typeCall.type.$refText  → string (display name)
+ *   {fieldArrayName}.${index}.card                    → RosettaCardinality { inf, sup?, unbounded? }
+ *   {fieldArrayName}.${index}.override                → boolean
+ *
+ * `fieldArrayName` defaults to `'attributes'` so all existing DataTypeForm
+ * and AnnotationForm usages continue to work unchanged. FunctionForm passes
+ * `fieldArrayName="inputs"` so the same row can power function inputs without
+ * any logic duplication (DRY / Task R-func-input).
  *
  * Per R11 of `specs/013-z2f-editor-migration/research.md`, the editor
  * consumes the AST graph node directly — no projection layer. The bespoke
@@ -45,6 +50,11 @@ import type { TypeOption, NavigateToNodeCallback } from '../../types.js';
 export interface AttributeRowProps {
   /** Index position of this member in the useFieldArray. */
   index: number;
+  /**
+   * Name of the `useFieldArray` field (form path prefix).
+   * Defaults to `'attributes'`; pass `'inputs'` for function input rows.
+   */
+  fieldArrayName?: string;
   /** Last-committed attribute name (for graph action diffing). */
   committedName: string;
   /** Available type options for the TypeSelector. */
@@ -76,6 +86,7 @@ const ATTRIBUTE_ROW_LAYOUT =
 
 function AttributeRow({
   index,
+  fieldArrayName = 'attributes',
   committedName,
   availableTypes,
   onUpdate,
@@ -90,7 +101,7 @@ function AttributeRow({
   const { control, getValues, setValue, watch } = useFormContext();
   const editorCtx = useEditorActionsContext();
   const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
-  const prefix = `attributes.${index}`;
+  const prefix = `${fieldArrayName}.${index}`;
 
   // AST-canonical reads (R11 / row-renderer contract §2). The picker still
   // talks in `(inf..sup)` strings, so we adapt at the row boundary rather

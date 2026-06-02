@@ -23,15 +23,15 @@ export interface TypeChipProps extends React.ComponentProps<'button'> {
 }
 
 /** Presentational type chip (the .rune-cell-type-chip look). No drag-drop /
- * no dropdown — callers compose those around it. */
-export function TypeChip({
-  typeName,
-  typeKind,
-  className,
-  ...props
-}: TypeChipProps): React.ReactElement {
+ * no dropdown — callers compose those around it. Forwards its ref so it can be
+ * used as a base-ui Popover/Trigger `render` element (the inspector type field). */
+export const TypeChip = React.forwardRef<HTMLButtonElement, TypeChipProps>(function TypeChip(
+  { typeName, typeKind, className, ...props },
+  ref
+): React.ReactElement {
   return (
     <button
+      ref={ref}
       type="button"
       data-slot="type-chip"
       className={cn('rune-cell-type-chip', TYPE_CHIP_KIND_CLASS[typeKind], className)}
@@ -40,4 +40,4 @@ export function TypeChip({
       {typeName}
     </button>
   );
-}
+});

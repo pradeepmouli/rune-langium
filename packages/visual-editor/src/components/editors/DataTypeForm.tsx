@@ -23,7 +23,7 @@ import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
-import { TypeHeader } from '../TypeHeader.js';
+import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
@@ -378,12 +378,12 @@ function DataTypeForm({
   return (
     <FormProvider {...form}>
       <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
-      <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full">
+      <div data-slot="data-type-form" className="flex flex-col min-h-0 h-full gap-4 p-4">
         {/* Header: Namespace + Name + Badge — always visible above tabs */}
-        <TypeHeader kind="data" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Type name" nameAriaLabel="Data type name" className="shrink-0" />
+        <TypeHeader kind="data" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Type name" nameAriaLabel="Data type name" className={INSPECTOR_FORM_HEADER_CLASS} />
 
         {/* Inheritance — always visible above tabs */}
-        <div className="px-4 pb-3 shrink-0">
+        <div className="shrink-0">
           <FieldSet className="gap-1.5">
             <FieldLegend variant="label" className="mb-0 text-muted-foreground">
               Extends
@@ -404,8 +404,8 @@ function DataTypeForm({
         </div>
 
         {/* Tabbed sections */}
-        <Tabs defaultValue="members" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="studio-insp-tabs">
+        <Tabs defaultValue="members" className="-mx-4 flex-1 flex flex-col min-h-0">
+          <TabsList className="studio-insp-tabs px-4">
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="conditions">Conditions</TabsTrigger>
             <TabsTrigger value="doc">Doc</TabsTrigger>
@@ -413,7 +413,7 @@ function DataTypeForm({
           </TabsList>
 
           {/* Members tab — attributes */}
-          <TabsContent value="members" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="members" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
             <FieldSet className="gap-1">
               <FieldLegend variant="label" className="mb-0 text-muted-foreground flex items-center justify-between">
                 <span>Attributes ({fields.length + inheritedCount})</span>
@@ -484,7 +484,7 @@ function DataTypeForm({
           </TabsContent>
 
           {/* Conditions tab */}
-          <TabsContent value="conditions" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="conditions" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
             <ConditionSection
               label="Conditions"
               conditions={d.conditions}
@@ -498,7 +498,7 @@ function DataTypeForm({
           </TabsContent>
 
           {/* Doc tab — description, comments, synonyms */}
-          <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
             <MetadataSection
               onDefinitionCommit={commitDefinition}
               onCommentsCommit={commitComments}
@@ -508,7 +508,7 @@ function DataTypeForm({
           </TabsContent>
 
           {/* Meta tab — annotations */}
-          <TabsContent value="meta" className="studio-scroll flex-1 overflow-y-auto p-3 mt-0">
+          <TabsContent value="meta" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
             <AnnotationSection
               annotations={d.annotations}
               onAdd={handleAddAnnotation}

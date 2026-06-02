@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import { COMBINED_MODEL_SOURCE, ENUM_MODEL_SOURCE, CHOICE_MODEL_SOURCE } from '../helpers/fixture-loader.js';
+import { COMBINED_MODEL_SOURCE, ENUM_MODEL_SOURCE, CHOICE_MODEL_SOURCE, FUNCTION_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 
 describe('EditorStore — new actions', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -953,5 +953,104 @@ describe('EditorStore — setInheritance (Finding 3: cross-namespace qualificati
     const node = store.getState().nodes.find((n) => n.id === childId)!;
     const superType = (node.data as any).superType;
     expect(superType?.$refText).toBe(beforeRefText);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Function input param operations (R-func-input)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — updateInputParam / reorderInputParam', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(FUNCTION_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  // -----------------------------------------------------------------------
+  // updateInputParam
+  // -----------------------------------------------------------------------
+
+  describe('updateInputParam', () => {
+    it('updates name, type, and cardinality of an existing input', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+      expect(addNode).toBeDefined();
+
+      store.getState().updateInputParam(addNode!.id, 'a', 'first', 'Money', '0..1');
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const inputs = ((updated!.data as any).inputs ?? []) as Array<any>;
+      const renamed = inputs.find((inp: any) => inp.name === 'first');
+      expect(renamed).toBeDefined();
+      expect(renamed!.typeCall?.type?.$refText).toBe('Money');
+      expect(renamed!.card).toMatchObject({ inf: 0, sup: 1, unbounded: false });
+    });
+
+    it('does not affect other inputs', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+
+      store.getState().updateInputParam(addNode!.id, 'a', 'first', 'Money', '0..1');
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const inputs = ((updated!.data as any).inputs ?? []) as Array<any>;
+      // 'b' input is unchanged
+      const bInput = inputs.find((inp: any) => inp.name === 'b');
+      expect(bInput).toBeDefined();
+      expect(bInput!.typeCall?.type?.$refText).toBe('number');
+    });
+
+    it('is a no-op when oldName does not match any input', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+      const before = ((addNode!.data as any).inputs ?? []) as Array<any>;
+      const beforeNames = before.map((i: any) => i.name);
+
+      store.getState().updateInputParam(addNode!.id, 'nonexistent', 'x', 'string', '(1..1)');
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const after = ((updated!.data as any).inputs ?? []) as Array<any>;
+      expect(after.map((i: any) => i.name)).toEqual(beforeNames);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // reorderInputParam
+  // -----------------------------------------------------------------------
+
+  describe('reorderInputParam', () => {
+    it('moves an input from one position to another', () => {
+      const nodes = store.getState().nodes;
+      const addNode = nodes.find((n) => n.data.name === 'Add');
+      const inputs = ((addNode!.data as any).inputs ?? []) as Array<any>;
+      expect(inputs.length).toBeGreaterThanOrEqual(2);
+
+      const originalFirst = inputs[0]!.name;
+      const originalSecond = inputs[1]!.name;
+
+      // Move first to second position (splice-move: remove from 0, insert at 1)
+      store.getState().reorderInputParam(addNode!.id, 0, 1);
+
+      const updated = store.getState().nodes.find((n) => n.id === addNode!.id);
+      const updatedInputs = ((updated!.data as any).inputs ?? []) as Array<any>;
+      expect(updatedInputs[0]!.name).toBe(originalSecond);
+      expect(updatedInputs[1]!.name).toBe(originalFirst);
+    });
+
+    it('is a no-op on a non-function node', () => {
+      // Money is a Data type — reorderInputParam should not mutate it.
+      const nodes = store.getState().nodes;
+      const moneyNode = nodes.find((n) => n.data.name === 'Money');
+      expect(moneyNode).toBeDefined();
+
+      const before = JSON.stringify(moneyNode!.data);
+      store.getState().reorderInputParam(moneyNode!.id, 0, 1);
+      const after = JSON.stringify(store.getState().nodes.find((n) => n.id === moneyNode!.id)!.data);
+
+      expect(after).toBe(before);
+    });
   });
 });

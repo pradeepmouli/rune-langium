@@ -313,6 +313,8 @@ export interface ChoiceFormActions extends CommonFormActions {
 export interface FuncFormActions extends CommonFormActions {
   addInputParam(nodeId: string, paramName: string, typeName: string): void;
   removeInputParam(nodeId: string, paramName: string): void;
+  updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string): void;
+  reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 }
