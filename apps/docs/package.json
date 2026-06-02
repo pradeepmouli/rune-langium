@@ -10,7 +10,9 @@
     "build:combined": "node scripts/build-combined.mjs",
     "preview": "vitepress preview"
   },
-  "dependencies": {  },
+  "dependencies": {
+    "@rune-langium/design-system": "workspace:*"
+  },
   "devDependencies": {
     "typedoc": "0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",

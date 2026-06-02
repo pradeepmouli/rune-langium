@@ -14,9 +14,11 @@
  *
  * Replaces the generated output of the former `@rune-langium/design-tokens`
  * package (tokens.json + build.ts), retired so the token source-of-truth is
- * CSS-first and editable (native color picker) with no build step. Values are
- * preserved verbatim (incl. hex casing) from the former generated tokens.css
- * so the migration is byte-identical at the computed-value level.
+ * CSS-first and editable (native color picker) with no build step. The package
+ * retirement preserved the values byte-for-byte (computed-value parity was
+ * verified against a live capture); the colors were subsequently converted to
+ * `oklch()` (Tailwind v4 / shadcn default) — each conversion verified to
+ * round-trip to the same sRGB, so the rendered output is unchanged.
  */
 :root {
   --color-surface-1: oklch(0.1586 0.0169 284.31);

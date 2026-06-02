@@ -5,13 +5,15 @@
  * Rune DSL Design System — TypeScript token exports.
  *
  * JS-side color/font/radius references (ReactFlow config, chart colors) that
- * cannot read CSS `@theme`/`var(--*)` at runtime. Mirror the primitive values
- * in `tokens.css` (the base palette). This is the one irreducible bit of
- * duplication a CSS-first token source leaves — keep the two in sync by hand
- * (the values rarely change; the daikonic theme retunes via CSS, not here).
+ * cannot read CSS `@theme`/`var(--*)` at runtime, so they need literal values
+ * here. These are the SAME COLORS as the `tokens.css` primitive layer, kept in
+ * the sRGB hex/rgba notation JS consumers expect — `tokens.css` expresses the
+ * same colors as `oklch()` for the CSS side. This sRGB↔oklch split is the one
+ * irreducible bit of duplication a CSS-first token source leaves; keep the two
+ * in sync by hand (values rarely change; the daikonic theme retunes via CSS).
  *
  * Formerly derived from `@rune-langium/design-tokens/tokens.json` (package
- * retired). Values are preserved verbatim from that source.
+ * retired).
  */
 
 export const colors = {

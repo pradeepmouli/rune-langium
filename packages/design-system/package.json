@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./theme.css": "./src/theme.css",
+    "./tokens.css": "./src/tokens.css",
     "./tokens": "./src/tokens.ts",
     "./utils": "./src/utils.ts",
     "./ui/alert": "./src/ui/alert.tsx",

@@ -166,6 +166,10 @@ importers:
         version: 4.93.1(@cloudflare/workers-types@4.20260525.1)
 
   apps/docs:
+    dependencies:
+      '@rune-langium/design-system':
+        specifier: workspace:*
+        version: link:../../packages/design-system
     devDependencies:
       typedoc:
         specifier: 0.28.19

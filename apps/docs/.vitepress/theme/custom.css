@@ -5,13 +5,17 @@
  * override, no mode toggle).
  *
  * T061 (014/FR-022) — pulls brand colours, fonts, syntax palette, focus
- * ring, and brand-mark dimensions from the shared
- * `@rune-langium/design-tokens` source. The `--rune-*` aliases below
- * exist only to translate the shared token names into VitePress's
- * `--vp-*` chrome variables.
+ * ring, and brand-mark dimensions from the shared design-system primitive
+ * token layer. The `--rune-*` aliases below exist only to translate the
+ * shared token names into VitePress's `--vp-*` chrome variables.
+ *
+ * Formerly imported `@rune-langium/design-tokens/dist/brand.css` (a generated
+ * brand subset); that package was retired in favour of the CSS-first
+ * `tokens.css` primitive layer, a superset of the old brand subset (same
+ * `--color-*`/`--font-*`/`--syntax-*`/`--focus-ring-*`/`--brand-mark-*` vars).
  */
 
-@import '@rune-langium/design-tokens/dist/brand.css';
+@import '@rune-langium/design-system/tokens.css';
 
 :root {
   --rune-teal: var(--color-accent-base);
