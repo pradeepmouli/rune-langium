@@ -415,7 +415,9 @@ export function filterSegmentedTree(roots: SegmentNode[], query: string): Segmen
  * contain matching types. Used by the explorer to auto-expand ancestor segments
  * so that filtered results are immediately visible.
  *
- * The returned set includes every ancestor's `fullPath` (NOT the leaf itself).
+ * The returned set includes every ancestor's `fullPath` AND the matching
+ * node's own `fullPath`, so the matched node's types/children are revealed
+ * in the explorer (not just the ancestors above it).
  */
 export function ancestorPathsForMatches(roots: SegmentNode[], query: string): Set<string> {
   if (!query.trim()) return new Set();

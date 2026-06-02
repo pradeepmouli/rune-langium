@@ -267,7 +267,9 @@ function FunctionForm({
   const handleRemoveInputByIndex = useCallback(
     (index: number) => {
       // Resolve the committed name so the store can find the entry by name.
-      // Fall back to the field array item name if the committed data is ahead.
+      // If `committedInputs[index]` is missing (e.g. the committed snapshot is
+      // behind the field array), the remove is skipped — no fallback is
+      // performed because the store uses name-keyed lookup.
       const committedInputs = ((committedRef.current as any).inputs ?? []) as Array<any>;
       const committed = committedInputs[index];
       if (committed) {
