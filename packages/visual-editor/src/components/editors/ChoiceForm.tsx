@@ -36,7 +36,7 @@ import { useCallback, useRef } from 'react';
 import { FormProvider, Controller } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
+import { KindBadge } from '../KindBadge.js';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -209,7 +209,7 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
                 </Field>
               )}
             />
-            <Badge variant="choice">Choice</Badge>
+            <KindBadge kind="choice" />
           </div>
 
           {/* Options */}

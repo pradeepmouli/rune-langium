@@ -23,8 +23,8 @@ import { FormProvider, Controller, useFieldArray, type Control } from 'react-hoo
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
-import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { KindBadge } from '../KindBadge.js';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
@@ -395,7 +395,7 @@ function DataTypeForm({
               </Field>
             )}
           />
-          <Badge variant="data">Data</Badge>
+          <KindBadge kind="data" />
         </div>
 
         {/* Inheritance — always visible above tabs */}
