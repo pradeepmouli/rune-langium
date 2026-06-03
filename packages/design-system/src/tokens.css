@@ -132,9 +132,18 @@
   --syntax-operator: oklch(0.6374 0.0178 285.88);
   --syntax-constant: oklch(0.7321 0.1441 61.66);
   --syntax-variable: oklch(0.7747 0.1507 171.66);
-  --radius-sm: 0.25rem;
-  --radius-md: 8px;
-  --radius-lg: 0.75rem;
+  /* Radius ladder — derived from the single `--radius` knob (declared in
+   * theme.css) so the whole app's corner language changes by editing ONE value.
+   * These MUST match theme.css's `@theme inline` radius bridge (which feeds the
+   * Tailwind `rounded-*` utilities) so hand-written `var(--radius-*)` and the
+   * `rounded-*` utilities render the SAME corner. They previously diverged
+   * (this file hardcoded md=8/lg=12 while the bridge computed md=6/lg=8), so a
+   * `var(--radius-lg)` element and a `rounded-lg` element had different radii. */
+  --radius-xs: calc(var(--radius) - 6px); /* 2px @ --radius:8 */
+  --radius-sm: calc(var(--radius) - 4px); /* 4px */
+  --radius-md: calc(var(--radius) - 2px); /* 6px */
+  --radius-lg: var(--radius); /* 8px */
+  --radius-xl: calc(var(--radius) + 4px); /* 12px */
   --radius-full: 9999px;
   --button-height: 40px;
   --focus-ring-width: 2px;

@@ -35,7 +35,7 @@ function ToastViewport({ className, ...props }: React.ComponentProps<typeof Toas
 }
 
 const toastVariants = cva(
-  'group pointer-events-auto relative flex w-full items-start justify-between gap-3 overflow-hidden rounded-lg border p-4 pr-6 shadow-lg transition-all data-[starting-style]:animate-in data-[ending-style]:animate-out data-[ending-style]:fade-out-80 data-[starting-style]:fade-in-0 data-[ending-style]:slide-out-to-right-full data-[starting-style]:slide-in-from-bottom-full',
+  'group pointer-events-auto relative flex w-full items-start justify-between gap-3 overflow-hidden rounded-xl border p-4 pr-6 shadow-lg transition-all data-[starting-style]:animate-in data-[ending-style]:animate-out data-[ending-style]:fade-out-80 data-[starting-style]:fade-in-0 data-[ending-style]:slide-out-to-right-full data-[starting-style]:slide-in-from-bottom-full',
   {
     variants: {
       variant: {

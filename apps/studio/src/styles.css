@@ -42,7 +42,7 @@
  * - Thumb:   color-mix(border, white) — slightly lifted from --border so
  *            it reads on both --card and --background surfaces
  * - Width:   --studio-scrollbar-width (8px default)
- * - Radius:  fully rounded (border-radius: 999px)
+ * - Radius:  fully rounded (border-radius: var(--radius-full))
  * - Gutter:  `scrollbar-gutter: stable` prevents content jump when the
  *            scrollbar mounts/unmounts
  * - Cross-browser: webkit pseudo-elements cover Chromium/Safari/Edge;
@@ -88,7 +88,7 @@ html {
 
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
   transition: background-color var(--motion-fast);
@@ -115,7 +115,7 @@ html {
 
 .studio-scroll::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
   transition: background-color var(--motion-fast);
@@ -233,7 +233,7 @@ html {
     height: 26px;
     background: color-mix(in srgb, var(--background) 96%, var(--muted) 4%);
     border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     overflow: hidden;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -264,13 +264,13 @@ html {
   }
 
   .studio-app .studio-paneswitch__seg:first-child {
-    border-top-left-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: var(--radius-full);
+    border-bottom-left-radius: var(--radius-full);
   }
 
   .studio-app .studio-paneswitch__seg:last-child {
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
+    border-top-right-radius: var(--radius-full);
+    border-bottom-right-radius: var(--radius-full);
   }
 
   /* Hairline divider between consecutive segments. Hidden if either
@@ -338,7 +338,7 @@ html {
     min-width: 14px;
     height: 14px;
     padding: 0 5px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     font-size: 10px;
     line-height: 14px;
     letter-spacing: 0;
@@ -427,7 +427,7 @@ html {
     bottom: 6px;
     width: 3px;
     background: var(--primary);
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   }
 
 
@@ -533,7 +533,7 @@ html {
   .studio-app .studio-topbar__ws-mark {
     width: 17px;
     height: 17px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -596,7 +596,7 @@ html {
     font-size: 10.5px;
     background: var(--glass-kbd-bg);
     border: 0.5px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     padding: 1px 5px;
     color: var(--muted-foreground);
   }
@@ -659,7 +659,7 @@ html {
     gap: 7px;
     height: 28px;
     padding: 0 10px;
-    border-radius: calc(var(--radius) + 2px);
+    border-radius: calc(var(--radius) + var(--radius-xs));
     color: var(--muted-foreground);
     max-width: 200px;
     font-size: 12px;
@@ -729,7 +729,7 @@ html {
     min-width: 26px;
     height: 16px;
     padding: 0 6px;
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     border: 0.5px solid color-mix(in srgb, var(--border) 76%, transparent);
     background: color-mix(in srgb, var(--muted) 68%, transparent);
     color: color-mix(in srgb, var(--muted-foreground) 88%, white 12%);
@@ -750,7 +750,7 @@ html {
   .studio-app .studio-type-glyph {
     width: 18px;
     height: 18px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     display: grid;
     place-items: center;
     font-size: 10px;
@@ -767,7 +767,7 @@ html {
     bottom: 6px;
     width: 2px;
     background: var(--primary);
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
   }
 
   /* Explorer selected row — gradient wash from primary (left-to-right fade) */
@@ -866,7 +866,7 @@ html {
     color: var(--muted-foreground);
     height: 18px;
     padding: 0 4px;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-family: var(--font-mono);
     font-size: 11px;
     cursor: pointer;
@@ -1035,7 +1035,7 @@ html {
   color: var(--muted-foreground);
   background: var(--background);
   padding: var(--space-1) var(--space-3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   flex-shrink: 0;
 }
 
@@ -1224,7 +1224,7 @@ html {
   font-family: var(--font-mono);
   font-size: 10.5px;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%);
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
   border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
@@ -1266,7 +1266,7 @@ html {
   min-width: 0;
   height: 28px;
   padding-inline: 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: color-mix(in srgb, var(--foreground) 56%, transparent);
   transition:
     background-color var(--motion-fast),
@@ -1294,7 +1294,7 @@ html {
   height: 28px;
   padding: 0 8px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   appearance: none;
   color: inherit;
@@ -1337,7 +1337,7 @@ html {
   height: 18px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   appearance: none;
   cursor: pointer;
@@ -1507,7 +1507,7 @@ html {
 /* ---------- Dark-theme ReactFlow controls & minimap ---------- */
 .studio-app .react-flow__controls {
   box-shadow: var(--shadow-lg);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -1529,7 +1529,7 @@ html {
 .studio-app .react-flow__minimap {
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 }
 
@@ -1590,7 +1590,7 @@ html {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   border: 1px solid var(--input);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   outline: none;
   background: var(--background);
   color: var(--foreground);
@@ -1839,7 +1839,7 @@ html {
   width: 22px;
   height: 22px;
   border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1985,7 +1985,7 @@ html {
   min-width: 22px;
   height: 18px;
   padding: 0 6px;
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(
       180deg,
@@ -2015,7 +2015,7 @@ html {
   gap: 5px;
   height: 18px;
   padding: 0 8px 0 6px;
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   font-size: 10px;
   font-family: var(--font-mono);
   font-weight: 500;
@@ -2061,7 +2061,7 @@ html {
 }
 
 .studio-app [data-slot='tabs-list'][data-size='sm'] [data-slot='tabs-trigger'] {
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   font-size: 12px;
   height: 28px;
   position: relative;
@@ -2075,7 +2075,7 @@ html {
   bottom: -0.5px;
   height: 1.5px;
   background: var(--primary);
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
 }
 
 /* ─── Center stack — panes split side-by-side via paneswitch pill ────────── */
@@ -2100,7 +2100,7 @@ html {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--muted-foreground);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
