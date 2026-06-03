@@ -37,7 +37,7 @@ describe('cross-app snapshot (T093)', () => {
       '--font-family-sans',
       '--font-size-base',
       '--font-weight-semibold',
-      '--spacing-3',
+      '--space-3',
       '--radius-md',
       '--motion-duration-base'
     ];
