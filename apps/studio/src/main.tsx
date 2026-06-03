@@ -9,9 +9,17 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 // Dockview chrome (tab strips, sash handles, abyss theme palette).
-// Loaded before app styles so any local overrides win.
+// dockview's upstream theme CSS — UNLAYERED, sits above all @layer rules.
 import 'dockview-react/dist/styles/dockview.css';
 import './styles.css';
+// Rune structural overrides for DockviewReact (.rune-dock-theme). Imported
+// AFTER styles.css on purpose: styles.css's `@import 'tailwindcss'` must
+// establish the canonical @layer order (theme, base, components, utilities)
+// FIRST. If dock-theme.css declared `@layer components` before that, it would
+// register `components` ahead of `base` and globally invert base↔components
+// priority. Order vs dockview's unlayered dist CSS is unaffected — dockview.css
+// is imported first, so dock-theme's unlayered overrides still win source-order.
+import '@rune-langium/design-system/dock-theme.css';
 
 const root = document.getElementById('root');
 if (!root) {

@@ -7,6 +7,7 @@
   "exports": {
     "./theme.css": "./src/theme.css",
     "./tokens.css": "./src/tokens.css",
+    "./dock-theme.css": "./src/dock-theme.css",
     "./tokens": "./src/tokens.ts",
     "./utils": "./src/utils.ts",
     "./ui/alert": "./src/ui/alert.tsx",
@@ -38,6 +39,7 @@
     "./ui/toast": "./src/ui/toast.tsx",
     "./ui/textarea": "./src/ui/textarea.tsx",
     "./ui/tooltip": "./src/ui/tooltip.tsx",
+    "./ui/dock-layout": "./src/ui/dock-layout.tsx",
     "./ui/components": "./src/ui/index.tsx"
   },
   "files": [
@@ -51,6 +53,7 @@
   "license": "MIT",
   "dependencies": {
     "@base-ui/react": "1.5.0",
+    "dockview-react": "^6.5.0",
     "@hookform/resolvers": "^5.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
