@@ -15,11 +15,32 @@ function Tabs({ ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return <TabsPrimitive.Root data-slot="tabs" {...props} />;
 }
 
-function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
+/**
+ * TabsList size variants:
+ *   default — standard pill strip (bg-muted, rounded, p-1 gap-1)
+ *   sm      — compact underline strip for dense panels. Sets
+ *             `data-size="sm"` on the list element so the consuming
+ *             app can target `[data-slot='tabs-list'][data-size='sm']`
+ *             and its descendant triggers via CSS. Height 34px,
+ *             bottom border hairline, no pill background.
+ *             Use in inspector-style tabbed subsections (e.g. DataTypeForm).
+ */
+type TabsListSize = 'default' | 'sm';
+
+function TabsList({
+  className,
+  size = 'default',
+  ...props
+}: React.ComponentProps<typeof TabsPrimitive.List> & { size?: TabsListSize }) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn('flex items-center gap-1 rounded-lg bg-muted p-1', className)}
+      data-size={size}
+      className={cn(
+        size === 'default' && 'flex items-center gap-1 rounded-lg bg-muted p-1',
+        size === 'sm' && 'flex items-center gap-0.5 h-[34px] bg-transparent rounded-none p-0',
+        className
+      )}
       {...props}
     />
   );
@@ -46,3 +67,4 @@ function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPr
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };
+export type { TabsListSize };

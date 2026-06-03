@@ -12,7 +12,28 @@ const buttonVariants = cva(
   // `focus-visible:ring-[3px]` which diverged from Studio's
   // hand-rolled `outline: 2px solid` rules elsewhere; now every
   // surface (button, input, namespace explorer) shares the spec.
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ring) aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  //
+  // Phase-4 style-override cleanup: cursor-pointer added to base;
+  // transition-all replaced with a targeted property list so layout
+  // props (width, height, padding) are not animated on every state
+  // change. Hover-lift (transform translateY(-1px)) and active-settle
+  // are pushed here from the studio override block so all consumers
+  // share the affordance; the 1px lift is subtle enough to be a
+  // universal improvement. [&:not(:disabled):hover] and active
+  // selectors use Tailwind arbitrary-variant syntax.
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer " +
+  // cursor-pointer is unconditional above; restore the not-allowed cursor for
+  // disabled / aria-disabled states (the disabled:/aria-disabled: variants have
+  // higher specificity than the bare cursor-pointer, so they win for those
+  // states — otherwise cursor-pointer would override the global
+  // `:where(:disabled,[aria-disabled='true']){cursor:not-allowed}` baseline).
+  "disabled:cursor-not-allowed aria-disabled:cursor-not-allowed " +
+  "[transition:transform_140ms_cubic-bezier(0.22,1,0.36,1),background-color_160ms_ease,border-color_160ms_ease,color_160ms_ease,box-shadow_160ms_ease,opacity_160ms_ease] " +
+  "[&:not(:disabled):hover]:-translate-y-px [&:not(:disabled):active]:translate-y-0 " +
+  "disabled:pointer-events-none disabled:opacity-50 " +
+  "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 " +
+  "outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ring) " +
+  "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
