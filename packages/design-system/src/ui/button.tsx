@@ -22,6 +22,12 @@ const buttonVariants = cva(
   // universal improvement. [&:not(:disabled):hover] and active
   // selectors use Tailwind arbitrary-variant syntax.
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer " +
+  // cursor-pointer is unconditional above; restore the not-allowed cursor for
+  // disabled / aria-disabled states (the disabled:/aria-disabled: variants have
+  // higher specificity than the bare cursor-pointer, so they win for those
+  // states — otherwise cursor-pointer would override the global
+  // `:where(:disabled,[aria-disabled='true']){cursor:not-allowed}` baseline).
+  "disabled:cursor-not-allowed aria-disabled:cursor-not-allowed " +
   "[transition:transform_140ms_cubic-bezier(0.22,1,0.36,1),background-color_160ms_ease,border-color_160ms_ease,color_160ms_ease,box-shadow_160ms_ease,opacity_160ms_ease] " +
   "[&:not(:disabled):hover]:-translate-y-px [&:not(:disabled):active]:translate-y-0 " +
   "disabled:pointer-events-none disabled:opacity-50 " +
