@@ -132,19 +132,12 @@
   --syntax-operator: oklch(0.6374 0.0178 285.88);
   --syntax-constant: oklch(0.7321 0.1441 61.66);
   --syntax-variable: oklch(0.7747 0.1507 171.66);
-  /* Radius ladder — derived from the single `--radius` knob (declared in
-   * theme.css) so the whole app's corner language changes by editing ONE value.
-   * These MUST match theme.css's `@theme inline` radius bridge (which feeds the
-   * Tailwind `rounded-*` utilities) so hand-written `var(--radius-*)` and the
-   * `rounded-*` utilities render the SAME corner. They previously diverged
-   * (this file hardcoded md=8/lg=12 while the bridge computed md=6/lg=8), so a
-   * `var(--radius-lg)` element and a `rounded-lg` element had different radii. */
-  --radius-xs: calc(var(--radius) - 6px); /* 2px @ --radius:8 */
-  --radius-sm: calc(var(--radius) - 4px); /* 4px */
-  --radius-md: calc(var(--radius) - 2px); /* 6px */
-  --radius-lg: var(--radius); /* 8px */
-  --radius-xl: calc(var(--radius) + 4px); /* 12px */
-  --radius-full: 9999px;
+  /* Radius ladder lives ONCE in theme.css's `@theme inline` block (it emits the
+   * `--radius-*` custom properties to `:root,:host` AND feeds the Tailwind
+   * `rounded-*` utilities from the same source, so hand-written `var(--radius-*)`
+   * and `rounded-*` can't diverge). It is intentionally NOT redefined here —
+   * a previous duplicate copy in this file disagreed with the bridge (md=8/lg=12
+   * vs 6/8) and made `var(--radius-lg)` and `rounded-lg` render different corners. */
   --button-height: 40px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
