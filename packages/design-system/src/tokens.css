@@ -123,7 +123,8 @@
   --space-8: 32px;
   --space-9: 36px;
   --space-10: 40px;
-  --text-md: 0.9375rem;
+  /* --text-md (0.9375rem) now lives in theme.css's @theme block so it also
+   * generates a `text-md` utility (and still emits --text-md to :root). */
   --sidebar-width-default: 280px;
   --sidebar-width-min: 220px;
   --sidebar-width-max: 360px;

@@ -134,6 +134,16 @@
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-number: var(--syntax-number);
   --color-syntax-operator: var(--syntax-operator);
+
+  /* Type scale — promoted into @theme so these become real `text-*` utilities
+   * (Tailwind has no 2xs/3xs/md) AND emit `--text-*` to :root for hand-written
+   * `var(--text-*)`. Purely ADDITIVE: Tailwind's default xs/sm/base/lg/xl (which
+   * coincide with the repo values) are left untouched, so their line-height
+   * pairings are preserved. Lets components style type as `text-2xs`/`text-3xs`
+   * instead of arbitrary `var()` (see the NumberChiclet override pilot). */
+  --text-3xs: var(--font-size-3xs); /* 10px */
+  --text-2xs: var(--font-size-2xs); /* 11px */
+  --text-md: 0.9375rem; /* 15px — the studio in-between rung */
 }
 
 /* ── Color palette: Daikon ──────────────────────────────────────── */
@@ -199,9 +209,10 @@
   --sidebar-max-width: var(--sidebar-width-max);
   /* Short-form text-size aliases — Studio uses `--text-xs/sm/base`
    * while the canonical tokens emit `--font-size-*`. Map them so
-   * styles.css resolves cleanly without rewriting every rule. */
-  --text-3xs: var(--font-size-3xs);
-  --text-2xs: var(--font-size-2xs);
+   * styles.css resolves cleanly without rewriting every rule.
+   * (3xs/2xs/md are emitted by the `@theme` block above instead, so they also
+   * generate `text-3xs/2xs/md` utilities; the xs/sm/base/lg/xl rungs stay here
+   * because Tailwind already ships those utilities at matching values.) */
   --text-xs: var(--font-size-xs);
   --text-sm: var(--font-size-sm);
   --text-base: var(--font-size-base);
