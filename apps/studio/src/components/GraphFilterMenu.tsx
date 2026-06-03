@@ -23,7 +23,7 @@ const NODE_KINDS: Array<{ kind: TypeKind; label: string; color: string; icon: ty
   { kind: 'choice', label: 'Choice', color: 'var(--color-choice)', icon: List },
   { kind: 'enum', label: 'Enum', color: 'var(--color-enum)', icon: Hash },
   { kind: 'func', label: 'Function', color: 'var(--color-func)', icon: ArrowRight },
-  { kind: 'record', label: 'Record', color: 'var(--color-func)', icon: FileText },
+  { kind: 'record', label: 'Record', color: 'var(--color-data)', icon: FileText },
   { kind: 'typeAlias', label: 'Type Alias', color: '#8A8A96', icon: Tag },
   { kind: 'basicType', label: 'Basic Type', color: '#8A8A96', icon: Tag },
   { kind: 'annotation', label: 'Annotation', color: '#8A8A96', icon: Tag }
@@ -33,7 +33,7 @@ const NODE_KINDS: Array<{ kind: TypeKind; label: string; color: string; icon: ty
 const EDGE_KINDS: Array<{ kind: EdgeKind; label: string; color: string; dashed?: boolean }> = [
   { kind: 'extends', label: 'Inheritance', color: 'var(--color-data)' },
   { kind: 'enum-extends', label: 'Enum Inheritance', color: 'var(--color-enum)' },
-  { kind: 'attribute-ref', label: 'References', color: 'var(--color-func)', dashed: true },
+  { kind: 'attribute-ref', label: 'References', color: 'var(--color-edge-ref)', dashed: true },
   { kind: 'choice-option', label: 'Choice Options', color: 'var(--color-choice)' },
   { kind: 'type-alias-ref', label: 'Type Alias Refs', color: '#8A8A96', dashed: true }
 ];
