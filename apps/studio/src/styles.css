@@ -1007,7 +1007,7 @@ html {
 
 /* Namespace row */
 .ns-row {
-  border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+  border-bottom: 1px solid var(--border);
 }
 
 .ns-row__header {
@@ -1021,11 +1021,11 @@ html {
 }
 
 .ns-row__header:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
 }
 
 .ns-row__header--visible {
-  background: rgba(59, 130, 246, 0.05);
+  background: color-mix(in oklch, var(--primary) 5%, transparent);
 }
 
 .ns-row__chevron {
@@ -1090,7 +1090,7 @@ html {
 }
 
 .ns-type:hover {
-  background: rgba(59, 130, 246, 0.08);
+  background: color-mix(in oklch, var(--primary) 8%, transparent);
 }
 
 .ns-type--visible {
@@ -1665,7 +1665,7 @@ html {
   padding: var(--space-2) var(--space-6);
   font-size: var(--text-sm);
   font-weight: 500;
-  color: #ffffff;
+  color: var(--primary-foreground);
   background: var(--primary);
   border: none;
   border-radius: var(--radius-md);

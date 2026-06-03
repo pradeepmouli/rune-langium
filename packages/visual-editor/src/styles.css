@@ -623,7 +623,7 @@ button[data-navigable]:focus-visible {
 .rune-toolbar-button-active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #ffffff;
+  color: var(--primary-foreground);
 }
 
 .rune-toolbar-select {
