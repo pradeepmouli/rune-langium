@@ -337,7 +337,7 @@ html {
     position: static;
     min-width: 14px;
     height: 14px;
-    padding: 0 5px;
+    padding: 0 var(--space-1);
     border-radius: var(--radius-full);
     font-size: 10px;
     line-height: 14px;
@@ -360,8 +360,8 @@ html {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 8px 0;
-    gap: 4px;
+    padding: var(--space-2) 0;
+    gap: var(--space-1);
   }
 
   .studio-app .studio-rail__group {
@@ -432,7 +432,7 @@ html {
 
 
   .studio-app .studio-rail > .studio-brand__mark {
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
   }
 
   /* .rune-dock-theme sash rules (dv-split-view-container) moved to
@@ -447,22 +447,22 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 12px 0 8px;
-    gap: 12px;
+    padding: 0 var(--space-3) 0 var(--space-2);
+    gap: var(--space-3);
     flex-shrink: 0;
   }
 
   .studio-app .studio-topbar__left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
     min-width: 0;
   }
 
   .studio-app .studio-topbar__right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     flex-shrink: 0;
   }
 
@@ -485,9 +485,9 @@ html {
       );
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 10px 0 7px;
+    padding: 0 var(--space-3) 0 var(--space-2);
     border-radius: var(--radius);
     color: var(--foreground);
     font-size: 12.5px;
@@ -563,9 +563,9 @@ html {
       );
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 6px 0 9px;
+    padding: 0 var(--space-2) 0 var(--space-2);
     border-radius: var(--radius);
     color: var(--muted-foreground);
     width: 260px;
@@ -597,7 +597,7 @@ html {
     background: var(--glass-kbd-bg);
     border: 0.5px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 1px 5px;
+    padding: 1px var(--space-1);
     color: var(--muted-foreground);
   }
 
@@ -609,9 +609,9 @@ html {
     border: 0;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 14px;
+    padding: 0 var(--space-4);
     border-radius: var(--radius);
     font-size: 12px;
     font-weight: 600;
@@ -643,7 +643,7 @@ html {
 
   .studio-app .studio-topbar__tabs {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
     align-items: center;
     min-width: 0;
     overflow: hidden;
@@ -656,9 +656,9 @@ html {
     background: transparent;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 10px;
+    padding: 0 var(--space-3);
     border-radius: calc(var(--radius) + var(--radius-xs));
     color: var(--muted-foreground);
     max-width: 200px;
@@ -728,7 +728,7 @@ html {
     justify-content: center;
     min-width: 26px;
     height: 16px;
-    padding: 0 6px;
+    padding: 0 var(--space-2);
     border-radius: var(--radius-full);
     border: 0.5px solid color-mix(in srgb, var(--border) 76%, transparent);
     background: color-mix(in srgb, var(--muted) 68%, transparent);
@@ -816,7 +816,7 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 12px;
+    padding: 0 var(--space-3);
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted-foreground);
@@ -828,11 +828,11 @@ html {
   .studio-app .studio-statusbar__right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .studio-app .studio-statusbar__right {
-    gap: 10px;
+    gap: var(--space-3);
   }
 
   .studio-app .studio-statusbar__sep {
@@ -844,7 +844,7 @@ html {
   .studio-app .studio-statusbar__lsp {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   .studio-app .studio-statusbar__dot {
@@ -865,7 +865,7 @@ html {
     background: transparent;
     color: var(--muted-foreground);
     height: 18px;
-    padding: 0 4px;
+    padding: 0 var(--space-1);
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
     font-size: 11px;
@@ -959,7 +959,7 @@ html {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
 }
 
 .ns-explorer__empty {
@@ -977,8 +977,8 @@ html {
 .ns-row__header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   transition: background 0.1s;
   user-select: none;
@@ -1041,14 +1041,14 @@ html {
 
 /* Type entries */
 .ns-row__children {
-  padding-left: 20px;
+  padding-left: var(--space-5);
 }
 
 .ns-type {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
   cursor: default;
   transition: background 0.1s;
 }
@@ -1148,7 +1148,7 @@ html {
 }
 
 .studio-source-view__tab {
-  padding: var(--space-3) 14px;
+  padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
   color: var(--muted-foreground);
   background: transparent;
@@ -1207,8 +1207,8 @@ html {
   height: 30px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   border-bottom: 0.5px solid var(--border);
   background: color-mix(in oklch, var(--card) 92%, var(--background) 8%);
   font-family: var(--font-mono);
@@ -1223,7 +1223,7 @@ html {
   align-items: center;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  padding: 2px 7px;
+  padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%);
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
@@ -1254,7 +1254,7 @@ html {
   gap: 1px;
   overflow-x: auto;
   min-height: 34px;
-  padding: 3px 6px 4px;
+  padding: 3px var(--space-2) var(--space-1);
   border-bottom: 0.5px solid var(--border);
   background: color-mix(in oklch, var(--card) 94%, var(--background) 6%);
 }
@@ -1288,11 +1288,11 @@ html {
 .studio-source-editor__tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
   max-width: 16rem;
   height: 28px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border: none;
   border-radius: var(--radius-lg);
   background: transparent;
@@ -1387,7 +1387,7 @@ html {
  * the nav links don't wrap. The mark + links stay accessible. */
 @media (max-width: 640px) {
   .studio-links {
-    gap: var(--space-4, 16px);
+    gap: var(--space-4, var(--space-4));
   }
   .studio-links a {
     font-size: 12px;
@@ -1832,7 +1832,7 @@ html {
 .studio-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .studio-brand__mark {
@@ -1984,7 +1984,7 @@ html {
   justify-content: center;
   min-width: 22px;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-lg);
   background:
     linear-gradient(
@@ -2012,9 +2012,9 @@ html {
 .studio-app .kind-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   height: 18px;
-  padding: 0 8px 0 6px;
+  padding: 0 var(--space-2) 0 var(--space-2);
   border-radius: var(--radius-lg);
   font-size: 10px;
   font-family: var(--font-mono);
@@ -2083,7 +2083,7 @@ html {
 .studio-app .studio-center-stack__bar {
   display: flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   flex-shrink: 0;
   border-bottom: 0.5px solid var(--border);
 }

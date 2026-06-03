@@ -26,9 +26,9 @@
   z-index: 5;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   max-width: calc(100% - 24px);
-  padding: 6px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--glass-btn-border);
   border-radius: var(--radius-full);
   background: var(--glass-bg-header);
@@ -41,7 +41,7 @@
 .rune-graph-breadcrumbs__item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -123,12 +123,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   /* box-sizing + height keep the rendered header flush with
    * HEADER_HEIGHT in structure-layout.ts so row offsets align. */
   box-sizing: border-box;
   height: var(--rune-header-height);
-  padding: 0 14px;
+  padding: 0 var(--space-4);
 }
 
 .rune-graph-group__title {
@@ -146,7 +146,7 @@
 }
 
 .rune-graph-group__description {
-  padding: 2px 14px 0;
+  padding: 2px var(--space-4) 0;
 }
 
 /* ── Node base ────────────────────────────────────────────────── */
@@ -323,7 +323,7 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: baseline;
   column-gap: var(--space-3);
-  padding: 4px 0;
+  padding: var(--space-1) 0;
   row-gap: var(--space-4);
 }
 
@@ -515,12 +515,12 @@ button[data-navigable]:focus-visible {
 }
 
 .rune-type-graph--zoom-low .rune-node-header {
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-3);
 }
 
 .rune-type-graph--zoom-low .rune-node-summary {
   display: block;
-  padding: 0 10px 8px;
+  padding: 0 var(--space-3) var(--space-2);
   font-size: 10px;
   color: var(--muted-foreground);
   white-space: nowrap;
@@ -658,10 +658,10 @@ button[data-navigable]:focus-visible {
 .rune-inspector-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   height: auto;
   min-width: 0;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   background: color-mix(in oklch, var(--muted) 20%, transparent);
@@ -693,7 +693,7 @@ button[data-navigable]:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--space-1);
   width: 100%;
   min-width: 0;
 }
@@ -705,7 +705,7 @@ button[data-navigable]:focus-visible {
 }
 
 .rune-type-reference[data-empty='true'] {
-  padding-left: 6px;
+  padding-left: var(--space-2);
 }
 
 .rune-type-reference__picker-wrap {
@@ -720,8 +720,8 @@ button[data-navigable]:focus-visible {
   min-width: 18px;
   height: 18px;
   line-height: 14px;
-  gap: 0px;
-  padding: 0px 0px;
+  gap: 0;
+  padding: 0 0;
 }
 
 .rune-type-reference__picker:hover {
@@ -734,9 +734,9 @@ button[data-navigable]:focus-visible {
   flex: 1;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   overflow: hidden;
-  padding: 0px 1px 0px 0px;
+  padding: 0 1px 0 0;
   border: 0;
   background: transparent;
   color: var(--muted-foreground);
@@ -751,7 +751,7 @@ button[data-navigable]:focus-visible {
   justify-content: center;
   min-width: 18px;
   height: 16px;
-  padding-inline: 4px;
+  padding-inline: var(--space-1);
   border-radius: var(--radius-md);
   border: 1px solid color-mix(in oklch, var(--border) 68%, transparent);
   background: color-mix(in oklch, var(--background) 22%, transparent);
@@ -822,7 +822,7 @@ button[data-navigable]:focus-visible {
 .rune-type-reference [data-slot='type-picker-trigger'].rune-cell-type-chip {
   display: inline-block;
   max-width: 100%;
-  padding-inline: 8px;
+  padding-inline: var(--space-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1034,8 +1034,8 @@ button[data-navigable]:focus-visible {
  *    the header to HEADER_HEIGHT so row offsets computed in structure-layout.ts
  *    stay aligned with the rendered rows.
  * 2. `padding-left: var(--space-2)` tightens the title's left inset
- *    (default --rune-header-padding-x = 16px reads as a noticeable indent).
- *    8px = 3px accent-stripe (`.rune-node::before`) + 5px breathing room,
+ *    (default --rune-header-padding-x = var(--space-4) reads as a noticeable indent).
+ *    var(--space-2) = 3px accent-stripe (`.rune-node::before`) + var(--space-1) breathing room,
  *    so the title reads as left-flush against the chrome without crowding
  *    the colored stripe. Decoupled from --rune-node-padding (the body's
  *    layout-coupled inset) — header inset is a purely visual concern with
@@ -1096,7 +1096,7 @@ button[data-navigable]:focus-visible {
   align-items: center;
   height: var(--rune-row-height);
   gap: var(--rune-row-gap);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   position: relative; /* anchor per-row Handle */
   /* UX rec #7: row hover + focus-within so the row reads as a target
      even before the user clicks an interactive child (the chevron / name
