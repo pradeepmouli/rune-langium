@@ -14,10 +14,24 @@
   "scss.lint.unknownAtRules": "ignore",
   "files.associations": {
     "*.css": "tailwindcss"
-},
-"builder.serverUrl": "http://localhost:8788",
-"builder.command": "",
-"builder.runDevServer": false,
-"builder.autoDetectDevServer": true,
-"builder.launchType": "editor"
+  },
+  "tailwindCSS.experimental.configFile": {
+    "apps/studio/src/app.css": "{apps/studio/src/**,packages/design-system/src/**,packages/visual-editor/src/**}"
+  },
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "tailwindCSS.classFunctions": [
+    "cn",
+    "clsx",
+    "cva",
+    "cx",
+    "twMerge"
+  ],
+  "builder.serverUrl": "http://localhost:8788",
+  "builder.command": "",
+  "builder.runDevServer": false,
+  "builder.autoDetectDevServer": true,
+  "builder.launchType": "editor"
 }

@@ -34,6 +34,7 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 - When modifying scripts or workflows, update the relevant docs and memory files in the same change.
 - If adding hooks, prefer `simple-git-hooks` and `lint-staged` already configured in `package.json`.
 - For Studio, the primary LSP path is the embedded browser worker transport; direct WebSocket and Cloudflare Worker LSP are fallbacks, and an explicit `wsUri` selects the direct WebSocket path.
+- Tailwind CSS 4 IntelliSense in this monorepo relies on `.vscode/settings.json` using `tailwindCSS.experimental.configFile` with `apps/studio/src/app.css` as the entry stylesheet mapped to `apps/studio/src/**`, `packages/design-system/src/**`, and `packages/visual-editor/src/**`.
 - Real corpus fixtures live under the hidden `.resources/` tree. Prefer those files for repros, and guard/skip tests that rely on them when the corpus is unavailable in the checkout.
 - In Studio Playwright tests, avoid `waitForLoadState('networkidle')` on routes with persistent worker/LSP traffic; wait for visible UI readiness signals instead.
 - Codegen now walks each namespace once in `packages/codegen/src/emit/namespace-walker.ts`; emitters consume the readonly walk result and own their own diagnostics/source maps. Keep TS-only func extraction in the TypeScript emitter unless behavior intentionally changes across targets.
