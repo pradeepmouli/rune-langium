@@ -11,6 +11,9 @@ import { App } from './App.js';
 // Dockview chrome (tab strips, sash handles, abyss theme palette).
 // Loaded before app styles so any local overrides win.
 import 'dockview-react/dist/styles/dockview.css';
+// Rune structural overrides for DockviewReact (.rune-dock-theme).
+// Must come after dockview dist CSS (unlayered) and before app styles.
+import '@rune-langium/design-system/dock-theme.css';
 import './styles.css';
 
 const root = document.getElementById('root');
