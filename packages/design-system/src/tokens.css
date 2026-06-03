@@ -5,12 +5,17 @@
  * Rune DSL Design System — primitive token layer.
  *
  * Hand-owned, CSS-first (Tailwind v4). These are the raw cross-surface
- * primitives (kind palette, syntax, spacing, surfaces, …). They live in
- * `:root` rather than `@theme` on purpose: names like `--spacing-*`,
- * `--radius-*`, `--text-*` are Tailwind theme namespaces, so emitting them
- * via `@theme` would override Tailwind's own scales. The Tailwind-token layer
- * is the `@theme inline` semantic bridge in `theme.css`; THESE are the values
+ * primitives (kind palette, syntax, space scale, surfaces, …). They live in
+ * `:root` rather than `@theme` on purpose: names like `--radius-*`,
+ * `--text-*` are Tailwind theme namespaces, so emitting them via `@theme`
+ * would override Tailwind's own scales. The Tailwind-token layer is the
+ * `@theme inline` semantic bridge in `theme.css`; THESE are the values
  * that bridge (and the daikonic retune) reference.
+ *
+ * Spacing note: only `--space-1..10` (px) are live — consumed by
+ * apps/studio/src/styles.css and packages/visual-editor/src/styles.css.
+ * The former `--spacing-0..32` (rem) ladder had zero consumers and was
+ * removed.
  *
  * Replaces the generated output of the former `@rune-langium/design-tokens`
  * package (tokens.json + build.ts), retired so the token source-of-truth is
@@ -103,17 +108,6 @@
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
-  --spacing-0: 0;
-  --spacing-1: 0.25rem;
-  --spacing-2: 0.5rem;
-  --spacing-3: 0.75rem;
-  --spacing-4: 1rem;
-  --spacing-6: 1.5rem;
-  --spacing-8: 2rem;
-  --spacing-12: 3rem;
-  --spacing-16: 4rem;
-  --spacing-24: 6rem;
-  --spacing-32: 8rem;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
