@@ -6,9 +6,13 @@ export default {
   plugins: [
     './stylelint-plugins/no-literal-layout-px.mjs',
     './stylelint-plugins/no-raw-color.mjs',
+    './stylelint-plugins/no-raw-geometry.mjs',
   ],
   rules: {
     'rune/no-literal-layout-px': true,
+    // Keep radius + spacing on the design-system token ladders (raw px can't
+    // drift back in). Hairline insets ≤3px and custom-prop defs are allowed.
+    'rune/no-raw-geometry': true,
     // Require design tokens for color values.
     // box-shadow excluded: depth-cue alpha layers (glass shadows) use raw
     // oklch(0 0 0 / alpha) with no 1-to-1 token mapping.

@@ -12,8 +12,13 @@ export default {
   extends: ['stylelint-config-standard'],
   plugins: [
     '../../packages/visual-editor/stylelint-plugins/no-raw-color.mjs',
+    '../../packages/visual-editor/stylelint-plugins/no-raw-geometry.mjs',
   ],
   rules: {
+    // Keep radius + spacing on the design-system token ladders so raw px can't
+    // drift back in. Hairline insets ≤3px and custom-property defs are allowed.
+    'rune/no-raw-geometry': true,
+
     // ── rune custom rules ──────────────────────────────────────────────────
     // Require design tokens for color values; raw literals only allowed in
     // custom-property definitions (token files) or as var() fallbacks.
