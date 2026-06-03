@@ -259,9 +259,45 @@
   --glass-bg-panel:     oklch(0.16 0.02 280 / 0.80);
   --glass-bg-overlay:   oklch(0.14 0.02 280 / 0.92);
   --glass-border:       oklch(1 0 0 / 0.06);
+  --glass-border-strong: oklch(1 0 0 / 0.1);
   --glass-blur-sm:      blur(8px);
   --glass-blur-md:      blur(12px);
   --glass-blur-lg:      blur(20px);
+
+  /* Glass button surface tokens — used by glass-toolbar and glass-header
+   * button overrides. These capture the exact translucent alpha steps so
+   * callers never hard-code oklch literals.
+   *   -btn-bg            default bg  (white / 4%)
+   *   -btn-bg-hover      hover bg    (white / 8%)
+   *   -btn-bg-active     active bg   (teal / 12%)
+   *   -btn-bg-active-hover active hover (teal / 18%)
+   *   -btn-border        default border (white / 8%)
+   *   -btn-border-hover  hover border   (white / 15%)
+   *   -btn-border-active active border  (teal / 35%)
+   *   -btn-border-active-hover active hover border (teal / 50%)
+   *   -btn-text          default text (neutral muted)
+   *   -btn-text-hover    hover text   (neutral bright)
+   *   -btn-text-active   active text  (teal)
+   *   -btn-text-active-hover active hover text (teal bright)
+   *   -btn-teal          base teal hue (for glow box-shadow raw use)
+   *   -dot-grid          dot-grid overlay opacity
+   *   -kbd-bg            monospace kbd chip background
+   */
+  --glass-btn-bg:                oklch(1 0 0 / 0.04);
+  --glass-btn-bg-hover:          oklch(1 0 0 / 0.08);
+  --glass-btn-bg-active:         oklch(0.78 0.17 168 / 0.12);
+  --glass-btn-bg-active-hover:   oklch(0.78 0.17 168 / 0.18);
+  --glass-btn-border:            oklch(1 0 0 / 0.08);
+  --glass-btn-border-hover:      oklch(1 0 0 / 0.15);
+  --glass-btn-border-active:     oklch(0.78 0.17 168 / 0.35);
+  --glass-btn-border-active-hover: oklch(0.78 0.17 168 / 0.50);
+  --glass-btn-text:              oklch(0.75 0.01 280);
+  --glass-btn-text-hover:        oklch(0.92 0.01 280);
+  --glass-btn-text-active:       oklch(0.78 0.17 168);
+  --glass-btn-text-active-hover: oklch(0.85 0.15 168);
+  --glass-dot-grid:              rgba(255, 255, 255, 0.04);
+  --glass-kbd-bg:                rgba(255, 255, 255, 0.04);
+  --glass-grid-line:             rgba(255, 255, 255, 0.015);
 }
 
 .dark {
