@@ -25,7 +25,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 //      `--text-secondary`, the shadcn `--background` / `--foreground`
 //      surface palette, the `--color-warning` / `--color-info` semantic
 //      colours, the per-domain (data/choice/enum/func) palette, etc.)
-const STUDIO_STYLES = resolve(__dirname, '../../src/styles.css');
+const STUDIO_STYLES = resolve(__dirname, '../../src/app.css');
 const TOKENS_CSS = resolve(__dirname, '../../../../packages/design-system/src/tokens.css');
 const DS_THEME_CSS = resolve(__dirname, '../../../../packages/design-system/src/theme.css');
 

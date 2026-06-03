@@ -43,14 +43,16 @@ const SPACE_PROPS = new Set([
   'gap', 'row-gap', 'column-gap',
 ]);
 
-// Strip var()/calc()/min()/max()/clamp() groups (innermost-out) so only px
-// literals that sit OUTSIDE a token reference remain to be inspected.
+// Strip only var() token references (innermost-out for nested var()). The math
+// wrappers calc()/min()/max()/clamp() are deliberately KEPT so a raw px hidden
+// inside them — e.g. `calc(8px + var(--space-1))` — is still inspected and
+// can't slip past the ladder enforcement.
 function bareLiterals(value) {
   let v = value;
   let prev;
   do {
     prev = v;
-    v = v.replace(/\b(?:var|calc|min|max|clamp)\([^()]*\)/g, ' ');
+    v = v.replace(/\bvar\([^()]*\)/g, ' ');
   } while (v !== prev);
   return v;
 }
