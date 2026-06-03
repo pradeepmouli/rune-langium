@@ -225,16 +225,8 @@ html {
     font-size: 0.6875rem;
   }
 
-  .studio-app .dockview-theme-abyss {
-    --dv-tabs-and-actions-container-font-size: 11px;
-    --dv-tabs-and-actions-container-height: 24px;
-    --dv-tabs-and-actions-container-background-color:
-      color-mix(in srgb, var(--card) 92%, var(--background) 8%);
-    --dv-sash-color: rgba(148, 163, 184, 0.42);
-    --dv-active-sash-color: rgba(94, 234, 212, 0.9);
-    --dv-active-sash-transition-duration: 0.12s;
-    --dv-active-sash-transition-delay: 0s;
-  }
+  /* rune-dock-theme --dv-* custom properties + structural dv-* rules moved
+   * to packages/design-system/src/dock-theme.css (MIT). */
 
   .studio-app .studio-layout-presets {
     display: none;
@@ -356,38 +348,8 @@ html {
     }
   }
 
-  .studio-app .dockview-theme-abyss .dv-tab {
-    min-height: 28px;
-    border-radius: 6px;
-    user-select: none;
-    color: color-mix(in srgb, var(--foreground) 52%, transparent);
-    transition:
-      color var(--motion-fast),
-      background-color var(--motion-fast),
-      box-shadow var(--motion-fast),
-      opacity var(--motion-fast);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab {
-    display: flex;
-    width: 100%;
-    min-width: 0;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .studio-app .dockview-theme-abyss .dv-tab .dv-default-tab-content {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    padding-inline: 0.625rem;
-    text-transform: none;
-    letter-spacing: -0.01em;
-    font-size: 0.75rem;
-    font-weight: 500;
-    line-height: 1;
-    text-align: center;
-  }
+  /* .rune-dock-theme .dv-tab + .dv-default-tab + .dv-default-tab-content
+   * moved to packages/design-system/src/dock-theme.css. */
 
   .studio-app .studio-dock-tab {
     display: flex;
@@ -407,7 +369,7 @@ html {
     white-space: nowrap;
   }
 
-  .studio-app .dockview-theme-abyss .dv-tab .studio-dock-tab__count {
+  .studio-app .rune-dock-theme .dv-tab .studio-dock-tab__count {
     position: static;
     min-width: 14px;
     height: 14px;
@@ -419,23 +381,8 @@ html {
     box-shadow: none;
   }
 
-  .studio-app .dockview-theme-abyss {
-    padding: 8px;
-    background: var(--background);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-group-panel {
-    border-radius: 12px;
-    border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
-    overflow: hidden;
-    background: var(--background);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-group-panel .dv-tabs-container {
-    border-radius: 12px 12px 0 0;
-    background: var(--card);
-  }
-
+  /* .rune-dock-theme padding/background + .dv-group-panel + .dv-tabs-container
+   * moved to packages/design-system/src/dock-theme.css. */
 
   /* ─── Activity Rail ────────────────────────────────────────────
    * Narrow 52px left column with icon-only buttons, an active-state
@@ -524,105 +471,8 @@ html {
     margin-bottom: 8px;
   }
 
-  .studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
-    width: 12px;
-    margin-left: -6px;
-    margin-right: -6px;
-  }
-
-  .studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
-    height: 12px;
-    margin-top: -6px;
-    margin-bottom: -6px;
-  }
-
-  .studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash {
-    position: absolute !important;
-    top: 0 !important;
-    bottom: 0 !important;
-  }
-
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container.dv-horizontal
-    > .dv-sash-container
-    > .dv-sash::after {
-    content: '';
-    position: absolute;
-    top: 10px;
-    bottom: 10px;
-    left: 50%;
-    width: 3px;
-    transform: translateX(-50%);
-    border-radius: 999px;
-    background: var(--dv-sash-color);
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
-    transition:
-      background-color 120ms ease,
-      box-shadow 120ms ease,
-      transform 120ms ease;
-  }
-
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container.dv-vertical
-    > .dv-sash-container
-    > .dv-sash::after {
-    content: '';
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    top: 50%;
-    height: 3px;
-    transform: translateY(-50%);
-    border-radius: 999px;
-    background: var(--dv-sash-color);
-    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
-    transition:
-      background-color 120ms ease,
-      box-shadow 120ms ease,
-      transform 120ms ease;
-  }
-
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container
-    .dv-sash-container
-    .dv-sash.dv-enabled:hover::after,
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container
-    .dv-sash-container
-    .dv-sash.dv-enabled:active::after {
-    background: var(--dv-active-sash-color);
-    box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.18);
-  }
-
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container.dv-horizontal
-    > .dv-sash-container
-    > .dv-sash.dv-enabled:hover::after,
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container.dv-horizontal
-    > .dv-sash-container
-    > .dv-sash.dv-enabled:active::after {
-    transform: translateX(-50%) scaleX(1.35);
-  }
-
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container.dv-vertical
-    > .dv-sash-container
-    > .dv-sash.dv-enabled:hover::after,
-  .studio-app
-    .dockview-theme-abyss
-    .dv-split-view-container.dv-vertical
-    > .dv-sash-container
-    > .dv-sash.dv-enabled:active::after {
-    transform: translateY(-50%) scaleY(1.35);
-  }
+  /* .rune-dock-theme sash rules (dv-split-view-container) moved to
+   * packages/design-system/src/dock-theme.css. */
 
   /* ─── Top bar ────────────────────────────────────────────────────── */
 
@@ -981,62 +831,8 @@ html {
     }
   }
 
-  /* ─── Accent underline on active dockview tabs ────────────────────
-   * Matches the design's orange underline bar on active tabs in the
-   * right column (Code/Form) and bottom dock (Problems/Messages).
-   */
-  .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab {
-    position: relative;
-  }
-
-  .studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-    color: color-mix(in srgb, var(--foreground) 96%, white 4%);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-inactive-tab {
-    color: color-mix(in srgb, var(--foreground) 52%, transparent);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-active-tab {
-    color: color-mix(in srgb, var(--foreground) 72%, white 4%);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-inactive-tab {
-    color: color-mix(in srgb, var(--foreground) 34%, transparent);
-  }
-
-  .studio-app .dockview-theme-abyss .dv-tab.dv-inactive-tab:hover {
-    color: color-mix(in srgb, var(--foreground) 76%, transparent);
-    background: color-mix(in srgb, var(--accent) 28%, transparent);
-  }
-
-  /* Accent underline via ::before — dockview 6.x owns ::after for its focus
-   * indicator (full-size overlay with outline), so we use ::before instead. */
-  .studio-app .dockview-theme-abyss .dv-tab.dv-active-tab::before {
-    content: '';
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 0;
-    height: 1.5px;
-    background: var(--primary);
-    border-radius: 1.5px;
-    z-index: 6;
-    pointer-events: none;
-  }
-
-  /* dockview 6.x adds a full-size ::after overlay on focus/focus-within —
-   * suppress it so our ::before underline shows, then restore a ring for
-   * keyboard focus so the tab remains accessible. */
-  .studio-app .dockview-theme-abyss .dv-tab:focus-within::after,
-  .studio-app .dockview-theme-abyss .dv-tab:focus::after {
-    display: none;
-  }
-  .studio-app .dockview-theme-abyss .dv-tab:focus-visible,
-  .studio-app .dockview-theme-abyss .dv-tab:has(:focus-visible) {
-    outline: 2px solid var(--ring);
-    outline-offset: -2px;
-  }
+  /* .rune-dock-theme tab active/inactive + accent underline + focus rules moved
+   * to packages/design-system/src/dock-theme.css. */
 
   .studio-app .studio-graph-canvas {
     background:
@@ -2453,214 +2249,6 @@ html {
   background: color-mix(in oklch, var(--primary), transparent 70%);
 }
 
-/* Hide the entire tab header bar for single-tab panels — the 24px bar adds
- * no value when there's nothing to switch between. Multi-tab panels (e.g.
- * Form/Code on the inspector, Problems/Messages on the utility tray) keep
- * their headers because dockview does not add dv-single-tab to those. */
-.studio-app .dockview-theme-abyss .dv-tabs-and-actions-container.dv-single-tab {
-  display: none;
-}
-
-/* Dockview panel tabs are fixed layout components — no close buttons needed.
- * Placed outside @layer so it beats dockview's unlayered CSS in the cascade. */
-.studio-app .dockview-theme-abyss .dv-tab .dv-default-tab .dv-default-tab-action {
-  display: none;
-}
-
-/* dv-grid-view defaults to #000c18 (abyss theme) — make it transparent so the
- * lighter frame background on .dockview-theme-abyss shows in the gap areas. */
-.studio-app .dockview-theme-abyss .dv-grid-view {
-  background: transparent;
-}
-
-/* Dockview's outer dv-view wrappers default to overflow:auto. Our padded shell
- * makes those wrappers a few pixels larger than their client box, which causes
- * browser scrollbars around the entire dock frame. Clamp only the shell-level
- * wrappers so inner panel content can keep its own scrolling behavior. */
-.studio-app .dv-view.visible:has(> .dockview-theme-abyss),
-.studio-app .dv-view.visible:has(> .dv-shell-middle-column) {
-  overflow: hidden !important;
-}
-
-.studio-app .dv-view.visible {
-  overflow: hidden !important;
-}
-
-/* dockview leaves .dv-content-container without overflow, so tall panel content
- * (e.g. a very long code preview) bleeds outside the panel bounds and creates a
- * visual gap at the bottom. overflow:hidden clips it at the panel edge and lets
- * CodeMirror's own cm-scroller create the scroll area. */
-.studio-app .dockview-theme-abyss .dv-content-container {
-  overflow: hidden;
-}
-
-/* Only target leaf dv-views (those with a direct dv-groupview child). Container
- * dv-views hold nested splits and must not get padding — dockview's JS doesn't
- * account for CSS padding when computing inner panel sizes, so padding on a
- * container causes nested panels to overflow and misalign. Leaf panels are safe
- * because they own a single dv-groupview (the actual panel surface). */
-.studio-app .dockview-theme-abyss .dv-view:has(> .dv-groupview) {
-  padding: 4px;
-  box-sizing: border-box;
-  background: var(--background);
-  border-radius: 16px;
-}
-
-/* Kill dockview's ::before separator line — with our padding-based gap the
- * ::before floats visibly in the center of the gap rather than at an edge. */
-.studio-app .dockview-theme-abyss {
-  --dv-separator-border: transparent;
-}
-
-/* Panel surface: rounded corners, slightly elevated over the dark gap.
- * Composes the `.studio-card` chrome (radius / background / two-tier
- * shadow) defined in design-system/theme.css so a Dockview panel and
- * a `.rune-node` on the same dark canvas read with matching elevation.
- * The 0.5px hairline ring is layered ABOVE the card shadow as a fourth
- * stacked layer so the sash hover indicator still has a border to
- * fight against — that's the one studio-specific addition. The 1px
- * solid border from `.studio-card` is intentionally suppressed (panels
- * sit flush against each other; a hairline ring reads better than a
- * full border at the panel edge). */
-.studio-app .dockview-theme-abyss .dv-groupview {
-  border-radius: var(--radius-lg, 12px);
-  overflow: hidden;
-  background: var(--card);
-  box-shadow:
-    0 0 0 0.5px var(--border),
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.10);
-}
-
-/* Tab header background matches card surface; top corners follow panel radius. */
-.studio-app .dockview-theme-abyss .dv-tabs-and-actions-container {
-  display: flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 3px 6px 4px;
-  border-radius: 12px 12px 0 0;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--card) 94%, white 6%),
-      color-mix(in srgb, var(--card) 97%, var(--background) 3%)
-    );
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 52%, transparent);
-}
-
-/* Dockview tab text defaults are theme-defined and unlayered, so keep these
- * overrides here with the other high-priority dockview patches. */
-.studio-app .dockview-theme-abyss .dv-tab .dv-default-tab {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  min-height: 28px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-}
-
-.studio-app .dockview-theme-abyss .dv-tab .dv-default-tab-content {
-  width: 100%;
-  min-width: 0;
-  padding-inline: 0.625rem;
-  text-transform: none;
-  letter-spacing: -0.01em;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1;
-  text-align: center !important;
-}
-
-.studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
-  background: color-mix(in oklch, var(--accent) 26%, var(--card) 74%) !important;
-  color: color-mix(in srgb, var(--foreground) 96%, white 4%) !important;
-}
-
-.studio-app .dockview-theme-abyss .dv-groupview.dv-active-group .dv-tab.dv-inactive-tab {
-  background: transparent !important;
-  color: color-mix(in srgb, var(--foreground) 52%, transparent) !important;
-}
-
-.studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-active-tab {
-  background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%) !important;
-  color: color-mix(in srgb, var(--foreground) 72%, white 4%) !important;
-}
-
-.studio-app .dockview-theme-abyss .dv-groupview.dv-inactive-group .dv-tab.dv-inactive-tab {
-  background: transparent !important;
-  color: color-mix(in srgb, var(--foreground) 34%, transparent) !important;
-}
-
-/* Sash (resize handle) — outside @layer so it beats dockview's 4px default.
- * The visual gap is 4px (2px per leaf panel side); the sash covers the full
- * gap plus a small overshoot so the cursor changes anywhere in the gap. */
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
-  width: 16px;
-  margin-left: -8px;
-  margin-right: -8px;
-  cursor: col-resize;
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
-  height: 16px;
-  margin-top: -8px;
-  margin-bottom: -8px;
-  cursor: row-resize;
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash {
-  position: absolute !important;
-  top: 0 !important;
-  bottom: 0 !important;
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::after {
-  content: '';
-  position: absolute;
-  top: 16px;
-  bottom: 16px;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: var(--dv-sash-color);
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
-  transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::after {
-  content: '';
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  top: 50%;
-  height: 2px;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: var(--dv-sash-color);
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22);
-  transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:hover::after,
-.studio-app .dockview-theme-abyss .dv-split-view-container .dv-sash-container .dv-sash.dv-enabled:active::after {
-  background: var(--dv-active-sash-color);
-  box-shadow: 0 0 0 2px rgba(94, 234, 212, 0.18);
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash.dv-enabled:hover::after,
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash.dv-enabled:active::after {
-  transform: translateX(-50%) scaleX(1.35);
-}
-
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash.dv-enabled:hover::after,
-.studio-app .dockview-theme-abyss .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash.dv-enabled:active::after {
-  transform: translateY(-50%) scaleY(1.35);
-}
+/* All .rune-dock-theme structural dockview overrides (unlayered section)
+ * moved to packages/design-system/src/dock-theme.css (MIT).
+ * Imported below via @import '@rune-langium/design-system/dock-theme.css'. */

@@ -24,8 +24,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { DockviewReact } from 'dockview-react';
 import type { DockviewApi, DockviewReadyEvent, IDockviewPanelHeaderProps, IDockviewPanelProps } from 'dockview-react';
+import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
 import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
@@ -452,11 +452,11 @@ export function DockShell({
         <PanelRegistryContext.Provider value={panelRegistry}>
           <UtilityTrayContext.Provider value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}>
             <div className="min-h-0 min-w-0 flex-1">
-              <DockviewReact
+              <DockLayout
                 components={DOCKVIEW_COMPONENTS}
                 defaultTabComponent={StudioDockTab}
                 onReady={onReady}
-                className="dockview-theme-abyss h-full min-w-0 w-full"
+                className="h-full min-w-0 w-full"
               />
             </div>
           </UtilityTrayContext.Provider>
