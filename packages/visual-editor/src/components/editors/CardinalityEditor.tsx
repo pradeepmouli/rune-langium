@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, memo } from 'react';
+import { Input } from '@rune-langium/design-system/ui/input';
 
 export interface CardinalityEditorProps {
   nodeId: string;
@@ -75,13 +76,14 @@ export const CardinalityEditor = memo(function CardinalityEditor({
         ))}
       </div>
       <div className="rune-cardinality-editor__custom">
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="e.g. 2..5"
-          className="rune-cardinality-editor__input"
+          className="rune-cardinality-editor__input px-2 py-1 text-sm"
           aria-label="Custom cardinality"
         />
         <button

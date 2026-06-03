@@ -10,6 +10,7 @@
 
 import { useState, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
+import { Input } from '@rune-langium/design-system/ui/input';
 import { validateCardinality } from '../../validation/edit-validator.js';
 
 // ---------------------------------------------------------------------------
@@ -152,7 +153,8 @@ export function CardinalityPicker({
   if (showCustom) {
     return (
       <div data-slot="cardinality-picker" className={joinClasses('flex items-center gap-1', wrapperClassName)}>
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={customValue}
           onChange={(e) => {
@@ -167,11 +169,7 @@ export function CardinalityPicker({
           aria-invalid={!!customError}
           autoFocus
           className={joinClasses(
-            `w-[4.25rem] rounded border px-1.5 py-0.5 text-2xs font-mono leading-none
-            bg-background outline-none
-            focus-visible:ring-1 focus-visible:ring-ring
-            disabled:cursor-not-allowed disabled:opacity-50
-            ${customError ? 'border-destructive' : 'border-input'}`,
+            `w-[4.25rem] px-1.5 py-0.5 text-2xs font-mono leading-none disabled:cursor-not-allowed${customError ? ' border-destructive' : ''}`,
             inputClassName
           )}
         />

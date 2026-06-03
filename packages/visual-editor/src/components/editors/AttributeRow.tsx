@@ -35,6 +35,7 @@
 import { useCallback, useMemo } from 'react';
 import { useFormContext, Controller } from 'react-hook-form';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Input } from '@rune-langium/design-system/ui/input';
 import { X } from 'lucide-react';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -246,7 +247,8 @@ function AttributeRow({
         control={control}
         name={`${prefix}.name`}
         render={({ field }) => (
-          <input
+          <Input
+            variant="inline"
             data-slot="attribute-name"
             type="text"
             value={field.value}
@@ -256,8 +258,7 @@ function AttributeRow({
             }}
             onBlur={field.onBlur}
             disabled={effectiveReadOnly}
-            className="w-full min-w-0 px-1.5 py-0.5 text-xs border border-transparent rounded
-              focus:border-input focus:outline-none bg-transparent"
+            className="w-full min-w-0 px-1.5 py-0.5 text-xs"
             placeholder="name"
             aria-label={`Attribute name: ${field.value}`}
           />

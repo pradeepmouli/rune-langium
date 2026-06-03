@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@rune-langium/design-system/ui/select';
+import { Input } from '@rune-langium/design-system/ui/input';
 
 export interface TypeCreatorProps {
   onCreateType: (kind: TypeKind, name: string, namespace: string) => void;
@@ -62,22 +63,24 @@ export const TypeCreator = memo(function TypeCreator({
             <SelectItem value="enum">Enum</SelectItem>
           </SelectContent>
         </Select>
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type name"
-          className="rune-type-creator__name"
+          className="rune-type-creator__name px-2 py-1 text-sm"
           aria-label="Type name"
           autoFocus
         />
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={namespace}
           onChange={(e) => setNamespace(e.target.value)}
           placeholder="Namespace"
-          className="rune-type-creator__namespace"
+          className="rune-type-creator__namespace px-2 py-1 text-sm"
           aria-label="Namespace"
         />
         <button

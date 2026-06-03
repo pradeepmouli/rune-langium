@@ -1654,19 +1654,7 @@ html {
 
 /* ---------- Editor Form Panel — Dark Theme (T038) ---------- */
 
-/* Form inputs — dark background with visible borders */
-[data-slot='enum-form'] input,
-[data-slot='function-form'] input,
-[data-slot='data-type-form'] input {
-  background-color: var(--card);
-  color: var(--foreground);
-  border-color: var(--border);
-}
-
-/* Focus rings on form inputs */
-[data-slot='enum-form'] input:focus,
-[data-slot='function-form'] input:focus,
-[data-slot='data-type-form'] input:focus,
+/* Focus ring on expression editor (textarea — not an <Input variant="inline">) */
 [data-slot='expression-editor']:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 1px var(--primary);
@@ -1676,6 +1664,12 @@ html {
 [data-slot='expression-editor'] {
   background-color: var(--card);
   color: var(--foreground);
+}
+
+/* Disabled expression textarea */
+[data-slot='expression-editor']:disabled {
+  opacity: 0.5;
+  background-color: var(--background);
 }
 
 /* Section borders (between form sections) */
@@ -1692,18 +1686,6 @@ html {
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
   border-color: var(--border);
-}
-
-/* Disabled form controls — opacity diverges (0.5 vs the 0.4
- * baseline) so the input greys deeper than a button; the
- * background-color swap (--card → --background) is the carrier
- * signal that the field is locked. */
-[data-slot='enum-form'] input:disabled,
-[data-slot='function-form'] input:disabled,
-[data-slot='data-type-form'] input:disabled,
-[data-slot='expression-editor']:disabled {
-  opacity: 0.5;
-  background-color: var(--background);
 }
 
 /* Kind badges — consistent across themes */

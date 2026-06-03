@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, memo } from 'react';
+import { Input } from '@rune-langium/design-system/ui/input';
 
 export interface AttributeEditorProps {
   nodeId: string;
@@ -46,30 +47,33 @@ export const AttributeEditor = memo(function AttributeEditor({
     <div className="rune-attribute-editor" data-testid="attribute-editor">
       <div className="rune-attribute-editor__header">Add Attribute</div>
       <div className="rune-attribute-editor__form">
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Attribute name"
-          className="rune-attribute-editor__name"
+          className="rune-attribute-editor__name px-2 py-1 text-sm"
           aria-label="Attribute name"
           autoFocus
         />
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={typeName}
           onChange={(e) => setTypeName(e.target.value)}
           placeholder="Type"
-          className="rune-attribute-editor__type"
+          className="rune-attribute-editor__type px-2 py-1 text-sm"
           aria-label="Attribute type"
         />
-        <input
+        <Input
+          variant="inline"
           type="text"
           value={cardinality}
           onChange={(e) => setCardinality(e.target.value)}
           placeholder="Cardinality"
-          className="rune-attribute-editor__card"
+          className="rune-attribute-editor__card px-2 py-1 text-sm"
           aria-label="Cardinality"
         />
         <button onClick={handleAdd} disabled={!name.trim()} className="rune-attribute-editor__submit">
