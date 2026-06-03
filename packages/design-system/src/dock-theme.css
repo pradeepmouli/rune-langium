@@ -242,9 +242,8 @@
 
 /* ── Unlayered dock overrides — MUST stay outside @layer ──────────────────
  * dockview's dist CSS is unlayered, so these rules also live outside @layer
- * to win the cascade without requiring !important. Preserves the placement
- * they had in apps/studio/src/styles.css (see comments there at lines 2465
- * and 2595). */
+ * to win the cascade without requiring !important. Preserves the unlayered
+ * placement they had when this theming lived in apps/studio/src/styles.css. */
 
 /* Hide the entire tab header bar for single-tab panels — the 24px bar adds
  * no value when there's nothing to switch between. Multi-tab panels (e.g.

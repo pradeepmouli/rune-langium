@@ -2249,6 +2249,7 @@ html {
   background: color-mix(in oklch, var(--primary), transparent 70%);
 }
 
-/* All .rune-dock-theme structural dockview overrides (unlayered section)
- * moved to packages/design-system/src/dock-theme.css (MIT).
- * Imported below via @import '@rune-langium/design-system/dock-theme.css'. */
+/* All .rune-dock-theme structural dockview overrides moved to
+ * packages/design-system/src/dock-theme.css (MIT). The studio imports that
+ * partial from apps/studio/src/main.tsx (after this file, so Tailwind's @layer
+ * order is established first). */
