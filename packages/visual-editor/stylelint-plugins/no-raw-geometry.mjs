@@ -33,7 +33,13 @@ const meta = {
 const RADIUS_PROP = /^border(?:-[a-z]+)*-radius$/;
 const SPACE_PROPS = new Set([
   'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  // logical longhands/shorthands — the repo styles in `padding-inline` etc.,
+  // so the rule must cover them or raw px could re-enter through that door.
+  'padding-inline', 'padding-block',
+  'padding-inline-start', 'padding-inline-end', 'padding-block-start', 'padding-block-end',
   'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+  'margin-inline', 'margin-block',
+  'margin-inline-start', 'margin-inline-end', 'margin-block-start', 'margin-block-end',
   'gap', 'row-gap', 'column-gap',
 ]);
 

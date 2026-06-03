@@ -659,7 +659,7 @@ html {
     gap: var(--space-2);
     height: 28px;
     padding: 0 var(--space-3);
-    border-radius: calc(var(--radius) + var(--radius-xs));
+    border-radius: var(--radius-lg);
     color: var(--muted-foreground);
     max-width: 200px;
     font-size: 12px;
@@ -1590,10 +1590,16 @@ html {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   border: 1px solid var(--input);
-  border-radius: var(--radius-xl);
+  /* Controls stay crisp at md; the card surface is promoted to xl below. */
+  border-radius: var(--radius-md);
   outline: none;
   background: var(--background);
   color: var(--foreground);
+}
+
+/* The attribute-editor card is a surface, not a control — modern 12px corner. */
+.rune-attribute-editor__card {
+  border-radius: var(--radius-xl);
 }
 
 .rune-type-creator__kind:focus,
