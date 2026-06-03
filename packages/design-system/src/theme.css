@@ -200,6 +200,8 @@
   /* Short-form text-size aliases — Studio uses `--text-xs/sm/base`
    * while the canonical tokens emit `--font-size-*`. Map them so
    * styles.css resolves cleanly without rewriting every rule. */
+  --text-3xs: var(--font-size-3xs);
+  --text-2xs: var(--font-size-2xs);
   --text-xs: var(--font-size-xs);
   --text-sm: var(--font-size-sm);
   --text-base: var(--font-size-base);
