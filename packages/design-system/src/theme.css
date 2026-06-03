@@ -25,6 +25,16 @@
 
 /* ── shadcn semantic bridge ─────────────────────────────────────── */
 @theme inline {
+  /* Font families — `inline` so the generated `font-sans`/`font-mono`/
+   * `font-display` utilities inline `var(--font-family-*)` (the brand stacks in
+   * tokens.css) rather than emitting a competing `--font-*` into a layered
+   * `:root`. The semantic `--font-sans/mono/display` vars themselves come from
+   * tokens.css's plain `:root` (so standalone, Tailwind-less consumers resolve
+   * them too). Without these keys Tailwind shipped its OWN default mono/sans for
+   * the utilities and never knew `font-display` at all (it was base-rule only). */
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+  --font-display: var(--font-family-display);
   --radius-xs: calc(var(--radius) - 6px);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -150,8 +160,9 @@
 :root {
   /* `--radius` (the shadcn base knob) now lives in tokens.css's primitive
    * layer so a tokens.css-only consumer can resolve the radius ladder; it is
-   * imported above, so the `@theme inline` `--radius-*` calc()s resolve here. */
-  --font-sans: var(--font-family-sans);
+   * imported above, so the `@theme inline` `--radius-*` calc()s resolve here.
+   * (`--font-sans` and the other font semantics now live in tokens.css's :root
+   * alongside the `--font-family-*` primitives — see the @theme inline bridge.) */
 
   --background: var(--color-surface-1);
   --foreground: var(--color-foreground-primary);
