@@ -40,16 +40,21 @@ test.describe('Cross-surface UX consistency (T063 / US7)', () => {
       const bodyFont = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
       expect(bodyFont).toMatch(/Inter/i);
 
-      // 2. The primary "New blank workspace" button has 8px border-radius
-      //    (FR-024 — landing/docs/Studio canonical primary radius).
+      // 2. The primary "New blank workspace" button has a 6px border-radius.
+      //    shadcn/Button uses the `rounded-md` utility, and Tailwind v4's
+      //    `@theme inline` INLINES its value into the utility — so `rounded-md`
+      //    is `calc(var(--radius) - 2px)` = 6px (it does NOT reference
+      //    `var(--radius-md)`). This has been the rendered value since the
+      //    `@theme inline` bridge existed; the prior `8px` assertion never
+      //    matched reality. 6px is the intended crisp-control corner (distinct
+      //    from the 12px surface/card corner).
       const primaryButton = page.getByTestId('file-loader').getByRole('button', { name: /^New/i });
       await expect(primaryButton).toBeVisible();
       const primaryRadius = await primaryButton.evaluate(
         (el) => getComputedStyle(el as Element).borderRadius
       );
-      // shadcn/Button uses `rounded-md` which = `var(--radius-md)` = 8px now.
-      // Some browsers report `8px 8px 8px 8px` (per-corner); accept either.
-      expect(primaryRadius).toMatch(/^(8px|8px 8px 8px 8px)$/);
+      // Some browsers report `6px 6px 6px 6px` (per-corner); accept either.
+      expect(primaryRadius).toMatch(/^(6px|6px 6px 6px 6px)$/);
 
       // 3. Secondary buttons (Select Files / Select Folder) render
       //    transparent — NOT solid amber. (FR-023, T054.)

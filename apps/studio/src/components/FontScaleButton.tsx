@@ -30,7 +30,7 @@ function applyToRoot(scale: FontScale): void {
  * Cycle button for content-pane font size (Inspector / Structure / Graph
  * / Form). Three steps: sm / md / lg. Persisted in localStorage. Applied
  * by writing `data-font-scale` on the document root; CSS in
- * apps/studio/src/styles.css scales the relevant pane containers via
+ * apps/studio/src/app.css scales the relevant pane containers via
  * the `zoom` property (works under React Flow's internal transform
  * because zoom is applied at the outer container before RF reads layout
  * coordinates).

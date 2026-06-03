@@ -25,12 +25,14 @@
 
 /* ── shadcn semantic bridge ─────────────────────────────────────── */
 @theme inline {
+  --radius-xs: calc(var(--radius) - 6px);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
+  --radius-full: 9999px;
   --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -136,9 +138,9 @@
 
 /* ── Color palette: Daikon ──────────────────────────────────────── */
 :root {
-  /* Keep the shadcn base radius concrete so the derived --radius-* theme
-   * tokens don't form a circular var(--radius) <-> var(--radius-md) chain. */
-  --radius: 8px;
+  /* `--radius` (the shadcn base knob) now lives in tokens.css's primitive
+   * layer so a tokens.css-only consumer can resolve the radius ladder; it is
+   * imported above, so the `@theme inline` `--radius-*` calc()s resolve here. */
   --font-sans: var(--font-family-sans);
 
   --background: var(--color-surface-1);

@@ -69,11 +69,10 @@ export const fonts = {
   mono: "'JetBrains Mono', ui-monospace, monospace"
 } as const;
 
-export const radii = {
-  sm: '0.25rem',
-  md: '8px',
-  lg: '0.75rem'
-} as const;
+// NOTE: there is intentionally no JS `radii` export. Radius lives only in CSS
+// (theme.css `@theme inline`, the single `--radius` knob) — a hand-kept JS
+// mirror was unused and pure drift surface, so it was removed. Read radii from
+// the CSS custom properties (`var(--radius-*)`) instead.
 
 export const syntax = {
   keyword: '#C792EA',

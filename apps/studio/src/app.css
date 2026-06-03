@@ -42,7 +42,7 @@
  * - Thumb:   color-mix(border, white) — slightly lifted from --border so
  *            it reads on both --card and --background surfaces
  * - Width:   --studio-scrollbar-width (8px default)
- * - Radius:  fully rounded (border-radius: 999px)
+ * - Radius:  fully rounded (border-radius: var(--radius-full))
  * - Gutter:  `scrollbar-gutter: stable` prevents content jump when the
  *            scrollbar mounts/unmounts
  * - Cross-browser: webkit pseudo-elements cover Chromium/Safari/Edge;
@@ -88,7 +88,7 @@ html {
 
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
   transition: background-color var(--motion-fast);
@@ -115,7 +115,7 @@ html {
 
 .studio-scroll::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background-clip: padding-box;
   background-color: var(--studio-scrollbar-thumb);
   transition: background-color var(--motion-fast);
@@ -233,7 +233,7 @@ html {
     height: 26px;
     background: color-mix(in srgb, var(--background) 96%, var(--muted) 4%);
     border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-    border-radius: 999px;
+    border-radius: var(--radius-full);
     overflow: hidden;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -264,13 +264,13 @@ html {
   }
 
   .studio-app .studio-paneswitch__seg:first-child {
-    border-top-left-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: var(--radius-full);
+    border-bottom-left-radius: var(--radius-full);
   }
 
   .studio-app .studio-paneswitch__seg:last-child {
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
+    border-top-right-radius: var(--radius-full);
+    border-bottom-right-radius: var(--radius-full);
   }
 
   /* Hairline divider between consecutive segments. Hidden if either
@@ -337,8 +337,8 @@ html {
     position: static;
     min-width: 14px;
     height: 14px;
-    padding: 0 5px;
-    border-radius: 999px;
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-full);
     font-size: 10px;
     line-height: 14px;
     letter-spacing: 0;
@@ -360,8 +360,8 @@ html {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 8px 0;
-    gap: 4px;
+    padding: var(--space-2) 0;
+    gap: var(--space-1);
   }
 
   .studio-app .studio-rail__group {
@@ -427,12 +427,12 @@ html {
     bottom: 6px;
     width: 3px;
     background: var(--primary);
-    border-radius: 0 2px 2px 0;
+    border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   }
 
 
   .studio-app .studio-rail > .studio-brand__mark {
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
   }
 
   /* .rune-dock-theme sash rules (dv-split-view-container) moved to
@@ -447,22 +447,22 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 12px 0 8px;
-    gap: 12px;
+    padding: 0 var(--space-3) 0 var(--space-2);
+    gap: var(--space-3);
     flex-shrink: 0;
   }
 
   .studio-app .studio-topbar__left {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
     min-width: 0;
   }
 
   .studio-app .studio-topbar__right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     flex-shrink: 0;
   }
 
@@ -485,9 +485,9 @@ html {
       );
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 10px 0 7px;
+    padding: 0 var(--space-3) 0 var(--space-2);
     border-radius: var(--radius);
     color: var(--foreground);
     font-size: 12.5px;
@@ -533,7 +533,7 @@ html {
   .studio-app .studio-topbar__ws-mark {
     width: 17px;
     height: 17px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -563,9 +563,9 @@ html {
       );
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 6px 0 9px;
+    padding: 0 var(--space-2) 0 var(--space-2);
     border-radius: var(--radius);
     color: var(--muted-foreground);
     width: 260px;
@@ -596,8 +596,8 @@ html {
     font-size: 10.5px;
     background: var(--glass-kbd-bg);
     border: 0.5px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    padding: 1px var(--space-1);
     color: var(--muted-foreground);
   }
 
@@ -609,9 +609,9 @@ html {
     border: 0;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 14px;
+    padding: 0 var(--space-4);
     border-radius: var(--radius);
     font-size: 12px;
     font-weight: 600;
@@ -643,7 +643,7 @@ html {
 
   .studio-app .studio-topbar__tabs {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
     align-items: center;
     min-width: 0;
     overflow: hidden;
@@ -656,10 +656,10 @@ html {
     background: transparent;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--space-2);
     height: 28px;
-    padding: 0 10px;
-    border-radius: calc(var(--radius) + 2px);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-lg);
     color: var(--muted-foreground);
     max-width: 200px;
     font-size: 12px;
@@ -728,8 +728,8 @@ html {
     justify-content: center;
     min-width: 26px;
     height: 16px;
-    padding: 0 6px;
-    border-radius: 999px;
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-full);
     border: 0.5px solid color-mix(in srgb, var(--border) 76%, transparent);
     background: color-mix(in srgb, var(--muted) 68%, transparent);
     color: color-mix(in srgb, var(--muted-foreground) 88%, white 12%);
@@ -750,7 +750,7 @@ html {
   .studio-app .studio-type-glyph {
     width: 18px;
     height: 18px;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
     display: grid;
     place-items: center;
     font-size: 10px;
@@ -767,7 +767,7 @@ html {
     bottom: 6px;
     width: 2px;
     background: var(--primary);
-    border-radius: 2px;
+    border-radius: var(--radius-xs);
   }
 
   /* Explorer selected row — gradient wash from primary (left-to-right fade) */
@@ -816,7 +816,7 @@ html {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 12px;
+    padding: 0 var(--space-3);
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted-foreground);
@@ -828,11 +828,11 @@ html {
   .studio-app .studio-statusbar__right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
 
   .studio-app .studio-statusbar__right {
-    gap: 10px;
+    gap: var(--space-3);
   }
 
   .studio-app .studio-statusbar__sep {
@@ -844,7 +844,7 @@ html {
   .studio-app .studio-statusbar__lsp {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
   }
 
   .studio-app .studio-statusbar__dot {
@@ -865,8 +865,8 @@ html {
     background: transparent;
     color: var(--muted-foreground);
     height: 18px;
-    padding: 0 4px;
-    border-radius: 4px;
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-sm);
     font-family: var(--font-mono);
     font-size: 11px;
     cursor: pointer;
@@ -959,7 +959,7 @@ html {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 0;
+  padding: var(--space-1) 0;
 }
 
 .ns-explorer__empty {
@@ -977,8 +977,8 @@ html {
 .ns-row__header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   cursor: pointer;
   transition: background 0.1s;
   user-select: none;
@@ -1035,20 +1035,20 @@ html {
   color: var(--muted-foreground);
   background: var(--background);
   padding: var(--space-1) var(--space-3);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   flex-shrink: 0;
 }
 
 /* Type entries */
 .ns-row__children {
-  padding-left: 20px;
+  padding-left: var(--space-5);
 }
 
 .ns-type {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
   cursor: default;
   transition: background 0.1s;
 }
@@ -1148,7 +1148,7 @@ html {
 }
 
 .studio-source-view__tab {
-  padding: var(--space-3) 14px;
+  padding: var(--space-3) var(--space-4);
   font-size: var(--text-sm);
   color: var(--muted-foreground);
   background: transparent;
@@ -1207,8 +1207,8 @@ html {
   height: 30px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
   border-bottom: 0.5px solid var(--border);
   background: color-mix(in oklch, var(--card) 92%, var(--background) 8%);
   font-family: var(--font-mono);
@@ -1223,8 +1223,8 @@ html {
   align-items: center;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%);
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
   border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
@@ -1254,7 +1254,7 @@ html {
   gap: 1px;
   overflow-x: auto;
   min-height: 34px;
-  padding: 3px 6px 4px;
+  padding: 3px var(--space-2) var(--space-1);
   border-bottom: 0.5px solid var(--border);
   background: color-mix(in oklch, var(--card) 94%, var(--background) 6%);
 }
@@ -1266,7 +1266,7 @@ html {
   min-width: 0;
   height: 28px;
   padding-inline: 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: color-mix(in srgb, var(--foreground) 56%, transparent);
   transition:
     background-color var(--motion-fast),
@@ -1288,13 +1288,13 @@ html {
 .studio-source-editor__tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
   max-width: 16rem;
   height: 28px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: transparent;
   appearance: none;
   color: inherit;
@@ -1337,7 +1337,7 @@ html {
   height: 18px;
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   appearance: none;
   cursor: pointer;
@@ -1387,7 +1387,7 @@ html {
  * the nav links don't wrap. The mark + links stay accessible. */
 @media (max-width: 640px) {
   .studio-links {
-    gap: var(--space-4, 16px);
+    gap: var(--space-4, var(--space-4));
   }
   .studio-links a {
     font-size: 12px;
@@ -1507,7 +1507,7 @@ html {
 /* ---------- Dark-theme ReactFlow controls & minimap ---------- */
 .studio-app .react-flow__controls {
   box-shadow: var(--shadow-lg);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -1529,7 +1529,7 @@ html {
 .studio-app .react-flow__minimap {
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 }
 
@@ -1590,10 +1590,16 @@ html {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   border: 1px solid var(--input);
+  /* Controls stay crisp at md; the card surface is promoted to xl below. */
   border-radius: var(--radius-md);
   outline: none;
   background: var(--background);
   color: var(--foreground);
+}
+
+/* The attribute-editor card is a surface, not a control — modern 12px corner. */
+.rune-attribute-editor__card {
+  border-radius: var(--radius-xl);
 }
 
 .rune-type-creator__kind:focus,
@@ -1832,14 +1838,14 @@ html {
 .studio-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .studio-brand__mark {
   width: 22px;
   height: 22px;
   border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1984,8 +1990,8 @@ html {
   justify-content: center;
   min-width: 22px;
   height: 18px;
-  padding: 0 6px;
-  border-radius: 9px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-lg);
   background:
     linear-gradient(
       180deg,
@@ -2012,10 +2018,10 @@ html {
 .studio-app .kind-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   height: 18px;
-  padding: 0 8px 0 6px;
-  border-radius: 9px;
+  padding: 0 var(--space-2) 0 var(--space-2);
+  border-radius: var(--radius-lg);
   font-size: 10px;
   font-family: var(--font-mono);
   font-weight: 500;
@@ -2061,7 +2067,7 @@ html {
 }
 
 .studio-app [data-slot='tabs-list'][data-size='sm'] [data-slot='tabs-trigger'] {
-  border-radius: 6px 6px 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   font-size: 12px;
   height: 28px;
   position: relative;
@@ -2075,7 +2081,7 @@ html {
   bottom: -0.5px;
   height: 1.5px;
   background: var(--primary);
-  border-radius: 1.5px;
+  border-radius: var(--radius-xs);
 }
 
 /* ─── Center stack — panes split side-by-side via paneswitch pill ────────── */
@@ -2083,7 +2089,7 @@ html {
 .studio-app .studio-center-stack__bar {
   display: flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: var(--space-1) var(--space-2);
   flex-shrink: 0;
   border-bottom: 0.5px solid var(--border);
 }
@@ -2100,7 +2106,7 @@ html {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--muted-foreground);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;

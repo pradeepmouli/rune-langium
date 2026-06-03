@@ -12,8 +12,30 @@ export default {
   extends: ['stylelint-config-standard'],
   plugins: [
     '../../packages/visual-editor/stylelint-plugins/no-raw-color.mjs',
+    '../../packages/visual-editor/stylelint-plugins/no-raw-geometry.mjs',
+    '../../packages/visual-editor/stylelint-plugins/no-undefined-token.mjs',
   ],
   rules: {
+    // Keep radius + spacing on the design-system token ladders so raw px can't
+    // drift back in. Hairline insets ≤3px and custom-property defs are allowed.
+    'rune/no-raw-geometry': true,
+
+    // Every var(--…) must resolve in the token layer, this file, or a known
+    // runtime-injected name. Replaces no-undefined-vars.test.ts (a lint rule is
+    // rename-proof + needs no hand-maintained token list).
+    'rune/no-undefined-token': [true, {
+      importFrom: [
+        '../../packages/design-system/src/tokens.css',
+        '../../packages/design-system/src/theme.css',
+      ],
+      // `kind-color` is provided per-instance via inline style (`.kind-chip`).
+      ignore: ['kind-color'],
+      // Framework / runtime-injected vars never present in a static CSS file:
+      // Rune layout vars (STRUCTURE_LAYOUT_CSS_VARS), React Flow (`--xy-*`),
+      // Radix/base-ui positioners, dockview (`--dv-*`).
+      ignorePrefixes: ['rune-', 'xy-', 'radix-', 'dv-'],
+    }],
+
     // ── rune custom rules ──────────────────────────────────────────────────
     // Require design tokens for color values; raw literals only allowed in
     // custom-property definitions (token files) or as var() fallbacks.
