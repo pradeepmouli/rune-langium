@@ -238,8 +238,8 @@ function sizeData(
   // their natural y from the wrapper origin: HEADER_HEIGHT for row 0 top,
   // plus i*ROW_HEIGHT, plus half-row to reach center.
   const rowOffsets = new Map<string, number>();
-  for (let i = 0; i < rows.length; i++) {
-    rowOffsets.set(rows[i].attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+  for (const [i, row] of rows.entries()) {
+    rowOffsets.set(row.attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
   let childrenWidth = 0;
@@ -293,8 +293,8 @@ function sizeChoice(
   // their identity IS the referenced type). Header is flush with the wrapper
   // top (no top NODE_PADDING — see sizeData for matching rationale).
   const rowOffsets = new Map<string, number>();
-  for (let i = 0; i < node.options.length; i++) {
-    rowOffsets.set(node.options[i].typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+  for (const [i, option] of node.options.entries()) {
+    rowOffsets.set(option.typeName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
   const rowsHeight = HEADER_HEIGHT + node.options.length * ROW_HEIGHT;
 
@@ -345,8 +345,8 @@ const EMPTY_EXPANSIONS: ReadonlyMap<string, string> = new Map();
  */
 function sizeEnum(node: StructureEnumNode): SizedNode {
   const rowOffsets = new Map<string, number>();
-  for (let i = 0; i < node.values.length; i++) {
-    rowOffsets.set(node.values[i], HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+  for (const [i, value] of node.values.entries()) {
+    rowOffsets.set(value, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
   // e2e-batch fix #12: per-node width based on the longest enum value name.
   const rowsColWidth = estimateRowsColWidth(
@@ -392,8 +392,8 @@ function sizeBase(
   // CSS applies `padding: 16px` (BASE_PADDING) inside .rune-graph-group--base,
   // pushing every rendered row down by that amount relative to the node origin.
   const rowOffsets = new Map<string, number>();
-  for (let i = 0; i < node.baseRows.length; i++) {
-    rowOffsets.set(node.baseRows[i].attrName, BASE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+  for (const [i, baseRow] of node.baseRows.entries()) {
+    rowOffsets.set(baseRow.attrName, BASE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
 
   let expansionsWidth = 0;

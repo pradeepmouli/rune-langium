@@ -574,18 +574,24 @@ function materializeDataWithInheritance(
   const basePaths: Array<ReadonlyArray<string>> = [];
   let prevRfId = outermostInstanceId;
   let prevPath: ReadonlyArray<string> = instancePath;
-  for (let i = 0; i < baseCanonicalIds.length; i++) {
+  // `.entries()` (not `for (let i…)`) so `baseCanonicalId` is typed `string`,
+  // not `string | undefined` — the iterator yields the element directly. We
+  // also capture the just-computed rfId/path locally instead of re-reading
+  // `baseRfIds[i]`/`basePaths[i]`, which removes the redundant index access.
+  for (const [i, baseCanonicalId] of baseCanonicalIds.entries()) {
+    let myRfId: string;
+    let myPath: ReadonlyArray<string>;
     if (i === 0) {
-      baseRfIds.push(outermostInstanceId);
-      basePaths.push(instancePath);
+      myRfId = outermostInstanceId;
+      myPath = instancePath;
     } else {
-      const myRfId = adapterDerivedInstanceId(prevRfId, baseCanonicalIds[i]);
-      const myPath = [...prevPath, prevRfId];
-      baseRfIds.push(myRfId);
-      basePaths.push(myPath);
+      myRfId = adapterDerivedInstanceId(prevRfId, baseCanonicalId);
+      myPath = [...prevPath, prevRfId];
     }
-    prevRfId = baseRfIds[i];
-    prevPath = basePaths[i];
+    baseRfIds.push(myRfId);
+    basePaths.push(myPath);
+    prevRfId = myRfId;
+    prevPath = myPath;
   }
   // Focused node sits one __derived deeper than the innermost base (or IS
   // the outermost wrapper when there's no inheritance).
@@ -613,8 +619,8 @@ function materializeDataWithInheritance(
   let childInstanceId = focusedRfId;
   let outermostCanonical = focused.id;
   let outermostRfId = focusedRfId;
-  for (let ai = 0; ai < ancestors.length; ai++) {
-    const baseNode = ancestors[ai];
+  // `.entries()` yields `baseNode` typed `AdapterNode` (not `… | undefined`).
+  for (const [ai, baseNode] of ancestors.entries()) {
     const baseCanonicalId = `${focused.id}::__base::${baseNode.id}`;
     // Same defensive filter as walkAndExpand — null entries can briefly appear
     // in inherited-attribute arrays during partial-parse.
@@ -625,8 +631,11 @@ function materializeDataWithInheritance(
     // Look up the rfId+path computed for this base container above. Loop
     // walks INNERMOST → OUTERMOST; arrays are OUTERMOST → INNERMOST.
     const oi = ancestors.length - 1 - ai;
-    const baseRfId = baseRfIds[oi];
-    const baseRowInstancePath = basePaths[oi];
+    // `baseRfIds`/`basePaths` were built with exactly `ancestors.length`
+    // entries above, and `oi ∈ [0, ancestors.length)`, so both reads are
+    // in-bounds — the non-null assertions encode that structural invariant.
+    const baseRfId = baseRfIds[oi]!;
+    const baseRowInstancePath = basePaths[oi]!;
 
     const baseExpansions = new Map<string, string>();
     // Cycle guard set carries CANONICAL ids. Include focused.id, the base

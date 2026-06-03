@@ -48,35 +48,15 @@ function forceExitAfterBuild(): Plugin {
   };
 }
 
-export default defineConfig(({ command }) => {
-  // Dev-only source aliases. The studio's `@rune-langium/visual-editor`
-  // dependency resolves to its built `dist/` via the package `exports`, so
-  // edits to `packages/visual-editor/src` don't hot-reload in `vite dev`
-  // (unlike `@rune-langium/design-system`, whose exports already point at
-  // `src`). Under `command === 'serve'` we alias the package to its source so
-  // component + style edits HMR directly. Production `vite build`
-  // (`command === 'build'`) is untouched and keeps consuming the package's
-  // published `dist/`, so shipped bundles are unaffected.
-  // Array form (not object) so the bare-package entry can be an anchored RegExp.
-  // A string alias matches by prefix (`importee === find || startsWith(find + '/')`),
-  // so a bare `@rune-langium/visual-editor` entry would greedily swallow subpath
-  // imports like `@rune-langium/visual-editor/styles.css` and rewrite them to
-  // `…/src/index.ts/styles.css` (unresolvable). The exact RegExp matches only the
-  // bare specifier; `styles.css` gets its own explicit entry, listed first.
-  const devSrcAliases =
-    command === 'serve'
-      ? [
-          {
-            find: '@rune-langium/visual-editor/styles.css',
-            replacement: fileURLToPath(new URL('../../packages/visual-editor/src/styles.css', import.meta.url))
-          },
-          {
-            find: /^@rune-langium\/visual-editor$/,
-            replacement: fileURLToPath(new URL('../../packages/visual-editor/src/index.ts', import.meta.url))
-          }
-        ]
-      : [];
-
+export default defineConfig(() => {
+  // `@rune-langium/visual-editor` resolves to its `src/` for BOTH `vite dev`
+  // and `vite build` via the package's `exports` map (which points at source,
+  // mirroring `@rune-langium/design-system`). So source edits HMR directly and
+  // production bundles compile from source — no built `dist/` required, and no
+  // serve-only alias to keep in sync. A previous dev-only `resolve.alias`
+  // entry duplicated this resolution; the exports map is now the single source
+  // of truth (it also handles subpath imports like `…/styles.css` correctly,
+  // which a bare-prefix string alias could not).
   return {
     base: process.env.VITE_BASE_URL || (process.env.CF_PAGES === '1' ? '/rune-studio/studio/' : '/'),
     // Plugin order: z2fVite BEFORE react() per upstream's quickstart, so the
@@ -122,10 +102,7 @@ export default defineConfig(({ command }) => {
       process: '({argv:[],platform:"browser",env:{},exit:()=>{},cwd:()=>"/"})'
     },
     resolve: {
-      alias: [
-        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
-        ...devSrcAliases
-      ],
+      alias: [{ find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) }],
       dedupe: [
         'react',
         'react-dom',

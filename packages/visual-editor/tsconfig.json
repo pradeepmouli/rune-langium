@@ -7,6 +7,13 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
+    // Aligned with apps/studio/tsconfig.json. Without this, visual-editor's own
+    // type-check is LOOSER than its studio consumer: now that studio resolves
+    // visual-editor SOURCE (package.json exports → ./src) instead of a pre-built
+    // .d.ts, studio re-type-checks this source under its stricter options.
+    // Matching the flag here means `pnpm --filter visual-editor type-check`
+    // catches the same indexed-access bugs studio would.
+    "noUncheckedIndexedAccess": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
