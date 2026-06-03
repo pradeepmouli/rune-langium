@@ -1220,25 +1220,6 @@ html {
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
 }
 
-.studio-source-view__content::-webkit-scrollbar {
-  width: var(--studio-scrollbar-width);
-  height: var(--studio-scrollbar-width);
-}
-
-.studio-source-view__content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.studio-source-view__content::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background-clip: padding-box;
-  background-color: var(--studio-scrollbar-thumb);
-}
-
-.studio-source-view__content::-webkit-scrollbar-thumb:hover {
-  background-color: var(--studio-scrollbar-thumb-hover);
-}
 
 .studio-source-view__code {
   font-family: var(--font-mono);
@@ -1763,12 +1744,6 @@ html {
 }
 
 /* ── Glass morphism utilities ────────────────────────────────── */
-.glass-surface {
-  background: oklch(0.16 0.02 280 / 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
 .glass-header {
   background: oklch(0.14 0.02 280 / 0.8);
   backdrop-filter: blur(20px);
@@ -1800,7 +1775,11 @@ html {
   color: oklch(0.75 0.01 280) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
 }
 
@@ -1846,7 +1825,11 @@ html {
   background: oklch(1 0 0 / 0.04) !important;
   border: 1px solid oklch(1 0 0 / 0.08) !important;
   color: oklch(0.75 0.01 280) !important;
-  transition: all 0.2s ease;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast);
   box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
 }
 
