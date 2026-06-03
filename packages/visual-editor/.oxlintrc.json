@@ -1,0 +1,4 @@
+{
+  "jsPlugins": ["./oxlint-plugins/no-palette-utility.mjs"],
+  "rules": { "rune/no-palette-utility": "error" }
+}

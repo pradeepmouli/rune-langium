@@ -26,44 +26,22 @@ const THEME_SRC = readFileSync(
 );
 
 describe('design-system syntax tokens (canonical values)', () => {
-  it('syntax.keyword is #C792EA', () => {
-    expect(syntax.keyword).toBe('#C792EA');
-  });
-
-  it('syntax.function is #82AAFF', () => {
-    expect(syntax.function).toBe('#82AAFF');
-  });
-
-  it('syntax.attribute is #82AAFF', () => {
-    expect(syntax.attribute).toBe('#82AAFF');
-  });
-
-  it('syntax.type is #00D4AA', () => {
-    expect(syntax.type).toBe('#00D4AA');
-  });
-
-  it('syntax.operator is #8A8A96', () => {
-    expect(syntax.operator).toBe('#8A8A96');
-  });
-
-  it('syntax.comment is #5C5C6A', () => {
-    expect(syntax.comment).toBe('#5C5C6A');
-  });
-
-  it('syntax.constant is #E8913A', () => {
-    expect(syntax.constant).toBe('#E8913A');
-  });
-
-  it('syntax.number is #E8913A', () => {
-    expect(syntax.number).toBe('#E8913A');
-  });
-
-  it('syntax.string is #C3E88D', () => {
-    expect(syntax.string).toBe('#C3E88D');
-  });
-
-  it('syntax.variable is #00D4AA', () => {
-    expect(syntax.variable).toBe('#00D4AA');
+  // One object-equality pins every canonical hex value AND the exact key set —
+  // `toEqual` also fails on an added/removed key, so it's strictly stronger than
+  // the 10 per-key `it` blocks it replaces.
+  it('syntax tokens match the canonical palette', () => {
+    expect(syntax).toEqual({
+      keyword: '#C792EA',
+      type: '#00D4AA',
+      attribute: '#82AAFF',
+      string: '#C3E88D',
+      comment: '#5C5C6A',
+      number: '#E8913A',
+      function: '#82AAFF',
+      operator: '#8A8A96',
+      constant: '#E8913A',
+      variable: '#00D4AA'
+    });
   });
 });
 
