@@ -1978,37 +1978,10 @@ html {
   border-left: 2px solid var(--color-info);
 }
 
-/* ─── Number chiclet ─────────────────────────────────────────────────
- * Tabular-numeral count pill. Stable width across digit counts so
- * neighboring rows align to the right edge. Used in the namespace
- * explorer to display visible-of-total counts and per-row member
- * counts (replaces the generic shadcn Badge for numeric data).
- */
-.studio-app .number-chiclet {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 18px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-lg);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--muted) 88%, transparent),
-      color-mix(in srgb, var(--background) 76%, transparent)
-    );
-  color: color-mix(in srgb, var(--muted-foreground) 92%, white 8%);
-  font-size: var(--text-2xs);
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  border: 0.5px solid color-mix(in srgb, var(--border) 86%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 9%, transparent);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
+/* `.number-chiclet` moved to the <NumberChiclet> component
+ * (packages/design-system/src/ui/number-chiclet.tsx) — the pilot for the
+ * component-override convention: styling lives with the component (utilities +
+ * inline component CSS vars), not here in the global app.css. */
 
 /* ─── Kind chip ──────────────────────────────────────────────────────
  * Compact "5 data" / "2 choice" pill with a colored dot, count, and

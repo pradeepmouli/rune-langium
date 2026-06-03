@@ -16,6 +16,7 @@
 import type { JSX } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 
 // ---------------------------------------------------------------------------
 // Flat-tree geometry — the single source of truth for both the namespace
@@ -80,7 +81,7 @@ export function NamespaceSegmentHeaderRow({
           {fullPath || '(default)'}
         </button>
 
-        <span className="number-chiclet shrink-0">{count}</span>
+        <NumberChiclet>{count}</NumberChiclet>
       </div>
     </div>
   );
