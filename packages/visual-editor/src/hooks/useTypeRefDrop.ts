@@ -122,8 +122,8 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
     // accept only if one of them is in acceptableMimes (enforces accept during hover).
     const kindMimePrefix = `${TYPE_REF_PAYLOAD_MIME}+`;
     let hasAnyKindSpecific = false;
-    for (let i = 0; i < types.length; i++) {
-      const t = types[i].toLowerCase();
+    for (const type of types) {
+      const t = type.toLowerCase();
       if (t.startsWith(kindMimePrefix)) {
         hasAnyKindSpecific = true;
         if (acceptableMimes.has(t)) return true;
@@ -132,8 +132,8 @@ export function useTypeRefDrop(opts: UseTypeRefDropOptions): UseTypeRefDropResul
     if (hasAnyKindSpecific) return false; // kind-specific present but none matched
     // Phase 2: canonical MIME alone — source didn't register any kind-specific MIME.
     // Drop handler still validates via parsePayload + accept before firing onDrop.
-    for (let i = 0; i < types.length; i++) {
-      if (types[i].toLowerCase() === TYPE_REF_PAYLOAD_MIME) return true;
+    for (const type of types) {
+      if (type.toLowerCase() === TYPE_REF_PAYLOAD_MIME) return true;
     }
     return false;
   }

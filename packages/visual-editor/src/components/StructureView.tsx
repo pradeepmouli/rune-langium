@@ -36,8 +36,10 @@ import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
 function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: T) => boolean = Object.is): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (!eq(a[i], b[i])) return false;
+  // `.entries()` types `av` as `T`; `b[i]` is in-bounds because the lengths
+  // were just checked equal (the `!` encodes that).
+  for (const [i, av] of a.entries()) {
+    if (!eq(av, b[i]!)) return false;
   }
   return true;
 }
