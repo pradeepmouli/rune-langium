@@ -139,7 +139,11 @@
    * derived from the single `--radius` knob and MUST match theme.css's
    * `@theme inline` bridge so hand-written `var(--radius-*)` and the Tailwind
    * `rounded-*` utilities render the SAME corner — they previously diverged
-   * (this file once hardcoded md=8/lg=12 vs the bridge's 6/8). */
+   * (this file once hardcoded md=8/lg=12 vs the bridge's 6/8). The `--radius`
+   * knob is declared HERE (the primitive layer) — not only in theme.css — so a
+   * tokens.css-only consumer (`@rune-langium/design-system/tokens.css` imported
+   * without theme.css) can still resolve the calc()-derived ladder. */
+  --radius: 8px;
   --radius-xs: calc(var(--radius) - 6px); /* 2px @ --radius:8 */
   --radius-sm: calc(var(--radius) - 4px); /* 4px */
   --radius-md: calc(var(--radius) - 2px); /* 6px */
