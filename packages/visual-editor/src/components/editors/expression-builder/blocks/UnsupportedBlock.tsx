@@ -23,7 +23,7 @@ export function UnsupportedBlock({ node }: UnsupportedBlockProps) {
       data-block="unsupported"
       title="This expression type is not yet supported in the visual builder"
     >
-      <span className="text-[10px]">⚠</span>
+      <span className="text-3xs">⚠</span>
       <span className="max-w-[200px] truncate">{rawText}</span>
     </span>
   );

@@ -292,7 +292,7 @@ function AttributeRow({
 
       <div className="min-w-0 justify-self-end flex items-center gap-1">
         {isOverride && (
-          <span data-slot="override-badge" className="text-[11px] text-muted-foreground italic whitespace-nowrap">
+          <span data-slot="override-badge" className="text-2xs text-muted-foreground italic whitespace-nowrap">
             override
           </span>
         )}
@@ -304,7 +304,7 @@ function AttributeRow({
             type="button"
             onClick={onRevert}
             disabled={effectiveReadOnly}
-            className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
+            className="shrink-0 rounded border border-border px-2 py-0.5 text-2xs
               text-muted-foreground transition-colors hover:text-foreground hover:border-input
               disabled:opacity-30 disabled:cursor-not-allowed"
             aria-label={`Revert override for attribute ${committedName || 'unnamed'}`}
@@ -400,12 +400,12 @@ function InheritedAttributeRow({
         />
       </div>
 
-      <span data-slot="attribute-cardinality" className="shrink-0 text-[11px] text-muted-foreground">
+      <span data-slot="attribute-cardinality" className="shrink-0 text-2xs text-muted-foreground">
         {cardinality}
       </span>
 
       <div className="min-w-0 justify-self-end flex items-center gap-1">
-        <span data-slot="inherited-from-label" className="text-[11px] text-muted-foreground italic whitespace-nowrap">
+        <span data-slot="inherited-from-label" className="text-2xs text-muted-foreground italic whitespace-nowrap">
           inherited from {ancestorName}
         </span>
 
@@ -415,7 +415,7 @@ function InheritedAttributeRow({
             type="button"
             onClick={onOverride}
             aria-label={`Override inherited attribute ${name} from ${ancestorName}`}
-            className="shrink-0 rounded border border-border px-2 py-0.5 text-[11px]
+            className="shrink-0 rounded border border-border px-2 py-0.5 text-2xs
               text-muted-foreground transition-colors hover:text-foreground hover:border-input"
           >
             Override

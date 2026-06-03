@@ -353,7 +353,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
               </span>
               {activeFile?.relativePath ? (
                 <span
-                  className="block max-w-[22rem] truncate text-[11px] text-muted-foreground"
+                  className="block max-w-[22rem] truncate text-2xs text-muted-foreground"
                   data-testid="codegen-relative-path"
                   title={activeFile.relativePath}
                 >
@@ -361,7 +361,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
                 </span>
               ) : null}
               {statusMessage ? (
-                <span className="block max-w-[22rem] truncate text-[11px] text-muted-foreground">{statusMessage}</span>
+                <span className="block max-w-[22rem] truncate text-2xs text-muted-foreground">{statusMessage}</span>
               ) : null}
             </div>
           </div>

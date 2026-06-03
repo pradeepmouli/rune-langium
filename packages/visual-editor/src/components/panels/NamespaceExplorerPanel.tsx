@@ -222,7 +222,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
         <div className="flex items-center justify-between px-3 py-2 border-b">
           <div className="min-w-0">
             <span className="text-sm font-semibold">Type explorer</span>
-            <p className="text-[11px] text-muted-foreground">Browse namespaces and types in the active source.</p>
+            <p className="text-2xs text-muted-foreground">Browse namespaces and types in the active source.</p>
           </div>
           <span className="number-chiclet" data-testid="namespace-explorer-count">
             {visibleCount}/{totalTypes}
@@ -238,7 +238,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               placeholder="Filter types or namespaces..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-7 border-border/70 bg-background/55 pl-8 pr-2 text-[11px] shadow-none placeholder:text-muted-foreground/70"
+              className="h-7 border-border/70 bg-background/55 pl-8 pr-2 text-2xs shadow-none placeholder:text-muted-foreground/70"
               data-testid="namespace-search"
             />
           </div>
@@ -404,7 +404,7 @@ function NamespaceHeaderRow({ row, isGraphVisible, onToggleTreeExpand }: Namespa
             the user that types inside are draggable. Stays hidden until hover
             so it doesn't compete visually with the type-count chiclet. */}
         <span
-          className="shrink-0 px-1 text-[10px] leading-none text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100"
+          className="shrink-0 px-1 text-3xs leading-none text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100"
           aria-hidden="true"
           title="Types in this namespace can be dragged onto Structure rows or the Source editor"
         >
@@ -583,7 +583,7 @@ function TypeItemRow({
             render={
               <span className="inline-flex items-center gap-0.5 text-muted-foreground">
                 <Link className="size-3" />
-                <span className="text-[10px]">{refCount}</span>
+                <span className="text-3xs">{refCount}</span>
               </span>
             }
           />

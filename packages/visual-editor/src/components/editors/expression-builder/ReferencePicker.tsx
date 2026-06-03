@@ -71,11 +71,11 @@ export function ReferencePicker({ open, scope, onSelect, onClose }: ReferencePic
                 data-testid={`ref-option-${entry.name}`}
               >
                 <span className="font-mono font-medium">{entry.name}</span>
-                {entry.typeName && <span className="text-[10px] text-muted-foreground">{entry.typeName}</span>}
+                {entry.typeName && <span className="text-3xs text-muted-foreground">{entry.typeName}</span>}
                 {entry.cardinality && (
-                  <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{entry.cardinality}</span>
+                  <span className="rounded bg-muted px-1 text-3xs text-muted-foreground">{entry.cardinality}</span>
                 )}
-                <span className="ml-auto rounded bg-muted px-1 text-[9px] text-muted-foreground">{entry.origin}</span>
+                <span className="ml-auto rounded bg-muted px-1 text-3xs text-muted-foreground">{entry.origin}</span>
               </CommandItem>
             ))}
           </CommandList>

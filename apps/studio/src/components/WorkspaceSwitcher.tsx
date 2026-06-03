@@ -84,7 +84,7 @@ export function WorkspaceSwitcher({ onOpen, onCreate: _onCreate, onDelete }: Pro
                   className="flex-1 flex items-center gap-2 text-left cursor-pointer"
                 >
                   <span className="font-medium truncate">{row.name}</span>
-                  <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
+                  <span className="shrink-0 text-3xs px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
                     {KIND_LABEL[row.kind]}
                   </span>
                   <span className="shrink-0 ml-auto text-xs text-muted-foreground">

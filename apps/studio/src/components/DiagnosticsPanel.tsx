@@ -290,9 +290,9 @@ function PanelHeader({
         <div className="flex items-center gap-2 text-xs font-medium text-foreground">
           <FileWarning className="size-4 text-muted-foreground" aria-hidden />
           <span>Problems</span>
-          <span className="font-mono text-[11px] text-muted-foreground">{titleMeta}</span>
+          <span className="font-mono text-2xs text-muted-foreground">{titleMeta}</span>
         </div>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">
+        <p className="mt-0.5 text-2xs text-muted-foreground">
           {hasActiveSeverityFilters
             ? 'Filter active — only matching severities are shown.'
             : 'Review diagnostics and jump straight to the affected source.'}
@@ -315,7 +315,7 @@ function PanelHeader({
           />
           <PopoverContent className="w-56 p-2" align="end" sideOffset={6}>
             <div className="space-y-1">
-              <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="px-2 pb-1 text-3xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Visible severities
               </p>
               {SEVERITY_ORDER.map((severity) => {
@@ -343,7 +343,7 @@ function PanelHeader({
                       />
                       <span className="capitalize">{severity}</span>
                     </span>
-                    <span className="text-[10px] font-medium uppercase tracking-[0.12em]">{active ? 'On' : 'Off'}</span>
+                    <span className="text-3xs font-medium uppercase tracking-[0.12em]">{active ? 'On' : 'Off'}</span>
                   </button>
                 );
               })}
@@ -371,7 +371,7 @@ function PanelHeader({
                 onClick={onToggleSummary}
               >
                 <span>{showSummary ? 'Hide summary row' : 'Show summary row'}</span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                <span className="text-3xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   {showSummary ? 'On' : 'Off'}
                 </span>
               </button>
@@ -382,7 +382,7 @@ function PanelHeader({
                 disabled={!hasActiveSeverityFilters}
               >
                 <span>Show all severities</span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Reset</span>
+                <span className="text-3xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Reset</span>
               </button>
             </div>
           </PopoverContent>
@@ -509,7 +509,7 @@ function DiagnosticItemRow({ row, onNavigate }: DiagnosticItemRowProps) {
         )}
       </span>
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{diag.message}</span>
-      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+      <span className="shrink-0 font-mono text-2xs text-muted-foreground">
         {line}:{col}
       </span>
     </button>
