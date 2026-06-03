@@ -132,12 +132,20 @@
   --syntax-operator: oklch(0.6374 0.0178 285.88);
   --syntax-constant: oklch(0.7321 0.1441 61.66);
   --syntax-variable: oklch(0.7747 0.1507 171.66);
-  /* Radius ladder lives ONCE in theme.css's `@theme inline` block (it emits the
-   * `--radius-*` custom properties to `:root,:host` AND feeds the Tailwind
-   * `rounded-*` utilities from the same source, so hand-written `var(--radius-*)`
-   * and `rounded-*` can't diverge). It is intentionally NOT redefined here —
-   * a previous duplicate copy in this file disagreed with the bridge (md=8/lg=12
-   * vs 6/8) and made `var(--radius-lg)` and `rounded-lg` render different corners. */
+  /* Radius ladder — declared here in PLAIN `:root` (not only theme.css's
+   * `@theme inline` block) so `var(--radius-*)` resolves for STANDALONE consumers
+   * of visual-editor's plain CSS, which import this file but do NOT run Tailwind
+   * (Tailwind is what emits the `@theme inline` vars to `:root`). The values are
+   * derived from the single `--radius` knob and MUST match theme.css's
+   * `@theme inline` bridge so hand-written `var(--radius-*)` and the Tailwind
+   * `rounded-*` utilities render the SAME corner — they previously diverged
+   * (this file once hardcoded md=8/lg=12 vs the bridge's 6/8). */
+  --radius-xs: calc(var(--radius) - 6px); /* 2px @ --radius:8 */
+  --radius-sm: calc(var(--radius) - 4px); /* 4px */
+  --radius-md: calc(var(--radius) - 2px); /* 6px */
+  --radius-lg: var(--radius); /* 8px */
+  --radius-xl: calc(var(--radius) + 4px); /* 12px */
+  --radius-full: 9999px;
   --button-height: 40px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
