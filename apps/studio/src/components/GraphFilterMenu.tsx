@@ -19,11 +19,11 @@ import { cn } from '@rune-langium/design-system/utils';
 
 /** Node kind display config. */
 const NODE_KINDS: Array<{ kind: TypeKind; label: string; color: string; icon: typeof GitBranch }> = [
-  { kind: 'data', label: 'Data', color: '#00D4AA', icon: Braces },
-  { kind: 'choice', label: 'Choice', color: '#E8913A', icon: List },
-  { kind: 'enum', label: 'Enum', color: '#8B7BF4', icon: Hash },
-  { kind: 'func', label: 'Function', color: '#82AAFF', icon: ArrowRight },
-  { kind: 'record', label: 'Record', color: '#82AAFF', icon: FileText },
+  { kind: 'data', label: 'Data', color: 'var(--color-data)', icon: Braces },
+  { kind: 'choice', label: 'Choice', color: 'var(--color-choice)', icon: List },
+  { kind: 'enum', label: 'Enum', color: 'var(--color-enum)', icon: Hash },
+  { kind: 'func', label: 'Function', color: 'var(--color-func)', icon: ArrowRight },
+  { kind: 'record', label: 'Record', color: 'var(--color-data)', icon: FileText },
   { kind: 'typeAlias', label: 'Type Alias', color: '#8A8A96', icon: Tag },
   { kind: 'basicType', label: 'Basic Type', color: '#8A8A96', icon: Tag },
   { kind: 'annotation', label: 'Annotation', color: '#8A8A96', icon: Tag }
@@ -31,10 +31,10 @@ const NODE_KINDS: Array<{ kind: TypeKind; label: string; color: string; icon: ty
 
 /** Edge kind display config. */
 const EDGE_KINDS: Array<{ kind: EdgeKind; label: string; color: string; dashed?: boolean }> = [
-  { kind: 'extends', label: 'Inheritance', color: '#00D4AA' },
-  { kind: 'enum-extends', label: 'Enum Inheritance', color: '#8B7BF4' },
-  { kind: 'attribute-ref', label: 'References', color: '#82AAFF', dashed: true },
-  { kind: 'choice-option', label: 'Choice Options', color: '#E8913A' },
+  { kind: 'extends', label: 'Inheritance', color: 'var(--color-data)' },
+  { kind: 'enum-extends', label: 'Enum Inheritance', color: 'var(--color-enum)' },
+  { kind: 'attribute-ref', label: 'References', color: 'var(--color-edge-ref)', dashed: true },
+  { kind: 'choice-option', label: 'Choice Options', color: 'var(--color-choice)' },
   { kind: 'type-alias-ref', label: 'Type Alias Refs', color: '#8A8A96', dashed: true }
 ];
 

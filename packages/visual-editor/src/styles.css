@@ -623,7 +623,7 @@ button[data-navigable]:focus-visible {
 .rune-toolbar-button-active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #ffffff;
+  color: var(--primary-foreground);
 }
 
 .rune-toolbar-select {
@@ -1474,12 +1474,12 @@ button[data-navigable]:focus-visible {
 }
 
 .rune-node-row--diagnostic-warn {
-  border-left: 3px solid var(--warning, #ecc94b);
+  border-left: 3px solid var(--color-warning, #ecc94b);
   padding-left: var(--rune-row-indent, 6px);
 }
 
 .rune-node-row--diagnostic-info {
-  border-left: 3px solid var(--info, #63b3ed);
+  border-left: 3px solid var(--color-info, #63b3ed);
   padding-left: var(--rune-row-indent, 6px);
 }
 
