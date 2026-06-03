@@ -24,6 +24,8 @@ const messages = stylelint.utils.ruleMessages(ruleName, {
     `"${prop}: ${value}" must use a radius token — var(--radius-xs|sm|md|lg|xl|full), not a raw px value.`,
   space: (prop, value) =>
     `"${prop}: ${value}" must use a spacing token — var(--space-N), not a raw px value (literals ≤3px are allowed for hairline insets).`,
+  font: (prop, value) =>
+    `"${prop}: ${value}" must use a type token — var(--text-3xs|2xs|xs|sm|md|base|lg|xl|2xl|3xl), not a raw px/rem value.`,
 });
 
 const meta = {
@@ -80,6 +82,11 @@ const rule = (primary) => (root, result) => {
     } else if (SPACE_PROPS.has(prop)) {
       if (pxValues(bare).some((n) => n >= 4)) {
         stylelint.utils.report({ message: messages.space(decl.prop, decl.value), node: decl, result, ruleName });
+      }
+    } else if (prop === 'font-size') {
+      // any raw px/rem literal must be a --text-* token (the type scale).
+      if (/[0-9.]+(?:px|rem)/.test(bare)) {
+        stylelint.utils.report({ message: messages.font(decl.prop, decl.value), node: decl, result, ruleName });
       }
     }
   });
