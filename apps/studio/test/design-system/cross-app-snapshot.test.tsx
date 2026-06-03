@@ -12,45 +12,16 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Heading } from '@rune-langium/design-system/ui/heading';
 import { AppSwitcher } from '@rune-langium/design-system/ui/app-switcher';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const TOKENS_CSS = resolve(__dirname, '../../../../packages/design-system/src/tokens.css');
-const THEME_CSS = resolve(__dirname, '../../../../packages/design-system/src/theme.css');
-
 describe('cross-app snapshot (T093)', () => {
-  it('the primitive token layer defines every variable family the primitives consume', () => {
-    // The token layer is tokens.css (raw primitives) + theme.css (the shadcn
-    // @theme bridge — where the `--radius-*` ladder now lives, derived from the
-    // single `--radius` knob). Check the union so a token defined in either file
-    // counts as "present in the layer".
-    const css = readFileSync(TOKENS_CSS, 'utf8') + '\n' + readFileSync(THEME_CSS, 'utf8');
-
-    // The primitives use these token families. Every one MUST be present
-    // in the token layer — otherwise the styling cascade silently drops
-    // to the browser default.
-    const required = [
-      '--color-accent-base',
-      '--color-foreground-primary',
-      '--color-border-default',
-      '--font-family-sans',
-      '--font-size-base',
-      '--font-weight-semibold',
-      '--space-3',
-      '--radius-md',
-      '--motion-duration-base'
-    ];
-    for (const v of required) {
-      expect(css).toContain(v);
-    }
-  });
-
+  // Token-layer presence (every var(--…) resolves) is now enforced statically by
+  // the `rune/no-undefined-token` stylelint rule at author-time, so the former
+  // hand-maintained "required token" assertion was retired. What remains here is
+  // component-render + a11y behaviour that only a render test can verify.
   it('Button primitive renders consistent class names across consumers', () => {
     const { rerender } = render(<Button>Primary</Button>);
     const primaryHtml = screen.getByRole('button').outerHTML;

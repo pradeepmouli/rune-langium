@@ -69,14 +69,10 @@ export const fonts = {
   mono: "'JetBrains Mono', ui-monospace, monospace"
 } as const;
 
-// Mirrors the CSS radius ladder (theme.css `@theme inline`, the single source)
-// at the default `--radius: 8px`: sm = --radius-4 = 4px, md = --radius-2 = 6px,
-// lg = --radius = 8px. Static JS mirror — update if the `--radius` knob changes.
-export const radii = {
-  sm: '4px',
-  md: '6px',
-  lg: '8px'
-} as const;
+// NOTE: there is intentionally no JS `radii` export. Radius lives only in CSS
+// (theme.css `@theme inline`, the single `--radius` knob) — a hand-kept JS
+// mirror was unused and pure drift surface, so it was removed. Read radii from
+// the CSS custom properties (`var(--radius-*)`) instead.
 
 export const syntax = {
   keyword: '#C792EA',
