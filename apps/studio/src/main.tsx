@@ -11,9 +11,9 @@ import { App } from './App.js';
 // Dockview chrome (tab strips, sash handles, abyss theme palette).
 // dockview's upstream theme CSS — UNLAYERED, sits above all @layer rules.
 import 'dockview-react/dist/styles/dockview.css';
-import './styles.css';
+import './app.css';
 // Rune structural overrides for DockviewReact (.rune-dock-theme). Imported
-// AFTER styles.css on purpose: styles.css's `@import 'tailwindcss'` must
+// AFTER app.css on purpose: app.css's `@import 'tailwindcss'` must
 // establish the canonical @layer order (theme, base, components, utilities)
 // FIRST. If dock-theme.css declared `@layer components` before that, it would
 // register `components` ahead of `base` and globally invert base↔components

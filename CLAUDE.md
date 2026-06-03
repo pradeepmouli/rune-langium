@@ -19,6 +19,7 @@ This keeps skills discoverable from both locations without duplication.
 ## Current Repo-Wide Notes
 
 - Studio prefers the embedded browser LSP worker transport first; direct WebSocket and Cloudflare Worker LSP remain fallbacks, and an explicit `wsUri` selects the direct WebSocket path.
+- Tailwind CSS 4 IntelliSense in this monorepo depends on `.vscode/settings.json` using `tailwindCSS.experimental.configFile` with `apps/studio/src/app.css` as the entry stylesheet mapped to `apps/studio/src/**`, `packages/design-system/src/**`, and `packages/visual-editor/src/**`.
 - Real CDM/source fixtures live under the hidden `.resources/` tree. Use those files for runtime repros, and guard/skip tests that depend on them when the corpus is absent.
 - Studio Playwright flows should wait for visible UI readiness rather than `networkidle` on routes that keep worker/LSP connections open.
 - Codegen is now split between a shared namespace walker and language-specific emitters. `packages/codegen/src/generator.ts` walks each namespace once via `packages/codegen/src/emit/namespace-walker.ts`, then passes a readonly `NamespaceWalkResult` to the Zod, TypeScript, and JSON Schema emitters.
