@@ -594,7 +594,7 @@ html {
   .studio-app .studio-topbar__cmdk kbd {
     font-family: var(--font-mono);
     font-size: 10.5px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--glass-kbd-bg);
     border: 0.5px solid var(--border);
     border-radius: 4px;
     padding: 1px 5px;
@@ -807,7 +807,7 @@ html {
     content: '';
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1.5px);
+    background-image: radial-gradient(circle, var(--glass-dot-grid) 1px, transparent 1.5px);
     background-size: 22px 22px;
     pointer-events: none;
   }
@@ -1191,7 +1191,7 @@ html {
   line-height: 1.5;
   color: var(--foreground);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   tab-size: 2;
 }
 
@@ -1734,9 +1734,9 @@ html {
    Uses !important to override Tailwind utility classes from CVA. */
 .glass-toolbar [data-slot="button"],
 .glass-toolbar [data-slot="button"][data-variant="secondary"] {
-  background: oklch(1 0 0 / 0.04) !important;
-  border: 1px solid oklch(1 0 0 / 0.08) !important;
-  color: oklch(0.75 0.01 280) !important;
+  background: var(--glass-btn-bg) !important;
+  border: 1px solid var(--glass-btn-border) !important;
+  color: var(--glass-btn-text) !important;
   backdrop-filter: var(--glass-blur-sm);
   -webkit-backdrop-filter: var(--glass-blur-sm);
   transition:
@@ -1749,9 +1749,9 @@ html {
 
 .glass-toolbar [data-slot="button"]:hover,
 .glass-toolbar [data-slot="button"][data-variant="secondary"]:hover {
-  background: oklch(1 0 0 / 0.08) !important;
-  border-color: oklch(1 0 0 / 0.15) !important;
-  color: oklch(0.92 0.01 280) !important;
+  background: var(--glass-btn-bg-hover) !important;
+  border-color: var(--glass-btn-border-hover) !important;
+  color: var(--glass-btn-text-hover) !important;
   transform: translateY(-1px);
   box-shadow:
     0 2px 8px oklch(0 0 0 / 0.3),
@@ -1765,9 +1765,9 @@ html {
 
 /* Active toggle state — teal glow ring */
 .glass-toolbar [data-slot="button"][data-variant="default"] {
-  background: oklch(0.78 0.17 168 / 0.12) !important;
-  border-color: oklch(0.78 0.17 168 / 0.35) !important;
-  color: oklch(0.78 0.17 168) !important;
+  background: var(--glass-btn-bg-active) !important;
+  border-color: var(--glass-btn-border-active) !important;
+  color: var(--glass-btn-text-active) !important;
   box-shadow:
     0 1px 2px oklch(0 0 0 / 0.2),
     0 0 8px oklch(0.78 0.17 168 / 0.15),
@@ -1775,9 +1775,9 @@ html {
 }
 
 .glass-toolbar [data-slot="button"][data-variant="default"]:hover {
-  background: oklch(0.78 0.17 168 / 0.18) !important;
-  border-color: oklch(0.78 0.17 168 / 0.5) !important;
-  color: oklch(0.85 0.15 168) !important;
+  background: var(--glass-btn-bg-active-hover) !important;
+  border-color: var(--glass-btn-border-active-hover) !important;
+  color: var(--glass-btn-text-active-hover) !important;
   box-shadow:
     0 2px 8px oklch(0 0 0 / 0.3),
     0 0 16px oklch(0.78 0.17 168 / 0.25),
@@ -1786,9 +1786,9 @@ html {
 
 /* Apply same glass treatment to header buttons */
 .glass-header [data-slot="button"] {
-  background: oklch(1 0 0 / 0.04) !important;
-  border: 1px solid oklch(1 0 0 / 0.08) !important;
-  color: oklch(0.75 0.01 280) !important;
+  background: var(--glass-btn-bg) !important;
+  border: 1px solid var(--glass-btn-border) !important;
+  color: var(--glass-btn-text) !important;
   transition:
     background-color var(--motion-fast),
     border-color var(--motion-fast),
@@ -1798,9 +1798,9 @@ html {
 }
 
 .glass-header [data-slot="button"]:hover {
-  background: oklch(1 0 0 / 0.08) !important;
-  border-color: oklch(1 0 0 / 0.15) !important;
-  color: oklch(0.92 0.01 280) !important;
+  background: var(--glass-btn-bg-hover) !important;
+  border-color: var(--glass-btn-border-hover) !important;
+  color: var(--glass-btn-text-hover) !important;
   transform: translateY(-1px);
   box-shadow:
     0 2px 8px oklch(0 0 0 / 0.3),
@@ -1812,10 +1812,10 @@ html {
   background: var(--glass-bg-overlay) !important;
   backdrop-filter: var(--glass-blur-lg);
   -webkit-backdrop-filter: var(--glass-blur-lg);
-  border-color: oklch(1 0 0 / 0.1) !important;
+  border-color: var(--glass-border-strong) !important;
   box-shadow:
     0 8px 32px oklch(0 0 0 / 0.5),
-    0 0 1px oklch(1 0 0 / 0.1);
+    0 0 1px var(--glass-border-strong);
 }
 
 /* ── Branded header ─────────────────────────────────────────── */
@@ -1933,8 +1933,8 @@ html {
 /* ── Refactory Dark — Grid background ────────────────────────── */
 .refactory-grid-bg {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+    linear-gradient(var(--glass-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--glass-grid-line) 1px, transparent 1px);
   background-size: 80px 80px;
 }
 
