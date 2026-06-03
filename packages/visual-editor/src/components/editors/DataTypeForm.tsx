@@ -414,7 +414,7 @@ function DataTypeForm({
 
           {/* Tabbed sections */}
           <Tabs defaultValue="members" className="-mx-4 flex-1 flex flex-col min-h-0">
-            <TabsList className="studio-insp-tabs px-4">
+            <TabsList size="sm" className="px-2">
               <TabsTrigger value="members">Members</TabsTrigger>
               <TabsTrigger value="conditions">Conditions</TabsTrigger>
               <TabsTrigger value="doc">Doc</TabsTrigger>

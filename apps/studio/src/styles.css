@@ -130,54 +130,18 @@ html {
 }
 
 @layer components {
-  .studio-app {
-    font-family: var(--font-sans);
-  }
+  /* Font cascade is handled at the body level:
+   *   • `body[data-studio-app='true']` (styles.css @layer base) sets var(--font-sans)
+   *   • `@layer base body` in design-system/theme.css does the same
+   *   • Tailwind v4 preflight `button, input, select, textarea { font: inherit }`
+   *     makes all form elements inherit from body, so no per-element overrides needed
+   *   • `h1-h6 { font-family: inherit }` in theme.css lets headings follow the body font
+   *   Previously three rules here repeated font-family: var(--font-sans) on .studio-app,
+   *   form elements, and h1-h6 — removed in Phase 4 style-override cleanup (redundant). */
 
-  /* Override the design-system's body font (Outfit) for all studio
-   * UI elements. Outfit is only used on the brand wordmark. Code/mono
-   * elements use var(--font-mono) via their own rules. */
-  .studio-app button,
-  .studio-app input,
-  .studio-app select,
-  .studio-app textarea,
-  .studio-app label,
-  .studio-app legend,
-  .studio-app fieldset,
-  .studio-app [data-slot] {
-    font-family: var(--font-sans);
-  }
-
-  /* design-system theme.css sets h1-h6 to --font-display (Outfit) globally;
-   * override so studio panels use the same sans stack as all other UI chrome. */
-  .studio-app h1,
-  .studio-app h2,
-  .studio-app h3,
-  .studio-app h4,
-  .studio-app h5,
-  .studio-app h6 {
-    font-family: var(--font-sans), system-ui, sans-serif;
-  }
-
-  .studio-app [data-slot='button'] {
-    cursor: pointer;
-    transition:
-      transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 160ms ease,
-      border-color 160ms ease,
-      color 160ms ease,
-      box-shadow 160ms ease,
-      opacity 160ms ease;
-  }
-
-  .studio-app [data-slot='button']:not(:disabled):hover {
-    transform: translateY(-1px);
-  }
-
-  .studio-app [data-slot='button']:not(:disabled):active {
-    transform: translateY(0);
-  }
-
+  /* Button density — studio compacts the default/sm/xs heights slightly
+   * so panels read denser. cursor/transition/hover-lift are now in the
+   * Button CVA base (design-system/src/ui/button.tsx) and apply universally. */
   .studio-app [data-slot='button'][data-size='default'] {
     min-height: 2rem;
     padding-inline: 0.875rem;
@@ -1717,10 +1681,10 @@ html {
 }
 
 /* Panel header sticky overlay — glass effect */
-[data-slot='panel-header'] {
-  background: oklch(0.16 0.02 280 / 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+.studio-app [data-slot='panel-header'] {
+  background: var(--glass-bg-panel);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
   border-color: var(--border);
 }
 
@@ -1745,23 +1709,23 @@ html {
 
 /* ── Glass morphism utilities ────────────────────────────────── */
 .glass-header {
-  background: oklch(0.14 0.02 280 / 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid oklch(1 0 0 / 0.06);
+  background: var(--glass-bg-header);
+  backdrop-filter: var(--glass-blur-lg);
+  -webkit-backdrop-filter: var(--glass-blur-lg);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .glass-toolbar {
-  background: oklch(0.16 0.02 280 / 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--glass-bg-toolbar);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
 }
 
 .glass-statusbar {
-  background: oklch(0.14 0.02 280 / 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid oklch(1 0 0 / 0.06);
+  background: var(--glass-bg-statusbar);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  border-top: 1px solid var(--glass-border);
 }
 
 /* ── Glass toolbar buttons ─────────────────────────────────── */
@@ -1773,8 +1737,8 @@ html {
   background: oklch(1 0 0 / 0.04) !important;
   border: 1px solid oklch(1 0 0 / 0.08) !important;
   color: oklch(0.75 0.01 280) !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: var(--glass-blur-sm);
+  -webkit-backdrop-filter: var(--glass-blur-sm);
   transition:
     background-color var(--motion-fast),
     border-color var(--motion-fast),
@@ -1845,9 +1809,9 @@ html {
 
 /* Glass popover content (filter menu, export menu) */
 [data-slot="popover-content"] {
-  background: oklch(0.14 0.02 280 / 0.92) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--glass-bg-overlay) !important;
+  backdrop-filter: var(--glass-blur-lg);
+  -webkit-backdrop-filter: var(--glass-blur-lg);
   border-color: oklch(1 0 0 / 0.1) !important;
   box-shadow:
     0 8px 32px oklch(0 0 0 / 0.5),
@@ -2087,24 +2051,23 @@ html {
   opacity: 0.78;
 }
 
-/* Inspector panel — tabbed subsections (Members / Conditions / Doc / Meta) */
-.studio-app .studio-insp-tabs {
-  height: 34px;
+/* Inspector panel — tabbed subsections (Members / Conditions / Doc / Meta)
+ * Targets TabsList size="sm" (data-size="sm" on [data-slot='tabs-list']).
+ * The studio-insp-tabs class is removed; consumers use <TabsList size="sm">.
+ * Horizontal padding is consumer-supplied (className="px-2" etc.). */
+.studio-app [data-slot='tabs-list'][data-size='sm'] {
   border-bottom: 0.5px solid var(--border);
-  background: transparent;
-  border-radius: 0;
-  padding: 0 8px;
   gap: 2px;
 }
 
-.studio-app .studio-insp-tabs [data-slot='tabs-trigger'] {
+.studio-app [data-slot='tabs-list'][data-size='sm'] [data-slot='tabs-trigger'] {
   border-radius: 6px 6px 0 0;
   font-size: 12px;
   height: 28px;
   position: relative;
 }
 
-.studio-app .studio-insp-tabs [data-slot='tabs-trigger'][data-state='active']::after {
+.studio-app [data-slot='tabs-list'][data-size='sm'] [data-slot='tabs-trigger'][data-active]::after {
   content: '';
   position: absolute;
   left: 8px;

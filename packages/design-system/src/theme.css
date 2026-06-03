@@ -231,6 +231,37 @@
    * `transition: background-color var(--motion-fast)`). */
   --motion-fast: 140ms ease;
   --motion-default: 240ms ease-out;
+
+  /* Glass morphism material tokens (studio chrome surfaces).
+   * Defined here so the FR-025 no-undefined-vars guard resolves them.
+   * Daikonic overrides these in daikonic.css to tune the hue; the
+   * base values below reproduce the hand-rolled oklch literals that
+   * were in styles.css before Phase 4 of the style-override cleanup.
+   *
+   * Two base hues (lightness 0.16 = toolbar/panel-header — lighter
+   * mid-tone; lightness 0.14 = header/statusbar/overlay — deeper
+   * base) with per-surface opacity variants that differ across the
+   * three live glass surfaces + popover overlay.
+   *
+   *   --glass-bg-header     header bar     (0.14 / 0.80)
+   *   --glass-bg-toolbar    editor toolbar (0.16 / 0.70)
+   *   --glass-bg-statusbar  status bar     (0.14 / 0.75)
+   *   --glass-bg-panel      panel-header   (0.16 / 0.80)
+   *   --glass-bg-overlay    glass popover  (0.14 / 0.92)
+   *   --glass-border        glass hairline (white / 0.06)
+   *   --glass-blur-sm       8px blur       (button backdrop)
+   *   --glass-blur-md       12px blur      (toolbar / statusbar / panel)
+   *   --glass-blur-lg       20px blur      (header / popover)
+   */
+  --glass-bg-header:    oklch(0.14 0.02 280 / 0.80);
+  --glass-bg-toolbar:   oklch(0.16 0.02 280 / 0.70);
+  --glass-bg-statusbar: oklch(0.14 0.02 280 / 0.75);
+  --glass-bg-panel:     oklch(0.16 0.02 280 / 0.80);
+  --glass-bg-overlay:   oklch(0.14 0.02 280 / 0.92);
+  --glass-border:       oklch(1 0 0 / 0.06);
+  --glass-blur-sm:      blur(8px);
+  --glass-blur-md:      blur(12px);
+  --glass-blur-lg:      blur(20px);
 }
 
 .dark {
