@@ -386,13 +386,12 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* App-wide negative tracking — Inter is drawn a touch wide for UI density,
-     * so the design handoff applies a subtle -0.005em on `body` globally. It's
-     * imperceptible per-letter but accumulates into the tighter, more
-     * "designed" set the reference has and the studio was missing. Display
-     * surfaces tighten further (.font-display below, matching the reference's
-     * -0.01em on headings/names). */
-    letter-spacing: -0.005em;
+    /* App-wide negative tracking — Inter is drawn a touch wide for UI density.
+     * The handoff's -0.005em is below the perceptual threshold on its own, so
+     * we run -0.01em globally for a visibly tighter set (still conservative;
+     * mono/code opt back out where needed). Display surfaces tighten further
+     * (.font-display below). */
+    letter-spacing: -0.01em;
   }
   h1, h2, h3, h4, h5, h6 {
     /* Headings follow the cascade rather than hard-coding a family, so a
@@ -411,9 +410,10 @@
    * brand font never becomes ambient again. */
   .font-display {
     font-family: var(--font-display);
-    /* Display/heading text tracks tighter than body — matches the reference's
-     * -0.01em on `.rs-doc-h` / type names (it tracks body at -0.005em). */
-    letter-spacing: -0.01em;
+    /* Display/heading text tracks tighter than body (body at -0.01em). The
+     * reference pushes display/name text to -0.01..-0.02em; -0.015em keeps
+     * headings/wordmarks crisp without crowding. */
+    letter-spacing: -0.015em;
   }
 
   /* ── Global :focus-visible baseline ─────────────────────────────
