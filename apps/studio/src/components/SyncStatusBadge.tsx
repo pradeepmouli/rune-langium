@@ -105,7 +105,7 @@ export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): Re
             size="xs"
             data-testid="sync-resolve-keep-mine"
             onClick={() => onResolve('keepMine')}
-            className="h-5 px-1.5 text-[10px]"
+            className="h-5 px-1.5 text-3xs"
           >
             Keep mine
           </Button>
@@ -115,7 +115,7 @@ export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): Re
             size="xs"
             data-testid="sync-resolve-take-remote"
             onClick={() => onResolve('takeRemote')}
-            className="h-5 px-1.5 text-[10px]"
+            className="h-5 px-1.5 text-3xs"
           >
             Take remote
           </Button>

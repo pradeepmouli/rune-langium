@@ -231,7 +231,7 @@ export function ExpressionBuilder({
             {scope.inputs.map((input) => (
               <span
                 key={input.name}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-3xs text-muted-foreground"
               >
                 {input.name}
                 {input.typeName && `: ${input.typeName}`}
@@ -244,7 +244,7 @@ export function ExpressionBuilder({
       {scope.output && (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">Output</span>
-          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-3xs text-muted-foreground">
             {scope.output.name}
             {scope.output.typeName && `: ${scope.output.typeName}`}
           </span>

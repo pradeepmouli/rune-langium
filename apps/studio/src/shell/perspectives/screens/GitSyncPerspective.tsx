@@ -123,7 +123,7 @@ export function GitSyncPerspective({ workspaceId, workspaceKind }: GitSyncPerspe
               <p className="text-xs font-medium text-amber-500">Conflicting files</p>
               <ul className="space-y-0.5">
                 {syncStatus.conflictPaths.map((path) => (
-                  <li key={path} className="text-[11px] font-mono text-muted-foreground">
+                  <li key={path} className="text-2xs font-mono text-muted-foreground">
                     {path}
                   </li>
                 ))}

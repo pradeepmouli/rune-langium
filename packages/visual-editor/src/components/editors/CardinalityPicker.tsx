@@ -72,7 +72,7 @@ function joinClasses(...classNames: Array<string | undefined>): string | undefin
  */
 /** Canonical chip trigger class for the structure-view cardinality cell look. */
 const CHIP_TRIGGER_CLASS =
-  'rune-cell-card h-auto min-w-0 border-0 bg-muted px-[var(--rune-pill-padding-x)] py-[var(--rune-chip-padding-y)] text-[11px] text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring';
+  'rune-cell-card h-auto min-w-0 border-0 bg-muted px-[var(--rune-pill-padding-x)] py-[var(--rune-chip-padding-y)] text-2xs text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring';
 
 /**
  * Inspector pill trigger — wears the shared `.rune-inspector-pill` box (the same
@@ -167,7 +167,7 @@ export function CardinalityPicker({
           aria-invalid={!!customError}
           autoFocus
           className={joinClasses(
-            `w-[4.25rem] rounded border px-1.5 py-0.5 text-[11px] font-mono leading-none
+            `w-[4.25rem] rounded border px-1.5 py-0.5 text-2xs font-mono leading-none
             bg-background outline-none
             focus-visible:ring-1 focus-visible:ring-ring
             disabled:cursor-not-allowed disabled:opacity-50
@@ -190,7 +190,7 @@ export function CardinalityPicker({
               ? CHIP_TRIGGER_CLASS
               : variant === 'pill'
                 ? PILL_TRIGGER_CLASS
-                : 'h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-[11px] font-mono leading-none gap-0.5',
+                : 'h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-2xs font-mono leading-none gap-0.5',
             triggerClassName
           )}
           aria-label="Cardinality"

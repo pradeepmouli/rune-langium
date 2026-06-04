@@ -301,8 +301,8 @@ export function FormPreviewPanel({
             ) : null}
             {executionResult !== undefined ? (
               <div className="execution-result mt-2">
-                <span className="text-[11px] font-medium text-muted-foreground">Output:</span>
-                <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-[11px] leading-5 text-foreground">
+                <span className="text-2xs font-medium text-muted-foreground">Output:</span>
+                <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-2xs leading-5 text-foreground">
                   {JSON.stringify(executionResult, null, 2)}
                 </pre>
               </div>
@@ -314,12 +314,12 @@ export function FormPreviewPanel({
           <div className="space-y-2 border-t border-border p-2">
             <pre
               aria-label="Sample data output"
-              className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-[11px] leading-5 text-foreground"
+              className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
               data-testid="sample-data-output"
             >
               {activeSample?.serialized ?? '{}'}
             </pre>
-            <p role="status" aria-live="polite" className="text-[11px] text-muted-foreground">
+            <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
               {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
             </p>
           </div>
@@ -550,7 +550,7 @@ function PreviewFieldControl({
           ? items.map((_, index) => (
               <div key={`${field.path}-item-${index}`} className="space-y-1 p-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+                  <span className="text-2xs text-muted-foreground inline-flex items-center gap-1.5">
                     {child.label} {index + 1}
                     {/* − icon replaces the verbose "Remove <Field> N"
                         text per the same +/- treatment as the section

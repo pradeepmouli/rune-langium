@@ -104,7 +104,7 @@ export function OperatorPalette({
                         className={op.recommended ? '' : 'opacity-50'}
                       >
                         <span className="font-mono font-medium">{op.label}</span>
-                        <span className="text-[10px] text-muted-foreground">{op.description}</span>
+                        <span className="text-3xs text-muted-foreground">{op.description}</span>
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -125,7 +125,7 @@ export function OperatorPalette({
                   data-testid="palette-open-reference"
                 >
                   <span className="font-mono font-medium">Variable</span>
-                  <span className="text-[10px] text-muted-foreground">Pick from scope</span>
+                  <span className="text-3xs text-muted-foreground">Pick from scope</span>
                 </CommandItem>
               </div>
             </>

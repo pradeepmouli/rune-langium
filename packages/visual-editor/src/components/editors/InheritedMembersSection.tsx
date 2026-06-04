@@ -52,7 +52,7 @@ function InheritedGroupCollapsible({ group }: { group: InheritedGroup }) {
           className={`size-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
         />
         <span className="font-medium text-muted-foreground">from {group.ancestorName}</span>
-        <Badge variant="outline" className="ml-auto text-[10px] h-4 px-1">
+        <Badge variant="outline" className="ml-auto text-3xs h-4 px-1">
           {group.members.length}
         </Badge>
       </CollapsibleTrigger>
