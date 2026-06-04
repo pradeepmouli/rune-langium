@@ -1007,20 +1007,33 @@ button[data-navigable]:focus-visible {
  * (`.rune-node-{kind}:hover`, e.g. line ~389) carries the affordance, so no
  * shadow is needed. `:not(.rune-node-selected)` keeps this `none` from
  * clobbering the selection ring below. */
+/* Structure cards stay FLAT at rest — depth appears only on hover/select, and
+ * lighter than the graph nodes (which float even at rest). The resting
+ * background gradient (above) supplies quiet dimensionality. */
 .rune-node-data--structure:not(.rune-node-selected),
 .rune-node-choice--structure:not(.rune-node-selected),
 .rune-node-enum--structure:not(.rune-node-selected) {
   box-shadow: none;
 }
 
-/* Selected structure card: ring-only emphasis, still FLAT (no drop) so it stays
- * consistent with the flat resting state. Overrides the shared
- * `.rune-node-selected` drop (graph nodes keep their float) — higher
+/* Hover lift — a subtle drop, lighter than the graph node hover (0 6px 16px/.18). */
+.rune-node-data--structure:not(.rune-node-selected):hover,
+.rune-node-choice--structure:not(.rune-node-selected):hover,
+.rune-node-enum--structure:not(.rune-node-selected):hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 4px 12px oklch(0 0 0 / 0.14);
+}
+
+/* Selected: accent ring + a light drop (lighter than the graph selection
+ * 0 6px 18px/.28). Overrides the shared `.rune-node-selected` — higher
  * specificity (0,2,0 vs 0,1,0) wins. */
 .rune-node-data--structure.rune-node-selected,
 .rune-node-choice--structure.rune-node-selected,
 .rune-node-enum--structure.rune-node-selected {
-  box-shadow: inset 0 0 0 1px var(--node-accent);
+  box-shadow:
+    inset 0 0 0 1px var(--node-accent),
+    0 4px 14px oklch(0 0 0 / 0.2);
 }
 
 /* Drop a further notch on the member/attribute cell content inside
