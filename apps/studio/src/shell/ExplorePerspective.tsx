@@ -1477,18 +1477,17 @@ export function ExplorePerspective() {
           aria-label="Graph toolbar"
           className="glass-toolbar flex flex-wrap items-center gap-1 border-b border-border px-2 py-1"
         >
-          <Button variant="secondary" size="xs" onClick={handleFitView} title="Fit to view">
+          <Button variant="glass" size="xs" onClick={handleFitView} title="Fit to view">
             <Maximize2 />
             Fit View
           </Button>
-          <Button variant="secondary" size="xs" onClick={handleRelayout} title="Re-run auto layout">
+          <Button variant="glass" size="xs" onClick={handleRelayout} title="Re-run auto layout">
             <LayoutGrid />
             Re-layout
           </Button>
           <Separator orientation="vertical" className="mx-1 h-4" />
           <Button
-            variant={focusMode ? 'default' : 'secondary'}
-            data-variant={focusMode ? 'default' : 'secondary'}
+            variant="glass"
             aria-pressed={focusMode}
             size="xs"
             onClick={handleToggleFocusMode}
@@ -1498,8 +1497,7 @@ export function ExplorePerspective() {
             Focus
           </Button>
           <Button
-            variant={groupedLayout ? 'default' : 'secondary'}
-            data-variant={groupedLayout ? 'default' : 'secondary'}
+            variant="glass"
             aria-pressed={groupedLayout}
             size="xs"
             onClick={handleToggleGroupedLayout}

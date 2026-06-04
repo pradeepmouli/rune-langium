@@ -49,7 +49,20 @@ const buttonVariants = cva(
         // surface with a visible border.
         secondary: 'bg-transparent border border-input/70 hover:bg-muted text-foreground',
         ghost: 'hover:bg-accent hover:text-primary-foreground dark:hover:bg-accent/50',
-        link: 'text-primary underline-offset-4 hover:underline'
+        link: 'text-primary underline-offset-4 hover:underline',
+        // Translucent frosted-glass treatment for chrome surfaces (toolbar /
+        // header). Was the contextual `.glass-toolbar [data-slot=button]`
+        // override in studio app.css; promoted to an explicit, opt-in variant.
+        // The teal "active" toggle state is driven by `aria-pressed` (the
+        // toggle buttons already set it), not by overloading the base variant.
+        // Multi-layer glows live in `--glass-btn-shadow*` tokens (theme.css).
+        // Base hover-lift / transition come from the shared CVA base above.
+        glass:
+          'border bg-(--glass-btn-bg) border-(--glass-btn-border) text-(--glass-btn-text) shadow-(--glass-btn-shadow) ' +
+          '[backdrop-filter:var(--glass-blur-sm)] [-webkit-backdrop-filter:var(--glass-blur-sm)] ' +
+          'hover:bg-(--glass-btn-bg-hover) hover:border-(--glass-btn-border-hover) hover:text-(--glass-btn-text-hover) hover:shadow-(--glass-btn-shadow-hover) ' +
+          'aria-pressed:bg-(--glass-btn-bg-active) aria-pressed:border-(--glass-btn-border-active) aria-pressed:text-(--glass-btn-text-active) aria-pressed:shadow-(--glass-btn-shadow-active) ' +
+          'aria-pressed:hover:bg-(--glass-btn-bg-active-hover) aria-pressed:hover:border-(--glass-btn-border-active-hover) aria-pressed:hover:text-(--glass-btn-text-active-hover) aria-pressed:hover:shadow-(--glass-btn-shadow-active-hover)'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
