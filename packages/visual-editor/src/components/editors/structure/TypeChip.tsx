@@ -55,25 +55,32 @@ export interface TypeChipProps extends React.ComponentProps<'button'> {
 }
 
 export const TypeChip = React.forwardRef<HTMLButtonElement, TypeChipProps>(function TypeChip(
-  { typeName, typeKind, className, style, as = 'button', ...props },
+  { typeName, typeKind, className, style, as = 'button', disabled, ...props },
   ref
 ): React.ReactElement {
   const Component = as as React.ElementType;
+  const isButton = as === 'button';
   return (
     <Component
-      ref={ref}
-      {...(as === 'button' ? { type: 'button' } : {})}
+      // Only the button case is a real HTMLButtonElement, so only forward the
+      // (button-typed) ref then — a `span` would be a type/runtime mismatch.
+      ref={isButton ? ref : undefined}
+      {...(isButton ? { type: 'button', disabled } : {})}
       data-slot="type-chip"
       data-kind={typeKind}
       style={{ ...kindVars[typeKind], ...(style as React.CSSProperties) }}
       className={cn(
         // `rune-cell-type-chip` = the contextual-CSS + test hook (see header).
         'rune-cell-type-chip',
-        // Intrinsic look: mono pill, kind-tinted surface, hover ring.
-        'inline-flex items-end justify-end cursor-pointer rounded-sm border border-transparent',
+        // Intrinsic look: mono pill, kind-tinted surface.
+        'inline-flex items-end justify-end rounded-sm border border-transparent',
         'px-(--rune-chip-padding-x) py-(--rune-chip-padding-y) font-mono text-xs not-italic',
-        'bg-(--type-chip-bg) text-(color:--type-chip-fg)',
-        'transition-colors duration-[120ms] hover:border-current',
+        'bg-(--type-chip-bg) text-(color:--type-chip-fg) transition-colors duration-[120ms]',
+        // Interactive affordance only for an ENABLED button. A disabled button
+        // gets not-allowed explicitly (the global `:disabled` baseline is
+        // specificity-0 and would lose to a `cursor-*` utility); the static
+        // `span` display chip gets neither pointer nor hover ring.
+        isButton ? (disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:border-current') : 'cursor-default',
         className
       )}
       {...props}
