@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 import { cn } from '@rune-langium/design-system/utils';
 import { flattenDiagnostics } from '../utils/flatten-diagnostics.js';
 import type { FlatDiagnosticRow } from '../utils/flatten-diagnostics.js';
@@ -216,9 +217,9 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
           <SeverityPill severity="warning" count={counts.warnings} />
           <SeverityPill severity="info" count={counts.info} />
           <SeverityPill severity="hint" count={counts.hints} />
-          <span className="number-chiclet" title={`${fileCount} file${fileCount === 1 ? '' : 's'}`}>
+          <NumberChiclet title={`${fileCount} file${fileCount === 1 ? '' : 's'}`}>
             {fileCount} file{fileCount === 1 ? '' : 's'}
-          </span>
+          </NumberChiclet>
         </div>
       ) : null}
 
@@ -439,7 +440,7 @@ function SeverityPill({ severity, count }: { severity: SeverityKind; count: numb
         meta[severity].className
       )}
     >
-      <span className="number-chiclet">{count}</span>
+      <NumberChiclet>{count}</NumberChiclet>
       <Icon className={cn('size-3.5', meta[severity].iconClassName)} aria-hidden />
       <span>{meta[severity].label}</span>
     </span>
@@ -456,9 +457,9 @@ function FileHeaderRow({ uri, count }: { uri: string; count: number }) {
       <span className="truncate uppercase" title={uri}>
         {extractFileName(uri)}
       </span>
-      <span className="number-chiclet" title={`${count} problem${count === 1 ? '' : 's'}`}>
+      <NumberChiclet title={`${count} problem${count === 1 ? '' : 's'}`}>
         {count}
-      </span>
+      </NumberChiclet>
     </div>
   );
 }

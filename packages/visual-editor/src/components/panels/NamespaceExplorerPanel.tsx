@@ -19,6 +19,7 @@ import { ArrowUpRight, ChevronRight, ChevronDown, PlusSquare, MinusSquare, Link,
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
+import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { KindBadge, KIND_LABEL } from '../KindBadge.js';
 import {
@@ -224,9 +225,9 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
             <span className="text-sm font-semibold">Type explorer</span>
             <p className="text-2xs text-muted-foreground">Browse namespaces and types in the active source.</p>
           </div>
-          <span className="number-chiclet" data-testid="namespace-explorer-count">
+          <NumberChiclet data-testid="namespace-explorer-count">
             {visibleCount}/{totalTypes}
-          </span>
+          </NumberChiclet>
         </div>
 
         {/* Toolbar */}
@@ -411,7 +412,7 @@ function NamespaceHeaderRow({ row, isGraphVisible, onToggleTreeExpand }: Namespa
           ⋮⋮
         </span>
 
-        <span className="number-chiclet">{row.typeCount}</span>
+        <NumberChiclet>{row.typeCount}</NumberChiclet>
       </div>
     </div>
   );
