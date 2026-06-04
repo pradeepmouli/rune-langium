@@ -107,7 +107,7 @@
   width: 100%;
   height: 100%;
   border-radius: var(--radius-xl);
-  border: 1px dotted color-mix(in oklch, var(--muted-foreground) 32%, transparent);
+  border: 0.5px dotted color-mix(in oklch, var(--muted-foreground) 32%, transparent);
   background:
     linear-gradient(
       180deg,
@@ -161,7 +161,9 @@
    * UX rec #2: 12px radius reads as the modern 2024+ canvas language
    * ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
   border-radius: var(--radius-xl);
-  border: 1px solid var(--border);
+  /* 0.5px hairline — the design handoff builds on 0.5px borders (43 uses)
+   * for a finer, more refined edge than a full 1px. */
+  border: 0.5px solid var(--border);
   position: relative;
   overflow: hidden;
   background: var(--card);
@@ -212,7 +214,7 @@
   padding: var(--rune-header-padding-y) var(--rune-header-padding-x);
   font-weight: 600;
   font-size: var(--text-sm);
-  border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  border-bottom: 0.5px solid color-mix(in oklch, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
   /* justify-content + `order: 2` on the kind pill flips the visual order
@@ -480,7 +482,7 @@ button[data-navigable]:focus-visible {
   background: var(--color-edge-label-bg);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-edge-label-border);
+  border: 0.5px solid var(--color-edge-label-border);
   color: var(--color-node-text);
   pointer-events: all;
   transition:
@@ -1313,7 +1315,7 @@ button[data-navigable]:focus-visible {
    * to the right edge — same pattern as the inner DataNode header (kind
    * badge gets margin-left: auto). */
   padding: 1px;
-  border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  border-bottom: 0.5px solid color-mix(in oklch, var(--border) 78%, transparent);
 }
 
 .rune-graph-group--base .rune-graph-group__title {
