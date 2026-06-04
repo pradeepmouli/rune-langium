@@ -29,7 +29,7 @@
   gap: var(--space-2);
   max-width: calc(100% - 24px);
   padding: var(--space-2) var(--space-3);
-  border: 0.5px solid var(--glass-btn-border);
+  border: var(--hairline) solid var(--glass-btn-border);
   border-radius: var(--radius-full);
   background: var(--glass-bg-header);
   backdrop-filter: blur(10px);
@@ -107,7 +107,7 @@
   width: 100%;
   height: 100%;
   border-radius: var(--radius-xl);
-  border: 0.5px dotted color-mix(in oklch, var(--muted-foreground) 32%, transparent);
+  border: var(--hairline) dotted color-mix(in oklch, var(--muted-foreground) 32%, transparent);
   background:
     linear-gradient(
       180deg,
@@ -163,9 +163,10 @@
    * UX rec #2: 12px radius reads as the modern 2024+ canvas language
    * ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
   border-radius: var(--radius-xl);
-  /* 0.5px hairline — the design handoff builds on 0.5px borders (43 uses)
-   * for a finer, more refined edge than a full 1px. */
-  border: 0.5px solid var(--border);
+  /* Hairline edge via the shared --hairline token (tokens.css) — the same knob
+   * the global `[class~="border"]` override uses, so node + component borders
+   * stay in lockstep. */
+  border: var(--hairline) solid var(--border);
   position: relative;
   overflow: hidden;
   background: var(--card);
@@ -216,7 +217,7 @@
   padding: var(--rune-header-padding-y) var(--rune-header-padding-x);
   font-weight: 600;
   font-size: var(--text-sm);
-  border-bottom: 0.5px solid color-mix(in oklch, var(--border) 78%, transparent);
+  border-bottom: var(--hairline) solid color-mix(in oklch, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
   /* justify-content + `order: 2` on the kind pill flips the visual order
@@ -484,7 +485,7 @@ button[data-navigable]:focus-visible {
   background: var(--color-edge-label-bg);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  border: 0.5px solid var(--color-edge-label-border);
+  border: var(--hairline) solid var(--color-edge-label-border);
   color: var(--color-node-text);
   pointer-events: all;
   transition:
@@ -547,7 +548,7 @@ button[data-navigable]:focus-visible {
 
 .rune-panel {
   background: var(--card);
-  border: 0.5px solid var(--border);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   padding: var(--space-6);
@@ -568,7 +569,7 @@ button[data-navigable]:focus-visible {
 .rune-search-input {
   width: 100%;
   padding: var(--space-3) var(--space-5);
-  border: 0.5px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
   outline: none;
@@ -618,7 +619,7 @@ button[data-navigable]:focus-visible {
 
 .rune-toolbar-button {
   padding: var(--space-3) var(--space-5);
-  border: 0.5px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   background: var(--muted);
   cursor: pointer;
@@ -640,7 +641,7 @@ button[data-navigable]:focus-visible {
 .rune-toolbar-select {
   font-size: var(--text-sm);
   padding: var(--space-2) var(--space-3);
-  border: 0.5px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   background: var(--muted);
   color: var(--foreground);
@@ -666,7 +667,7 @@ button[data-navigable]:focus-visible {
   height: auto;
   min-width: 0;
   padding: 2px var(--space-2);
-  border: 0.5px solid transparent;
+  border: var(--hairline) solid transparent;
   border-radius: var(--radius-lg);
   background: color-mix(in oklch, var(--muted) 20%, transparent);
   font-family: var(--font-mono);
@@ -757,7 +758,7 @@ button[data-navigable]:focus-visible {
   height: 16px;
   padding-inline: var(--space-1);
   border-radius: var(--radius-md);
-  border: 0.5px solid color-mix(in oklch, var(--border) 68%, transparent);
+  border: var(--hairline) solid color-mix(in oklch, var(--border) 68%, transparent);
   background: color-mix(in oklch, var(--background) 22%, transparent);
   color: currentColor;
   font-size: var(--text-3xs);
@@ -1227,7 +1228,7 @@ button[data-navigable]:focus-visible {
   min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
   /* Phase 10.2 — decorative left border to visually separate the child column.
    * Padding uses --rune-row-gap (8px) as the inset. */
-  border-left: 0.5px dashed var(--border);
+  border-left: var(--hairline) dashed var(--border);
   padding-left: var(--rune-row-gap);
   /* Copilot e2e-batch review flagged a potential overflow when a node has
    * NO expansions: the slot's margin-left + border + padding could push
@@ -1266,7 +1267,7 @@ button[data-navigable]:focus-visible {
    * are achieved by (a) dotted instead of dashed (smaller marks, more
    * whitespace) and (b) ~55% color opacity so the scaffolding fades against
    * the canvas instead of competing with the inner node's solid border. */
-  border: 0.5px dotted color-mix(in oklch, var(--color-base-type) 55%, transparent);
+  border: var(--hairline) dotted color-mix(in oklch, var(--color-base-type) 55%, transparent);
   /* Subtle vertical gradient — slightly brighter yellow tint at the top
    * fading to ~half intensity at the bottom. Gives the container quiet
    * depth without competing with the inner DataNode's solid fill. The
@@ -1317,7 +1318,7 @@ button[data-navigable]:focus-visible {
    * to the right edge — same pattern as the inner DataNode header (kind
    * badge gets margin-left: auto). */
   padding: 1px;
-  border-bottom: 0.5px solid color-mix(in oklch, var(--border) 78%, transparent);
+  border-bottom: var(--hairline) solid color-mix(in oklch, var(--border) 78%, transparent);
 }
 
 .rune-graph-group--base .rune-graph-group__title {

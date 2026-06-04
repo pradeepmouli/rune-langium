@@ -193,6 +193,15 @@
   --radius-lg: var(--radius); /* 8px */
   --radius-xl: calc(var(--radius) + 4px); /* 12px */
   --radius-full: 9999px;
+  /* Hairline border width — the single knob for the whole system. The design
+   * handoff builds on 0.5px hairlines pervasively; this is the one place to
+   * retune that weight. Referenced BOTH by the global `[class~="border"]`
+   * override in app.css (so every shadcn/Tailwind `border` utility — pills,
+   * badges, dialogs, inputs — renders a hairline) AND by hand-rolled CSS
+   * borders (nodes, panels, dock chrome) that the className override can't
+   * reach. Note: 0.5px is retina-first; sub-pixel borders round unpredictably
+   * on 1x displays. */
+  --hairline: 0.5px;
   --button-height: 40px;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
