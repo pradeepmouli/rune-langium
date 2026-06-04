@@ -232,7 +232,7 @@ html {
     display: inline-flex;
     height: 26px;
     background: color-mix(in srgb, var(--background) 96%, var(--muted) 4%);
-    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+    border: 0.5px solid color-mix(in srgb, var(--border) 80%, transparent);
     border-radius: var(--radius-full);
     overflow: hidden;
     box-shadow:
@@ -711,7 +711,7 @@ html {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    border: 1px solid var(--muted-foreground);
+    border: 0.5px solid var(--muted-foreground);
     flex-shrink: 0;
   }
 
@@ -812,7 +812,7 @@ html {
     background:
       radial-gradient(
         ellipse at 50% 30%,
-        color-mix(in oklch, var(--background), black 14%),
+        color-mix(in oklch, var(--background), black 26%),
         var(--card)
       );
   }
@@ -898,7 +898,7 @@ html {
   justify-content: space-between;
   padding: var(--space-4) var(--space-6);
   background: var(--background);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .ns-explorer__title {
@@ -917,7 +917,7 @@ html {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .ns-explorer__search {
@@ -926,7 +926,7 @@ html {
   font-size: var(--text-sm);
   color: var(--foreground);
   background: var(--background);
-  border: 1px solid var(--input);
+  border: 0.5px solid var(--input);
   border-radius: var(--radius-md);
   outline: none;
 }
@@ -949,7 +949,7 @@ html {
   font-size: var(--text-md);
   color: var(--muted-foreground);
   background: transparent;
-  border: 1px solid transparent;
+  border: 0.5px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1;
@@ -976,7 +976,7 @@ html {
 
 /* Namespace row */
 .ns-row {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
 }
 
 .ns-row__header {
@@ -1148,7 +1148,7 @@ html {
   display: flex;
   overflow-x: auto;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0.5px solid var(--border);
   gap: 1px;
 }
 
@@ -1419,7 +1419,7 @@ html {
 
 .studio-editor-page__source .cm-editor .cm-gutters {
   background: color-mix(in srgb, var(--card) 92%, var(--background));
-  border-right: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-right: 0.5px solid color-mix(in srgb, var(--border) 84%, transparent);
   color: color-mix(in srgb, var(--muted-foreground) 74%, var(--input));
 }
 
@@ -1446,7 +1446,7 @@ html {
 
 .studio-editor-page__source .cm-editor .cm-tooltip {
   background: color-mix(in srgb, var(--card) 88%, var(--background));
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
   color: var(--foreground);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -1533,7 +1533,7 @@ html {
 
 .studio-app .react-flow__minimap {
   background: var(--background);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 }
@@ -1559,7 +1559,7 @@ html {
   width: 6px;
   height: 6px;
   background: var(--muted-foreground);
-  border: 1px solid var(--input);
+  border: 0.5px solid var(--input);
 }
 
 .studio-app .react-flow__handle:hover {
@@ -1598,7 +1598,7 @@ html {
 .rune-type-creator__kind {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
-  border: 1px solid var(--input);
+  border: 0.5px solid var(--input);
   border-radius: var(--radius-md);
   outline: none;
   background: var(--background);
@@ -1639,7 +1639,7 @@ html {
   padding: var(--space-2) var(--space-6);
   font-size: var(--text-sm);
   background: transparent;
-  border: 1px solid var(--input);
+  border: 0.5px solid var(--input);
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--muted-foreground);
@@ -1698,7 +1698,7 @@ html {
   background: var(--glass-bg-header);
   backdrop-filter: var(--glass-blur-lg);
   -webkit-backdrop-filter: var(--glass-blur-lg);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 0.5px solid var(--glass-border);
 }
 
 .glass-toolbar {
@@ -1711,7 +1711,7 @@ html {
   background: var(--glass-bg-statusbar);
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
-  border-top: 1px solid var(--glass-border);
+  border-top: 0.5px solid var(--glass-border);
 }
 
 /* Glass toolbar/header buttons are now the `<Button variant="glass">` CVA
@@ -1751,7 +1751,7 @@ html {
 .studio-brand__mark {
   width: 22px;
   height: 22px;
-  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--primary) 42%, transparent);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -1832,7 +1832,7 @@ html {
 }
 
 .preview-panel__sample {
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--border) 82%, transparent);
   border-radius: 0.875rem;
   background: color-mix(in srgb, var(--card) 74%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, black 18%, transparent);
@@ -2070,7 +2070,7 @@ html {
   width: 5px;
   margin: 0 -2px;
   background: transparent;
-  border-left: 1px solid var(--border);
+  border-left: 0.5px solid var(--border);
   flex-shrink: 0;
   cursor: col-resize;
   z-index: 1;
