@@ -979,6 +979,46 @@ button[data-navigable]:focus-visible {
   font-size: var(--text-xs);
 }
 
+/* Visual polish — bring structure nodes up to the graph node's chrome.
+ * The geometry block above is layout-only; this block adds the depth the
+ * structure variants were missing. They share the .rune-node baseline
+ * (radius / border / resting two-tier shadow) but previously read FLAT
+ * because there was no node-level hover elevation and the fill was a flat
+ * var(--card). Mirrors .rune-node:hover (lines ~198) with a slightly
+ * softer outer blur, plus a whisper-subtle resting depth cue. The graph
+ * .rune-node rules are intentionally untouched. */
+.rune-node-data--structure,
+.rune-node-choice--structure,
+.rune-node-enum--structure {
+  /* Resting depth cue: a faint top-edge inset highlight catches the light
+   * at the card's top border, plus a barely-there vertical gradient over
+   * var(--card) (color-mix toward --background, no raw hex) that lends the
+   * fill a touch of dimensionality without reading tinted. The resting
+   * two-tier shadow is re-stated here so the inset highlight composes with
+   * it rather than replacing it. */
+  background-image: linear-gradient(
+    to bottom,
+    var(--card),
+    color-mix(in oklch, var(--card) 94%, var(--background) 6%)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.rune-node-data--structure:hover,
+.rune-node-choice--structure:hover,
+.rune-node-enum--structure:hover {
+  /* Node-level lift on hover — same recipe as .rune-node:hover with a
+   * marginally softer outer drop (0.20 vs 0.24) so the denser structure
+   * cards float a touch more quietly than the larger graph nodes. The
+   * inherited --motion-default transition (set on .rune-node) animates it. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 22px oklch(0 0 0 / 0.2);
+}
+
 /* Drop a further notch on the member/attribute cell content inside
  * structure-variant nodes and base containers — the row text was still
  * reading a touch large against the tight 12px header. 11px keeps the
@@ -1102,6 +1142,17 @@ button[data-navigable]:focus-visible {
      even before the user clicks an interactive child (the chevron / name
      cell). Without this rows flatline visually until interacted with. */
   transition: background-color var(--motion-fast);
+}
+
+/* Light row separators — give the dense, fixed-height rows gentle
+ * horizontal separation so stacked members read as discrete records
+ * rather than one undifferentiated block. Drawn as a 1px inset top
+ * highlight (low-opacity var(--border)) on every row after the first, so
+ * it does NOT consume content-box height the way a real `border-top`
+ * would — the row's `height: var(--rune-row-height)` layout math (mirrored
+ * in structure-layout.ts) stays exact. */
+.rune-node-row + .rune-node-row {
+  box-shadow: inset 0 1px 0 color-mix(in oklch, var(--border) 45%, transparent);
 }
 
 .rune-node-row:hover {
