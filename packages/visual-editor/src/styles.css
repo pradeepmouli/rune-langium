@@ -1076,24 +1076,25 @@ button[data-navigable]:focus-visible {
  *    the colored stripe. Decoupled from --rune-node-padding (the body's
  *    layout-coupled inset) — header inset is a purely visual concern with
  *    no row-offset coupling, so they're free to move independently. */
-.rune-node-data--structure .rune-node-header {
+/* Structure-variant headers (data / choice / enum) share ONE padding so the
+ * title + kind badge align with the row content below — and so all three kinds
+ * read identically (previously: data left 8px/right 16px, choice the same,
+ * enum the default 16px → three different insets, none aligned to the rows).
+ *
+ * 12px (--space-3) is the row-content inset: data/choice rows land at body
+ * NODE_PADDING (4px) + .rune-node-row padding (8px) = 12px; enum members land
+ * at the enum body inset below (also 12px). box-sizing + the locked
+ * HEADER_HEIGHT keep the header at exactly 28px so structure-layout.ts row
+ * offsets stay aligned (sizeChoice reserves HEADER_HEIGHT + n*ROW_HEIGHT — a
+ * taller header would push siblings off their computed y). Vertical padding is
+ * 0; the header's flex `align-items: center` centers the title. Horizontal
+ * padding is visual-only (not layout-coupled), so 12px is safe. */
+.rune-node-data--structure .rune-node-header,
+.rune-node-choice--structure .rune-node-header,
+.rune-node-enum--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
-  padding-left: var(--space-2);
-}
-
-/* Mirror the data-structure rule for the choice-structure variant.
- * sizeChoice in structure-layout.ts reserves exactly HEADER_HEIGHT (28px)
- * for the choice header via `height: HEADER_HEIGHT + n * ROW_HEIGHT`.
- * Without this override the default .rune-node-header padding renders the
- * header taller than 28px, pushing siblings below an expanded Choice out
- * of alignment with their layout-computed y positions. */
-.rune-node-choice--structure .rune-node-header {
-  box-sizing: border-box;
-  height: var(--rune-header-height);
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-left: var(--space-2);
+  padding: 0 var(--space-3);
 }
 
 .rune-node-body--two-col {
@@ -1117,6 +1118,16 @@ button[data-navigable]:focus-visible {
 .rune-node-data--structure .rune-node-body--two-col,
 .rune-node-choice--structure .rune-node-body--two-col {
   padding: 0 var(--rune-node-padding) var(--rune-node-padding);
+}
+
+/* Enum renders a single-column body (default .rune-node-body, not two-col), so
+ * give it the same 12px (--space-3) horizontal inset the data/choice rows reach
+ * (body 4px + row 8px) — enum members carry no row padding, so the inset lives
+ * on the body. This aligns enum value rows with the enum header AND with
+ * data/choice rows across nodes. Vertical/height untouched (no layout coupling
+ * — enum has no two-col RF children to place). */
+.rune-node-enum--structure .rune-node-body {
+  padding: 0 var(--space-3) var(--space-3);
 }
 
 .rune-node-rows {
