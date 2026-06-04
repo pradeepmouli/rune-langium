@@ -862,9 +862,12 @@ button[data-navigable]:focus-visible {
    node without having to parse multiple competing channels. */
 .rune-node-selected {
   border-color: var(--node-accent);
+  /* Inset accent ring IS the selection identity; the outer drop just lifts it.
+   * Softened (was 0 8px 24px / 0.35) so selection sits cohesively above the
+   * lighter hover (0 6px 16px / 0.18) without the heavy glassy glow. */
   box-shadow:
     inset 0 0 0 1px var(--node-accent),
-    0 8px 24px oklch(0 0 0 / 0.35);
+    0 6px 18px oklch(0 0 0 / 0.28);
 }
 
 .rune-node-search-match {
@@ -985,33 +988,26 @@ button[data-navigable]:focus-visible {
   );
 }
 
-/* Resting two-tier shadow + top-edge inset highlight — EXCLUDED when selected
- * (`:not(.rune-node-selected)`). The .rune-node-selected rule (defined earlier,
- * line ~880, equal specificity) would otherwise be overridden by this later
- * rule, silently dropping the selection accent shadow for exactly the nodes
- * this polish targets. Graph nodes don't hit this because their base shadow
- * lives on .rune-node (declared BEFORE .rune-node-selected), so selection wins
- * at rest there; this restores the same precedence for structure nodes. Hover
- * (below) intentionally still lifts over selection, matching .rune-node:hover. */
+/* Structure cards are FLAT — the reference keeps structure surfaces
+ * (.rs-field / .rs-field-card) to a hairline border + fill with NO drop shadow;
+ * only graph nodes (.rs-gnode) float. The kind-tinted border-brighten on hover
+ * (`.rune-node-{kind}:hover`, e.g. line ~389) carries the affordance, so no
+ * shadow is needed. `:not(.rune-node-selected)` keeps this `none` from
+ * clobbering the selection ring below. */
 .rune-node-data--structure:not(.rune-node-selected),
 .rune-node-choice--structure:not(.rune-node-selected),
 .rune-node-enum--structure:not(.rune-node-selected) {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
-.rune-node-data--structure:hover,
-.rune-node-choice--structure:hover,
-.rune-node-enum--structure:hover {
-  /* Node-level lift on hover — same recipe as .rune-node:hover with a
-   * marginally softer outer drop (0.16 vs the node's 0.18) so the denser
-   * structure cards float a touch more quietly than the larger graph nodes.
-   * The inherited --motion-default transition (set on .rune-node) animates it. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 6px 16px oklch(0 0 0 / 0.16);
+/* Selected structure card: ring-only emphasis, still FLAT (no drop) so it stays
+ * consistent with the flat resting state. Overrides the shared
+ * `.rune-node-selected` drop (graph nodes keep their float) — higher
+ * specificity (0,2,0 vs 0,1,0) wins. */
+.rune-node-data--structure.rune-node-selected,
+.rune-node-choice--structure.rune-node-selected,
+.rune-node-enum--structure.rune-node-selected {
+  box-shadow: inset 0 0 0 1px var(--node-accent);
 }
 
 /* Drop a further notch on the member/attribute cell content inside

@@ -947,10 +947,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   );
 
   return (
-    <div
-      className={cn('rune-type-graph', densityClass, className)}
-      style={STRUCTURE_LAYOUT_CSS_VARS as CSSProperties}
-    >
+    <div className={cn('rune-type-graph', densityClass, className)} style={STRUCTURE_LAYOUT_CSS_VARS as CSSProperties}>
       {breadcrumbItems.length > 0 && (
         <div className="rune-graph-breadcrumbs" aria-label="Graph navigation context">
           {breadcrumbItems.map((item, index) => (
@@ -992,7 +989,10 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         >
           {mergedConfig.showControls && <Controls />}
           {mergedConfig.showMinimap && <MiniMap />}
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          {/* 22px gap matches the reference `.rs-canvas-grid` (and the former
+              fixed CSS overlay, now removed so there is a single grid that pans
+              with the canvas rather than two phasing against each other). */}
+          <Background variant={BackgroundVariant.Dots} gap={22} size={1} />
         </ReactFlow>
       </NavigationContext.Provider>
       <GraphContextMenu
