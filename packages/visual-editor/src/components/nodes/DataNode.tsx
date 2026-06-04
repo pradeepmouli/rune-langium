@@ -12,6 +12,7 @@ import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Plus, Minus } from 'lucide-react';
+import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
 import type { AnyGraphNode } from '../../types.js';
 import type { StructureDataNode, StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
@@ -273,9 +274,11 @@ function StructureDataRow({
       )}
       {/* Spec §3.3 — enum-nav glyph (↗): navigate into the enum type as root. */}
       {isEnum && onNavigateToEnumType && row.targetNodeId ? (
-        <button
+        <RowGlyph
+          as="button"
+          variant="enum-nav"
           type="button"
-          className="rune-row-glyph rune-row-glyph--enum-nav nodrag nopan"
+          className="nodrag nopan"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -286,19 +289,19 @@ function StructureDataRow({
           data-testid={`enum-nav-${row.attrName}`}
         >
           ↗
-        </button>
+        </RowGlyph>
       ) : null}
       {/* Spec §3.3 — unresolved-ref indicator (?): shows LSP error as tooltip. */}
       {isUnresolved ? (
-        <span
-          className="rune-row-glyph rune-row-glyph--unresolved"
+        <RowGlyph
+          variant="unresolved"
           title={unresolvedTitle}
           aria-label={`Unresolved type: ${row.typeName}`}
           role="img"
           data-testid={`unresolved-${row.attrName}`}
         >
           ?
-        </span>
+        </RowGlyph>
       ) : null}
       {CardCell ? (
         <CardCell value={row.cardinality} nodeId={nodeId} attrName={row.attrName} />

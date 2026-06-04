@@ -19,6 +19,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { cn } from '@rune-langium/design-system/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
 import { resolveNodeId } from './TypeLink.js';
 import { NamespaceTreePicker } from './NamespaceTreePicker.js';
 import { TypeChip, type TypeChipKind } from './structure/TypeChip.js';
@@ -136,16 +137,18 @@ export function TypeReferenceField({
   const { dragOverHandlers, isOver } = useTypeRefDrop({ accept: acceptKinds, onDrop: handleDrop });
 
   const navButton = canNavigate ? (
-    <button
+    <RowGlyph
+      as="button"
+      variant="nav"
       type="button"
       data-slot="type-link"
       onClick={handleNavigate}
       title={`Go to ${typeLabel}`}
       aria-label={`Go to ${typeLabel}`}
-      className="rune-row-glyph rune-row-glyph--nav nodrag nopan shrink-0"
+      className="nodrag nopan"
     >
       <ArrowUpRight className="size-3.5" aria-hidden="true" />
-    </button>
+    </RowGlyph>
   ) : null;
 
   return (

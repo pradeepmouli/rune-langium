@@ -31,6 +31,7 @@
     "./ui/popover": "./src/ui/popover.tsx",
     "./ui/radio-group": "./src/ui/radio-group.tsx",
     "./ui/resizable": "./src/ui/resizable.tsx",
+    "./ui/row-glyph": "./src/ui/row-glyph.tsx",
     "./ui/scroll-area": "./src/ui/scroll-area.tsx",
     "./ui/select": "./src/ui/select.tsx",
     "./ui/separator": "./src/ui/separator.tsx",

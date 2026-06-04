@@ -22,6 +22,7 @@ import { memo, useCallback } from 'react';
 import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Plus, Minus } from 'lucide-react';
+import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
 import type { AnyGraphNode } from '../../types.js';
 import type {
   StructureChoiceNode,
@@ -257,9 +258,11 @@ function StructureChoiceArmRow({
       )}
       {/* Spec §3.3 — enum-nav glyph (↗) for Enum arms. */}
       {isEnum && onNavigateToEnumType && arm.targetNodeId ? (
-        <button
+        <RowGlyph
+          as="button"
+          variant="enum-nav"
           type="button"
-          className="rune-row-glyph rune-row-glyph--enum-nav nodrag nopan"
+          className="nodrag nopan"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -270,19 +273,19 @@ function StructureChoiceArmRow({
           data-testid={`enum-nav-arm-${arm.typeName}`}
         >
           ↗
-        </button>
+        </RowGlyph>
       ) : null}
       {/* Spec §3.3 — unresolved-type indicator (?) for Unresolved arms. */}
       {isUnresolved ? (
-        <span
-          className="rune-row-glyph rune-row-glyph--unresolved"
+        <RowGlyph
+          variant="unresolved"
           title={unresolvedTitle}
           aria-label={`Unresolved type: ${arm.typeName}`}
           role="img"
           data-testid={`unresolved-arm-${arm.typeName}`}
         >
           ?
-        </span>
+        </RowGlyph>
       ) : null}
       {/* Expand/collapse moved to right edge with +/− icons —
           matches DataNode and the form-preview Add/Remove treatment. */}
