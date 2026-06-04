@@ -32,10 +32,10 @@
   border: 1px solid var(--glass-btn-border);
   border-radius: var(--radius-full);
   background: var(--glass-bg-header);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px);
   color: var(--foreground);
   font-size: var(--text-2xs);
-  box-shadow: 0 10px 24px oklch(0 0 0 / 0.22);
+  box-shadow: 0 4px 14px oklch(0 0 0 / 0.15);
 }
 
 .rune-graph-breadcrumbs__item {
@@ -72,7 +72,7 @@
 
 .rune-flow-node-shell--focus .rune-node {
   box-shadow:
-    0 0 0 1px oklch(0.78 0.17 168 / 0.45),
+    0 0 0 1px color-mix(in oklch, var(--ring) 45%, transparent),
     0 8px 20px oklch(0 0 0 / 0.34);
 }
 
@@ -198,7 +198,7 @@
 .rune-node:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 22px oklch(0 0 0 / 0.24);
+    0 6px 16px oklch(0 0 0 / 0.18);
 }
 
 .react-flow__node.dragging .rune-node {
@@ -1006,12 +1006,12 @@ button[data-navigable]:focus-visible {
 .rune-node-choice--structure:hover,
 .rune-node-enum--structure:hover {
   /* Node-level lift on hover — same recipe as .rune-node:hover with a
-   * marginally softer outer drop (0.20 vs 0.24) so the denser structure
-   * cards float a touch more quietly than the larger graph nodes. The
-   * inherited --motion-default transition (set on .rune-node) animates it. */
+   * marginally softer outer drop (0.16 vs the node's 0.18) so the denser
+   * structure cards float a touch more quietly than the larger graph nodes.
+   * The inherited --motion-default transition (set on .rune-node) animates it. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 22px oklch(0 0 0 / 0.2);
+    0 6px 16px oklch(0 0 0 / 0.16);
 }
 
 /* Drop a further notch on the member/attribute cell content inside
@@ -1301,7 +1301,7 @@ button[data-navigable]:focus-visible {
    * peer. The translucent yellow fill stays untouched. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 22px oklch(0 0 0 / 0.24);
+    0 6px 16px oklch(0 0 0 / 0.18);
 }
 
 /* Header typography in base-scope tracks .rune-node-header rather than
