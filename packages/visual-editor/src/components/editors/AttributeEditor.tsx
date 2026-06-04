@@ -54,7 +54,7 @@ export const AttributeEditor = memo(function AttributeEditor({
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Attribute name"
-          className="rune-attribute-editor__name px-2 py-1 text-sm"
+          className="px-2 py-1 text-sm"
           aria-label="Attribute name"
           autoFocus
         />
@@ -64,7 +64,7 @@ export const AttributeEditor = memo(function AttributeEditor({
           value={typeName}
           onChange={(e) => setTypeName(e.target.value)}
           placeholder="Type"
-          className="rune-attribute-editor__type px-2 py-1 text-sm"
+          className="px-2 py-1 text-sm"
           aria-label="Attribute type"
         />
         <Input
@@ -73,7 +73,7 @@ export const AttributeEditor = memo(function AttributeEditor({
           value={cardinality}
           onChange={(e) => setCardinality(e.target.value)}
           placeholder="Cardinality"
-          className="rune-attribute-editor__card px-2 py-1 text-sm"
+          className="px-2 py-1 text-sm"
           aria-label="Cardinality"
         />
         <button onClick={handleAdd} disabled={!name.trim()} className="rune-attribute-editor__submit">

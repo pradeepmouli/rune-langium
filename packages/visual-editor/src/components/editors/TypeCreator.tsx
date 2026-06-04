@@ -70,7 +70,7 @@ export const TypeCreator = memo(function TypeCreator({
           onChange={(e) => setName(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type name"
-          className="rune-type-creator__name px-2 py-1 text-sm"
+          className="px-2 py-1 text-sm"
           aria-label="Type name"
           autoFocus
         />
@@ -80,7 +80,7 @@ export const TypeCreator = memo(function TypeCreator({
           value={namespace}
           onChange={(e) => setNamespace(e.target.value)}
           placeholder="Namespace"
-          className="rune-type-creator__namespace px-2 py-1 text-sm"
+          className="px-2 py-1 text-sm"
           aria-label="Namespace"
         />
         <button
