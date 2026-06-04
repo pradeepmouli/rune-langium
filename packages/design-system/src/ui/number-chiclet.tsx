@@ -39,8 +39,10 @@ export function NumberChiclet({ className, style, ...props }: React.ComponentPro
       className={cn(
         'inline-flex items-center justify-center min-w-[22px] h-[18px] px-2 rounded-lg',
         'font-mono text-2xs font-medium tabular-nums leading-none whitespace-nowrap shrink-0',
-        // composite surface, consumed from the component vars above:
-        'bg-[var(--chiclet-bg)] text-[color:var(--chiclet-fg)] border-[0.5px] border-[color:var(--chiclet-border)] shadow-[var(--chiclet-shadow)]',
+        // composite surface, consumed from the component vars above. `--chiclet-bg`
+        // is a gradient, so it MUST use `bg-[image:…]` — a bare `bg-[var()]` compiles
+        // to `background-color`, which silently drops a gradient value.
+        'bg-[image:var(--chiclet-bg)] text-[color:var(--chiclet-fg)] border-[0.5px] border-[color:var(--chiclet-border)] shadow-[var(--chiclet-shadow)]',
         className
       )}
       {...props}
