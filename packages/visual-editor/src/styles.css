@@ -160,9 +160,11 @@
    * adding the className in JSX, which is out of scope for this CSS-
    * only pass) so the rule remains self-contained.
    *
-   * UX rec #2: 12px radius reads as the modern 2024+ canvas language
-   * ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
-  border-radius: var(--radius-xl);
+   * Node radius is --radius-lg (8px) to match the reference `.rs-gnode`
+   * (--rs-r-md / 8px). Containers + panels keep --radius-xl (12px) so the
+   * nesting reads outer-more-rounded-than-inner. (Earlier 12px on a
+   * "rounded-xl reads modern" rationale; aligned down to the handoff.) */
+  border-radius: var(--radius-lg);
   /* Hairline edge via the shared --hairline token (tokens.css) — the same knob
    * the global `[class~="border"]` override uses, so node + component borders
    * stay in lockstep. */
@@ -196,8 +198,14 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: color-mix(in oklch, var(--node-accent) 82%, white 18%);
-  opacity: 0.78;
+  /* Pure kind color + a left-corner radius so the accent hugs the rounded node
+   * edge — matches the reference `.rs-gnode::before` (var(--kind) + left
+   * border-radius). Was lightened with 18% white (read pastel) and relied on the
+   * node's overflow:hidden clipping it to the larger 12px arc, which hard-cut
+   * the thin stripe at the corners. */
+  background: var(--node-accent);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  opacity: 0.75;
 }
 
 .rune-node:hover {
