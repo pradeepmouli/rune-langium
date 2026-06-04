@@ -25,6 +25,16 @@
 
 /* ── shadcn semantic bridge ─────────────────────────────────────── */
 @theme inline {
+  /* Font families — `inline` so the generated `font-sans`/`font-mono`/
+   * `font-display` utilities inline `var(--font-family-*)` (the brand stacks in
+   * tokens.css) rather than emitting a competing `--font-*` into a layered
+   * `:root`. The semantic `--font-sans/mono/display` vars themselves come from
+   * tokens.css's plain `:root` (so standalone, Tailwind-less consumers resolve
+   * them too). Without these keys Tailwind shipped its OWN default mono/sans for
+   * the utilities and never knew `font-display` at all (it was base-rule only). */
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+  --font-display: var(--font-family-display);
   --radius-xs: calc(var(--radius) - 6px);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -134,14 +144,25 @@
   --color-syntax-comment: var(--syntax-comment);
   --color-syntax-number: var(--syntax-number);
   --color-syntax-operator: var(--syntax-operator);
+
+  /* Type scale — promoted into @theme so these become real `text-*` utilities
+   * (Tailwind has no 2xs/3xs/md) AND emit `--text-*` to :root for hand-written
+   * `var(--text-*)`. Purely ADDITIVE: Tailwind's default xs/sm/base/lg/xl (which
+   * coincide with the repo values) are left untouched, so their line-height
+   * pairings are preserved. Lets components style type as `text-2xs`/`text-3xs`
+   * instead of arbitrary `var()` (see the NumberChiclet override pilot). */
+  --text-3xs: var(--font-size-3xs); /* 10px */
+  --text-2xs: var(--font-size-2xs); /* 11px */
+  --text-md: 0.9375rem; /* 15px — the studio in-between rung */
 }
 
 /* ── Color palette: Daikon ──────────────────────────────────────── */
 :root {
   /* `--radius` (the shadcn base knob) now lives in tokens.css's primitive
    * layer so a tokens.css-only consumer can resolve the radius ladder; it is
-   * imported above, so the `@theme inline` `--radius-*` calc()s resolve here. */
-  --font-sans: var(--font-family-sans);
+   * imported above, so the `@theme inline` `--radius-*` calc()s resolve here.
+   * (`--font-sans` and the other font semantics now live in tokens.css's :root
+   * alongside the `--font-family-*` primitives — see the @theme inline bridge.) */
 
   --background: var(--color-surface-1);
   --foreground: var(--color-foreground-primary);
@@ -199,9 +220,10 @@
   --sidebar-max-width: var(--sidebar-width-max);
   /* Short-form text-size aliases — Studio uses `--text-xs/sm/base`
    * while the canonical tokens emit `--font-size-*`. Map them so
-   * styles.css resolves cleanly without rewriting every rule. */
-  --text-3xs: var(--font-size-3xs);
-  --text-2xs: var(--font-size-2xs);
+   * styles.css resolves cleanly without rewriting every rule.
+   * (3xs/2xs/md are emitted by the `@theme` block above instead, so they also
+   * generate `text-3xs/2xs/md` utilities; the xs/sm/base/lg/xl rungs stay here
+   * because Tailwind already ships those utilities at matching values.) */
   --text-xs: var(--font-size-xs);
   --text-sm: var(--font-size-sm);
   --text-base: var(--font-size-base);

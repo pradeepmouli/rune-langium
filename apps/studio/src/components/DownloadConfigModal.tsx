@@ -322,7 +322,7 @@ export function DownloadConfigModal({
                           {ns}
                         </label>
                         {isPulled && (
-                          <Badge variant="secondary" className="ml-auto text-[10px]">
+                          <Badge variant="secondary" className="ml-auto text-3xs">
                             auto
                           </Badge>
                         )}

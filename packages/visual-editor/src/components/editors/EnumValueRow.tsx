@@ -192,7 +192,7 @@ function EnumValueRow({
 
       {/* Override badge */}
       {isOverride && (
-        <Badge data-slot="override-badge" variant="warning" className="shrink-0 text-[10px]">
+        <Badge data-slot="override-badge" variant="warning" className="shrink-0 text-3xs">
           override
         </Badge>
       )}

@@ -68,7 +68,7 @@ export function CodegenTargetsTable({
       className="preview-panel__targets-table studio-scroll flex flex-col overflow-auto"
     >
       <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 border-b border-border/70 bg-card/40 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        <thead className="sticky top-0 border-b border-border/70 bg-card/40 text-left text-3xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           <tr>
             <th scope="col" className="px-3 py-1.5 font-semibold">
               Target

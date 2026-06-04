@@ -1,7 +1,6 @@
 {
   "jsPlugins": ["../../oxlint-plugins/rune.mjs"],
   "rules": {
-    "rune/no-palette-utility": "error",
     "rune/no-raw-arbitrary-value": "error"
   }
 }

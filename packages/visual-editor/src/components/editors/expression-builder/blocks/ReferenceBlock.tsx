@@ -32,7 +32,7 @@ export function ReferenceBlock({ node }: ReferenceBlockProps) {
       data-block="reference"
     >
       <span className="font-medium">{name}</span>
-      {$type === 'RosettaImplicitVariable' && <span className="text-[10px] opacity-50">implicit</span>}
+      {$type === 'RosettaImplicitVariable' && <span className="text-3xs opacity-50">implicit</span>}
     </span>
   );
 }

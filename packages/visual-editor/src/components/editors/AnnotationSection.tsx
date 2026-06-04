@@ -144,7 +144,7 @@ export function AnnotationSection({
           <Badge
             key={`${ann.name}-${ann.attribute ?? ''}-${i}`}
             variant="annotation"
-            className="gap-1 text-[10px] h-5 pl-1.5 pr-1"
+            className="gap-1 text-3xs h-5 pl-1.5 pr-1"
           >
             [{ann.name}]{ann.attribute && <span className="opacity-60">.{ann.attribute}</span>}
             {!effectiveReadOnly && (
@@ -160,7 +160,7 @@ export function AnnotationSection({
           </Badge>
         ))}
         {annotations.length === 0 && (
-          <span className="text-[10px] text-muted-foreground/60 italic">No annotations</span>
+          <span className="text-3xs text-muted-foreground/60 italic">No annotations</span>
         )}
       </div>
 

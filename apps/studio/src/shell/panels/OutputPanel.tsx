@@ -34,7 +34,7 @@ export function OutputPanel(): React.ReactElement {
         <span className="text-xs font-medium text-foreground">Output</span>
         <button
           type="button"
-          className="rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+          className="rounded border border-border px-2 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
           onClick={clearLines}
         >
           Clear
@@ -42,13 +42,13 @@ export function OutputPanel(): React.ReactElement {
       </div>
       <div ref={scrollRef} aria-live="polite" className="studio-scroll flex-1 overflow-auto px-3 py-1.5">
         {lines.length === 0 ? (
-          <p className="font-mono text-[11px] text-muted-foreground/60">No output yet.</p>
+          <p className="font-mono text-2xs text-muted-foreground/60">No output yet.</p>
         ) : (
           lines.map((line) => {
             const prefix = SEV[line.severity];
             const colorClass = SEVERITY_CLASS[line.severity] ?? 'text-muted-foreground/60';
             return (
-              <div key={line.id} className={`font-mono text-[11.5px] leading-5 ${colorClass}`}>
+              <div key={line.id} className={`font-mono text-xs leading-5 ${colorClass}`}>
                 {prefix ? `${prefix} ${line.text}` : line.text}
               </div>
             );
