@@ -6,6 +6,7 @@ import type { Node, NodeProps } from '@xyflow/react';
 import type { StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
 import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
+import { TypeChip } from '../editors/structure/TypeChip.js';
 
 export interface GroupContainerInheritanceData extends Record<string, unknown> {
   scope: 'inheritance';
@@ -244,7 +245,7 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
               data-attr={row.attrName}
             >
               <span className="rune-cell-name">{row.attrName}</span>
-              <span className="rune-cell-type-chip rune-cell-type-chip--basic">{row.typeName}</span>
+              <TypeChip as="span" typeName={row.typeName} typeKind="BasicType" />
               <span className="rune-cell-card">{row.cardinality}</span>
               {/* Codex P2 (PR #191): row-level expand/collapse for inherited rows.
                   Moved to right edge with +/− icons per the post-polish iteration —

@@ -23,6 +23,7 @@ import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Plus, Minus } from 'lucide-react';
 import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
+import { TypeChip } from '../editors/structure/TypeChip.js';
 import type { AnyGraphNode } from '../../types.js';
 import type {
   StructureChoiceNode,
@@ -254,7 +255,7 @@ function StructureChoiceArmRow({
           attrName={arm.typeName}
         />
       ) : (
-        <span className="rune-cell-type-chip">{arm.typeName || '?'}</span>
+        <TypeChip as="span" typeName={arm.typeName || '?'} typeKind={armKindToRowKind(arm.typeKind)} />
       )}
       {/* Spec §3.3 — enum-nav glyph (↗) for Enum arms. */}
       {isEnum && onNavigateToEnumType && arm.targetNodeId ? (

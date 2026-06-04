@@ -13,6 +13,7 @@ import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Plus, Minus } from 'lucide-react';
 import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
+import { TypeChip } from '../editors/structure/TypeChip.js';
 import type { AnyGraphNode } from '../../types.js';
 import type { StructureDataNode, StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
@@ -269,8 +270,8 @@ function StructureDataRow({
       {TypeCell ? (
         <TypeCell typeName={row.typeName} typeKind={row.typeKind} nodeId={nodeId} attrName={row.attrName} />
       ) : (
-        // Finding 3: row.typeName is string (not undefined) per StructureRow; render '?' if empty.
-        <span className="rune-cell-type-chip">{row.typeName || '?'}</span>
+        // row.typeName is string (not undefined) per StructureRow; render '?' if empty.
+        <TypeChip as="span" typeName={row.typeName || '?'} typeKind={row.typeKind} />
       )}
       {/* Spec §3.3 — enum-nav glyph (↗): navigate into the enum type as root. */}
       {isEnum && onNavigateToEnumType && row.targetNodeId ? (

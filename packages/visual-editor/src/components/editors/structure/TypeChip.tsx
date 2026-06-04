@@ -6,38 +6,86 @@ import { cn } from '@rune-langium/design-system/utils';
 
 export type TypeChipKind = 'Data' | 'Choice' | 'Enum' | 'BasicType' | 'Record' | 'TypeAlias' | 'Unresolved';
 
-/** Structure-view kind → chip color-variant class. The canonical type-as-chip idiom. */
-export const TYPE_CHIP_KIND_CLASS: Record<TypeChipKind, string> = {
-  Data: 'rune-cell-type-chip--data',
-  Choice: 'rune-cell-type-chip--choice',
-  Enum: 'rune-cell-type-chip--enum',
-  BasicType: 'rune-cell-type-chip--basic',
-  Record: 'rune-cell-type-chip--record',
-  TypeAlias: 'rune-cell-type-chip--typealias',
-  Unresolved: 'rune-cell-type-chip--unresolved'
-};
+/**
+ * TypeChip — the canonical "type as chip" idiom (structure-view cells + the
+ * inspector type-reference field).
+ *
+ * Component-override convention: the chip's INTRINSIC look (mono pill layout +
+ * per-kind colour) lives here — utilities plus a per-kind CSS-var swap for the
+ * `color-mix` fills that have no utility form. The `rune-cell-type-chip` class
+ * is retained as a stable hook for the CONTEXTUAL overrides that legitimately
+ * stay in CSS (visual-editor styles.css) because they depend on where the chip
+ * is nested — parent-driven state a self-contained component can't express:
+ *   - base-container row    → `margin-left: auto`
+ *   - type-picker trigger   → ellipsis truncation (`[data-slot='type-picker-trigger']`)
+ *   - structure-node cells  → `font-size: var(--text-2xs)`
+ *   - drag-over wrapper      → focus outline
+ * Those rules are unlayered, so they still win over the layered utilities here.
+ * A test also queries `.rune-cell-type-chip`, so the class must remain.
+ *
+ * Polymorphic via `as`: defaults to `button` (the interactive popover trigger —
+ * forwards its ref so base-ui's `<PopoverTrigger render>` can attach), or `span`
+ * for a static display chip (e.g. the base-container row).
+ */
+
+// Per-kind colour surface. Data/Record/TypeAlias share the data palette;
+// BasicType & Unresolved use `color-mix` tints (the tier-3 vars).
+const kindVars: Record<TypeChipKind, React.CSSProperties> = {
+  Data: { '--type-chip-bg': 'var(--color-data-badge)', '--type-chip-fg': 'var(--color-data-text)' },
+  Record: { '--type-chip-bg': 'var(--color-data-badge)', '--type-chip-fg': 'var(--color-data-text)' },
+  TypeAlias: { '--type-chip-bg': 'var(--color-data-badge)', '--type-chip-fg': 'var(--color-data-text)' },
+  Choice: { '--type-chip-bg': 'var(--color-choice-bg)', '--type-chip-fg': 'var(--color-choice-text)' },
+  Enum: { '--type-chip-bg': 'var(--color-enum-bg)', '--type-chip-fg': 'var(--color-enum-text)' },
+  BasicType: {
+    '--type-chip-bg': 'color-mix(in oklch, var(--muted-foreground) 14%, transparent)',
+    '--type-chip-fg': 'var(--muted-foreground)',
+  },
+  Unresolved: {
+    '--type-chip-bg': 'color-mix(in oklch, var(--destructive) 14%, transparent)',
+    '--type-chip-fg': 'var(--destructive)',
+  },
+} as Record<TypeChipKind, React.CSSProperties>;
 
 export interface TypeChipProps extends React.ComponentProps<'button'> {
   typeName: string;
   typeKind: TypeChipKind;
+  /** Render element. `button` (default) for interactive triggers; `span` for a
+   *  static display chip (no ref / handlers). */
+  as?: 'button' | 'span';
 }
 
-/** Presentational type chip (the .rune-cell-type-chip look). No drag-drop /
- * no dropdown — callers compose those around it. Forwards its ref so it can be
- * used as a base-ui Popover/Trigger `render` element (the inspector type field). */
 export const TypeChip = React.forwardRef<HTMLButtonElement, TypeChipProps>(function TypeChip(
-  { typeName, typeKind, className, ...props },
+  { typeName, typeKind, className, style, as = 'button', disabled, ...props },
   ref
 ): React.ReactElement {
+  const Component = as as React.ElementType;
+  const isButton = as === 'button';
   return (
-    <button
-      ref={ref}
-      type="button"
+    <Component
+      // Only the button case is a real HTMLButtonElement, so only forward the
+      // (button-typed) ref then — a `span` would be a type/runtime mismatch.
+      ref={isButton ? ref : undefined}
+      {...(isButton ? { type: 'button', disabled } : {})}
       data-slot="type-chip"
-      className={cn('rune-cell-type-chip', TYPE_CHIP_KIND_CLASS[typeKind], className)}
+      data-kind={typeKind}
+      style={{ ...kindVars[typeKind], ...(style as React.CSSProperties) }}
+      className={cn(
+        // `rune-cell-type-chip` = the contextual-CSS + test hook (see header).
+        'rune-cell-type-chip',
+        // Intrinsic look: mono pill, kind-tinted surface.
+        'inline-flex items-end justify-end rounded-sm border border-transparent',
+        'px-(--rune-chip-padding-x) py-(--rune-chip-padding-y) font-mono text-xs not-italic',
+        'bg-(--type-chip-bg) text-(color:--type-chip-fg) transition-colors duration-[120ms]',
+        // Interactive affordance only for an ENABLED button. A disabled button
+        // gets not-allowed explicitly (the global `:disabled` baseline is
+        // specificity-0 and would lose to a `cursor-*` utility); the static
+        // `span` display chip gets neither pointer nor hover ring.
+        isButton ? (disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:border-current') : 'cursor-default',
+        className
+      )}
       {...props}
     >
       {typeName}
-    </button>
+    </Component>
   );
 });

@@ -1373,61 +1373,12 @@ button[data-navigable]:focus-visible {
  * Colors are mapped through design-system tokens; no raw hex literals.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/* Type reference chip — per-kind coloured badge replacing italic text */
-.rune-cell-type-chip {
-  display: inline-flex;
-  align-items: flex-end;
-  padding: var(--rune-chip-padding-y) var(--rune-chip-padding-x);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-style: normal;
-  justify-content: right;
-  cursor: pointer;
-  background: var(--color-data-badge);
-  color: var(--color-data-text);
-  border: 1px solid transparent;
-  transition: background 0.12s, border-color 0.12s;
-}
-
-/* Per-kind chip variants — background/text from design-system kind tokens */
-.rune-cell-type-chip--data {
-  background: var(--color-data-badge);
-  color: var(--color-data-text);
-}
-
-.rune-cell-type-chip--choice {
-  background: var(--color-choice-bg);
-  color: var(--color-choice-text);
-}
-
-.rune-cell-type-chip--enum {
-  background: var(--color-enum-bg);
-  color: var(--color-enum-text);
-}
-
-/* Basic/scalar types reuse muted-foreground palette */
-.rune-cell-type-chip--basic {
-  background: color-mix(in oklch, var(--muted-foreground) 14%, transparent);
-  color: var(--muted-foreground);
-}
-
-.rune-cell-type-chip--unresolved {
-  background: color-mix(in oklch, var(--destructive) 14%, transparent);
-  color: var(--destructive);
-}
-
-/* User-defined record and typeAlias share the data-kind color (var(--color-data))
- * per the explorer's KIND_COLOR_VAR mapping. They are leaf-only — no chevron. */
-.rune-cell-type-chip--record,
-.rune-cell-type-chip--typealias {
-  background: var(--color-data-badge);
-  color: var(--color-data-text);
-}
-
-.rune-cell-type-chip:hover {
-  border-color: currentColor;
-}
+/* The type-reference chip's INTRINSIC look (base pill + per-kind colour + hover)
+ * now lives in the <TypeChip> component
+ * (packages/visual-editor/src/components/editors/structure/TypeChip.tsx) — the
+ * component-override convention. Only the CONTEXTUAL overrides remain in this
+ * file (base-row margin, type-picker-trigger ellipsis, structure-node font-size,
+ * drag-over outline), keyed off the retained `.rune-cell-type-chip` class. */
 
 /* Cardinality pill — monospace badge replacing plain text */
 .rune-cell-card {
