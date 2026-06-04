@@ -217,8 +217,8 @@
   }
 
   /* dockview 6.x adds a full-size ::after overlay on focus/focus-within —
-   * suppress it so our ::before underline shows, then restore a ring for
-   * keyboard focus so the tab remains accessible. */
+   * suppress it so it doesn't wash a tint over the active tab, then restore a
+   * ring for keyboard focus so the tab remains accessible. */
   .studio-app .rune-dock-theme .dv-tab:focus-within::after,
   .studio-app .rune-dock-theme .dv-tab:focus::after {
     display: none;

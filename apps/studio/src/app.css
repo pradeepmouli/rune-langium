@@ -1517,9 +1517,12 @@ html {
  *
  * Scope notes:
  *  - `[class~="border"]` matches ONLY the all-sides `border` token, so
- *    `border-2`, `border-t`, etc. keep their own widths.
+ *    `border-2`, `border-t`, etc. (used WITHOUT a bare `border`) keep their
+ *    own widths.
  *  - Unlayered + `:where()` (specificity 0) so it beats Tailwind's layered
- *    `.border` utility while any explicit width utility still wins.
+ *    width utilities. Caveat: if an element carries BOTH `border` and an
+ *    explicit width (`border border-2`), this rule still wins and forces
+ *    `--hairline` — so don't combine them; pick one.
  *  - Deliberately reinterprets a standard utility — documented here so
  *    `border` ≠ 1px is not a surprise. */
 .studio-app :where([class~='border']) {
