@@ -1706,84 +1706,11 @@ html {
   border-top: 1px solid var(--glass-border);
 }
 
-/* ── Glass toolbar buttons ─────────────────────────────────── */
-/* Override default/secondary button variants inside the toolbar
-   with translucent glass treatment, glow hover, and lift.
-   Uses !important to override Tailwind utility classes from CVA. */
-.glass-toolbar [data-slot="button"],
-.glass-toolbar [data-slot="button"][data-variant="secondary"] {
-  background: var(--glass-btn-bg) !important;
-  border: 1px solid var(--glass-btn-border) !important;
-  color: var(--glass-btn-text) !important;
-  backdrop-filter: var(--glass-blur-sm);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    color var(--motion-fast),
-    box-shadow var(--motion-fast);
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
-}
-
-.glass-toolbar [data-slot="button"]:hover,
-.glass-toolbar [data-slot="button"][data-variant="secondary"]:hover {
-  background: var(--glass-btn-bg-hover) !important;
-  border-color: var(--glass-btn-border-hover) !important;
-  color: var(--glass-btn-text-hover) !important;
-  transform: translateY(-1px);
-  box-shadow:
-    0 2px 8px oklch(0 0 0 / 0.3),
-    0 0 12px oklch(0.78 0.17 168 / 0.08);
-}
-
-.glass-toolbar [data-slot="button"]:active {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
-}
-
-/* Active toggle state — teal glow ring */
-.glass-toolbar [data-slot="button"][data-variant="default"] {
-  background: var(--glass-btn-bg-active) !important;
-  border-color: var(--glass-btn-border-active) !important;
-  color: var(--glass-btn-text-active) !important;
-  box-shadow:
-    0 1px 2px oklch(0 0 0 / 0.2),
-    0 0 8px oklch(0.78 0.17 168 / 0.15),
-    inset 0 0 12px oklch(0.78 0.17 168 / 0.06);
-}
-
-.glass-toolbar [data-slot="button"][data-variant="default"]:hover {
-  background: var(--glass-btn-bg-active-hover) !important;
-  border-color: var(--glass-btn-border-active-hover) !important;
-  color: var(--glass-btn-text-active-hover) !important;
-  box-shadow:
-    0 2px 8px oklch(0 0 0 / 0.3),
-    0 0 16px oklch(0.78 0.17 168 / 0.25),
-    inset 0 0 16px oklch(0.78 0.17 168 / 0.08);
-}
-
-/* Apply same glass treatment to header buttons */
-.glass-header [data-slot="button"] {
-  background: var(--glass-btn-bg) !important;
-  border: 1px solid var(--glass-btn-border) !important;
-  color: var(--glass-btn-text) !important;
-  transition:
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    color var(--motion-fast),
-    box-shadow var(--motion-fast);
-  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
-}
-
-.glass-header [data-slot="button"]:hover {
-  background: var(--glass-btn-bg-hover) !important;
-  border-color: var(--glass-btn-border-hover) !important;
-  color: var(--glass-btn-text-hover) !important;
-  transform: translateY(-1px);
-  box-shadow:
-    0 2px 8px oklch(0 0 0 / 0.3),
-    0 0 10px oklch(0.78 0.17 168 / 0.08);
-}
+/* Glass toolbar/header buttons are now the `<Button variant="glass">` CVA
+ * variant (design-system/src/ui/button.tsx) — an explicit, opt-in surface
+ * treatment rather than this parent-context override. The teal toggle state is
+ * driven by `aria-pressed` there. (The `.glass-header` button rules were already
+ * dead — that header renders only links.) */
 
 /* Glass popover content (filter menu, export menu) */
 [data-slot="popover-content"] {
