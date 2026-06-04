@@ -109,7 +109,10 @@ export function RowGlyph<E extends React.ElementType = 'span'>({
         // `unresolved` marker is non-interactive and renders its `?` bold.
         variant === 'unresolved'
           ? 'cursor-default font-semibold'
-          : 'cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(color:--primary)',
+          : // `disabled:cursor-not-allowed` is explicit because the global
+            // `:where(:disabled,…){cursor:not-allowed}` baseline is specificity-0
+            // and would otherwise lose to this `cursor-pointer` utility.
+            'cursor-pointer disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(color:--primary)',
         className
       )}
       {...props}
