@@ -44,6 +44,7 @@ import { installShellShortcuts, type ShellAction } from './keyboard.js';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
+import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 import { UtilityTrayContext } from './utility-tray-context.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
@@ -177,9 +178,9 @@ function StudioDockTab({ api, params }: IDockviewPanelHeaderProps<PanelTabMeta>)
     <div className="studio-dock-tab" data-count={count === undefined ? undefined : String(count)}>
       <span className="studio-dock-tab__label">{api.title ?? ''}</span>
       {count !== undefined ? (
-        <span className="number-chiclet studio-dock-tab__count" title={`${count} item${count === 1 ? '' : 's'}`}>
+        <NumberChiclet className="studio-dock-tab__count" title={`${count} item${count === 1 ? '' : 's'}`}>
           {count}
-        </span>
+        </NumberChiclet>
       ) : null}
     </div>
   );
