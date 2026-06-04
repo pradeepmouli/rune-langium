@@ -990,17 +990,29 @@ button[data-navigable]:focus-visible {
 .rune-node-data--structure,
 .rune-node-choice--structure,
 .rune-node-enum--structure {
-  /* Resting depth cue: a faint top-edge inset highlight catches the light
-   * at the card's top border, plus a barely-there vertical gradient over
-   * var(--card) (color-mix toward --background, no raw hex) that lends the
-   * fill a touch of dimensionality without reading tinted. The resting
-   * two-tier shadow is re-stated here so the inset highlight composes with
-   * it rather than replacing it. */
+  /* Resting depth cue: a barely-there vertical gradient over var(--card)
+   * (color-mix toward --background, no raw hex) that lends the fill a touch
+   * of dimensionality without reading tinted. Applied to ALL structure nodes
+   * (incl. selected) so the fill doesn't flip when a node is selected — only
+   * the shadow below changes. */
   background-image: linear-gradient(
     to bottom,
     var(--card),
     color-mix(in oklch, var(--card) 94%, var(--background) 6%)
   );
+}
+
+/* Resting two-tier shadow + top-edge inset highlight — EXCLUDED when selected
+ * (`:not(.rune-node-selected)`). The .rune-node-selected rule (defined earlier,
+ * line ~880, equal specificity) would otherwise be overridden by this later
+ * rule, silently dropping the selection accent shadow for exactly the nodes
+ * this polish targets. Graph nodes don't hit this because their base shadow
+ * lives on .rune-node (declared BEFORE .rune-node-selected), so selection wins
+ * at rest there; this restores the same precedence for structure nodes. Hover
+ * (below) intentionally still lifts over selection, matching .rune-node:hover. */
+.rune-node-data--structure:not(.rune-node-selected),
+.rune-node-choice--structure:not(.rune-node-selected),
+.rune-node-enum--structure:not(.rune-node-selected) {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.08),
