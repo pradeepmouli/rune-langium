@@ -29,6 +29,7 @@
 import { useState, useCallback } from 'react';
 import { useFormContext, Controller, useFieldArray } from 'react-hook-form';
 import { Field, FieldLabel, FieldGroup } from '@rune-langium/design-system/ui/field';
+import { Input } from '@rune-langium/design-system/ui/input';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 
@@ -256,17 +257,15 @@ export function MetadataSection({
             </div>
             {!effectiveReadOnly && (
               <div className="flex items-center gap-1">
-                <input
+                <Input
+                  variant="inline"
                   type="text"
                   value={synonymInput}
                   onChange={(e) => setSynonymInput(e.target.value)}
                   onKeyDown={handleSynonymKeyDown}
                   placeholder="Add synonym..."
                   data-slot="metadata-synonym-input"
-                  className="flex-1 rounded border border-input bg-background
-                    px-2 py-1 text-xs text-foreground
-                    placeholder:text-muted-foreground
-                    focus:ring-1 focus:ring-ring focus:outline-none"
+                  className="flex-1 px-2 py-1 text-xs"
                 />
                 <button
                   type="button"

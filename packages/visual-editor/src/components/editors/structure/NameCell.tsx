@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useState, useCallback, useEffect } from 'react';
+import { Input } from '@rune-langium/design-system/ui/input';
 import { useEditorStore, type EditorStore } from '../../../store/editor-store.js';
 
 export interface NameCellProps {
@@ -49,10 +50,11 @@ export function NameCell({ value, nodeId, attrName, disabled }: NameCellProps): 
 
   if (editing) {
     return (
-      <input
+      <Input
+        variant="inline"
         ref={focusOnMount}
         aria-label={`Edit ${attrName}`}
-        className="rune-cell-editor"
+        className="rune-cell-editor w-full px-1 py-0.5 text-xs"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}

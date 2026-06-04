@@ -22,6 +22,7 @@ import { useFormContext, Controller } from 'react-hook-form';
 import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Input } from '@rune-langium/design-system/ui/input';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 
@@ -148,7 +149,8 @@ function EnumValueRow({
         render={({ field }) => {
           const isEmpty = (field.value ?? '').trim() === '';
           return (
-            <input
+            <Input
+              variant="inline"
               type="text"
               value={field.value ?? ''}
               onChange={(e) => {
@@ -159,10 +161,7 @@ function EnumValueRow({
               disabled={effectiveReadOnly}
               aria-label={`Value name for ${name || 'new value'}`}
               placeholder="Value name"
-              className={`flex-1 min-w-0 px-2 py-1 text-sm rounded
-              bg-transparent border
-              ${isEmpty ? 'border-destructive' : 'border-border'}
-              focus:outline-none focus:ring-1 focus:ring-ring`}
+              className={`flex-1 min-w-0 px-2 py-1 text-sm${isEmpty ? ' border-destructive' : ''}`}
             />
           );
         }}
@@ -173,7 +172,8 @@ function EnumValueRow({
         control={control}
         name={`${prefix}.display`}
         render={({ field }) => (
-          <input
+          <Input
+            variant="inline"
             type="text"
             value={field.value ?? ''}
             onChange={(e) => {
@@ -183,9 +183,7 @@ function EnumValueRow({
             onBlur={field.onBlur}
             disabled={effectiveReadOnly}
             placeholder="Display name (optional)"
-            className="flex-1 min-w-0 px-2 py-1 text-sm rounded
-              bg-transparent border border-border
-              focus:outline-none focus:ring-1 focus:ring-ring"
+            className="flex-1 min-w-0 px-2 py-1 text-sm"
           />
         )}
       />

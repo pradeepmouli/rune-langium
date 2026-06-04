@@ -1581,33 +1581,23 @@ html {
   flex-wrap: wrap;
 }
 
-.rune-type-creator__kind,
-.rune-type-creator__name,
-.rune-type-creator__namespace,
-.rune-attribute-editor__name,
-.rune-attribute-editor__type,
-.rune-attribute-editor__card {
+/* SelectTrigger chrome for the type-kind picker. The sibling text fields
+ * (type-creator __name/__namespace, attribute-editor __name/__type/__card) are
+ * now <Input variant="inline">, which owns their chrome — their BEM rules were
+ * removed here: being UNLAYERED, they overrode the inline variant's
+ * bg-card/border-border/padding (which live in @layer utilities), so the
+ * migration was only half-applied until they came out. */
+.rune-type-creator__kind {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
   border: 1px solid var(--input);
-  /* Controls stay crisp at md; the card surface is promoted to xl below. */
   border-radius: var(--radius-md);
   outline: none;
   background: var(--background);
   color: var(--foreground);
 }
 
-/* The attribute-editor card is a surface, not a control — modern 12px corner. */
-.rune-attribute-editor__card {
-  border-radius: var(--radius-xl);
-}
-
-.rune-type-creator__kind:focus,
-.rune-type-creator__name:focus,
-.rune-type-creator__namespace:focus,
-.rune-attribute-editor__name:focus,
-.rune-attribute-editor__type:focus,
-.rune-attribute-editor__card:focus {
+.rune-type-creator__kind:focus {
   border-color: var(--primary);
 }
 
@@ -1654,19 +1644,7 @@ html {
 
 /* ---------- Editor Form Panel — Dark Theme (T038) ---------- */
 
-/* Form inputs — dark background with visible borders */
-[data-slot='enum-form'] input,
-[data-slot='function-form'] input,
-[data-slot='data-type-form'] input {
-  background-color: var(--card);
-  color: var(--foreground);
-  border-color: var(--border);
-}
-
-/* Focus rings on form inputs */
-[data-slot='enum-form'] input:focus,
-[data-slot='function-form'] input:focus,
-[data-slot='data-type-form'] input:focus,
+/* Focus ring on expression editor (textarea — not an <Input variant="inline">) */
 [data-slot='expression-editor']:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 1px var(--primary);
@@ -1676,6 +1654,12 @@ html {
 [data-slot='expression-editor'] {
   background-color: var(--card);
   color: var(--foreground);
+}
+
+/* Disabled expression textarea */
+[data-slot='expression-editor']:disabled {
+  opacity: 0.5;
+  background-color: var(--background);
 }
 
 /* Section borders (between form sections) */
@@ -1692,18 +1676,6 @@ html {
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
   border-color: var(--border);
-}
-
-/* Disabled form controls — opacity diverges (0.5 vs the 0.4
- * baseline) so the input greys deeper than a button; the
- * background-color swap (--card → --background) is the carrier
- * signal that the field is locked. */
-[data-slot='enum-form'] input:disabled,
-[data-slot='function-form'] input:disabled,
-[data-slot='data-type-form'] input:disabled,
-[data-slot='expression-editor']:disabled {
-  opacity: 0.5;
-  background-color: var(--background);
 }
 
 /* Kind badges — consistent across themes */

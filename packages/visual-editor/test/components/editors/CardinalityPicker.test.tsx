@@ -72,15 +72,19 @@ describe('CardinalityPicker', () => {
     expect(onChange).toHaveBeenCalledWith('(2..3)');
   });
 
-  it('uses focus-visible and disabled styling for the custom cardinality input', async () => {
+  it('uses inline-variant focus and disabled styling for the custom cardinality input', async () => {
     render(<CardinalityPicker value="(0..1)" onChange={vi.fn()} disabled />);
 
     fireEvent.click(await screen.findByRole('option', { name: 'Custom…' }));
 
     const input = screen.getByLabelText('Custom cardinality');
-    expect(input).toHaveClass('focus-visible:ring-1');
-    expect(input).toHaveClass('focus-visible:ring-ring');
-    expect(input).toHaveClass('disabled:cursor-not-allowed');
+    // inline variant: focus uses border-primary + 1px primary shadow (not focus-visible ring)
+    expect(input).toHaveClass('focus:border-primary');
+    // disabled classes from inline variant + call-site className
     expect(input).toHaveClass('disabled:opacity-50');
+    expect(input).toHaveClass('disabled:cursor-not-allowed');
+    // data-slot and data-variant from <Input variant="inline">
+    expect(input).toHaveAttribute('data-slot', 'input');
+    expect(input).toHaveAttribute('data-variant', 'inline');
   });
 });
