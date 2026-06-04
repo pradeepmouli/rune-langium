@@ -75,7 +75,7 @@ export function NamespaceSegmentHeaderRow({
             Enter/Space and assistive tech announces it as interactive. */}
         <button
           type="button"
-          className="flex-1 truncate text-xs font-semibold tracking-wide cursor-pointer bg-transparent border-0 p-0 text-left text-inherit hover:text-inherit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="flex-1 truncate text-xs font-normal cursor-pointer bg-transparent border-0 p-0 text-left text-inherit hover:text-inherit focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={onToggle}
         >
           {fullPath || '(default)'}

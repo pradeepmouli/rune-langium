@@ -43,8 +43,10 @@
  *            it reads on both --card and --background surfaces
  * - Width:   --studio-scrollbar-width (8px default)
  * - Radius:  fully rounded (border-radius: var(--radius-full))
- * - Gutter:  `scrollbar-gutter: stable` prevents content jump when the
- *            scrollbar mounts/unmounts
+ * - Gutter:  NONE — a reserved `scrollbar-gutter: stable` read as an uneven
+ *            right margin on non-scrolling panels (the reference reserves no
+ *            gutter). Removed; content may shift by the scrollbar width when a
+ *            scrollbar mounts/unmounts.
  * - Cross-browser: webkit pseudo-elements cover Chromium/Safari/Edge;
  *            `scrollbar-width`/`scrollbar-color` cover Firefox.
  *
@@ -69,9 +71,8 @@
  * and the source-code panel + inspector forms still showed the browser's
  * native white tracks.
  *
- * `.studio-scroll` (below) still exists for elements that ALSO want
- * `scrollbar-gutter: stable` (prevents content-jump when the scrollbar
- * mounts/unmounts) — a stronger contract than the baseline. */
+ * `.studio-scroll` (below) still exists as the explicit opt-in marker for
+ * scroll containers; it no longer reserves a gutter (see note above). */
 html {
   scrollbar-width: thin;
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
@@ -99,7 +100,6 @@ html {
 }
 
 .studio-scroll {
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
 }
@@ -1187,8 +1187,7 @@ html {
   padding: var(--space-6);
   /* Inherits .studio-scroll's tokens via direct property echo so the
    * non-class selector benefits from the shared chrome without forcing
-   * call sites to add an extra class. */
-  scrollbar-gutter: stable;
+   * call sites to add an extra class. (No reserved gutter — see .studio-scroll.) */
   scrollbar-width: thin;
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
 }
