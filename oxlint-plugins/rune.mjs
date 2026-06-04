@@ -55,6 +55,10 @@ const ARBITRARY = /\b([a-z][a-z-]*)-\[([^\]]+)\]/g;
 const RAW_LENGTH = /^-?\d*\.?\d+(px|rem|em)$/;
 // A hex color anywhere in the payload: `#fff`, `#0a0a0a`, `#00000080`.
 const HEX_COLOR = /#[0-9a-fA-F]{3,8}\b/;
+// A leading Tailwind data-type hint: `length:`, `color:`, `family-name:`, …
+// Stripped before the font-size test so `text-[length:11px]` is analyzed as the
+// raw `11px` it really is (the hint must not be a hiding place for raw values).
+const TYPE_HINT = /^[a-z-]+:/;
 
 function checkArbitrary(context, node, str) {
   if (typeof str !== 'string' || !str.includes('[')) return;
@@ -62,8 +66,10 @@ function checkArbitrary(context, node, str) {
   let m;
   while ((m = ARBITRARY.exec(str))) {
     const [whole, prefix, inner] = m;
-    // Any var()/custom-property reference is the tokenized form we WANT.
-    if (inner.includes('var(') || inner.includes('--')) continue;
+    // Hex is never the tokenized form — flag it ANYWHERE in the payload, even
+    // when a var() also appears (e.g. `linear-gradient(#fff, var(--bg))`). NOT
+    // gated on a var-free payload: a token reference alongside a raw hex must
+    // not launder the hex through.
     if (HEX_COLOR.test(inner)) {
       context.report({
         message: `Raw hex color "${whole}" bypasses the token layer — use a var(--color-*) token (or a semantic utility) instead of a hardcoded color.`,
@@ -71,9 +77,11 @@ function checkArbitrary(context, node, str) {
       });
       continue;
     }
-    // Raw font-size: a bare length under `text-` (excludes `text-[length:…]` /
-    // `text-[color:…]`, which carry a `:` and so don't match RAW_LENGTH).
-    if (prefix === 'text' && RAW_LENGTH.test(inner)) {
+    // Raw font-size: a bare length under `text-`, AFTER stripping any data-type
+    // hint. `text-[11px]` and `text-[length:11px]` both reduce to `11px` and are
+    // flagged; `text-[length:var(--text-2xs)]` reduces to a var() ref, which is
+    // not a bare length and so passes (the tokenized form we want).
+    if (prefix === 'text' && RAW_LENGTH.test(inner.replace(TYPE_HINT, ''))) {
       context.report({
         message: `Raw font-size "${whole}" bypasses the type scale — use a --text-* utility (text-3xs/2xs/xs/sm/md/base/lg/xl) instead of an arbitrary length.`,
         node,
