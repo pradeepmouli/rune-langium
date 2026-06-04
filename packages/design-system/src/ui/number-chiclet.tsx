@@ -18,9 +18,10 @@ import { cn } from '../utils';
  * The vars compose from design tokens (`--muted`, `--background`, …) so theming
  * still flows through, and a consumer can override any of them via `style`.
  *
- * Note: `--font-mono` / `--text-2xs` go through arbitrary `var()` because the
- * repo's type tokens live in `:root`, not Tailwind's `@theme` — promoting the
- * type scale into `@theme` would make these clean named utilities (follow-up).
+ * Type uses the named `font-mono` / `text-2xs` utilities (the brand mono stack
+ * and the 11px scale rung, both wired through Tailwind's `@theme`); the composite
+ * surface keeps arbitrary `var()` because a gradient / color-mix fill has no
+ * utility form — that's exactly the tier-3 escape hatch.
  */
 const surfaceVars = {
   '--chiclet-bg':
@@ -37,7 +38,7 @@ export function NumberChiclet({ className, style, ...props }: React.ComponentPro
       style={{ ...surfaceVars, ...style }}
       className={cn(
         'inline-flex items-center justify-center min-w-[22px] h-[18px] px-2 rounded-lg',
-        'font-[family-name:var(--font-mono)] text-[length:var(--text-2xs)] font-medium tabular-nums leading-none whitespace-nowrap shrink-0',
+        'font-mono text-2xs font-medium tabular-nums leading-none whitespace-nowrap shrink-0',
         // composite surface, consumed from the component vars above:
         'bg-[var(--chiclet-bg)] text-[color:var(--chiclet-fg)] border-[0.5px] border-[color:var(--chiclet-border)] shadow-[var(--chiclet-shadow)]',
         className
