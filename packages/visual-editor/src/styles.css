@@ -828,26 +828,9 @@ button[data-navigable]:focus-visible {
   white-space: nowrap;
 }
 
-/* Nav arrow — reuses the structure-view `.rune-row-glyph` idiom so the inspector
-   matches the canvas. Neutral (muted) variant with a subtle box + hover tint,
-   so the arrow reads as a button that coordinates with the chip pill. */
-.rune-row-glyph--nav {
-  background: color-mix(in oklch, var(--muted) 32%, transparent);
-  border: 1px solid color-mix(in oklch, var(--border) 55%, transparent);
-  border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
-  cursor: pointer;
-  transition:
-    color var(--motion-fast),
-    background-color var(--motion-fast),
-    border-color var(--motion-fast);
-}
-
-.rune-row-glyph--nav:hover {
-  color: var(--foreground);
-  background: color-mix(in oklch, var(--muted) 64%, transparent);
-  border-color: color-mix(in oklch, var(--border) 85%, transparent);
-}
+/* The inspector nav-arrow glyph (formerly `.rune-row-glyph--nav`) now renders
+ * via the design-system <RowGlyph variant="nav"> component. See
+ * packages/design-system/src/ui/row-glyph.tsx. */
 
 /* ── Detail panel ─────────────────────────────────────────────── */
 
@@ -1428,54 +1411,10 @@ button[data-navigable]:focus-visible {
   outline-offset: 1px;
 }
 
-/* ── Spec 020 §3.3 — row-level affordance glyphs ────────────────────────────
- *
- * .rune-row-glyph: shared base for the enum-nav (↗) and unresolved (?)
- * glyphs that appear after the type chip on qualifying rows.
- *
- * --enum-nav is a <button> (keyboard-accessible); --unresolved is a <span
- * role="img"> (indicator only, no action).
- * ────────────────────────────────────────────────────────────────────────── */
-
-.rune-row-glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  font-size: var(--text-xs);
-  line-height: 1;
-  border-radius: var(--radius-xs);
-  cursor: default;
-}
-
-/* Enum-nav ↗ button */
-.rune-row-glyph--enum-nav {
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: var(--color-enum-text);
-  cursor: pointer;
-}
-
-.rune-row-glyph--enum-nav:hover {
-  color: var(--foreground);
-  background: color-mix(in oklch, var(--color-enum-text) 20%, transparent);
-}
-
-.rune-row-glyph--enum-nav:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
-
-/* Unresolved-type ? indicator */
-.rune-row-glyph--unresolved {
-  color: var(--destructive);
-  background: color-mix(in oklch, var(--destructive) 14%, transparent);
-  font-weight: 600;
-}
+/* Spec 020 §3.3 — row-level affordance glyphs (.rune-row-glyph and its
+ * --nav / --enum-nav / --unresolved variants) moved into the design-system
+ * <RowGlyph> component (component-override convention). See
+ * packages/design-system/src/ui/row-glyph.tsx. */
 
 /* ── Spec 020 §3.4 — diagnostic left-edge severity markers ──────────────────
  *
