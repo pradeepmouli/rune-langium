@@ -719,6 +719,21 @@ button[data-navigable]:focus-visible {
   background: color-mix(in oklch, var(--muted) 50%, transparent);
 }
 
+/* ── Namespace segment header band ────────────────────────────────────
+   The flat namespace tree (explorer + inspector type picker) drops the
+   per-depth indent, so nesting is signalled by a resting background that
+   deepens with depth. The depth tint is supplied by the component as the
+   `--ns-seg-bg` custom property (so this :hover rule can still override the
+   background — an inline `background` would beat the hover and kill the
+   affordance). Fallback keeps the original muted/40 if the var is unset. */
+.rune-ns-seg-header {
+  background: var(--ns-seg-bg, color-mix(in oklch, var(--muted) 40%, transparent));
+}
+
+.rune-ns-seg-header:hover {
+  background: color-mix(in oklch, var(--accent) 50%, transparent);
+}
+
 /* Type-reference field — a BARE layout wrapper + drop target. The colored chip
    is the pill (structure-view idiom); no outer box, no padding, so the chip is
    not double-nested or compressed inside a second container. */

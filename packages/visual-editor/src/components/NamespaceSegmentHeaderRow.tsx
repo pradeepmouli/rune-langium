@@ -13,7 +13,7 @@
  * (constant in the flat layouts) via `indentPx`.
  */
 
-import type { JSX } from 'react';
+import type { CSSProperties, JSX } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
@@ -40,6 +40,12 @@ export interface NamespaceSegmentHeaderRowProps {
   onToggle: () => void;
   /** Left padding in px. Flat layouts pass a constant baseline. */
   indentPx: number;
+  /**
+   * Nesting depth (0 = top-level namespace). Drives a progressively darker
+   * resting background so deeper sub-namespaces read as nested even though the
+   * flat layout keeps every header at the same indent. Defaults to 0.
+   */
+  depth?: number;
   /** Optional test id for the outer wrapper (explorer uses `ns-seg-${fullPath}`). */
   'data-testid'?: string;
 }
@@ -50,16 +56,27 @@ export function NamespaceSegmentHeaderRow({
   count,
   onToggle,
   indentPx,
+  depth = 0,
   'data-testid': dataTestId
 }: NamespaceSegmentHeaderRowProps): JSX.Element {
+  // Resting fill deepens with depth (40% → +8%/level, capped at 72%) so nesting
+  // is legible without a per-depth indent. Passed as a CSS variable so the
+  // `.rune-ns-seg-header:hover` rule can still override the background (an inline
+  // `background` would win over the hover and kill the affordance).
+  const restingBgPercent = Math.min(40 + depth * 8, 72);
+  const segStyle = {
+    paddingLeft: `${indentPx}px`,
+    '--ns-seg-bg': `color-mix(in oklch, var(--muted) ${restingBgPercent}%, transparent)`
+  } as CSSProperties;
+
   return (
     <div data-testid={dataTestId} className="group">
-      {/* Header band: separator + muted background mark this row as a namespace
-          header (vs. a type row), since the flat layout drops the depth indent
-          that would otherwise distinguish them. */}
+      {/* Header band: separator + depth-tinted background mark this row as a
+          namespace header (vs. a type row), since the flat layout drops the
+          depth indent that would otherwise distinguish them. */}
       <div
-        className="flex items-center gap-1 border-t border-border/60 bg-muted/40 px-2 py-1 text-sm hover:bg-accent/50 cursor-default text-foreground"
-        style={{ paddingLeft: `${indentPx}px` }}
+        className="rune-ns-seg-header flex items-center gap-1 border-t border-border/60 px-2 py-1 text-sm cursor-default text-foreground"
+        style={segStyle}
       >
         <Button
           variant="ghost"

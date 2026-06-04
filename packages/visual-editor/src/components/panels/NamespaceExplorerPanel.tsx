@@ -32,7 +32,8 @@ import {
   buildSegmentedNamespaceTree,
   flattenSegmentedTree,
   filterSegmentedTree,
-  ancestorPathsForMatches
+  ancestorPathsForMatches,
+  collectSegmentSubtreePaths
 } from '../../utils/namespace-tree.js';
 import type { FlatTreeRow } from '../../utils/namespace-tree.js';
 import { useVirtualTree } from '../../hooks/useVirtualTree.js';
@@ -200,18 +201,25 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
   const virtualizer = useVirtualTree(flatRows, scrollRef);
 
-  // Toggle tree expansion (UI-only, not graph visibility).
-  const toggleTreeExpand = useCallback((fullPath: string) => {
-    setTreeExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(fullPath)) {
-        next.delete(fullPath);
-      } else {
-        next.add(fullPath);
-      }
-      return next;
-    });
-  }, []);
+  // Toggle tree expansion (UI-only, not graph visibility). Expanding a
+  // namespace recursively reveals every sub-namespace below it (and collapsing
+  // hides the whole subtree) so one click opens an entire branch — the
+  // "opening a namespace opens all the subnamespaces below it" UX.
+  const toggleTreeExpand = useCallback(
+    (fullPath: string) => {
+      const subtree = collectSegmentSubtreePaths(segmentedRoots, fullPath);
+      setTreeExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(fullPath)) {
+          for (const path of subtree) next.delete(path);
+        } else {
+          for (const path of subtree) next.add(path);
+        }
+        return next;
+      });
+    },
+    [segmentedRoots]
+  );
 
   const totalTypes = nodes.length;
   const visibleCount = nodes.filter((n) => expandedNamespaces.has(n.data.namespace) && !hiddenNodeIds.has(n.id)).length;
@@ -328,10 +336,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                         onToggleTreeExpand={() => toggleTreeExpand(row.namespace)}
                       />
                     ) : row.kind === 'segment' ? (
-                      <SegmentHeaderRow
-                        row={row}
-                        onToggleTreeExpand={() => toggleTreeExpand(row.fullPath)}
-                      />
+                      <SegmentHeaderRow row={row} onToggleTreeExpand={() => toggleTreeExpand(row.fullPath)} />
                     ) : row.kind === 'type' ? (
                       <TypeItemRow
                         row={row}
@@ -434,6 +439,7 @@ function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): J
       fullPath={row.fullPath}
       expanded={row.expanded}
       count={row.totalCount}
+      depth={row.depth}
       onToggle={onToggleTreeExpand}
       indentPx={TREE_INDENT_BASE}
     />
