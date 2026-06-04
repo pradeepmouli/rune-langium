@@ -802,13 +802,19 @@ html {
    * to packages/design-system/src/dock-theme.css. */
 
   .studio-app .studio-graph-canvas {
-    /* Subtle radial vignette (matches the reference `.rs-canvas` ellipse at
-     * 50% 30%), token-driven so it tracks the midnight-green surfaces. The dot
-     * grid is NOT painted here as a fixed ::after overlay anymore — React Flow's
-     * <Background> renders a single grid that pans/zooms WITH the canvas, so a
-     * second fixed grid no longer phases against it. */
+    /* Radial vignette matching the reference `.rs-canvas`: a DARK pool at
+     * 50% 30% fading out to the lighter panel surface (reference is
+     * `radial-gradient(ellipse at 50% 30%, oklch(0.16…), --rs-bg-2)` — center
+     * darker than the surfaces, not lighter). Token-driven so it tracks the
+     * midnight-green palette. The dot grid is NOT painted here as a fixed
+     * ::after overlay anymore — React Flow's <Background> renders a single grid
+     * that pans/zooms WITH the canvas, so nothing phases against it. */
     background:
-      radial-gradient(ellipse at 50% 30%, var(--card), var(--background));
+      radial-gradient(
+        ellipse at 50% 30%,
+        color-mix(in oklch, var(--background), black 14%),
+        var(--card)
+      );
   }
 
   .studio-app .studio-statusbar {
