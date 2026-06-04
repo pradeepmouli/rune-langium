@@ -699,6 +699,26 @@ button[data-navigable]:focus-visible {
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent);
 }
 
+/* ── Inspector editable row band ──────────────────────────────────────
+   SSoT for the resting "row band": a soft muted fill so each editable row
+   (attribute, enum value, choice option, function input) reads as a distinct
+   band against the panel background, deepening on hover. Pairs with the
+   per-row `border border-transparent hover:border-border` outline the rows
+   already carry. Kept here (not as a Tailwind utility cluster repeated at four
+   call sites) so the band is tuned from one place — same convention as
+   `.rune-inspector-pill` above. */
+.rune-inspector-row {
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.rune-inspector-row:hover {
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+
 /* Type-reference field — a BARE layout wrapper + drop target. The colored chip
    is the pill (structure-view idiom); no outer box, no padding, so the chip is
    not double-nested or compressed inside a second container. */

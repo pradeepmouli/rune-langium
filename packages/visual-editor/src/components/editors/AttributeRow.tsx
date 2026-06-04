@@ -61,7 +61,14 @@ export interface AttributeRowProps {
   /** Available type options for the TypeSelector. */
   availableTypes: TypeOption[];
   /** Commit attribute changes to the graph. */
-  onUpdate: (index: number, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) => void;
+  onUpdate: (
+    index: number,
+    oldName: string,
+    newName: string,
+    typeName: string,
+    cardinality: string,
+    targetTypeId?: string
+  ) => void;
   /** Remove this attribute by index. */
   onRemove: (index: number) => void;
   /** Reorder (drag) callback; fromIndex → toIndex. */
@@ -226,8 +233,8 @@ function AttributeRow({
     <div
       data-slot="attribute-row"
       data-index={index}
-      className={`${ATTRIBUTE_ROW_LAYOUT} rounded border border-transparent px-1 py-0.5
-        hover:border-border hover:bg-background/50 ${isOverride ? 'opacity-60' : ''}`}
+      className={`${ATTRIBUTE_ROW_LAYOUT} rune-inspector-row border border-transparent px-1 py-0.5
+        hover:border-border ${isOverride ? 'opacity-60' : ''}`}
       draggable={!effectiveReadOnly}
       onDragStart={handleDragStart}
       onDrop={handleDrop}
