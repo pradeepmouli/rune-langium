@@ -24,6 +24,7 @@ import type {
   StructureChoiceNode,
   StructureDataNode,
   StructureEnumNode,
+  StructureFunctionNode,
   StructureGraphInput,
   StructureNode
 } from '../types/structure-view.js';
@@ -401,6 +402,51 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
 }
 
 /**
+ * Size a read-only Function node (Phase C). The body is the function's input
+ * rows followed by an optional output row, all rendered as stacked Data-style
+ * rows → DATA_ROW_HEIGHT (matching sizeData). Functions have no expansion
+ * children in this first cut, so there is no right-hand column and no
+ * simulateColumnHeight pass — height is the header plus the row stack.
+ *
+ * Width grows from the input/output row texts plus the function name as a
+ * header floor, via `estimateRowsColWidth` (same estimator the Data/Choice/Enum
+ * sizers use). rowOffsets are keyed by each row's `attrName` (inputs) plus a
+ * stable `__output__` sentinel for the output row, so they stay populated for
+ * symmetry with the other sizers even though functions place no children.
+ */
+const FUNCTION_OUTPUT_ROW_KEY = '__output__';
+
+function sizeFunction(node: StructureFunctionNode): SizedNode {
+  const inputRows = node.inputRows;
+  const rowCount = inputRows.length + (node.outputRow ? 1 : 0);
+
+  const rowOffsets = new Map<string, number>();
+  for (const [i, row] of inputRows.entries()) {
+    rowOffsets.set(row.attrName, HEADER_HEIGHT + i * DATA_ROW_HEIGHT + DATA_ROW_HEIGHT / 2);
+  }
+  if (node.outputRow) {
+    rowOffsets.set(FUNCTION_OUTPUT_ROW_KEY, HEADER_HEIGHT + inputRows.length * DATA_ROW_HEIGHT + DATA_ROW_HEIGHT / 2);
+  }
+
+  const rowTexts = inputRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }));
+  if (node.outputRow) {
+    rowTexts.push({
+      name: node.outputRow.attrName,
+      typeName: node.outputRow.typeName,
+      card: node.outputRow.cardinality
+    });
+  }
+  const rowsColWidth = estimateRowsColWidth(rowTexts, node.name);
+
+  return {
+    width: rowsColWidth,
+    height: HEADER_HEIGHT + rowCount * DATA_ROW_HEIGHT,
+    rowsColWidth,
+    rowOffsets
+  };
+}
+
+/**
  * Compute the SizedNode for a Base container, recursing into the derived inner
  * child and any per-instance row-level expansions.
  */
@@ -547,6 +593,7 @@ function sizeOf(
     if (node.kind === 'data') sized = sizeData(node, sizes, input, sizing);
     else if (node.kind === 'choice') sized = sizeChoice(node, sizes, input, sizing);
     else if (node.kind === 'enum') sized = sizeEnum(node);
+    else if (node.kind === 'function') sized = sizeFunction(node);
     else sized = sizeBase(node, sizes, input, sizing);
     sizes.set(cacheKey, sized);
     return sized;
@@ -697,6 +744,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       case 'enum':
         // Phase 14e/A — Enum nodes are terminal; their value list renders
         // as plain rows, no children to place.
+        break;
+      case 'function':
+        // Phase C — Function nodes are terminal in this first cut; inputs and
+        // the output render as plain stacked rows with no expansion children.
         break;
       default: {
         const _exhaustive: never = n;

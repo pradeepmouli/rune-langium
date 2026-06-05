@@ -136,9 +136,18 @@ function shallowEqualData(a: unknown, b: unknown): boolean {
     if (Object.is(av, bv)) continue;
     // Special-case the known-nested fields the adapter+layout rebuild per
     // pass. Everything else falls through to Object.is (strict identity).
-    if (k === 'rows' || k === 'baseRows' || k === 'options') {
+    if (k === 'rows' || k === 'baseRows' || k === 'options' || k === 'inputRows') {
+      // Phase C: `inputRows` is a StructureFunctionNode's array of StructureRow
+      // (same per-pass-rebuilt shape as `rows`), so compare it structurally too.
       if (!Array.isArray(av) || !Array.isArray(bv)) return false;
       if (!arraysEqual(av, bv, shallowRecordEqual)) return false;
+      continue;
+    }
+    if (k === 'outputRow') {
+      // Phase C: single StructureRow (or undefined); the adapter rebuilds it per
+      // pass with a fresh astRange object, so compare by value via the same
+      // record comparator the row arrays use.
+      if (!shallowRecordEqual(av, bv)) return false;
       continue;
     }
     if (k === 'values') {

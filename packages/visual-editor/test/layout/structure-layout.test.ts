@@ -1443,3 +1443,66 @@ describe('layoutStructureGraph — node dimensions on style (Finding G)', () => 
     expect(node.height).toBeUndefined();
   });
 });
+
+describe('layoutStructureGraph — Function node (Phase C)', () => {
+  const { HEADER_HEIGHT, DATA_ROW_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
+
+  function fnInput(inputCount: number, hasOutput: boolean): StructureGraphInput {
+    const inputRows = Array.from({ length: inputCount }, (_, i) => ({
+      attrName: `in${i}`,
+      typeName: 'number',
+      typeKind: 'BasicType' as const,
+      cardinality: '1..1',
+      isOptional: false,
+      isInherited: false
+    }));
+    return {
+      rootNodeId: 'fn',
+      nodes: new Map([
+        [
+          'fn',
+          {
+            id: 'fn',
+            kind: 'function' as const,
+            name: 'Calc',
+            namespaceUri: 'cdm.calc',
+            inputRows,
+            outputRow: hasOutput
+              ? {
+                  attrName: 'out',
+                  typeName: 'Money',
+                  typeKind: 'Data' as const,
+                  cardinality: '1..1',
+                  isOptional: false,
+                  isInherited: false
+                }
+              : undefined
+          }
+        ]
+      ])
+    };
+  }
+
+  it('emits a single function-typed node with no parent and no children', () => {
+    const { nodes, edges } = layoutStructureGraph(fnInput(2, true));
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe('fn');
+    expect(nodes[0].type).toBe('function');
+    expect(nodes[0].parentId).toBeUndefined();
+    expect(edges).toHaveLength(0);
+  });
+
+  it('height = HEADER_HEIGHT + (inputs + output) * DATA_ROW_HEIGHT', () => {
+    // 2 inputs + 1 output = 3 stacked rows.
+    const withOutput = layoutStructureGraph(fnInput(2, true));
+    expect((withOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT + 3 * DATA_ROW_HEIGHT);
+
+    // 2 inputs, no output = 2 rows.
+    const noOutput = layoutStructureGraph(fnInput(2, false));
+    expect((noOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT + 2 * DATA_ROW_HEIGHT);
+
+    // 0 inputs, no output = header only.
+    const empty = layoutStructureGraph(fnInput(0, false));
+    expect((empty.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT);
+  });
+});

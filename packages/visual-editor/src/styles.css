@@ -992,6 +992,7 @@ button[data-navigable]:focus-visible {
 .rune-node-data--structure,
 .rune-node-choice--structure,
 .rune-node-enum--structure,
+.rune-node-func--structure,
 .rune-graph-group--base {
   /* Inherits .rune-node-data card baseline; structure layout
    * stacks the header, then a two-column body below it. */
@@ -1019,7 +1020,8 @@ button[data-navigable]:focus-visible {
  * .rune-node rules are intentionally untouched. */
 .rune-node-data--structure,
 .rune-node-choice--structure,
-.rune-node-enum--structure {
+.rune-node-enum--structure,
+.rune-node-func--structure {
   /* Resting depth cue: a barely-there vertical gradient over var(--card)
    * (color-mix toward --background, no raw hex) that lends the fill a touch
    * of dimensionality without reading tinted. Applied to ALL structure nodes
@@ -1043,14 +1045,16 @@ button[data-navigable]:focus-visible {
  * background gradient (above) supplies quiet dimensionality. */
 .rune-node-data--structure:not(.rune-node-selected),
 .rune-node-choice--structure:not(.rune-node-selected),
-.rune-node-enum--structure:not(.rune-node-selected) {
+.rune-node-enum--structure:not(.rune-node-selected),
+.rune-node-func--structure:not(.rune-node-selected) {
   box-shadow: none;
 }
 
 /* Hover lift — a subtle drop, lighter than the graph node hover (0 6px 16px/.18). */
 .rune-node-data--structure:not(.rune-node-selected):hover,
 .rune-node-choice--structure:not(.rune-node-selected):hover,
-.rune-node-enum--structure:not(.rune-node-selected):hover {
+.rune-node-enum--structure:not(.rune-node-selected):hover,
+.rune-node-func--structure:not(.rune-node-selected):hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 4px 12px oklch(0 0 0 / 0.14);
@@ -1061,7 +1065,8 @@ button[data-navigable]:focus-visible {
  * specificity (0,2,0 vs 0,1,0) wins. */
 .rune-node-data--structure.rune-node-selected,
 .rune-node-choice--structure.rune-node-selected,
-.rune-node-enum--structure.rune-node-selected {
+.rune-node-enum--structure.rune-node-selected,
+.rune-node-func--structure.rune-node-selected {
   box-shadow:
     inset 0 0 0 1px var(--node-accent),
     0 4px 14px oklch(0 0 0 / 0.2);
@@ -1083,6 +1088,9 @@ button[data-navigable]:focus-visible {
 .rune-node-enum--structure .rune-cell-name,
 .rune-node-enum--structure .rune-cell-card,
 .rune-node-enum--structure .rune-cell-type-chip,
+.rune-node-func--structure .rune-cell-name,
+.rune-node-func--structure .rune-cell-card,
+.rune-node-func--structure .rune-cell-type-chip,
 .rune-graph-group--base .rune-cell-name,
 .rune-graph-group--base .rune-cell-card,
 .rune-graph-group--base .rune-cell-type-chip {
@@ -1107,7 +1115,8 @@ button[data-navigable]:focus-visible {
  * y=HEADER_HEIGHT, with NODE_PADDING bottom inset and 2*NODE_PADDING
  * total width — mirroring this CSS exactly. */
 .rune-node-data--structure,
-.rune-node-choice--structure {
+.rune-node-choice--structure,
+.rune-node-func--structure {
   box-sizing: border-box;
   height: 100%;
 }
@@ -1143,7 +1152,8 @@ button[data-navigable]:focus-visible {
  * padding is visual-only (not layout-coupled), so 12px is safe. */
 .rune-node-data--structure .rune-node-header,
 .rune-node-choice--structure .rune-node-header,
-.rune-node-enum--structure .rune-node-header {
+.rune-node-enum--structure .rune-node-header,
+.rune-node-func--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
   padding: 0 var(--space-3);
@@ -1178,7 +1188,8 @@ button[data-navigable]:focus-visible {
  * on the body. This aligns enum value rows with the enum header AND with
  * data/choice rows across nodes. Vertical/height untouched (no layout coupling
  * — enum has no two-col RF children to place). */
-.rune-node-enum--structure .rune-node-body {
+.rune-node-enum--structure .rune-node-body,
+.rune-node-func--structure .rune-node-body {
   padding: 0 var(--space-3) var(--space-3);
 }
 
@@ -1211,7 +1222,8 @@ button[data-navigable]:focus-visible {
    and Enum values stay on the single-line --rune-row-height above. The geometry
    math in structure-layout.ts (sizeData / sizeBase) uses DATA_ROW_HEIGHT for
    these rows, so the rendered height MUST mirror it. */
-.rune-node-data--structure .rune-node-row {
+.rune-node-data--structure .rune-node-row,
+.rune-node-func--structure .rune-node-row {
   height: var(--rune-data-row-height);
 }
 
@@ -1240,6 +1252,36 @@ button[data-navigable]:focus-visible {
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
+}
+
+/* ── Function node output row (Phase C) ───────────────────────────
+ * A function's output is rendered as a distinct row beneath its inputs,
+ * separated by a hairline and marked with a leading `→` glyph. The
+ * separator is a real 1px top border (the inset-shadow row separator used
+ * between sibling rows would not read strongly enough to signal the
+ * input→output boundary). Token-based colors only — no raw hex. */
+.rune-node-func-output-sep {
+  height: 0;
+  margin: var(--space-1) 0;
+  border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+}
+
+.rune-node-row--output .rune-node-row__name-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.rune-node-row__output-arrow {
+  color: var(--color-func-text, var(--muted-foreground));
+  font-weight: 600;
+}
+
+/* Subtle "output" treatment: the output name reads in the muted accent so the
+ * row is visually distinct from input parameters without adding chrome. */
+.rune-node-row--output .rune-cell-name {
+  color: var(--muted-foreground);
+  font-style: italic;
 }
 
 /* Light row separators — give the dense, fixed-height rows gentle

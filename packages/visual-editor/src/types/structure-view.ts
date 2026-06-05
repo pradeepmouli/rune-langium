@@ -295,7 +295,41 @@ export interface StructureBaseContainer {
   readonly expansions: ReadonlyMap<string, string>;
 }
 
-export type StructureNode = StructureDataNode | StructureChoiceNode | StructureBaseContainer | StructureEnumNode;
+/**
+ * A read-only Function node in the Structure View graph (Phase C). Materialized
+ * when the user focuses a `RosettaFunction` from the namespace explorer.
+ *
+ * Functions are RENDERED as a card with the function's inputs presented as
+ * stacked Data-style rows (name on top, `type · cardinality` beneath) and a
+ * distinct output row (`→ ReturnType · card`). Functions are roots only in this
+ * first cut — no nested expansion of input/output types into subtrees (deferred
+ * to a later phase), so a function node has no expansion children and renders
+ * like a simple Data node with no children column.
+ */
+export interface StructureFunctionNode {
+  readonly id: string;
+  readonly instanceId?: string;
+  readonly kind: 'function';
+  readonly name: string;
+  readonly namespaceUri: string;
+  /** Input parameters as stacked Data-style rows (reuses `StructureRow`). */
+  readonly inputRows: ReadonlyArray<StructureRow>;
+  /** Output as a single Data-style row; undefined when the function has no output. */
+  readonly outputRow?: StructureRow;
+  /** Phase A — type-level documentation; see `StructureDataNode.definition`. */
+  readonly definition?: string;
+  /** Phase A — annotation display strings; see `StructureDataNode.annotations`. */
+  readonly annotations?: readonly string[];
+  /** Phase A — condition display meta; see `StructureDataNode.conditions`. */
+  readonly conditions?: readonly StructureConditionMeta[];
+}
+
+export type StructureNode =
+  | StructureDataNode
+  | StructureChoiceNode
+  | StructureBaseContainer
+  | StructureEnumNode
+  | StructureFunctionNode;
 
 /** Full graph input produced by the adapter. */
 export interface StructureGraphInput {

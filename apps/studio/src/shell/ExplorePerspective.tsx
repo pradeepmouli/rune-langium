@@ -248,6 +248,9 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
       if (k === 'enum' || k === 'Enum' || k === 'RosettaEnumeration') return 'RosettaEnumeration';
       if (k === 'record' || k === 'RosettaRecordType') return 'RosettaRecordType';
       if (k === 'typeAlias' || k === 'TypeAlias' || k === 'RosettaTypeAlias') return 'TypeAlias';
+      // Phase C — Function structure node. Mirror the selectedNodeType fallback
+      // chain so curated-hydration func nodes (no `$type`) still project.
+      if (k === 'func' || k === 'Function' || k === 'RosettaFunction') return 'RosettaFunction';
       return undefined;
     })();
 
@@ -321,8 +324,36 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
     } else if (effectiveType === 'TypeAlias' || effectiveType === 'RosettaTypeAlias') {
       const ta = d as { name: string; namespace: string };
       adapterNodes.push({ id: rfNode.id, $type: 'TypeAlias', name: ta.name, namespace: ta.namespace });
+    } else if (effectiveType === 'RosettaFunction') {
+      // Phase C — Function structure node. `inputs` and `output` are
+      // Attribute-shaped (name + typeCall + card), identical to Data
+      // `attributes`, so they pass through to AdapterNode unchanged and the
+      // adapter's buildRow consumes them. Defensive against missing fields:
+      // partial-parse / hydration func nodes may omit inputs or output.
+      const df = d as {
+        name: string;
+        namespace: string;
+        inputs?: readonly unknown[];
+        output?: unknown;
+        definition?: string;
+        annotations?: readonly unknown[];
+        conditions?: readonly unknown[];
+      };
+      adapterNodes.push({
+        id: rfNode.id,
+        $type: 'Function',
+        name: df.name,
+        namespace: df.namespace,
+        inputs: (df.inputs ?? []) as AdapterNode['inputs'],
+        output: (df.output ?? null) as AdapterNode['output'],
+        // Phase A — type metadata (doc / annotations / conditions). Functions
+        // carry conditions + postConditions in the grammar; project doc +
+        // annotations + conditions via the shared helper. Empty results
+        // collapse to undefined.
+        ...projectStructureMeta(df)
+      });
     }
-    // Other kinds (Function, etc.) are not relevant to Structure View; Record and TypeAlias are now projected above.
+    // Record and TypeAlias projected above; Function projected here.
   }
 
   const namespaces = Array.from(namespacesSet).map((uri) => ({ uri }));
@@ -1686,7 +1717,14 @@ export function ExplorePerspective() {
   // Structure pane — focusedTypeId gated by node $type (Data / Choice / Enum only)
   const structureFocusedTypeId = useMemo(() => {
     if (!selectedNodeId) return undefined;
-    if (selectedNodeType === 'Data' || selectedNodeType === 'Choice' || selectedNodeType === 'RosettaEnumeration')
+    // Phase C — Functions are now a supported structure-view root alongside
+    // Data / Choice / Enum.
+    if (
+      selectedNodeType === 'Data' ||
+      selectedNodeType === 'Choice' ||
+      selectedNodeType === 'RosettaEnumeration' ||
+      selectedNodeType === 'RosettaFunction'
+    )
       return selectedNodeId;
     // Unsupported kind — pass undefined so StructureView shows its empty-selection state
     return undefined;
