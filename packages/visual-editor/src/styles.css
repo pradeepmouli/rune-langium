@@ -1168,19 +1168,19 @@ button[data-navigable]:focus-visible {
    * width here so the node shell remains the single source of truth. */
 }
 
-/* Apply NODE_PADDING on sides + bottom of the body so the rows column and
- * the right-column children read with breathing room around them. Top
- * stays 0 because the body's top edge sits flush against the header's
- * bottom — no extra gap wanted there. Default .rune-node-body padding
- * (8/12px) is intentionally reset and replaced with the SSoT-tracked
- * inset; structure-layout.ts uses NODE_PADDING in matching positions so
- * RF-placed children land in the padded zone, not over it.
- *
- * The choice variant gets the same treatment — same right-column-expansion
- * geometry, same inset story. */
-.rune-node-data--structure .rune-node-body--two-col,
+/* Choice body: NODE_PADDING on sides + bottom so the rows column and the
+ * right-column children read with breathing room. Top stays 0 (flush under
+ * the header). sizeChoice reserves exactly NODE_PADDING below the row stack. */
 .rune-node-choice--structure .rune-node-body--two-col {
   padding: 0 var(--rune-node-padding) var(--rune-node-padding);
+}
+
+/* Data body: sides only — NO vertical padding. The framed-rows stack
+ * (.rune-node-rows below) carries its own DATA_ROWS_PADDING top + bottom, so a
+ * body bottom inset here would DOUBLE the bottom gap (the regression the user
+ * flagged). sizeData reserves the rows stack's own padding, not a body inset. */
+.rune-node-data--structure .rune-node-body--two-col {
+  padding: 0 var(--rune-node-padding);
 }
 
 /* Enum renders a single-column body (default .rune-node-body, not two-col), so
@@ -1193,14 +1193,12 @@ button[data-navigable]:focus-visible {
   padding: 0 var(--space-3) var(--space-3);
 }
 
-/* Function body: same --space-3 horizontal inset as enum (aligns input/output
- * rows with the header), but the BOTTOM padding is layout-coupled — it must be
- * --rune-node-padding (NODE_PADDING) because sizeFunction reserves exactly
- * NODE_PADDING below the row stack. Using --space-3 here would render more
- * bottom padding than the height math reserves, clipping under
- * .rune-node's overflow: hidden. */
+/* Function body: sides only (NODE_PADDING) — like Data, the framed input/output
+ * rows stack carries its own DATA_ROWS_PADDING top + bottom, so no body vertical
+ * inset (which would double the bottom gap / clip under .rune-node's overflow).
+ * sizeFunction's width reserves 2×NODE_PADDING horizontally to match. */
 .rune-node-func--structure .rune-node-body {
-  padding: 0 var(--space-3) var(--rune-node-padding);
+  padding: 0 var(--rune-node-padding);
 }
 
 .rune-node-rows {
@@ -1227,14 +1225,39 @@ button[data-navigable]:focus-visible {
   transition: background-color var(--motion-fast);
 }
 
-/* Data attribute rows are XMLSpy-style stacked (name line + type/card line),
-   so they get the taller DATA_ROW_HEIGHT (--rune-data-row-height). Choice arms
-   and Enum values stay on the single-line --rune-row-height above. The geometry
-   math in structure-layout.ts (sizeData / sizeBase) uses DATA_ROW_HEIGHT for
-   these rows, so the rendered height MUST mirror it. */
+/* Framed-rows stack — Data attribute rows, base-container inherited rows, and
+   Function input/output rows render as XMLSpy-style stacked, hairline-bordered
+   CARDS that shrink-wrap to their widest member. The stack is a flex column
+   with DATA_ROW_GAP between cards and DATA_ROWS_PADDING top + bottom; the
+   `padding-inline-start` gives the cards' left border room so it isn't flush
+   against the body edge. (Choice arms + Enum values stay single-line + unframed
+   on .rune-node-rows above.) The inline `width` the renderer sets from the
+   layout's rows-only `rowsColWidth` makes the stack tight to its content. */
+.rune-node-data--structure .rune-node-rows,
+.rune-graph-group--base .rune-node-rows,
+.rune-node-func--structure .rune-node-rows {
+  box-sizing: border-box;
+  row-gap: var(--rune-data-row-gap);
+  padding-block: var(--rune-data-rows-padding);
+  padding-inline-start: var(--rune-data-row-padding-x);
+}
+
+/* Each framed card: DATA_ROW_HEIGHT (border-box, so border + padding sit inside
+   the layout-reserved height), a hairline border + subtle fill, tight corners,
+   and `align-self: stretch` so every card matches the widest one. The geometry
+   math in structure-layout.ts (sizeData / sizeBase / sizeFunction) reserves
+   DATA_ROW_HEIGHT + DATA_ROW_GAP per row, so the rendered height MUST mirror it. */
 .rune-node-data--structure .rune-node-row,
+.rune-graph-group--base .rune-node-row,
 .rune-node-func--structure .rune-node-row {
+  box-sizing: border-box;
   height: var(--rune-data-row-height);
+  align-self: stretch;
+  padding: var(--rune-data-row-padding-y) var(--rune-data-row-padding-x);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--border) 6%, transparent);
+  box-shadow: none;
 }
 
 /* XMLSpy-style stacked attribute row: the name occupies the top line and the
@@ -1301,14 +1324,14 @@ button[data-navigable]:focus-visible {
   font-style: italic;
 }
 
-/* Light row separators — give the dense, fixed-height rows gentle
- * horizontal separation so stacked members read as discrete records
- * rather than one undifferentiated block. Drawn as a 1px inset top
- * highlight (low-opacity var(--border)) on every row after the first, so
- * it does NOT consume content-box height the way a real `border-top`
- * would — the row's `height: var(--rune-row-height)` layout math (mirrored
- * in structure-layout.ts) stays exact. */
-.rune-node-row + .rune-node-row {
+/* Light row separators for the UNFRAMED single-line rows (Choice arms + Enum
+ * values) — a 1px inset top highlight on every row after the first so stacked
+ * members read as discrete records. It does NOT consume content-box height the
+ * way a real `border-top` would, so the --rune-row-height layout math stays
+ * exact. Framed Data/base/func rows are excluded — their hairline border IS the
+ * separator (they set `box-shadow: none` above). */
+.rune-node-choice--structure .rune-node-row + .rune-node-row,
+.rune-node-enum--structure .rune-node-row + .rune-node-row {
   box-shadow: inset 0 1px 0 color-mix(in oklch, var(--border) 45%, transparent);
 }
 

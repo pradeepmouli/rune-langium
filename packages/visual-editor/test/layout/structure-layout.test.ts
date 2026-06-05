@@ -991,12 +991,18 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // Constants (must stay in sync with structure-layout.ts):
     const BASE_PADDING = 4;
     const HEADER_HEIGHT = 28;
-    // Base inherited rows ARE Data attribute rows → DATA_ROW_HEIGHT (36) for the
-    // XMLSpy-style stacked layout (name line + var(--space-1) gap + type/card
-    // line). Choice arms / Enum values keep the single-line ROW_HEIGHT (28); not
-    // used here.
-    const DATA_ROW_HEIGHT = 36;
+    // Base inherited rows ARE Data attribute rows → framed cards at
+    // DATA_ROW_HEIGHT (44) each, separated by DATA_ROW_GAP (3), with
+    // DATA_ROWS_PADDING (4) top + bottom on the stack. Choice arms / Enum values
+    // keep the single-line ROW_HEIGHT (28); not used here.
+    const DATA_ROW_HEIGHT = 44;
+    const DATA_ROW_GAP = 3;
+    const DATA_ROWS_PADDING = 4;
     const ROW_GAP = 8;
+    // Total footprint of n framed rows incl. top+bottom padding + inter-row gaps
+    // (mirrors structure-layout.ts `framedRowsStackHeight`).
+    const framedRowsStackHeight = (n: number) =>
+      n <= 0 ? 0 : 2 * DATA_ROWS_PADDING + n * DATA_ROW_HEIGHT + (n - 1) * DATA_ROW_GAP;
 
     const input: StructureGraphInput = {
       rootNodeId: 'Trade::__base',
@@ -1066,18 +1072,20 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     const trade = nodes.find((n) => (n.data as { id?: string }).id === 'Trade')!;
     const party = nodes.find((n) => (n.data as { id?: string }).id === 'Party')!;
 
-    // Derived child must be placed below base rows + BASE_PADDING gap.
-    // Expected: BASE_PADDING (top CSS padding) is NOT part of this formula —
-    // placeBaseChildren places the child at:
-    //   y = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING = 28 + 36 + 4 = 68
-    const expectedTradeY = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING;
+    // Derived child must be placed below the framed base-rows stack + BASE_PADDING
+    // gap. placeBaseChildren places the child at:
+    //   y = HEADER_HEIGHT + framedRowsStackHeight(1) + BASE_PADDING
+    //     = 28 + (2*4 + 44) + 4 = 28 + 52 + 4 = 84
+    const expectedTradeY = HEADER_HEIGHT + framedRowsStackHeight(1) + BASE_PADDING;
     expect((trade.position as { x: number; y: number }).y).toBe(expectedTradeY);
 
-    // Right-column expansion for the base row must start at the row's
-    // vertical center minus half DATA_ROW_HEIGHT, accounting for BASE_PADDING top.
-    // Row 0 center = BASE_PADDING + HEADER_HEIGHT + 0*DATA_ROW_HEIGHT + DATA_ROW_HEIGHT/2
-    const row0Center = BASE_PADDING + HEADER_HEIGHT + 0 * DATA_ROW_HEIGHT + DATA_ROW_HEIGHT / 2;
-    const expectedPartyY = row0Center - DATA_ROW_HEIGHT / 2; // = rowTop for row 0 = 32
+    // Right-column expansion for the base row must start at the framed row's top:
+    // center minus half DATA_ROW_HEIGHT. The framed stack begins at
+    //   baseRowsTop = BASE_PADDING + HEADER_HEIGHT + DATA_ROWS_PADDING = 4+28+4 = 36
+    // Row 0 center = baseRowsTop + DATA_ROW_HEIGHT/2 → rowTop = baseRowsTop = 36.
+    const baseRowsTop = BASE_PADDING + HEADER_HEIGHT + DATA_ROWS_PADDING;
+    const row0Center = baseRowsTop + 0 * (DATA_ROW_HEIGHT + DATA_ROW_GAP) + DATA_ROW_HEIGHT / 2;
+    const expectedPartyY = row0Center - DATA_ROW_HEIGHT / 2; // = rowTop for row 0 = 36
     expect((party.position as { x: number; y: number }).y).toBe(expectedPartyY);
 
     // BASE_PADDING must equal 4 — documents the CSS coupling in the test.
@@ -1446,7 +1454,19 @@ describe('layoutStructureGraph — node dimensions on style (Finding G)', () => 
 });
 
 describe('layoutStructureGraph — Function node (Phase C)', () => {
-  const { HEADER_HEIGHT, DATA_ROW_HEIGHT, NODE_PADDING, FUNCTION_OUTPUT_SEP_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
+  const { HEADER_HEIGHT, DATA_ROW_HEIGHT, DATA_ROW_GAP, DATA_ROWS_PADDING, FUNCTION_OUTPUT_SEP_HEIGHT } =
+    STRUCTURE_LAYOUT_CONSTANTS;
+  // Reserved height for a function node: header + the framed rows stack
+  // (DATA_ROWS_PADDING top, n input rows at DATA_ROW_HEIGHT separated by
+  // DATA_ROW_GAP), + (separator + output row when present), + DATA_ROWS_PADDING
+  // bottom. Mirrors sizeFunction.
+  const inputStack = (n: number) => (n > 0 ? n * DATA_ROW_HEIGHT + (n - 1) * DATA_ROW_GAP : 0);
+  const fnReservedHeight = (nInputs: number, hasOutput: boolean) =>
+    HEADER_HEIGHT +
+    DATA_ROWS_PADDING +
+    inputStack(nInputs) +
+    (hasOutput ? FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT : 0) +
+    DATA_ROWS_PADDING;
 
   function fnInput(inputCount: number, hasOutput: boolean): StructureGraphInput {
     const inputRows = Array.from({ length: inputCount }, (_, i) => ({
@@ -1499,19 +1519,16 @@ describe('layoutStructureGraph — Function node (Phase C)', () => {
     // clipping fix, so the output row + bottom edge were clipped by
     // .rune-node's overflow: hidden.
     const withOutput = layoutStructureGraph(fnInput(2, true));
-    expect((withOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(
-      HEADER_HEIGHT + 2 * DATA_ROW_HEIGHT + FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT + NODE_PADDING
-    );
+    expect((withOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(fnReservedHeight(2, true));
 
-    // 2 inputs, no output: no separator, but bottom NODE_PADDING is still reserved.
+    // 2 inputs, no output: no separator, but the rows stack's top + bottom
+    // DATA_ROWS_PADDING is still reserved.
     const noOutput = layoutStructureGraph(fnInput(2, false));
-    expect((noOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(
-      HEADER_HEIGHT + 2 * DATA_ROW_HEIGHT + NODE_PADDING
-    );
+    expect((noOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(fnReservedHeight(2, false));
 
-    // 0 inputs, no output: header + bottom NODE_PADDING.
+    // 0 inputs, no output: header + the empty rows stack's top + bottom padding.
     const empty = layoutStructureGraph(fnInput(0, false));
-    expect((empty.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT + NODE_PADDING);
+    expect((empty.nodes[0] as { initialHeight?: number }).initialHeight).toBe(fnReservedHeight(0, false));
   });
 
   it('function with an output does NOT clip — reserved height covers the separator + output row + bottom padding', () => {
@@ -1522,8 +1539,7 @@ describe('layoutStructureGraph — Function node (Phase C)', () => {
     // output row + bottom padding.
     const result = layoutStructureGraph(fnInput(3, true));
     const reserved = (result.nodes[0] as { initialHeight?: number }).initialHeight ?? 0;
-    const fullRenderedFootprint =
-      HEADER_HEIGHT + 3 * DATA_ROW_HEIGHT + FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT + NODE_PADDING;
+    const fullRenderedFootprint = fnReservedHeight(3, true);
     expect(reserved).toBe(fullRenderedFootprint);
     expect(reserved).toBeGreaterThanOrEqual(fullRenderedFootprint);
   });
