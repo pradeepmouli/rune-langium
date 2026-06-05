@@ -247,9 +247,9 @@ function estimateRowsColWidth(
   // char count under-counts (card data is e.g. "1..1" but renders "(1..1)") + a
   // small safety margin. Tighter than the previous flat 48 (which always
   // budgeted the expand chevron → visible empty space inside primitive/enum
-  // rows, the slack the user flagged) but not so tight it clips: ~26 keeps a
-  // few px margin over real content for typical rows.
-  const CHROME_BASE = 26;
+  // rows, the slack the user flagged) but not so tight it clips: ~22 keeps a
+  // few px margin over real content for typical rows (chip padding-x is now 4px).
+  const CHROME_BASE = 22;
   // The right-edge expand control (+/−) renders ONLY for rows whose type is
   // itself expandable (Data / Choice). Reserve its footprint only for those
   // rows so a node of all-primitive attributes hugs its content.
@@ -285,18 +285,19 @@ function rowIsExpandable(typeKind: string): boolean {
  * attributes). Each size site takes `max(rowsColWidth, estimateHeaderWidth())`
  * for the node's content width.
  *
- * Calibrated against the rendered header (`.rune-node-header`): 12px L/R
- * padding (24), kind badge ≈ 46, badge→name gap 8, name ≈ 9px/char, and — when
- * the node carries doc/conditions/annotations — the `StructureMetaIndicators`
- * cluster (gap 8 + ≈ 30 for up to three compact indicators). Rounded generously
- * so the estimate is a safe upper bound (no header truncation).
+ * Calibrated against the rendered header (`.rune-node-header`): tightened
+ * --space-2 L/R padding (16), kind badge ≈ 46, badge/name/meta gap --space-1
+ * (4), name ≈ 9px/char, and — when the node carries doc/conditions/annotations —
+ * the `StructureMetaIndicators` cluster (gap 4 + ≈ 20 for up to three compact
+ * indicators). Must stay in sync with the `.rune-node-*--structure
+ * .rune-node-header` padding/gap in styles.css so the node hugs the header.
  */
 function estimateHeaderWidth(name: string, hasMeta: boolean): number {
-  const HEADER_PADDING = 24; // 12px left + 12px right
+  const HEADER_PADDING = 16; // --space-2 left + right
   const KIND_BADGE = 46;
-  const BADGE_GAP = 8;
+  const BADGE_GAP = 4; // --space-1
   const NAME_CHAR_W = 9;
-  const META_CLUSTER = hasMeta ? 8 + 20 : 0; // gap + indicator cluster (≈ measured 20px)
+  const META_CLUSTER = hasMeta ? 4 + 20 : 0; // gap + indicator cluster (≈ measured 20px)
   return HEADER_PADDING + KIND_BADGE + BADGE_GAP + name.length * NAME_CHAR_W + META_CLUSTER;
 }
 

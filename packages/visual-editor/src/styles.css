@@ -943,7 +943,7 @@ button[data-navigable]:focus-visible {
    * rune/no-literal-layout-px accepts them on geometry-class selectors.
    * Parity with STRUCTURE_LAYOUT_CONSTANTS is NOT required for these. */
   --rune-chip-padding-y: 1px;
-  --rune-chip-padding-x: 6px;
+  --rune-chip-padding-x: 4px;
   --rune-pill-padding-x: 5px;
   --rune-row-indent: 6px;
   /* Chrome padding — bridges design-system tokens to the rune SSoT
@@ -1157,7 +1157,12 @@ button[data-navigable]:focus-visible {
 .rune-node-func--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
-  padding: 0 var(--space-3);
+  /* Tightened header insets (visual-only, not layout-coupled): L/R padding
+   * --space-3 -> --space-2 and the badge/name/meta gap --space-2 -> --space-1
+   * so the header (which drives the node width) hugs its tokens. Mirrored in
+   * estimateHeaderWidth so the node actually shrinks, not just the chrome. */
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
 }
 
 .rune-node-body--two-col {
