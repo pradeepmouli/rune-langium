@@ -16,6 +16,7 @@ import {
   flattenSegmentedTree,
   filterSegmentedTree,
   ancestorPathsForMatches,
+  collectSegmentSubtreePaths,
   type SegmentNode
 } from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode, TypeOption } from '../../src/types.js';
@@ -180,9 +181,9 @@ describe('buildSegmentedNamespaceTree', () => {
 
     expect(base.totalCount).toBe(1);
     expect(party.totalCount).toBe(1);
-    expect(model.totalCount).toBe(3);   // 2 direct + 1 in base
+    expect(model.totalCount).toBe(3); // 2 direct + 1 in base
     expect(rosetta.totalCount).toBe(4); // 3 (model subtree) + 1 (party)
-    expect(com.totalCount).toBe(4);     // same as rosetta (com has no direct types)
+    expect(com.totalCount).toBe(4); // same as rosetta (com has no direct types)
   });
 
   it('totalCount for "" segment equals its direct type count', () => {
@@ -304,9 +305,7 @@ describe('flattenSegmentedTree (no compression)', () => {
     expect(baseRow).toMatchObject({ kind: 'segment', segment: 'base', depth: 3 });
 
     // Then the 2 direct types of model appear at depth 3
-    const modelTypes = rows.slice(modelIdx + 2).filter(
-      (r) => r.kind === 'type' && r.namespace === 'com.rosetta.model'
-    );
+    const modelTypes = rows.slice(modelIdx + 2).filter((r) => r.kind === 'type' && r.namespace === 'com.rosetta.model');
     expect(modelTypes).toHaveLength(2);
     expect(modelTypes.map((r) => (r as any).name)).toEqual(['Event', 'Trade']); // sorted
     modelTypes.forEach((r) => expect((r as any).depth).toBe(3));
@@ -357,7 +356,12 @@ describe('flattenSegmentedTree (no compression)', () => {
   it('full expansion emits all 5 types', () => {
     const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
     const allPaths = new Set([
-      '', 'com', 'com.rosetta', 'com.rosetta.model', 'com.rosetta.model.base', 'com.rosetta.party'
+      '',
+      'com',
+      'com.rosetta',
+      'com.rosetta.model',
+      'com.rosetta.model.base',
+      'com.rosetta.party'
     ]);
     const rows = flattenSegmentedTree(roots, allPaths);
     const typeRows = rows.filter((r) => r.kind === 'type');
@@ -374,10 +378,7 @@ describe('flattenSegmentedTree (no compression)', () => {
 describe('flattenSegmentedTree (compressSingleChild: true)', () => {
   it('collapses "com > rosetta" into a single "com.rosetta" row when com has no direct types', () => {
     // Build a fixture where com → rosetta → model (no party, so rosetta has 1 child)
-    const nodes = [
-      makeNode('com.rosetta.model', 'Trade'),
-      makeNode('com.rosetta.model.base', 'Date')
-    ];
+    const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.model.base', 'Date')];
     const roots = buildSegmentedNamespaceTree(nodes);
     const rows = flattenSegmentedTree(roots, new Set(), { compressSingleChild: true });
 
@@ -399,10 +400,7 @@ describe('flattenSegmentedTree (compressSingleChild: true)', () => {
   });
 
   it('expands the compressed row using the terminal fullPath', () => {
-    const nodes = [
-      makeNode('com.rosetta.model', 'Trade'),
-      makeNode('com.rosetta.model', 'Event')
-    ];
+    const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.model', 'Event')];
     const roots = buildSegmentedNamespaceTree(nodes);
     // Compress stops at model (has types); expand by "com.rosetta.model"
     const rows = flattenSegmentedTree(roots, new Set(['com.rosetta.model']), { compressSingleChild: true });
@@ -413,10 +411,7 @@ describe('flattenSegmentedTree (compressSingleChild: true)', () => {
 
   it('does NOT compress a node that has direct types', () => {
     // com.rosetta has a direct type → compression must not merge com into it
-    const nodes = [
-      makeNode('com.rosetta', 'Root'),
-      makeNode('com.rosetta.model', 'Trade')
-    ];
+    const nodes = [makeNode('com.rosetta', 'Root'), makeNode('com.rosetta.model', 'Trade')];
     const roots = buildSegmentedNamespaceTree(nodes);
     const rows = flattenSegmentedTree(roots, new Set(), { compressSingleChild: true });
     // com has no direct types, 1 child (rosetta) BUT rosetta HAS types → stop at rosetta
@@ -427,10 +422,7 @@ describe('flattenSegmentedTree (compressSingleChild: true)', () => {
 
   it('does NOT compress a node with multiple children', () => {
     // com.rosetta has two children (model, party) → no compression at rosetta
-    const nodes = [
-      makeNode('com.rosetta.model', 'Trade'),
-      makeNode('com.rosetta.party', 'Party')
-    ];
+    const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('com.rosetta.party', 'Party')];
     const roots = buildSegmentedNamespaceTree(nodes);
     const rows = flattenSegmentedTree(roots, new Set(), { compressSingleChild: true });
     // com (no types, 1 child rosetta) → rosetta has 2 children → compress "com" → "com.rosetta"
@@ -574,16 +566,13 @@ describe('filterSegmentedTree', () => {
 
   it('does not mutate the original tree', () => {
     const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
-    const originalModelTypes = [...(roots.find(r => r.segment === 'com')
-      ?.children[0]
-      ?.children.find(c => c.segment === 'model')
-      ?.types ?? [])];
+    const originalModelTypes = [
+      ...(roots.find((r) => r.segment === 'com')?.children[0]?.children.find((c) => c.segment === 'model')?.types ?? [])
+    ];
 
     filterSegmentedTree(roots, 'Trade');
 
-    const modelAfter = roots.find(r => r.segment === 'com')
-      ?.children[0]
-      ?.children.find(c => c.segment === 'model');
+    const modelAfter = roots.find((r) => r.segment === 'com')?.children[0]?.children.find((c) => c.segment === 'model');
     expect(modelAfter?.types).toHaveLength(originalModelTypes.length);
   });
 
@@ -640,10 +629,7 @@ describe('ancestorPathsForMatches', () => {
 
   it('search that matches types in two branches includes ancestors for both', () => {
     // Both com.rosetta.model::Trade and cdm.trade::Trade — use a fixture with both
-    const nodes = [
-      makeNode('com.rosetta.model', 'Trade'),
-      makeNode('cdm.trade', 'Trade')
-    ];
+    const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('cdm.trade', 'Trade')];
     const roots = buildSegmentedNamespaceTree(nodes);
     const paths = ancestorPathsForMatches(roots, 'Trade');
     // com branch
@@ -701,9 +687,7 @@ describe('buildSegmentedNamespaceTreeFromOptions', () => {
   });
 
   it('nests sub-namespaces into segment chains', () => {
-    const roots = buildSegmentedNamespaceTreeFromOptions([
-      opt('cdm.base.datetime', 'BusinessCenters', 'data')
-    ]);
+    const roots = buildSegmentedNamespaceTreeFromOptions([opt('cdm.base.datetime', 'BusinessCenters', 'data')]);
     expect(roots).toHaveLength(1);
     expect(roots[0]!.fullPath).toBe('cdm');
     expect(roots[0]!.children[0]!.fullPath).toBe('cdm.base');
@@ -731,5 +715,37 @@ describe('buildSegmentedNamespaceTreeFromOptions', () => {
     ]);
     expect(roots.map((r) => r.segment)).toEqual(['alpha', 'zeta']);
     expect(roots[0]!.types.map((t) => t.name)).toEqual(['Apple', 'Beta']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collectSegmentSubtreePaths — recursive expand/collapse support
+// ---------------------------------------------------------------------------
+
+describe('collectSegmentSubtreePaths', () => {
+  it('collects a namespace plus every descendant segment fullPath', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    // "com" subtree = com, com.rosetta, com.rosetta.model, com.rosetta.model.base,
+    // com.rosetta.party — opening "com" should reveal them all.
+    expect(new Set(collectSegmentSubtreePaths(roots, 'com'))).toEqual(
+      new Set(['com', 'com.rosetta', 'com.rosetta.model', 'com.rosetta.model.base', 'com.rosetta.party'])
+    );
+  });
+
+  it('collects a mid-tree segment and only its own descendants', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(new Set(collectSegmentSubtreePaths(roots, 'com.rosetta.model'))).toEqual(
+      new Set(['com.rosetta.model', 'com.rosetta.model.base'])
+    );
+  });
+
+  it('returns just the leaf for a segment with no children', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(collectSegmentSubtreePaths(roots, 'com.rosetta.party')).toEqual(['com.rosetta.party']);
+  });
+
+  it('degrades to the requested path when it is not in the tree (no-op safety)', () => {
+    const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
+    expect(collectSegmentSubtreePaths(roots, 'does.not.exist')).toEqual(['does.not.exist']);
   });
 });

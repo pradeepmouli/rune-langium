@@ -28,7 +28,7 @@ const surfaceVars = {
     'linear-gradient(180deg, color-mix(in srgb, var(--muted) 88%, transparent), color-mix(in srgb, var(--background) 76%, transparent))',
   '--chiclet-fg': 'color-mix(in srgb, var(--muted-foreground) 92%, white 8%)',
   '--chiclet-border': 'color-mix(in srgb, var(--border) 86%, transparent)',
-  '--chiclet-shadow': 'inset 0 1px 0 color-mix(in srgb, white 9%, transparent)',
+  '--chiclet-shadow': 'inset 0 1px 0 color-mix(in srgb, white 9%, transparent)'
 } as React.CSSProperties;
 
 export function NumberChiclet({ className, style, ...props }: React.ComponentProps<'span'>) {
@@ -42,7 +42,12 @@ export function NumberChiclet({ className, style, ...props }: React.ComponentPro
         // composite surface, consumed from the component vars above. `--chiclet-bg`
         // is a gradient, so it MUST use `bg-[image:…]` — a bare `bg-[var()]` compiles
         // to `background-color`, which silently drops a gradient value.
-        'bg-[image:var(--chiclet-bg)] text-[color:var(--chiclet-fg)] border-[0.5px] border-[color:var(--chiclet-border)] shadow-[var(--chiclet-shadow)]',
+        // Hairline width is set self-contained via the shared --hairline token,
+        // NOT the studio-scoped `[class~="border"]` override — so the chiclet keeps
+        // its 0.5px edge even outside the studio shell (e.g. in
+        // @rune-langium/visual-editor, which doesn't load app.css). `border-[color:…]`
+        // only sets the color.
+        'bg-[image:var(--chiclet-bg)] text-[color:var(--chiclet-fg)] border-[length:var(--hairline)] border-[color:var(--chiclet-border)] shadow-[var(--chiclet-shadow)]',
         className
       )}
       {...props}

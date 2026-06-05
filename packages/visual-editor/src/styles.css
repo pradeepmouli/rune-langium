@@ -29,13 +29,13 @@
   gap: var(--space-2);
   max-width: calc(100% - 24px);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--glass-btn-border);
+  border: var(--hairline) solid var(--glass-btn-border);
   border-radius: var(--radius-full);
   background: var(--glass-bg-header);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px);
   color: var(--foreground);
   font-size: var(--text-2xs);
-  box-shadow: 0 10px 24px oklch(0 0 0 / 0.22);
+  box-shadow: 0 4px 14px oklch(0 0 0 / 0.15);
 }
 
 .rune-graph-breadcrumbs__item {
@@ -72,7 +72,7 @@
 
 .rune-flow-node-shell--focus .rune-node {
   box-shadow:
-    0 0 0 1px oklch(0.78 0.17 168 / 0.45),
+    0 0 0 1px color-mix(in oklch, var(--ring) 45%, transparent),
     0 8px 20px oklch(0 0 0 / 0.34);
 }
 
@@ -107,7 +107,7 @@
   width: 100%;
   height: 100%;
   border-radius: var(--radius-xl);
-  border: 1px dotted color-mix(in oklch, var(--muted-foreground) 32%, transparent);
+  border: var(--hairline) dotted color-mix(in oklch, var(--muted-foreground) 32%, transparent);
   background:
     linear-gradient(
       180deg,
@@ -133,7 +133,9 @@
 
 .rune-graph-group__title {
   font-size: var(--text-3xs);
-  font-weight: 650;
+  /* 600 (was a non-standard 650) — the reference uses 600 for uppercase
+   * section/cluster labels (.rs-insp-sect / .rs-gnode-kind). */
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: color-mix(in oklch, var(--foreground) 70%, var(--primary) 12%);
@@ -158,10 +160,15 @@
    * adding the className in JSX, which is out of scope for this CSS-
    * only pass) so the rule remains self-contained.
    *
-   * UX rec #2: 12px radius reads as the modern 2024+ canvas language
-   * ("rounded-xl" in Tailwind terms). 8px was Bootstrap-era. */
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border);
+   * Node radius is --radius-lg (8px) to match the reference `.rs-gnode`
+   * (--rs-r-md / 8px). Containers + panels keep --radius-xl (12px) so the
+   * nesting reads outer-more-rounded-than-inner. (Earlier 12px on a
+   * "rounded-xl reads modern" rationale; aligned down to the handoff.) */
+  border-radius: var(--radius-lg);
+  /* Hairline edge via the shared --hairline token (tokens.css) — the same knob
+   * the global `[class~="border"]` override uses, so node + component borders
+   * stay in lockstep. */
+  border: var(--hairline) solid var(--border);
   position: relative;
   overflow: hidden;
   background: var(--card);
@@ -191,14 +198,20 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: color-mix(in oklch, var(--node-accent) 82%, white 18%);
-  opacity: 0.78;
+  /* Pure kind color + a left-corner radius so the accent hugs the rounded node
+   * edge — matches the reference `.rs-gnode::before` (var(--kind) + left
+   * border-radius). Was lightened with 18% white (read pastel) and relied on the
+   * node's overflow:hidden clipping it to the larger 12px arc, which hard-cut
+   * the thin stripe at the corners. */
+  background: var(--node-accent);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  opacity: 0.75;
 }
 
 .rune-node:hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 22px oklch(0 0 0 / 0.24);
+    0 6px 16px oklch(0 0 0 / 0.18);
 }
 
 .react-flow__node.dragging .rune-node {
@@ -212,7 +225,7 @@
   padding: var(--rune-header-padding-y) var(--rune-header-padding-x);
   font-weight: 600;
   font-size: var(--text-sm);
-  border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  border-bottom: var(--hairline) solid color-mix(in oklch, var(--border) 78%, transparent);
   display: flex;
   align-items: center;
   /* justify-content + `order: 2` on the kind pill flips the visual order
@@ -480,7 +493,7 @@ button[data-navigable]:focus-visible {
   background: var(--color-edge-label-bg);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-edge-label-border);
+  border: var(--hairline) solid var(--color-edge-label-border);
   color: var(--color-node-text);
   pointer-events: all;
   transition:
@@ -543,7 +556,7 @@ button[data-navigable]:focus-visible {
 
 .rune-panel {
   background: var(--card);
-  border: 1px solid var(--border);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   padding: var(--space-6);
@@ -564,7 +577,7 @@ button[data-navigable]:focus-visible {
 .rune-search-input {
   width: 100%;
   padding: var(--space-3) var(--space-5);
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
   outline: none;
@@ -614,7 +627,7 @@ button[data-navigable]:focus-visible {
 
 .rune-toolbar-button {
   padding: var(--space-3) var(--space-5);
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   background: var(--muted);
   cursor: pointer;
@@ -636,7 +649,7 @@ button[data-navigable]:focus-visible {
 .rune-toolbar-select {
   font-size: var(--text-sm);
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   background: var(--muted);
   color: var(--foreground);
@@ -662,7 +675,7 @@ button[data-navigable]:focus-visible {
   height: auto;
   min-width: 0;
   padding: 2px var(--space-2);
-  border: 1px solid transparent;
+  border: var(--hairline) solid transparent;
   border-radius: var(--radius-lg);
   background: color-mix(in oklch, var(--muted) 20%, transparent);
   font-family: var(--font-mono);
@@ -684,6 +697,41 @@ button[data-navigable]:focus-visible {
   border-color: color-mix(in oklch, var(--primary) 42%, transparent);
   background: color-mix(in oklch, var(--muted) 42%, transparent);
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent);
+}
+
+/* ── Inspector editable row band ──────────────────────────────────────
+   SSoT for the resting "row band": a soft muted fill so each editable row
+   (attribute, enum value, choice option, function input) reads as a distinct
+   band against the panel background, deepening on hover. Pairs with the
+   per-row `border border-transparent hover:border-border` outline the rows
+   already carry. Kept here (not as a Tailwind utility cluster repeated at four
+   call sites) so the band is tuned from one place — same convention as
+   `.rune-inspector-pill` above. */
+.rune-inspector-row {
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--muted) 30%, transparent);
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast);
+}
+
+.rune-inspector-row:hover {
+  background: color-mix(in oklch, var(--muted) 50%, transparent);
+}
+
+/* ── Namespace segment header band ────────────────────────────────────
+   The flat namespace tree (explorer + inspector type picker) drops the
+   per-depth indent, so nesting is signalled by a resting background that
+   deepens with depth. The depth tint is supplied by the component as the
+   `--ns-seg-bg` custom property (so this :hover rule can still override the
+   background — an inline `background` would beat the hover and kill the
+   affordance). Fallback keeps the original muted/40 if the var is unset. */
+.rune-ns-seg-header {
+  background: var(--ns-seg-bg, color-mix(in oklch, var(--muted) 40%, transparent));
+}
+
+.rune-ns-seg-header:hover {
+  background: color-mix(in oklch, var(--accent) 50%, transparent);
 }
 
 /* Type-reference field — a BARE layout wrapper + drop target. The colored chip
@@ -753,7 +801,7 @@ button[data-navigable]:focus-visible {
   height: 16px;
   padding-inline: var(--space-1);
   border-radius: var(--radius-md);
-  border: 1px solid color-mix(in oklch, var(--border) 68%, transparent);
+  border: var(--hairline) solid color-mix(in oklch, var(--border) 68%, transparent);
   background: color-mix(in oklch, var(--background) 22%, transparent);
   color: currentColor;
   font-size: var(--text-3xs);
@@ -862,9 +910,12 @@ button[data-navigable]:focus-visible {
    node without having to parse multiple competing channels. */
 .rune-node-selected {
   border-color: var(--node-accent);
+  /* Inset accent ring IS the selection identity; the outer drop just lifts it.
+   * Softened (was 0 8px 24px / 0.35) so selection sits cohesively above the
+   * lighter hover (0 6px 16px / 0.18) without the heavy glassy glow. */
   box-shadow:
     inset 0 0 0 1px var(--node-accent),
-    0 8px 24px oklch(0 0 0 / 0.35);
+    0 6px 18px oklch(0 0 0 / 0.28);
 }
 
 .rune-node-search-match {
@@ -985,33 +1036,39 @@ button[data-navigable]:focus-visible {
   );
 }
 
-/* Resting two-tier shadow + top-edge inset highlight — EXCLUDED when selected
- * (`:not(.rune-node-selected)`). The .rune-node-selected rule (defined earlier,
- * line ~880, equal specificity) would otherwise be overridden by this later
- * rule, silently dropping the selection accent shadow for exactly the nodes
- * this polish targets. Graph nodes don't hit this because their base shadow
- * lives on .rune-node (declared BEFORE .rune-node-selected), so selection wins
- * at rest there; this restores the same precedence for structure nodes. Hover
- * (below) intentionally still lifts over selection, matching .rune-node:hover. */
+/* Structure cards are FLAT — the reference keeps structure surfaces
+ * (.rs-field / .rs-field-card) to a hairline border + fill with NO drop shadow;
+ * only graph nodes (.rs-gnode) float. The kind-tinted border-brighten on hover
+ * (`.rune-node-{kind}:hover`, e.g. line ~389) carries the affordance, so no
+ * shadow is needed. `:not(.rune-node-selected)` keeps this `none` from
+ * clobbering the selection ring below. */
+/* Structure cards stay FLAT at rest — depth appears only on hover/select, and
+ * lighter than the graph nodes (which float even at rest). The resting
+ * background gradient (above) supplies quiet dimensionality. */
 .rune-node-data--structure:not(.rune-node-selected),
 .rune-node-choice--structure:not(.rune-node-selected),
 .rune-node-enum--structure:not(.rune-node-selected) {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
-.rune-node-data--structure:hover,
-.rune-node-choice--structure:hover,
-.rune-node-enum--structure:hover {
-  /* Node-level lift on hover — same recipe as .rune-node:hover with a
-   * marginally softer outer drop (0.20 vs 0.24) so the denser structure
-   * cards float a touch more quietly than the larger graph nodes. The
-   * inherited --motion-default transition (set on .rune-node) animates it. */
+/* Hover lift — a subtle drop, lighter than the graph node hover (0 6px 16px/.18). */
+.rune-node-data--structure:not(.rune-node-selected):hover,
+.rune-node-choice--structure:not(.rune-node-selected):hover,
+.rune-node-enum--structure:not(.rune-node-selected):hover {
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 22px oklch(0 0 0 / 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 4px 12px oklch(0 0 0 / 0.14);
+}
+
+/* Selected: accent ring + a light drop (lighter than the graph selection
+ * 0 6px 18px/.28). Overrides the shared `.rune-node-selected` — higher
+ * specificity (0,2,0 vs 0,1,0) wins. */
+.rune-node-data--structure.rune-node-selected,
+.rune-node-choice--structure.rune-node-selected,
+.rune-node-enum--structure.rune-node-selected {
+  box-shadow:
+    inset 0 0 0 1px var(--node-accent),
+    0 4px 14px oklch(0 0 0 / 0.2);
 }
 
 /* Drop a further notch on the member/attribute cell content inside
@@ -1075,24 +1132,25 @@ button[data-navigable]:focus-visible {
  *    the colored stripe. Decoupled from --rune-node-padding (the body's
  *    layout-coupled inset) — header inset is a purely visual concern with
  *    no row-offset coupling, so they're free to move independently. */
-.rune-node-data--structure .rune-node-header {
+/* Structure-variant headers (data / choice / enum) share ONE padding so the
+ * title + kind badge align with the row content below — and so all three kinds
+ * read identically (previously: data left 8px/right 16px, choice the same,
+ * enum the default 16px → three different insets, none aligned to the rows).
+ *
+ * 12px (--space-3) is the row-content inset: data/choice rows land at body
+ * NODE_PADDING (4px) + .rune-node-row padding (8px) = 12px; enum members land
+ * at the enum body inset below (also 12px). box-sizing + the locked
+ * HEADER_HEIGHT keep the header at exactly 28px so structure-layout.ts row
+ * offsets stay aligned (sizeChoice reserves HEADER_HEIGHT + n*ROW_HEIGHT — a
+ * taller header would push siblings off their computed y). Vertical padding is
+ * 0; the header's flex `align-items: center` centers the title. Horizontal
+ * padding is visual-only (not layout-coupled), so 12px is safe. */
+.rune-node-data--structure .rune-node-header,
+.rune-node-choice--structure .rune-node-header,
+.rune-node-enum--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
-  padding-left: var(--space-2);
-}
-
-/* Mirror the data-structure rule for the choice-structure variant.
- * sizeChoice in structure-layout.ts reserves exactly HEADER_HEIGHT (28px)
- * for the choice header via `height: HEADER_HEIGHT + n * ROW_HEIGHT`.
- * Without this override the default .rune-node-header padding renders the
- * header taller than 28px, pushing siblings below an expanded Choice out
- * of alignment with their layout-computed y positions. */
-.rune-node-choice--structure .rune-node-header {
-  box-sizing: border-box;
-  height: var(--rune-header-height);
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-left: var(--space-2);
+  padding: 0 var(--space-3);
 }
 
 .rune-node-body--two-col {
@@ -1116,6 +1174,16 @@ button[data-navigable]:focus-visible {
 .rune-node-data--structure .rune-node-body--two-col,
 .rune-node-choice--structure .rune-node-body--two-col {
   padding: 0 var(--rune-node-padding) var(--rune-node-padding);
+}
+
+/* Enum renders a single-column body (default .rune-node-body, not two-col), so
+ * give it the same 12px (--space-3) horizontal inset the data/choice rows reach
+ * (body 4px + row 8px) — enum members carry no row padding, so the inset lives
+ * on the body. This aligns enum value rows with the enum header AND with
+ * data/choice rows across nodes. Vertical/height untouched (no layout coupling
+ * — enum has no two-col RF children to place). */
+.rune-node-enum--structure .rune-node-body {
+  padding: 0 var(--space-3) var(--space-3);
 }
 
 .rune-node-rows {
@@ -1227,7 +1295,7 @@ button[data-navigable]:focus-visible {
   min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
   /* Phase 10.2 — decorative left border to visually separate the child column.
    * Padding uses --rune-row-gap (8px) as the inset. */
-  border-left: 1px dashed var(--border);
+  border-left: var(--hairline) dashed var(--border);
   padding-left: var(--rune-row-gap);
   /* Copilot e2e-batch review flagged a potential overflow when a node has
    * NO expansions: the slot's margin-left + border + padding could push
@@ -1266,7 +1334,7 @@ button[data-navigable]:focus-visible {
    * are achieved by (a) dotted instead of dashed (smaller marks, more
    * whitespace) and (b) ~55% color opacity so the scaffolding fades against
    * the canvas instead of competing with the inner node's solid border. */
-  border: 1px dotted color-mix(in oklch, var(--color-base-type) 55%, transparent);
+  border: var(--hairline) dotted color-mix(in oklch, var(--color-base-type) 55%, transparent);
   /* Subtle vertical gradient — slightly brighter yellow tint at the top
    * fading to ~half intensity at the bottom. Gives the container quiet
    * depth without competing with the inner DataNode's solid fill. The
@@ -1301,7 +1369,7 @@ button[data-navigable]:focus-visible {
    * peer. The translucent yellow fill stays untouched. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 22px oklch(0 0 0 / 0.24);
+    0 6px 16px oklch(0 0 0 / 0.18);
 }
 
 /* Header typography in base-scope tracks .rune-node-header rather than
@@ -1317,7 +1385,7 @@ button[data-navigable]:focus-visible {
    * to the right edge — same pattern as the inner DataNode header (kind
    * badge gets margin-left: auto). */
   padding: 1px;
-  border-bottom: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  border-bottom: var(--hairline) solid color-mix(in oklch, var(--border) 78%, transparent);
 }
 
 .rune-graph-group--base .rune-graph-group__title {

@@ -2,14 +2,29 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * CardinalityPicker — Dropdown select for cardinality with custom input option.
+ * CardinalityPicker — chip/pill trigger that opens a compact preset popover.
  *
- * Provides quick-select for common cardinalities (1..1, 0..1, 0..*, 1..*)
- * via a compact dropdown, plus a custom input that validates via `validateCardinality()`.
+ * Shares the structure-view / inspector "type selector" idiom: a mono chip
+ * trigger (`TypeChip` / `rune-inspector-pill` aesthetic) that opens a
+ * `Popover` listing the four common cardinalities plus a custom input. This
+ * deliberately mirrors `TypeReferenceField` + `NamespaceTreePicker` rather than
+ * a base-ui `Select`, because the Select:
+ *   - rendered oversized inside structure nodes (its `data-[size=sm]:h-8` beat
+ *     the chip's `h-auto`),
+ *   - never opened inside a React Flow node (no `nodrag nopan`, so RF claimed
+ *     the pointerdown as a canvas gesture), and
+ *   - highlighted items with `text-primary-foreground` (poor contrast) instead
+ *     of the `text-accent-foreground` the popover lists use.
+ * The Popover + chip trigger fixes all three and unifies the look with the
+ * type field. Public props are unchanged so both call sites (the structure
+ * `CardinalityCell` `chip` variant and the inspector `AttributeRow` `pill`
+ * variant) and z2f's `componentMap` keep working.
  */
 
-import { useState, useCallback } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
+import { useCallback, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@rune-langium/design-system/utils';
+import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { validateCardinality } from '../../validation/edit-validator.js';
 
@@ -26,17 +41,18 @@ export interface CardinalityPickerProps {
   disabled?: boolean;
   /**
    * Visual variant for the trigger.
-   * - `'default'`: compact input-box look (h-5, rounded).
-   * - `'chip'`: pill/chip look matching the structure-view cardinality cell.
-   * - `'pill'`: rounded muted-box look matching the inspector type-reference
-   *   field, so the cardinality selector and the type picker share an aesthetic.
+   * - `'default'`: compact mono box (h-5, rounded).
+   * - `'chip'`: structure-view chip — wears `rune-cell-card` so it matches the
+   *   `TypeChip` cells in the same row.
+   * - `'pill'`: inspector pill — wears `rune-inspector-pill`, the shared muted
+   *   rounded-field box, so it stays in sync with the type-reference field.
    */
   variant?: 'default' | 'chip' | 'pill';
-  /** Optional wrapper class override for host-specific layouts. */
+  /** Optional wrapper class override (merged onto the trigger). */
   wrapperClassName?: string;
-  /** Optional trigger class override for compact host-specific chrome. */
+  /** Optional trigger class override. */
   triggerClassName?: string;
-  /** Optional popup class override. */
+  /** Optional popover-content class override. */
   contentClassName?: string;
   /** Optional custom-input class override. */
   inputClassName?: string;
@@ -53,6 +69,20 @@ const PRESETS = [
   { label: '1..*', value: '(1..*)' }
 ] as const;
 
+/** Trigger chrome per variant. `nodrag nopan` keeps React Flow from claiming
+ *  the click when the chip lives inside a structure node (the same guard the
+ *  row's expand button uses). */
+const TRIGGER_VARIANT_CLASS: Record<NonNullable<CardinalityPickerProps['variant']>, string> = {
+  // Structure chip — `rune-cell-card` is the mono muted pill the TypeChip cells
+  // sit beside; the structure-node font-size override drops it to 2xs there.
+  chip: 'rune-cell-card nodrag nopan',
+  // Inspector pill — the shared muted rounded-field box.
+  pill: 'rune-inspector-pill nodrag nopan',
+  // Default compact box.
+  default:
+    'nodrag nopan inline-flex h-5 min-w-[3.75rem] items-center gap-0.5 rounded-md bg-muted px-1.5 text-2xs font-mono leading-none text-muted-foreground'
+};
+
 /** Sentinel value used to trigger the custom input flow. */
 const CUSTOM_VALUE = '__custom__';
 
@@ -65,24 +95,6 @@ function joinClasses(...classNames: Array<string | undefined>): string | undefin
 // Component
 // ---------------------------------------------------------------------------
 
-/**
- * Cardinality picker as a compact dropdown with 4 presets and a custom option.
- *
- * Preset selection commits immediately. Choosing "Custom…" shows an inline
- * input that validates with `validateCardinality()` on blur or Enter.
- */
-/** Canonical chip trigger class for the structure-view cardinality cell look. */
-const CHIP_TRIGGER_CLASS =
-  'rune-cell-card h-auto min-w-0 border-0 bg-muted px-[var(--rune-pill-padding-x)] py-[var(--rune-chip-padding-y)] text-2xs text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring';
-
-/**
- * Inspector pill trigger — wears the shared `.rune-inspector-pill` box (the same
- * SSoT muted-rounded-field aesthetic as the type-reference field), so the
- * cardinality selector and the type picker stay visually in sync from one place.
- * `shadow-none` cancels the shadcn SelectTrigger default ring/shadow.
- */
-const PILL_TRIGGER_CLASS = 'rune-inspector-pill shadow-none';
-
 export function CardinalityPicker({
   value,
   onChange,
@@ -93,32 +105,40 @@ export function CardinalityPicker({
   contentClassName,
   inputClassName
 }: CardinalityPickerProps): React.ReactNode {
+  const [open, setOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
   const [customValue, setCustomValue] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
+  const customInputRef = useRef<HTMLInputElement>(null);
 
-  // Normalize the value for display (strip parens)
+  // Normalize the value for display (strip parens).
   const normalizedValue = value.replace(/[()]/g, '').trim();
   const hasValue = normalizedValue.length > 0;
-
-  // Find matching preset for the Select's controlled value
   const matchingPreset = PRESETS.find((p) => p.value.replace(/[()]/g, '').trim() === normalizedValue);
-  const selectValue = hasValue ? (matchingPreset?.value ?? CUSTOM_VALUE) : null;
 
-  const handleSelectChange = useCallback(
-    (newValue: string) => {
-      if (newValue === CUSTOM_VALUE) {
-        setShowCustom(true);
-        setCustomValue(normalizedValue);
-        setCustomError(null);
-      } else {
-        setShowCustom(false);
-        setCustomError(null);
-        onChange(newValue);
-      }
+  const handleOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    // Reset the custom flow whenever the popover closes so it reopens to the
+    // preset list, not a stale input.
+    if (!next) {
+      setShowCustom(false);
+      setCustomError(null);
+    }
+  }, []);
+
+  const commitPreset = useCallback(
+    (presetValue: string) => {
+      onChange(presetValue);
+      handleOpenChange(false);
     },
-    [normalizedValue, onChange]
+    [onChange, handleOpenChange]
   );
+
+  const startCustom = useCallback(() => {
+    setShowCustom(true);
+    setCustomValue(normalizedValue);
+    setCustomError(null);
+  }, [normalizedValue]);
 
   const commitCustom = useCallback(() => {
     if (!customValue.trim()) {
@@ -128,21 +148,21 @@ export function CardinalityPicker({
     const error = validateCardinality(customValue);
     if (error) {
       setCustomError(error);
-    } else {
-      setCustomError(null);
-      const formatted = customValue.startsWith('(') ? customValue : `(${customValue})`;
-      onChange(formatted);
-      setShowCustom(false);
+      return;
     }
-  }, [customValue, onChange]);
+    setCustomError(null);
+    const formatted = customValue.startsWith('(') ? customValue : `(${customValue})`;
+    onChange(formatted);
+    handleOpenChange(false);
+  }, [customValue, onChange, handleOpenChange]);
 
   const handleCustomKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         commitCustom();
-      }
-      if (e.key === 'Escape') {
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
         setShowCustom(false);
         setCustomError(null);
       }
@@ -150,62 +170,87 @@ export function CardinalityPicker({
     [commitCustom]
   );
 
-  if (showCustom) {
-    return (
-      <div data-slot="cardinality-picker" className={joinClasses('flex items-center gap-1', wrapperClassName)}>
-        <Input
-          variant="inline"
-          type="text"
-          value={customValue}
-          onChange={(e) => {
-            setCustomValue(e.target.value);
-            setCustomError(null);
-          }}
-          onBlur={commitCustom}
-          onKeyDown={handleCustomKeyDown}
-          disabled={disabled}
-          placeholder="inf..sup"
-          aria-label="Custom cardinality"
-          aria-invalid={!!customError}
-          autoFocus
-          className={joinClasses(
-            `w-[4.25rem] px-1.5 py-0.5 text-2xs font-mono leading-none disabled:cursor-not-allowed${customError ? ' border-destructive' : ''}`,
-            inputClassName
-          )}
-        />
-        {customError && <span className="text-xs text-destructive">{customError}</span>}
-      </div>
-    );
-  }
-
   return (
-    <div data-slot="cardinality-picker" className={wrapperClassName}>
-      <Select value={selectValue} onValueChange={handleSelectChange} disabled={disabled}>
-        <SelectTrigger
-          size="sm"
-          className={joinClasses(
-            variant === 'chip'
-              ? CHIP_TRIGGER_CLASS
-              : variant === 'pill'
-                ? PILL_TRIGGER_CLASS
-                : 'h-5 min-w-[3.75rem] rounded-md px-1.5 py-0 text-2xs font-mono leading-none gap-0.5',
-            triggerClassName
-          )}
-          aria-label="Cardinality"
-        >
-          <SelectValue placeholder="1..1">{hasValue ? normalizedValue : undefined}</SelectValue>
-        </SelectTrigger>
-        <SelectContent position="popper" className={joinClasses('min-w-[5.5rem]', contentClassName)}>
-          {PRESETS.map((preset) => (
-            <SelectItem key={preset.value} value={preset.value} className="text-xs font-mono">
-              {preset.label}
-            </SelectItem>
-          ))}
-          <SelectItem value={CUSTOM_VALUE} className="text-xs">
-            Custom…
-          </SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger
+        data-slot="cardinality-picker"
+        disabled={disabled}
+        render={
+          <button
+            type="button"
+            aria-label="Cardinality"
+            className={joinClasses(TRIGGER_VARIANT_CLASS[variant], wrapperClassName, triggerClassName)}
+          >
+            <span data-slot="cardinality-value" className={cn('font-mono', !hasValue && 'text-muted-foreground')}>
+              {hasValue ? normalizedValue : '1..1'}
+            </span>
+            <ChevronDown className="size-3 shrink-0 opacity-50" aria-hidden="true" />
+          </button>
+        }
+      />
+      <PopoverContent align="start" sideOffset={4} className={joinClasses('w-auto min-w-[6rem] p-1', contentClassName)}>
+        {showCustom ? (
+          <div className="flex flex-col gap-1">
+            <Input
+              ref={customInputRef}
+              variant="inline"
+              type="text"
+              value={customValue}
+              onChange={(e) => {
+                setCustomValue(e.target.value);
+                setCustomError(null);
+              }}
+              onKeyDown={handleCustomKeyDown}
+              onBlur={commitCustom}
+              disabled={disabled}
+              placeholder="inf..sup"
+              aria-label="Custom cardinality"
+              aria-invalid={!!customError}
+              autoFocus
+              className={joinClasses(
+                `w-full px-1.5 py-0.5 text-2xs font-mono leading-none disabled:cursor-not-allowed${customError ? ' border-destructive' : ''}`,
+                inputClassName
+              )}
+            />
+            {customError && <span className="px-1 text-2xs text-destructive">{customError}</span>}
+          </div>
+        ) : (
+          <div className="flex flex-col" role="listbox" aria-label="Cardinality presets">
+            {PRESETS.map((preset) => {
+              const isSelected = matchingPreset?.value === preset.value;
+              return (
+                <button
+                  key={preset.value}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => commitPreset(preset.value)}
+                  className={cn(
+                    'flex w-full items-center rounded-sm px-2 py-1 text-xs font-mono text-foreground hover:bg-accent/50',
+                    isSelected && 'bg-accent text-accent-foreground'
+                  )}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+            <div className="my-1 h-px bg-border" aria-hidden="true" />
+            <button
+              type="button"
+              role="option"
+              aria-selected={!matchingPreset && hasValue}
+              data-value={CUSTOM_VALUE}
+              onClick={startCustom}
+              className={cn(
+                'flex w-full items-center rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-accent/50',
+                !matchingPreset && hasValue && 'bg-accent text-accent-foreground'
+              )}
+            >
+              Custom…
+            </button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

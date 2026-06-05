@@ -173,7 +173,7 @@
   --muted: var(--color-surface-3);
   --muted-foreground: var(--color-foreground-secondary);
 
-  --primary: var(--color-accent-base);
+  --primary: var(--color-brand-base);
   --primary-foreground: var(--color-surface-1);
   --secondary: var(--color-warning-base);
   --secondary-foreground: var(--color-surface-1);
@@ -194,7 +194,7 @@
 
   --sidebar: var(--color-surface-2);
   --sidebar-foreground: var(--color-foreground-primary);
-  --sidebar-primary: var(--color-accent-base);
+  --sidebar-primary: var(--color-brand-base);
   --sidebar-primary-foreground: var(--color-surface-1);
   --sidebar-accent: var(--color-surface-4);
   --sidebar-accent-foreground: var(--color-foreground-primary);
@@ -260,32 +260,32 @@
 
   /* Glass morphism material tokens (studio chrome surfaces).
    * Defined here so the FR-025 no-undefined-vars guard resolves them.
-   * Daikonic overrides these in daikonic.css to tune the hue; the
-   * base values below reproduce the hand-rolled oklch literals that
-   * were in styles.css before Phase 4 of the style-override cleanup.
+   * daikonic.css does NOT override these — it sets the opaque --background/
+   * --card semantics but leaves the glass chrome to this base layer, so these
+   * values must already carry the daikonic midnight-green hue (220). Tuning
+   * the glass here updates BOTH the default theme and daikonic by inheritance.
    *
-   * Two base hues (lightness 0.16 = toolbar/panel-header — lighter
-   * mid-tone; lightness 0.14 = header/statusbar/overlay — deeper
-   * base) with per-surface opacity variants that differ across the
-   * three live glass surfaces + popover overlay.
+   * Two base lightnesses (0.16 = toolbar/panel-header — lighter mid-tone;
+   * 0.14 = header/statusbar/overlay — deeper base) at hue 220, with
+   * per-surface opacity variants across the live glass surfaces + popover.
    *
    *   --glass-bg-header     header bar     (0.14 / 0.80)
    *   --glass-bg-toolbar    editor toolbar (0.16 / 0.70)
    *   --glass-bg-statusbar  status bar     (0.14 / 0.75)
    *   --glass-bg-panel      panel-header   (0.16 / 0.80)
    *   --glass-bg-overlay    glass popover  (0.14 / 0.92)
-   *   --glass-border        glass hairline (white / 0.06)
+   *   --glass-border        glass hairline (white / 0.10)
    *   --glass-blur-sm       8px blur       (button backdrop)
    *   --glass-blur-md       12px blur      (toolbar / statusbar / panel)
    *   --glass-blur-lg       20px blur      (header / popover)
    */
-  --glass-bg-header:    oklch(0.14 0.02 280 / 0.80);
-  --glass-bg-toolbar:   oklch(0.16 0.02 280 / 0.70);
-  --glass-bg-statusbar: oklch(0.14 0.02 280 / 0.75);
-  --glass-bg-panel:     oklch(0.16 0.02 280 / 0.80);
-  --glass-bg-overlay:   oklch(0.14 0.02 280 / 0.92);
-  --glass-border:       oklch(1 0 0 / 0.06);
-  --glass-border-strong: oklch(1 0 0 / 0.1);
+  --glass-bg-header:    oklch(0.14 0.02 220 / 0.80);
+  --glass-bg-toolbar:   oklch(0.16 0.02 220 / 0.70);
+  --glass-bg-statusbar: oklch(0.14 0.02 220 / 0.75);
+  --glass-bg-panel:     oklch(0.16 0.02 220 / 0.80);
+  --glass-bg-overlay:   oklch(0.14 0.02 220 / 0.92);
+  --glass-border:       oklch(1 0 0 / 0.1);
+  --glass-border-strong: oklch(1 0 0 / 0.14);
   --glass-blur-sm:      blur(8px);
   --glass-blur-md:      blur(12px);
   --glass-blur-lg:      blur(20px);
@@ -295,40 +295,39 @@
    * callers never hard-code oklch literals.
    *   -btn-bg            default bg  (white / 4%)
    *   -btn-bg-hover      hover bg    (white / 8%)
-   *   -btn-bg-active     active bg   (teal / 12%)
-   *   -btn-bg-active-hover active hover (teal / 18%)
+   *   -btn-bg-active     active bg   (sandy brand / 12%)
+   *   -btn-bg-active-hover active hover (sandy brand / 18%)
    *   -btn-border        default border (white / 8%)
    *   -btn-border-hover  hover border   (white / 15%)
-   *   -btn-border-active active border  (teal / 35%)
-   *   -btn-border-active-hover active hover border (teal / 50%)
+   *   -btn-border-active active border  (sandy brand / 35%)
+   *   -btn-border-active-hover active hover border (sandy brand / 50%)
    *   -btn-text          default text (neutral muted)
    *   -btn-text-hover    hover text   (neutral bright)
-   *   -btn-text-active   active text  (teal)
-   *   -btn-text-active-hover active hover text (teal bright)
-   *   -btn-teal          base teal hue (for glow box-shadow raw use)
+   *   -btn-text-active   active text  (sandy brand)
+   *   -btn-text-active-hover active hover text (sandy brand bright)
    *   -dot-grid          dot-grid overlay opacity
    *   -kbd-bg            monospace kbd chip background
    */
   --glass-btn-bg:                oklch(1 0 0 / 0.04);
   --glass-btn-bg-hover:          oklch(1 0 0 / 0.08);
-  --glass-btn-bg-active:         oklch(0.78 0.17 168 / 0.12);
-  --glass-btn-bg-active-hover:   oklch(0.78 0.17 168 / 0.18);
+  --glass-btn-bg-active:         oklch(0.7694 0.1486 56.99 / 0.12);
+  --glass-btn-bg-active-hover:   oklch(0.7694 0.1486 56.99 / 0.18);
   --glass-btn-border:            oklch(1 0 0 / 0.08);
   --glass-btn-border-hover:      oklch(1 0 0 / 0.15);
-  --glass-btn-border-active:     oklch(0.78 0.17 168 / 0.35);
-  --glass-btn-border-active-hover: oklch(0.78 0.17 168 / 0.50);
-  --glass-btn-text:              oklch(0.75 0.01 280);
-  --glass-btn-text-hover:        oklch(0.92 0.01 280);
-  --glass-btn-text-active:       oklch(0.78 0.17 168);
-  --glass-btn-text-active-hover: oklch(0.85 0.15 168);
+  --glass-btn-border-active:     oklch(0.7694 0.1486 56.99 / 0.35);
+  --glass-btn-border-active-hover: oklch(0.7694 0.1486 56.99 / 0.50);
+  --glass-btn-text:              oklch(0.75 0.01 220);
+  --glass-btn-text-hover:        oklch(0.92 0.01 220);
+  --glass-btn-text-active:       oklch(0.7694 0.1486 56.99);
+  --glass-btn-text-active-hover: oklch(0.8394 0.1486 56.99);
   /* Multi-layer glass-button elevation/glow shadows — tokenised so the
    * `<Button variant="glass">` CVA can reference them (`shadow-(--glass-btn-shadow*)`)
    * instead of inlining unreadable multi-stop oklch strings. The -active* pair
-   * adds the teal toggle glow (driven by `aria-pressed`). */
+   * adds the sandy-brand toggle glow (driven by `aria-pressed`). */
   --glass-btn-shadow:              0 1px 2px oklch(0 0 0 / 0.2);
-  --glass-btn-shadow-hover:        0 2px 8px oklch(0 0 0 / 0.3), 0 0 12px oklch(0.78 0.17 168 / 0.08);
-  --glass-btn-shadow-active:       0 1px 2px oklch(0 0 0 / 0.2), 0 0 8px oklch(0.78 0.17 168 / 0.15), inset 0 0 12px oklch(0.78 0.17 168 / 0.06);
-  --glass-btn-shadow-active-hover: 0 2px 8px oklch(0 0 0 / 0.3), 0 0 16px oklch(0.78 0.17 168 / 0.25), inset 0 0 16px oklch(0.78 0.17 168 / 0.08);
+  --glass-btn-shadow-hover:        0 2px 8px oklch(0 0 0 / 0.3), 0 0 12px oklch(0.78 0.17 56.99 / 0.08);
+  --glass-btn-shadow-active:       0 1px 2px oklch(0 0 0 / 0.2), 0 0 8px oklch(0.78 0.17 56.99 / 0.15), inset 0 0 12px oklch(0.78 0.17 56.99 / 0.06);
+  --glass-btn-shadow-active-hover: 0 2px 8px oklch(0 0 0 / 0.3), 0 0 16px oklch(0.78 0.17 56.99 / 0.25), inset 0 0 16px oklch(0.78 0.17 56.99 / 0.08);
   --glass-dot-grid:              rgba(255, 255, 255, 0.04);
   --glass-kbd-bg:                rgba(255, 255, 255, 0.04);
   --glass-grid-line:             rgba(255, 255, 255, 0.015);
@@ -343,7 +342,7 @@
   --popover-foreground: var(--color-foreground-primary);
   --muted: var(--color-surface-3);
   --muted-foreground: var(--color-foreground-secondary);
-  --primary: var(--color-accent-base);
+  --primary: var(--color-brand-base);
   --primary-foreground: var(--color-surface-1);
   --secondary: var(--color-warning-base);
   --secondary-foreground: var(--color-surface-1);
@@ -361,7 +360,7 @@
   --chart-5: var(--color-warning-hover);
   --sidebar: var(--color-surface-2);
   --sidebar-foreground: var(--color-foreground-primary);
-  --sidebar-primary: var(--color-accent-base);
+  --sidebar-primary: var(--color-brand-base);
   --sidebar-primary-foreground: var(--color-surface-1);
   --sidebar-accent: var(--color-surface-4);
   --sidebar-accent-foreground: var(--color-foreground-primary);
@@ -387,6 +386,12 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* App-wide negative tracking — Inter is drawn a touch wide for UI density.
+     * The handoff's -0.005em is below the perceptual threshold on its own, so
+     * we run -0.01em globally for a visibly tighter set (still conservative;
+     * mono/code opt back out where needed). Display surfaces tighten further
+     * (.font-display below). */
+    letter-spacing: -0.01em;
   }
   h1, h2, h3, h4, h5, h6 {
     /* Headings follow the cascade rather than hard-coding a family, so a
@@ -405,6 +410,10 @@
    * brand font never becomes ambient again. */
   .font-display {
     font-family: var(--font-display);
+    /* Display/heading text tracks tighter than body (body at -0.01em). The
+     * reference pushes display/name text to -0.01..-0.02em; -0.015em keeps
+     * headings/wordmarks crisp without crowding. */
+    letter-spacing: -0.015em;
   }
 
   /* ── Global :focus-visible baseline ─────────────────────────────

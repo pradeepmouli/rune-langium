@@ -446,7 +446,7 @@ function DataTypeForm({
                   )}
                 </FieldLegend>
 
-                <FieldGroup className="gap-1">
+                <FieldGroup className="gap-0.5">
                   {/* Inherited rows via z2f's `arrayConfig.before` ghost-row primitive
                     (R6 / US4). Rendered above local rows; do not participate in
                     form state, validation, or submission. */}

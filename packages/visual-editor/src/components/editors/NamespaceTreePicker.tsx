@@ -71,19 +71,14 @@ export function NamespaceTreePicker({
   }, [options, filterKinds]);
 
   // Build the segmented tree from the (kind-filtered) options.
-  const roots = useMemo(
-    () => buildSegmentedNamespaceTreeFromOptions(filteredOptions),
-    [filteredOptions]
-  );
+  const roots = useMemo(() => buildSegmentedNamespaceTreeFromOptions(filteredOptions), [filteredOptions]);
 
   // Default expansion: roots + their direct children, so the tree is usable on
   // open without expanding to every leaf. (Search overrides this below.)
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     for (const root of buildSegmentedNamespaceTreeFromOptions(
-      filterKinds && filterKinds.length > 0
-        ? options.filter((opt) => filterKinds.includes(opt.kind))
-        : options
+      filterKinds && filterKinds.length > 0 ? options.filter((opt) => filterKinds.includes(opt.kind)) : options
     )) {
       initial.add(root.fullPath);
       for (const child of root.children) initial.add(child.fullPath);
@@ -106,10 +101,7 @@ export function NamespaceTreePicker({
     return treeExpanded;
   }, [searchQuery, roots, treeExpanded]);
 
-  const visibleRoots = useMemo(
-    () => filterSegmentedTree(roots, searchQuery),
-    [roots, searchQuery]
-  );
+  const visibleRoots = useMemo(() => filterSegmentedTree(roots, searchQuery), [roots, searchQuery]);
 
   const flatRows = useMemo(
     () => flattenSegmentedTree(visibleRoots, effectiveExpanded, { compressSingleChild: true }),
@@ -152,19 +144,13 @@ export function NamespaceTreePicker({
         </button>
       )}
 
-      <div
-        ref={scrollRef}
-        className="studio-scroll max-h-72 flex-1 overflow-auto"
-        data-testid="nstp-tree"
-      >
+      <div ref={scrollRef} className="studio-scroll max-h-72 flex-1 overflow-auto" data-testid="nstp-tree">
         {flatRows.length === 0 ? (
           <p className="px-3 py-4 text-center text-xs text-muted-foreground">
             {searchQuery ? 'No matching types' : 'No types available'}
           </p>
         ) : (
-          <div
-            style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
-          >
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const row = flatRows[virtualRow.index]!;
               return (
@@ -184,6 +170,7 @@ export function NamespaceTreePicker({
                       fullPath={row.fullPath}
                       expanded={row.expanded}
                       count={row.totalCount}
+                      depth={row.depth}
                       onToggle={() => toggleExpand(row.fullPath)}
                       indentPx={NAMESPACE_TREE_INDENT_BASE}
                     />

@@ -57,7 +57,7 @@ function FunctionInputRow({
   return (
     <div
       data-slot="input-param-row"
-      className="flex items-center gap-1.5 p-1 rounded hover:bg-muted/50"
+      className="rune-inspector-row flex items-center gap-1.5 border border-transparent p-1 hover:border-border"
       role="listitem"
     >
       <span className="text-xs text-muted-foreground w-3" aria-hidden="true">

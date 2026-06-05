@@ -3,67 +3,52 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
-const SelectContext = createContext<{ onValueChange?: (value: string) => void }>({});
-
-vi.mock('@rune-langium/design-system/ui/select', () => ({
-  Select: ({
-    children,
-    onValueChange,
-    value
-  }: {
-    children: ReactNode;
-    onValueChange?: (value: string) => void;
-    value?: string | null;
-  }) => (
-    <SelectContext.Provider value={{ onValueChange }}>
-      <div data-testid="select-root" data-value={value ?? ''}>
-        {children}
-      </div>
-    </SelectContext.Provider>
-  ),
-  SelectContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, value }: { children: ReactNode; value: string }) => {
-    const { onValueChange } = useContext(SelectContext);
-    return (
-      <button type="button" role="option" onClick={() => onValueChange?.(value)}>
-        {children}
-      </button>
-    );
-  },
-  SelectTrigger: ({ children, className, ...props }: ComponentProps<'button'>) => (
-    <button type="button" role="combobox" className={className} {...props}>
-      {children}
-    </button>
-  ),
-  SelectValue: ({ placeholder, children }: { placeholder?: ReactNode; children?: ReactNode }) => (
-    <span
-      data-slot="select-value"
-      className={children == null && placeholder != null ? 'text-muted-foreground' : undefined}
-    >
-      {children ?? placeholder}
-    </span>
-  )
+// Mock the popover primitive so the trigger and content render flat and
+// deterministically (no portal / open-state plumbing) — the same testing
+// strategy the previous Select-based picker used. `render` is the trigger
+// element; we render it as-is. Content is always rendered so we can assert on
+// the preset list and the custom-input flow without driving the open state.
+vi.mock('@rune-langium/design-system/ui/popover', () => ({
+  Popover: ({ children }: { children: ReactNode }) => <div data-testid="popover">{children}</div>,
+  PopoverTrigger: ({ render }: { render: ReactElement }) => render,
+  PopoverContent: ({ children }: { children: ReactNode }) => <div data-testid="popover-content">{children}</div>
 }));
 
 import { CardinalityPicker } from '../../../src/components/editors/CardinalityPicker.js';
 
 describe('CardinalityPicker', () => {
-  it('renders an empty value as placeholder text instead of a selected custom value', () => {
+  it('renders an empty value as muted placeholder text instead of a selected custom value', () => {
     render(<CardinalityPicker value="" onChange={vi.fn()} />);
 
-    const trigger = screen.getByRole('combobox', { name: 'Cardinality' });
+    const trigger = screen.getByRole('button', { name: 'Cardinality' });
     expect(trigger).toHaveTextContent('1..1');
-    expect(trigger.querySelector('[data-slot="select-value"]')).toHaveClass('text-muted-foreground');
+    expect(trigger.querySelector('[data-slot="cardinality-value"]')).toHaveClass('text-muted-foreground');
   });
 
-  it('commits a custom value with canonical parentheses', async () => {
+  it('marks the matching preset as selected', () => {
+    render(<CardinalityPicker value="(0..*)" onChange={vi.fn()} />);
+
+    expect(screen.getByRole('option', { name: '0..*' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('option', { name: '1..1' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('commits a preset immediately on click', () => {
+    const onChange = vi.fn();
+    render(<CardinalityPicker value="(0..1)" onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('option', { name: '1..*' }));
+
+    expect(onChange).toHaveBeenCalledWith('(1..*)');
+  });
+
+  it('commits a custom value with canonical parentheses', () => {
     const onChange = vi.fn();
 
     render(<CardinalityPicker value="(0..1)" onChange={onChange} />);
 
-    fireEvent.click(await screen.findByRole('option', { name: 'Custom…' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Custom…' }));
 
     const input = screen.getByLabelText('Custom cardinality');
     fireEvent.change(input, { target: { value: '2..3' } });
@@ -72,10 +57,10 @@ describe('CardinalityPicker', () => {
     expect(onChange).toHaveBeenCalledWith('(2..3)');
   });
 
-  it('uses inline-variant focus and disabled styling for the custom cardinality input', async () => {
+  it('uses inline-variant focus and disabled styling for the custom cardinality input', () => {
     render(<CardinalityPicker value="(0..1)" onChange={vi.fn()} disabled />);
 
-    fireEvent.click(await screen.findByRole('option', { name: 'Custom…' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Custom…' }));
 
     const input = screen.getByLabelText('Custom cardinality');
     // inline variant: focus uses border-primary + 1px primary shadow (not focus-visible ring)

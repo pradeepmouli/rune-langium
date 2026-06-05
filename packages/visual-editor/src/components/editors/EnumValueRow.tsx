@@ -126,7 +126,7 @@ function EnumValueRow({
   return (
     <div
       data-slot="enum-value-row"
-      className="flex items-center gap-1.5 py-1"
+      className="rune-inspector-row flex items-center gap-1.5 border border-transparent px-1 py-1 hover:border-border"
       role="listitem"
       draggable={!effectiveReadOnly}
       onDragStart={handleDragStart}

@@ -220,7 +220,7 @@ export function DockShell({
   const [_layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
     layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
   );
-  const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['graph']));
+  const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['structure']));
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
   );
@@ -259,8 +259,21 @@ export function DockShell({
           viewportWidth: getViewportWidth()
         });
         console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
-        useOutputStore.getState().addLine(fmtLine('layout', 'failed to apply saved layout, using default', err instanceof Error ? err.message : String(err)), 'warn');
-        showToast({ title: 'Layout restored to default', description: 'Your saved layout could not be applied.', variant: 'default' });
+        useOutputStore
+          .getState()
+          .addLine(
+            fmtLine(
+              'layout',
+              'failed to apply saved layout, using default',
+              err instanceof Error ? err.message : String(err)
+            ),
+            'warn'
+          );
+        showToast({
+          title: 'Layout restored to default',
+          description: 'Your saved layout could not be applied.',
+          variant: 'default'
+        });
         appliedLayout = fallback;
         setLayout(fallback);
         setLayoutPreset(fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit');
@@ -290,8 +303,17 @@ export function DockShell({
           });
         } catch (err) {
           console.error('[DockShell] Failed to serialize layout change', err);
-          useOutputStore.getState().addLine(fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)), 'warn');
-          showToast({ title: 'Layout not saved', description: 'Could not persist the current panel arrangement.', variant: 'destructive' });
+          useOutputStore
+            .getState()
+            .addLine(
+              fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
+              'warn'
+            );
+          showToast({
+            title: 'Layout not saved',
+            description: 'Could not persist the current panel arrangement.',
+            variant: 'destructive'
+          });
         }
       });
       onLayoutChangeRef.current?.(appliedLayout);
@@ -366,8 +388,17 @@ export function DockShell({
         });
       } catch (err) {
         console.error('[DockShell] Failed to reset layout', err);
-        useOutputStore.getState().addLine(fmtLine('layout', 'failed to reset layout', err instanceof Error ? err.message : String(err)), 'error');
-        showToast({ title: 'Layout reset failed', description: err instanceof Error ? err.message : 'Could not reset the panel layout.', variant: 'destructive' });
+        useOutputStore
+          .getState()
+          .addLine(
+            fmtLine('layout', 'failed to reset layout', err instanceof Error ? err.message : String(err)),
+            'error'
+          );
+        showToast({
+          title: 'Layout reset failed',
+          description: err instanceof Error ? err.message : 'Could not reset the panel layout.',
+          variant: 'destructive'
+        });
       }
     }
     onLayoutChangeRef.current?.(fresh);

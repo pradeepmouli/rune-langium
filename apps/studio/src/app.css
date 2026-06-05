@@ -43,8 +43,10 @@
  *            it reads on both --card and --background surfaces
  * - Width:   --studio-scrollbar-width (8px default)
  * - Radius:  fully rounded (border-radius: var(--radius-full))
- * - Gutter:  `scrollbar-gutter: stable` prevents content jump when the
- *            scrollbar mounts/unmounts
+ * - Gutter:  NONE — a reserved `scrollbar-gutter: stable` read as an uneven
+ *            right margin on non-scrolling panels (the reference reserves no
+ *            gutter). Removed; content may shift by the scrollbar width when a
+ *            scrollbar mounts/unmounts.
  * - Cross-browser: webkit pseudo-elements cover Chromium/Safari/Edge;
  *            `scrollbar-width`/`scrollbar-color` cover Firefox.
  *
@@ -69,9 +71,8 @@
  * and the source-code panel + inspector forms still showed the browser's
  * native white tracks.
  *
- * `.studio-scroll` (below) still exists for elements that ALSO want
- * `scrollbar-gutter: stable` (prevents content-jump when the scrollbar
- * mounts/unmounts) — a stronger contract than the baseline. */
+ * `.studio-scroll` (below) still exists as the explicit opt-in marker for
+ * scroll containers; it no longer reserves a gutter (see note above). */
 html {
   scrollbar-width: thin;
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
@@ -99,7 +100,6 @@ html {
 }
 
 .studio-scroll {
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
 }
@@ -232,7 +232,7 @@ html {
     display: inline-flex;
     height: 26px;
     background: color-mix(in srgb, var(--background) 96%, var(--muted) 4%);
-    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+    border: var(--hairline) solid color-mix(in srgb, var(--border) 80%, transparent);
     border-radius: var(--radius-full);
     overflow: hidden;
     box-shadow:
@@ -254,9 +254,16 @@ html {
     position: relative;
     color: var(--muted-foreground);
     font-family: var(--font-sans), system-ui, sans-serif;
-    font-size: var(--text-2xs);
+    /* 12px (--text-xs) to match the reference `.rs-paneswitch-seg`; the pill's
+     * padding (14px) / gap (6px) / height already match — only the type was a
+     * rung small (was --text-2xs / 11px). */
+    font-size: var(--text-xs);
     font-weight: 600;
-    letter-spacing: 0.04em;
+    /* Tight tracking — was +0.04em (wide), which overrode the body's negative
+     * track and made this the loosest text in the app. The reference
+     * `.rs-paneswitch-seg` carries no positive tracking; -0.01em matches the
+     * app-wide tight set. */
+    letter-spacing: -0.01em;
     cursor: pointer;
     transition:
       background 120ms ease,
@@ -282,7 +289,7 @@ html {
     left: 0;
     top: 5px;
     bottom: 5px;
-    width: 0.5px;
+    width: var(--hairline);
     background: color-mix(in srgb, var(--border) 90%, transparent);
   }
 
@@ -356,7 +363,7 @@ html {
   .studio-app .studio-rail {
     width: 52px;
     background: var(--background);
-    border-right: 0.5px solid var(--border);
+    border-right: var(--hairline) solid var(--border);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -443,7 +450,7 @@ html {
   .studio-app .studio-topbar {
     height: 44px;
     background: var(--background);
-    border-bottom: 0.5px solid var(--border);
+    border-bottom: var(--hairline) solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -476,7 +483,7 @@ html {
 
   .studio-app .studio-topbar__ws-btn {
     appearance: none;
-    border: 0.5px solid color-mix(in srgb, var(--border) 82%, transparent);
+    border: var(--hairline) solid color-mix(in srgb, var(--border) 82%, transparent);
     background:
       linear-gradient(
         180deg,
@@ -547,14 +554,14 @@ html {
         color-mix(in srgb, var(--primary) 24%, transparent),
         color-mix(in srgb, var(--secondary) 18%, transparent)
       );
-    border: 0.5px solid color-mix(in srgb, var(--primary) 38%, transparent);
+    border: var(--hairline) solid color-mix(in srgb, var(--primary) 38%, transparent);
     box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
     flex-shrink: 0;
   }
 
   .studio-app .studio-topbar__cmdk {
     appearance: none;
-    border: 0.5px solid color-mix(in srgb, var(--border) 82%, transparent);
+    border: var(--hairline) solid color-mix(in srgb, var(--border) 82%, transparent);
     background:
       linear-gradient(
         180deg,
@@ -595,7 +602,7 @@ html {
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
     background: var(--glass-kbd-bg);
-    border: 0.5px solid var(--border);
+    border: var(--hairline) solid var(--border);
     border-radius: var(--radius-sm);
     padding: 1px var(--space-1);
     color: var(--muted-foreground);
@@ -652,7 +659,7 @@ html {
 
   .studio-app .studio-topbar__tab {
     appearance: none;
-    border: 0.5px solid transparent;
+    border: var(--hairline) solid transparent;
     background: transparent;
     display: flex;
     align-items: center;
@@ -708,7 +715,7 @@ html {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    border: 1px solid var(--muted-foreground);
+    border: var(--hairline) solid var(--muted-foreground);
     flex-shrink: 0;
   }
 
@@ -730,7 +737,7 @@ html {
     height: 16px;
     padding: 0 var(--space-2);
     border-radius: var(--radius-full);
-    border: 0.5px solid color-mix(in srgb, var(--border) 76%, transparent);
+    border: var(--hairline) solid color-mix(in srgb, var(--border) 76%, transparent);
     background: color-mix(in srgb, var(--muted) 68%, transparent);
     color: color-mix(in srgb, var(--muted-foreground) 88%, white 12%);
     font-size: var(--text-3xs);
@@ -756,7 +763,7 @@ html {
     font-size: var(--text-3xs);
     font-weight: 700;
     font-family: var(--font-mono);
-    border: 0.5px solid;
+    border: var(--hairline) solid;
     flex-shrink: 0;
   }
 
@@ -799,17 +806,19 @@ html {
    * to packages/design-system/src/dock-theme.css. */
 
   .studio-app .studio-graph-canvas {
+    /* Radial vignette matching the reference `.rs-canvas`: a DARK pool at
+     * 50% 30% fading out to the lighter panel surface (reference is
+     * `radial-gradient(ellipse at 50% 30%, oklch(0.16…), --rs-bg-2)` — center
+     * darker than the surfaces, not lighter). Token-driven so it tracks the
+     * midnight-green palette. The dot grid is NOT painted here as a fixed
+     * ::after overlay anymore — React Flow's <Background> renders a single grid
+     * that pans/zooms WITH the canvas, so nothing phases against it. */
     background:
-      radial-gradient(ellipse at 50% 30%, var(--card), var(--background));
-  }
-
-  .studio-app .studio-graph-canvas::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-image: radial-gradient(circle, var(--glass-dot-grid) 1px, transparent 1.5px);
-    background-size: 22px 22px;
-    pointer-events: none;
+      radial-gradient(
+        ellipse at 50% 30%,
+        color-mix(in oklch, var(--background), black 26%),
+        var(--card)
+      );
   }
 
   .studio-app .studio-statusbar {
@@ -893,7 +902,7 @@ html {
   justify-content: space-between;
   padding: var(--space-4) var(--space-6);
   background: var(--background);
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
 }
 
 .ns-explorer__title {
@@ -912,7 +921,7 @@ html {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
 }
 
 .ns-explorer__search {
@@ -921,7 +930,7 @@ html {
   font-size: var(--text-sm);
   color: var(--foreground);
   background: var(--background);
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   outline: none;
 }
@@ -944,7 +953,7 @@ html {
   font-size: var(--text-md);
   color: var(--muted-foreground);
   background: transparent;
-  border: 1px solid transparent;
+  border: var(--hairline) solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
   line-height: 1;
@@ -971,7 +980,7 @@ html {
 
 /* Namespace row */
 .ns-row {
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
 }
 
 .ns-row__header {
@@ -1143,7 +1152,7 @@ html {
   display: flex;
   overflow-x: auto;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
   gap: 1px;
 }
 
@@ -1178,8 +1187,7 @@ html {
   padding: var(--space-6);
   /* Inherits .studio-scroll's tokens via direct property echo so the
    * non-class selector benefits from the shared chrome without forcing
-   * call sites to add an extra class. */
-  scrollbar-gutter: stable;
+   * call sites to add an extra class. (No reserved gutter — see .studio-scroll.) */
   scrollbar-width: thin;
   scrollbar-color: var(--studio-scrollbar-thumb) transparent;
 }
@@ -1209,7 +1217,7 @@ html {
   align-items: center;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
   background: color-mix(in oklch, var(--card) 92%, var(--background) 8%);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
@@ -1227,7 +1235,7 @@ html {
   border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--accent) 16%, var(--card) 84%);
   color: color-mix(in srgb, var(--foreground) 72%, transparent);
-  border: 0.5px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--border) 78%, transparent);
 }
 
 .studio-source-meta__path {
@@ -1255,7 +1263,7 @@ html {
   overflow-x: auto;
   min-height: 34px;
   padding: 3px var(--space-2) var(--space-1);
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
   background: color-mix(in oklch, var(--card) 94%, var(--background) 6%);
 }
 
@@ -1414,7 +1422,7 @@ html {
 
 .studio-editor-page__source .cm-editor .cm-gutters {
   background: color-mix(in srgb, var(--card) 92%, var(--background));
-  border-right: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-right: var(--hairline) solid color-mix(in srgb, var(--border) 84%, transparent);
   color: color-mix(in srgb, var(--muted-foreground) 74%, var(--input));
 }
 
@@ -1441,7 +1449,7 @@ html {
 
 .studio-editor-page__source .cm-editor .cm-tooltip {
   background: color-mix(in srgb, var(--card) 88%, var(--background));
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--border) 78%, transparent);
   color: var(--foreground);
   border-radius: var(--radius-md);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -1499,6 +1507,28 @@ html {
   border-radius: var(--radius-sm);
 }
 
+/* ---------- Hairline border default (single source of truth) ----------
+ * Every Tailwind/shadcn `border` utility renders at --hairline (0.5px) instead
+ * of the framework's 1px. This is the ONE knob for utility-border weight — it
+ * catches every shadcn primitive (button, input, card, dialog, dropdown,
+ * select, badge) and every pill/chip without editing 30+ component files, and
+ * survives future `shadcn add`. Hand-rolled CSS borders (nodes, panels, dock)
+ * reference var(--hairline) directly — see tokens.css.
+ *
+ * Scope notes:
+ *  - `[class~="border"]` matches ONLY the all-sides `border` token, so
+ *    `border-2`, `border-t`, etc. (used WITHOUT a bare `border`) keep their
+ *    own widths.
+ *  - Unlayered + `:where()` (specificity 0) so it beats Tailwind's layered
+ *    width utilities. Caveat: if an element carries BOTH `border` and an
+ *    explicit width (`border border-2`), this rule still wins and forces
+ *    `--hairline` — so don't combine them; pick one.
+ *  - Deliberately reinterprets a standard utility — documented here so
+ *    `border` ≠ 1px is not a surprise. */
+.studio-app :where([class~='border']) {
+  border-width: var(--hairline);
+}
+
 /* Dark-theme overrides for visual-editor graph nodes:
  * REMOVED — visual-editor now uses var() tokens from design-system/theme.css.
  * The studio imports theme.css, so dark values resolve automatically.
@@ -1528,7 +1558,7 @@ html {
 
 .studio-app .react-flow__minimap {
   background: var(--background);
-  border: 1px solid var(--border);
+  border: var(--hairline) solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 }
@@ -1543,7 +1573,10 @@ html {
 }
 
 .studio-app .react-flow__background pattern circle {
-  fill: var(--muted);
+  /* Faint white dots (matches the reference `.rs-canvas-grid`
+   * rgba(255,255,255,0.04)); --muted reads as a visible midnight-green
+   * surface and dominated the canvas. */
+  fill: var(--glass-dot-grid);
 }
 
 /* ReactFlow handle visibility on dark nodes */
@@ -1551,7 +1584,7 @@ html {
   width: 6px;
   height: 6px;
   background: var(--muted-foreground);
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
 }
 
 .studio-app .react-flow__handle:hover {
@@ -1590,7 +1623,7 @@ html {
 .rune-type-creator__kind {
   padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm);
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   outline: none;
   background: var(--background);
@@ -1631,7 +1664,7 @@ html {
   padding: var(--space-2) var(--space-6);
   font-size: var(--text-sm);
   background: transparent;
-  border: 1px solid var(--input);
+  border: var(--hairline) solid var(--input);
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--muted-foreground);
@@ -1690,7 +1723,7 @@ html {
   background: var(--glass-bg-header);
   backdrop-filter: var(--glass-blur-lg);
   -webkit-backdrop-filter: var(--glass-blur-lg);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: var(--hairline) solid var(--glass-border);
 }
 
 .glass-toolbar {
@@ -1703,7 +1736,7 @@ html {
   background: var(--glass-bg-statusbar);
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
-  border-top: 1px solid var(--glass-border);
+  border-top: var(--hairline) solid var(--glass-border);
 }
 
 /* Glass toolbar/header buttons are now the `<Button variant="glass">` CVA
@@ -1743,7 +1776,7 @@ html {
 .studio-brand__mark {
   width: 22px;
   height: 22px;
-  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--primary) 42%, transparent);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -1824,7 +1857,7 @@ html {
 }
 
 .preview-panel__sample {
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: var(--hairline) solid color-mix(in srgb, var(--border) 82%, transparent);
   border-radius: 0.875rem;
   background: color-mix(in srgb, var(--card) 74%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, black 18%, transparent);
@@ -1909,7 +1942,7 @@ html {
       color-mix(in oklch, var(--background) 82%, transparent)
     );
   color: var(--kind-color, var(--muted-foreground));
-  border: 0.5px solid color-mix(in oklch, var(--kind-color, var(--border)) 42%, transparent);
+  border: var(--hairline) solid color-mix(in oklch, var(--kind-color, var(--border)) 42%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
 }
 
@@ -1934,7 +1967,7 @@ html {
  * The studio-insp-tabs class is removed; consumers use <TabsList size="sm">.
  * Horizontal padding is consumer-supplied (className="px-2" etc.). */
 .studio-app [data-slot='tabs-list'][data-size='sm'] {
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
   gap: 2px;
 }
 
@@ -1963,7 +1996,7 @@ html {
   align-items: center;
   padding: var(--space-1) var(--space-2);
   flex-shrink: 0;
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
 }
 .studio-app .studio-panel-actions {
   display: flex;
@@ -2062,7 +2095,7 @@ html {
   width: 5px;
   margin: 0 -2px;
   background: transparent;
-  border-left: 1px solid var(--border);
+  border-left: var(--hairline) solid var(--border);
   flex-shrink: 0;
   cursor: col-resize;
   z-index: 1;

@@ -45,8 +45,6 @@ export { TypeCreator } from './components/editors/TypeCreator.js';
 export type { TypeCreatorProps } from './components/editors/TypeCreator.js';
 export { AttributeEditor } from './components/editors/AttributeEditor.js';
 export type { AttributeEditorProps } from './components/editors/AttributeEditor.js';
-export { CardinalityEditor } from './components/editors/CardinalityEditor.js';
-export type { CardinalityEditorProps } from './components/editors/CardinalityEditor.js';
 
 // New editor form sub-components
 export { TypeSelector, getKindBadgeClasses, getKindLabel } from './components/editors/TypeSelector.js';

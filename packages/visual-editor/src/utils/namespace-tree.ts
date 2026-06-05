@@ -391,8 +391,7 @@ export function filterSegmentedTree(roots: SegmentNode[], query: string): Segmen
     }
 
     // Return a shallow copy with only matching contents.
-    const filteredTotalCount =
-      matchingTypes.length + matchingChildren.reduce((s, c) => s + c.totalCount, 0);
+    const filteredTotalCount = matchingTypes.length + matchingChildren.reduce((s, c) => s + c.totalCount, 0);
 
     return {
       ...node,
@@ -454,6 +453,41 @@ export function ancestorPathsForMatches(roots: SegmentNode[], query: string): Se
   }
 
   return ancestorPaths;
+}
+
+/**
+ * Collect a segment's own `fullPath` plus every descendant segment `fullPath`
+ * in its subtree. Used by the explorer to recursively expand (or collapse) a
+ * namespace and ALL its sub-namespaces in a single toggle — "opening a
+ * namespace opens all the subnamespaces below it".
+ *
+ * The requested `fullPath` is always included (even if not found in the tree)
+ * so the caller degrades to a single-path toggle rather than a no-op.
+ */
+export function collectSegmentSubtreePaths(roots: SegmentNode[], fullPath: string): string[] {
+  const paths = new Set<string>([fullPath]);
+
+  function collectAll(node: SegmentNode): void {
+    paths.add(node.fullPath);
+    for (const child of node.children) collectAll(child);
+  }
+
+  function findAndCollect(node: SegmentNode): boolean {
+    if (node.fullPath === fullPath) {
+      collectAll(node);
+      return true;
+    }
+    for (const child of node.children) {
+      if (findAndCollect(child)) return true;
+    }
+    return false;
+  }
+
+  for (const root of roots) {
+    if (findAndCollect(root)) break;
+  }
+
+  return [...paths];
 }
 
 /**

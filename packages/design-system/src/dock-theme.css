@@ -185,9 +185,14 @@
     transform: translateY(-50%) scaleY(1.35);
   }
 
-  /* ── Active / inactive tab accent states ────────────────────────── */
+  /* ── Active / inactive tab states ───────────────────────────────────
+   * The reference (.rs-tab.is-active) marks the active tab with a subtle
+   * surface FILL — no accent underline. Simplified to match: the prior
+   * ::before primary-colored underline read as over-embellished. The
+   * group-state COLOR hierarchy below stays (it's a real multi-group dock
+   * affordance the single-window mock doesn't need). */
   .studio-app .rune-dock-theme .dv-tab.dv-active-tab {
-    position: relative;
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
   }
 
   .studio-app .rune-dock-theme .dv-groupview.dv-active-group .dv-tab.dv-active-tab {
@@ -211,24 +216,9 @@
     background: color-mix(in srgb, var(--accent) 28%, transparent);
   }
 
-  /* Accent underline via ::before — dockview 6.x owns ::after for its focus
-   * indicator (full-size overlay with outline), so we use ::before instead. */
-  .studio-app .rune-dock-theme .dv-tab.dv-active-tab::before {
-    content: '';
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 0;
-    height: 1.5px;
-    background: var(--primary);
-    border-radius: 1.5px;
-    z-index: 6;
-    pointer-events: none;
-  }
-
   /* dockview 6.x adds a full-size ::after overlay on focus/focus-within —
-   * suppress it so our ::before underline shows, then restore a ring for
-   * keyboard focus so the tab remains accessible. */
+   * suppress it so it doesn't wash a tint over the active tab, then restore a
+   * ring for keyboard focus so the tab remains accessible. */
   .studio-app .rune-dock-theme .dv-tab:focus-within::after,
   .studio-app .rune-dock-theme .dv-tab:focus::after {
     display: none;
