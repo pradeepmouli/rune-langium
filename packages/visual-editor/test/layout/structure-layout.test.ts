@@ -991,7 +991,10 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // Constants (must stay in sync with structure-layout.ts):
     const BASE_PADDING = 4;
     const HEADER_HEIGHT = 28;
-    const ROW_HEIGHT = 28;
+    // Base inherited rows ARE Data attribute rows → DATA_ROW_HEIGHT (32) for the
+    // XMLSpy-style stacked layout (name line + tight type/card line). Choice
+    // arms / Enum values keep the single-line ROW_HEIGHT (28); not used here.
+    const DATA_ROW_HEIGHT = 32;
     const ROW_GAP = 8;
 
     const input: StructureGraphInput = {
@@ -1065,15 +1068,15 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // Derived child must be placed below base rows + BASE_PADDING gap.
     // Expected: BASE_PADDING (top CSS padding) is NOT part of this formula —
     // placeBaseChildren places the child at:
-    //   y = HEADER_HEIGHT + 1 * ROW_HEIGHT + BASE_PADDING
-    const expectedTradeY = HEADER_HEIGHT + 1 * ROW_HEIGHT + BASE_PADDING;
+    //   y = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING = 28 + 32 + 4 = 64
+    const expectedTradeY = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING;
     expect((trade.position as { x: number; y: number }).y).toBe(expectedTradeY);
 
     // Right-column expansion for the base row must start at the row's
-    // vertical center minus half ROW_HEIGHT, accounting for BASE_PADDING top.
-    // Row 0 center = BASE_PADDING + HEADER_HEIGHT + 0 * ROW_HEIGHT + ROW_HEIGHT/2
-    const row0Center = BASE_PADDING + HEADER_HEIGHT + 0 * ROW_HEIGHT + ROW_HEIGHT / 2;
-    const expectedPartyY = row0Center - ROW_HEIGHT / 2; // = rowTop for row 0
+    // vertical center minus half DATA_ROW_HEIGHT, accounting for BASE_PADDING top.
+    // Row 0 center = BASE_PADDING + HEADER_HEIGHT + 0*DATA_ROW_HEIGHT + DATA_ROW_HEIGHT/2
+    const row0Center = BASE_PADDING + HEADER_HEIGHT + 0 * DATA_ROW_HEIGHT + DATA_ROW_HEIGHT / 2;
+    const expectedPartyY = row0Center - DATA_ROW_HEIGHT / 2; // = rowTop for row 0 = 32
     expect((party.position as { x: number; y: number }).y).toBe(expectedPartyY);
 
     // BASE_PADDING must equal 4 — documents the CSS coupling in the test.

@@ -270,21 +270,17 @@
   order: 2;
 }
 
-/* Right-align the type chip + cardinality pill in structure-variant
- * rows so the name reads on the left and the type metadata clusters on
- * the right edge — same name-left / metadata-right rhythm as the
- * headers (kind pill on right). Two markup variants:
- *   - Inner Data/Choice rows wrap the chip in `.rune-cell-type-wrap`
- *     (the wrap is the direct flex child; auto-margin lands here).
- *   - Base container rows put `.rune-cell-type-chip` directly inside
- *     `.rune-graph-group__base-row` (GroupContainerNode renders raw,
- *     no wrap).
- * Both selectors get auto-margin so the right-edge cluster works
- * regardless of which renderer produced the row. The card pill follows
- * on its right via the parent flex gap. Scoped so graph-variant rows
- * (less dense, different reading) stay as-is. */
-.rune-node-data--structure .rune-node-row .rune-cell-type-wrap,
-.rune-node-choice--structure .rune-node-row .rune-cell-type-wrap,
+/* Base-container rows stay SINGLE-LINE (name | type | cardinality), so the
+ * type chip is auto-margined to the right edge — same name-left / metadata-
+ * right rhythm as the headers (kind pill on right). GroupContainerNode renders
+ * the chip directly inside `.rune-graph-group__base-row` (no wrap), so the
+ * auto-margin lands on `.rune-cell-type-chip`.
+ *
+ * NOTE: Data/Choice structure rows are now XMLSpy-style STACKED — the type
+ * chip lives on its own `.rune-node-row__type-line` beneath the name and is
+ * left-aligned there, so it deliberately does NOT get the right-edge auto-
+ * margin (which previously pushed it to the row's right edge in the old
+ * single-line layout). */
 .rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
   margin-left: auto;
 }
@@ -1197,6 +1193,9 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: row;
   align-items: center;
+  /* Default single-line row height (28) — used by Choice arms and Enum values.
+     Data attribute rows override to --rune-data-row-height below (they're the
+     stacked two-line rows). */
   height: var(--rune-row-height);
   gap: var(--rune-row-gap);
   padding: 0 var(--space-2);
@@ -1205,6 +1204,42 @@ button[data-navigable]:focus-visible {
      even before the user clicks an interactive child (the chevron / name
      cell). Without this rows flatline visually until interacted with. */
   transition: background-color var(--motion-fast);
+}
+
+/* Data attribute rows are XMLSpy-style stacked (name line + type/card line),
+   so they get the taller DATA_ROW_HEIGHT (--rune-data-row-height). Choice arms
+   and Enum values stay on the single-line --rune-row-height above. The geometry
+   math in structure-layout.ts (sizeData / sizeBase) uses DATA_ROW_HEIGHT for
+   these rows, so the rendered height MUST mirror it. */
+.rune-node-data--structure .rune-node-row {
+  height: var(--rune-data-row-height);
+}
+
+/* XMLSpy-style stacked attribute row: the name occupies the top line and the
+   type-chip + cardinality the second line. `__main` is the stacked column
+   (flex:1), and the right-edge expand control sits beside it as a sibling so
+   it centers vertically across both lines. */
+.rune-node-row__main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1;
+  /* No gap between the name line and the type/card line — kept tight so both
+     lines of --text-2xs fit in the 32px DATA_ROW_HEIGHT. The line-box heights
+     already provide separation. */
+  gap: 0;
+}
+
+.rune-node-row__name-line {
+  min-width: 0;
+}
+
+.rune-node-row__type-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 /* Light row separators — give the dense, fixed-height rows gentle
@@ -1416,11 +1451,12 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: column;
   /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
-   * exactly ROW_HEIGHT without inter-row spacing. */
+   * exactly DATA_ROW_HEIGHT without inter-row spacing (base inherited rows are
+   * Data attribute rows). */
   /* Gap before the nested child data node MUST equal BASE_PADDING in
    * structure-layout.ts (sizeBase: leftColumnHeight = baseRowsHeight +
    * childSize.height + BASE_PADDING; placeBaseChildren: y = HEADER_HEIGHT +
-   * baseRows.length*ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
+   * baseRows.length*DATA_ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
    * here made the rendered child sit 4px below the container's reserved
    * bottom, so the inner DataNode overflowed the dashed base border. */
   margin-bottom: var(--rune-base-padding);
@@ -1430,7 +1466,10 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: row;
   align-items: center;
-  height: var(--rune-row-height);
+  /* Base inherited rows ARE Data attribute rows — sizeBase reserves
+     DATA_ROW_HEIGHT per row, so the rendered height must mirror it (these
+     render single-line but centered in the taller row). */
+  height: var(--rune-data-row-height);
   gap: var(--rune-row-gap);
 }
 

@@ -31,6 +31,7 @@ const css = readFileSync(cssPath, 'utf-8');
 describe('Structure layout SSoT — emitted CSS vars derive from TS constants', () => {
   const cases: Array<[keyof typeof STRUCTURE_LAYOUT_CONSTANTS, string]> = [
     ['ROW_HEIGHT', '--rune-row-height'],
+    ['DATA_ROW_HEIGHT', '--rune-data-row-height'],
     ['HEADER_HEIGHT', '--rune-header-height'],
     ['COL_WIDTH', '--rune-col-width'],
     ['COL_GAP', '--rune-col-gap'],
