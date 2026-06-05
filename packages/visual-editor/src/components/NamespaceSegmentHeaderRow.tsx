@@ -17,6 +17,21 @@ import type { CSSProperties, JSX } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
+import type { TypeKind } from '../types.js';
+import { KIND_LABEL } from './KindBadge.js';
+
+// Order the kind-count chips deterministically (most common kinds first) so the
+// breakdown reads consistently across namespaces.
+const KIND_CHIP_ORDER: readonly TypeKind[] = [
+  'data',
+  'choice',
+  'enum',
+  'func',
+  'record',
+  'typeAlias',
+  'basicType',
+  'annotation'
+];
 
 // ---------------------------------------------------------------------------
 // Flat-tree geometry — the single source of truth for both the namespace
@@ -36,6 +51,13 @@ export interface NamespaceSegmentHeaderRowProps {
   expanded: boolean;
   /** Total count shown in the trailing chiclet (types in this subtree). */
   count: number;
+  /**
+   * Per-kind breakdown of the types DIRECTLY in this namespace (kinds with 0
+   * omitted). When present and non-empty, a compact muted chip row renders under
+   * the header (e.g. "14 data · 2 choice · 1 enum"). Optional so the inspector's
+   * type-picker reuse of this row can omit it.
+   */
+  kindCounts?: Partial<Record<TypeKind, number>>;
   /** Toggle expand/collapse — fired by the chevron button and the label. */
   onToggle: () => void;
   /** Left padding in px. Flat layouts pass a constant baseline. */
@@ -54,11 +76,17 @@ export function NamespaceSegmentHeaderRow({
   fullPath,
   expanded,
   count,
+  kindCounts,
   onToggle,
   indentPx,
   depth = 0,
   'data-testid': dataTestId
 }: NamespaceSegmentHeaderRowProps): JSX.Element {
+  // Compact per-kind chips for the types directly in this namespace. Only kinds
+  // with count > 0 render; the row is omitted entirely when there are none.
+  const kindChips = kindCounts
+    ? KIND_CHIP_ORDER.filter((k) => (kindCounts[k] ?? 0) > 0).map((k) => ({ kind: k, count: kindCounts[k]! }))
+    : [];
   // Resting fill deepens with depth (40% → +8%/level, capped at 72%) so nesting
   // is legible without a per-depth indent. Passed as a CSS variable so the
   // `.rune-ns-seg-header:hover` rule can still override the background (an inline
@@ -100,6 +128,25 @@ export function NamespaceSegmentHeaderRow({
 
         <NumberChiclet>{count}</NumberChiclet>
       </div>
+
+      {/* Per-kind breakdown chips for the types directly in this namespace.
+          Compact + muted so the dense header rows stay scannable. Indented to
+          sit under the label (chevron width + base indent). */}
+      {kindChips.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pb-1 text-3xs text-muted-foreground/80"
+          style={{ paddingLeft: `${indentPx + 28}px` }}
+          data-testid={dataTestId ? `${dataTestId}-kinds` : undefined}
+        >
+          {kindChips.map(({ kind, count: kindCount }, i) => (
+            <span key={kind} className="inline-flex items-center whitespace-nowrap">
+              {i > 0 && <span className="mr-1.5 text-muted-foreground/40">·</span>}
+              <span className="font-mono font-medium tabular-nums text-muted-foreground">{kindCount}</span>
+              <span className="ml-0.5">{KIND_LABEL[kind].toLowerCase()}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -75,7 +75,15 @@ export interface ChoiceFormProps {
 // Component
 // ---------------------------------------------------------------------------
 
-function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, allNodeIds, readOnly: readOnlyProp }: ChoiceFormProps) {
+function ChoiceForm({
+  nodeId,
+  data,
+  availableTypes,
+  actions,
+  onNavigateToNode,
+  allNodeIds,
+  readOnly: readOnlyProp
+}: ChoiceFormProps) {
   const d = data as any;
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
@@ -186,7 +194,16 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
       <EditorActionsProvider nodeId={nodeId} actions={actions as unknown as EditorFormActions} readOnly={isReadOnly}>
         <div data-slot="choice-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="choice" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Choice name" nameAriaLabel="Choice type name" className={INSPECTOR_FORM_HEADER_CLASS} />
+          <TypeHeader
+            kind="choice"
+            namespace={d.namespace}
+            control={form.control}
+            onNameChange={debouncedName}
+            placeholder="Choice name"
+            nameAriaLabel="Choice type name"
+            className={INSPECTOR_FORM_HEADER_CLASS}
+            onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+          />
 
           {/* Options */}
           <FieldSet className="gap-1">
@@ -216,9 +233,9 @@ function ChoiceForm({ nodeId, data, availableTypes, actions, onNavigateToNode, a
 
             {/* Add Option via TypeSelector — hidden in read-only mode */}
             {!isReadOnly && (
-            <div data-slot="add-option" className="mt-1">
-              <TypeSelector value="" options={addableTypes} onSelect={handleAddOption} placeholder="Add option..." />
-            </div>
+              <div data-slot="add-option" className="mt-1">
+                <TypeSelector value="" options={addableTypes} onSelect={handleAddOption} placeholder="Add option..." />
+              </div>
             )}
           </FieldSet>
 

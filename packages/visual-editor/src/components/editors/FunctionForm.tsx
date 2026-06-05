@@ -198,7 +198,7 @@ function FunctionForm({
   const handleExpressionBlur = useCallback(() => {
     // Guard: a readOnly textarea cannot produce new content, so blur should
     // never trigger a mutation. Early-return to be explicit.
-    if (Boolean(readOnlyProp || (data as any).isReadOnly)) return;
+    if (readOnlyProp || (data as any).isReadOnly) return;
     const currentExpression = form.getValues('expressionText' as never) as unknown as string;
     const result = validateExpression(currentExpression);
     if (!result.valid) {
@@ -329,6 +329,7 @@ function FunctionForm({
             placeholder="Function name"
             nameAriaLabel="Function type name"
             className={INSPECTOR_FORM_HEADER_CLASS}
+            onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
           />
 
           {/* Input Parameters — editable AttributeRow list via useFieldArray,

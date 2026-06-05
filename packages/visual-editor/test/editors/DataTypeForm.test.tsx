@@ -1038,4 +1038,34 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
 
     expect(setInheritance).toHaveBeenCalledWith('test::Trade', 'test::BaseType');
   });
+
+  // Gap 3: header "Reveal in graph" action.
+  it('renders a "Reveal in graph" header action that navigates to this node', () => {
+    const onNavigateToNode = vi.fn();
+    render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={makeDataNode()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        onNavigateToNode={onNavigateToNode}
+      />
+    );
+
+    const reveal = screen.getByLabelText('Reveal in graph');
+    fireEvent.click(reveal);
+    expect(onNavigateToNode).toHaveBeenCalledWith('test::Trade');
+  });
+
+  it('hides the "Reveal in graph" action when no navigate callback is provided', () => {
+    render(
+      <DataTypeForm
+        nodeId="test::Trade"
+        data={makeDataNode()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+    expect(screen.queryByLabelText('Reveal in graph')).toBeNull();
+  });
 });

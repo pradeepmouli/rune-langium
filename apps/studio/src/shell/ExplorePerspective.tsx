@@ -92,7 +92,7 @@ import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
 import { usePerspectiveStore } from '../store/perspective-store.js';
 import type { WorkspaceFile } from '../services/workspace.js';
-import { linkDocument } from '../services/workspace.js';
+import { linkDocument, createBlankWorkspaceFile } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
@@ -359,35 +359,79 @@ function resolveResponsiveLayoutDirection(
   return previous;
 }
 
+/** Count error (severity 1) and warning (severity 2) diagnostics for a file. */
+function countFileDiagnostics(diagnostics: readonly LspDiagnostic[] | undefined): {
+  errors: number;
+  warnings: number;
+} {
+  let errors = 0;
+  let warnings = 0;
+  if (diagnostics) {
+    for (const d of diagnostics) {
+      if (d.severity === 1) errors += 1;
+      else if (d.severity === 2) warnings += 1;
+    }
+  }
+  return { errors, warnings };
+}
+
 function FileTabStrip({
   files,
   activeFile,
-  onSelectFile
+  onSelectFile,
+  onCreateFile,
+  fileDiagnostics
 }: {
   files: readonly WorkspaceFile[];
   activeFile: string | undefined;
   onSelectFile: (path: string) => void;
+  onCreateFile: () => void;
+  fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>;
 }) {
   const userFiles = files.filter((f) => !f.readOnly);
-  if (userFiles.length === 0) return null;
 
   return (
     <div className="studio-topbar__tabs">
-      {userFiles.map((f) => (
-        <button
-          key={f.path}
-          type="button"
-          className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
-          onClick={() => onSelectFile(f.path)}
-          title={f.path}
-        >
-          <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
-          <span className="studio-topbar__tab-name">{f.name}</span>
-          <span className="studio-topbar__tab-badge" aria-hidden="true">
-            {getFileKindBadge(f.name)}
-          </span>
-        </button>
-      ))}
+      {userFiles.map((f) => {
+        const { errors, warnings } = countFileDiagnostics(fileDiagnostics.get(f.path));
+        return (
+          <button
+            key={f.path}
+            type="button"
+            className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
+            onClick={() => onSelectFile(f.path)}
+            title={f.path}
+          >
+            <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
+            <span className="studio-topbar__tab-name">{f.name}</span>
+            {errors > 0 && (
+              <span className="studio-topbar__tab-count is-error" title={`${errors} error${errors === 1 ? '' : 's'}`}>
+                {errors}
+              </span>
+            )}
+            {warnings > 0 && (
+              <span
+                className="studio-topbar__tab-count is-warning"
+                title={`${warnings} warning${warnings === 1 ? '' : 's'}`}
+              >
+                {warnings}
+              </span>
+            )}
+            <span className="studio-topbar__tab-badge" aria-hidden="true">
+              {getFileKindBadge(f.name)}
+            </span>
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        className="studio-topbar__tab-new"
+        aria-label="New file"
+        title="New file"
+        onClick={onCreateFile}
+      >
+        <Plus className="size-3.5" />
+      </button>
     </div>
   );
 }
@@ -857,7 +901,9 @@ export function ExplorePerspective() {
   // switching between nodes in the same namespace on the same nonce doesn't
   // issue redundant linkDocument round-trips.
   const relinkedRef = useRef(new Set<string>());
-  useEffect(() => { relinkedRef.current = new Set(); }, [hydrationNonce, workspaceId]);
+  useEffect(() => {
+    relinkedRef.current = new Set();
+  }, [hydrationNonce, workspaceId]);
 
   useEffect(() => {
     if (hydrationNonce === 0 || !selectedNodeId) return;
@@ -1037,6 +1083,14 @@ export function ExplorePerspective() {
     setActiveEditorFile(filePath);
   }, []);
 
+  // "+" new-file affordance — mirrors FileLoader's start-page "New" flow:
+  // mint the next available untitled[.rosetta] file, append it, and open it.
+  const handleCreateFile = useCallback(() => {
+    const file = createBlankWorkspaceFile(filesRef.current);
+    onFilesChange?.([...filesRef.current, file]);
+    openFileInSource(file.path);
+  }, [onFilesChange, openFileInSource]);
+
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
       storeSelectNode(nodeId, { reapplyFocusMode: true });
@@ -1207,10 +1261,7 @@ export function ExplorePerspective() {
       if (!file) {
         // eslint-disable-next-line no-console
         console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
-        useOutputStore.getState().addLine(
-          fmtLine('editor', `file not found for URI`, fileName),
-          'warn'
-        );
+        useOutputStore.getState().addLine(fmtLine('editor', `file not found for URI`, fileName), 'warn');
         return null;
       }
       openFileInSource(file.path);
@@ -1224,10 +1275,7 @@ export function ExplorePerspective() {
             pendingDisplayFileRef.current.delete(file.path);
             // eslint-disable-next-line no-console
             console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
-            useOutputStore.getState().addLine(
-              fmtLine('editor', 'editor view timeout', file.path),
-              'warn'
-            );
+            useOutputStore.getState().addLine(fmtLine('editor', 'editor view timeout', file.path), 'warn');
             resolve(null);
           }
         }, 2000);
@@ -1986,7 +2034,13 @@ export function ExplorePerspective() {
           </Popover>
         </div>
         {activePerspective === 'explore' && (
-          <FileTabStrip files={files} activeFile={activeEditorFile} onSelectFile={openFileInSource} />
+          <FileTabStrip
+            files={files}
+            activeFile={activeEditorFile}
+            onSelectFile={openFileInSource}
+            onCreateFile={handleCreateFile}
+            fileDiagnostics={combinedFileDiagnostics}
+          />
         )}
         <div className="studio-topbar__right">
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">

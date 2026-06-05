@@ -197,6 +197,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       >
         <OtherForm
           nodeData={nodeData}
+          nodeId={nodeId}
           onNavigateToNode={onNavigateToNode}
           allNodeIds={allNodeIds}
           refOnly={refOnly}
@@ -296,10 +297,14 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'record':
       case 'basicType':
       case 'annotation':
-        return <OtherForm nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
+        return (
+          <OtherForm nodeData={nodeData!} nodeId={nodeId} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
+        );
 
       default:
-        return <OtherForm nodeData={nodeData!} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />;
+        return (
+          <OtherForm nodeData={nodeData!} nodeId={nodeId} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
+        );
     }
   }
 

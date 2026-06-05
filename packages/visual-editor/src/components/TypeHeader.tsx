@@ -10,8 +10,10 @@
  */
 import * as React from 'react';
 import { Controller, type Control } from 'react-hook-form';
+import { Crosshair } from 'lucide-react';
 import { Field, FieldError } from '@rune-langium/design-system/ui/field';
 import { Input } from '@rune-langium/design-system/ui/input';
+import { Button } from '@rune-langium/design-system/ui/button';
 import { cn } from '@rune-langium/design-system/utils';
 import { KindBadge } from './KindBadge.js';
 import { useEditorActionsContext } from './forms/sections/EditorActionsContext.js';
@@ -39,6 +41,13 @@ export interface TypeHeaderProps {
   nameAriaLabel?: string;
   /** Read-only variant: static name (used when `control` is absent). */
   name?: string;
+  /**
+   * Reveal-in-graph action. When provided, a header icon button navigates to
+   * this type's graph node (parents bind it to `onNavigateToNode(nodeId)`).
+   * When absent (callback or node id unavailable at the mount), the button is
+   * not rendered — no dead control.
+   */
+  onReveal?: () => void;
 }
 
 export function TypeHeader({
@@ -50,7 +59,8 @@ export function TypeHeader({
   onNameChange,
   placeholder,
   nameAriaLabel,
-  name
+  name,
+  onReveal
 }: TypeHeaderProps): React.ReactElement {
   const editorCtx = useEditorActionsContext();
   const nameReadOnly = editorCtx?.readOnly ?? false;
@@ -100,6 +110,20 @@ export function TypeHeader({
           </h3>
         )}
       </div>
+      {onReveal && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          data-slot="type-header-reveal"
+          onClick={onReveal}
+          aria-label="Reveal in graph"
+          title="Reveal in graph"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+        >
+          <Crosshair className="size-3.5" />
+        </Button>
+      )}
       <KindBadge kind={kind} />
       {trailing}
     </div>

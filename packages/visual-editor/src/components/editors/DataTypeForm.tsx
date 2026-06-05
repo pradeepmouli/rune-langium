@@ -388,6 +388,7 @@ function DataTypeForm({
             placeholder="Type name"
             nameAriaLabel="Data type name"
             className={INSPECTOR_FORM_HEADER_CLASS}
+            onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
           />
 
           {/* Inheritance — always visible above tabs */}

@@ -183,7 +183,16 @@ function TypeAliasForm({
       <FormProvider {...form}>
         <div data-slot="type-alias-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="typeAlias" namespace={(data as any).namespace} control={form.control} onNameChange={debouncedName} placeholder="Type alias name" nameAriaLabel="Type alias name" className={INSPECTOR_FORM_HEADER_CLASS} />
+          <TypeHeader
+            kind="typeAlias"
+            namespace={(data as any).namespace}
+            control={form.control}
+            onNameChange={debouncedName}
+            placeholder="Type alias name"
+            nameAriaLabel="Type alias name"
+            className={INSPECTOR_FORM_HEADER_CLASS}
+            onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+          />
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}
           <FieldSet className="gap-1.5">

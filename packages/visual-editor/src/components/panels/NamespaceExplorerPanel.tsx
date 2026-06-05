@@ -32,6 +32,7 @@ import {
   buildSegmentedNamespaceTree,
   flattenSegmentedTree,
   filterSegmentedTree,
+  filterSegmentedTreeByKind,
   ancestorPathsForMatches,
   collectSegmentSubtreePaths
 } from '../../utils/namespace-tree.js';
@@ -130,6 +131,38 @@ function toPayloadKind(typeKind: TypeKind): TypeRefKind {
 }
 
 // ---------------------------------------------------------------------------
+// Kind filter pills
+// ---------------------------------------------------------------------------
+
+/** Every TypeKind value — the keep-set baseline when gating a subset of kinds. */
+const ALL_TYPE_KINDS: readonly TypeKind[] = [
+  'data',
+  'choice',
+  'enum',
+  'func',
+  'record',
+  'typeAlias',
+  'basicType',
+  'annotation'
+];
+
+/**
+ * Kinds surfaced as toggle pills (matches the graph legend + KindBadge tokens).
+ * `dotClass` resolves to the `--color-{kind}` token, so the pill accent tracks
+ * the theme exactly like GraphLegend's swatches.
+ */
+type FilterKind = 'data' | 'choice' | 'enum' | 'func';
+
+const EXPLORER_FILTER_KINDS: readonly FilterKind[] = ['data', 'choice', 'enum', 'func'];
+
+const KIND_DOT_CLASS: Record<FilterKind, string> = {
+  data: 'bg-data',
+  choice: 'bg-choice',
+  enum: 'bg-enum',
+  func: 'bg-func'
+};
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -154,10 +187,37 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   onClearDragSource
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
+  // Local explorer kind filter (independent of graph visibility / GraphFilterMenu).
+  // All-on by default; toggling a pill off prunes that kind from the tree.
+  const [activeKinds, setActiveKinds] = useState<Set<TypeKind>>(() => new Set(EXPLORER_FILTER_KINDS));
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const toggleKind = useCallback((kind: TypeKind) => {
+    setActiveKinds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  }, []);
+
   // Build the segmented namespace tree.
-  const segmentedRoots = useMemo(() => buildSegmentedNamespaceTree(nodes), [nodes]);
+  const segmentedRootsRaw = useMemo(() => buildSegmentedNamespaceTree(nodes), [nodes]);
+
+  // Apply the local kind filter FIRST so search + ancestor-expansion operate on
+  // the kind-pruned tree. Only the pill-controlled kinds (data/choice/enum/func)
+  // are gated; every other kind (record/typeAlias/basicType/annotation) is always
+  // kept. When all pills are on the tree is returned unchanged (cheap no-op).
+  const segmentedRoots = useMemo(() => {
+    const allPillsOn = EXPLORER_FILTER_KINDS.every((k) => activeKinds.has(k));
+    if (allPillsOn) return segmentedRootsRaw;
+    // Keep-set = every kind, minus the pill kinds that are toggled off.
+    const keepKinds = new Set<TypeKind>(ALL_TYPE_KINDS);
+    for (const k of EXPLORER_FILTER_KINDS) {
+      if (!activeKinds.has(k)) keepKinds.delete(k);
+    }
+    return filterSegmentedTreeByKind(segmentedRootsRaw, keepKinds);
+  }, [segmentedRootsRaw, activeKinds]);
 
   // Default expansion: expand all depth-0 and depth-1 segments so the tree is
   // usable on first render without collapsing all the way to bare root segments.
@@ -287,6 +347,40 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
               <TooltipContent>Hide all namespaces from graph</TooltipContent>
             </Tooltip>
           </IconButtonGroup>
+        </div>
+
+        {/* Kind filter pills — a LOCAL explorer filter (independent of graph
+            visibility / GraphFilterMenu). All-on by default; toggling a pill off
+            prunes that kind from the tree and prunes now-empty namespaces. */}
+        <div
+          className="flex flex-wrap items-center gap-1 border-b px-3 py-1.5"
+          role="group"
+          aria-label="Filter types by kind"
+          data-testid="kind-filter-pills"
+        >
+          {EXPLORER_FILTER_KINDS.map((kind) => {
+            const active = activeKinds.has(kind);
+            return (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => toggleKind(kind)}
+                aria-pressed={active}
+                data-testid={`kind-filter-${kind}`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs font-medium transition-colors ${
+                  active
+                    ? 'border-border bg-accent/60 text-foreground'
+                    : 'border-border/50 bg-transparent text-muted-foreground/70 hover:text-muted-foreground'
+                }`}
+              >
+                <span
+                  className={`inline-block size-2 shrink-0 rounded-full ${KIND_DOT_CLASS[kind]} ${active ? '' : 'opacity-40'}`}
+                  aria-hidden="true"
+                />
+                {KIND_LABEL[kind]}
+              </button>
+            );
+          })}
         </div>
 
         {/* Virtualized Tree.
@@ -439,6 +533,7 @@ function SegmentHeaderRow({ row, onToggleTreeExpand }: SegmentHeaderRowProps): J
       fullPath={row.fullPath}
       expanded={row.expanded}
       count={row.totalCount}
+      kindCounts={row.kindCounts}
       depth={row.depth}
       onToggle={onToggleTreeExpand}
       indentPx={TREE_INDENT_BASE}
