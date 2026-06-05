@@ -55,6 +55,22 @@ describe('isDegradedReparse', () => {
     expect(isDegradedReparse([node('ns::Alpha', 0)], [node('ns::Alpha', 1)])).toBe(false);
   });
 
+  it('flags a multi-node total wipe on a SMALL model (worker-down signature below the ratio cutoff)', () => {
+    // Two 1-attribute types (currentTotal = 2 < 3, so the ratio test is skipped)
+    // both stripped to zero → the multi-node total-wipe detector catches it.
+    const current = [node('ns::Alpha', 1), node('ns::Beta', 1)];
+    const wiped = [node('ns::Alpha', 0), node('ns::Beta', 0)];
+    expect(isDegradedReparse(wiped, current)).toBe(true);
+  });
+
+  it('does NOT flag a SINGLE small type cleared to zero (indistinguishable from a legit clear-all)', () => {
+    // Only one shared type → could be a legit "delete all attributes" source edit;
+    // rejecting it would wedge the graph, so it is accepted (documented residual).
+    const current = [node('ns::Alpha', 2)];
+    const cleared = [node('ns::Alpha', 0)];
+    expect(isDegradedReparse(cleared, current)).toBe(false);
+  });
+
   it('does NOT flag a node that disappears entirely (possible legit delete, judged elsewhere)', () => {
     // Beta is gone from incoming — only shared nodes are compared, and Alpha is intact.
     const current = [node('ns::Alpha', 4), node('ns::Beta', 3)];

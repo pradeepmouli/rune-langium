@@ -93,6 +93,19 @@ describe('edit-reconcile — store integration', () => {
     expect(store.getState().pendingEditPatches.length).toBe(0); // converged — no longer replayed
   });
 
+  it('reconciles the combined updateAttribute (inspector form) across a stale reparse', async () => {
+    const alphaId = store.getState().nodes.find((n) => n.data.name === 'Alpha')!.id;
+    // Combined name+type+cardinality edit (the inspector form's path).
+    store.getState().updateAttribute(alphaId, 'x', 'renamed', 'string', '0..1');
+    expect(alphaAttrNames(store)).toEqual(['renamed', 'y']);
+    expect(store.getState().pendingEditPatches.length).toBeGreaterThan(0);
+
+    const staleModels = (await parse(BASE_SOURCE)).value; // still has x
+    store.getState().loadModels(staleModels);
+
+    expect(alphaAttrNames(store)).toEqual(['renamed', 'y']); // combined edit survived
+  });
+
   it('preserves an in-flight attribute REMOVAL across a stale reparse', async () => {
     const alphaId = store.getState().nodes.find((n) => n.data.name === 'Alpha')!.id;
     store.getState().removeAttribute(alphaId, 'y');

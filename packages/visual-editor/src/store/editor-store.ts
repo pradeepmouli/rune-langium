@@ -166,7 +166,8 @@ export interface EditorState {
   hydrationNonce: number;
   /**
    * Monotonically-incrementing counter bumped ONLY when the graph is (re)built
-   * from a parse result — i.e. inside `loadModels` / `loadDeferredExports`.
+   * from a parse result — i.e. inside `loadModels`. (`loadDeferredExports` is a
+   * state-only stash that does NOT rebuild nodes, so it does not bump it.)
    * User-edit actions deliberately do NOT bump it.
    *
    * `useModelSourceSync` reads this to tell PARSE-origin `nodes`/`edges` changes
@@ -637,9 +638,17 @@ function nodeAttributeCount(n: TypeGraphNode): number {
  * legitimate user deletion is NOT flagged: after a delete the live graph
  * already reflects it, and the reparse of the saved source matches → ratio ≈ 1.
  * Only nodes present in BOTH are compared, so hydration that ADDS nodes never
- * trips it. Uses a collective-ratio test (not per-node) so a single-attribute
- * delete (drop of 1 out of many) stays well above the threshold, while a
- * worker-down strip (most attributes → 0) falls below it.
+ * trips it. Two detectors: (1) a multi-node TOTAL wipe (2+ shared types all
+ * stripped to zero attributes) — the worker-down signature, which also covers
+ * small attributed models; (2) a collective-ratio test for larger models, so a
+ * single-attribute delete (drop of 1 out of many) stays above the threshold
+ * while a worker-down strip (most attributes → 0) falls below it.
+ *
+ * Residual window (accepted by design): a SINGLE small attributed type stripped
+ * to zero is NOT flagged — it is indistinguishable from a legit "clear all
+ * attributes" source edit, and rejecting that would wedge the graph. The
+ * parseEpoch gate still suppresses the immediate write-back; a robust fix needs
+ * a real parse-worker health signal rather than this heuristic.
  */
 export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphNode[]): boolean {
   if (current.length === 0) return false; // no baseline (initial load) → accept
@@ -654,9 +663,19 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
     currentTotal += nodeAttributeCount(cur);
     incomingTotal += nodeAttributeCount(inc);
   }
-  // Need a meaningful attributed baseline before judging (avoids false positives
-  // on tiny / attribute-light graphs).
-  if (common === 0 || currentTotal < 3) return false;
+  if (common === 0) return false;
+  // Multi-node TOTAL wipe: every shared node that had attributes now has none.
+  // This is the worker-down signature — a whole namespace stripped in one parse.
+  // It catches SMALL attributed models that the ratio test below skips (e.g. two
+  // 1-attribute types → 0). We require `common >= 2` so a single-type clear-all
+  // (a plausible legit source edit) is still accepted: rejecting it would wedge
+  // the graph at the stale version, since the healthy reparse keeps returning 0
+  // and we would keep rejecting it. A user cannot plausibly zero out 2+ types in
+  // a single reparse, so the multi-node case is safe to reject.
+  if (common >= 2 && currentTotal > 0 && incomingTotal === 0) return true;
+  // Need a meaningful attributed baseline before judging by ratio (avoids false
+  // positives on tiny / attribute-light graphs — see the single-type note above).
+  if (currentTotal < 3) return false;
   // Degraded when the shared nodes collectively lost more than half their
   // attributes — a single user edit can't plausibly do that, a worker-down
   // strip always does.
@@ -1387,54 +1406,48 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         // -----------------------------------------------------------------------
 
         updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
+          // Combined name+type+cardinality edit from the inspector form. Routed
+          // through `commitEdit` (like the field-level attribute actions) so an
+          // edit made just before its own reparse lands is captured as a pending
+          // patch and replayed, not dropped. See `edit-reconcile.ts`.
           const card = parseCardinalityString(cardinality);
-          set((state) => {
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
+          const { nodes, edges } = get();
+          const oldEdgeIds = edges
+            .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
+            .map((e) => e.id);
+          const targetNodeId = nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+          const newEdge: TypeGraphEdge | null =
+            targetNodeId && targetNodeId !== nodeId
+              ? {
+                  id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
+                  source: nodeId,
+                  target: targetNodeId,
+                  type: 'attribute-ref',
+                  data: {
+                    kind: 'attribute-ref' as const,
+                    label: newName,
+                    cardinality: formatCardinalityString(cardinality)
+                  } as EdgeData
+                }
+              : null;
+
+          commitEdit(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            if (n) {
               const d = n.data as AnyGraphNode;
               if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const attrs = ((d as any).attributes ?? []).map((a: any) =>
-                  a.name === oldName
-                    ? {
-                        ...a,
-                        name: newName,
-                        typeCall: {
-                          ...a.typeCall,
-                          $type: 'TypeCall',
-                          type: { $refText: typeName }
-                        },
-                        card: { $type: 'RosettaCardinality', ...card }
-                      }
-                    : a
-                );
-                return { ...n, data: { ...d, attributes: attrs } };
+                // Update every attribute sharing the old name (mirrors the prior `.map`).
+                for (const a of (d as { attributes?: any[] }).attributes ?? []) {
+                  if (a.name === oldName) {
+                    a.name = newName;
+                    a.typeCall = { ...a.typeCall, $type: 'TypeCall', type: { $refText: typeName } };
+                    a.card = { $type: 'RosettaCardinality', ...card };
+                  }
+                }
               }
-              return n;
-            });
-
-            // Remove old attribute-ref edge for the old attribute name
-            const filteredEdges = state.edges.filter(
-              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
-            );
-
-            // Add new attribute-ref edge if target exists
-            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
-            if (targetNodeId && targetNodeId !== nodeId) {
-              const newEdge: TypeGraphEdge = {
-                id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
-                source: nodeId,
-                target: targetNodeId,
-                type: 'attribute-ref',
-                data: {
-                  kind: 'attribute-ref' as const,
-                  label: newName,
-                  cardinality: formatCardinalityString(cardinality)
-                } as EdgeData
-              };
-              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
             }
-
-            return { nodes: updatedNodes, edges: filteredEdges };
+            for (const id of oldEdgeIds) draft.edges.delete(id);
+            if (newEdge) draft.edges.set(newEdge.id, newEdge);
           });
         },
 
