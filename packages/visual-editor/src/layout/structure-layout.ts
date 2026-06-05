@@ -238,22 +238,41 @@ interface SizedNode {
  * it). Not pixel-perfect — variable-pitch fonts can render wider; the
  * COL_WIDTH_MAX cap + CSS `text-overflow: ellipsis` are the safety net.
  */
-function estimateRowsColWidth(rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string }>): number {
+function estimateRowsColWidth(
+  rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string; expandable?: boolean }>
+): number {
   const CHAR_W = 7;
-  // XMLSpy-style stacked rows: the name is on its own line, the type-chip +
-  // cardinality on a second line. Per-row width is therefore the MAX of the
-  // two lines, not their sum. CHROME_STACKED allows for the framed-row padding
-  // + border + the right-edge expand chevron + gaps + safety margin ≈ 48.
-  const CHROME_STACKED = 48;
+  // Framed-row chrome ALWAYS present: 2px L/R row padding + hairline border +
+  // the chip & cardinality internal padding AND the cardinality parens the
+  // char count under-counts (card data is e.g. "1..1" but renders "(1..1)") + a
+  // small safety margin. Tighter than the previous flat 48 (which always
+  // budgeted the expand chevron → visible empty space inside primitive/enum
+  // rows, the slack the user flagged) but not so tight it clips: ~26 keeps a
+  // few px margin over real content for typical rows.
+  const CHROME_BASE = 26;
+  // The right-edge expand control (+/−) renders ONLY for rows whose type is
+  // itself expandable (Data / Choice). Reserve its footprint only for those
+  // rows so a node of all-primitive attributes hugs its content.
+  const EXPAND_CHEVRON = 22;
   let max = 0;
   for (const r of rowTexts) {
     // Type line holds the type chip text + a small gap + the cardinality, so
     // estimate it as typeName + card + 2 chars of separator.
     const lineChars = Math.max(r.name.length, r.typeName.length + r.card.length + 2);
-    const w = lineChars * CHAR_W + CHROME_STACKED;
+    const w = lineChars * CHAR_W + CHROME_BASE + (r.expandable ? EXPAND_CHEVRON : 0);
     if (w > max) max = w;
   }
   return Math.min(COL_WIDTH_MAX, Math.max(COL_WIDTH, max));
+}
+
+/**
+ * Whether a structure row renders the right-edge expand control — true only for
+ * rows whose target type is itself a structured node (Data / Choice). Mirrors
+ * `isRowExpandable` in DataNode.tsx so the width estimate reserves chevron room
+ * exactly when the renderer draws it.
+ */
+function rowIsExpandable(typeKind: string): boolean {
+  return typeKind === 'Data' || typeKind === 'Choice';
 }
 
 /**
@@ -414,7 +433,12 @@ function sizeData(
   // (rowsColWidth, rows-only), while the node's content width also respects the
   // header (kind badge + name + meta) when it is the wider element.
   const rowsColWidth = estimateRowsColWidth(
-    rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }))
+    rows.map((r) => ({
+      name: r.attrName,
+      typeName: r.typeName,
+      card: r.cardinality,
+      expandable: rowIsExpandable(r.typeKind)
+    }))
   );
   const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node));
   // Wrapper dimensions = inner content + NODE_PADDING on the sides (×2) and
@@ -475,7 +499,8 @@ function sizeChoice(
   // attrName / cardinality — pass empty strings so the row estimate only widens
   // for long typeNames.
   const rowsColWidth = Math.max(
-    estimateRowsColWidth(node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' }))),
+    // Choice arms always expand into their referenced type, so reserve chevron room.
+    estimateRowsColWidth(node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '', expandable: true }))),
     estimateHeaderWidth(node.name, nodeHasMeta(node))
   );
   const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
@@ -659,7 +684,14 @@ function sizeBase(
   // Base rows fill the column (header floor folded in via estimateHeaderWidth),
   // mirroring Choice/Enum — only top-level Data rows shrink-wrap.
   const baseRowsColWidth = Math.max(
-    estimateRowsColWidth(node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }))),
+    estimateRowsColWidth(
+      node.baseRows.map((r) => ({
+        name: r.attrName,
+        typeName: r.typeName,
+        card: r.cardinality,
+        expandable: rowIsExpandable(r.typeKind)
+      }))
+    ),
     estimateHeaderWidth(node.baseTypeName, false)
   );
   const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);

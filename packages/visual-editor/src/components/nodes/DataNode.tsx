@@ -460,7 +460,16 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
               );
             })}
           </div>
-          <div className="rune-node-children-slot" data-testid="data-node-children" />
+          <div
+            className="rune-node-children-slot"
+            data-testid="data-node-children"
+            // Only decorate (grow into the gutter + draw the dashed column
+            // divider) when this node actually has a materialized child column.
+            // Otherwise the slot must stay collapsed: with rows now shrink-wrapped
+            // and the node width header-driven, a growing slot would fill the
+            // empty right area and draw a stray vertical dashed line.
+            data-has-children={(childYByAttrName?.size ?? 0) > 0 ? 'true' : undefined}
+          />
         </div>
         {/* Visual-polish #11 (PR #210): SVG connector from row→child for each
             materialized expansion. Rendered AFTER the body so it paints over,

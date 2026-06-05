@@ -1403,27 +1403,27 @@ button[data-navigable]:focus-visible {
   stroke-width: 1;
 }
 
+/* Empty by default: the slot stays collapsed (no grow, no decoration) so a
+ * leaf node — whose rows now shrink-wrap while the node width is header-driven —
+ * does NOT render a stray dashed divider in the empty right area. React Flow
+ * positions child nodes absolutely via parentNode, so the slot never holds DOM
+ * children; it is purely the column-gutter decoration, only meaningful when a
+ * child column actually exists. */
 .rune-node-children-slot {
-  /* React Flow positions child nodes absolutely via parentNode; this
-   * slot only declares the column gap.  Width is implicit from the
-   * layout's child placements. */
-  margin-left: var(--rune-col-gap);
+  flex: 0 0 0;
+  width: 0;
+}
+
+/* Materialized child column (data-has-children) — grow into the gutter and draw
+ * the decorative dashed divider that separates rows from the child column.
+ * Padding/inset use --rune-row-gap (8px); the column gap is --rune-col-gap. */
+.rune-node-children-slot[data-has-children='true'] {
   flex: 1 1 auto;
-  min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
-  /* Phase 10.2 — decorative left border to visually separate the child column.
-   * Padding uses --rune-row-gap (8px) as the inset. */
+  width: auto;
+  margin-left: var(--rune-col-gap);
+  min-height: var(--rune-row-height);
   border-left: var(--hairline) dashed var(--border);
   padding-left: var(--rune-row-gap);
-  /* Copilot e2e-batch review flagged a potential overflow when a node has
-   * NO expansions: the slot's margin-left + border + padding could push
-   * the inner content past the layout's pre-computed sz.width. In
-   * practice this is invisible because (a) `.rune-node` has
-   * `overflow: hidden` which clips anything past the outer frame, and
-   * (b) `flex: 1 1 auto` shrinks the slot to 0 width when there's no
-   * remaining space (no expansion children = empty slot, no content
-   * pressure, slot collapses). The decorative border-left is also
-   * clipped in the no-children case. If a future change adds visible
-   * inner content to the slot DOM (e.g., a placeholder), revisit. */
 }
 
 /* GroupContainerNode — base-type scope -------------------------- */
