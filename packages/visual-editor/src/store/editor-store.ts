@@ -56,6 +56,8 @@ import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
+import type { Patches } from 'mutative';
+import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -176,6 +178,17 @@ export interface EditorState {
    * complementary protection (rejecting a parse that shrinks the live graph).
    */
   parseEpoch: number;
+  /**
+   * Id-rooted Mutative patches for user edits that have NOT yet round-tripped
+   * through a reparse. Captured by `commitEdit` (semantic edit actions), replayed
+   * by `loadModels` on top of each healthy parse so an edit made just before its
+   * own reparse lands is not momentarily reverted, then pruned as the parse
+   * catches up. See `edit-reconcile.ts` for the pure replay logic.
+   *
+   * Deliberately excluded from the zundo `partialize` set (`{nodes, edges}`), so
+   * it is not part of undo history — patches track in-flight intent, not state.
+   */
+  pendingEditPatches: Patches;
 }
 
 export interface DeferredExportEntry {
@@ -650,6 +663,39 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
   return incomingTotal < currentTotal * 0.5;
 }
 
+/**
+ * Apply a semantic graph edit through the id-keyed Mutative projection, capturing
+ * the resulting id-rooted patches as pending user intent.
+ *
+ * Every source-affecting edit action routes through here instead of calling
+ * `set` directly so that:
+ *   1. the change is recorded as field-precise, id-rooted patches (see
+ *      `edit-reconcile.ts`) that survive a reparse re-ordering the node array,
+ *   2. `parseEpoch` is NOT bumped — `useModelSourceSync` therefore treats this as
+ *      a USER-origin change and serializes it back to source.
+ *
+ * A recipe that mutates nothing (an early-return guard inside it) produces zero
+ * patches; we then skip `set` entirely to avoid allocating new array references
+ * and triggering needless subscriber re-renders. `extra` carries non-graph state
+ * the action also changes (e.g. `selectedNodeId`); when present we always `set`.
+ */
+function commitEdit(
+  set: (partial: Partial<EditorState>) => void,
+  get: () => EditorState,
+  recipe: GraphEditRecipe,
+  extra?: Partial<EditorState>
+): void {
+  const { nodes, edges, pendingEditPatches } = get();
+  const { nodes: nextNodes, edges: nextEdges, patches } = commitGraphEdit(nodes, edges, recipe);
+  if (patches.length === 0 && !extra) return; // no-op recipe (guard hit) — leave state untouched
+  set({
+    nodes: nextNodes,
+    edges: nextEdges,
+    pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
+    ...extra
+  });
+}
+
 const initialState: EditorState = {
   nodes: [],
   edges: [],
@@ -673,7 +719,8 @@ const initialState: EditorState = {
   pendingHydrationNamespaces: [],
   hydratedNamespaces: [],
   hydrationNonce: 0,
-  parseEpoch: 0
+  parseEpoch: 0,
+  pendingEditPatches: []
 };
 
 // ---------------------------------------------------------------------------
@@ -780,13 +827,32 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             return;
           }
 
+          // Replay user edits made since the last parse on top of this one, then
+          // clear them (ONE-SHOT). This covers the dangerous in-flight case: an
+          // edit made just before its own reparse lands, where the reparse predates
+          // the edit and would otherwise momentarily revert it (and that reverted
+          // graph would then be re-serialized over source). Id-keyed, so replay
+          // targets the right node even if the parse re-orders the array.
+          //
+          // One-shot (clear below, don't carry remaining patches forward) is
+          // deliberate: the save-triggered reparse that DOES reflect the edit is
+          // the next parse, so a single replay window suffices. Carrying patches
+          // would let object-valued edits (typeCall, cardinality) — which a reparse
+          // re-derives with extra AST metadata, so they never compare byte-equal —
+          // accumulate and replay stale data indefinitely. See `edit-reconcile.ts`.
+          const { nodes: reconciledNodes, edges: reconciledEdges } = reconcileParse(
+            laidOutNodes,
+            edges,
+            get().pendingEditPatches
+          );
+
           const previousSelection = get().selectedNodeId;
           const preservedSelection =
-            previousSelection && laidOutNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
+            previousSelection && reconciledNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
 
           set({
-            nodes: laidOutNodes,
-            edges,
+            nodes: reconciledNodes,
+            edges: reconciledEdges,
             layoutOptions: opts,
             selectedNodeId: preservedSelection,
             searchQuery: '',
@@ -794,6 +860,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             // PARSE-origin change — bump parseEpoch so useModelSourceSync skips
             // serializing this graph back to source (it came FROM the source).
             parseEpoch: get().parseEpoch + 1,
+            // One-shot: edits since the last parse have now been replayed; clear
+            // so they can never accumulate or replay stale data across reparses.
+            pendingEditPatches: [],
             visibility: {
               expandedNamespaces,
               hiddenNodeIds: new Set<string>(),
@@ -1054,54 +1123,58 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             synonyms: []
           };
 
-          set((state) => {
-            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+          const targetNodeId = get().nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+          const newEdge: TypeGraphEdge | null =
+            targetNodeId && targetNodeId !== nodeId
+              ? {
+                  id: `${nodeId}--attribute-ref--${attrName}--${targetNodeId}`,
+                  source: nodeId,
+                  target: targetNodeId,
+                  type: 'attribute-ref',
+                  data: {
+                    kind: 'attribute-ref' as const,
+                    label: attrName,
+                    cardinality: formatCardinalityString(cardinality)
+                  } as EdgeData
+                }
+              : null;
 
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
+          commitEdit(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            if (n) {
               const d = n.data as AnyGraphNode;
               // Data and Annotation use 'attributes'
               if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const attrs = [...((d as any).attributes ?? []), newAttr];
-                return { ...n, data: { ...d, attributes: attrs } };
+                const dd = d as { attributes?: unknown[] };
+                if (!Array.isArray(dd.attributes)) dd.attributes = [];
+                dd.attributes.push(newAttr);
               }
-              return n;
-            });
-
-            if (targetNodeId && targetNodeId !== nodeId) {
-              const newEdge: TypeGraphEdge = {
-                id: `${nodeId}--attribute-ref--${attrName}--${targetNodeId}`,
-                source: nodeId,
-                target: targetNodeId,
-                type: 'attribute-ref',
-                data: {
-                  kind: 'attribute-ref' as const,
-                  label: attrName,
-                  cardinality: formatCardinalityString(cardinality)
-                } as EdgeData
-              };
-              return { nodes: updatedNodes, edges: [...state.edges, newEdge] };
             }
-
-            return { nodes: updatedNodes };
+            if (newEdge) draft.edges.set(newEdge.id, newEdge);
           });
         },
 
         removeAttribute(nodeId: string, attrName: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
+          const edgeIdsToDrop = get()
+            .edges.filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
+            .map((e) => e.id);
+          commitEdit(set, get, (draft) => {
+            const node = draft.nodes.get(nodeId);
+            if (node) {
+              const d = node.data as AnyGraphNode;
               if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const attrs = ((d as any).attributes ?? []).filter((a: any) => a.name !== attrName);
-                return { ...n, data: { ...d, attributes: attrs } };
+                const attrs = (d as { attributes?: Array<{ name: string }> }).attributes;
+                // Remove every attribute sharing the name (mirrors the prior
+                // `.filter`; a malformed model may hold duplicate names).
+                if (attrs) {
+                  for (let i = attrs.length - 1; i >= 0; i--) {
+                    if (attrs[i]?.name === attrName) attrs.splice(i, 1);
+                  }
+                }
               }
-              return n;
-            }),
-            edges: state.edges.filter(
-              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
-            )
-          }));
+            }
+            for (const id of edgeIdsToDrop) draft.edges.delete(id);
+          });
         },
 
         updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId: string) {
@@ -1138,73 +1211,59 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           if (!targetNamespace) return; // malformed target
           const refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
 
-          set((state) => {
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
+          // For Choice arms, the old edge is a choice-option keyed by old type name;
+          // for Data/Annotation it's an attribute-ref keyed by attribute name.
+          const oldEdgeIds = current.edges
+            .filter((e) =>
+              isChoice
+                ? e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName
+                : e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName
+            )
+            .map((e) => e.id);
+
+          // New edge unless the attribute points back at its own node.
+          const newEdge: TypeGraphEdge | null =
+            targetTypeId === nodeId
+              ? null
+              : isChoice
+                ? {
+                    id: `${nodeId}--choice-option--${refText}--${targetTypeId}`,
+                    source: nodeId,
+                    target: targetTypeId,
+                    type: 'choice-option',
+                    data: { kind: 'choice-option' as const, label: refText } as EdgeData
+                  }
+                : {
+                    id: `${nodeId}--attribute-ref--${attrName}--${targetTypeId}`,
+                    source: nodeId,
+                    target: targetTypeId,
+                    type: 'attribute-ref',
+                    data: {
+                      kind: 'attribute-ref' as const,
+                      label: attrName,
+                      cardinality: preservedCardinality
+                    } as EdgeData
+                  };
+
+          commitEdit(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            if (n) {
               const d = n.data as AnyGraphNode;
-              if (d.$type !== 'Data' && d.$type !== 'Annotation' && d.$type !== 'Choice') return n;
-              const attrs = ((d as any).attributes ?? []) as any[];
-              const next = isChoice
-                ? attrs.map((a: any) =>
-                    (a.typeCall?.type?.$refText ?? a.typeCall) === attrName
-                      ? {
-                          ...a,
-                          typeCall: {
-                            ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                            type: { $refText: refText }
-                          }
-                        }
-                      : a
-                  )
-                : attrs.map((a: any) =>
-                    a.name === attrName
-                      ? {
-                          ...a,
-                          typeCall: {
-                            ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                            type: { $refText: refText }
-                          }
-                        }
-                      : a
-                  );
-              return { ...n, data: { ...d, attributes: next } };
-            });
-
-            // For Choice arms, remove the old choice-option edge (keyed by old type name).
-            // For Data/Annotation, remove the old attribute-ref edge.
-            const filteredEdges = isChoice
-              ? state.edges.filter(
-                  (e) => !(e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName)
-                )
-              : state.edges.filter(
-                  (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName)
-                );
-
-            if (targetTypeId === nodeId) {
-              return { nodes: updatedNodes, edges: filteredEdges };
-            }
-
-            // Choice arms use choice-option edges; Data/Annotation use attribute-ref edges.
-            const newEdge: TypeGraphEdge = isChoice
-              ? {
-                  id: `${nodeId}--choice-option--${refText}--${targetTypeId}`,
-                  source: nodeId,
-                  target: targetTypeId,
-                  type: 'choice-option',
-                  data: { kind: 'choice-option' as const, label: refText } as EdgeData
+              if (d.$type === 'Data' || d.$type === 'Annotation' || d.$type === 'Choice') {
+                const attrs = (d as { attributes?: any[] }).attributes;
+                for (const a of attrs ?? []) {
+                  const matches = isChoice ? (a.typeCall?.type?.$refText ?? a.typeCall) === attrName : a.name === attrName;
+                  if (matches) {
+                    a.typeCall = {
+                      ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                      type: { $refText: refText }
+                    };
+                  }
                 }
-              : {
-                  id: `${nodeId}--attribute-ref--${attrName}--${targetTypeId}`,
-                  source: nodeId,
-                  target: targetTypeId,
-                  type: 'attribute-ref',
-                  data: {
-                    kind: 'attribute-ref' as const,
-                    label: attrName,
-                    cardinality: preservedCardinality
-                  } as EdgeData
-                };
-            return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
+              }
+            }
+            for (const id of oldEdgeIds) draft.edges.delete(id);
+            if (newEdge) draft.edges.set(newEdge.id, newEdge);
           });
         },
 
@@ -1217,44 +1276,50 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const attrs0 = ((d0 as any).attributes ?? []) as any[];
           if (!attrs0.some((a) => a.name === oldName)) return;
 
-          set((state) => {
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type !== 'Data' && d.$type !== 'Annotation') return n;
-              const attrs = ((d as any).attributes ?? []) as any[];
-              const next = attrs.map((a) => (a.name === oldName ? { ...a, name: newName } : a));
-              return { ...n, data: { ...d, attributes: next } };
-            });
-            const updatedEdges = state.edges.map((e) => {
-              if (e.source !== nodeId || e.data?.kind !== 'attribute-ref' || e.data.label !== oldName) {
-                return e;
-              }
-              return {
+          // Precompute id-rewrites for the attribute-ref edges (their id encodes
+          // the attribute name) from the current base edges.
+          const edgeRewrites = current.edges
+            .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === oldName)
+            .map((e) => ({
+              oldId: e.id,
+              newEdge: {
                 ...e,
                 id: e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`),
                 data: { ...e.data, label: newName }
-              };
-            });
-            return { nodes: updatedNodes, edges: updatedEdges };
+              } as TypeGraphEdge
+            }));
+
+          commitEdit(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            if (n) {
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'Data' || d.$type === 'Annotation') {
+                // Rename every attribute sharing the old name (mirrors the prior `.map`).
+                for (const a of (d as { attributes?: Array<{ name: string }> }).attributes ?? []) {
+                  if (a.name === oldName) a.name = newName;
+                }
+              }
+            }
+            for (const { oldId, newEdge } of edgeRewrites) {
+              if (!draft.edges.has(oldId)) continue;
+              draft.edges.delete(oldId);
+              draft.edges.set(newEdge.id, newEdge);
+            }
           });
         },
 
         updateCardinality(nodeId: string, attrName: string, cardinality: string) {
           const card = parseCardinalityString(cardinality);
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const attrs = ((d as any).attributes ?? []).map((a: any) =>
-                  a.name === attrName ? { ...a, card: { $type: 'RosettaCardinality', ...card } } : a
-                );
-                return { ...n, data: { ...d, attributes: attrs } };
-              }
-              return n;
-            })
-          }));
+          commitEdit(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            if (!n) return;
+            const d = n.data as AnyGraphNode;
+            if (d.$type !== 'Data' && d.$type !== 'Annotation') return;
+            // Update every attribute sharing the name (mirrors the prior `.map`).
+            for (const a of (d as { attributes?: Array<{ name: string; card?: unknown }> }).attributes ?? []) {
+              if (a.name === attrName) a.card = { $type: 'RosettaCardinality', ...card };
+            }
+          });
         },
 
         setInheritance(childId: string, parentId: string | null) {

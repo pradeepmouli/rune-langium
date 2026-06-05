@@ -703,6 +703,9 @@ importers:
       lucide-react:
         specifier: ^1.16.0
         version: 1.16.0(react@19.2.6)
+      mutative:
+        specifier: ^1.3.0
+        version: 1.3.0
       react-hook-form:
         specifier: ^7.76.0
         version: 7.76.0(react@19.2.6)
@@ -4957,6 +4960,10 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  mutative@1.3.0:
+    resolution: {integrity: sha512-8MJj6URmOZAV70dpFe1YnSppRTKC4DsMkXQiBDFayLcDI4ljGokHxmpqaBQuDWa4iAxWaJJ1PS8vAmbntjjKmQ==}
+    engines: {node: '>=14.0'}
 
   mute-stream@3.0.0:
     resolution: {integrity: sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==}
@@ -10271,6 +10278,8 @@ snapshots:
       typescript: 6.0.3
     transitivePeerDependencies:
       - '@types/node'
+
+  mutative@1.3.0: {}
 
   mute-stream@3.0.0: {}
 

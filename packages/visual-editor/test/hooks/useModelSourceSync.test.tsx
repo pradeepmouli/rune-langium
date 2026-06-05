@@ -34,6 +34,10 @@ import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 async function loadCombinedModel() {
   const result = await parse(COMBINED_MODEL_SOURCE);
   act(() => {
+    // Reset in-flight edit patches before loading: the singleton store persists
+    // across tests, and a prior test's edit would otherwise be replayed onto this
+    // fresh parse (one-shot reconcile), polluting the baseline graph.
+    useEditorStore.setState({ pendingEditPatches: [] });
     useEditorStore.getState().selectNode(null);
     useEditorStore.getState().loadModels(result.value);
     useEditorStore.getState().expandAllNamespaces();
