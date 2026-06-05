@@ -273,41 +273,14 @@ case "$status" in
     ;;
 esac
 
-# ---------- 7. Codegen Worker — /generate/health ----------
-# 200 = warm or cached-health path works. 503 = worker routed but upstream
-# container unavailable, which is a failed prod verification. 404/405 indicate
-# the route is wrong or missing.
-
-status=$(http_status GET "$BASE/api/generate/health")
-case "$status" in
-  200)
-    body=$(http_body GET "$BASE/api/generate/health")
-    if grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' <<<"$body"; then
-      pass "Codegen /generate/health ($status)"
-    else
-      fail "Codegen /generate/health" \
-           "200 but body missing status=ok: ${body:0:160}"
-    fi
-    ;;
-  503)
-    body=$(http_body GET "$BASE/api/generate/health")
-    if grep -q '"status"[[:space:]]*:[[:space:]]*"unavailable"' <<<"$body"; then
-      fail "Codegen /generate/health" \
-           "503 status=unavailable — worker route is live but the backing container/cache is unavailable."
-    else
-      fail "Codegen /generate/health" \
-           "503 but body missing status=unavailable: ${body:0:160}"
-    fi
-    ;;
-  404|405)
-    fail "Codegen /generate/health" \
-         "$status — codegen Worker route missing or misconfigured; expected /rune-studio/api/generate/*."
-    ;;
-  *)
-    fail "Codegen /generate/health" \
-         "expected 200/503, got $status"
-    ;;
-esac
+# ---------- 7. Codegen — NOT probed here ----------
+# The legacy JVM-bridge codegen Worker (`/api/generate/*`) was retired and is
+# intentionally NOT deployed in prod (#272 — see apps/codegen-worker's
+# package.json / wrangler.toml "NOT deployed in production"). Codegen now runs
+# server-side as the studio's own `/api/codegen` Pages Function
+# (apps/studio/functions/api/codegen.ts). Probing `/api/generate/health`
+# therefore always 404s — a false failure — so the check is removed. (Codegen
+# functional coverage lives in the package + studio test suites.)
 
 # ---------- 8. Spec 019 Pages Functions — same-origin LSP + parse ----------
 # These probes target the NEW endpoints deployed via apps/docs/.vitepress/dist/
