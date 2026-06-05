@@ -991,10 +991,11 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // Constants (must stay in sync with structure-layout.ts):
     const BASE_PADDING = 4;
     const HEADER_HEIGHT = 28;
-    // Base inherited rows ARE Data attribute rows → DATA_ROW_HEIGHT (32) for the
-    // XMLSpy-style stacked layout (name line + tight type/card line). Choice
-    // arms / Enum values keep the single-line ROW_HEIGHT (28); not used here.
-    const DATA_ROW_HEIGHT = 32;
+    // Base inherited rows ARE Data attribute rows → DATA_ROW_HEIGHT (36) for the
+    // XMLSpy-style stacked layout (name line + var(--space-1) gap + type/card
+    // line). Choice arms / Enum values keep the single-line ROW_HEIGHT (28); not
+    // used here.
+    const DATA_ROW_HEIGHT = 36;
     const ROW_GAP = 8;
 
     const input: StructureGraphInput = {
@@ -1068,7 +1069,7 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     // Derived child must be placed below base rows + BASE_PADDING gap.
     // Expected: BASE_PADDING (top CSS padding) is NOT part of this formula —
     // placeBaseChildren places the child at:
-    //   y = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING = 28 + 32 + 4 = 64
+    //   y = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING = 28 + 36 + 4 = 68
     const expectedTradeY = HEADER_HEIGHT + 1 * DATA_ROW_HEIGHT + BASE_PADDING;
     expect((trade.position as { x: number; y: number }).y).toBe(expectedTradeY);
 

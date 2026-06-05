@@ -48,12 +48,14 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
   /**
    * Stacked Data attribute-row height. XMLSpy-style: each Data row is TWO lines
    * of `--text-2xs` — the attribute NAME on top, the type-chip + cardinality on
-   * a second line beneath — so 32 = name line + (tight) type/card line. Tighter
-   * than the original single-global 40; Choice/Enum stay on ROW_HEIGHT (28).
-   * Base-container inherited rows are Data attribute rows, so they use this
-   * height too. CSS mirror: `--rune-data-row-height`.
+   * a second line beneath — so 36 = name line + var(--space-1) inter-line gap +
+   * type/card line. The 4px gap matches the horizontal type↔cardinality gap on
+   * the type-line (`.rune-node-row__main` gap = `.rune-node-row__type-line`
+   * gap = var(--space-1)). Still tighter than the original single-global 40;
+   * Choice/Enum stay on ROW_HEIGHT (28). Base-container inherited rows are Data
+   * attribute rows, so they use this height too. CSS mirror: `--rune-data-row-height`.
    */
-  DATA_ROW_HEIGHT: 32,
+  DATA_ROW_HEIGHT: 36,
   HEADER_HEIGHT: 28,
   /**
    * Minimum rows-column width. The actual per-node width grows from this

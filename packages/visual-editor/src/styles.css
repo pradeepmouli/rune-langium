@@ -1237,10 +1237,11 @@ button[data-navigable]:focus-visible {
   justify-content: center;
   min-width: 0;
   flex: 1;
-  /* No gap between the name line and the type/card line — kept tight so both
-     lines of --text-2xs fit in the 32px DATA_ROW_HEIGHT. The line-box heights
-     already provide separation. */
-  gap: 0;
+  /* Inter-line gap matches the horizontal type↔cardinality gap on the
+     type-line (both var(--space-1) = 4px), so the stacked name/type lines
+     breathe by the same amount the type and cardinality do. DATA_ROW_HEIGHT
+     (36) = name line + this gap + type/card line. */
+  gap: var(--space-1);
 }
 
 .rune-node-row__name-line {
