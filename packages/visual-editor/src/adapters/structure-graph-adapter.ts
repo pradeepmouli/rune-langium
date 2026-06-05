@@ -49,6 +49,17 @@ export interface AdapterNode {
   /** Choice nodes carry their arms here — real ChoiceOption AST shape (typeCall only, no name/card). */
   readonly choiceOptions?: ReadonlyArray<AdapterChoiceOption | null | undefined>;
   readonly values?: ReadonlyArray<{ name: string }>;
+  /**
+   * Phase A — type metadata projected from the store node by the studio
+   * (`graphNodesToAdapterDocument`). All optional: fallback / hydration nodes
+   * may omit them. `definition` is the doc string; `annotations` are display
+   * strings from `annotationsToDisplay`; `conditions` are
+   * `{ name, preview }` pairs from `conditionsToDisplay` (Data only, in
+   * practice). The adapter forwards these onto the built StructureNode.
+   */
+  readonly definition?: string;
+  readonly annotations?: readonly string[];
+  readonly conditions?: readonly { readonly name: string; readonly preview: string }[];
 }
 
 /**
@@ -320,6 +331,11 @@ function buildChoiceNode(
     kind: 'choice',
     name: node.name,
     namespaceUri: node.namespace,
+    // Phase A — forward type metadata from the AdapterNode (projected by the
+    // studio). Defensive defaults keep fallback/hydration nodes from throwing.
+    definition: node.definition,
+    annotations: node.annotations,
+    conditions: node.conditions,
     options: arms,
     expansions
   };
@@ -448,6 +464,11 @@ function walkAndExpand(
     namespaceUri: node.namespace,
     extendsName: node.extends,
     extendsNodeId: node.extends ? findNodeByName(node.extends, doc, node.namespace)?.id : undefined,
+    // Phase A — forward type metadata from the AdapterNode (projected by the
+    // studio). Defensive defaults keep fallback/hydration nodes from throwing.
+    definition: node.definition,
+    annotations: node.annotations,
+    conditions: node.conditions,
     rows,
     expansions
   };

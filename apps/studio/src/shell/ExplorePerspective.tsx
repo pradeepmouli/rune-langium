@@ -36,6 +36,8 @@ import {
   TypePickerCell,
   BUILTIN_TYPES,
   resolveNodeKind,
+  annotationsToDisplay,
+  conditionsToDisplay,
   useEditorStore,
   useModelSourceSync
 } from '@rune-langium/visual-editor';
@@ -187,6 +189,40 @@ function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagn
  *
  * This is a **pure projection** — no side-effects, safe to call inside useMemo.
  */
+/**
+ * Phase A — project a store node's raw AST metadata (documentation,
+ * annotations, conditions) into the display-shaped fields the adapter and
+ * Structure View node header read. Reuses the shared `annotationsToDisplay` /
+ * `conditionsToDisplay` helpers so expression previews are not hand-rolled.
+ *
+ * Defensive: fallback / curated-hydration nodes may omit any of these fields,
+ * so each access tolerates `undefined` and the helpers return empty arrays.
+ * Empty results collapse to `undefined` so the indicators render nothing.
+ */
+function projectStructureMeta(d: {
+  definition?: string;
+  annotations?: readonly unknown[];
+  conditions?: readonly unknown[];
+}): {
+  definition?: string;
+  annotations?: readonly string[];
+  conditions?: readonly { name: string; preview: string }[];
+} {
+  const definition = typeof d.definition === 'string' && d.definition.trim() ? d.definition : undefined;
+
+  const annotationInfos = annotationsToDisplay(d.annotations as never);
+  const annotations = annotationInfos.length
+    ? annotationInfos.map((a) => (a.attribute ? `${a.name}.${a.attribute}` : a.name))
+    : undefined;
+
+  const conditionInfos = conditionsToDisplay(d.conditions as never);
+  const conditions = conditionInfos.length
+    ? conditionInfos.map((c) => ({ name: c.name ?? '', preview: c.expressionText }))
+    : undefined;
+
+  return { definition, annotations, conditions };
+}
+
 function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGraphNode }[]): AdapterDocument {
   const adapterNodes: AdapterNode[] = [];
   const namespacesSet = new Set<string>();
@@ -230,6 +266,9 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         namespace: string;
         superType?: { $refText?: string };
         attributes?: readonly unknown[];
+        definition?: string;
+        annotations?: readonly unknown[];
+        conditions?: readonly unknown[];
       };
       adapterNodes.push({
         id: rfNode.id,
@@ -239,19 +278,33 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         extends: dd.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
-        attributes: (dd.attributes ?? []) as AdapterNode['attributes']
+        attributes: (dd.attributes ?? []) as AdapterNode['attributes'],
+        // Phase A — type metadata (doc / annotations / conditions). Reuses the
+        // shared display helpers; empty results collapse to undefined.
+        ...projectStructureMeta(dd)
       });
     } else if (effectiveType === 'Choice') {
       // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
       // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
       // The adapter's buildChoiceArm consumes the real shape via typeCall only.
-      const dc = d as { name: string; namespace: string; attributes?: readonly unknown[] };
+      const dc = d as {
+        name: string;
+        namespace: string;
+        attributes?: readonly unknown[];
+        definition?: string;
+        annotations?: readonly unknown[];
+        conditions?: readonly unknown[];
+      };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
         name: dc.name,
         namespace: dc.namespace,
-        choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
+        choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>,
+        // Phase A — type metadata. Choice declarations carry doc + annotations
+        // (and may carry conditions in the grammar); project all via the shared
+        // helper for symmetry with Data. Empty results collapse to undefined.
+        ...projectStructureMeta(dc)
       });
     } else if (effectiveType === 'RosettaEnumeration') {
       const de = d as { name: string; namespace: string; enumValues?: readonly unknown[] };
@@ -857,7 +910,9 @@ export function ExplorePerspective() {
   // switching between nodes in the same namespace on the same nonce doesn't
   // issue redundant linkDocument round-trips.
   const relinkedRef = useRef(new Set<string>());
-  useEffect(() => { relinkedRef.current = new Set(); }, [hydrationNonce, workspaceId]);
+  useEffect(() => {
+    relinkedRef.current = new Set();
+  }, [hydrationNonce, workspaceId]);
 
   useEffect(() => {
     if (hydrationNonce === 0 || !selectedNodeId) return;
@@ -1207,10 +1262,7 @@ export function ExplorePerspective() {
       if (!file) {
         // eslint-disable-next-line no-console
         console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
-        useOutputStore.getState().addLine(
-          fmtLine('editor', `file not found for URI`, fileName),
-          'warn'
-        );
+        useOutputStore.getState().addLine(fmtLine('editor', `file not found for URI`, fileName), 'warn');
         return null;
       }
       openFileInSource(file.path);
@@ -1224,10 +1276,7 @@ export function ExplorePerspective() {
             pendingDisplayFileRef.current.delete(file.path);
             // eslint-disable-next-line no-console
             console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
-            useOutputStore.getState().addLine(
-              fmtLine('editor', 'editor view timeout', file.path),
-              'warn'
-            );
+            useOutputStore.getState().addLine(fmtLine('editor', 'editor view timeout', file.path), 'warn');
             resolve(null);
           }
         }, 2000);

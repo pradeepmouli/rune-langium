@@ -20,6 +20,7 @@ import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
+import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
@@ -418,6 +419,11 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
         <div className="rune-node-header">
           <NodeKindBadge kind="data" />
           <span>{data.name}</span>
+          <StructureMetaIndicators
+            definition={data.definition}
+            annotations={data.annotations}
+            conditions={data.conditions}
+          />
         </div>
         <div className="rune-node-body rune-node-body--two-col">
           <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>

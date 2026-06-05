@@ -128,6 +128,18 @@ export function expansionKey(k: StructureExpansionKey): string {
   return `${base}::${k.instancePath.join('>')}`;
 }
 
+/**
+ * Display-shaped condition meta surfaced on a Data node's header indicator
+ * (Phase A). `name` is the condition's source name (may be empty for unnamed
+ * conditions — the renderer falls back to `preview` or an index label);
+ * `preview` is a short text rendering of the condition expression produced by
+ * `conditionsToDisplay` (no hand-rolled expression serialization).
+ */
+export interface StructureConditionMeta {
+  readonly name: string;
+  readonly preview: string;
+}
+
 /** Single row inside a Data node, as the Structure View sees it. */
 export interface StructureRow {
   readonly attrName: string;
@@ -170,6 +182,24 @@ export interface StructureDataNode {
   readonly namespaceUri: string;
   readonly extendsName?: string;
   readonly extendsNodeId?: string;
+  /**
+   * Phase A — type-level documentation (the `definition` string on the AST
+   * Data node). Surfaced via the header doc (ⓘ) indicator. Undefined / empty
+   * when the type has no documentation.
+   */
+  readonly definition?: string;
+  /**
+   * Phase A — annotation display strings (e.g. `metadata`, `rootType`) derived
+   * from the AST `annotations` via `annotationsToDisplay`. Surfaced via the
+   * header annotations (@) indicator. Empty / undefined when none.
+   */
+  readonly annotations?: readonly string[];
+  /**
+   * Phase A — condition display meta derived from the AST `conditions` via
+   * `conditionsToDisplay`. Surfaced via the header conditions (✓) indicator.
+   * Empty / undefined when none.
+   */
+  readonly conditions?: readonly StructureConditionMeta[];
   readonly rows: ReadonlyArray<StructureRow>;
   /**
    * Direct expansions (attrName → child INSTANCE id). The child id keys into
@@ -201,6 +231,16 @@ export interface StructureChoiceNode {
   readonly kind: 'choice';
   readonly name: string;
   readonly namespaceUri: string;
+  /** Phase A — type-level documentation; see `StructureDataNode.definition`. */
+  readonly definition?: string;
+  /** Phase A — annotation display strings; see `StructureDataNode.annotations`. */
+  readonly annotations?: readonly string[];
+  /**
+   * Phase A — condition display meta; see `StructureDataNode.conditions`.
+   * Choice declarations may carry conditions in the grammar, so this is
+   * accepted symmetrically with Data even though it is usually empty.
+   */
+  readonly conditions?: readonly StructureConditionMeta[];
   readonly options: ReadonlyArray<StructureChoiceArm>;
   /**
    * Per-arm expansions (Phase 14e/B). Keyed by the arm's `typeName` (since
