@@ -86,7 +86,18 @@ function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[
 export function useModelSourceSync(
   nodes: TypeGraphNode[],
   edges: TypeGraphEdge[],
-  onModelChanged?: (serialized: Map<string, string>) => void | Promise<void>
+  onModelChanged?: (serialized: Map<string, string>) => void | Promise<void>,
+  /**
+   * The editor store's `parseEpoch` — bumped ONLY when the graph is (re)built
+   * from a parse result. Used to gate serialization: a `nodes`/`edges` change
+   * that arrives together with a `parseEpoch` bump came FROM the source (a
+   * parse), so serializing it back is pointless and — for a degraded reparse
+   * (worker unavailable) — actively corrupts the file. We serialize ONLY when
+   * the change is USER-EDIT-origin (parseEpoch unchanged since the last run).
+   * Optional/defaulted so non-studio callers (tests, standalone) keep the old
+   * "serialize every content change" behavior.
+   */
+  parseEpoch = 0
 ): void {
   // Keep a stable ref so the effect doesn't need to re-register when the
   // callback identity changes (e.g. inline arrow in EditorPage).
@@ -98,15 +109,41 @@ export function useModelSourceSync(
   const lastSerializedRef = useRef<Map<string, string> | null>(null);
   const hasFiredInitialSerializeRef = useRef(false);
   const lastContentFingerprintRef = useRef<string | null>(null);
+  const lastParseEpochRef = useRef(parseEpoch);
 
   useEffect(() => {
     const handler = onModelChangedRef.current;
     if (!handler) return;
     if (nodes.length === 0) return;
 
+    // Did this render's nodes/edges change arrive together with a parse? If so
+    // the graph was rebuilt FROM source — it must NOT be serialized back.
+    const parseAdvanced = parseEpoch !== lastParseEpochRef.current;
+    lastParseEpochRef.current = parseEpoch;
+
     const fingerprint = computeContentFingerprint(nodes, edges);
     if (lastContentFingerprintRef.current === fingerprint) return;
     lastContentFingerprintRef.current = fingerprint;
+
+    // PARSE-ORIGIN GATE (source-corruption fix): a content change that came
+    // with a parseEpoch bump is the graph being (re)derived from the source —
+    // re-serializing it is a no-op at best and, when the parse is degraded
+    // (worker unavailable), splices truncated text over the real file. Adopt
+    // the parse as the new serialize baseline and bail without emitting. Only
+    // genuine USER edits (parseEpoch unchanged) fall through to serialize.
+    if (parseAdvanced) {
+      const baseline = new Map<string, string>();
+      for (const model of modelsToAst(nodes, edges)) {
+        try {
+          baseline.set(model.name, serializeModel(model));
+        } catch {
+          baseline.set(model.name, `// Error serializing ${model.name}`);
+        }
+      }
+      hasFiredInitialSerializeRef.current = true;
+      lastSerializedRef.current = baseline;
+      return;
+    }
 
     const outputModels = modelsToAst(nodes, edges);
     const next = new Map<string, string>();
@@ -144,5 +181,5 @@ export function useModelSourceSync(
     // async smart-merge), but the source-sync effect intentionally does
     // not await it.
     void handler(next);
-  }, [nodes, edges]);
+  }, [nodes, edges, parseEpoch]);
 }

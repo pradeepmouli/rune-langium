@@ -162,6 +162,20 @@ export interface EditorState {
    * initial link ran before the hydration round-trip completed.
    */
   hydrationNonce: number;
+  /**
+   * Monotonically-incrementing counter bumped ONLY when the graph is (re)built
+   * from a parse result — i.e. inside `loadModels` / `loadDeferredExports`.
+   * User-edit actions deliberately do NOT bump it.
+   *
+   * `useModelSourceSync` reads this to tell PARSE-origin `nodes`/`edges` changes
+   * apart from USER-EDIT-origin ones: it only serializes the graph back to
+   * source text when `parseEpoch` did NOT advance since the last emission.
+   * Without this, a degraded reparse (worker unavailable → attributes stripped,
+   * empty `errors`) would re-serialize the truncated graph over the real source
+   * and corrupt the file. See `loadModels`' degraded-parse guard for the
+   * complementary protection (rejecting a parse that shrinks the live graph).
+   */
+  parseEpoch: number;
 }
 
 export interface DeferredExportEntry {
@@ -593,6 +607,49 @@ const ALL_EDGE_KINDS = new Set<EdgeKind>([
   'type-alias-ref'
 ]);
 
+/** Number of source attributes carried by a graph node (0 for non-attributed kinds). */
+function nodeAttributeCount(n: TypeGraphNode): number {
+  const d = n.data as { attributes?: unknown };
+  return Array.isArray(d.attributes) ? d.attributes.length : 0;
+}
+
+/**
+ * Detect a DEGRADED reparse — one that strips source content from the live
+ * graph, the symptom of the parse worker being unavailable (types still parse
+ * but their attributes come back empty, with no `errors`). Applying such a
+ * result would let `useModelSourceSync` re-serialize the truncated graph over
+ * the real source and corrupt it.
+ *
+ * Compared against the CURRENT store nodes (not a frozen baseline) so a
+ * legitimate user deletion is NOT flagged: after a delete the live graph
+ * already reflects it, and the reparse of the saved source matches → ratio ≈ 1.
+ * Only nodes present in BOTH are compared, so hydration that ADDS nodes never
+ * trips it. Uses a collective-ratio test (not per-node) so a single-attribute
+ * delete (drop of 1 out of many) stays well above the threshold, while a
+ * worker-down strip (most attributes → 0) falls below it.
+ */
+export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphNode[]): boolean {
+  if (current.length === 0) return false; // no baseline (initial load) → accept
+  const incomingById = new Map(incoming.map((n) => [n.id, n]));
+  let currentTotal = 0;
+  let incomingTotal = 0;
+  let common = 0;
+  for (const cur of current) {
+    const inc = incomingById.get(cur.id);
+    if (!inc) continue; // missing node may be a legit delete — don't judge it here
+    common++;
+    currentTotal += nodeAttributeCount(cur);
+    incomingTotal += nodeAttributeCount(inc);
+  }
+  // Need a meaningful attributed baseline before judging (avoids false positives
+  // on tiny / attribute-light graphs).
+  if (common === 0 || currentTotal < 3) return false;
+  // Degraded when the shared nodes collectively lost more than half their
+  // attributes — a single user edit can't plausibly do that, a worker-down
+  // strip always does.
+  return incomingTotal < currentTotal * 0.5;
+}
+
 const initialState: EditorState = {
   nodes: [],
   edges: [],
@@ -615,7 +672,8 @@ const initialState: EditorState = {
   },
   pendingHydrationNamespaces: [],
   hydratedNamespaces: [],
-  hydrationNonce: 0
+  hydrationNonce: 0,
+  parseEpoch: 0
 };
 
 // ---------------------------------------------------------------------------
@@ -708,6 +766,20 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           // (which read selectedNodeId directly) went empty. Only drop the
           // selection when the previously-selected id no longer matches a
           // node in the new graph (e.g. type was renamed or deleted).
+          // Degraded-parse guard: reject a reparse that strips source content
+          // from the live graph (parse worker unavailable → attributes return
+          // empty with no `errors`). Applying it would corrupt the source via
+          // the model→source serialize path. Keep the last good graph verbatim;
+          // a healthy reparse later replaces it. Compared against current nodes
+          // so legitimate user deletions are not mistaken for degradation.
+          if (isDegradedReparse(laidOutNodes, get().nodes)) {
+            console.warn(
+              '[editor-store] Rejected a degraded reparse (attributes stripped from the live graph) ' +
+                'to protect the source document. The parse worker is likely unavailable.'
+            );
+            return;
+          }
+
           const previousSelection = get().selectedNodeId;
           const preservedSelection =
             previousSelection && laidOutNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
@@ -719,6 +791,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             selectedNodeId: preservedSelection,
             searchQuery: '',
             searchResults: [],
+            // PARSE-origin change — bump parseEpoch so useModelSourceSync skips
+            // serializing this graph back to source (it came FROM the source).
+            parseEpoch: get().parseEpoch + 1,
             visibility: {
               expandedNamespaces,
               hiddenNodeIds: new Set<string>(),
@@ -1532,7 +1607,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           }));
         },
 
-        updateInputParam(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string, targetTypeId?: string) {
+        updateInputParam(
+          nodeId: string,
+          oldName: string,
+          newName: string,
+          typeName: string,
+          cardinality: string,
+          targetTypeId?: string
+        ) {
           const card = parseCardinalityString(cardinality);
           set((state) => {
             // Resolve the qualified $refText using the same disambiguation logic
@@ -1540,11 +1622,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             // canonical targetTypeId is supplied and the node exists, qualify the
             // name if any OTHER node shares the same bare name.  Fall back to the
             // bare typeName when the id is absent or stale (backward-compatible).
-            const targetNode = targetTypeId
-              ? state.nodes.find((n) => n.id === targetTypeId)
-              : undefined;
+            const targetNode = targetTypeId ? state.nodes.find((n) => n.id === targetTypeId) : undefined;
             const targetNamespace = targetNode
-              ? ((targetNode.data as AnyGraphNode) as { namespace?: string }).namespace
+              ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
               : undefined;
             const refText =
               targetNode && targetNamespace
@@ -1578,8 +1658,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
             // Remove the old attribute-ref edge for this input (keyed by old name).
             const filteredEdges = state.edges.filter(
-              (e) =>
-                !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
+              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
             );
 
             // Add a new attribute-ref edge if the target type node exists.
@@ -1587,8 +1666,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             // node in a different namespace); fall back to name-based lookup for
             // built-in / string types that have no graph node.
             const targetNodeId =
-              targetNode?.id ??
-              state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+              targetNode?.id ?? state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
             if (targetNodeId && targetNodeId !== nodeId) {
               const newEdge: TypeGraphEdge = {
                 id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
