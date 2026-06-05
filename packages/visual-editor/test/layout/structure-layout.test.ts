@@ -1446,7 +1446,7 @@ describe('layoutStructureGraph — node dimensions on style (Finding G)', () => 
 });
 
 describe('layoutStructureGraph — Function node (Phase C)', () => {
-  const { HEADER_HEIGHT, DATA_ROW_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
+  const { HEADER_HEIGHT, DATA_ROW_HEIGHT, NODE_PADDING, FUNCTION_OUTPUT_SEP_HEIGHT } = STRUCTURE_LAYOUT_CONSTANTS;
 
   function fnInput(inputCount: number, hasOutput: boolean): StructureGraphInput {
     const inputRows = Array.from({ length: inputCount }, (_, i) => ({
@@ -1493,17 +1493,38 @@ describe('layoutStructureGraph — Function node (Phase C)', () => {
     expect(edges).toHaveLength(0);
   });
 
-  it('height = HEADER_HEIGHT + (inputs + output) * DATA_ROW_HEIGHT', () => {
-    // 2 inputs + 1 output = 3 stacked rows.
+  it('reserves header + input rows + (separator + output row when present) + bottom NODE_PADDING', () => {
+    // 2 inputs + 1 output: the output row also reserves the separator footprint
+    // AND the body's bottom NODE_PADDING — both were missing before the
+    // clipping fix, so the output row + bottom edge were clipped by
+    // .rune-node's overflow: hidden.
     const withOutput = layoutStructureGraph(fnInput(2, true));
-    expect((withOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT + 3 * DATA_ROW_HEIGHT);
+    expect((withOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(
+      HEADER_HEIGHT + 2 * DATA_ROW_HEIGHT + FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT + NODE_PADDING
+    );
 
-    // 2 inputs, no output = 2 rows.
+    // 2 inputs, no output: no separator, but bottom NODE_PADDING is still reserved.
     const noOutput = layoutStructureGraph(fnInput(2, false));
-    expect((noOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT + 2 * DATA_ROW_HEIGHT);
+    expect((noOutput.nodes[0] as { initialHeight?: number }).initialHeight).toBe(
+      HEADER_HEIGHT + 2 * DATA_ROW_HEIGHT + NODE_PADDING
+    );
 
-    // 0 inputs, no output = header only.
+    // 0 inputs, no output: header + bottom NODE_PADDING.
     const empty = layoutStructureGraph(fnInput(0, false));
-    expect((empty.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT);
+    expect((empty.nodes[0] as { initialHeight?: number }).initialHeight).toBe(HEADER_HEIGHT + NODE_PADDING);
+  });
+
+  it('function with an output does NOT clip — reserved height covers the separator + output row + bottom padding', () => {
+    // Regression for PR #307 finding #1: .rune-node is overflow:hidden, so a
+    // height that omits the separator (FUNCTION_OUTPUT_SEP_HEIGHT) or the body's
+    // bottom NODE_PADDING clips the output row. Assert the reserved height is at
+    // least the full rendered footprint: header + all input rows + separator +
+    // output row + bottom padding.
+    const result = layoutStructureGraph(fnInput(3, true));
+    const reserved = (result.nodes[0] as { initialHeight?: number }).initialHeight ?? 0;
+    const fullRenderedFootprint =
+      HEADER_HEIGHT + 3 * DATA_ROW_HEIGHT + FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT + NODE_PADDING;
+    expect(reserved).toBe(fullRenderedFootprint);
+    expect(reserved).toBeGreaterThanOrEqual(fullRenderedFootprint);
   });
 });

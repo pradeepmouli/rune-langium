@@ -181,11 +181,14 @@ function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagn
 /**
  * Project the editor store's node array into the AdapterDocument shape.
  *
- * Only `Data`, `Choice`, and `Enum` nodes are included. `superType.$refText`
- * maps to `extends`; Data `attributes` carry through to `AdapterAttribute`
- * directly since their fields match. Choice arms are mapped to the new
- * `choiceOptions` field on `AdapterNode`, preserving the real `ChoiceOption`
- * AST shape (only `typeCall`, no synthesized `name` or `card`).
+ * Projects `Data`, `Choice`, `Enum`, `Record`, `TypeAlias`, and `Function`
+ * nodes. `superType.$refText` maps to `extends`; Data `attributes` carry
+ * through to `AdapterAttribute` directly since their fields match. Choice arms
+ * are mapped to the `choiceOptions` field on `AdapterNode`, preserving the real
+ * `ChoiceOption` AST shape (only `typeCall`, no synthesized `name` or `card`).
+ * Record / TypeAlias project as bare reference targets (name + namespace only);
+ * Function projects its `inputs` + `output` (Attribute-shaped) plus Phase-A
+ * metadata.
  *
  * This is a **pure projection** — no side-effects, safe to call inside useMemo.
  */
@@ -203,6 +206,14 @@ function projectStructureMeta(d: {
   definition?: string;
   annotations?: readonly unknown[];
   conditions?: readonly unknown[];
+  /**
+   * Functions carry `postConditions` as a SEPARATE array from `conditions`
+   * (Phase C / PR #307 finding #2). When present they are forwarded to
+   * `conditionsToDisplay`'s dedicated `postConditions` param so they surface in
+   * the condition indicator (tagged `isPostCondition`) instead of being
+   * dropped. Data/Choice nodes omit this field, so it's optional.
+   */
+  postConditions?: readonly unknown[];
 }): {
   definition?: string;
   annotations?: readonly string[];
@@ -215,7 +226,10 @@ function projectStructureMeta(d: {
     ? annotationInfos.map((a) => (a.attribute ? `${a.name}.${a.attribute}` : a.name))
     : undefined;
 
-  const conditionInfos = conditionsToDisplay(d.conditions as never);
+  // Pass conditions + postConditions through the shared helper; functions
+  // surface BOTH (postConditions tagged isPostCondition), Data/Choice only the
+  // former (postConditions undefined).
+  const conditionInfos = conditionsToDisplay(d.conditions as never, d.postConditions as never);
   const conditions = conditionInfos.length
     ? conditionInfos.map((c) => ({ name: c.name ?? '', preview: c.expressionText }))
     : undefined;
@@ -338,6 +352,7 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         definition?: string;
         annotations?: readonly unknown[];
         conditions?: readonly unknown[];
+        postConditions?: readonly unknown[];
       };
       adapterNodes.push({
         id: rfNode.id,
@@ -347,9 +362,10 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         inputs: (df.inputs ?? []) as AdapterNode['inputs'],
         output: (df.output ?? null) as AdapterNode['output'],
         // Phase A — type metadata (doc / annotations / conditions). Functions
-        // carry conditions + postConditions in the grammar; project doc +
-        // annotations + conditions via the shared helper. Empty results
-        // collapse to undefined.
+        // carry BOTH `conditions` and `postConditions`; projectStructureMeta
+        // forwards postConditions to conditionsToDisplay so they surface in the
+        // condition indicator instead of being dropped (PR #307 finding #2).
+        // Empty results collapse to undefined.
         ...projectStructureMeta(df)
       });
     }

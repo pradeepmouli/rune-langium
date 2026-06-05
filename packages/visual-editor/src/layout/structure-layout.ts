@@ -94,7 +94,17 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
    * stay numerically in sync. Replaced the earlier CHILD_INSET-only fix
    * (which only padded the right + bottom edges) once the user asked for
    * uniform padding around all content. */
-  NODE_PADDING: 4
+  NODE_PADDING: 4,
+  /**
+   * Rendered vertical footprint of the Function node's input→output separator
+   * (Phase C). The `.rune-node-func-output-sep` rule draws a 1px top border
+   * with `var(--space-1)` (4px) margin above AND below: 4 + 1 + 4 = 9px. This
+   * footprint sits between the last input row and the output row, so
+   * `sizeFunction` MUST reserve it (only when an output exists) or the output
+   * row + bottom padding get clipped by `.rune-node`'s `overflow: hidden`.
+   * CSS mirror: `--rune-func-output-sep-height` (the separator rule derives its
+   * margin/border from this var so the 9px stays in one source). */
+  FUNCTION_OUTPUT_SEP_HEIGHT: 9
 } as const;
 
 /**
@@ -117,7 +127,8 @@ export const STRUCTURE_LAYOUT_CSS_VARS = {
   '--rune-col-gap': `${STRUCTURE_LAYOUT_CONSTANTS.COL_GAP}px`,
   '--rune-row-gap': `${STRUCTURE_LAYOUT_CONSTANTS.ROW_GAP}px`,
   '--rune-base-padding': `${STRUCTURE_LAYOUT_CONSTANTS.BASE_PADDING}px`,
-  '--rune-node-padding': `${STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING}px`
+  '--rune-node-padding': `${STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING}px`,
+  '--rune-func-output-sep-height': `${STRUCTURE_LAYOUT_CONSTANTS.FUNCTION_OUTPUT_SEP_HEIGHT}px`
 } as const satisfies Record<`--rune-${string}`, string>;
 
 // Internal aliases — keep call sites inside this module readable.
@@ -130,7 +141,8 @@ const {
   COL_GAP,
   ROW_GAP,
   BASE_PADDING,
-  NODE_PADDING
+  NODE_PADDING,
+  FUNCTION_OUTPUT_SEP_HEIGHT
 } = STRUCTURE_LAYOUT_CONSTANTS;
 
 interface SizedNode {
@@ -410,24 +422,36 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
  * children in this first cut, so there is no right-hand column and no
  * simulateColumnHeight pass — height is the header plus the row stack.
  *
+ * **Reserved height (clipping fix).** `.rune-node` is `overflow: hidden`, so
+ * the returned height MUST cover everything the renderer draws:
+ *   - header (HEADER_HEIGHT)
+ *   - each input row (DATA_ROW_HEIGHT)
+ *   - when an output exists: the input→output separator
+ *     (FUNCTION_OUTPUT_SEP_HEIGHT — the 1px border + 2×space-1 margins) PLUS
+ *     the output row (DATA_ROW_HEIGHT)
+ *   - the body's bottom NODE_PADDING inset
+ * Omitting the separator or NODE_PADDING clips the output row / bottom edge.
+ *
  * Width grows from the input/output row texts plus the function name as a
  * header floor, via `estimateRowsColWidth` (same estimator the Data/Choice/Enum
  * sizers use). rowOffsets are keyed by each row's `attrName` (inputs) plus a
- * stable `__output__` sentinel for the output row, so they stay populated for
- * symmetry with the other sizers even though functions place no children.
+ * stable `__output__` sentinel for the output row; the output center is pushed
+ * down by FUNCTION_OUTPUT_SEP_HEIGHT to account for the separator above it.
  */
 const FUNCTION_OUTPUT_ROW_KEY = '__output__';
 
 function sizeFunction(node: StructureFunctionNode): SizedNode {
   const inputRows = node.inputRows;
-  const rowCount = inputRows.length + (node.outputRow ? 1 : 0);
 
   const rowOffsets = new Map<string, number>();
   for (const [i, row] of inputRows.entries()) {
     rowOffsets.set(row.attrName, HEADER_HEIGHT + i * DATA_ROW_HEIGHT + DATA_ROW_HEIGHT / 2);
   }
   if (node.outputRow) {
-    rowOffsets.set(FUNCTION_OUTPUT_ROW_KEY, HEADER_HEIGHT + inputRows.length * DATA_ROW_HEIGHT + DATA_ROW_HEIGHT / 2);
+    // The separator sits between the last input row and the output row, so the
+    // output center is offset by the full input stack + the separator footprint.
+    const outputTop = HEADER_HEIGHT + inputRows.length * DATA_ROW_HEIGHT + FUNCTION_OUTPUT_SEP_HEIGHT;
+    rowOffsets.set(FUNCTION_OUTPUT_ROW_KEY, outputTop + DATA_ROW_HEIGHT / 2);
   }
 
   const rowTexts = inputRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }));
@@ -440,9 +464,14 @@ function sizeFunction(node: StructureFunctionNode): SizedNode {
   }
   const rowsColWidth = estimateRowsColWidth(rowTexts, node.name);
 
+  // Output contributes the separator footprint + its own row; the body's
+  // bottom NODE_PADDING is always reserved (mirrors the func body CSS padding).
+  const outputHeight = node.outputRow ? FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT : 0;
+  const height = HEADER_HEIGHT + inputRows.length * DATA_ROW_HEIGHT + outputHeight + NODE_PADDING;
+
   return {
     width: rowsColWidth,
-    height: HEADER_HEIGHT + rowCount * DATA_ROW_HEIGHT,
+    height,
     rowsColWidth,
     rowOffsets
   };

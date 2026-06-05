@@ -156,6 +156,32 @@ function shallowEqualData(a: unknown, b: unknown): boolean {
       if (!arraysEqual(av, bv, Object.is)) return false;
       continue;
     }
+    // Phase A meta (definition / annotations / conditions). `projectStructureMeta`
+    // rebuilds the annotations + conditions arrays on every adapter recompute, so
+    // without a structural compare any metadata-bearing Data/Choice/Function node
+    // would fail Object.is every pass and never reuse its React Flow node
+    // reference — defeating the Phase-14c re-render limiter (PR #307 finding #3).
+    if (k === 'definition') {
+      // Plain string | undefined — value compare.
+      if (av !== bv) return false;
+      continue;
+    }
+    if (k === 'annotations') {
+      // readonly string[] | undefined. Treat absent as empty so undefined ↔ [] is equal.
+      const aa = (av ?? []) as readonly string[];
+      const ba = (bv ?? []) as readonly string[];
+      if (!Array.isArray(aa) || !Array.isArray(ba)) return false;
+      if (!arraysEqual(aa, ba, Object.is)) return false;
+      continue;
+    }
+    if (k === 'conditions') {
+      // readonly { name, preview }[] | undefined — per-index field equality.
+      const ac = (av ?? []) as ReadonlyArray<{ name: string; preview: string }>;
+      const bc = (bv ?? []) as ReadonlyArray<{ name: string; preview: string }>;
+      if (!Array.isArray(ac) || !Array.isArray(bc)) return false;
+      if (!arraysEqual(ac, bc, (x, y) => x.name === y.name && x.preview === y.preview)) return false;
+      continue;
+    }
     if (k === 'expansions') {
       if (!(av instanceof Map) || !(bv instanceof Map)) return false;
       if (!mapEqual(av as ReadonlyMap<string, string>, bv as ReadonlyMap<string, string>)) return false;

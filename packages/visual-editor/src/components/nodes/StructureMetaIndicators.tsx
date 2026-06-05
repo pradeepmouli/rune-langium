@@ -3,7 +3,7 @@
 
 /**
  * StructureMetaIndicators — header indicator cluster for a Structure View
- * Data / Choice node (Phase A).
+ * Data / Choice / Function node (Phase A; Function added in Phase C).
  *
  * Renders up to three compact Popover-trigger buttons on the right side of the
  * node header, each shown ONLY when its meta is non-empty:

@@ -129,11 +129,13 @@ export function expansionKey(k: StructureExpansionKey): string {
 }
 
 /**
- * Display-shaped condition meta surfaced on a Data node's header indicator
- * (Phase A). `name` is the condition's source name (may be empty for unnamed
- * conditions — the renderer falls back to `preview` or an index label);
- * `preview` is a short text rendering of the condition expression produced by
- * `conditionsToDisplay` (no hand-rolled expression serialization).
+ * Display-shaped condition meta surfaced on a Data / Choice / Function node's
+ * header indicator (Phase A; Function added in Phase C — its `conditions` carry
+ * both the function's `conditions` and `postConditions`). `name` is the
+ * condition's source name (may be empty for unnamed conditions — the renderer
+ * falls back to `preview` or an index label); `preview` is a short text
+ * rendering of the condition expression produced by `conditionsToDisplay` (no
+ * hand-rolled expression serialization).
  */
 export interface StructureConditionMeta {
   readonly name: string;

@@ -37,7 +37,8 @@ describe('Structure layout SSoT — emitted CSS vars derive from TS constants', 
     ['COL_GAP', '--rune-col-gap'],
     ['ROW_GAP', '--rune-row-gap'],
     ['BASE_PADDING', '--rune-base-padding'],
-    ['NODE_PADDING', '--rune-node-padding']
+    ['NODE_PADDING', '--rune-node-padding'],
+    ['FUNCTION_OUTPUT_SEP_HEIGHT', '--rune-func-output-sep-height']
   ];
 
   for (const [tsKey, cssVar] of cases) {

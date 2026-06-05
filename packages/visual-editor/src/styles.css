@@ -276,11 +276,12 @@
  * the chip directly inside `.rune-graph-group__base-row` (no wrap), so the
  * auto-margin lands on `.rune-cell-type-chip`.
  *
- * NOTE: Data/Choice structure rows are now XMLSpy-style STACKED — the type
- * chip lives on its own `.rune-node-row__type-line` beneath the name and is
- * left-aligned there, so it deliberately does NOT get the right-edge auto-
- * margin (which previously pushed it to the row's right edge in the old
- * single-line layout). */
+ * NOTE: Only Data attribute rows (and Function input/output rows) are XMLSpy-
+ * style STACKED at DATA_ROW_HEIGHT — the type chip lives on its own
+ * `.rune-node-row__type-line` beneath the name and is left-aligned there, so it
+ * deliberately does NOT get the right-edge auto-margin (which previously pushed
+ * it to the row's right edge in the old single-line layout). Choice arms and
+ * Enum values stay single-line at ROW_HEIGHT (no stacked `__type-line`). */
 .rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
   margin-left: auto;
 }
@@ -1188,9 +1189,18 @@ button[data-navigable]:focus-visible {
  * on the body. This aligns enum value rows with the enum header AND with
  * data/choice rows across nodes. Vertical/height untouched (no layout coupling
  * — enum has no two-col RF children to place). */
-.rune-node-enum--structure .rune-node-body,
-.rune-node-func--structure .rune-node-body {
+.rune-node-enum--structure .rune-node-body {
   padding: 0 var(--space-3) var(--space-3);
+}
+
+/* Function body: same --space-3 horizontal inset as enum (aligns input/output
+ * rows with the header), but the BOTTOM padding is layout-coupled — it must be
+ * --rune-node-padding (NODE_PADDING) because sizeFunction reserves exactly
+ * NODE_PADDING below the row stack. Using --space-3 here would render more
+ * bottom padding than the height math reserves, clipping under
+ * .rune-node's overflow: hidden. */
+.rune-node-func--structure .rune-node-body {
+  padding: 0 var(--space-3) var(--rune-node-padding);
 }
 
 .rune-node-rows {
@@ -1260,10 +1270,16 @@ button[data-navigable]:focus-visible {
  * separated by a hairline and marked with a leading `→` glyph. The
  * separator is a real 1px top border (the inset-shadow row separator used
  * between sibling rows would not read strongly enough to signal the
- * input→output boundary). Token-based colors only — no raw hex. */
+ * input→output boundary). Token-based colors only — no raw hex.
+ *
+ * Total vertical footprint is layout-coupled: sizeFunction reserves
+ * FUNCTION_OUTPUT_SEP_HEIGHT (--rune-func-output-sep-height = 9px) between the
+ * last input row and the output row. The margins are DERIVED from that var so
+ * the 9px lives in one source: footprint = 2×margin + 1px border, so each
+ * margin = (var - 1px) / 2. */
 .rune-node-func-output-sep {
   height: 0;
-  margin: var(--space-1) 0;
+  margin: calc((var(--rune-func-output-sep-height) - 1px) / 2) 0;
   border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
 }
 
