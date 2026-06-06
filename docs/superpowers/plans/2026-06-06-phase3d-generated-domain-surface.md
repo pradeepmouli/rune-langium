@@ -18,7 +18,8 @@
 2. **Generated, never hand-edited.** `domain.ts` is regenerated like `zod-schemas.ts`; a `check-generated` CI guard fails on drift. Rune semantics live in `domain-surfaces.json`, not the generator.
 3. **Read vs write split.** `toDomain` (cross-refs→branded `Ref<T>`, `$type` retained) feeds read-only surfaces only (inspector; NOT `computeContentFingerprint`/P4 — that is a content DIGEST, intentionally lossy, and stays on its own subset projection). Node `data` stays AST-shaped; write accessors (`setDataName`, `addRosettaFunctionInputs`, …) mutate `node.data` in place inside recipes.
 4. **`superFunction` gap.** `form-surfaces.json` omits `RosettaFunction.superFunction`, but `ast-to-model.ts:278` builds `func-inherits` edges from it. `domain-surfaces.json` MUST include it (full surface — no per-type `fields` whitelist).
-4b. **LOSSLESS, TYPE-FAITHFUL projection — no merges, no type-collapse.** The Rune domain surface faithfully mirrors the AST's SEMANTIC content AND its type structure. Strip ONLY derived/internal data (`$container`, `$cstNode`, resolved-`ref` objects, `references`/`labels` indexes) — all reconstructable from reparse + scope. **Cross-refs project to branded `Ref<'TargetType'>`, NOT bare `string`** — a bare string merges every reference to one type, erasing which kind is referenced (the type-collapse the user flagged); the branded ref keeps the target type at the type level while the runtime stays the `$refText` string (lossless both ways). **Do NOT use `merges`** — collapsing distinct collections (e.g. `conditions`+`postConditions`) is irreversible on read and the write side must keep them separate anyway. `renames` are lossless relabels, used sparingly. The langium-zod `merges` capability stays in the generator; Rune opts out.
+4b. **LOSSLESS, TYPE-FAITHFUL, INFORMATION-COMPLETE projection — no merges, no type-collapse, no semantic drops.** The Rune domain surface mirrors the AST's semantic content AND type structure, and for every field it keeps it captures as much as the AST does. Three rules: (i) **Strip ONLY `$`-internals** (`$container`/`$containerProperty`/`$containerIndex`/`$cstNode`/`$document`/`$refNode`/`$nodeDescription`) — all reconstructable from reparse + scope. Do NOT strip semantic grammar-authored fields the editor's FORM surface happens to drop (`typeCallArgs`, `references`/doc-refs, `enumSynonyms`, `synonyms`, `annotations`, `conditions`, `operations`, …) — capturing as much as the AST means keeping them in full. (ii) **Cross-refs project to branded `Ref<'TargetType'>`, NOT bare `string`** — a bare string merges every reference to one type, erasing which kind is referenced; the branded ref keeps the target type at the type level while the runtime stays the `$refText` string. (iii) **No `merges`** — collapsing distinct collections (e.g. `conditions`+`postConditions`) is irreversible on read and the write side keeps them separate anyway. `renames` are lossless relabels, used sparingly. The langium-zod `merges` capability stays in the generator; Rune opts out. (Note: `computeContentFingerprint` is a DIGEST, intentionally lossy — out of scope for this rule.)
+4c. **Lossless normalizations (additive).** The domain surface adds canonical, uniform views of concepts the grammar spells inconsistently — provably lossless because they're (a) ADDITIVE (the original field is kept) and (b) reversible (the `$type` discriminant + a fixed normalization map recover the source field), and the AST-shaped `node.data` keeps the originals for `modelsToAst` round-trip (normalized fields are read-only views, never written). Two normalizations: **inheritance** (`Data.superType` / `RosettaFunction.superFunction` / `RosettaEnumeration.parent` → a uniform `extends: Ref<T>`) and **members** (`attributes`/`enumValues`/`inputs`/`features` → a uniform `members: MemberDomain[]`, a discriminated union preserving each element's `$type`). Config-driven (`domain-surfaces.json` `normalizations`). The cross-kind UNIFICATION is done in the generator; making a ref CANONICAL (resolving `$refText` to the fully-qualified key) requires scope and is done at the editor/repository layer (the generated `extends` carries the original `$refText` as a branded `Ref<T>`).
 5. **Repository indexes SOURCE nodes.** The read interface has no namespace, so the qualified-name key comes from a runtime `keyOf` (rune passes `qualifiedExportPath(n.namespace, n.name)`); the repository projects via `toDomain` lazily and groups by the retained `$type`.
 6. **Cross-repo version discipline.** The emitter changes need a langium-zod release; pin via `pnpm-workspace.yaml` `overrides` (memory `project_pnpm_overrides_location`) so core + visual-editor resolve one version. During dev, rune builds against a workspace-linked/`@dev` langium-zod.
 7. **Validation:** langium-zod — `pnpm --filter langium-zod run type-check`/`test`. rune — `pnpm --filter @rune-langium/visual-editor test`/`run type-check`, `pnpm --filter @rune-langium/studio test`, `pnpm run lint`, `pnpm run generate:domain` clean. Commits `SKIP_SIMPLE_GIT_HOOKS=1`, end `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`. Branches: langium-zod `feat/domain-discriminant-repository`; rune `feat/phase3d-domain-surface` off the 3C merge.
@@ -121,6 +122,49 @@ Call after `emitMasterDispatch(objects)`. The `byType` return narrows because Ta
 
 ---
 
+### Task 2b: Lossless normalization pass (`applyNormalizations`)
+
+**Files:** Modify `packages/langium-zod/src/projection.ts` (extend the config type with `normalizations`), `packages/langium-zod/src/emitters/domain.ts` (an `applyNormalizations` pass + `planObject` emits the normalized field), `DomainGenerationOptions`; extend `test/unit/domain-emitter.test.ts`.
+
+> A normalization adds a canonical field that unifies a concept spelled differently across kinds. ADDITIVE (source field kept) + reversible → lossless. The normalized field is READ-ONLY (no setter — writes target the source field's accessors). Config shape (in `DomainGenerationOptions.normalizations`, supplied via the projection/overlay config):
+> ```ts
+> interface NormalizationConfig {
+>   /** canonical field name on the domain interface (e.g. 'extends', 'members') */
+>   as: string;
+>   /** per-kind source field the canonical field reads from */
+>   from: Record<string /* typeName */, string /* sourceField */>;
+> }
+> interface DomainGenerationOptions { /* … */ normalizations?: Record<string /* id */, NormalizationConfig>; }
+> ```
+
+- [ ] **Step 1: Write the failing test**
+```ts
+it('adds an additive normalized field (inheritance → extends), keeping the source', () => {
+  const out = generateDomainCode(descriptors, {
+    normalizations: { inheritance: { as: 'extends', from: { Data: 'superType', RosettaFunction: 'superFunction', RosettaEnumeration: 'parent' } } }
+  });
+  expect(out).toContain('superType?: Ref<'); // original kept (additive)
+  expect(out).toContain('extends?: Ref<');   // canonical added, same target type as the source
+  expect(out).toContain('extends: node.superType,'); // toDomain reads from the source
+});
+it('members normalization is a discriminated union preserving element $type', () => {
+  const out = generateDomainCode(descriptors, {
+    normalizations: { members: { as: 'members', from: { Data: 'attributes', RosettaFunction: 'inputs' } } }
+  });
+  expect(out).toContain('members:'); // typed as the kind's element domain[], not unknown[]
+});
+```
+
+- [ ] **Step 2: Run, confirm FAIL.**
+
+- [ ] **Step 3: Implement `applyNormalizations`** — after `planObject` builds a kind's plan, for each normalization whose `from` lists this kind, ADD a read field `{ name: as, tsType: <the source field's tsType>, readExpr: \`node.${sourceField}\`, readonly: true }`. The normalized field's TS type is the SOURCE field's type verbatim (so `extends` on `Data` is `Ref<'DataOrChoice'>`, `members` on `Data` is `AttributeDomain[]`) — element/target types are preserved per-kind (no `unknown`, no widening). `emitInterface` emits it; `emitReadFn` emits `${as}: node.${sourceField},`; `emitWriteAccessors` SKIPS it (read-only view). Thread `normalizations` from `DomainGenerationOptions` (and the CLI/projection config) into `generateDomainCode`.
+
+- [ ] **Step 4: Run, confirm PASS** — `pnpm --filter langium-zod test` + `run type-check`.
+
+- [ ] **Step 5: Commit** — `feat(domain): lossless additive normalization pass (inheritance + members)`.
+
+---
+
 ## Phase 3D-2 — rune: generate + consume (workspace-linked langium-zod)
 
 ### Task 3: Workspace-link the langium-zod branch + author `domain-surfaces.json`
@@ -128,21 +172,38 @@ Call after `emitMasterDispatch(objects)`. The `byType` return narrows because Ta
 **Files:** rune `pnpm-workspace.yaml` (a `@dev`/`link:` override to the local langium-zod), `packages/visual-editor/domain-surfaces.json` (create). Branch `feat/phase3d-domain-surface`.
 
 - [ ] **Step 1: Link the local langium-zod** — add a `pnpm-workspace.yaml` override pointing `langium-zod` at the local `feat/domain-discriminant-repository` build (`link:../../langium-zod/packages/langium-zod` or a `@dev` tarball). `pnpm install`; confirm `node_modules/langium-zod` resolves to the branch build (with `$type` retention + `emitRepository`).
-- [ ] **Step 2: Write `domain-surfaces.json`** (full, FAITHFUL projection — no `fields` whitelist, no merges):
+- [ ] **Step 2: Classify every AST field (derived vs semantic) before writing the strip set**
+
+For each Rune kind, read its interface in `packages/core/src/generated/ast.ts` and classify each field:
+- **Derived/internal → strip:** the `$`-prefixed fields (`$container`, `$containerProperty`, `$containerIndex`, `$cstNode`, `$document`, `$refNode`, `$nodeDescription`) and any pure Langium index artifact (confirm `labels`/`ruleReferences` are not grammar-authored — if they ARE grammar fields, KEEP them).
+- **Semantic → KEEP (capture in full):** every grammar-authored field, INCLUDING ones the editor's `form-surfaces.json`/`strip-additional-ast-fields.ts` drops for forms — `typeCallArgs` (generic type arguments), `references` (`RosettaDocReference[]`), `enumSynonyms`, `synonyms`, `annotations`, `definition`, `conditions`, `postConditions`, `operations`, `shortcuts`, etc. The domain model must say as much about each field as the AST does.
+
+Record the classification (a comment block in `domain-surfaces.json` or the PR description). Anything you're unsure about → default to KEEP and flag it.
+
+- [ ] **Step 3: Write `domain-surfaces.json`** (faithful — strip ONLY `$`-internals, keep all semantic content):
 ```jsonc
 {
   "defaults": {
-    "strip": [
-      "$container", "$containerProperty", "$containerIndex",
-      "$cstNode", "$document", "$refNode", "$nodeDescription",
-      "references", "labels", "ruleReferences", "typeCallArgs", "enumSynonyms"
-    ]
+    "strip": ["$container", "$containerProperty", "$containerIndex", "$cstNode", "$document", "$refNode", "$nodeDescription"]
   },
-  "types": {}
+  "types": {},
+  "normalizations": {
+    "inheritance": {
+      "as": "extends",
+      "from": { "Data": "superType", "RosettaFunction": "superFunction", "RosettaEnumeration": "parent" }
+    },
+    "members": {
+      "as": "members",
+      "from": {
+        "Data": "attributes", "Annotation": "attributes", "Choice": "attributes",
+        "RosettaEnumeration": "enumValues", "RosettaFunction": "inputs", "RosettaRecordType": "features"
+      }
+    }
+  }
 }
 ```
-> The surface is a faithful AST mirror (constraint 4b). `strip` removes ONLY derived/internal `$`-fields and the resolved-ref/index helpers — never semantic content. `$type` is NOT stripped (the emitter retains it per Task 1). NO `merges` — `RosettaFunction` keeps `conditions` AND `postConditions` as separate fields (lossless); `Choice` keeps `attributes` (faithful name). `types: {}` is intentional — overlays are added later ONLY if a lossless rename is genuinely wanted. Full surface keeps `superFunction` (constraint 4). This deliberately departs from the spec §0.5 merge example, which is lossy.
-- [ ] **Step 3: Commit** — `feat(ve): workspace-link langium-zod @dev + domain-surfaces.json`.
+> The surface is a faithful AST mirror (constraint 4b) plus the two lossless additive normalizations (constraint 4c): `extends` (uniform inheritance) and `members` (uniform member container, typed per-kind). Originals (`superType`/`attributes`/…) are kept. `strip` lists ONLY `$`-internals (container/CST/document/resolution — all reconstructable from reparse + scope). **It does NOT strip `typeCallArgs`/`references`/`enumSynonyms`/etc.** — those are semantic and were dropped only for the editor's narrower FORM surface; the domain model keeps them (the "capture as much as the AST" rule). `$type` is retained (Task 1). NO `merges`/`renames` — `RosettaFunction` keeps `conditions` AND `postConditions` separate; `Choice` keeps `attributes`. `types: {}` intentional. (If `--strip-internals` already drops all `$`-fields, this list is belt-and-suspenders; confirm and trim to whatever `--strip-internals` does not cover.) Note the expression-text case: expressions are captured via their structural sub-AST (`operations[*].expression`, kept) — the editor's `$cstText` shortcut is editor policy, not the domain model's source of truth.
+- [ ] **Step 4: Commit** — `feat(ve): workspace-link langium-zod @dev + faithful domain-surfaces.json`.
 
 ---
 
@@ -155,7 +216,7 @@ Call after `emitMasterDispatch(objects)`. The `byType` return narrows because Ta
 "generate:domain": "langium-zod generate --config ../core/langium-config.json --domain --domain-out src/generated/domain.ts --strip-internals --projection domain-surfaces.json --ast-types ../core/src/generated/ast.ts"
 ```
 > Confirm `--projection` applies to the domain path; if it's Zod-only, move the overlays to a `langium-zod.config.js` `domainOverlays` block and keep `--projection` for `strip`.
-- [ ] **Step 2: Generate** — `pnpm --filter @rune-langium/visual-editor run generate:domain`. Verify: `$type: 'Data'` literals in each interface; `superFunction` on `RosettaFunctionDomain`; **separate `conditions` AND `postConditions`** (no merge — lossless, constraint 4b); `addChoiceAttributes` (faithful name, no rename); `createRepository` present; `toDomain` master switch.
+- [ ] **Step 2: Generate** — `pnpm --filter @rune-langium/visual-editor run generate:domain`. Verify: `$type: 'Data'` literals in each interface; `superFunction` on `RosettaFunctionDomain`; **separate `conditions` AND `postConditions`** (no merge — lossless, constraint 4b); `addChoiceAttributes` (faithful name, no rename); **additive normalizations** (constraint 4c) — `extends` alongside `superType`/`superFunction`/`parent`, and a typed `members` alongside `attributes`/`enumValues`/`inputs`/`features`; `createRepository` present; `toDomain` master switch.
 - [ ] **Step 3: Extend `check-generated`** to regenerate + `git diff --exit-code src/generated/domain.ts` (find via `rg -n "check-generated|generate:schemas" .github`).
 - [ ] **Step 4: Commit** the script + generated `domain.ts` — `feat(ve): generate:domain + committed domain.ts (discriminated + repository)`.
 
@@ -165,7 +226,7 @@ Call after `emitMasterDispatch(objects)`. The `byType` return narrows because Ta
 
 **Files:** `useModelSourceSync.ts` (`computeContentFingerprint`); the inspector read path; extend the source-sync test.
 
-- [ ] **Step 1: Conformance test** — model → `toDomain(node)` → assert the FAITHFUL shape: `$type` retained, `conditions` and `postConditions` BOTH present and distinct (no merge), cross-refs as `$refText` strings; the inspector can `switch (d.$type)`.
+- [ ] **Step 1: Conformance + information-completeness test** — model → `toDomain(node)` → assert the FAITHFUL shape: `$type` retained; `conditions` and `postConditions` BOTH present and distinct (no merge); cross-refs as branded `Ref<T>` (runtime string, target-typed); the inspector can `switch (d.$type)`. **Information-completeness:** assert that for a representative node, EVERY non-`$`-internal AST field is present on the domain object (no semantic field dropped) — e.g. `typeCallArgs`/`references`/`synonyms`/`annotations` survive. This is the "capture as much as the AST" guard (constraint 4b).
 - [ ] **Step 2: Run, confirm FAIL** where inline reads aren't using `toDomain`.
 - [ ] **Step 3: Re-point the inspector read** to `toDomain` (it now narrows on `$type`). For `computeContentFingerprint`: adopt `toDomain` ONLY if its content key-set equals the current `astRelevantProjection` set — **the fingerprint MUST NOT change** (a drift re-serializes every model once). If shapes differ, keep `astRelevantProjection` for the fingerprint and use `toDomain` only for the inspector. REPORT which.
 - [ ] **Step 4: Verify** — VE + studio suites; watch source-sync/serialization-churn. Green.
@@ -179,7 +240,7 @@ Call after `emitMasterDispatch(objects)`. The `byType` return narrows because Ta
 
 > Spec §0.4: `node-projection.ts` becomes a thin re-export of the generated accessors + the editor-policy bits codegen does not own (V3 edge-id, V5/V6 derivation, V2 `GRAPH_METADATA_KEYS`, `makeNodeId`=`qualifiedExportPath`). The member-container map (V4) + type-ref/cardinality write accessors come from the generated artifact.
 
-- [ ] **Step 1: Re-export** — `export * from '../generated/domain.js';` from `node-projection.ts`. Keep V2/V3/V5/V6 + `makeNodeId`. For V4: use the generated `MEMBER_FIELD_BY_KIND` if Task 2 emitted it; else keep V4 hand-written (small editor policy) and note it. REPORT.
+- [ ] **Step 1: Re-export** — `export * from '../generated/domain.js';` from `node-projection.ts`. Keep V2/V3/V5/V6 + `makeNodeId`. For V4: prefer the generated **`members` normalization** (Task 2b) — it gives a TYPED `MemberDomain[]` discriminated union, replacing the hand-written `getMemberArray → unknown[]` type-collapse. Re-point `getMemberArray` callers to read `node.data` via the generated `members` view (typed), and use the generated `MEMBER_FIELD_BY_KIND` (Task 2) for the field-name lookup the WRITE side needs. Keep the hand-written V4 only as a thin shim if a caller needs the raw field name rather than the typed array. REPORT what was re-pointed vs kept.
 - [ ] **Step 2: Convert Wave A recipes to generated setters** — `addDataAttributes`/`setDataName`/cross-ref `setAttribute…Ref` replace inline `d.attributes.push`/`a.name=`/`typeCall.$refText=`. Keep edge mutations (V3 `makeEdgeId`) inline (editor policy). Run the actions suite.
 - [ ] **Step 3: Roll across remaining waves** — generated setter where a 1:1 accessor exists; leave inline (with `// no generated accessor: <reason>`) for rich-ref/inline-union scalars (the MVP gap). Whole VE + studio suite after each wave.
 - [ ] **Step 4: Conformance round-trip test** (spec §0.5) — model → edit via generated setter → `modelsToAst`/`serializeModel` equals the pre-3D inline-write source. Proves behavior-identical to 3C.
@@ -216,7 +277,7 @@ Call after `emitMasterDispatch(objects)`. The `byType` return narrows because Ta
 
 ## Self-review checklist (performed during plan authoring)
 
-**Spec coverage (§0.2–§0.5) + user corrections:** `$type` retained as a discriminant + cross-refs emitted as branded `Ref<TargetType>` not bare `string` (Task 1 — the two 2026-06-06 type-faithfulness directives: keep id metadata `$type`, and don't merge ref objects to one `string` type) ✓; generated artifact committed (Task 4) ✓; `node-projection.ts` re-exports generated accessors keeping V2/V3/V5/V6 + `makeNodeId` (Task 6, §0.4) ✓; recipes call generated setters (Task 6, §0.4) ✓; `toDomain` for read-only surfaces (Task 5, §0.4) ✓; **lossless faithful surface — no merges** (Task 3, constraint 4b; deliberately departs from the spec §0.5 merge example) ✓; conformance round-trip (Tasks 5,6, §0.5) ✓; regeneration + check-generated (Task 4) ✓; generated repository with `byType` (Tasks 2,7 — the approved option, now keyed by the retained `$type`) ✓.
+**Spec coverage (§0.2–§0.5) + user corrections:** `$type` retained as a discriminant + cross-refs emitted as branded `Ref<TargetType>` not bare `string` (Task 1 — the two 2026-06-06 type-faithfulness directives: keep id metadata `$type`, and don't merge ref objects to one `string` type) ✓; generated artifact committed (Task 4) ✓; `node-projection.ts` re-exports generated accessors keeping V2/V3/V5/V6 + `makeNodeId` (Task 6, §0.4) ✓; recipes call generated setters (Task 6, §0.4) ✓; `toDomain` for read-only surfaces (Task 5, §0.4) ✓; **lossless, information-complete, type-faithful surface — no merges, no semantic drops, branded refs** (Task 3, constraint 4b; departs from spec §0.5 merge example) ✓; **lossless additive normalizations — `extends` + typed `members`** (Task 2b, constraint 4c; `members` also resolves the V4 `unknown[]` collapse) ✓; conformance round-trip (Tasks 5,6, §0.5) ✓; regeneration + check-generated (Task 4) ✓; generated repository with `byType` (Tasks 2,7 — the approved option, now keyed by the retained `$type`) ✓.
 
 **Why `$type` retention reorders the plan:** it's an emitter change affecting the WHOLE surface (not just the repository), so it's front-loaded (Phase 3D-1) and rune workspace-links the branch (Task 3) to generate once against the improved emitter — avoiding a generate-twice churn. The release+pin (Phase 3D-3) is the clean cutover.
 
