@@ -35,6 +35,7 @@ import type {
 import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode, GraphNode, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
+import { makeNodeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -55,10 +56,6 @@ export interface AstToModelResult {
 
 function getNamespace(model: RosettaModel): string {
   return typeof model.name === 'string' ? model.name : 'unknown';
-}
-
-function makeNodeId(namespace: string, name: string): string {
-  return `${namespace}::${name}`;
 }
 
 function passesFilter(kind: TypeKind, namespace: string, name: string, filters?: GraphFilters): boolean {

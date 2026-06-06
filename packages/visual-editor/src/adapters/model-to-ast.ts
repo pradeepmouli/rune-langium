@@ -13,6 +13,7 @@
  */
 
 import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode } from '../types.js';
+import { nameFromNodeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,14 +54,6 @@ function stripMetadata(data: AnyGraphNode): Record<string, unknown> {
     }
   }
   return result;
-}
-
-/**
- * Extract parent name from a node ID like "namespace::ParentName".
- */
-function nameFromNodeId(nodeId: string): string {
-  const parts = nodeId.split('::');
-  return parts.length > 1 ? parts[parts.length - 1]! : nodeId;
 }
 
 /**

@@ -58,6 +58,7 @@ import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from 
 import type { TrackedState } from './history.js';
 import type { Patches } from 'mutative';
 import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
+import { makeNodeId } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -409,7 +410,7 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
       // are index-only (for cross-file reference resolution).
       if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
       const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
-      const nodeId = `${entry.namespace}::${exp.name}`;
+      const nodeId = makeNodeId(entry.namespace, exp.name);
       if (existingIds.has(nodeId)) continue;
       existingIds.add(nodeId);
       out.push({
@@ -491,10 +492,6 @@ let nodeCounter = 0;
 
 /** Sequence counter to cancel in-flight progressive namespace expansion. */
 let expandSeq = 0;
-
-function makeNodeId(namespace: string, name: string): string {
-  return `${namespace}::${name}`;
-}
 
 function parseCardinalityString(card: string): { inf: number; sup?: number; unbounded: boolean } {
   const match = card.match(/\(?(\d+)\.\.(\*|\d+)\)?/);
