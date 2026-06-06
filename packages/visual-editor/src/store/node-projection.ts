@@ -187,3 +187,10 @@ export function toEdgesById(edges: readonly TypeGraphEdge[]): Map<string, TypeGr
 export function edgesFromMap(map: ReadonlyMap<string, TypeGraphEdge>): TypeGraphEdge[] {
   return [...map.values()];
 }
+
+// ---------------------------------------------------------------------------
+// Node-kind resolution (re-exported so node-projection.ts is the single
+// import surface for structural projections — the implementation lives in
+// model-helpers.ts and is NOT re-implemented here).
+// ---------------------------------------------------------------------------
+export { resolveNodeKind } from '../adapters/model-helpers.js';

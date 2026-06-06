@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect } from 'vitest';
+import type { GraphMetadata } from '../../src/types.js';
 import { makeNodeId, nameFromNodeId, splitNodeId } from '../../src/store/node-projection.js';
 import { makeEdgeId, parseEdgeId } from '../../src/store/node-projection.js';
 import {
@@ -112,5 +113,18 @@ describe('node-projection array↔Map derivation (V5/V6)', () => {
     const map = toEdgesById(edges);
     expect(map.get('e1')).toBe(edges[0]);
     expect(edgesFromMap(map)).toEqual(edges);
+  });
+});
+
+describe('node-projection parity guards', () => {
+  it('GRAPH_METADATA_KEYS matches the strip-relevant keys of GraphMetadata', () => {
+    // GraphMetadata also has `deferred` (not stripped) + an index signature; the
+    // strip set is the explicit non-deferred metadata fields. This test fails if a
+    // new GraphMetadata field is added without deciding its strip behavior.
+    const known: Array<keyof GraphMetadata> = [
+      'namespace', 'position', 'errors', 'isReadOnly', 'hasExternalRefs', 'comments', 'deferred'
+    ];
+    const stripExpected = known.filter((k) => k !== 'deferred');
+    expect([...GRAPH_METADATA_KEYS].sort()).toEqual([...stripExpected].sort());
   });
 });
