@@ -264,7 +264,19 @@ vi.mock('@rune-langium/visual-editor', () => ({
       return { name: cond.name ?? undefined, expressionText: '' };
     }),
   useEditorStore,
-  useModelSourceSync: () => {}
+  useModelSourceSync: () => {},
+  // Node-id utilities (3A′ dot-form helpers) — exact mirrors of node-projection.ts
+  // so ExplorePerspective can call them inside the mock module boundary.
+  nameFromNodeId: (nodeId: string) => {
+    const idx = nodeId.lastIndexOf('.');
+    return idx < 0 ? nodeId : nodeId.slice(idx + 1);
+  },
+  splitNodeId: (nodeId: string) => {
+    const idx = nodeId.lastIndexOf('.');
+    if (idx < 0) return { namespace: '', name: nodeId };
+    return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + 1) };
+  },
+  makeNodeId: (namespace: string, name: string) => `${namespace}.${name}`
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({

@@ -96,8 +96,8 @@ export async function selectNode(page: Page, kind: FormKind): Promise<void> {
   });
   // Phase 13 amend: navigate via the dedicated arrow button (single-click on the button).
   // The forms baseline fixture always uses the "demo.forms" namespace, so the nodeId
-  // is predictable as "demo.forms::<nodeName>".
-  const nodeId = `demo.forms::${nodeName}`;
+  // is predictable as "demo.forms.<nodeName>".
+  const nodeId = `demo.forms.${nodeName}`;
   const navBtn = page.getByTestId(`ns-type-nav-${nodeId}`);
   await navBtn.waitFor({ state: 'visible', timeout: 10000 });
   await navBtn.click();
