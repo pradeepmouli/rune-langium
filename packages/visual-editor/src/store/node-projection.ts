@@ -14,6 +14,11 @@
  * separate follow-up that only changes the two functions below.
  */
 
+import type { EdgeKind } from '../types.js';
+
+// Re-export so callers can import EdgeKind from a single surface.
+export type { EdgeKind };
+
 const NODE_ID_SEPARATOR = '::';
 
 /** Build the canonical top-level node id `${namespace}::${name}`. */
@@ -32,4 +37,37 @@ export function splitNodeId(nodeId: string): { namespace: string; name: string }
   const idx = nodeId.lastIndexOf(NODE_ID_SEPARATOR);
   if (idx < 0) return { namespace: '', name: nodeId };
   return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + NODE_ID_SEPARATOR.length) };
+}
+
+// ---------------------------------------------------------------------------
+// V3 edge-id builders
+// ---------------------------------------------------------------------------
+
+const EDGE_SEPARATOR = '--';
+const LABEL_BEARING: ReadonlySet<EdgeKind> = new Set(['attribute-ref', 'choice-option']);
+
+/**
+ * Build an edge id. Label-bearing kinds (`attribute-ref`, `choice-option`) encode
+ * `${source}--${kind}--${label}--${target}`; others encode `${source}--${kind}--${target}`.
+ */
+export function makeEdgeId(kind: EdgeKind, parts: { source: string; target: string; label?: string }): string {
+  const { source, target, label } = parts;
+  return label !== undefined
+    ? `${source}${EDGE_SEPARATOR}${kind}${EDGE_SEPARATOR}${label}${EDGE_SEPARATOR}${target}`
+    : `${source}${EDGE_SEPARATOR}${kind}${EDGE_SEPARATOR}${target}`;
+}
+
+/** Parse an edge id back to its parts, or `null` if it isn't a well-formed edge id. */
+export function parseEdgeId(
+  id: string
+): { kind: EdgeKind; source: string; target: string; label?: string } | null {
+  const segs = id.split(EDGE_SEPARATOR);
+  if (segs.length < 3) return null;
+  const kind = segs[1] as EdgeKind;
+  if (LABEL_BEARING.has(kind)) {
+    if (segs.length !== 4) return null;
+    return { kind, source: segs[0]!, label: segs[2], target: segs[3]! };
+  }
+  if (segs.length !== 3) return null;
+  return { kind, source: segs[0]!, target: segs[2]! };
 }

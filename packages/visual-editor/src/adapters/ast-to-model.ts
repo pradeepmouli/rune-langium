@@ -35,7 +35,7 @@ import type {
 import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode, GraphNode, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
-import { makeNodeId } from '../store/node-projection.js';
+import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -121,7 +121,7 @@ function getAttributeEdges(
       const targetNodeId = nameToNodeId.get(typeName);
       if (targetNodeId && targetNodeId !== nodeId) {
         edges.push({
-          id: `${nodeId}--attribute-ref--${member.name ?? typeName}--${targetNodeId}`,
+          id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: member.name ?? typeName }),
           source: nodeId,
           target: targetNodeId,
           type: 'attribute-ref',
@@ -210,7 +210,7 @@ export function astToModel(
         const parentNodeId = nameToNodeId.get(parentName);
         if (parentNodeId) {
           edges.push({
-            id: `${node.id}--extends--${parentNodeId}`,
+            id: makeEdgeId('extends', { source: node.id, target: parentNodeId }),
             source: node.id,
             target: parentNodeId,
             type: 'extends',
@@ -229,7 +229,7 @@ export function astToModel(
           const targetNodeId = nameToNodeId.get(typeName);
           if (targetNodeId) {
             edges.push({
-              id: `${node.id}--choice-option--${typeName}--${targetNodeId}`,
+              id: makeEdgeId('choice-option', { source: node.id, target: targetNodeId, label: typeName }),
               source: node.id,
               target: targetNodeId,
               type: 'choice-option',
@@ -245,7 +245,7 @@ export function astToModel(
         const parentNodeId = nameToNodeId.get(parentName);
         if (parentNodeId) {
           edges.push({
-            id: `${node.id}--enum-extends--${parentNodeId}`,
+            id: makeEdgeId('enum-extends', { source: node.id, target: parentNodeId }),
             source: node.id,
             target: parentNodeId,
             type: 'enum-extends',
@@ -263,7 +263,7 @@ export function astToModel(
         const targetNodeId = nameToNodeId.get(outputTypeName);
         if (targetNodeId && targetNodeId !== node.id) {
           edges.push({
-            id: `${node.id}--attribute-ref--output--${targetNodeId}`,
+            id: makeEdgeId('attribute-ref', { source: node.id, target: targetNodeId, label: 'output' }),
             source: node.id,
             target: targetNodeId,
             type: 'attribute-ref',
@@ -277,7 +277,7 @@ export function astToModel(
         const parentNodeId = nameToNodeId.get(superName);
         if (parentNodeId) {
           edges.push({
-            id: `${node.id}--extends--${parentNodeId}`,
+            id: makeEdgeId('extends', { source: node.id, target: parentNodeId }),
             source: node.id,
             target: parentNodeId,
             type: 'extends',
@@ -295,7 +295,7 @@ export function astToModel(
         const targetNodeId = nameToNodeId.get(targetType);
         if (targetNodeId && targetNodeId !== node.id) {
           edges.push({
-            id: `${node.id}--type-alias-ref--${targetNodeId}`,
+            id: makeEdgeId('type-alias-ref', { source: node.id, target: targetNodeId }),
             source: node.id,
             target: targetNodeId,
             type: 'type-alias-ref',
