@@ -55,19 +55,14 @@ describe('isDegradedReparse', () => {
     expect(isDegradedReparse([node('ns::Alpha', 0)], [node('ns::Alpha', 1)])).toBe(false);
   });
 
-  it('flags a multi-node total wipe on a SMALL model (worker-down signature below the ratio cutoff)', () => {
-    // Two 1-attribute types (currentTotal = 2 < 3, so the ratio test is skipped)
-    // both stripped to zero → the multi-node total-wipe detector catches it.
+  it('does NOT flag a legit multi-type source clear (would wedge the graph; only content, no worker signal)', () => {
+    // A user clears all attributes from 2+ types in the source editor → a HEALTHY
+    // parse with the same ids and zero attributes. This is byte-identical to a
+    // worker-down strip, so a total-wipe rejecter would wedge the graph here. The
+    // ratio test deliberately does NOT reject it (small totals fall under the
+    // currentTotal<3 floor; larger ones are the documented residual).
     const current = [node('ns::Alpha', 1), node('ns::Beta', 1)];
-    const wiped = [node('ns::Alpha', 0), node('ns::Beta', 0)];
-    expect(isDegradedReparse(wiped, current)).toBe(true);
-  });
-
-  it('does NOT flag a SINGLE small type cleared to zero (indistinguishable from a legit clear-all)', () => {
-    // Only one shared type → could be a legit "delete all attributes" source edit;
-    // rejecting it would wedge the graph, so it is accepted (documented residual).
-    const current = [node('ns::Alpha', 2)];
-    const cleared = [node('ns::Alpha', 0)];
+    const cleared = [node('ns::Alpha', 0), node('ns::Beta', 0)];
     expect(isDegradedReparse(cleared, current)).toBe(false);
   });
 

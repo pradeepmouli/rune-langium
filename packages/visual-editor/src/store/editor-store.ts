@@ -638,17 +638,19 @@ function nodeAttributeCount(n: TypeGraphNode): number {
  * legitimate user deletion is NOT flagged: after a delete the live graph
  * already reflects it, and the reparse of the saved source matches → ratio ≈ 1.
  * Only nodes present in BOTH are compared, so hydration that ADDS nodes never
- * trips it. Two detectors: (1) a multi-node TOTAL wipe (2+ shared types all
- * stripped to zero attributes) — the worker-down signature, which also covers
- * small attributed models; (2) a collective-ratio test for larger models, so a
- * single-attribute delete (drop of 1 out of many) stays above the threshold
- * while a worker-down strip (most attributes → 0) falls below it.
+ * trips it. Uses a collective-ratio test (not per-node) so a single-attribute
+ * delete (drop of 1 out of many) stays well above the threshold, while a
+ * worker-down strip (most attributes → 0) falls below it.
  *
- * Residual window (accepted by design): a SINGLE small attributed type stripped
- * to zero is NOT flagged — it is indistinguishable from a legit "clear all
- * attributes" source edit, and rejecting that would wedge the graph. The
- * parseEpoch gate still suppresses the immediate write-back; a robust fix needs
- * a real parse-worker health signal rather than this heuristic.
+ * Deliberately a RATIO test, not a total-wipe test: distinguishing a worker-down
+ * strip from a legitimate "clear all attributes" source edit is impossible from
+ * content alone (both yield the same node ids with zero attributes), and a
+ * total-wipe rejecter would wedge the graph on a real multi-type source clear.
+ * The ratio test therefore only catches degradation of models with enough
+ * attributes (currentTotal >= 3) to be statistically implausible as a user edit;
+ * a robust fix for the small-model residual needs a real parse-worker health
+ * signal, which the parse pipeline does not currently expose. The parseEpoch gate
+ * still suppresses the immediate write-back in the residual case.
  */
 export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphNode[]): boolean {
   if (current.length === 0) return false; // no baseline (initial load) → accept
@@ -663,19 +665,9 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
     currentTotal += nodeAttributeCount(cur);
     incomingTotal += nodeAttributeCount(inc);
   }
-  if (common === 0) return false;
-  // Multi-node TOTAL wipe: every shared node that had attributes now has none.
-  // This is the worker-down signature — a whole namespace stripped in one parse.
-  // It catches SMALL attributed models that the ratio test below skips (e.g. two
-  // 1-attribute types → 0). We require `common >= 2` so a single-type clear-all
-  // (a plausible legit source edit) is still accepted: rejecting it would wedge
-  // the graph at the stale version, since the healthy reparse keeps returning 0
-  // and we would keep rejecting it. A user cannot plausibly zero out 2+ types in
-  // a single reparse, so the multi-node case is safe to reject.
-  if (common >= 2 && currentTotal > 0 && incomingTotal === 0) return true;
-  // Need a meaningful attributed baseline before judging by ratio (avoids false
-  // positives on tiny / attribute-light graphs — see the single-type note above).
-  if (currentTotal < 3) return false;
+  // Need a meaningful attributed baseline before judging (avoids false positives
+  // on tiny / attribute-light graphs, and avoids wedging on legit source clears).
+  if (common === 0 || currentTotal < 3) return false;
   // Degraded when the shared nodes collectively lost more than half their
   // attributes — a single user edit can't plausibly do that, a worker-down
   // strip always does.
