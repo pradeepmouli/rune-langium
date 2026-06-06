@@ -578,6 +578,9 @@ export function ExplorePerspective() {
 
   const storeNodes = useEditorStore((s) => s.nodes);
   const storeEdges = useEditorStore((s) => s.edges);
+  // parseEpoch gates source serialization: only USER edits (not parse-driven
+  // graph rebuilds) get written back to source — see useModelSourceSync.
+  const storeParseEpoch = useEditorStore((s) => s.parseEpoch);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
   const expandedNamespaces = visibility.expandedNamespaces;
@@ -1276,7 +1279,7 @@ export function ExplorePerspective() {
   // Previously this subscription lived inside RuneTypeGraph, which is only
   // mounted when the Graph pane is active; Structure-pane edits never reached
   // the source pane (2026-05-21, fix/inspector-source-sync).
-  useModelSourceSync(storeNodes, storeEdges, handleModelChanged);
+  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch);
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics } = useDiagnosticsStore();

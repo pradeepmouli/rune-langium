@@ -34,6 +34,10 @@ import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 async function loadCombinedModel() {
   const result = await parse(COMBINED_MODEL_SOURCE);
   act(() => {
+    // Reset in-flight edit patches before loading: the singleton store persists
+    // across tests, and a prior test's edit would otherwise be replayed onto this
+    // fresh parse (one-shot reconcile), polluting the baseline graph.
+    useEditorStore.setState({ pendingEditPatches: [] });
     useEditorStore.getState().selectNode(null);
     useEditorStore.getState().loadModels(result.value);
     useEditorStore.getState().expandAllNamespaces();
@@ -69,8 +73,13 @@ describe('useModelSourceSync', () => {
     const onModelChanged = vi.fn();
 
     const { rerender } = renderHook(
-      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
-        useModelSourceSync(nodes, edges, onModelChanged),
+      ({
+        nodes,
+        edges
+      }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        edges: ReturnType<typeof useEditorStore.getState>['edges'];
+      }) => useModelSourceSync(nodes, edges, onModelChanged),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,
@@ -91,9 +100,7 @@ describe('useModelSourceSync', () => {
     const productNode = useEditorStore.getState().nodes.find((n) => n.data.name === 'Product')!;
 
     act(() => {
-      useEditorStore
-        .getState()
-        .updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
 
     // Re-render the hook with the new nodes/edges from the store.
@@ -123,8 +130,13 @@ describe('useModelSourceSync', () => {
     const onModelChanged = vi.fn();
 
     const { rerender } = renderHook(
-      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
-        useModelSourceSync(nodes, edges, onModelChanged),
+      ({
+        nodes,
+        edges
+      }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        edges: ReturnType<typeof useEditorStore.getState>['edges'];
+      }) => useModelSourceSync(nodes, edges, onModelChanged),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,
@@ -161,6 +173,75 @@ describe('useModelSourceSync', () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(onModelChanged).not.toHaveBeenCalled();
+  });
+
+  it('does NOT serialize a PARSE-origin change (parseEpoch advanced) — source-corruption guard', async () => {
+    // Regression for the source-corruption bug: when the parse worker is
+    // unavailable a degraded reparse rebuilds `nodes` (attributes stripped) and
+    // bumps `parseEpoch`. Serializing that back to source splices truncated text
+    // over the real file. The gate: a content change that arrives WITH a
+    // parseEpoch bump came FROM the source (a parse) → must NOT be serialized.
+    const onModelChanged = vi.fn();
+    const baselineNodes = useEditorStore.getState().nodes;
+    const edges = useEditorStore.getState().edges;
+
+    // Produce genuinely different graph content (as a reparse would).
+    const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+    });
+    const changedNodes = useEditorStore.getState().nodes;
+
+    const { rerender } = renderHook(
+      ({ nodes, epoch }: { nodes: typeof baselineNodes; epoch: number }) =>
+        useModelSourceSync(nodes, edges, onModelChanged, epoch),
+      { initialProps: { nodes: baselineNodes, epoch: 0 } }
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // Content differs AND parseEpoch advanced → parse-origin → no serialize.
+    rerender({ nodes: changedNodes, epoch: 1 });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onModelChanged).not.toHaveBeenCalled();
+  });
+
+  it('DOES serialize a USER-origin change (same content change, parseEpoch unchanged)', async () => {
+    // Control for the gate above: the SAME content change WITHOUT a parseEpoch
+    // bump is a user edit and MUST still serialize — proving the gate keys on
+    // parse-origin, not on the change itself (and doesn't break normal edits,
+    // including deletions which are also user edits).
+    const onModelChanged = vi.fn();
+    const baselineNodes = useEditorStore.getState().nodes;
+    const edges = useEditorStore.getState().edges;
+
+    const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+    });
+    const changedNodes = useEditorStore.getState().nodes;
+
+    const { rerender } = renderHook(
+      ({ nodes, epoch }: { nodes: typeof baselineNodes; epoch: number }) =>
+        useModelSourceSync(nodes, edges, onModelChanged, epoch),
+      { initialProps: { nodes: baselineNodes, epoch: 7 } }
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // Content differs, parseEpoch UNCHANGED (7) → user-origin → serialize fires.
+    rerender({ nodes: changedNodes, epoch: 7 });
+    await waitFor(() => {
+      expect(onModelChanged).toHaveBeenCalled();
+    });
   });
 
   it('does NOT call onModelChanged when onModelChanged is undefined', async () => {
