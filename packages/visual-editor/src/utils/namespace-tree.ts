@@ -431,7 +431,9 @@ export function filterSegmentedTree(roots: SegmentNode[], query: string): Segmen
  *
  * `activeKinds` is the set of currently-enabled kinds (the explorer's kind
  * filter pills). When it covers every kind present in the tree the result is
- * the input unchanged.
+ * structurally equal to the input, but always a fresh shallow copy — the
+ * function allocates new arrays/objects and never returns the input references,
+ * so callers must not rely on referential equality for memoization.
  */
 export function filterSegmentedTreeByKind(roots: SegmentNode[], activeKinds: ReadonlySet<TypeKind>): SegmentNode[] {
   function visitNode(node: SegmentNode): SegmentNode | null {

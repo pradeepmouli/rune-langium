@@ -401,6 +401,11 @@ function FileTabStrip({
             className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
             onClick={() => onSelectFile(f.path)}
             title={f.path}
+            // Explicit label so screen readers don't read the diagnostics
+            // chiclets as bare numbers (e.g. "a.rosetta 2 1").
+            aria-label={`${f.name}${f.dirty ? ', unsaved' : ''}${
+              errors > 0 ? `, ${errors} error${errors === 1 ? '' : 's'}` : ''
+            }${warnings > 0 ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}`}
           >
             <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
             <span className="studio-topbar__tab-name">{f.name}</span>

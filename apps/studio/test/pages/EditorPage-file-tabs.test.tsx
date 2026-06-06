@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Gap 1 — file tabs chrome: per-tab diagnostics counts, close (✕), and the
- * "+" new-file affordance.
+ * Gap 1 — file tabs chrome: per-tab diagnostics counts and the
+ * "+" new-file affordance. (No close affordance in this PR.)
  *
  * The FileTabStrip is an internal component of ExplorePerspective rendered in
  * the topbar, so it is exercised through the EditorPage harness (the same

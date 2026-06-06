@@ -134,7 +134,10 @@ export function NamespaceSegmentHeaderRow({
           sit under the label (chevron width + base indent). */}
       {kindChips.length > 0 && (
         <div
-          className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pb-1 text-3xs text-muted-foreground/80"
+          // Single-line + clip: the virtualizer allocates a FIXED row height for
+          // the kinds row, so wrapping (flex-wrap) would overflow it and overlap
+          // the next row on narrow panels / many kinds. Keep it one line.
+          className="flex flex-nowrap items-center gap-x-1.5 overflow-hidden pb-1 text-3xs text-muted-foreground/80"
           style={{ paddingLeft: `${indentPx + 28}px` }}
           data-testid={dataTestId ? `${dataTestId}-kinds` : undefined}
         >
