@@ -47,13 +47,25 @@ const EDGE_SEPARATOR = '--';
 const LABEL_BEARING: ReadonlySet<EdgeKind> = new Set(['attribute-ref', 'choice-option']);
 
 /**
+ * All known EdgeKind values — kept in sync with the `EdgeKind` union in `types.ts`.
+ * Satisfies `ReadonlySet<EdgeKind>` so the compiler catches any drift.
+ */
+const KNOWN_EDGE_KINDS: ReadonlySet<EdgeKind> = new Set([
+  'extends', 'attribute-ref', 'choice-option', 'enum-extends', 'type-alias-ref'
+] satisfies EdgeKind[]);
+
+/**
  * Build an edge id. Label-bearing kinds (`attribute-ref`, `choice-option`) encode
  * `${source}--${kind}--${label}--${target}`; others encode `${source}--${kind}--${target}`.
+ *
+ * The format decision is driven by KIND (matching `parseEdgeId`), not by whether
+ * `label` is present. A label-bearing kind with no label degrades to an empty label
+ * segment; a label-less kind silently ignores any stray label argument.
  */
 export function makeEdgeId(kind: EdgeKind, parts: { source: string; target: string; label?: string }): string {
   const { source, target, label } = parts;
-  return label !== undefined
-    ? `${source}${EDGE_SEPARATOR}${kind}${EDGE_SEPARATOR}${label}${EDGE_SEPARATOR}${target}`
+  return LABEL_BEARING.has(kind)
+    ? `${source}${EDGE_SEPARATOR}${kind}${EDGE_SEPARATOR}${label ?? ''}${EDGE_SEPARATOR}${target}`
     : `${source}${EDGE_SEPARATOR}${kind}${EDGE_SEPARATOR}${target}`;
 }
 
@@ -64,6 +76,7 @@ export function parseEdgeId(
   const segs = id.split(EDGE_SEPARATOR);
   if (segs.length < 3) return null;
   const kind = segs[1] as EdgeKind;
+  if (!KNOWN_EDGE_KINDS.has(kind)) return null;
   if (LABEL_BEARING.has(kind)) {
     if (segs.length !== 4) return null;
     return { kind, source: segs[0]!, label: segs[2], target: segs[3]! };

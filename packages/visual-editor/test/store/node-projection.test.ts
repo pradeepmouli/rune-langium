@@ -41,6 +41,21 @@ describe('node-projection edge-id builders (V3)', () => {
   it('returns null for a non-edge string', () => {
     expect(parseEdgeId('ns::A')).toBeNull();
   });
+  it('makeEdgeId is kind-driven: a stray label on a label-less kind is ignored', () => {
+    // extends is label-less → label ignored → 3-segment, round-trips
+    const id = makeEdgeId('extends', { source: 'ns::A', target: 'ns::B', label: 'ignored' } as never);
+    expect(id).toBe('ns::A--extends--ns::B');
+    expect(parseEdgeId(id)).toEqual({ kind: 'extends', source: 'ns::A', target: 'ns::B' });
+  });
+  it('parseEdgeId rejects an unknown kind segment', () => {
+    expect(parseEdgeId('ns::A--bogus--ns::B')).toBeNull();
+  });
+  it('parseEdgeId rejects a label-less kind with an extra (4th) segment', () => {
+    expect(parseEdgeId('ns::A--extends--x--ns::B')).toBeNull();
+  });
+  it('parseEdgeId rejects a label-bearing kind missing its label (3 segments)', () => {
+    expect(parseEdgeId('ns::A--attribute-ref--ns::B')).toBeNull();
+  });
 });
 
 describe('node-projection metadata projection (V2)', () => {
