@@ -10,6 +10,7 @@ import {
   withGraphMetadata
 } from '../../src/store/node-projection.js';
 import { getMemberArray, ensureMemberArray, forEachMember } from '../../src/store/node-projection.js';
+import { toNodesById, nodesFromMap, toEdgesById, edgesFromMap } from '../../src/store/node-projection.js';
 
 describe('node-projection id builders (V1)', () => {
   it('makeNodeId joins namespace and name with the :: separator', () => {
@@ -96,5 +97,20 @@ describe('node-projection member accessors (V4)', () => {
     const seen: unknown[] = [];
     forEachMember({ $type: 'Data', attributes: ['a', 'b'] } as never, (m: unknown) => seen.push(m));
     expect(seen).toEqual(['a', 'b']);
+  });
+});
+
+describe('node-projection array↔Map derivation (V5/V6)', () => {
+  const nodes = [{ id: 'a' }, { id: 'b' }] as never[];
+  const edges = [{ id: 'e1' }] as never[];
+  it('toNodesById / nodesFromMap round-trip preserving order', () => {
+    const map = toNodesById(nodes);
+    expect(map.get('a')).toBe(nodes[0]);
+    expect(nodesFromMap(map)).toEqual(nodes);
+  });
+  it('toEdgesById / edgesFromMap round-trip', () => {
+    const map = toEdgesById(edges);
+    expect(map.get('e1')).toBe(edges[0]);
+    expect(edgesFromMap(map)).toEqual(edges);
   });
 });

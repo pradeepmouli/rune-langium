@@ -14,7 +14,7 @@
  * separate follow-up that only changes the two functions below.
  */
 
-import type { EdgeKind, AnyGraphNode } from '../types.js';
+import type { EdgeKind, AnyGraphNode, TypeGraphNode, TypeGraphEdge } from '../types.js';
 
 // Re-export so callers can import EdgeKind from a single surface.
 export type { EdgeKind };
@@ -162,4 +162,28 @@ export function ensureMemberArray(node: { $type?: string } & Record<string, unkn
 export function forEachMember(node: { $type?: string } & Record<string, unknown>, fn: (member: unknown, index: number) => void): void {
   const got = getMemberArray(node);
   if (got) got.members.forEach(fn);
+}
+
+// ---------------------------------------------------------------------------
+// V5/V6 array↔Map derivation primitives
+// ---------------------------------------------------------------------------
+
+/** Build the id→node Map (insertion order preserved). */
+export function toNodesById(nodes: readonly TypeGraphNode[]): Map<string, TypeGraphNode> {
+  return new Map(nodes.map((n) => [n.id, n]));
+}
+
+/** Derive the node array from the Map (= [...map.values()]). */
+export function nodesFromMap(map: ReadonlyMap<string, TypeGraphNode>): TypeGraphNode[] {
+  return [...map.values()];
+}
+
+/** Build the id→edge Map. */
+export function toEdgesById(edges: readonly TypeGraphEdge[]): Map<string, TypeGraphEdge> {
+  return new Map(edges.map((e) => [e.id, e]));
+}
+
+/** Derive the edge array from the Map. */
+export function edgesFromMap(map: ReadonlyMap<string, TypeGraphEdge>): TypeGraphEdge[] {
+  return [...map.values()];
 }

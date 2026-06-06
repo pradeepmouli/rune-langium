@@ -58,7 +58,7 @@ import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from 
 import type { TrackedState } from './history.js';
 import type { Patches } from 'mutative';
 import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata } from './node-projection.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -388,7 +388,7 @@ function getEdgeKind(edge: TypeGraphEdge): EdgeKind | undefined {
 }
 
 function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
-  return new Map(nodes.map((node) => [node.id, node]));
+  return toNodesById(nodes);
 }
 
 /**

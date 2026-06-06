@@ -24,6 +24,7 @@
 
 import { create, apply, type Patches, type Patch } from 'mutative';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
+import { toNodesById, toEdgesById, nodesFromMap, edgesFromMap } from './node-projection.js';
 
 /** Id-keyed projection of the editable graph — the unit Mutative patches address. */
 export interface GraphDraft {
@@ -35,14 +36,11 @@ export interface GraphDraft {
 export type GraphEditRecipe = (draft: GraphDraft) => void;
 
 export function projectGraph(nodes: readonly TypeGraphNode[], edges: readonly TypeGraphEdge[]): GraphDraft {
-  return {
-    nodes: new Map(nodes.map((n) => [n.id, n])),
-    edges: new Map(edges.map((e) => [e.id, e]))
-  };
+  return { nodes: toNodesById(nodes), edges: toEdgesById(edges) };
 }
 
 export function flattenGraph(draft: GraphDraft): { nodes: TypeGraphNode[]; edges: TypeGraphEdge[] } {
-  return { nodes: [...draft.nodes.values()], edges: [...draft.edges.values()] };
+  return { nodes: nodesFromMap(draft.nodes), edges: edgesFromMap(draft.edges) };
 }
 
 /**
