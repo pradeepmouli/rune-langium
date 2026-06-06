@@ -32,7 +32,7 @@ import type {
   RosettaRecordType,
   RosettaTypeAlias
 } from '@rune-langium/core';
-import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode, GraphNode, GraphFilters, TypeKind } from '../types.js';
+import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
 import { makeNodeId, makeEdgeId, withGraphMetadata } from '../store/node-projection.js';
