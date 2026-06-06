@@ -1,9 +1,55 @@
 # Node Representation Unification — Maps-as-SoT + a single node-projection module
 
 - **Date:** 2026-06-05
-- **Status:** Design (approved approach — "B delivered via C"; not yet implemented)
+- **Status:** Design. **Metamodel agreed (§0, 2026-06-06):** the grammar/AST is the metamodel; the node surface is *generated* by a new `domain` target on `langium-zod`; the editor refactor (§1–§8) consumes it. Generator-target mechanics pending a langium-zod architecture review. Not yet implemented.
 - **Scope:** Two workstreams. **(A) Editor unification (§1–§8):** `packages/visual-editor` (MIT) — Maps-as-SoT + a single `node-projection.ts`. **(B) Cross-layer DRY (§9):** `@rune-langium/core` (MIT) gains shared wire-AST / namespace / qualified-name helpers consumed by the FSL `apps/studio` + `functions/` parse pipeline. The **node-id `::`→`.` unification (§9.8) spans both** — it does touch `apps/studio` source (a delimiter swap), correcting the "no studio changes" assumption that workstream (A) alone would imply.
 - **Primary mandate:** DRY across the many representations / serializations / projections of a "node." Per repo `CLAUDE.md`, "DRY is the #1 core correctness rule."
+
+---
+
+## 0. Metamodel (agreed foundation)
+
+> **Agreed 2026-06-06.** This section is the foundation the rest of the document projects from. §1–§8 (the editor Maps-as-SoT refactor) and §9 (cross-layer DRY) are **downstream** of it — they *consume* the metamodel and its generated surface rather than re-deriving node shape. Where §3.2's hand-written `node-projection.ts` helpers overlap the generated surface, the generated artifact wins and `node-projection.ts` shrinks to a re-export + the few things codegen can't own (see §0.4).
+
+### 0.1 The metamodel **is** the Langium grammar / AST
+
+The canonical model of a Rune entity is the **Langium grammar** (`packages/core/src/grammar/rune-dsl.langium`) and its generated `ast.ts` — itself Rune's reimplementation of the **Rosetta metamodel**. There is **no hand-written parallel domain model**: a second model would duplicate what the grammar already single-sources and *generates*, and the AST↔domain mapping would re-introduce the very drift this document fights (it would be V1–V15 relocated into a sync layer). The grammar is the SSoT for *structure*; the only thing we add is a **single, generated owner** of how to *navigate and edit* that structure. (This also subsumes the "align to Rosetta metamodel" option — the grammar already is that alignment.)
+
+### 0.2 The surface is GENERATED — extend `langium-zod` with a `domain` target
+
+The node "surface" (the typed, quirk-free view consumers use) is **generated** from the grammar by adding a `domain` target to **`langium-zod`** (`/Users/pmouli/GitHub.nosync/active/ts/langium-zod`, the user's generic Langium→Zod generator). The generator stays **generic** by splitting concerns:
+
+- **Mechanical layer — auto-detected from the grammar, zero Rune knowledge:** strip `$`-internals (existing `--strip-internals`); **single cross-reference → flattened `$refText` string** (generalizes the `typeCall.type.$refText → typeRef` quirk — any single-valued cross-ref property gets a string surface, because the grammar marks cross-refs).
+- **Semantic layer — a Rune projection config (`domain-surfaces.json`, like `form-surfaces.json`):** everything the grammar can't express — `conditions ⊕ postConditions → conditions`, `Choice.attributes → options`, renames/aliases. **All Rune-specificity lives here, not in the generator.**
+
+**Asymmetric surface (resolves the merge write-back problem).** Simple flattenings (cross-ref→string, rename) are bidirectional. **Aggregations** (n arrays → 1 list) are read-trivial but write-ambiguous (an edit to a merged `conditions` list can't be auto-routed back to `conditions` vs `postConditions`). So the generated surface is asymmetric:
+
+- a **read projection** (`toDomain(ast)`) that merges/flattens freely — for display, inspector, fingerprinting;
+- **field-precise write accessors** that mutate the **source** arrays in place (`addCondition` vs `addPostCondition` stay distinct) — no unmerge, no bidirectional transform, no live proxy.
+
+The write accessors **are** the `mutateGraph` recipe surface (§3.3): they mutate the Mutative draft of the AST node, and Mutative captures the id-rooted patch. So the generator's write-side output and the editor's edit/patch model are the same thing — they compose natively.
+
+### 0.3 The five facets (resolved)
+
+| Facet | Resolution |
+|---|---|
+| **Source of truth** | Langium grammar / generated `ast.ts` (= Rune's Rosetta metamodel). No parallel model. |
+| **Surface** | Generated per-kind types + read projection + field-precise write accessors (langium-zod `domain` target + Rune `domain-surfaces.json`). |
+| **Entities (kinds)** | Closed set: Data, Choice, Enumeration, Function, Annotation, RecordType, TypeAlias, basicType. |
+| **Members** | Per-kind containers, owned by the generated accessors (closes V4). |
+| **Identity** | Top-level: dot qualified name `${namespace}.${name}` (§9.8). Members: parent + local name (no global id). |
+| **Relationships (edges)** | **Derived**, not stored — projected from member type-refs + `superType` by the forward adapter; edge-id grammar owned centrally (§2-V3). |
+| **Model vs. view** | "Model" = the AST fields `serializeModel` round-trips; "view" = `GraphMetadata`. The split is the round-trip set, not an opinion (closes V2). |
+| **Edit composition** | Generated write accessors are the `mutateGraph` recipe surface — mutate the Mutative draft in place; patches captured id-rooted. No proxy, no unmerge. |
+
+### 0.4 How the rest of the spec consumes the generated surface
+
+- **`node-projection.ts` (§3.2)** becomes a thin **re-export** of the generated accessors plus the handful of things codegen does not own: the **edge-id grammar** (V3, `makeEdgeId`/`parseEdgeId`), the **array↔Map derivation** (V5/V6), and the **`GRAPH_METADATA_KEYS`/strip** (V2) (the model/view split is editor policy layered on top of the AST model). `makeNodeId` is the generated `qualifiedExportPath` (§9.8). The member-container map (V4) and the type-ref/cardinality accessors come from the generated artifact.
+- **`mutateGraph` recipes (§3.3, all 34 actions)** call generated setters — "migrate action → recipe" becomes "action calls `setMemberTypeRef(draft, …)`."
+- **The read projection** feeds the inspector/structure surfaces and `computeContentFingerprint` (P4) — one generated `toDomain` instead of ad-hoc field reads.
+- **Regeneration** joins the existing `generate:schemas` (R7) pipeline; the domain artifact is a generated file, never hand-edited (like `zod-schemas.ts`).
+
+> **Pending:** the concrete `domain`-target design (how it plugs into langium-zod's emitter/IR, whether the projection schema needs extension for merges, the generated artifact's exact API) is being grounded in a langium-zod architecture review and will be filled in here. The metamodel above is agreed and stable regardless of those mechanics.
 
 ---
 
