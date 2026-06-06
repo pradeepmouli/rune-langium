@@ -13,6 +13,7 @@ import { createContext, useContext } from 'react';
 import { Position } from '@xyflow/react';
 import type { NavigateToNodeCallback } from '../../types.js';
 import type { LayoutOptions } from '../../types.js';
+import { nameFromNodeId } from '../../store/node-projection.js';
 
 export type GraphLayoutDirection = NonNullable<LayoutOptions['direction']>;
 
@@ -49,16 +50,17 @@ export function getHandlePositions(direction: GraphLayoutDirection): {
 
 /**
  * Resolve a type name to a node ID from the set of all node IDs.
- * Node IDs follow the pattern `namespace::name`, so we match on the `::name` suffix.
+ * Node IDs follow the pattern `namespace.name` (dot-form). Exact match first;
+ * then exact last-segment match via nameFromNodeId to avoid namespace-segment
+ * collisions (e.g. "a.Foo.Bar" must NOT match typeName="Foo").
  * Returns the first matching node ID, or undefined if not navigable.
  */
 export function resolveTypeNodeId(typeName: string, allNodeIds: Set<string>): string | undefined {
-  // Exact match first (already fully qualified, e.g., "cdm.base.math::Quantity")
+  // Exact match first (already fully qualified, e.g., "cdm.base.math.Quantity")
   if (allNodeIds.has(typeName)) return typeName;
-  // Suffix match on ::name
-  const suffix = `::${typeName}`;
+  // Exact last-segment match — avoids false positives from namespace segments
   for (const id of allNodeIds) {
-    if (id.endsWith(suffix)) return id;
+    if (nameFromNodeId(id) === typeName) return id;
   }
   return undefined;
 }

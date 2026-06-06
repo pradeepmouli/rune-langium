@@ -195,7 +195,7 @@ describe('AttributeRow', () => {
           onRemove={onRemove}
           onReorder={onReorder}
           onNavigateToNode={onNavigateToNode}
-          allNodeIds={['com.rosetta.model::date']}
+          allNodeIds={['com.rosetta.model.date']}
         />
       </FormWrapper>
     );
@@ -204,6 +204,6 @@ describe('AttributeRow', () => {
     expect(typeLink).not.toBeNull();
     fireEvent.click(typeLink!);
 
-    expect(onNavigateToNode).toHaveBeenCalledWith('com.rosetta.model::date');
+    expect(onNavigateToNode).toHaveBeenCalledWith('com.rosetta.model.date');
   });
 });

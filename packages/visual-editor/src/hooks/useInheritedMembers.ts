@@ -14,6 +14,7 @@
 import { useMemo } from 'react';
 import type { AnyGraphNode, TypeGraphNode } from '../types.js';
 import { getRefText, resolveNodeKind, getTypeRefText, formatCardinality } from '../adapters/model-helpers.js';
+import { makeNodeId } from '../store/node-projection.js';
 
 // Narrow shapes for type-safe access to union members
 interface RefShape {
@@ -98,7 +99,7 @@ export function useInheritedMembers(
 
       const parentNode = allNodes.find((n) => {
         const pd = n.data as AnyGraphNode;
-        return pd.name === currentParentName || `${pd.namespace}::${pd.name}` === currentParentName;
+        return pd.name === currentParentName || makeNodeId(pd.namespace as string, pd.name as string) === currentParentName;
       });
 
       if (!parentNode) break;
