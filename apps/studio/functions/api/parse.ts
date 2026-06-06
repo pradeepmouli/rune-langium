@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -441,12 +441,7 @@ async function hydrateUserWorkspace(
     // outer stringifyWithBigInt also handles them, but doing it inside
     // the langium serializer is more efficient (avoids one re-scan of
     // the embedded model JSON).
-    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model, {
-      refText: true,
-      textRegions: true,
-      replacer: (_key, value, defaultReplacer) =>
-        typeof value === 'bigint' ? Number(value) : defaultReplacer(_key, value)
-    });
+    const serializedModel = serializeRuneModel(RuneDsl.serializer.JsonSerializer, model);
     const rawName = model.name as string;
     const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
 
@@ -565,16 +560,11 @@ function mergeCuratedDocIntoDeferredExports(
 }
 
 /**
- * `JSON.stringify` throws on BigInt by default. The Langium parser produces
- * BigInt values for some numeric literals in the Rune grammar (e.g. very
- * large integers parsed as bigint). Those leak into `documentsForHydration`
- * via `serializedModel` and `exports`, so we need a replacer that converts
- * them to strings. Browser-side deserialization treats them as strings —
- * acceptable because nothing on the client currently depends on numeric
- * comparison of these values.
+ * Envelope uses the canonical bigint policy (runeBigIntReplacer -> Number) so wire bytes
+ * agree across all serialize paths (V8).
  */
 function stringifyWithBigInt(value: unknown): string {
-  return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v));
+  return JSON.stringify(value, runeBigIntReplacer);
 }
 
 /**
