@@ -59,7 +59,15 @@ vi.mock('@rune-langium/core', () => ({
         }
       }
     }
-  })
+  }),
+  hydrateModelDocument: (_services: unknown, _uri: unknown, json: string, { register }: { register: string }) => {
+    const model = deserializeMock(json);
+    const document = fromModelMock(model, _uri);
+    if (register === 'always') {
+      addDocumentMock(document);
+    }
+    return { model, document };
+  }
 }));
 
 vi.mock('langium', () => ({

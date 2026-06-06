@@ -52,6 +52,8 @@ export {
 } from './serializer/rosetta-serializer.js';
 export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
 export { preserveCstText } from './serializer/preserve-cst-text.js';
+export { deserializeRuneModel, hydrateModelDocument } from './serializer/hydrate-model-document.js';
+export type { HydrateServices, HydrateOptions } from './serializer/hydrate-model-document.js';
 
 // Utility functions
 export {

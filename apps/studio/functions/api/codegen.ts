@@ -189,15 +189,13 @@ async function loadAllDocuments(
   curatedBundles: ReadonlyArray<{ id: string; version: string }>,
   curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined
 ): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response }> {
-  const [{ createRuneDslServices }, { EmptyFileSystem, URI }] = await Promise.all([
+  const [{ createRuneDslServices, hydrateModelDocument }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
   ]);
   const { RuneDsl } = createRuneDslServices(EmptyFileSystem);
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
   const builder = RuneDsl.shared.workspace.DocumentBuilder;
-  const langiumDocuments = RuneDsl.shared.workspace.LangiumDocuments;
-  const serializer = RuneDsl.serializer.JsonSerializer;
 
   const docs: import('langium').LangiumDocument[] = [];
 
@@ -215,23 +213,20 @@ async function loadAllDocuments(
     try {
       const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
       for (const cd of curatedDocs) {
-        const model = serializer.deserialize(cd.serializedModel) as import('@rune-langium/core').RosettaModel;
         // `cd.uri` already includes the bundle-id prefix (curated-fetch's
         // toDocuments builds `${bundleId}/${doc.path}`). Copilot review
         // on PR #168 caught a previous double-prefix bug where we wrote
         // `curated:///${bundle.id}/${cd.uri}`. Use cd.uri as-is.
-        const uri = URI.parse(`curated:///${cd.uri}`);
         // Codex review on PR #169: register with the document store via
         // `factory.fromModel` so `RuneDslLinker.loadAstNode` can resolve
-        // cross-references through `.ref`. The previous synthetic doc
-        // literal skipped this and would have caused `.ref` resolution
-        // failures for curated models with typed cross-namespace fields.
-        const doc = factory.fromModel(model, uri);
-        const existing = langiumDocuments.getDocument(uri);
-        docs.push(existing ?? doc);
-        if (!existing) {
-          langiumDocuments.addDocument(doc);
-        }
+        // cross-references through `.ref`.
+        const { document } = hydrateModelDocument(
+          { RuneDsl, shared: RuneDsl.shared },
+          URI.parse(`curated:///${cd.uri}`),
+          cd.serializedModel,
+          { register: 'idempotent' }
+        );
+        docs.push(document);
       }
     } catch (err) {
       if (err instanceof CuratedBundleUnavailableError) {

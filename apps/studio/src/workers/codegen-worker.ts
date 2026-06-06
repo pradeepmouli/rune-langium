@@ -24,7 +24,7 @@
 
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
-import { createRuneDslServices } from '@rune-langium/core';
+import { createRuneDslServices, hydrateModelDocument } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen';
 import type { Target } from '@rune-langium/codegen';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
@@ -75,7 +75,6 @@ type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecu
 const { RuneDsl } = createRuneDslServices();
 const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
 const builder = RuneDsl.shared.workspace.DocumentBuilder;
-const langiumDocuments = RuneDsl.shared.workspace.LangiumDocuments;
 
 let currentCodegenFiles: FileEntry[] = [];
 let currentPreviewFiles: FileEntry[] = [];
@@ -234,19 +233,13 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
   const curatedDocuments: LangiumDocument[] = [];
   for (const entry of curatedEntries) {
     try {
-      const model = RuneDsl.serializer.JsonSerializer.deserialize(
-        entry.serializedModelJson!
-      ) as import('@rune-langium/core').RosettaModel;
-      const uri = URI.parse(entry.uri);
-      const doc = factory.fromModel(model, uri);
-      // Idempotent: re-running preview on the same workspace would
-      // double-register otherwise. `getDocument` returns the existing
-      // doc if any; otherwise add the new one.
-      const existing = langiumDocuments.getDocument(uri);
-      curatedDocuments.push(existing ?? doc);
-      if (!existing) {
-        langiumDocuments.addDocument(doc);
-      }
+      const { document } = hydrateModelDocument(
+        { RuneDsl, shared: RuneDsl.shared },
+        URI.parse(entry.uri),
+        entry.serializedModelJson!,
+        { register: 'idempotent' }
+      );
+      curatedDocuments.push(document);
     } catch (err) {
       console.warn(`[codegen-worker] Failed to deserialize curated AST for ${entry.uri}; excluded from preview.`, err);
     }

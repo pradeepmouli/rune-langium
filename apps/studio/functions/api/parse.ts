@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -583,7 +583,6 @@ async function populateDependencyGraph(
       const { RuneDsl, shared } = createRuneDslServices(EmptyFileSystem);
       context = { shared, RuneDsl, userDocs: [] };
     }
-    const factory = context.shared.workspace.LangiumDocumentFactory;
     const builder = context.shared.workspace.DocumentBuilder;
 
     // Hydrate curated docs into LangiumDocuments. User docs are already in
@@ -601,8 +600,12 @@ async function populateDependencyGraph(
       const meta = readSerializedModelMeta(entry.serializedModel);
       if (!meta || !closureNamespaces.has(meta.namespace)) continue;
       try {
-        const model = context.RuneDsl.serializer.JsonSerializer.deserialize(entry.serializedModel) as RosettaModel;
-        const doc = factory.fromModel(model, URI.parse(entry.uri));
+        const { document: doc } = hydrateModelDocument(
+          { RuneDsl: context.RuneDsl, shared: context.shared },
+          URI.parse(entry.uri),
+          entry.serializedModel,
+          { register: 'none' }
+        );
         curatedDocs.push(doc);
       } catch {
         // Skip individual malformed entries — the rest of the workspace

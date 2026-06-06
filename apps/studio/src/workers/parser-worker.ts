@@ -14,6 +14,7 @@ import {
   RuneDslIndexManager,
   namespaceFromSource,
   preserveCstText,
+  hydrateModelDocument,
   type DeferredModelProvider,
   type RosettaModel
 } from '@rune-langium/core';
@@ -373,11 +374,14 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
     // Corpus documents are stored as raw JSON until first link request.
     // Materialize the target document now if it hasn't been deserialized yet.
     if (deferredModelJson.has(targetUri.toString())) {
-      const json = deferredModelJson.get(targetUri.toString())!;
-      const model = serializer.deserialize<RosettaModel>(json);
+      const { model, document } = hydrateModelDocument(
+        { RuneDsl, shared: RuneDsl.shared },
+        targetUri,
+        deferredModelJson.get(targetUri.toString())!,
+        { register: 'always' }
+      );
       newModelsAccumulator.push(model);
-      doc = factory.fromModel(model, targetUri);
-      activeLangiumDocs.addDocument(doc);
+      doc = document;
       deferredModelJson.delete(targetUri.toString());
     } else if (activeLangiumDocs.hasDocument(targetUri)) {
       doc = activeLangiumDocs.getDocument(targetUri);
