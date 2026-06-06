@@ -58,7 +58,7 @@ import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from 
 import type { TrackedState } from './history.js';
 import type { Patches } from 'mutative';
 import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
-import { makeNodeId, makeEdgeId } from './node-projection.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -417,16 +417,18 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
         id: nodeId,
         type: nodeType,
         position: { x: 0, y: 0 },
-        data: {
-          $type: exp.type,
-          name: exp.name,
-          namespace: entry.namespace,
-          position: { x: 0, y: 0 },
-          errors: [],
-          isReadOnly: true,
-          hasExternalRefs: false,
-          deferred: true
-        } as unknown as AnyGraphNode
+        // `deferred: true` is passed as extra metadata (withGraphMetadata merges whatever is given).
+        data: withGraphMetadata(
+          { $type: exp.type, name: exp.name },
+          {
+            namespace: entry.namespace,
+            position: { x: 0, y: 0 },
+            errors: [],
+            isReadOnly: true,
+            hasExternalRefs: false,
+            deferred: true
+          }
+        )
       });
     }
   }

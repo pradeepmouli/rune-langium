@@ -14,7 +14,7 @@
  * separate follow-up that only changes the two functions below.
  */
 
-import type { EdgeKind } from '../types.js';
+import type { EdgeKind, AnyGraphNode } from '../types.js';
 
 // Re-export so callers can import EdgeKind from a single surface.
 export type { EdgeKind };
@@ -70,4 +70,60 @@ export function parseEdgeId(
   }
   if (segs.length !== 3) return null;
   return { kind, source: segs[0]!, target: segs[2]! };
+}
+
+// ---------------------------------------------------------------------------
+// V2 metadata field set + AST projection
+// ---------------------------------------------------------------------------
+
+/**
+ * The GraphMetadata keys stripped when extracting the AST model. Mirrors the old
+ * `GRAPH_META_KEYS` exactly — `deferred` is intentionally NOT included (deferred
+ * placeholder nodes are stripped via their absence from the real node set, not
+ * via this key set).
+ */
+export const GRAPH_METADATA_KEYS: ReadonlySet<string> = new Set([
+  'namespace', 'position', 'errors', 'isReadOnly', 'hasExternalRefs', 'comments'
+]);
+
+/**
+ * Fields excluded from the content fingerprint (positional / derived view state).
+ * Mirrors the inline exclusion in `computeContentFingerprint` exactly —
+ * changing this set would cause every model to re-serialize on upgrade.
+ */
+const FINGERPRINT_EXCLUDED: ReadonlySet<string> = new Set(['position', 'errors', 'hasExternalRefs']);
+
+/** Strip GraphMetadata view fields, leaving only AST-relevant fields. */
+export function stripGraphMetadata(data: AnyGraphNode): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!GRAPH_METADATA_KEYS.has(key)) result[key] = value;
+  }
+  return result;
+}
+
+/**
+ * The "what counts as content" projection for fingerprinting — excludes
+ * `position`, `errors`, and `hasExternalRefs` so positional-only mutations
+ * (drag, layout, fit-view) don't trigger the serialization pipeline.
+ */
+export function astRelevantProjection(data: AnyGraphNode): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!FINGERPRINT_EXCLUDED.has(key)) result[key] = value;
+  }
+  return result;
+}
+
+/**
+ * Inverse of `stripGraphMetadata`: merge AST data with GraphMetadata fields
+ * into a graph-node data object. The caller supplies exactly the metadata
+ * fields the site currently sets (e.g. `namespace`, `position`, `errors`,
+ * `isReadOnly`, `hasExternalRefs`; optionally `deferred`).
+ */
+export function withGraphMetadata(
+  astData: Record<string, unknown>,
+  meta: Record<string, unknown>
+): AnyGraphNode {
+  return { ...astData, ...meta } as unknown as AnyGraphNode;
 }

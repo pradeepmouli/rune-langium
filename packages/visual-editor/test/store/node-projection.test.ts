@@ -3,6 +3,12 @@
 import { describe, it, expect } from 'vitest';
 import { makeNodeId, nameFromNodeId, splitNodeId } from '../../src/store/node-projection.js';
 import { makeEdgeId, parseEdgeId } from '../../src/store/node-projection.js';
+import {
+  GRAPH_METADATA_KEYS,
+  stripGraphMetadata,
+  astRelevantProjection,
+  withGraphMetadata
+} from '../../src/store/node-projection.js';
 
 describe('node-projection id builders (V1)', () => {
   it('makeNodeId joins namespace and name with the :: separator', () => {
@@ -31,5 +37,38 @@ describe('node-projection edge-id builders (V3)', () => {
   });
   it('returns null for a non-edge string', () => {
     expect(parseEdgeId('ns::A')).toBeNull();
+  });
+});
+
+describe('node-projection metadata projection (V2)', () => {
+  const data = {
+    $type: 'Data', name: 'Foo', attributes: [],
+    namespace: 'ns', position: { x: 1, y: 2 }, errors: [], isReadOnly: false, hasExternalRefs: false, comments: 'c'
+  } as Record<string, unknown>;
+
+  it('GRAPH_METADATA_KEYS is the strip set (no `deferred`)', () => {
+    expect([...GRAPH_METADATA_KEYS].sort()).toEqual(
+      ['comments', 'errors', 'hasExternalRefs', 'isReadOnly', 'namespace', 'position'].sort()
+    );
+    expect(GRAPH_METADATA_KEYS.has('deferred')).toBe(false);
+  });
+  it('stripGraphMetadata removes only metadata keys, keeps AST fields', () => {
+    const out = stripGraphMetadata(data as never);
+    expect(out).toEqual({ $type: 'Data', name: 'Foo', attributes: [] });
+  });
+  it('astRelevantProjection excludes position/errors/hasExternalRefs but keeps namespace/comments', () => {
+    const out = astRelevantProjection(data as never) as Record<string, unknown>;
+    expect('position' in out).toBe(false);
+    expect('errors' in out).toBe(false);
+    expect('hasExternalRefs' in out).toBe(false);
+    expect(out.namespace).toBe('ns');
+    expect(out.comments).toBe('c');
+  });
+  it('withGraphMetadata merges AST data + metadata', () => {
+    const node = withGraphMetadata({ $type: 'Data', name: 'Foo' } as never, {
+      namespace: 'ns', position: { x: 0, y: 0 }, errors: [], hasExternalRefs: false
+    });
+    expect((node as Record<string, unknown>).name).toBe('Foo');
+    expect((node as Record<string, unknown>).namespace).toBe('ns');
   });
 });

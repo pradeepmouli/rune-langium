@@ -35,7 +35,7 @@ import type {
 import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode, GraphNode, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
-import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -81,15 +81,15 @@ function buildGraphNode<T extends { $type: string; name: string }>(
 ): TypeGraphNode {
   const nodeType = resolveNodeKind(element);
   const astData = stripAdditionalAstFields(element);
-  const data = {
-    ...astData,
-    // GraphMetadata fields:
+  // Merge AST fields + GraphMetadata via the canonical helper.
+  // Note: `comments` is intentionally absent here (not set at read time).
+  const data = withGraphMetadata(astData as Record<string, unknown>, {
     namespace,
     position: { x: 0, y: 0 },
     errors: [],
     isReadOnly,
     hasExternalRefs: false
-  } as unknown as AnyGraphNode;
+  });
 
   return {
     id: nodeId,
