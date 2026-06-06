@@ -16,7 +16,7 @@
 export function preserveCstText(model: any): void {
   for (const elem of model?.elements ?? []) {
     if (elem.$type === 'RosettaFunction') {
-      for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
+      for (const arr of [elem.shortcuts, elem.operations, elem.postConditions]) {
         for (const part of arr ?? []) {
           if (part?.$cstNode?.text) {
             part.$cstText = part.$cstNode.text;

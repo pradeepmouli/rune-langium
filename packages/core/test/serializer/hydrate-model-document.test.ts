@@ -8,9 +8,17 @@ function makeFakeServices() {
   const added: unknown[] = [];
   const existingByUri = new Map<string, unknown>();
   const fakeDoc = { uri: 'x' };
+  let deserializeCallCount = 0;
   const services = {
     RuneDsl: {
-      serializer: { JsonSerializer: { deserialize: (json: string) => ({ $type: 'RosettaModel', parsed: json }) } }
+      serializer: {
+        JsonSerializer: {
+          deserialize: (json: string) => {
+            deserializeCallCount++;
+            return { $type: 'RosettaModel', parsed: json };
+          }
+        }
+      }
     },
     shared: {
       workspace: {
@@ -22,7 +30,7 @@ function makeFakeServices() {
       }
     }
   };
-  return { services, added, existingByUri, fakeDoc };
+  return { services, added, existingByUri, fakeDoc, getDeserializeCallCount: () => deserializeCallCount };
 }
 
 describe('deserializeRuneModel', () => {
@@ -47,11 +55,18 @@ describe('hydrateModelDocument', () => {
     expect(added).toHaveLength(1);
   });
   it("register:'idempotent' returns the existing document and does not re-add", () => {
-    const { services, added, existingByUri } = makeFakeServices();
+    const { services, added, existingByUri, getDeserializeCallCount } = makeFakeServices();
     const uri = URI.parse('mem:///a');
-    existingByUri.set(uri.toString(), { uri: 'existing' });
-    const { document } = hydrateModelDocument(services as never, uri, '{}', { register: 'idempotent' });
-    expect(document).toEqual({ uri: 'existing' });
+    const existingModel = { $type: 'RosettaModel' as const };
+    const existingDoc = { uri: 'existing', parseResult: { value: existingModel } };
+    existingByUri.set(uri.toString(), existingDoc);
+    const { model, document } = hydrateModelDocument(services as never, uri, '{}', { register: 'idempotent' });
+    // document must be the pre-existing one
+    expect(document).toBe(existingDoc);
+    // model must come from the existing doc's parseResult, not from a fresh deserialize
+    expect(model).toBe(existingModel);
+    // deserialize must NOT have been called (no wasted work)
+    expect(getDeserializeCallCount()).toBe(0);
     expect(added).toHaveLength(0);
   });
   it("register:'idempotent' adds when no existing document", () => {

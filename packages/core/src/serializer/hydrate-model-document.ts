@@ -40,17 +40,18 @@ export function hydrateModelDocument(
   options: HydrateOptions
 ): { model: RosettaModel; document: LangiumDocument } {
   const resolvedUri = typeof uri === 'string' ? URI.parse(uri) : uri;
-  const model = deserializeRuneModel(services, json);
-  const factory = services.shared.workspace.LangiumDocumentFactory;
   const documents = services.shared.workspace.LangiumDocuments;
 
   if (options.register === 'idempotent') {
     const existing = documents.getDocument(resolvedUri);
     if (existing) {
-      return { model, document: existing };
+      // Return the consistent pair: the existing document's own model, no wasted deserialize.
+      return { model: existing.parseResult.value as RosettaModel, document: existing };
     }
   }
 
+  const model = deserializeRuneModel(services, json);
+  const factory = services.shared.workspace.LangiumDocumentFactory;
   const document = factory.fromModel(model, resolvedUri);
   if (options.register === 'always' || options.register === 'idempotent') {
     documents.addDocument(document);
