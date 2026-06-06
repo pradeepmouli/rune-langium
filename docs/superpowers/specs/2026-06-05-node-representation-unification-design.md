@@ -1,7 +1,7 @@
 # Node Representation Unification — Maps-as-SoT + a single node-projection module
 
 - **Date:** 2026-06-05
-- **Status:** Design. **Metamodel agreed (§0, 2026-06-06):** the grammar/AST is the metamodel; the node surface is *generated* by a new `domain` target on `langium-zod`; the editor refactor (§1–§8) consumes it. Generator-target mechanics pending a langium-zod architecture review. Not yet implemented.
+- **Status:** Design — **metamodel + generator-target agreed (§0, 2026-06-06)**, grounded in a langium-zod architecture review (§0.5). The grammar/AST is the metamodel; the node surface is *generated* by a new `domain` target on `langium-zod`; the editor refactor (§1–§8) consumes it. Ready for `writing-plans`. Not yet implemented.
 - **Scope:** Two workstreams. **(A) Editor unification (§1–§8):** `packages/visual-editor` (MIT) — Maps-as-SoT + a single `node-projection.ts`. **(B) Cross-layer DRY (§9):** `@rune-langium/core` (MIT) gains shared wire-AST / namespace / qualified-name helpers consumed by the FSL `apps/studio` + `functions/` parse pipeline. The **node-id `::`→`.` unification (§9.8) spans both** — it does touch `apps/studio` source (a delimiter swap), correcting the "no studio changes" assumption that workstream (A) alone would imply.
 - **Primary mandate:** DRY across the many representations / serializations / projections of a "node." Per repo `CLAUDE.md`, "DRY is the #1 core correctness rule."
 
@@ -49,7 +49,33 @@ The write accessors **are** the `mutateGraph` recipe surface (§3.3): they mutat
 - **The read projection** feeds the inspector/structure surfaces and `computeContentFingerprint` (P4) — one generated `toDomain` instead of ad-hoc field reads.
 - **Regeneration** joins the existing `generate:schemas` (R7) pipeline; the domain artifact is a generated file, never hand-edited (like `zod-schemas.ts`).
 
-> **Pending:** the concrete `domain`-target design (how it plugs into langium-zod's emitter/IR, whether the projection schema needs extension for merges, the generated artifact's exact API) is being grounded in a langium-zod architecture review and will be filled in here. The metamodel above is agreed and stable regardless of those mechanics.
+### 0.5 Generator-target design (extend `langium-zod`)
+
+Grounded in a read of `langium-zod` (`/Users/pmouli/GitHub.nosync/active/ts/langium-zod`). Integration is clean — **no blocking obstacles**, ~500–800 LOC added, no breaking change to the Zod emitter.
+
+**Reuse the IR pipeline.** langium-zod already builds a target-agnostic IR from the grammar: `collectAst(grammar)` → `extractTypeDescriptors` → `detectRecursiveTypes` → `applyProjectionToDescriptors` (`api.ts:138–173`). The IR is `TypeDescriptor[]` (object/union/enum) with per-property `{name, type-expr, optional, minItems}` and a **cross-ref signal** (`property.isCrossRef` / `zodType.kind === 'crossReference'` + `targetType`, `type-mapper.ts:179`). The `domain` emitter consumes the **same** descriptors — only the final emit differs.
+
+**Add a target abstraction.** The CLI is single-purpose today (`generate` → Zod only; no `--target`). Introduce **`--target zod|domain`** (repeatable), dispatching the shared IR to `generateZodCode` (existing) or a new `generateDomainCode(descriptors, recursiveTypes, options)` in `src/emitters/domain.ts`, reusing `topoSortObjectDescriptors`, recursion handling, humanization, import/header helpers. (Minimal fallback: an additive `--domain`/`--domain-out` flag on the existing command.)
+
+**Mechanical rules (generic, in the emitter):** a cross-ref property → domain `…Ref: string` (read = `prop.$refText`; write accessor sets it in place); `--strip-internals` already drops `$`-fields via the projection.
+
+**Semantic overlays need a projection-schema extension.** Today's `ProjectionConfig` (`projection.ts:4`) supports only `defaults.strip` + per-type `fields` whitelist — it **cannot** express merges or renames. Extend it and add an `applySemanticOverlays(descriptors, config)` pass after `applyProjectionToDescriptors`:
+```jsonc
+// rune domain-surfaces.json
+{ "types": {
+  "RosettaFunction": { "merges": [{ "from": ["conditions","postConditions"], "to": "conditions" }] },
+  "Choice":          { "renames": { "attributes": "options" } }
+}}
+```
+**Renames are bidirectional** (one source field → unambiguous write-back). **Merges are read-only on the merged name:** the generator emits a merged READ field (`conditions = conditions ⧺ postConditions`) but **write accessors target the SOURCE fields** (`addCondition`→`conditions[]`, `addPostCondition`→`postConditions[]`) — there is no merged setter. This is the asymmetric surface (§0.2) realized in codegen; **merges never need an unmerge.**
+
+**Generated artifact (committed, like `zod-schemas.ts`).** Emit `packages/visual-editor/src/generated/domain.ts`: per-kind domain interfaces (read shape) + `toDomain(ast)` read projection + field-precise write accessors (`setMemberTypeRef`, `addCondition`, …). Regenerated via an extended `generate:schemas` (or sibling `generate:domain`) script; never hand-edited.
+
+**Conformance (optional, reuse infra).** langium-zod's `--conformance` file-I/O (`conformance.ts`) can emit an AST↔domain round-trip guard (read `toDomain`, write-back preserves required fields + cross-ref flattening) — different logic, same plumbing.
+
+**Packaging / dev loop.** Single package (Option 1) — the extractor/type-mapper are shared, no second package warranted. rune-langium consumes a workspace-linked / `@dev` langium-zod build while the `domain` target is in flight; pins a release once shipped.
+
+> The metamodel (§0.1–§0.4) is agreed and stable; this subsection is the implementation contract for the generator that produces its surface.
 
 ---
 
