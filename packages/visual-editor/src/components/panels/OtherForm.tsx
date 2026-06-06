@@ -24,6 +24,8 @@ import type { AnyGraphNode, ValidationError, NavigateToNodeCallback, TypeKind } 
 
 export interface OtherFormProps {
   nodeData: AnyGraphNode | null;
+  /** Graph node id of the displayed type — enables the header "Reveal in graph" action. */
+  nodeId?: string | null;
   /** Callback to navigate to a type's graph node. */
   onNavigateToNode?: NavigateToNodeCallback;
   /** All loaded graph node IDs for resolving type name to node ID. */
@@ -76,7 +78,7 @@ function extractMembers(d: any): Array<{ name: string; typeName?: string; cardin
   }
 }
 
-export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: OtherFormProps) {
+export function OtherForm({ nodeData, nodeId, onNavigateToNode, allNodeIds, refOnly }: OtherFormProps) {
   if (!nodeData) return null;
 
   const d = nodeData as any;
@@ -94,11 +96,14 @@ export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: O
           namespace={d.namespace}
           name={d.name}
           className="-mx-4 -mt-4"
-          trailing={refOnly ? (
-            <Badge variant="outline" className="text-xs text-muted-foreground">
-              Reference Only
-            </Badge>
-          ) : undefined}
+          onReveal={onNavigateToNode && nodeId ? () => onNavigateToNode(nodeId) : undefined}
+          trailing={
+            refOnly ? (
+              <Badge variant="outline" className="text-xs text-muted-foreground">
+                Reference Only
+              </Badge>
+            ) : undefined
+          }
         />
 
         <Separator />
@@ -108,11 +113,7 @@ export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: O
 
         {/* Extends */}
         {parentName && (
-          <ExtendsField
-            parentName={parentName}
-            onNavigateToNode={onNavigateToNode}
-            allNodeIds={allNodeIds}
-          />
+          <ExtendsField parentName={parentName} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
         )}
 
         {/* Members */}
@@ -166,4 +167,3 @@ export function OtherForm({ nodeData, onNavigateToNode, allNodeIds, refOnly }: O
     </ScrollArea>
   );
 }
-

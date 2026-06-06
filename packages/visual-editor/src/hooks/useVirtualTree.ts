@@ -11,6 +11,9 @@ import type { FlatTreeRow } from '../utils/namespace-tree.js';
 
 const NAMESPACE_ROW_HEIGHT = 36;
 const SEGMENT_ROW_HEIGHT = 32;
+// Extra height a segment header reserves for the per-kind breakdown chip row.
+// Only segments with direct types (non-empty kindCounts) render the chips.
+const SEGMENT_KINDS_ROW_HEIGHT = 18;
 const TYPE_ROW_HEIGHT = 28;
 
 export function useVirtualTree(rows: FlatTreeRow[], scrollRef: RefObject<HTMLDivElement | null>) {
@@ -18,9 +21,12 @@ export function useVirtualTree(rows: FlatTreeRow[], scrollRef: RefObject<HTMLDiv
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => {
-      const kind = rows[index]?.kind;
-      if (kind === 'namespace') return NAMESPACE_ROW_HEIGHT;
-      if (kind === 'segment') return SEGMENT_ROW_HEIGHT;
+      const row = rows[index];
+      if (row?.kind === 'namespace') return NAMESPACE_ROW_HEIGHT;
+      if (row?.kind === 'segment') {
+        const hasKindChips = Object.keys(row.kindCounts ?? {}).length > 0;
+        return SEGMENT_ROW_HEIGHT + (hasKindChips ? SEGMENT_KINDS_ROW_HEIGHT : 0);
+      }
       return TYPE_ROW_HEIGHT;
     },
     overscan: 10

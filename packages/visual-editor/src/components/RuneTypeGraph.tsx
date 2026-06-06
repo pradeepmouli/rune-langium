@@ -49,6 +49,7 @@ import {
   ReactFlow,
   MiniMap,
   Controls,
+  Panel,
   Background,
   BackgroundVariant,
   useNodesState,
@@ -66,6 +67,7 @@ import { NavigationContext } from './nodes/NavigationContext.js';
 import { edgeTypes } from './edges/index.js';
 import { GraphContextMenu } from './GraphContextMenu.js';
 import type { ContextMenuState } from './GraphContextMenu.js';
+import { GraphLegend } from './GraphLegend.js';
 import { computeLayout, computeLayoutIncremental } from '../layout/dagre-layout.js';
 import { computeLayoutAsync, cancelAsyncLayout } from '../layout/layout-worker.js';
 import { findInheritanceGroups } from '../layout/grouped-layout.js';
@@ -97,11 +99,13 @@ const DEFAULT_CONFIG: {
   layout: LayoutOptions;
   showMinimap: boolean;
   showControls: boolean;
+  showLegend: boolean;
   readOnly: boolean;
 } = {
   layout: { direction: 'TB' as const, nodeSeparation: 50, rankSeparation: 100 },
   showMinimap: false,
   showControls: true,
+  showLegend: true,
   readOnly: true
 };
 
@@ -989,6 +993,11 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         >
           {mergedConfig.showControls && <Controls />}
           {mergedConfig.showMinimap && <MiniMap />}
+          {mergedConfig.showLegend && (
+            <Panel position="top-right">
+              <GraphLegend />
+            </Panel>
+          )}
           {/* 22px gap matches the reference `.rs-canvas-grid` (and the former
               fixed CSS overlay, now removed so there is a single grid that pans
               with the canvas rather than two phasing against each other). */}

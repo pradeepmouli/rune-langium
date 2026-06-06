@@ -241,7 +241,16 @@ function EnumForm({
       <EditorActionsProvider {...editorActionsValue}>
         <div data-slot="enum-form" className="flex flex-col gap-4 p-4">
           {/* Header: Namespace + Name + Badge */}
-          <TypeHeader kind="enum" namespace={d.namespace} control={form.control} onNameChange={debouncedName} placeholder="Enum name" nameAriaLabel="Enum type name" className={INSPECTOR_FORM_HEADER_CLASS} />
+          <TypeHeader
+            kind="enum"
+            namespace={d.namespace}
+            control={form.control}
+            onNameChange={debouncedName}
+            placeholder="Enum name"
+            nameAriaLabel="Enum type name"
+            className={INSPECTOR_FORM_HEADER_CLASS}
+            onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+          />
 
           {/* Parent Enum */}
           <FieldSet className="gap-1.5">

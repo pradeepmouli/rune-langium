@@ -15,11 +15,14 @@ import {
   buildSegmentedNamespaceTreeFromOptions,
   flattenSegmentedTree,
   filterSegmentedTree,
+  filterSegmentedTreeByKind,
+  countEntriesByKind,
   ancestorPathsForMatches,
   collectSegmentSubtreePaths,
-  type SegmentNode
+  type SegmentNode,
+  type FlatTreeRow
 } from '../../src/utils/namespace-tree.js';
-import type { TypeGraphNode, TypeOption } from '../../src/types.js';
+import type { TypeGraphNode, TypeKind, TypeOption } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers (mirror the pattern from namespace-tree.test.ts)
@@ -747,5 +750,82 @@ describe('collectSegmentSubtreePaths', () => {
   it('degrades to the requested path when it is not in the tree (no-op safety)', () => {
     const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
     expect(collectSegmentSubtreePaths(roots, 'does.not.exist')).toEqual(['does.not.exist']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Gap 2: per-kind counts + kind filter
+// ---------------------------------------------------------------------------
+
+describe('countEntriesByKind', () => {
+  it('counts per kind and omits zero kinds', () => {
+    const entries = [
+      { nodeId: 'a', name: 'A', kind: 'data' as TypeKind },
+      { nodeId: 'b', name: 'B', kind: 'data' as TypeKind },
+      { nodeId: 'c', name: 'C', kind: 'choice' as TypeKind }
+    ];
+    expect(countEntriesByKind(entries)).toEqual({ data: 2, choice: 1 });
+  });
+
+  it('returns an empty object for no entries', () => {
+    expect(countEntriesByKind([])).toEqual({});
+  });
+});
+
+describe('flattenSegmentedTree — kindCounts on segment rows', () => {
+  const NODES = [
+    makeNode('pkg', 'A', 'data'),
+    makeNode('pkg', 'B', 'data'),
+    makeNode('pkg', 'C', 'choice'),
+    makeNode('pkg', 'E', 'enum')
+  ];
+
+  it('emits per-kind breakdown for the segment’s own direct types', () => {
+    const roots = buildSegmentedNamespaceTree(NODES);
+    const expanded = new Set(['pkg']);
+    const rows = flattenSegmentedTree(roots, expanded);
+    const seg = rows.find(
+      (r): r is Extract<FlatTreeRow, { kind: 'segment' }> => r.kind === 'segment' && r.fullPath === 'pkg'
+    );
+    expect(seg?.kindCounts).toEqual({ data: 2, choice: 1, enum: 1 });
+  });
+
+  it('emits an empty kindCounts for a parent segment with no direct types', () => {
+    const roots = buildSegmentedNamespaceTree([makeNode('a.b', 'Leaf', 'data')]);
+    const rows = flattenSegmentedTree(roots, new Set(['a', 'a.b']));
+    const parent = rows.find(
+      (r): r is Extract<FlatTreeRow, { kind: 'segment' }> => r.kind === 'segment' && r.fullPath === 'a'
+    );
+    expect(parent?.kindCounts).toEqual({});
+  });
+});
+
+describe('filterSegmentedTreeByKind', () => {
+  const NODES = [
+    makeNode('pkg', 'A', 'data'),
+    makeNode('pkg', 'C', 'choice'),
+    makeNode('pkg', 'E', 'enum'),
+    makeNode('pkg', 'F', 'func')
+  ];
+
+  it('keeps only types whose kind is in the active set', () => {
+    const roots = buildSegmentedNamespaceTree(NODES);
+    const filtered = filterSegmentedTreeByKind(roots, new Set<TypeKind>(['data', 'enum']));
+    const pkg = findByPath(filtered, 'pkg');
+    expect(pkg?.types.map((t) => t.name).sort()).toEqual(['A', 'E']);
+    expect(pkg?.totalCount).toBe(2);
+  });
+
+  it('prunes a namespace whose every type is filtered out', () => {
+    const roots = buildSegmentedNamespaceTree(NODES);
+    const filtered = filterSegmentedTreeByKind(roots, new Set<TypeKind>(['record']));
+    expect(filtered).toEqual([]);
+  });
+
+  it('prunes now-empty parent segments while keeping matching descendants', () => {
+    const roots = buildSegmentedNamespaceTree([makeNode('a.keep', 'K', 'data'), makeNode('a.drop', 'D', 'choice')]);
+    const filtered = filterSegmentedTreeByKind(roots, new Set<TypeKind>(['data']));
+    expect(findByPath(filtered, 'a.keep')).toBeDefined();
+    expect(findByPath(filtered, 'a.drop')).toBeUndefined();
   });
 });

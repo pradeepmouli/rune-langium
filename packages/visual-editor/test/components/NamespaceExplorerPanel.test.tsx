@@ -379,3 +379,79 @@ describe('NamespaceExplorerPanel', () => {
     expect(setData.mock.calls.some((c: string[]) => c[0] === typeRefMimeForKind('Func'))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Gap 2: kind-count chips + kind filter pills
+// ---------------------------------------------------------------------------
+
+describe('NamespaceExplorerPanel — kind filter pills', () => {
+  const mixedNodes = [
+    makeNode('pkg', 'D1', 'Data'),
+    makeNode('pkg', 'D2', 'Data'),
+    makeNode('pkg', 'C1', 'Choice'),
+    makeNode('pkg', 'E1', 'RosettaEnumeration'),
+    makeNode('pkg', 'F1', 'RosettaFunction')
+  ];
+
+  function renderMixed() {
+    return render(
+      <NamespaceExplorerPanel
+        nodes={mixedNodes}
+        expandedNamespaces={new Set(['pkg'])}
+        hiddenNodeIds={new Set()}
+        onToggleNamespace={vi.fn()}
+        onExpandAll={vi.fn()}
+        onCollapseAll={vi.fn()}
+        onSelectNode={vi.fn()}
+      />
+    );
+  }
+
+  it('renders all four kind filter pills, pressed by default', () => {
+    renderMixed();
+    for (const kind of ['data', 'choice', 'enum', 'func']) {
+      const pill = screen.getByTestId(`kind-filter-${kind}`);
+      expect(pill.getAttribute('aria-pressed')).toBe('true');
+    }
+  });
+
+  it('renders the per-kind breakdown chips under the segment header', () => {
+    renderMixed();
+    const chips = screen.getByTestId('ns-seg-pkg-kinds');
+    expect(chips.textContent).toContain('2');
+    expect(chips.textContent?.toLowerCase()).toContain('data');
+    expect(chips.textContent?.toLowerCase()).toContain('choice');
+    expect(chips.textContent?.toLowerCase()).toContain('enum');
+  });
+
+  it('hides types of a kind when its pill is toggled off', () => {
+    renderMixed();
+    // All five types visible initially.
+    expect(screen.getByTestId('ns-type-pkg::C1')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('kind-filter-choice'));
+    expect(screen.getByTestId('kind-filter-choice').getAttribute('aria-pressed')).toBe('false');
+    // Choice row gone; data/enum/func rows remain.
+    expect(screen.queryByTestId('ns-type-pkg::C1')).toBeNull();
+    expect(screen.getByTestId('ns-type-pkg::D1')).toBeTruthy();
+    expect(screen.getByTestId('ns-type-pkg::E1')).toBeTruthy();
+  });
+
+  it('prunes a now-empty namespace from the tree when its only kind is filtered off', () => {
+    render(
+      <NamespaceExplorerPanel
+        nodes={[makeNode('only.choice', 'C', 'Choice')]}
+        expandedNamespaces={new Set(['only.choice'])}
+        hiddenNodeIds={new Set()}
+        onToggleNamespace={vi.fn()}
+        onExpandAll={vi.fn()}
+        onCollapseAll={vi.fn()}
+        onSelectNode={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('ns-type-only.choice::C')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('kind-filter-choice'));
+    expect(screen.queryByTestId('ns-type-only.choice::C')).toBeNull();
+    // Empty-state message replaces the pruned tree.
+    expect(screen.getByText('No types loaded')).toBeTruthy();
+  });
+});

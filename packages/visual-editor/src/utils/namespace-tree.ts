@@ -59,9 +59,22 @@ export type FlatTreeRow =
       /** Aggregate type count across this segment's entire subtree (all
        *  descendant leaves) — what the header count pill displays. */
       totalCount: number;
+      /** Per-kind breakdown of the types DIRECTLY in this segment (namespace ===
+       *  fullPath). Only kinds with count > 0 are present. Drives the compact
+       *  kind-count chips under the segment header. */
+      kindCounts: Partial<Record<TypeKind, number>>;
       expanded: boolean;
       depth: number;
     };
+
+/** Compute a per-kind count map for a list of type entries (kinds with 0 omitted). */
+export function countEntriesByKind(entries: readonly NamespaceTypeEntry[]): Partial<Record<TypeKind, number>> {
+  const counts: Partial<Record<TypeKind, number>> = {};
+  for (const entry of entries) {
+    counts[entry.kind] = (counts[entry.kind] ?? 0) + 1;
+  }
+  return counts;
+}
 
 /**
  * Build a sorted list of namespace tree entries from graph nodes.
@@ -410,6 +423,51 @@ export function filterSegmentedTree(roots: SegmentNode[], query: string): Segmen
 }
 
 /**
+ * Filter a segmented namespace tree to only types whose kind is in `activeKinds`.
+ *
+ * Mirrors `filterSegmentedTree`'s pruning contract: segments with no surviving
+ * direct types and no surviving children are pruned, and `totalCount` is
+ * recomputed from the kept contents. Pure (does not mutate the input).
+ *
+ * `activeKinds` is the set of currently-enabled kinds (the explorer's kind
+ * filter pills). When it covers every kind present in the tree the result is
+ * structurally equal to the input, but always a fresh shallow copy — the
+ * function allocates new arrays/objects and never returns the input references,
+ * so callers must not rely on referential equality for memoization.
+ */
+export function filterSegmentedTreeByKind(roots: SegmentNode[], activeKinds: ReadonlySet<TypeKind>): SegmentNode[] {
+  function visitNode(node: SegmentNode): SegmentNode | null {
+    const matchingTypes = node.types.filter((t) => activeKinds.has(t.kind));
+
+    const matchingChildren: SegmentNode[] = [];
+    for (const child of node.children) {
+      const filtered = visitNode(child);
+      if (filtered !== null) matchingChildren.push(filtered);
+    }
+
+    if (matchingTypes.length === 0 && matchingChildren.length === 0) {
+      return null; // prune
+    }
+
+    const filteredTotalCount = matchingTypes.length + matchingChildren.reduce((s, c) => s + c.totalCount, 0);
+
+    return {
+      ...node,
+      types: matchingTypes,
+      children: matchingChildren,
+      totalCount: filteredTotalCount
+    };
+  }
+
+  const result: SegmentNode[] = [];
+  for (const root of roots) {
+    const filtered = visitNode(root);
+    if (filtered !== null) result.push(filtered);
+  }
+  return result;
+}
+
+/**
  * Compute the set of all segment `fullPath`s that are ancestors of nodes that
  * contain matching types. Used by the explorer to auto-expand ancestor segments
  * so that filtered results are immediately visible.
@@ -540,6 +598,7 @@ export function flattenSegmentedTree(
         typeCount: cursor.types.length,
         childCount: cursor.children.length,
         totalCount: cursor.totalCount,
+        kindCounts: countEntriesByKind(cursor.types),
         expanded: isExpanded,
         depth
       });
@@ -570,6 +629,7 @@ export function flattenSegmentedTree(
       typeCount: node.types.length,
       childCount: node.children.length,
       totalCount: node.totalCount,
+      kindCounts: countEntriesByKind(node.types),
       expanded: isExpanded,
       depth
     });
