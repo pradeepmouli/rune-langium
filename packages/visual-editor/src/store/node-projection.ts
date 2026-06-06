@@ -127,3 +127,39 @@ export function withGraphMetadata(
 ): AnyGraphNode {
   return { ...astData, ...meta } as unknown as AnyGraphNode;
 }
+
+// ---------------------------------------------------------------------------
+// V4 member-array accessors
+// ---------------------------------------------------------------------------
+
+/** Per-kind member-container field. The single owner of this map (V4). */
+const MEMBER_FIELD_BY_KIND: Readonly<Record<string, string>> = {
+  Data: 'attributes',
+  Annotation: 'attributes',
+  Choice: 'attributes',
+  RosettaEnumeration: 'enumValues',
+  RosettaFunction: 'inputs',
+  RosettaRecordType: 'features'
+};
+
+/** The member array + its field name for a node, or null if the kind has none. */
+export function getMemberArray(node: { $type?: string } & Record<string, unknown>): { field: string; members: unknown[] } | null {
+  const field = node.$type ? MEMBER_FIELD_BY_KIND[node.$type] : undefined;
+  if (!field) return null;
+  const members = node[field];
+  return { field, members: Array.isArray(members) ? members : [] };
+}
+
+/** Ensure the member array exists on the node, returning it (initializes `[]`). */
+export function ensureMemberArray(node: { $type?: string } & Record<string, unknown>): unknown[] {
+  const field = node.$type ? MEMBER_FIELD_BY_KIND[node.$type] : undefined;
+  if (!field) return []; // no-op for unknown kinds (returns a disconnected [])
+  if (!Array.isArray(node[field])) node[field] = [];
+  return node[field] as unknown[];
+}
+
+/** Iterate the members of a node (no-op when the kind has no member container). */
+export function forEachMember(node: { $type?: string } & Record<string, unknown>, fn: (member: unknown, index: number) => void): void {
+  const got = getMemberArray(node);
+  if (got) got.members.forEach(fn);
+}

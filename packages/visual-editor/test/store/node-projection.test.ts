@@ -9,6 +9,7 @@ import {
   astRelevantProjection,
   withGraphMetadata
 } from '../../src/store/node-projection.js';
+import { getMemberArray, ensureMemberArray, forEachMember } from '../../src/store/node-projection.js';
 
 describe('node-projection id builders (V1)', () => {
   it('makeNodeId joins namespace and name with the :: separator', () => {
@@ -70,5 +71,30 @@ describe('node-projection metadata projection (V2)', () => {
     });
     expect((node as Record<string, unknown>).name).toBe('Foo');
     expect((node as Record<string, unknown>).namespace).toBe('ns');
+  });
+});
+
+describe('node-projection member accessors (V4)', () => {
+  it('maps each kind to its member field', () => {
+    expect(getMemberArray({ $type: 'Data', attributes: [1] } as never)).toEqual({ field: 'attributes', members: [1] });
+    expect(getMemberArray({ $type: 'Annotation', attributes: [5] } as never)).toEqual({ field: 'attributes', members: [5] });
+    expect(getMemberArray({ $type: 'Choice', attributes: [] } as never)).toEqual({ field: 'attributes', members: [] });
+    expect(getMemberArray({ $type: 'RosettaEnumeration', enumValues: [2] } as never)).toEqual({ field: 'enumValues', members: [2] });
+    expect(getMemberArray({ $type: 'RosettaFunction', inputs: [3] } as never)).toEqual({ field: 'inputs', members: [3] });
+    expect(getMemberArray({ $type: 'RosettaRecordType', features: [4] } as never)).toEqual({ field: 'features', members: [4] });
+  });
+  it('returns null for a kind with no member container', () => {
+    expect(getMemberArray({ $type: 'RosettaTypeAlias' } as never)).toBeNull();
+  });
+  it('ensureMemberArray initializes a missing array and returns it', () => {
+    const node = { $type: 'Data' } as Record<string, unknown>;
+    const arr = ensureMemberArray(node as never);
+    expect(arr).toEqual([]);
+    expect(node.attributes).toBe(arr);
+  });
+  it('forEachMember iterates the member array', () => {
+    const seen: unknown[] = [];
+    forEachMember({ $type: 'Data', attributes: ['a', 'b'] } as never, (m: unknown) => seen.push(m));
+    expect(seen).toEqual(['a', 'b']);
   });
 });
