@@ -51,6 +51,7 @@ export {
   serializeModels
 } from './serializer/rosetta-serializer.js';
 export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
+export { preserveCstText } from './serializer/preserve-cst-text.js';
 
 // Utility functions
 export {

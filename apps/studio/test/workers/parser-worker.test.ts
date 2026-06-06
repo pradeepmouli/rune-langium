@@ -38,6 +38,7 @@ const registerExportsMock = vi.fn();
 vi.mock('@rune-langium/core', () => ({
   RuneDslIndexManager: class {},
   namespaceFromSource: (text: string) => text.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '',
+  preserveCstText: () => {},
   createRuneDslServices: () => ({
     RuneDsl: {
       serializer: {

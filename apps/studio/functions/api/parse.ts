@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -429,9 +429,9 @@ async function hydrateUserWorkspace(
     // serialized JSON — and the visual editor renders affected
     // expressions as blank even though the parse succeeded (Codex P2).
     //
-    // Mirrors apps/studio/src/workers/parser-worker.ts:preserveCstText,
-    // which the browser-side parse path already calls. Adding it here
-    // keeps the routed parse output equivalent to the in-worker output.
+    // `preserveCstText` is the shared @rune-langium/core helper, called on both the
+    // browser worker and this server path so the routed parse output keeps the
+    // expression CST text after the JSON round-trip (V7 — single source of truth).
     preserveCstText(model);
 
     // textRegions + refText preserve text-region offsets so language-
@@ -476,49 +476,6 @@ async function hydrateUserWorkspace(
 
   return { shared, RuneDsl, userDocs: docs };
 }
-
-/**
- * Walk the parsed RosettaModel and copy `$cstNode.text` into a sibling
- * `$cstText` property on Function-body parts, condition nodes, and
- * expression nodes. Mirrors `preserveCstText` in
- * apps/studio/src/workers/parser-worker.ts — keep the two implementations
- * in sync.
- *
- * Why this is needed: the visual editor's expression cells render from
- * `$cstText` (a serializable string property) rather than `$cstNode`
- * (the live CST tree, which is non-serializable and lost during JSON
- * round-trip). The in-browser parse path attached `$cstText` before
- * postMessage; the server-side parse path needs the same step so its
- * downstream hydration payload contains the same source text.
- */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function preserveCstText(model: any): void {
-  for (const elem of model?.elements ?? []) {
-    if (elem.$type === 'RosettaFunction') {
-      for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
-        for (const part of arr ?? []) {
-          if (part?.$cstNode?.text) {
-            part.$cstText = part.$cstNode.text;
-          }
-          if (part?.expression?.$cstNode?.text) {
-            part.expression.$cstText = part.expression.$cstNode.text;
-          }
-        }
-      }
-    }
-    if (elem.conditions) {
-      for (const cond of elem.conditions) {
-        if (cond?.$cstNode?.text) {
-          cond.$cstText = cond.$cstNode.text;
-        }
-        if (cond?.expression?.$cstNode?.text) {
-          cond.expression.$cstText = cond.expression.$cstNode.text;
-        }
-      }
-    }
-  }
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Extract the curated doc's namespace from its serialized model and append
