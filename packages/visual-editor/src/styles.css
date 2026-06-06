@@ -270,21 +270,18 @@
   order: 2;
 }
 
-/* Right-align the type chip + cardinality pill in structure-variant
- * rows so the name reads on the left and the type metadata clusters on
- * the right edge — same name-left / metadata-right rhythm as the
- * headers (kind pill on right). Two markup variants:
- *   - Inner Data/Choice rows wrap the chip in `.rune-cell-type-wrap`
- *     (the wrap is the direct flex child; auto-margin lands here).
- *   - Base container rows put `.rune-cell-type-chip` directly inside
- *     `.rune-graph-group__base-row` (GroupContainerNode renders raw,
- *     no wrap).
- * Both selectors get auto-margin so the right-edge cluster works
- * regardless of which renderer produced the row. The card pill follows
- * on its right via the parent flex gap. Scoped so graph-variant rows
- * (less dense, different reading) stay as-is. */
-.rune-node-data--structure .rune-node-row .rune-cell-type-wrap,
-.rune-node-choice--structure .rune-node-row .rune-cell-type-wrap,
+/* Base-container rows stay SINGLE-LINE (name | type | cardinality), so the
+ * type chip is auto-margined to the right edge — same name-left / metadata-
+ * right rhythm as the headers (kind pill on right). GroupContainerNode renders
+ * the chip directly inside `.rune-graph-group__base-row` (no wrap), so the
+ * auto-margin lands on `.rune-cell-type-chip`.
+ *
+ * NOTE: Only Data attribute rows (and Function input/output rows) are XMLSpy-
+ * style STACKED at DATA_ROW_HEIGHT — the type chip lives on its own
+ * `.rune-node-row__type-line` beneath the name and is left-aligned there, so it
+ * deliberately does NOT get the right-edge auto-margin (which previously pushed
+ * it to the row's right edge in the old single-line layout). Choice arms and
+ * Enum values stay single-line at ROW_HEIGHT (no stacked `__type-line`). */
 .rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
   margin-left: auto;
 }
@@ -946,7 +943,7 @@ button[data-navigable]:focus-visible {
    * rune/no-literal-layout-px accepts them on geometry-class selectors.
    * Parity with STRUCTURE_LAYOUT_CONSTANTS is NOT required for these. */
   --rune-chip-padding-y: 1px;
-  --rune-chip-padding-x: 6px;
+  --rune-chip-padding-x: 4px;
   --rune-pill-padding-x: 5px;
   --rune-row-indent: 6px;
   /* Chrome padding — bridges design-system tokens to the rune SSoT
@@ -996,6 +993,7 @@ button[data-navigable]:focus-visible {
 .rune-node-data--structure,
 .rune-node-choice--structure,
 .rune-node-enum--structure,
+.rune-node-func--structure,
 .rune-graph-group--base {
   /* Inherits .rune-node-data card baseline; structure layout
    * stacks the header, then a two-column body below it. */
@@ -1023,7 +1021,8 @@ button[data-navigable]:focus-visible {
  * .rune-node rules are intentionally untouched. */
 .rune-node-data--structure,
 .rune-node-choice--structure,
-.rune-node-enum--structure {
+.rune-node-enum--structure,
+.rune-node-func--structure {
   /* Resting depth cue: a barely-there vertical gradient over var(--card)
    * (color-mix toward --background, no raw hex) that lends the fill a touch
    * of dimensionality without reading tinted. Applied to ALL structure nodes
@@ -1047,14 +1046,16 @@ button[data-navigable]:focus-visible {
  * background gradient (above) supplies quiet dimensionality. */
 .rune-node-data--structure:not(.rune-node-selected),
 .rune-node-choice--structure:not(.rune-node-selected),
-.rune-node-enum--structure:not(.rune-node-selected) {
+.rune-node-enum--structure:not(.rune-node-selected),
+.rune-node-func--structure:not(.rune-node-selected) {
   box-shadow: none;
 }
 
 /* Hover lift — a subtle drop, lighter than the graph node hover (0 6px 16px/.18). */
 .rune-node-data--structure:not(.rune-node-selected):hover,
 .rune-node-choice--structure:not(.rune-node-selected):hover,
-.rune-node-enum--structure:not(.rune-node-selected):hover {
+.rune-node-enum--structure:not(.rune-node-selected):hover,
+.rune-node-func--structure:not(.rune-node-selected):hover {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 4px 12px oklch(0 0 0 / 0.14);
@@ -1065,7 +1066,8 @@ button[data-navigable]:focus-visible {
  * specificity (0,2,0 vs 0,1,0) wins. */
 .rune-node-data--structure.rune-node-selected,
 .rune-node-choice--structure.rune-node-selected,
-.rune-node-enum--structure.rune-node-selected {
+.rune-node-enum--structure.rune-node-selected,
+.rune-node-func--structure.rune-node-selected {
   box-shadow:
     inset 0 0 0 1px var(--node-accent),
     0 4px 14px oklch(0 0 0 / 0.2);
@@ -1087,6 +1089,9 @@ button[data-navigable]:focus-visible {
 .rune-node-enum--structure .rune-cell-name,
 .rune-node-enum--structure .rune-cell-card,
 .rune-node-enum--structure .rune-cell-type-chip,
+.rune-node-func--structure .rune-cell-name,
+.rune-node-func--structure .rune-cell-card,
+.rune-node-func--structure .rune-cell-type-chip,
 .rune-graph-group--base .rune-cell-name,
 .rune-graph-group--base .rune-cell-card,
 .rune-graph-group--base .rune-cell-type-chip {
@@ -1111,7 +1116,8 @@ button[data-navigable]:focus-visible {
  * y=HEADER_HEIGHT, with NODE_PADDING bottom inset and 2*NODE_PADDING
  * total width — mirroring this CSS exactly. */
 .rune-node-data--structure,
-.rune-node-choice--structure {
+.rune-node-choice--structure,
+.rune-node-func--structure {
   box-sizing: border-box;
   height: 100%;
 }
@@ -1147,10 +1153,16 @@ button[data-navigable]:focus-visible {
  * padding is visual-only (not layout-coupled), so 12px is safe. */
 .rune-node-data--structure .rune-node-header,
 .rune-node-choice--structure .rune-node-header,
-.rune-node-enum--structure .rune-node-header {
+.rune-node-enum--structure .rune-node-header,
+.rune-node-func--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
-  padding: 0 var(--space-3);
+  /* Tightened header insets (visual-only, not layout-coupled): L/R padding
+   * --space-3 -> --space-2 and the badge/name/meta gap --space-2 -> --space-1
+   * so the header (which drives the node width) hugs its tokens. Mirrored in
+   * estimateHeaderWidth so the node actually shrinks, not just the chrome. */
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
 }
 
 .rune-node-body--two-col {
@@ -1161,19 +1173,19 @@ button[data-navigable]:focus-visible {
    * width here so the node shell remains the single source of truth. */
 }
 
-/* Apply NODE_PADDING on sides + bottom of the body so the rows column and
- * the right-column children read with breathing room around them. Top
- * stays 0 because the body's top edge sits flush against the header's
- * bottom — no extra gap wanted there. Default .rune-node-body padding
- * (8/12px) is intentionally reset and replaced with the SSoT-tracked
- * inset; structure-layout.ts uses NODE_PADDING in matching positions so
- * RF-placed children land in the padded zone, not over it.
- *
- * The choice variant gets the same treatment — same right-column-expansion
- * geometry, same inset story. */
-.rune-node-data--structure .rune-node-body--two-col,
+/* Choice body: NODE_PADDING on sides + bottom so the rows column and the
+ * right-column children read with breathing room. Top stays 0 (flush under
+ * the header). sizeChoice reserves exactly NODE_PADDING below the row stack. */
 .rune-node-choice--structure .rune-node-body--two-col {
   padding: 0 var(--rune-node-padding) var(--rune-node-padding);
+}
+
+/* Data body: sides only — NO vertical padding. The framed-rows stack
+ * (.rune-node-rows below) carries its own DATA_ROWS_PADDING top + bottom, so a
+ * body bottom inset here would DOUBLE the bottom gap (the regression the user
+ * flagged). sizeData reserves the rows stack's own padding, not a body inset. */
+.rune-node-data--structure .rune-node-body--two-col {
+  padding: 0 var(--rune-node-padding);
 }
 
 /* Enum renders a single-column body (default .rune-node-body, not two-col), so
@@ -1184,6 +1196,14 @@ button[data-navigable]:focus-visible {
  * — enum has no two-col RF children to place). */
 .rune-node-enum--structure .rune-node-body {
   padding: 0 var(--space-3) var(--space-3);
+}
+
+/* Function body: sides only (NODE_PADDING) — like Data, the framed input/output
+ * rows stack carries its own DATA_ROWS_PADDING top + bottom, so no body vertical
+ * inset (which would double the bottom gap / clip under .rune-node's overflow).
+ * sizeFunction's width reserves 2×NODE_PADDING horizontally to match. */
+.rune-node-func--structure .rune-node-body {
+  padding: 0 var(--rune-node-padding);
 }
 
 .rune-node-rows {
@@ -1197,6 +1217,9 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: row;
   align-items: center;
+  /* Default single-line row height (28) — used by Choice arms and Enum values.
+     Data attribute rows override to --rune-data-row-height below (they're the
+     stacked two-line rows). */
   height: var(--rune-row-height);
   gap: var(--rune-row-gap);
   padding: 0 var(--space-2);
@@ -1207,14 +1230,113 @@ button[data-navigable]:focus-visible {
   transition: background-color var(--motion-fast);
 }
 
-/* Light row separators — give the dense, fixed-height rows gentle
- * horizontal separation so stacked members read as discrete records
- * rather than one undifferentiated block. Drawn as a 1px inset top
- * highlight (low-opacity var(--border)) on every row after the first, so
- * it does NOT consume content-box height the way a real `border-top`
- * would — the row's `height: var(--rune-row-height)` layout math (mirrored
- * in structure-layout.ts) stays exact. */
-.rune-node-row + .rune-node-row {
+/* Framed-rows stack — Data attribute rows, base-container inherited rows, and
+   Function input/output rows render as XMLSpy-style stacked, hairline-bordered
+   CARDS that shrink-wrap to their widest member. The stack is a flex column
+   with DATA_ROW_GAP between cards and DATA_ROWS_PADDING top + bottom; the
+   `padding-inline-start` gives the cards' left border room so it isn't flush
+   against the body edge. (Choice arms + Enum values stay single-line + unframed
+   on .rune-node-rows above.) The inline `width` the renderer sets from the
+   layout's rows-only `rowsColWidth` makes the stack tight to its content. */
+.rune-node-data--structure .rune-node-rows,
+.rune-graph-group--base .rune-node-rows,
+.rune-node-func--structure .rune-node-rows {
+  box-sizing: border-box;
+  row-gap: var(--rune-data-row-gap);
+  padding-block: var(--rune-data-rows-padding);
+  padding-inline-start: var(--rune-data-row-padding-x);
+}
+
+/* Each framed card: DATA_ROW_HEIGHT (border-box, so border + padding sit inside
+   the layout-reserved height), a hairline border + subtle fill, tight corners,
+   and `align-self: stretch` so every card matches the widest one. The geometry
+   math in structure-layout.ts (sizeData / sizeBase / sizeFunction) reserves
+   DATA_ROW_HEIGHT + DATA_ROW_GAP per row, so the rendered height MUST mirror it. */
+.rune-node-data--structure .rune-node-row,
+.rune-graph-group--base .rune-node-row,
+.rune-node-func--structure .rune-node-row {
+  box-sizing: border-box;
+  height: var(--rune-data-row-height);
+  align-self: stretch;
+  padding: var(--rune-data-row-padding-y) var(--rune-data-row-padding-x);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--border) 6%, transparent);
+  box-shadow: none;
+}
+
+/* XMLSpy-style stacked attribute row: the name occupies the top line and the
+   type-chip + cardinality the second line. `__main` is the stacked column
+   (flex:1), and the right-edge expand control sits beside it as a sibling so
+   it centers vertically across both lines. */
+.rune-node-row__main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1;
+  /* Inter-line gap matches the horizontal type↔cardinality gap on the
+     type-line (both var(--space-1) = 4px), so the stacked name/type lines
+     breathe by the same amount the type and cardinality do. DATA_ROW_HEIGHT
+     (36) = name line + this gap + type/card line. */
+  gap: var(--space-1);
+}
+
+.rune-node-row__name-line {
+  min-width: 0;
+}
+
+.rune-node-row__type-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* ── Function node output row (Phase C) ───────────────────────────
+ * A function's output is rendered as a distinct row beneath its inputs,
+ * separated by a hairline and marked with a leading `→` glyph. The
+ * separator is a real 1px top border (the inset-shadow row separator used
+ * between sibling rows would not read strongly enough to signal the
+ * input→output boundary). Token-based colors only — no raw hex.
+ *
+ * Total vertical footprint is layout-coupled: sizeFunction reserves
+ * FUNCTION_OUTPUT_SEP_HEIGHT (--rune-func-output-sep-height = 9px) between the
+ * last input row and the output row. The margins are DERIVED from that var so
+ * the 9px lives in one source: footprint = 2×margin + 1px border, so each
+ * margin = (var - 1px) / 2. */
+.rune-node-func-output-sep {
+  height: 0;
+  margin: calc((var(--rune-func-output-sep-height) - 1px) / 2) 0;
+  border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+}
+
+.rune-node-row--output .rune-node-row__name-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.rune-node-row__output-arrow {
+  color: var(--color-func-text, var(--muted-foreground));
+  font-weight: 600;
+}
+
+/* Subtle "output" treatment: the output name reads in the muted accent so the
+ * row is visually distinct from input parameters without adding chrome. */
+.rune-node-row--output .rune-cell-name {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+/* Light row separators for the UNFRAMED single-line rows (Choice arms + Enum
+ * values) — a 1px inset top highlight on every row after the first so stacked
+ * members read as discrete records. It does NOT consume content-box height the
+ * way a real `border-top` would, so the --rune-row-height layout math stays
+ * exact. Framed Data/base/func rows are excluded — their hairline border IS the
+ * separator (they set `box-shadow: none` above). */
+.rune-node-choice--structure .rune-node-row + .rune-node-row,
+.rune-node-enum--structure .rune-node-row + .rune-node-row {
   box-shadow: inset 0 1px 0 color-mix(in oklch, var(--border) 45%, transparent);
 }
 
@@ -1286,27 +1408,27 @@ button[data-navigable]:focus-visible {
   stroke-width: 1;
 }
 
+/* Empty by default: the slot stays collapsed (no grow, no decoration) so a
+ * leaf node — whose rows now shrink-wrap while the node width is header-driven —
+ * does NOT render a stray dashed divider in the empty right area. React Flow
+ * positions child nodes absolutely via parentNode, so the slot never holds DOM
+ * children; it is purely the column-gutter decoration, only meaningful when a
+ * child column actually exists. */
 .rune-node-children-slot {
-  /* React Flow positions child nodes absolutely via parentNode; this
-   * slot only declares the column gap.  Width is implicit from the
-   * layout's child placements. */
-  margin-left: var(--rune-col-gap);
+  flex: 0 0 0;
+  width: 0;
+}
+
+/* Materialized child column (data-has-children) — grow into the gutter and draw
+ * the decorative dashed divider that separates rows from the child column.
+ * Padding/inset use --rune-row-gap (8px); the column gap is --rune-col-gap. */
+.rune-node-children-slot[data-has-children='true'] {
   flex: 1 1 auto;
-  min-height: var(--rune-row-height); /* prevents collapse when child list is empty */
-  /* Phase 10.2 — decorative left border to visually separate the child column.
-   * Padding uses --rune-row-gap (8px) as the inset. */
+  width: auto;
+  margin-left: var(--rune-col-gap);
+  min-height: var(--rune-row-height);
   border-left: var(--hairline) dashed var(--border);
   padding-left: var(--rune-row-gap);
-  /* Copilot e2e-batch review flagged a potential overflow when a node has
-   * NO expansions: the slot's margin-left + border + padding could push
-   * the inner content past the layout's pre-computed sz.width. In
-   * practice this is invisible because (a) `.rune-node` has
-   * `overflow: hidden` which clips anything past the outer frame, and
-   * (b) `flex: 1 1 auto` shrinks the slot to 0 width when there's no
-   * remaining space (no expansion children = empty slot, no content
-   * pressure, slot collapses). The decorative border-left is also
-   * clipped in the no-children case. If a future change adds visible
-   * inner content to the slot DOM (e.g., a placeholder), revisit. */
 }
 
 /* GroupContainerNode — base-type scope -------------------------- */
@@ -1416,11 +1538,12 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: column;
   /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
-   * exactly ROW_HEIGHT without inter-row spacing. */
+   * exactly DATA_ROW_HEIGHT without inter-row spacing (base inherited rows are
+   * Data attribute rows). */
   /* Gap before the nested child data node MUST equal BASE_PADDING in
    * structure-layout.ts (sizeBase: leftColumnHeight = baseRowsHeight +
    * childSize.height + BASE_PADDING; placeBaseChildren: y = HEADER_HEIGHT +
-   * baseRows.length*ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
+   * baseRows.length*DATA_ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
    * here made the rendered child sit 4px below the container's reserved
    * bottom, so the inner DataNode overflowed the dashed base border. */
   margin-bottom: var(--rune-base-padding);
@@ -1430,7 +1553,10 @@ button[data-navigable]:focus-visible {
   display: flex;
   flex-direction: row;
   align-items: center;
-  height: var(--rune-row-height);
+  /* Base inherited rows ARE Data attribute rows — sizeBase reserves
+     DATA_ROW_HEIGHT per row, so the rendered height must mirror it (these
+     render single-line but centered in the taller row). */
+  height: var(--rune-data-row-height);
   gap: var(--rune-row-gap);
 }
 

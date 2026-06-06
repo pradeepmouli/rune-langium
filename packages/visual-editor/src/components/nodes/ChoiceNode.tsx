@@ -35,6 +35,7 @@ import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
+import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
 
@@ -351,6 +352,11 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
         <div className="rune-node-header">
           <NodeKindBadge kind="choice" />
           <span>{data.name}</span>
+          <StructureMetaIndicators
+            definition={data.definition}
+            annotations={data.annotations}
+            conditions={data.conditions}
+          />
         </div>
         {/* Body wrapper mirrors DataNode's DOM (PR #210 follow-up to a Codex
             review on PR #210's commit 616f71e5: the existing CSS rule
@@ -401,7 +407,13 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
               );
             })}
           </div>
-          <div className="rune-node-children-slot" data-testid="choice-node-children" />
+          <div
+            className="rune-node-children-slot"
+            data-testid="choice-node-children"
+            // See DataNode: only decorate when a child column is materialized,
+            // else the slot draws a stray dashed divider in empty space.
+            data-has-children={(childYByAttrName?.size ?? 0) > 0 ? 'true' : undefined}
+          />
         </div>
         {connectorGeometry ? (
           <RowConnectorOverlay

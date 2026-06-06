@@ -251,6 +251,18 @@ vi.mock('@rune-langium/visual-editor', () => ({
     const d = (obj.data ?? obj) as { $type?: string; typeKind?: string } | undefined;
     return d?.$type ?? d?.typeKind ?? obj?.type ?? 'data';
   },
+  // Phase A — tiny stubs mirroring the real display helpers' output shape so
+  // graphNodesToAdapterDocument's projectStructureMeta can run under the mock.
+  annotationsToDisplay: (annotations: unknown[] | undefined) =>
+    (annotations ?? []).map((ref) => {
+      const r = ref as { annotation?: { $refText?: string }; attribute?: { $refText?: string } };
+      return { name: r.annotation?.$refText ?? 'unknown', attribute: r.attribute?.$refText };
+    }),
+  conditionsToDisplay: (conditions: unknown[] | undefined) =>
+    (conditions ?? []).map((c) => {
+      const cond = c as { name?: string };
+      return { name: cond.name ?? undefined, expressionText: '' };
+    }),
   useEditorStore,
   useModelSourceSync: () => {}
 }));

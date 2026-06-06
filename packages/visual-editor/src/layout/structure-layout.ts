@@ -24,6 +24,7 @@ import type {
   StructureChoiceNode,
   StructureDataNode,
   StructureEnumNode,
+  StructureFunctionNode,
   StructureGraphInput,
   StructureNode
 } from '../types/structure-view.js';
@@ -38,16 +39,65 @@ import type {
  * fail CI if the two drift apart.**
  */
 export const STRUCTURE_LAYOUT_CONSTANTS = {
+  /**
+   * Single-line row height — used by Choice arms and Enum values, which render
+   * one line of `--text-2xs` (the arm's type chip, or the enum value name).
+   * Kept tight at 28 so those rows read "as before" the stacked-rows change.
+   */
   ROW_HEIGHT: 28,
+  /**
+   * Stacked Data attribute-row height — the rendered footprint of ONE framed
+   * row box (`box-sizing: border-box`). XMLSpy-style: each Data row is TWO
+   * lines of `--text-2xs` — the attribute NAME on top, the type-chip +
+   * cardinality on a second line beneath — wrapped in a hairline-bordered card.
+   * 44 = content (name line 18 + var(--space-1) inter-line gap 4 + type/card
+   * line ~18.5 ≈ 40.5) + 2×1px row padding + 2×0.5px hairline border ≈ 43.5,
+   * rounded to 44. Rows are framed (border + padding + radius) and separated by
+   * DATA_ROW_GAP; the rows stack also carries DATA_ROWS_PADDING top & bottom.
+   * Choice/Enum stay on ROW_HEIGHT (28, single-line, unframed). Base-container
+   * inherited rows are Data attribute rows, so they use this height too.
+   * CSS mirror: `--rune-data-row-height`.
+   */
+  DATA_ROW_HEIGHT: 44,
+  /**
+   * Vertical gap BETWEEN consecutive framed Data/base/func rows (the
+   * `.rune-node-rows` flex `row-gap`). Distinct from ROW_GAP (8 — the
+   * expansion-column vertical gutter). Reserved in the node-sizing math as
+   * `(n − 1) × DATA_ROW_GAP` and in each row's center offset (pitch =
+   * DATA_ROW_HEIGHT + DATA_ROW_GAP). CSS mirror: `--rune-data-row-gap`.
+   */
+  DATA_ROW_GAP: 3,
+  /**
+   * Top AND bottom padding of the framed-rows stack (`.rune-node-rows`
+   * `padding-block`) — breathing room between the header and the first framed
+   * row, and below the last framed row before the node's bottom edge. Reserved
+   * once at top and once at bottom in the node-sizing math, and pushes every
+   * row center down by this amount. CSS mirror: `--rune-data-rows-padding`.
+   */
+  DATA_ROWS_PADDING: 4,
+  /**
+   * Vertical padding INSIDE each framed row card (top & bottom). Layout-coupled:
+   * DATA_ROW_HEIGHT (border-box) budgets content + 2×DATA_ROW_PADDING_Y +
+   * 2×hairline border. CSS mirror: `--rune-data-row-padding-y`.
+   */
+  DATA_ROW_PADDING_Y: 1,
+  /**
+   * Horizontal padding inside each framed row card (left & right). CSS mirror:
+   * `--rune-data-row-padding-x`. (Width has estimate slack, so this is not as
+   * tightly layout-coupled as the Y padding, but kept in the SSoT for parity.)
+   */
+  DATA_ROW_PADDING_X: 2,
   HEADER_HEIGHT: 28,
   /**
-   * Minimum rows-column width. The actual per-node width grows from this
-   * baseline based on row content via `estimateRowsColWidth` (e2e-batch fix
-   * #12 — was 260, which clipped most CDM type names). MIN is the floor; the
-   * effective width is `max(MIN, estimated)`, capped by `COL_WIDTH_MAX` to
-   * prevent runaway widths from pathologically long identifiers.
+   * Minimum rows-column width — a TIGHT floor now that framed rows shrink-wrap
+   * to their widest member (the rows-only `estimateRowsColWidth` no longer
+   * folds in the header, so the column hugs its content; the node's outer width
+   * separately respects `estimateHeaderWidth`). Long CDM type names still grow
+   * the column past this floor via the estimate; the floor only stops
+   * absurdly-narrow nodes for single-short-attribute types. Lowered from 320
+   * (the old header-inclusive floor) so the rows hug. Capped by COL_WIDTH_MAX.
    */
-  COL_WIDTH: 320,
+  COL_WIDTH: 96,
   /** Upper clamp on per-node rows-column width — keeps long identifiers from breaking layout. */
   COL_WIDTH_MAX: 600,
   COL_GAP: 32,
@@ -77,7 +127,17 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
    * stay numerically in sync. Replaced the earlier CHILD_INSET-only fix
    * (which only padded the right + bottom edges) once the user asked for
    * uniform padding around all content. */
-  NODE_PADDING: 4
+  NODE_PADDING: 4,
+  /**
+   * Rendered vertical footprint of the Function node's input→output separator
+   * (Phase C). The `.rune-node-func-output-sep` rule draws a 1px top border
+   * with `var(--space-1)` (4px) margin above AND below: 4 + 1 + 4 = 9px. This
+   * footprint sits between the last input row and the output row, so
+   * `sizeFunction` MUST reserve it (only when an output exists) or the output
+   * row + bottom padding get clipped by `.rune-node`'s `overflow: hidden`.
+   * CSS mirror: `--rune-func-output-sep-height` (the separator rule derives its
+   * margin/border from this var so the 9px stays in one source). */
+  FUNCTION_OUTPUT_SEP_HEIGHT: 9
 } as const;
 
 /**
@@ -94,17 +154,53 @@ export const STRUCTURE_LAYOUT_CONSTANTS = {
  */
 export const STRUCTURE_LAYOUT_CSS_VARS = {
   '--rune-row-height': `${STRUCTURE_LAYOUT_CONSTANTS.ROW_HEIGHT}px`,
+  '--rune-data-row-height': `${STRUCTURE_LAYOUT_CONSTANTS.DATA_ROW_HEIGHT}px`,
+  '--rune-data-row-gap': `${STRUCTURE_LAYOUT_CONSTANTS.DATA_ROW_GAP}px`,
+  '--rune-data-rows-padding': `${STRUCTURE_LAYOUT_CONSTANTS.DATA_ROWS_PADDING}px`,
+  '--rune-data-row-padding-y': `${STRUCTURE_LAYOUT_CONSTANTS.DATA_ROW_PADDING_Y}px`,
+  '--rune-data-row-padding-x': `${STRUCTURE_LAYOUT_CONSTANTS.DATA_ROW_PADDING_X}px`,
   '--rune-header-height': `${STRUCTURE_LAYOUT_CONSTANTS.HEADER_HEIGHT}px`,
   '--rune-col-width': `${STRUCTURE_LAYOUT_CONSTANTS.COL_WIDTH}px`,
   '--rune-col-gap': `${STRUCTURE_LAYOUT_CONSTANTS.COL_GAP}px`,
   '--rune-row-gap': `${STRUCTURE_LAYOUT_CONSTANTS.ROW_GAP}px`,
   '--rune-base-padding': `${STRUCTURE_LAYOUT_CONSTANTS.BASE_PADDING}px`,
-  '--rune-node-padding': `${STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING}px`
+  '--rune-node-padding': `${STRUCTURE_LAYOUT_CONSTANTS.NODE_PADDING}px`,
+  '--rune-func-output-sep-height': `${STRUCTURE_LAYOUT_CONSTANTS.FUNCTION_OUTPUT_SEP_HEIGHT}px`
 } as const satisfies Record<`--rune-${string}`, string>;
 
 // Internal aliases — keep call sites inside this module readable.
-const { ROW_HEIGHT, HEADER_HEIGHT, COL_WIDTH, COL_WIDTH_MAX, COL_GAP, ROW_GAP, BASE_PADDING, NODE_PADDING } =
-  STRUCTURE_LAYOUT_CONSTANTS;
+const {
+  ROW_HEIGHT,
+  DATA_ROW_HEIGHT,
+  DATA_ROW_GAP,
+  DATA_ROWS_PADDING,
+  HEADER_HEIGHT,
+  COL_WIDTH,
+  COL_WIDTH_MAX,
+  COL_GAP,
+  ROW_GAP,
+  BASE_PADDING,
+  NODE_PADDING,
+  FUNCTION_OUTPUT_SEP_HEIGHT
+} = STRUCTURE_LAYOUT_CONSTANTS;
+
+/**
+ * Vertical pitch from one framed Data/base/func row's top to the next — the
+ * row footprint plus the inter-row gap. Used to derive each row's center and
+ * the total rows-stack height now that rows are framed cards separated by
+ * DATA_ROW_GAP (previously rows were flush, so pitch == DATA_ROW_HEIGHT).
+ */
+const DATA_ROW_PITCH = DATA_ROW_HEIGHT + DATA_ROW_GAP;
+
+/**
+ * Total vertical footprint of a stack of `n` framed Data/base/func rows,
+ * INCLUDING the top + bottom DATA_ROWS_PADDING and the (n − 1) inter-row gaps.
+ * `n === 0` collapses to zero (no padding reserved for an empty stack).
+ */
+function framedRowsStackHeight(rowCount: number): number {
+  if (rowCount <= 0) return 0;
+  return 2 * DATA_ROWS_PADDING + rowCount * DATA_ROW_HEIGHT + (rowCount - 1) * DATA_ROW_GAP;
+}
 
 interface SizedNode {
   /** Outer width — includes rowsColWidth + (optional COL_GAP + childrenWidth). */
@@ -123,43 +219,104 @@ interface SizedNode {
 }
 
 /**
- * Estimate the rendered width of the rows column for a Data/Choice/Enum node.
- * Uses a conservative monospace-ish character-width estimate (~7px @ 12px font)
- * plus chrome overhead (chevron, type chip padding, cardinality pill, gaps,
- * row padding). Result is clamped to [COL_WIDTH, COL_WIDTH_MAX].
+ * Estimate the rendered width of the framed **rows column** (the
+ * `.rune-node-rows` stack) for a Data/Choice/Enum/Function node — ROWS ONLY,
+ * NOT including the header.
  *
- * This isn't pixel-perfect — that would need post-mount measurement — but it's
- * accurate enough to stop CDM-scale type names from clipping at the
- * previously-fixed 260px column. Tradeoff acknowledged: variable-pitch fonts
- * and locale glyphs can render wider than the estimate; the COL_WIDTH_MAX cap
- * + CSS `text-overflow: ellipsis` are the safety net.
+ * Rows-only is deliberate: the rows now shrink-wrap to their widest member
+ * (XMLSpy-style framed cards), so the rendered rows column is tight to the
+ * widest row's content — narrower than the node when the header is the wider
+ * element. The node's outer width takes the MAX of this and the header width
+ * (see `estimateHeaderWidth`) at each size site. Keeping this rows-only also
+ * keeps it the correct connector anchor: `rowRightX = NODE_PADDING +
+ * rowsColWidth` lands on the framed rows' real right edge.
+ *
+ * Uses a conservative monospace-ish character-width estimate (~7px @ 12px font)
+ * plus per-row chrome (frame border + padding + the right-edge expand chevron).
+ * Result is clamped to [COL_WIDTH, COL_WIDTH_MAX]; COL_WIDTH is the minimum
+ * sane rows-column width (a tight floor now that the header no longer inflates
+ * it). Not pixel-perfect — variable-pitch fonts can render wider; the
+ * COL_WIDTH_MAX cap + CSS `text-overflow: ellipsis` are the safety net.
  */
 function estimateRowsColWidth(
-  rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string }>,
-  /**
-   * The node's HEADER text — the type's own name (`data.name`). Header
-   * width is the `NodeKindBadge` (~50px) + the name itself, and the
-   * header can be LONGER than any row's content (e.g. a Data type named
-   * `AdjustableOrAdjustedOrRelativeDate` with short attributes). Without
-   * including the header in the floor, the visual verification on dev
-   * caught the header truncating with text-overflow ellipsis even though
-   * all rows fit. e2e-batch follow-up #12.
-   */
-  headerName: string = ''
+  rowTexts: ReadonlyArray<{ name: string; typeName: string; card: string; expandable?: boolean }>
 ): number {
   const CHAR_W = 7;
-  // chrome: row padding (8) + chevron (14) + gap (4) + type chip horiz padding
-  // (16) + card pill horiz padding (12) + inter-cell gaps (4*4=16) + right
-  // padding (8) ≈ 78. Round up for safety margin.
-  const CHROME = 84;
-  // Header chrome: kind badge (50) + L/R padding (8+8) + safety margin (10) ≈ 76.
-  const HEADER_CHROME = 76;
-  let max = headerName.length * CHAR_W + HEADER_CHROME;
+  // Framed-row chrome ALWAYS present: 2px L/R row padding + hairline border +
+  // the chip & cardinality internal padding AND the cardinality parens the
+  // char count under-counts (card data is e.g. "1..1" but renders "(1..1)") + a
+  // small safety margin. Tighter than the previous flat 48 (which always
+  // budgeted the expand chevron → visible empty space inside primitive/enum
+  // rows, the slack the user flagged) but not so tight it clips: ~22 keeps a
+  // few px margin over real content for typical rows (chip padding-x is now 4px).
+  const CHROME_BASE = 22;
+  // The right-edge expand control (+/−) renders ONLY for rows whose type is
+  // itself expandable (Data / Choice). Reserve its footprint only for those
+  // rows so a node of all-primitive attributes hugs its content.
+  const EXPAND_CHEVRON = 22;
+  let max = 0;
   for (const r of rowTexts) {
-    const w = (r.name.length + r.typeName.length + r.card.length) * CHAR_W + CHROME;
+    // Type line holds the type chip text + a small gap + the cardinality, so
+    // estimate it as typeName + card + 2 chars of separator.
+    const lineChars = Math.max(r.name.length, r.typeName.length + r.card.length + 2);
+    const w = lineChars * CHAR_W + CHROME_BASE + (r.expandable ? EXPAND_CHEVRON : 0);
     if (w > max) max = w;
   }
   return Math.min(COL_WIDTH_MAX, Math.max(COL_WIDTH, max));
+}
+
+/**
+ * Whether a structure row renders the right-edge expand control — true only for
+ * rows whose target type is itself a structured node (Data / Choice). Mirrors
+ * `isRowExpandable` in DataNode.tsx so the width estimate reserves chevron room
+ * exactly when the renderer draws it.
+ */
+function rowIsExpandable(typeKind: string): boolean {
+  return typeKind === 'Data' || typeKind === 'Choice';
+}
+
+/**
+ * Estimate the rendered width of a structure node's HEADER — the
+ * `NodeKindBadge` + the type name + (optionally) the meta-indicator cluster.
+ *
+ * Split out from `estimateRowsColWidth` so the rows column can shrink-wrap to
+ * its members while the node's outer width still respects a header that is
+ * wider than any row (e.g. `AdjustableOrAdjustedOrRelativeDate` with short
+ * attributes). Each size site takes `max(rowsColWidth, estimateHeaderWidth())`
+ * for the node's content width.
+ *
+ * Calibrated against the rendered header (`.rune-node-header`): tightened
+ * --space-2 L/R padding (16), kind badge ≈ 46, badge/name/meta gap --space-1
+ * (4), name ≈ 9px/char, and — when the node carries doc/conditions/annotations —
+ * the `StructureMetaIndicators` cluster (gap 4 + ≈ 20 for up to three compact
+ * indicators). Must stay in sync with the `.rune-node-*--structure
+ * .rune-node-header` padding/gap in styles.css so the node hugs the header.
+ */
+function estimateHeaderWidth(name: string, hasMeta: boolean): number {
+  const HEADER_PADDING = 16; // --space-2 left + right
+  const KIND_BADGE = 46;
+  const BADGE_GAP = 4; // --space-1
+  const NAME_CHAR_W = 9;
+  const META_CLUSTER = hasMeta ? 4 + 20 : 0; // gap + indicator cluster (≈ measured 20px)
+  return HEADER_PADDING + KIND_BADGE + BADGE_GAP + name.length * NAME_CHAR_W + META_CLUSTER;
+}
+
+/**
+ * True when a structure node carries any header meta-indicator (doc /
+ * annotations / conditions), so `estimateHeaderWidth` reserves room for the
+ * `StructureMetaIndicators` cluster. Structural (duck-typed) so it works for
+ * Data / Choice / Function nodes alike — any node may omit the fields.
+ */
+function nodeHasMeta(node: {
+  definition?: string;
+  annotations?: readonly unknown[];
+  conditions?: readonly unknown[];
+}): boolean {
+  return (
+    (typeof node.definition === 'string' && node.definition.trim().length > 0) ||
+    (node.annotations?.length ?? 0) > 0 ||
+    (node.conditions?.length ?? 0) > 0
+  );
 }
 
 /**
@@ -202,7 +359,15 @@ function simulateColumnHeight(
   sizing: Set<string>,
   /** Initial yCursor — HEADER_HEIGHT for data nodes, BASE_PADDING+HEADER_HEIGHT
    *  for base containers (whose placement pass starts there to match CSS padding). */
-  initialYCursor: number = HEADER_HEIGHT
+  initialYCursor: number = HEADER_HEIGHT,
+  /**
+   * Height of the rows being aligned to at THIS level. Data attribute rows
+   * (sizeData / base inherited rows) are DATA_ROW_HEIGHT; Choice arms are
+   * ROW_HEIGHT. Used to derive each row's top from its center — must match the
+   * row height the corresponding place*Children walk uses, or expansion
+   * children misalign with their source row.
+   */
+  rowHeight: number = ROW_HEIGHT
 ): number {
   let yCursor = initialYCursor;
   for (const [attrName, childInstanceId] of expansions) {
@@ -211,7 +376,7 @@ function simulateColumnHeight(
     const childSize = sizeOf(child, sizes, input, sizing);
     if (!childSize) continue;
     const rowCenter = rowOffsets.get(attrName);
-    const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+    const rowTop = rowCenter !== undefined ? rowCenter - rowHeight / 2 : yCursor;
     const childY = Math.max(rowTop, yCursor);
     yCursor = childY + childSize.height + ROW_GAP;
   }
@@ -231,15 +396,19 @@ function sizeData(
   sizing: Set<string>
 ): SizedNode {
   const rows = node.rows;
-  const rowsHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT;
+  // Data attribute rows are stacked, framed two-line cards → DATA_ROW_HEIGHT
+  // each, separated by DATA_ROW_GAP, with DATA_ROWS_PADDING top + bottom. The
+  // header is flush with the wrapper top; the rows stack begins one
+  // DATA_ROWS_PADDING below it.
+  const rowsStackBottom = HEADER_HEIGHT + framedRowsStackHeight(rows.length);
 
-  // Header stays flush with the wrapper top (no top NODE_PADDING — the CSS
-  // applies the inset on the body, not the chrome). So row centers map to
-  // their natural y from the wrapper origin: HEADER_HEIGHT for row 0 top,
-  // plus i*ROW_HEIGHT, plus half-row to reach center.
+  // Row centers map to their y from the wrapper origin: header (flush) + the
+  // rows-stack top padding + i × pitch (row footprint + inter-row gap) + half a
+  // row to reach the framed card's vertical center.
   const rowOffsets = new Map<string, number>();
+  const rowsTop = HEADER_HEIGHT + DATA_ROWS_PADDING;
   for (const [i, row] of rows.entries()) {
-    rowOffsets.set(row.attrName, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(row.attrName, rowsTop + i * DATA_ROW_PITCH + DATA_ROW_HEIGHT / 2);
   }
 
   let childrenWidth = 0;
@@ -253,31 +422,36 @@ function sizeData(
 
   // Height of the right-hand expansions column matches what the placement pass
   // will actually produce (row-aligned + non-overlapping), not the naive sum.
-  // simulateColumnHeight starts at HEADER_HEIGHT (header is flush with wrapper
-  // top — no top NODE_PADDING) and returns an absolute y-bottom from the
-  // wrapper origin.
+  // simulateColumnHeight starts at the rows-stack top (header + top padding, so
+  // a no-offset child aligns near the first framed row) and returns an absolute
+  // y-bottom from the wrapper origin.
   const rightColumnAbsBottom =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, HEADER_HEIGHT)
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, rowsTop, DATA_ROW_HEIGHT)
       : HEADER_HEIGHT;
 
-  // e2e-batch fix #12: per-node rows-column width based on content +
-  // header name (follow-up: visual verification on dev caught long headers
-  // truncating when row content was short).
+  // Width is SPLIT: the framed rows shrink-wrap to their widest member
+  // (rowsColWidth, rows-only), while the node's content width also respects the
+  // header (kind badge + name + meta) when it is the wider element.
   const rowsColWidth = estimateRowsColWidth(
-    rows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
-    node.name
+    rows.map((r) => ({
+      name: r.attrName,
+      typeName: r.typeName,
+      card: r.cardinality,
+      expandable: rowIsExpandable(r.typeKind)
+    }))
   );
-  // Wrapper dimensions = inner content + NODE_PADDING on sides (×2 — left
-  // and right) and on the bottom only (×1 — header sits flush with the
-  // wrapper top, no top inset). rightColumnAbsBottom is already measured
-  // from the wrapper origin (no shift to subtract since rows no longer
-  // start at NODE_PADDING).
-  const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
-  const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom);
+  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node));
+  // Wrapper dimensions = inner content + NODE_PADDING on the sides (×2) and
+  // bottom only for the expansion column (the rows stack carries its own
+  // DATA_ROWS_PADDING bottom). rightColumnAbsBottom is measured from the
+  // wrapper origin. Header is flush at top (no top inset).
+  const leftColumnWidth = Math.max(rowsColWidth, headerWidth);
+  const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : leftColumnWidth;
+  const innerHeight = Math.max(rowsStackBottom, rightColumnAbsBottom + NODE_PADDING);
   return {
-    width: innerWidth + 2 * NODE_PADDING,
-    height: innerHeight + NODE_PADDING,
+    width: Math.max(innerWidth, headerWidth) + 2 * NODE_PADDING,
+    height: innerHeight,
     rowsColWidth,
     rowOffsets
   };
@@ -320,12 +494,15 @@ function sizeChoice(
       ? simulateColumnHeight(expansions, rowOffsets, input, sizes, sizing, HEADER_HEIGHT)
       : HEADER_HEIGHT;
 
-  // e2e-batch fix #12: per-node rows-column width based on arm content +
-  // header name. Choice arms have no attrName / cardinality — pass empty
-  // strings so the estimator only widens for long typeNames.
-  const rowsColWidth = estimateRowsColWidth(
-    node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '' })),
-    node.name
+  // Choice arms stay single-line, unframed (ROW_HEIGHT) and FILL the column —
+  // only Data rows shrink-wrap. So the column width is max(arm content, header)
+  // (the header floor that estimateRowsColWidth used to fold in). Arms have no
+  // attrName / cardinality — pass empty strings so the row estimate only widens
+  // for long typeNames.
+  const rowsColWidth = Math.max(
+    // Choice arms always expand into their referenced type, so reserve chevron room.
+    estimateRowsColWidth(node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '', expandable: true }))),
+    estimateHeaderWidth(node.name, nodeHasMeta(node))
   );
   const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom);
@@ -348,14 +525,89 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
   for (const [i, value] of node.values.entries()) {
     rowOffsets.set(value, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
   }
-  // e2e-batch fix #12: per-node width based on the longest enum value name.
-  const rowsColWidth = estimateRowsColWidth(
-    node.values.map((v) => ({ name: v, typeName: '', card: '' })),
-    node.name
+  // Enum values stay single-line, unframed (ROW_HEIGHT) and FILL the column.
+  // Width is max(longest value name, header) — Enum headers carry no meta
+  // cluster (StructureEnumNode has no doc/annotation/condition fields).
+  const rowsColWidth = Math.max(
+    estimateRowsColWidth(node.values.map((v) => ({ name: v, typeName: '', card: '' }))),
+    estimateHeaderWidth(node.name, false)
   );
   return {
     width: rowsColWidth,
     height: HEADER_HEIGHT + node.values.length * ROW_HEIGHT,
+    rowsColWidth,
+    rowOffsets
+  };
+}
+
+/**
+ * Size a read-only Function node (Phase C). The body is the function's input
+ * rows followed by an optional output row, all rendered as stacked Data-style
+ * rows → DATA_ROW_HEIGHT (matching sizeData). Functions have no expansion
+ * children in this first cut, so there is no right-hand column and no
+ * simulateColumnHeight pass — height is the header plus the row stack.
+ *
+ * **Reserved height (clipping fix).** `.rune-node` is `overflow: hidden`, so
+ * the returned height MUST cover everything the renderer draws:
+ *   - header (HEADER_HEIGHT)
+ *   - each input row (DATA_ROW_HEIGHT)
+ *   - when an output exists: the input→output separator
+ *     (FUNCTION_OUTPUT_SEP_HEIGHT — the 1px border + 2×space-1 margins) PLUS
+ *     the output row (DATA_ROW_HEIGHT)
+ *   - the body's bottom NODE_PADDING inset
+ * Omitting the separator or NODE_PADDING clips the output row / bottom edge.
+ *
+ * Width grows from the input/output row texts plus the function name as a
+ * header floor, via `estimateRowsColWidth` (same estimator the Data/Choice/Enum
+ * sizers use). rowOffsets are keyed by each row's `attrName` (inputs) plus a
+ * stable `__output__` sentinel for the output row; the output center is pushed
+ * down by FUNCTION_OUTPUT_SEP_HEIGHT to account for the separator above it.
+ */
+const FUNCTION_OUTPUT_ROW_KEY = '__output__';
+
+function sizeFunction(node: StructureFunctionNode): SizedNode {
+  const inputRows = node.inputRows;
+
+  // Framed input rows: the stack begins one DATA_ROWS_PADDING below the header,
+  // each row is DATA_ROW_HEIGHT separated by DATA_ROW_GAP (pitch).
+  const rowsTop = HEADER_HEIGHT + DATA_ROWS_PADDING;
+  const rowOffsets = new Map<string, number>();
+  for (const [i, row] of inputRows.entries()) {
+    rowOffsets.set(row.attrName, rowsTop + i * DATA_ROW_PITCH + DATA_ROW_HEIGHT / 2);
+  }
+  // Bottom of the input stack (no trailing gap after the last input row).
+  const inputStackBottom =
+    inputRows.length > 0
+      ? rowsTop + inputRows.length * DATA_ROW_HEIGHT + (inputRows.length - 1) * DATA_ROW_GAP
+      : rowsTop;
+
+  let contentBottom = inputStackBottom;
+  if (node.outputRow) {
+    // The separator sits between the last input row and the output row, so the
+    // output center is offset by the input stack bottom + the separator footprint.
+    const outputTop = inputStackBottom + FUNCTION_OUTPUT_SEP_HEIGHT;
+    rowOffsets.set(FUNCTION_OUTPUT_ROW_KEY, outputTop + DATA_ROW_HEIGHT / 2);
+    contentBottom = outputTop + DATA_ROW_HEIGHT;
+  }
+
+  const rowTexts = inputRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality }));
+  if (node.outputRow) {
+    rowTexts.push({
+      name: node.outputRow.attrName,
+      typeName: node.outputRow.typeName,
+      card: node.outputRow.cardinality
+    });
+  }
+  // Split width — framed rows shrink-wrap (rows-only), node respects the header.
+  const rowsColWidth = estimateRowsColWidth(rowTexts);
+  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node));
+
+  // Reserve the rows-stack bottom DATA_ROWS_PADDING (mirrors the func rows CSS).
+  const height = contentBottom + DATA_ROWS_PADDING;
+
+  return {
+    width: Math.max(rowsColWidth, headerWidth) + 2 * NODE_PADDING,
+    height,
     rowsColWidth,
     rowOffsets
   };
@@ -381,7 +633,10 @@ function sizeBase(
       })
     : { width: COL_WIDTH, height: HEADER_HEIGHT, rowsColWidth: COL_WIDTH, rowOffsets: new Map() };
 
-  const baseRowsHeight = HEADER_HEIGHT + node.baseRows.length * ROW_HEIGHT;
+  // Base inherited rows ARE Data attribute rows (name + type/card, stacked,
+  // framed) → DATA_ROW_HEIGHT + DATA_ROW_GAP + DATA_ROWS_PADDING, matching
+  // sizeData's framed-rows stack.
+  const baseRowsHeight = HEADER_HEIGHT + framedRowsStackHeight(node.baseRows.length);
 
   // Base containers can carry their own `expansions` (spec §3.2: containment
   // is uniform across inheritance and type-reference). Each expansion is
@@ -392,8 +647,9 @@ function sizeBase(
   // CSS applies `padding: 16px` (BASE_PADDING) inside .rune-graph-group--base,
   // pushing every rendered row down by that amount relative to the node origin.
   const rowOffsets = new Map<string, number>();
+  const baseRowsTop = BASE_PADDING + HEADER_HEIGHT + DATA_ROWS_PADDING;
   for (const [i, baseRow] of node.baseRows.entries()) {
-    rowOffsets.set(baseRow.attrName, BASE_PADDING + HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
+    rowOffsets.set(baseRow.attrName, baseRowsTop + i * DATA_ROW_PITCH + DATA_ROW_HEIGHT / 2);
   }
 
   let expansionsWidth = 0;
@@ -413,7 +669,7 @@ function sizeBase(
   // rightColumnHeight is that value directly — no further adjustment needed.
   const rightColumnHeight =
     node.expansions.size > 0
-      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, BASE_PADDING + HEADER_HEIGHT)
+      ? simulateColumnHeight(node.expansions, rowOffsets, input, sizes, sizing, baseRowsTop, DATA_ROW_HEIGHT)
       : BASE_PADDING + HEADER_HEIGHT;
 
   // e2e-batch fix #12 (Codex P1 follow-up): compute rowsColWidth FIRST so
@@ -426,9 +682,18 @@ function sizeBase(
   // nested derived child's rowsColWidth keeps the parent wide enough for
   // its own rows column. The base container's effective rowsColWidth is
   // the max of those two — whichever needs more room sets the floor.
-  const baseRowsColWidth = estimateRowsColWidth(
-    node.baseRows.map((r) => ({ name: r.attrName, typeName: r.typeName, card: r.cardinality })),
-    node.baseTypeName
+  // Base rows fill the column (header floor folded in via estimateHeaderWidth),
+  // mirroring Choice/Enum — only top-level Data rows shrink-wrap.
+  const baseRowsColWidth = Math.max(
+    estimateRowsColWidth(
+      node.baseRows.map((r) => ({
+        name: r.attrName,
+        typeName: r.typeName,
+        card: r.cardinality,
+        expandable: rowIsExpandable(r.typeKind)
+      }))
+    ),
+    estimateHeaderWidth(node.baseTypeName, false)
   );
   const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
 
@@ -439,7 +704,7 @@ function sizeBase(
   // leftColumnHeight is the content height from the node origin (before adding
   // BASE_PADDING bottom). The +BASE_PADDING accounts for the gap between the
   // last base row and the derived child, mirroring placeBaseChildren's
-  // y: HEADER_HEIGHT + baseRows.length*ROW_HEIGHT + BASE_PADDING for the child.
+  // y: HEADER_HEIGHT + baseRows.length*DATA_ROW_HEIGHT + BASE_PADDING for the child.
   const leftColumnHeight = baseRowsHeight + childSize.height + BASE_PADDING;
   const innerHeight = Math.max(leftColumnHeight, rightColumnHeight);
   // Left column reserves the wider of (rowsColWidth, derived child's full
@@ -498,6 +763,7 @@ function sizeOf(
     if (node.kind === 'data') sized = sizeData(node, sizes, input, sizing);
     else if (node.kind === 'choice') sized = sizeChoice(node, sizes, input, sizing);
     else if (node.kind === 'enum') sized = sizeEnum(node);
+    else if (node.kind === 'function') sized = sizeFunction(node);
     else sized = sizeBase(node, sizes, input, sizing);
     sizes.set(cacheKey, sized);
     return sized;
@@ -649,6 +915,10 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
         // Phase 14e/A — Enum nodes are terminal; their value list renders
         // as plain rows, no children to place.
         break;
+      case 'function':
+        // Phase C — Function nodes are terminal in this first cut; inputs and
+        // the output render as plain stacked rows with no expansion children.
+        break;
       default: {
         const _exhaustive: never = n;
         void _exhaustive;
@@ -672,16 +942,18 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     connectorGeometry.rowRightX = NODE_PADDING + sz.rowsColWidth;
     connectorGeometry.childLeftX = NODE_PADDING + sz.rowsColWidth + COL_GAP;
 
-    // yCursor floor: header sits flush with the wrapper top, so the first
-    // expansion's minimum y is HEADER_HEIGHT (no top NODE_PADDING — see
-    // sizeData/simulateColumnHeight for the symmetric init).
-    let yCursor = HEADER_HEIGHT;
+    // yCursor floor: header sits flush with the wrapper top; the framed rows
+    // stack begins one DATA_ROWS_PADDING below it, so the first expansion's
+    // minimum y mirrors sizeData/simulateColumnHeight's `rowsTop` init.
+    let yCursor = HEADER_HEIGHT + DATA_ROWS_PADDING;
     for (const [attrName, childInstanceId] of n.expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
 
+      // Data rows are the stacked two-line rows → DATA_ROW_HEIGHT (matches
+      // sizeData's rowOffsets + simulateColumnHeight rowHeight param).
       const rowCenter = sz.rowOffsets.get(attrName);
-      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+      const rowTop = rowCenter !== undefined ? rowCenter - DATA_ROW_HEIGHT / 2 : yCursor;
       const childY = Math.max(rowTop, yCursor);
 
       // Cycle guard: skip placement when the target instance is already on the
@@ -798,8 +1070,11 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
         n.childNodeId,
         nodeInstanceId(n),
         {
+          // Base inherited rows are framed Data attribute rows → the framed
+          // rows stack (matches sizeBase's baseRowsHeight). The derived child
+          // sits one BASE_PADDING below that stack.
           x: BASE_PADDING,
-          y: HEADER_HEIGHT + n.baseRows.length * ROW_HEIGHT + BASE_PADDING
+          y: HEADER_HEIGHT + framedRowsStackHeight(n.baseRows.length) + BASE_PADDING
         },
         ancestors,
         instanceAncestorPath
@@ -827,13 +1102,14 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
     connectorGeometry.rowRightX = BASE_PADDING + sz.rowsColWidth;
     connectorGeometry.childLeftX = rightColumnX;
 
-    let yCursor = BASE_PADDING + HEADER_HEIGHT;
+    let yCursor = BASE_PADDING + HEADER_HEIGHT + DATA_ROWS_PADDING;
     for (const [attrName, childInstanceId] of n.expansions) {
       const childSize = sizes.get(makeSizeCacheKey(childInstanceId));
       if (!childSize) continue;
 
+      // Base inherited rows are Data attribute rows → DATA_ROW_HEIGHT.
       const rowCenter = sz.rowOffsets.get(attrName);
-      const rowTop = rowCenter !== undefined ? rowCenter - ROW_HEIGHT / 2 : yCursor;
+      const rowTop = rowCenter !== undefined ? rowCenter - DATA_ROW_HEIGHT / 2 : yCursor;
       const childY = Math.max(rowTop, yCursor);
 
       if (!ancestors.has(childInstanceId)) {

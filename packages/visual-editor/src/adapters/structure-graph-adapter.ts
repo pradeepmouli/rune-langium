@@ -19,6 +19,7 @@ import {
   type StructureChoiceArm,
   type StructureBaseContainer,
   type StructureEnumNode,
+  type StructureFunctionNode,
   type StructureRow,
   expansionKey
 } from '../types/structure-view.js';
@@ -31,7 +32,7 @@ export interface AdapterDocument {
 
 export interface AdapterNode {
   readonly id: string;
-  readonly $type: 'Data' | 'Choice' | 'Enum' | 'Record' | 'TypeAlias';
+  readonly $type: 'Data' | 'Choice' | 'Enum' | 'Record' | 'TypeAlias' | 'Function';
   readonly name: string;
   readonly namespace: string;
   readonly extends?: string;
@@ -49,6 +50,29 @@ export interface AdapterNode {
   /** Choice nodes carry their arms here — real ChoiceOption AST shape (typeCall only, no name/card). */
   readonly choiceOptions?: ReadonlyArray<AdapterChoiceOption | null | undefined>;
   readonly values?: ReadonlyArray<{ name: string }>;
+  /**
+   * Phase C — Function nodes carry their input parameters here. Inputs are
+   * `Attribute`-shaped (same shape as Data `attributes`: name + typeCall + card),
+   * so they reuse `AdapterAttribute`. Array entries may be `null` during
+   * partial-parse; `buildFunctionNode` filters those out.
+   */
+  readonly inputs?: ReadonlyArray<AdapterAttribute | null | undefined>;
+  /**
+   * Phase C — a Function's (optional) output parameter, also `Attribute`-shaped.
+   * Null/undefined when the function declares no output.
+   */
+  readonly output?: AdapterAttribute | null;
+  /**
+   * Phase A — type metadata projected from the store node by the studio
+   * (`graphNodesToAdapterDocument`). All optional: fallback / hydration nodes
+   * may omit them. `definition` is the doc string; `annotations` are display
+   * strings from `annotationsToDisplay`; `conditions` are
+   * `{ name, preview }` pairs from `conditionsToDisplay` (Data only, in
+   * practice). The adapter forwards these onto the built StructureNode.
+   */
+  readonly definition?: string;
+  readonly annotations?: readonly string[];
+  readonly conditions?: readonly { readonly name: string; readonly preview: string }[];
 }
 
 /**
@@ -320,6 +344,11 @@ function buildChoiceNode(
     kind: 'choice',
     name: node.name,
     namespaceUri: node.namespace,
+    // Phase A — forward type metadata from the AdapterNode (projected by the
+    // studio). Defensive defaults keep fallback/hydration nodes from throwing.
+    definition: node.definition,
+    annotations: node.annotations,
+    conditions: node.conditions,
     options: arms,
     expansions
   };
@@ -337,6 +366,36 @@ function buildEnumNode(node: AdapterNode, instanceId: string): StructureEnumNode
     name: node.name,
     namespaceUri: node.namespace,
     values: (node.values ?? []).map((v) => v.name)
+  };
+}
+
+/**
+ * Build a StructureFunctionNode for `node` at the given instance id (Phase C).
+ *
+ * Inputs and the (optional) output are `Attribute`-shaped, so they reuse the
+ * same `buildRow` path as Data attributes — name on top, `type · cardinality`
+ * beneath. Functions are terminal in this first cut: no expansion map, no
+ * recursion into input/output types. Meta (definition / annotations /
+ * conditions) is forwarded from the AdapterNode (projected by the studio).
+ */
+function buildFunctionNode(node: AdapterNode, doc: AdapterDocument, instanceId: string): StructureFunctionNode {
+  const inputRows = (node.inputs ?? [])
+    .filter((a): a is AdapterAttribute => a != null)
+    .map((a) => buildRow(a, doc, node.namespace, false));
+  const outputRow = node.output != null ? buildRow(node.output, doc, node.namespace, false) : undefined;
+  return {
+    id: node.id,
+    instanceId,
+    kind: 'function',
+    name: node.name,
+    namespaceUri: node.namespace,
+    inputRows,
+    outputRow,
+    // Phase A — forward type metadata from the AdapterNode (projected by the
+    // studio). Defensive defaults keep fallback/hydration nodes from throwing.
+    definition: node.definition,
+    annotations: node.annotations,
+    conditions: node.conditions
   };
 }
 
@@ -448,6 +507,11 @@ function walkAndExpand(
     namespaceUri: node.namespace,
     extendsName: node.extends,
     extendsNodeId: node.extends ? findNodeByName(node.extends, doc, node.namespace)?.id : undefined,
+    // Phase A — forward type metadata from the AdapterNode (projected by the
+    // studio). Defensive defaults keep fallback/hydration nodes from throwing.
+    definition: node.definition,
+    annotations: node.annotations,
+    conditions: node.conditions,
     rows,
     expansions
   };
@@ -874,6 +938,15 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     // listing its values. Enums are terminal: no expansion, no chevrons.
     const rootInstanceId = root.id;
     nodes.set(rootInstanceId, buildEnumNode(root, rootInstanceId));
+    return { rootNodeId: rootInstanceId, nodes };
+  }
+
+  if (root.$type === 'Function') {
+    // Phase C — focused Function root materializes as a single node with its
+    // inputs as stacked Data-style rows and a distinct output row. Functions are
+    // roots only in this first cut: no nested expansion of input/output types.
+    const rootInstanceId = root.id;
+    nodes.set(rootInstanceId, buildFunctionNode(root, doc, rootInstanceId));
     return { rootNodeId: rootInstanceId, nodes };
   }
 

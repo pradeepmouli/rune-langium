@@ -20,6 +20,7 @@ import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
+import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
@@ -261,54 +262,65 @@ function StructureDataRow({
   const unresolvedTitle = diagnostic?.message ?? `Type ${row.typeName} not found in this namespace or its imports`;
 
   return (
+    // XMLSpy-style stacked row: the attribute name sits on the top line and
+    // the type-chip + cardinality (plus any enum-nav / unresolved glyphs) on a
+    // second line beneath. `.rune-node-row__main` is the stacked column; the
+    // expand control stays a direct child of `.rune-node-row` so it centers
+    // vertically across both lines.
     <div className={rowClass} data-attr={row.attrName}>
-      {NameCell ? (
-        <NameCell value={row.attrName} nodeId={nodeId} attrName={row.attrName} />
-      ) : (
-        <span className="rune-cell-name">{row.attrName}</span>
-      )}
-      {TypeCell ? (
-        <TypeCell typeName={row.typeName} typeKind={row.typeKind} nodeId={nodeId} attrName={row.attrName} />
-      ) : (
-        // row.typeName is string (not undefined) per StructureRow; render '?' if empty.
-        <TypeChip as="span" typeName={row.typeName || '?'} typeKind={row.typeKind} />
-      )}
-      {/* Spec §3.3 — enum-nav glyph (↗): navigate into the enum type as root. */}
-      {isEnum && onNavigateToEnumType && row.targetNodeId ? (
-        <RowGlyph
-          as="button"
-          variant="enum-nav"
-          type="button"
-          className="nodrag nopan"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onNavigateToEnumType(row.targetNodeId!);
-          }}
-          aria-label={`Navigate to ${row.typeName}`}
-          title={`Navigate to ${row.typeName}`}
-          data-testid={`enum-nav-${row.attrName}`}
-        >
-          ↗
-        </RowGlyph>
-      ) : null}
-      {/* Spec §3.3 — unresolved-ref indicator (?): shows LSP error as tooltip. */}
-      {isUnresolved ? (
-        <RowGlyph
-          variant="unresolved"
-          title={unresolvedTitle}
-          aria-label={`Unresolved type: ${row.typeName}`}
-          role="img"
-          data-testid={`unresolved-${row.attrName}`}
-        >
-          ?
-        </RowGlyph>
-      ) : null}
-      {CardCell ? (
-        <CardCell value={row.cardinality} nodeId={nodeId} attrName={row.attrName} />
-      ) : (
-        <span className="rune-cell-card">{row.cardinality}</span>
-      )}
+      <div className="rune-node-row__main">
+        <div className="rune-node-row__name-line">
+          {NameCell ? (
+            <NameCell value={row.attrName} nodeId={nodeId} attrName={row.attrName} />
+          ) : (
+            <span className="rune-cell-name">{row.attrName}</span>
+          )}
+        </div>
+        <div className="rune-node-row__type-line">
+          {TypeCell ? (
+            <TypeCell typeName={row.typeName} typeKind={row.typeKind} nodeId={nodeId} attrName={row.attrName} />
+          ) : (
+            // row.typeName is string (not undefined) per StructureRow; render '?' if empty.
+            <TypeChip as="span" typeName={row.typeName || '?'} typeKind={row.typeKind} />
+          )}
+          {/* Spec §3.3 — enum-nav glyph (↗): navigate into the enum type as root. */}
+          {isEnum && onNavigateToEnumType && row.targetNodeId ? (
+            <RowGlyph
+              as="button"
+              variant="enum-nav"
+              type="button"
+              className="nodrag nopan"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onNavigateToEnumType(row.targetNodeId!);
+              }}
+              aria-label={`Navigate to ${row.typeName}`}
+              title={`Navigate to ${row.typeName}`}
+              data-testid={`enum-nav-${row.attrName}`}
+            >
+              ↗
+            </RowGlyph>
+          ) : null}
+          {/* Spec §3.3 — unresolved-ref indicator (?): shows LSP error as tooltip. */}
+          {isUnresolved ? (
+            <RowGlyph
+              variant="unresolved"
+              title={unresolvedTitle}
+              aria-label={`Unresolved type: ${row.typeName}`}
+              role="img"
+              data-testid={`unresolved-${row.attrName}`}
+            >
+              ?
+            </RowGlyph>
+          ) : null}
+          {CardCell ? (
+            <CardCell value={row.cardinality} nodeId={nodeId} attrName={row.attrName} />
+          ) : (
+            <span className="rune-cell-card">{row.cardinality}</span>
+          )}
+        </div>
+      </div>
       {/* Expand/collapse control moved to the RIGHT edge of the row
           (was leading-edge before this iteration) and switched from a
           chevron to a +/− icon to match the form-preview Add/Remove
@@ -407,6 +419,11 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
         <div className="rune-node-header">
           <NodeKindBadge kind="data" />
           <span>{data.name}</span>
+          <StructureMetaIndicators
+            definition={data.definition}
+            annotations={data.annotations}
+            conditions={data.conditions}
+          />
         </div>
         <div className="rune-node-body rune-node-body--two-col">
           <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
@@ -443,7 +460,16 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
               );
             })}
           </div>
-          <div className="rune-node-children-slot" data-testid="data-node-children" />
+          <div
+            className="rune-node-children-slot"
+            data-testid="data-node-children"
+            // Only decorate (grow into the gutter + draw the dashed column
+            // divider) when this node actually has a materialized child column.
+            // Otherwise the slot must stay collapsed: with rows now shrink-wrapped
+            // and the node width header-driven, a growing slot would fill the
+            // empty right area and draw a stray vertical dashed line.
+            data-has-children={(childYByAttrName?.size ?? 0) > 0 ? 'true' : undefined}
+          />
         </div>
         {/* Visual-polish #11 (PR #210): SVG connector from row→child for each
             materialized expansion. Rendered AFTER the body so it paints over,

@@ -12,6 +12,7 @@ import {
   type StructureChoiceNode,
   type StructureDataNode,
   type StructureEnumNode,
+  type StructureFunctionNode,
   type StructureExpansionKey,
   expansionKey
 } from '../../src/types/structure-view.js';
@@ -3633,10 +3634,7 @@ describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR
         $type: 'Choice' as const,
         name: 'Pick',
         namespace: 'cdm.types',
-        choiceOptions: [
-          { typeCall: { type: { $refText: 'MyRec' } } },
-          { typeCall: { type: { $refText: 'MyAlias' } } }
-        ]
+        choiceOptions: [{ typeCall: { type: { $refText: 'MyRec' } } }, { typeCall: { type: { $refText: 'MyAlias' } } }]
       }
     ]
   };
@@ -3699,5 +3697,114 @@ describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR
     expect(result.nodes.size).toBe(1);
     const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
     expect(pick.expansions.size).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase C — Function as focused root
+// ---------------------------------------------------------------------------
+
+describe('buildStructureGraph — Function as focused root (Phase C)', () => {
+  const fnFixture = {
+    namespaces: [{ uri: 'cdm.calc' }],
+    nodes: [
+      {
+        id: 'cdm.calc::FixedAmount',
+        $type: 'Function' as const,
+        name: 'FixedAmount',
+        namespace: 'cdm.calc',
+        inputs: [
+          {
+            name: 'notional',
+            typeCall: { type: { $refText: 'number' } },
+            card: { inf: 1, unbounded: false, sup: 1 }
+          },
+          {
+            name: 'rate',
+            typeCall: { type: { $refText: 'Rate' } },
+            card: { inf: 0, unbounded: false, sup: 1 }
+          }
+        ],
+        output: {
+          name: 'amount',
+          typeCall: { type: { $refText: 'Money' } },
+          card: { inf: 1, unbounded: false, sup: 1 }
+        },
+        definition: 'Computes a fixed amount.',
+        annotations: ['calculation'],
+        conditions: [{ name: 'Positive', preview: 'amount > 0' }]
+      },
+      // A referenced Data node so the input/output types classify as Data (not Unresolved).
+      { id: 'cdm.calc::Rate', $type: 'Data' as const, name: 'Rate', namespace: 'cdm.calc', attributes: [] },
+      { id: 'cdm.calc::Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.calc', attributes: [] }
+    ]
+  };
+
+  it('materializes inputs as rows and the output as a distinct row', () => {
+    const result = buildStructureGraph(fnFixture, {
+      focusedTypeId: 'cdm.calc::FixedAmount',
+      expansionMap: new Map()
+    });
+    expect(result.rootNodeId).toBe('cdm.calc::FixedAmount');
+    expect(result.nodes.size).toBe(1);
+    const fn = result.nodes.get('cdm.calc::FixedAmount') as StructureFunctionNode;
+    expect(fn.kind).toBe('function');
+    expect(fn.name).toBe('FixedAmount');
+    expect(fn.inputRows.map((r) => r.attrName)).toEqual(['notional', 'rate']);
+    expect(fn.inputRows.map((r) => r.typeName)).toEqual(['number', 'Rate']);
+    expect(fn.inputRows.map((r) => r.cardinality)).toEqual(['1..1', '0..1']);
+    expect(fn.inputRows.map((r) => r.typeKind)).toEqual(['BasicType', 'Data']);
+    expect(fn.outputRow?.attrName).toBe('amount');
+    expect(fn.outputRow?.typeName).toBe('Money');
+    expect(fn.outputRow?.cardinality).toBe('1..1');
+    expect(fn.outputRow?.typeKind).toBe('Data');
+  });
+
+  it('forwards Phase-A meta (definition / annotations / conditions)', () => {
+    const result = buildStructureGraph(fnFixture, {
+      focusedTypeId: 'cdm.calc::FixedAmount',
+      expansionMap: new Map()
+    });
+    const fn = result.nodes.get('cdm.calc::FixedAmount') as StructureFunctionNode;
+    expect(fn.definition).toBe('Computes a fixed amount.');
+    expect(fn.annotations).toEqual(['calculation']);
+    expect(fn.conditions).toEqual([{ name: 'Positive', preview: 'amount > 0' }]);
+  });
+
+  it('materializes a function with no output and no inputs without crashing', () => {
+    const result = buildStructureGraph(
+      {
+        namespaces: [{ uri: 'cdm.calc' }],
+        nodes: [{ id: 'cdm.calc::Noop', $type: 'Function' as const, name: 'Noop', namespace: 'cdm.calc' }]
+      },
+      { focusedTypeId: 'cdm.calc::Noop', expansionMap: new Map() }
+    );
+    const fn = result.nodes.get('cdm.calc::Noop') as StructureFunctionNode;
+    expect(fn.kind).toBe('function');
+    expect(fn.inputRows).toEqual([]);
+    expect(fn.outputRow).toBeUndefined();
+  });
+
+  it('filters out null input entries (partial-parse tolerance)', () => {
+    const result = buildStructureGraph(
+      {
+        namespaces: [{ uri: 'cdm.calc' }],
+        nodes: [
+          {
+            id: 'cdm.calc::Partial',
+            $type: 'Function' as const,
+            name: 'Partial',
+            namespace: 'cdm.calc',
+            inputs: [
+              null,
+              { name: 'x', typeCall: { type: { $refText: 'number' } }, card: { inf: 1, unbounded: false, sup: 1 } }
+            ]
+          }
+        ]
+      },
+      { focusedTypeId: 'cdm.calc::Partial', expansionMap: new Map() }
+    );
+    const fn = result.nodes.get('cdm.calc::Partial') as StructureFunctionNode;
+    expect(fn.inputRows.map((r) => r.attrName)).toEqual(['x']);
   });
 });

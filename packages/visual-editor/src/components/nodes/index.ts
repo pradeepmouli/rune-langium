@@ -11,6 +11,7 @@ import type { NodeTypes } from '@xyflow/react';
 import { DataNode } from './DataNode.js';
 import { ChoiceNode } from './ChoiceNode.js';
 import { EnumNode } from './EnumNode.js';
+import { FunctionNode } from './FunctionNode.js';
 import { GenericNode } from './GenericNode.js';
 import { GroupContainerNode } from './GroupContainerNode.js';
 
@@ -26,5 +27,9 @@ export const nodeTypes: NodeTypes = {
   groupContainer: GroupContainerNode,
   // Finding 2: layoutStructureGraph emits base containers as type:'structureBase'; both
   // types map to GroupContainerNode which branches on data.scope internally.
-  structureBase: GroupContainerNode
+  structureBase: GroupContainerNode,
+  // Phase C: layoutStructureGraph emits Function structure nodes as type:'function'
+  // (from StructureFunctionNode.kind). The graph-variant 'func' node type above
+  // stays mapped to GenericNode — only the structure variant uses FunctionNode.
+  function: FunctionNode
 };

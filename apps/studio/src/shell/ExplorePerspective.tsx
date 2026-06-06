@@ -36,6 +36,8 @@ import {
   TypePickerCell,
   BUILTIN_TYPES,
   resolveNodeKind,
+  annotationsToDisplay,
+  conditionsToDisplay,
   useEditorStore,
   useModelSourceSync
 } from '@rune-langium/visual-editor';
@@ -179,14 +181,62 @@ function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagn
 /**
  * Project the editor store's node array into the AdapterDocument shape.
  *
- * Only `Data`, `Choice`, and `Enum` nodes are included. `superType.$refText`
- * maps to `extends`; Data `attributes` carry through to `AdapterAttribute`
- * directly since their fields match. Choice arms are mapped to the new
- * `choiceOptions` field on `AdapterNode`, preserving the real `ChoiceOption`
- * AST shape (only `typeCall`, no synthesized `name` or `card`).
+ * Projects `Data`, `Choice`, `Enum`, `Record`, `TypeAlias`, and `Function`
+ * nodes. `superType.$refText` maps to `extends`; Data `attributes` carry
+ * through to `AdapterAttribute` directly since their fields match. Choice arms
+ * are mapped to the `choiceOptions` field on `AdapterNode`, preserving the real
+ * `ChoiceOption` AST shape (only `typeCall`, no synthesized `name` or `card`).
+ * Record / TypeAlias project as bare reference targets (name + namespace only);
+ * Function projects its `inputs` + `output` (Attribute-shaped) plus Phase-A
+ * metadata.
  *
  * This is a **pure projection** — no side-effects, safe to call inside useMemo.
  */
+/**
+ * Phase A — project a store node's raw AST metadata (documentation,
+ * annotations, conditions) into the display-shaped fields the adapter and
+ * Structure View node header read. Reuses the shared `annotationsToDisplay` /
+ * `conditionsToDisplay` helpers so expression previews are not hand-rolled.
+ *
+ * Defensive: fallback / curated-hydration nodes may omit any of these fields,
+ * so each access tolerates `undefined` and the helpers return empty arrays.
+ * Empty results collapse to `undefined` so the indicators render nothing.
+ */
+function projectStructureMeta(d: {
+  definition?: string;
+  annotations?: readonly unknown[];
+  conditions?: readonly unknown[];
+  /**
+   * Functions carry `postConditions` as a SEPARATE array from `conditions`
+   * (Phase C / PR #307 finding #2). When present they are forwarded to
+   * `conditionsToDisplay`'s dedicated `postConditions` param so they surface in
+   * the condition indicator (tagged `isPostCondition`) instead of being
+   * dropped. Data/Choice nodes omit this field, so it's optional.
+   */
+  postConditions?: readonly unknown[];
+}): {
+  definition?: string;
+  annotations?: readonly string[];
+  conditions?: readonly { name: string; preview: string }[];
+} {
+  const definition = typeof d.definition === 'string' && d.definition.trim() ? d.definition : undefined;
+
+  const annotationInfos = annotationsToDisplay(d.annotations as never);
+  const annotations = annotationInfos.length
+    ? annotationInfos.map((a) => (a.attribute ? `${a.name}.${a.attribute}` : a.name))
+    : undefined;
+
+  // Pass conditions + postConditions through the shared helper; functions
+  // surface BOTH (postConditions tagged isPostCondition), Data/Choice only the
+  // former (postConditions undefined).
+  const conditionInfos = conditionsToDisplay(d.conditions as never, d.postConditions as never);
+  const conditions = conditionInfos.length
+    ? conditionInfos.map((c) => ({ name: c.name ?? '', preview: c.expressionText }))
+    : undefined;
+
+  return { definition, annotations, conditions };
+}
+
 function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGraphNode }[]): AdapterDocument {
   const adapterNodes: AdapterNode[] = [];
   const namespacesSet = new Set<string>();
@@ -212,6 +262,9 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
       if (k === 'enum' || k === 'Enum' || k === 'RosettaEnumeration') return 'RosettaEnumeration';
       if (k === 'record' || k === 'RosettaRecordType') return 'RosettaRecordType';
       if (k === 'typeAlias' || k === 'TypeAlias' || k === 'RosettaTypeAlias') return 'TypeAlias';
+      // Phase C — Function structure node. Mirror the selectedNodeType fallback
+      // chain so curated-hydration func nodes (no `$type`) still project.
+      if (k === 'func' || k === 'Function' || k === 'RosettaFunction') return 'RosettaFunction';
       return undefined;
     })();
 
@@ -230,6 +283,9 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         namespace: string;
         superType?: { $refText?: string };
         attributes?: readonly unknown[];
+        definition?: string;
+        annotations?: readonly unknown[];
+        conditions?: readonly unknown[];
       };
       adapterNodes.push({
         id: rfNode.id,
@@ -239,19 +295,33 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         extends: dd.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
-        attributes: (dd.attributes ?? []) as AdapterNode['attributes']
+        attributes: (dd.attributes ?? []) as AdapterNode['attributes'],
+        // Phase A — type metadata (doc / annotations / conditions). Reuses the
+        // shared display helpers; empty results collapse to undefined.
+        ...projectStructureMeta(dd)
       });
     } else if (effectiveType === 'Choice') {
       // ChoiceOption AST shape: { $type, typeCall, … } — NO `name`, NO `card`.
       // Pass through to the new `choiceOptions` field on AdapterNode unchanged.
       // The adapter's buildChoiceArm consumes the real shape via typeCall only.
-      const dc = d as { name: string; namespace: string; attributes?: readonly unknown[] };
+      const dc = d as {
+        name: string;
+        namespace: string;
+        attributes?: readonly unknown[];
+        definition?: string;
+        annotations?: readonly unknown[];
+        conditions?: readonly unknown[];
+      };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Choice',
         name: dc.name,
         namespace: dc.namespace,
-        choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>
+        choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>,
+        // Phase A — type metadata. Choice declarations carry doc + annotations
+        // (and may carry conditions in the grammar); project all via the shared
+        // helper for symmetry with Data. Empty results collapse to undefined.
+        ...projectStructureMeta(dc)
       });
     } else if (effectiveType === 'RosettaEnumeration') {
       const de = d as { name: string; namespace: string; enumValues?: readonly unknown[] };
@@ -268,8 +338,38 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
     } else if (effectiveType === 'TypeAlias' || effectiveType === 'RosettaTypeAlias') {
       const ta = d as { name: string; namespace: string };
       adapterNodes.push({ id: rfNode.id, $type: 'TypeAlias', name: ta.name, namespace: ta.namespace });
+    } else if (effectiveType === 'RosettaFunction') {
+      // Phase C — Function structure node. `inputs` and `output` are
+      // Attribute-shaped (name + typeCall + card), identical to Data
+      // `attributes`, so they pass through to AdapterNode unchanged and the
+      // adapter's buildRow consumes them. Defensive against missing fields:
+      // partial-parse / hydration func nodes may omit inputs or output.
+      const df = d as {
+        name: string;
+        namespace: string;
+        inputs?: readonly unknown[];
+        output?: unknown;
+        definition?: string;
+        annotations?: readonly unknown[];
+        conditions?: readonly unknown[];
+        postConditions?: readonly unknown[];
+      };
+      adapterNodes.push({
+        id: rfNode.id,
+        $type: 'Function',
+        name: df.name,
+        namespace: df.namespace,
+        inputs: (df.inputs ?? []) as AdapterNode['inputs'],
+        output: (df.output ?? null) as AdapterNode['output'],
+        // Phase A — type metadata (doc / annotations / conditions). Functions
+        // carry BOTH `conditions` and `postConditions`; projectStructureMeta
+        // forwards postConditions to conditionsToDisplay so they surface in the
+        // condition indicator instead of being dropped (PR #307 finding #2).
+        // Empty results collapse to undefined.
+        ...projectStructureMeta(df)
+      });
     }
-    // Other kinds (Function, etc.) are not relevant to Structure View; Record and TypeAlias are now projected above.
+    // Record and TypeAlias projected above; Function projected here.
   }
 
   const namespaces = Array.from(namespacesSet).map((uri) => ({ uri }));
@@ -857,7 +957,9 @@ export function ExplorePerspective() {
   // switching between nodes in the same namespace on the same nonce doesn't
   // issue redundant linkDocument round-trips.
   const relinkedRef = useRef(new Set<string>());
-  useEffect(() => { relinkedRef.current = new Set(); }, [hydrationNonce, workspaceId]);
+  useEffect(() => {
+    relinkedRef.current = new Set();
+  }, [hydrationNonce, workspaceId]);
 
   useEffect(() => {
     if (hydrationNonce === 0 || !selectedNodeId) return;
@@ -1207,10 +1309,7 @@ export function ExplorePerspective() {
       if (!file) {
         // eslint-disable-next-line no-console
         console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
-        useOutputStore.getState().addLine(
-          fmtLine('editor', `file not found for URI`, fileName),
-          'warn'
-        );
+        useOutputStore.getState().addLine(fmtLine('editor', `file not found for URI`, fileName), 'warn');
         return null;
       }
       openFileInSource(file.path);
@@ -1224,10 +1323,7 @@ export function ExplorePerspective() {
             pendingDisplayFileRef.current.delete(file.path);
             // eslint-disable-next-line no-console
             console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
-            useOutputStore.getState().addLine(
-              fmtLine('editor', 'editor view timeout', file.path),
-              'warn'
-            );
+            useOutputStore.getState().addLine(fmtLine('editor', 'editor view timeout', file.path), 'warn');
             resolve(null);
           }
         }, 2000);
@@ -1637,7 +1733,14 @@ export function ExplorePerspective() {
   // Structure pane — focusedTypeId gated by node $type (Data / Choice / Enum only)
   const structureFocusedTypeId = useMemo(() => {
     if (!selectedNodeId) return undefined;
-    if (selectedNodeType === 'Data' || selectedNodeType === 'Choice' || selectedNodeType === 'RosettaEnumeration')
+    // Phase C — Functions are now a supported structure-view root alongside
+    // Data / Choice / Enum.
+    if (
+      selectedNodeType === 'Data' ||
+      selectedNodeType === 'Choice' ||
+      selectedNodeType === 'RosettaEnumeration' ||
+      selectedNodeType === 'RosettaFunction'
+    )
       return selectedNodeId;
     // Unsupported kind — pass undefined so StructureView shows its empty-selection state
     return undefined;
