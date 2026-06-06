@@ -13,16 +13,17 @@ import {
 import { getMemberArray, ensureMemberArray, forEachMember } from '../../src/store/node-projection.js';
 import { toNodesById, nodesFromMap, toEdgesById, edgesFromMap } from '../../src/store/node-projection.js';
 
-describe('node-projection id builders (V1)', () => {
-  it('makeNodeId joins namespace and name with the :: separator', () => {
-    expect(makeNodeId('cdm.base', 'Foo')).toBe('cdm.base::Foo');
+describe('node-projection id builders (V1, dot form)', () => {
+  it('makeNodeId joins namespace and name with a dot (via qualifiedExportPath)', () => {
+    expect(makeNodeId('cdm.base', 'Foo')).toBe('cdm.base.Foo');
+    expect(makeNodeId('', 'Foo')).toBe('Foo'); // empty namespace → no leading dot
   });
-  it('nameFromNodeId returns the trailing name', () => {
-    expect(nameFromNodeId('cdm.base::Foo')).toBe('Foo');
-    expect(nameFromNodeId('Foo')).toBe('Foo'); // no separator → whole string
+  it('nameFromNodeId returns the trailing name via last-dot split', () => {
+    expect(nameFromNodeId('cdm.base.Foo')).toBe('Foo');
+    expect(nameFromNodeId('Foo')).toBe('Foo'); // no dot → whole string
   });
-  it('splitNodeId returns namespace + name', () => {
-    expect(splitNodeId('cdm.base::Foo')).toEqual({ namespace: 'cdm.base', name: 'Foo' });
+  it('splitNodeId returns namespace + name via last-dot split', () => {
+    expect(splitNodeId('cdm.base.Foo')).toEqual({ namespace: 'cdm.base', name: 'Foo' });
     expect(splitNodeId('Foo')).toEqual({ namespace: '', name: 'Foo' });
   });
 });

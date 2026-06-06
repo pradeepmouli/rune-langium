@@ -10,33 +10,32 @@
  * `model-helpers.ts`'s `resolveNodeKind`; this module re-exports it for a single
  * import surface but does not re-implement it.)
  *
- * NOTE: the node-id separator is `::` here; the `::`→`.` unification is a
- * separate follow-up that only changes the two functions below.
+ * Node ids are the core qualified name (dot-separated, via qualifiedExportPath).
+ * 3A′ hard cutover: `::` separator has been retired from node ids.
  */
 
+import { qualifiedExportPath } from '@rune-langium/core';
 import type { EdgeKind, AnyGraphNode, TypeGraphNode, TypeGraphEdge } from '../types.js';
 
 // Re-export so callers can import EdgeKind from a single surface.
 export type { EdgeKind };
 
-const NODE_ID_SEPARATOR = '::';
-
-/** Build the canonical top-level node id `${namespace}::${name}`. */
+/** Build the canonical top-level node id `${namespace}.${name}` (core qualified name). */
 export function makeNodeId(namespace: string, name: string): string {
-  return `${namespace}${NODE_ID_SEPARATOR}${name}`;
+  return qualifiedExportPath(namespace, name);
 }
 
-/** The trailing simple name of a node id (everything after the last separator). */
+/** The trailing simple name of a node id (everything after the last dot). */
 export function nameFromNodeId(nodeId: string): string {
-  const parts = nodeId.split(NODE_ID_SEPARATOR);
-  return parts.length > 1 ? parts[parts.length - 1]! : nodeId;
+  const idx = nodeId.lastIndexOf('.');
+  return idx < 0 ? nodeId : nodeId.slice(idx + 1);
 }
 
-/** Split a node id into `{ namespace, name }`; namespace is '' when absent. */
+/** Split a node id into `{ namespace, name }` by the last dot; namespace is '' when absent. */
 export function splitNodeId(nodeId: string): { namespace: string; name: string } {
-  const idx = nodeId.lastIndexOf(NODE_ID_SEPARATOR);
+  const idx = nodeId.lastIndexOf('.');
   if (idx < 0) return { namespace: '', name: nodeId };
-  return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + NODE_ID_SEPARATOR.length) };
+  return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + 1) };
 }
 
 // ---------------------------------------------------------------------------
