@@ -29,6 +29,7 @@ import {
   type RosettaModel
 } from '../generated/ast.js';
 import type { LangiumDocument } from 'langium';
+import { namespaceFromModelName } from '../naming/namespace.js';
 
 // ---------------------------------------------------------------------------
 // Shared primitives
@@ -51,12 +52,7 @@ export function getElementNamespace(element: { $container?: unknown }): string |
   if (!container || typeof container !== 'object') return undefined;
   const model = container as { name?: unknown; $type?: string };
   if (model.$type !== 'RosettaModel') return undefined;
-  const name = model.name;
-  if (typeof name === 'string') return name.replace(/^"|"$/g, '');
-  if (name && typeof name === 'object' && 'segments' in name) {
-    return (name as { segments: string[] }).segments.join('.');
-  }
-  return name == null ? undefined : String(name);
+  return namespaceFromModelName((model as { name?: unknown }).name);
 }
 
 // ---------------------------------------------------------------------------
@@ -110,12 +106,7 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
   // Re-use the same name → namespace projection as getElementNamespace so
   // the source-namespace key matches what trackRef writes for targets.
   function modelNamespace(model: RosettaModel): string | undefined {
-    const name = (model as unknown as { name?: unknown }).name;
-    if (typeof name === 'string') return name.replace(/^"|"$/g, '');
-    if (name && typeof name === 'object' && 'segments' in name) {
-      return (name as { segments: string[] }).segments.join('.');
-    }
-    return name == null ? undefined : String(name);
+    return namespaceFromModelName((model as unknown as { name?: unknown }).name);
   }
 
   for (const doc of documents) {

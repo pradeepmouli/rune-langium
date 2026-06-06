@@ -12,6 +12,7 @@
 import {
   createRuneDslServices,
   RuneDslIndexManager,
+  namespaceFromSource,
   type DeferredModelProvider,
   type RosettaModel
 } from '@rune-langium/core';
@@ -322,7 +323,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
           indexManager.registerExports(uri, descriptions);
 
           // Emit namespace-explorer stubs for the UI (no Langium involvement).
-          const ns = file.content.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '';
+          const ns = namespaceFromSource(file.content);
           deferredExports.push({
             filePath: file.name,
             namespace: ns,

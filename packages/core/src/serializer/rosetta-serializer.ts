@@ -13,6 +13,7 @@
 
 // We use duck-typing to avoid hard coupling to the Langium runtime reflection
 // utilities, which makes the serializer testable in isolation.
+import { namespaceFromModelName } from '../naming/namespace.js';
 
 // ---------------------------------------------------------------------------
 // Type guards (duck-typed)
@@ -43,14 +44,7 @@ function indent(text: string, level: number = 1): string {
 }
 
 function getNamespace(model: unknown): string {
-  const m = model as { name?: string | { segments?: string[] } };
-  if (typeof m.name === 'string') {
-    return m.name;
-  }
-  if (m.name && typeof m.name === 'object' && 'segments' in m.name) {
-    return (m.name as { segments: string[] }).segments.join('.');
-  }
-  return 'unknown';
+  return namespaceFromModelName((model as { name?: unknown }).name) ?? 'unknown';
 }
 
 function formatCardinality(card: { inf: number; sup?: number; unbounded: boolean }): string {

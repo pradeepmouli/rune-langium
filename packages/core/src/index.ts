@@ -76,3 +76,4 @@ export {
 
 // Naming utilities
 export { qualifiedExportPath } from './naming/qualified-export-path.js';
+export { namespaceFromSource, namespaceFromModelName } from './naming/namespace.js';
