@@ -6,6 +6,7 @@ import type { AstNode, AstNodeDescription, LangiumDocument } from 'langium';
 import type { MultiMap } from 'langium';
 import { isRosettaFunction, isRosettaEnumeration } from '../generated/ast.js';
 import type { RosettaModel } from '../generated/ast.js';
+import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 
 /**
  * Custom scope computation for the Rune DSL.
@@ -42,7 +43,7 @@ export class RuneDslScopeComputation extends DefaultScopeComputation {
     const simpleName = this.nameProvider.getName(node);
     if (!simpleName) return;
 
-    const qualifiedName = `${ns}.${simpleName}`;
+    const qualifiedName = qualifiedExportPath(ns, simpleName);
     exports.push(this.descriptions.createDescription(node, qualifiedName, document));
 
     // Also export enum values (nested inside RosettaEnumeration) to the global index,

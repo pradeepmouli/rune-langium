@@ -73,3 +73,6 @@ export {
   collectNamespaceDependencies,
   closeNamespaceDependencies
 } from './analysis/cross-namespace-refs.js';
+
+// Naming utilities
+export { qualifiedExportPath } from './naming/qualified-export-path.js';

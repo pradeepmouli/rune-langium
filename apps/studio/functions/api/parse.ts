@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -455,7 +455,7 @@ async function hydrateUserWorkspace(
       for (const elem of model.elements) {
         const e = elem as { $type: string; name?: string };
         if (e.name) {
-          exports.push({ type: e.$type, name: e.name, path: `${namespace}.${e.name}` });
+          exports.push({ type: e.$type, name: e.name, path: qualifiedExportPath(namespace, e.name) });
         }
       }
     }
