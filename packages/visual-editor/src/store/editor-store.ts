@@ -56,9 +56,10 @@ import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
+import { create as mutativeCreate } from 'mutative';
 import type { Patches } from 'mutative';
-import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById, toEdgesById } from './node-projection.js';
+import { reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById, toEdgesById, nodesFromMap, edgesFromMap } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -193,7 +194,7 @@ export interface EditorState {
   parseEpoch: number;
   /**
    * Id-rooted Mutative patches for user edits that have NOT yet round-tripped
-   * through a reparse. Captured by `commitEdit` (semantic edit actions), replayed
+   * through a reparse. Captured by `mutateGraph` (semantic edit actions), replayed
    * by `loadModels` on top of each healthy parse so an edit made just before its
    * own reparse lands is not momentarily reverted, then pruned as the parse
    * catches up. See `edit-reconcile.ts` for the pure replay logic.
@@ -685,33 +686,45 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
 }
 
 /**
- * Apply a semantic graph edit through the id-keyed Mutative projection, capturing
- * the resulting id-rooted patches as pending user intent.
+ * Apply a semantic graph edit DIRECTLY on the persistent state Maps, capturing
+ * id-rooted Mutative patches as pending user intent.
  *
- * Every source-affecting edit action routes through here instead of calling
- * `set` directly so that:
- *   1. the change is recorded as field-precise, id-rooted patches (see
- *      `edit-reconcile.ts`) that survive a reparse re-ordering the node array,
- *   2. `parseEpoch` is NOT bumped — `useModelSourceSync` therefore treats this as
- *      a USER-origin change and serializes it back to source.
+ * Phase 3B Task 3 chokepoint. Operates on `nodesById`/`edgesById` (the canonical
+ * edit substrate) rather than projecting maps from arrays each call. The recipe
+ * draft uses `nodes`/`edges` key names (matching `GraphDraft`) so:
+ *   • all 6 recipe bodies are UNCHANGED (they already mutate draft.nodes/draft.edges),
+ *   • patches are id-rooted at `nodes`/`edges` — identical shape to `commitEdit`,
+ *     so `reconcileParse` (Task 4) and all reconcile tests stay valid.
  *
- * A recipe that mutates nothing (an early-return guard inside it) produces zero
- * patches; we then skip `set` entirely to avoid allocating new array references
- * and triggering needless subscriber re-renders. `extra` carries non-graph state
- * the action also changes (e.g. `selectedNodeId`); when present we always `set`.
+ * INTERCEPTOR INTERACTION (Task 2 → Task 3):
+ * This calls the WRAPPED `set`, which triggers the Task-2 interceptor. The
+ * interceptor sees `next.nodes` (new array reference) and re-derives the Maps —
+ * but the re-derive result equals the Maps we just wrote (same entries, same order),
+ * so the Maps become a fresh-but-equal instance. The redundant rawSet is
+ * equality-skipped from undo history (partialize picks nodes+edges; the Map-only
+ * rawSet does NOT change them, so the partialized snapshot is identical → equality
+ * fn short-circuits). Result: exactly ONE history entry per edit, I1 is preserved.
+ * Task 3C removes the interceptor and eliminates this redundancy.
+ *
+ * @param set   The wrapped store set (from createEditorStore closure — routes through interceptor).
+ * @param get   Store getter.
+ * @param recipe Mutative recipe operating on `{ nodes: Map, edges: Map }`.
+ * @param extra  Optional additional state to merge (e.g. selectedNodeId changes).
  */
-function commitEdit(
+function mutateGraph(
   set: (partial: Partial<EditorState>) => void,
   get: () => EditorState,
   recipe: GraphEditRecipe,
   extra?: Partial<EditorState>
 ): void {
-  const { nodes, edges, pendingEditPatches } = get();
-  const { nodes: nextNodes, edges: nextEdges, patches } = commitGraphEdit(nodes, edges, recipe);
-  if (patches.length === 0 && !extra) return; // no-op recipe (guard hit) — leave state untouched
+  const { nodesById, edgesById, pendingEditPatches } = get();
+  const [next, patches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
+  if (patches.length === 0 && !extra) return; // no-op recipe — leave state untouched
   set({
-    nodes: nextNodes,
-    edges: nextEdges,
+    nodesById: next.nodes,
+    edgesById: next.edges,
+    nodes: nodesFromMap(next.nodes),     // re-derive caches (interceptor will re-do harmlessly)
+    edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
     ...extra
   });
@@ -1196,7 +1209,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                 }
               : null;
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -1215,7 +1228,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const edgeIdsToDrop = get()
             .edges.filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
             .map((e) => e.id);
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const node = draft.nodes.get(nodeId);
             if (node) {
               const d = node.data as AnyGraphNode;
@@ -1302,7 +1315,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                     } as EdgeData
                   };
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -1346,7 +1359,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               } as TypeGraphEdge
             }));
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -1367,7 +1380,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         updateCardinality(nodeId: string, attrName: string, cardinality: string) {
           const card = parseCardinalityString(cardinality);
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (!n) return;
             const d = n.data as AnyGraphNode;
@@ -1445,7 +1458,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
           // Combined name+type+cardinality edit from the inspector form. Routed
-          // through `commitEdit` (like the field-level attribute actions) so an
+          // through `mutateGraph` (like the field-level attribute actions) so an
           // edit made just before its own reparse lands is captured as a pending
           // patch and replayed, not dropped. See `edit-reconcile.ts`.
           const card = parseCardinalityString(cardinality);
@@ -1469,7 +1482,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                 }
               : null;
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
