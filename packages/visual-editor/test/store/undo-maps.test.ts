@@ -142,4 +142,66 @@ describe('undo/redo with Map substrate (Task 6)', () => {
     expect([...s.nodesById.values()]).toEqual(s.nodes);
     expect(s.nodes).toEqual(preEditNodes);
   });
+
+  // ---------------------------------------------------------------------------
+  // Regression (stale-closure-ref bug): an ARRAY-ONLY edit AFTER an undo must
+  // still keep I1 AND be recorded by zundo. The old interceptor used persistent
+  // closure refs (lastNodesById/...) updated only inside the wrapped `set`.
+  // undo()'s userSet bypasses that `set`, so those refs went stale → the next
+  // array-only edit spuriously reported mapsChanged → interceptor SKIPPED the
+  // Map re-derive (I1 broke) AND zundo skipped recording it (un-undoable).
+  // ---------------------------------------------------------------------------
+  it('array-only edit after undo keeps I1 and is recorded (stale-closure-ref regression)', () => {
+    // First array-only edit
+    store.getState().createType('data', 'FirstType', 'test.ns');
+
+    // Undo it (restores Maps via userSet, bypassing the wrapped set)
+    store.temporal.getState().undo();
+
+    // Baseline history length right before the second array-only edit
+    const historyBeforeSecond = store.temporal.getState().pastStates.length;
+
+    // Second array-only edit (different name) — the previously-buggy path
+    store.getState().createType('data', 'SecondType', 'test.ns');
+
+    const s = store.getState();
+    // (a) I1 holds: Map values deep-equal the nodes array
+    expect([...s.nodesById.values()]).toEqual(s.nodes);
+    expect([...s.edgesById.values()]).toEqual(s.edges);
+    // The second type is actually present
+    expect(s.nodes.some((n) => (n.data as AnyGraphNode).name === 'SecondType')).toBe(true);
+
+    // (b) the second createType WAS recorded
+    const historyAfterSecond = store.temporal.getState().pastStates.length;
+    expect(historyAfterSecond - historyBeforeSecond).toBe(1);
+
+    // (c) undo() now removes the second-created type (it's undoable)
+    store.temporal.getState().undo();
+    const afterUndo = store.getState();
+    expect([...afterUndo.nodesById.values()]).toEqual(afterUndo.nodes);
+    expect(afterUndo.nodes.some((n) => (n.data as AnyGraphNode).name === 'SecondType')).toBe(false);
+  });
+
+  it('array-only edit after undo+redo keeps I1 and is recorded (redo variant)', () => {
+    // Edit → undo → redo cycle first
+    store.getState().createType('data', 'AlphaType', 'test.ns');
+    store.temporal.getState().undo();
+    store.temporal.getState().redo();
+
+    // I1 must hold after the redo restore
+    let s = store.getState();
+    expect([...s.nodesById.values()]).toEqual(s.nodes);
+
+    // Now do an array-only action — must keep I1 + be recorded
+    const historyBefore = store.temporal.getState().pastStates.length;
+    store.getState().createType('data', 'BetaType', 'test.ns');
+
+    s = store.getState();
+    expect([...s.nodesById.values()]).toEqual(s.nodes);
+    expect([...s.edgesById.values()]).toEqual(s.edges);
+    expect(s.nodes.some((n) => (n.data as AnyGraphNode).name === 'BetaType')).toBe(true);
+
+    const historyAfter = store.temporal.getState().pastStates.length;
+    expect(historyAfter - historyBefore).toBe(1);
+  });
 });

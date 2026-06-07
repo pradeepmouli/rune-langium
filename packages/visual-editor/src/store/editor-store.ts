@@ -860,20 +860,21 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
         // that re-derive rawSet calls (which keep array refs identical) do not
         // push a redundant undo entry.
         // -----------------------------------------------------------------------
-        // Seed last-seen refs from the effective initial state so the first
-        // comparison has a proper baseline (avoids treating "not undefined" as
-        // "Maps changed" on the very first set call).
-        const _init = { ...initialState, ...overrides } as EditorState;
-        let lastNodes: TypeGraphNode[]               = _init.nodes;
-        let lastEdges: TypeGraphEdge[]               = _init.edges;
-        let lastNodesById: Map<string, TypeGraphNode> = _init.nodesById;
-        let lastEdgesById: Map<string, TypeGraphEdge> = _init.edgesById;
-
+        // The discriminator compares a fresh `prev` snapshot (read at the START
+        // of this wrapped-set call) against `next` (after the write). Using a
+        // per-call snapshot — rather than persistent closure refs — is essential:
+        // undo/redo (zundo's userSet) and the post-undo subscribe (store.setState)
+        // BYPASS this wrapped `set`, so any closure-captured "last seen" refs would
+        // go stale after an undo/redo and spuriously report mapsChanged on the next
+        // wrapped write (breaking I1 + dropping that edit from history). A fresh
+        // `get()` per call always reflects the true pre-write state.
+        // -----------------------------------------------------------------------
         const set: typeof rawSet = (partial, replace?) => {
+          const prev = get(); // snapshot BEFORE this write
           rawSet(partial as never, replace as never);
-          const next = get();
-          const arraysChanged = next.nodes !== lastNodes || next.edges !== lastEdges;
-          const mapsChanged   = next.nodesById !== lastNodesById || next.edgesById !== lastEdgesById;
+          const next = get(); // snapshot AFTER
+          const arraysChanged = next.nodes !== prev.nodes || next.edges !== prev.edges;
+          const mapsChanged   = next.nodesById !== prev.nodesById || next.edgesById !== prev.edgesById;
           if (arraysChanged && !mapsChanged) {
             // A legacy array-only write: re-derive Maps to keep I1.
             // rawSet (not the wrapped set) to avoid recursion.
@@ -884,12 +885,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               } as never
             );
           }
-          // Refresh all four last-seen refs to the post-write state.
-          const after = get();
-          lastNodes    = after.nodes;
-          lastEdges    = after.edges;
-          lastNodesById = after.nodesById;
-          lastEdgesById = after.edgesById;
         };
 
         return {
