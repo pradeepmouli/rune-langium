@@ -10,6 +10,8 @@
  * a re-layout; cosmetic changes (comments, whitespace) do not.
  */
 
+import { indexById } from '@rune-langium/core';
+
 // ────────────────────────────────────────────────────────────────────────────
 // Types
 // ────────────────────────────────────────────────────────────────────────────
@@ -40,8 +42,8 @@ export interface DiffResult {
  * Compare two snapshots of type declarations.
  */
 export function semanticDiff(before: TypeDeclaration[], after: TypeDeclaration[]): DiffResult {
-  const beforeMap = new Map(before.map((t) => [t.name, t]));
-  const afterMap = new Map(after.map((t) => [t.name, t]));
+  const beforeMap = indexById(before, (t) => t.name);
+  const afterMap = indexById(after, (t) => t.name);
 
   const added: string[] = [];
   const removed: string[] = [];

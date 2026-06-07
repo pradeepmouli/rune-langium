@@ -75,7 +75,7 @@ import { getNodeHeight, getNodeWidth } from '../layout/node-dimensions.js';
 import { STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { shouldReplaceLayoutPositions } from './layout-sync.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
-import { serializeModel } from '@rune-langium/core';
+import { serializeModel, indexById } from '@rune-langium/core';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
 import type {
@@ -364,7 +364,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     // Merge: preserve local positions, update data from store
     setNodes((localNodes: DisplayGraphNode[]) => {
       const localTypeNodes = localNodes.filter(isTypeGraphNode);
-      const storeMap = new Map(layoutedNodes.map((n) => [n.id, n]));
+      const storeMap = indexById(layoutedNodes);
       const merged: DisplayGraphNode[] = [];
       for (const n of localTypeNodes) {
         const sn = storeMap.get(n.id);

@@ -51,6 +51,7 @@ import type {
   RosettaRecordType,
   Annotation
 } from '@rune-langium/core';
+import { indexById } from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
@@ -665,7 +666,7 @@ function nodeAttributeCount(n: TypeGraphNode): number {
  */
 export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphNode[]): boolean {
   if (current.length === 0) return false; // no baseline (initial load) → accept
-  const incomingById = new Map(incoming.map((n) => [n.id, n]));
+  const incomingById = indexById(incoming);
   let currentTotal = 0;
   let incomingTotal = 0;
   let common = 0;

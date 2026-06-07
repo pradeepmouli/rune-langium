@@ -18,6 +18,7 @@
  */
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { indexById } from '@rune-langium/core';
 import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
@@ -235,8 +236,7 @@ function shallowEqualData(a: unknown, b: unknown): boolean {
  */
 function preserveNodeIdentities(prev: ReadonlyArray<Node>, next: ReadonlyArray<Node>): Node[] {
   if (prev.length === 0) return next as Node[];
-  const prevById = new Map<string, Node>();
-  for (const n of prev) prevById.set(n.id, n);
+  const prevById = indexById(prev);
   return next.map((n) => {
     const p = prevById.get(n.id);
     if (!p) return n;
