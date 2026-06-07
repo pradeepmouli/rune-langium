@@ -127,9 +127,9 @@ export interface EditorState {
   /**
    * Canonical id→node index — the edit SUBSTRATE (Phase 3B). `nodes` above is a
    * derived render cache (invariant I1: `nodes === [...nodesById.values()]`).
-   * The chokepoints (`mutateGraph`/`updateGraphView`/`loadModels`) write this Map
-   * directly. The transitional set-interceptor re-derives it for the not-yet-migrated
-   * actions that still author the `nodes` array (those convert to recipes in 3C).
+   * Every source-affecting action writes this Map through a chokepoint
+   * (`mutateGraph`/`updateGraphView`/`loadModels`); the post-undo `store.subscribe`
+   * re-derives the arrays from the Maps after history restore.
    * Do NOT write the Maps ad-hoc from a new action — go through a chokepoint.
    */
   nodesById: Map<string, TypeGraphNode>;
@@ -999,9 +999,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // accumulate and replay stale data indefinitely. See `edit-reconcile.ts`.
             //
             // reconcileParse now returns Maps (canonical substrate). We set them
-            // directly alongside the derived arrays so both invariants hold:
+            // directly alongside the derived arrays so the invariant holds:
             //   I1: nodes === [...nodesById.values()]
-            // The set-interceptor will harmlessly re-derive equal Maps after the set.
             const { nodesById: reconciledById, edgesById: reconciledEdgesById } = reconcileParse(
               laidOutNodes,
               edges,
