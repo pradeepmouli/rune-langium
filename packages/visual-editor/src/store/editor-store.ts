@@ -116,14 +116,17 @@ export interface EditorState {
   nodes: TypeGraphNode[];
   edges: TypeGraphEdge[];
   /**
-   * Derived Map index of nodes by id (invariant I1: always === [...nodes]).
-   * Maintained by the transitional set-interceptor in createEditorStore.
-   * Read-only from actions — do NOT write directly; write `nodes` instead.
+   * Canonical id→node index — the edit SUBSTRATE (Phase 3B). `nodes` above is a
+   * derived render cache (invariant I1: `nodes === [...nodesById.values()]`).
+   * The chokepoints (`mutateGraph`/`updateGraphView`/`loadModels`) write this Map
+   * directly. The transitional set-interceptor re-derives it for the not-yet-migrated
+   * actions that still author the `nodes` array (those convert to recipes in 3C).
+   * Do NOT write the Maps ad-hoc from a new action — go through a chokepoint.
    */
   nodesById: Map<string, TypeGraphNode>;
   /**
-   * Derived Map index of edges by id (invariant I1: always === [...edges]).
-   * Maintained by the transitional set-interceptor in createEditorStore.
+   * Canonical id→edge index — the edit substrate (invariant I1:
+   * `edges === [...edgesById.values()]`). See `nodesById` for the write contract.
    */
   edgesById: Map<string, TypeGraphEdge>;
   /**
@@ -687,6 +690,18 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
 }
 
 /**
+ * Extra state a graph chokepoint caller may set alongside a mutation — never the
+ * graph substrate (`nodes`/`edges`/`nodesById`/`edgesById`) nor the patch/epoch
+ * fields, which the chokepoint owns. Excluding them keeps I1/I2 structurally
+ * enforced: a caller's `extra` cannot override the derived caches or the Maps,
+ * append/clobber patches, or bump `parseEpoch`.
+ */
+type GraphMutationExtra = Omit<
+  Partial<EditorState>,
+  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'parseEpoch'
+>;
+
+/**
  * Apply a semantic graph edit DIRECTLY on the persistent state Maps, capturing
  * id-rooted Mutative patches as pending user intent.
  *
@@ -697,15 +712,14 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
  *   • patches are id-rooted at `nodes`/`edges` — identical shape to `commitEdit`,
  *     so `reconcileParse` (Task 4) and all reconcile tests stay valid.
  *
- * INTERCEPTOR INTERACTION (Task 2 → Task 3):
- * This calls the WRAPPED `set`, which triggers the Task-2 interceptor. The
- * interceptor sees `next.nodes` (new array reference) and re-derives the Maps —
- * but the re-derive result equals the Maps we just wrote (same entries, same order),
- * so the Maps become a fresh-but-equal instance. The redundant rawSet is
- * equality-skipped from undo history (partialize picks nodes+edges; the Map-only
- * rawSet does NOT change them, so the partialized snapshot is identical → equality
- * fn short-circuits). Result: exactly ONE history entry per edit, I1 is preserved.
- * Task 3C removes the interceptor and eliminates this redundancy.
+ * INTERCEPTOR INTERACTION (Task 2 → Task 6):
+ * This calls the WRAPPED `set`, which sets BOTH the Maps and the derived arrays
+ * in one write. The Task-2 interceptor only re-derives Maps when the arrays changed
+ * AND the Maps did NOT (`arraysChanged && !mapsChanged`) — the signature of a
+ * not-yet-migrated array-only action. Because mutateGraph changes the Maps too,
+ * `mapsChanged` is true, so the interceptor SKIPS its re-derive. zundo records
+ * exactly ONE history entry (this single Map-changing set; partialize tracks the
+ * Maps, equality is ref-based). I1 holds. 3C removes the interceptor entirely.
  *
  * @param set   The wrapped store set (from createEditorStore closure — routes through interceptor).
  * @param get   Store getter.
@@ -716,7 +730,7 @@ function mutateGraph(
   set: (partial: Partial<EditorState>) => void,
   get: () => EditorState,
   recipe: GraphEditRecipe,
-  extra?: Partial<EditorState>
+  extra?: GraphMutationExtra
 ): void {
   const { nodesById, edgesById, pendingEditPatches } = get();
   const [next, patches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
@@ -724,7 +738,7 @@ function mutateGraph(
   set({
     nodesById: next.nodes,
     edgesById: next.edges,
-    nodes: nodesFromMap(next.nodes),     // re-derive caches (interceptor will re-do harmlessly)
+    nodes: nodesFromMap(next.nodes),     // re-derive caches (interceptor skips: Maps changed)
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
     ...extra
@@ -759,7 +773,7 @@ function updateGraphView(
   set: (partial: Partial<EditorState>) => void,
   get: () => EditorState,
   view: { nodes?: TypeGraphNode[]; edges?: TypeGraphEdge[] },
-  extra?: Omit<Partial<EditorState>, 'pendingEditPatches' | 'parseEpoch'>
+  extra?: GraphMutationExtra
 ): void {
   const nextNodes = view.nodes ?? get().nodes;
   const nextEdges = view.edges ?? get().edges;
