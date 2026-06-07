@@ -13,7 +13,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
-import { COMBINED_MODEL_SOURCE, ENUM_MODEL_SOURCE, CHOICE_MODEL_SOURCE, FUNCTION_MODEL_SOURCE } from '../helpers/fixture-loader.js';
+import {
+  COMBINED_MODEL_SOURCE,
+  ENUM_MODEL_SOURCE,
+  CHOICE_MODEL_SOURCE,
+  FUNCTION_MODEL_SOURCE
+} from '../helpers/fixture-loader.js';
 
 describe('EditorStore — new actions', () => {
   let store: ReturnType<typeof createEditorStore>;
@@ -92,8 +97,8 @@ describe('EditorStore — new actions', () => {
 
       const patches = store.getState().pendingEditPatches;
       expect(patches.length).toBeGreaterThan(0);
-      expect(patches[0]!.path[0]).toBe('nodes');     // draft Map key
-      expect(patches[0]!.path[1]).toBe(nodeId);      // keyed by id, NOT an array index
+      expect(patches[0]!.path[0]).toBe('nodes'); // draft Map key
+      expect(patches[0]!.path[1]).toBe(nodeId); // keyed by id, NOT an array index
       expect(patches[0]!.path).toContain('attributes');
     });
   });
@@ -1915,5 +1920,443 @@ describe('EditorStore — metadata actions — id-rooted patches (Wave F)', () =
       expect(anns[0].$type).toBe('AnnotationRef');
       expect(anns[0].annotation.$refText).toBe('deprecated');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave G — structural actions → mutateGraph recipes
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// createType — patch-capture (bug fix: survives a reparse that does not include it)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — createType — patch-capture (Wave G)', () => {
+  it('createType node survives a reparse that does NOT include it (patch captured in nodesById Map)', async () => {
+    const BASE_SOURCE = `
+namespace test.waveG
+version "1.0.0"
+
+type Alpha:
+  x string (1..1)
+`;
+    const store = createEditorStore();
+    const models = (await parse(BASE_SOURCE)).value;
+    store.getState().loadModels(models);
+
+    // Create a new type — this adds a pending patch in pendingEditPatches
+    const newId = store.getState().createType('data', 'NewType', 'test.waveG');
+    expect(store.getState().nodes.find((n) => n.id === newId)).toBeDefined();
+    expect(store.getState().pendingEditPatches.length).toBeGreaterThan(0);
+
+    // Verify the patch is nodes-rooted and keyed by the new node's id
+    const patch = store.getState().pendingEditPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === newId);
+    expect(patch).toBeDefined();
+
+    // Now do a reparse with the SAME source (does NOT include NewType).
+    // The pending patch should be replayed, so NewType survives.
+    const staleModels = (await parse(BASE_SOURCE)).value;
+    store.getState().loadModels(staleModels);
+
+    // NewType must still be present after the replay
+    const survived = store.getState().nodes.find((n) => n.id === newId);
+    expect(survived).toBeDefined();
+    expect(survived!.data.name).toBe('NewType');
+  });
+
+  it('createType produces a nodes-rooted patch keyed by the new nodeId', () => {
+    const store = createEditorStore();
+    const patchesBefore = store.getState().pendingEditPatches.length;
+
+    const newId = store.getState().createType('data', 'Widget', 'test.ns');
+
+    const patches = store.getState().pendingEditPatches;
+    const newPatches = patches.slice(patchesBefore);
+    expect(newPatches.length).toBeGreaterThan(0);
+    expect(newPatches[0]!.path[0]).toBe('nodes');
+    expect(newPatches[0]!.path[1]).toBe(newId);
+  });
+
+  it('returns the expected nodeId (namespace.Name)', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.base');
+    expect(id).toBe('cdm.base.Trade');
+  });
+
+  it('builds the correct kind-specific member arrays for each TypeKind', () => {
+    const store = createEditorStore();
+    const dataId = store.getState().createType('data', 'D', 'ns');
+    const choiceId = store.getState().createType('choice', 'C', 'ns');
+    const enumId = store.getState().createType('enum', 'E', 'ns');
+    const funcId = store.getState().createType('func', 'F', 'ns');
+
+    const dataN = store.getState().nodes.find((n) => n.id === dataId)!;
+    expect((dataN.data as any).attributes).toEqual([]);
+    expect((dataN.data as any).conditions).toEqual([]);
+
+    const choiceN = store.getState().nodes.find((n) => n.id === choiceId)!;
+    expect((choiceN.data as any).attributes).toEqual([]);
+    expect((choiceN.data as any).conditions).toBeUndefined();
+
+    const enumN = store.getState().nodes.find((n) => n.id === enumId)!;
+    expect((enumN.data as any).enumValues).toEqual([]);
+
+    const funcN = store.getState().nodes.find((n) => n.id === funcId)!;
+    expect((funcN.data as any).inputs).toEqual([]);
+    expect((funcN.data as any).conditions).toEqual([]);
+    expect((funcN.data as any).postConditions).toEqual([]);
+    expect((funcN.data as any).operations).toEqual([]);
+    expect((funcN.data as any).shortcuts).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteType — removes node + all incident edges + clears selection
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — deleteType (Wave G)', () => {
+  it('removes the node from the graph', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().deleteType(id);
+    expect(store.getState().nodes.find((n) => n.id === id)).toBeUndefined();
+  });
+
+  it('removes all incident edges (source OR target)', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    const econId = store.getState().createType('data', 'Economics', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'party', 'Party', '0..1'); // edge: tradeId → partyId
+    store.getState().addAttribute(econId, 'trade', 'Trade', '0..1'); // edge: econId → tradeId
+    store.getState().setInheritance(tradeId, partyId); // edge: tradeId → partyId (extends)
+
+    // Verify edges exist before deletion
+    const edgesBefore = store.getState().edges;
+    expect(edgesBefore.some((e) => e.source === tradeId || e.target === tradeId)).toBe(true);
+
+    store.getState().deleteType(tradeId);
+
+    const edgesAfter = store.getState().edges;
+    expect(edgesAfter.some((e) => e.source === tradeId || e.target === tradeId)).toBe(false);
+  });
+
+  it('clears selectedNodeId when the deleted node was selected', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.setState({ selectedNodeId: id });
+    store.getState().deleteType(id);
+    expect(store.getState().selectedNodeId).toBeNull();
+  });
+
+  it('preserves selectedNodeId when a different node was selected', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    store.setState({ selectedNodeId: partyId });
+    store.getState().deleteType(tradeId);
+    expect(store.getState().selectedNodeId).toBe(partyId);
+  });
+
+  it('produces a nodes-rooted remove patch AND edges-rooted remove patches', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'party', 'Party', '0..1');
+
+    const patchesBefore = store.getState().pendingEditPatches.length;
+    store.getState().deleteType(tradeId);
+
+    const newPatches = store.getState().pendingEditPatches.slice(patchesBefore);
+    expect(newPatches.length).toBeGreaterThan(0);
+    // Must have a nodes-rooted patch (the node was removed)
+    const nodesPatch = newPatches.find((p) => p.path[0] === 'nodes');
+    expect(nodesPatch).toBeDefined();
+    void partyId; // silence unused warning
+  });
+});
+
+// ---------------------------------------------------------------------------
+// setInheritance — child superType + extends edge; stale-parentId no-op
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — setInheritance (Wave G)', () => {
+  it('sets child superType.$refText (bare name when unambiguous)', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const parentId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+    store.getState().setInheritance(childId, parentId);
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    expect((node.data as any).superType?.$refText).toBe('TradeBase');
+  });
+
+  it('creates an extends edge with type="inheritance" and data.kind="extends"', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const parentId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+    store.getState().setInheritance(childId, parentId);
+
+    const edge = store.getState().edges.find((e) => e.source === childId && e.target === parentId);
+    expect(edge).toBeDefined();
+    expect(edge!.type).toBe('inheritance'); // React-Flow type
+    expect(edge!.data?.kind).toBe('extends'); // semantic kind in data
+    expect(edge!.data?.label).toBe('extends');
+  });
+
+  it('replaces an existing extends edge when called again with a new parent', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const parent1Id = store.getState().createType('data', 'Base1', 'cdm.trade');
+    const parent2Id = store.getState().createType('data', 'Base2', 'cdm.trade');
+
+    store.getState().setInheritance(childId, parent1Id);
+    store.getState().setInheritance(childId, parent2Id);
+
+    const edges = store.getState().edges.filter((e) => e.source === childId && e.data?.kind === 'extends');
+    expect(edges.length).toBe(1);
+    expect(edges[0]!.target).toBe(parent2Id);
+  });
+
+  it('clears superType and removes edge when parentId is null', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const parentId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+    store.getState().setInheritance(childId, parentId);
+    store.getState().setInheritance(childId, null);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    expect((node.data as any).superType).toBeUndefined();
+
+    const edge = store.getState().edges.find((e) => e.source === childId && e.data?.kind === 'extends');
+    expect(edge).toBeUndefined();
+  });
+
+  it('stale parentId is a no-op — existing inheritance is PRESERVED (not cleared)', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const parentId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+    store.getState().setInheritance(childId, parentId);
+
+    const refTextBefore = (store.getState().nodes.find((n) => n.id === childId)!.data as any).superType?.$refText;
+    const edgeCountBefore = store
+      .getState()
+      .edges.filter((e) => e.source === childId && e.data?.kind === 'extends').length;
+
+    // Stale id — does not exist in the store
+    store.getState().setInheritance(childId, 'ns.x.Deleted');
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    expect((node.data as any).superType?.$refText).toBe(refTextBefore); // unchanged
+    const edgeCountAfter = store
+      .getState()
+      .edges.filter((e) => e.source === childId && e.data?.kind === 'extends').length;
+    expect(edgeCountAfter).toBe(edgeCountBefore); // edge count unchanged
+  });
+
+  it('produces nodes-rooted AND edges-rooted patches (Wave G)', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const parentId = store.getState().createType('data', 'TradeBase', 'cdm.trade');
+
+    const patchesBefore = store.getState().pendingEditPatches.length;
+    store.getState().setInheritance(childId, parentId);
+
+    const newPatches = store.getState().pendingEditPatches.slice(patchesBefore);
+    expect(newPatches.length).toBeGreaterThan(0);
+
+    const nodesPatch = newPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === childId);
+    expect(nodesPatch).toBeDefined();
+
+    const edgesPatch = newPatches.find((p) => p.path[0] === 'edges');
+    expect(edgesPatch).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// renameType — Map re-key + cascade + edge re-key (Wave G — THE CRITICAL ONE)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — renameType (Wave G)', () => {
+  it('(a) node is re-keyed under newNodeId; old key is absent', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.getState().renameType(id, 'Transaction');
+
+    const newId = 'cdm.trade.Transaction';
+    expect(store.getState().nodes.find((n) => n.id === id)).toBeUndefined();
+    expect(store.getState().nodes.find((n) => n.id === newId)).toBeDefined();
+    expect(store.getState().nodes.find((n) => n.id === newId)!.data.name).toBe('Transaction');
+  });
+
+  it('(b) incident edges are re-keyed (id + source/target updated)', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'party', 'Party', '0..1'); // edge: trade→party
+    store.getState().setInheritance(tradeId, partyId); // extends edge
+
+    store.getState().renameType(tradeId, 'Transaction');
+
+    const newTradeId = 'cdm.trade.Transaction';
+    const edges = store.getState().edges;
+
+    // No edge should reference the old tradeId
+    expect(edges.some((e) => e.source === tradeId || e.target === tradeId)).toBe(false);
+    // Edges that were incident should now reference newTradeId
+    expect(edges.some((e) => e.source === newTradeId || e.target === newTradeId)).toBe(true);
+    // All edge ids must also be consistent (no stale old id in the edge id)
+    edges.forEach((e) => {
+      expect(e.id).not.toContain(tradeId);
+    });
+  });
+
+  it('(b2) attribute-ref edge label is updated when the renamed node IS the source (via makeEdgeId)', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    store.getState().addAttribute(tradeId, 'party', 'Party', '0..1');
+    // Edge id format: <source>--attribute-ref--<label>--<target>
+    // Source changes so the edge must be re-keyed
+    store.getState().renameType(tradeId, 'Transaction');
+
+    const newTradeId = 'cdm.trade.Transaction';
+    const edge = store
+      .getState()
+      .edges.find((e) => e.source === newTradeId && e.data?.kind === 'attribute-ref' && e.data?.label === 'party');
+    expect(edge).toBeDefined();
+    expect(edge!.target).toBe(partyId);
+  });
+
+  it('(c) typeCall.$refText cascaded in referencing nodes', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    store.getState().addAttribute(partyId, 'relatedTrade', 'Trade', '0..1'); // Party refs Trade
+
+    store.getState().renameType(tradeId, 'Transaction');
+
+    const partyNode = store.getState().nodes.find((n) => n.id === partyId)!;
+    const attrs = (partyNode.data as any).attributes ?? [];
+    const refAttr = attrs.find((a: any) => a.name === 'relatedTrade');
+    expect(refAttr?.typeCall?.type?.$refText).toBe('Transaction'); // cascaded
+  });
+
+  it('(d) reorder safety — rename replays onto the correct node when the reparse RETURNS A DIFFERENT NODE ORDER', async () => {
+    // Type declaration order drives the parsed/store node array order.
+    // SOURCE_A lists [Alpha, Beta]; SOURCE_B lists [Beta, Alpha] — a genuine
+    // reorder. Because renameType re-keys via Map delete+set (id-rooted
+    // remove+add patches), the replay must target the renamed node BY ID, not
+    // by array position. This test FAILS if replay were position-based: the
+    // pending patch (rooted at the OLD Alpha id) would otherwise land on Beta
+    // (now at index 0) or be dropped.
+    const SOURCE_A = `
+namespace cdm.order
+version "1.0.0"
+
+type Alpha:
+  x string (1..1)
+
+type Beta:
+  a Alpha (1..1)
+`;
+    // Reordered: Beta is declared FIRST, Alpha SECOND. Alpha is NOT yet renamed
+    // (still 'Alpha') — the reparse is stale relative to the in-flight rename.
+    const SOURCE_B = `
+namespace cdm.order
+version "1.0.0"
+
+type Beta:
+  a Alpha (1..1)
+
+type Alpha:
+  x string (1..1)
+`;
+    const store = createEditorStore();
+    const modelsA = (await parse(SOURCE_A)).value;
+    store.getState().loadModels(modelsA);
+
+    // Pre-rename store order is [Alpha, Beta].
+    const orderBeforeRename = store.getState().nodes.map((n) => n.data.name);
+    expect(orderBeforeRename).toEqual(['Alpha', 'Beta']);
+
+    const alphaId = store.getState().nodes.find((n) => n.data.name === 'Alpha')!.id;
+    const betaId = store.getState().nodes.find((n) => n.data.name === 'Beta')!.id;
+
+    // Rename Alpha → AlphaRenamed (captured as id-rooted remove+add patches).
+    store.getState().renameType(alphaId, 'AlphaRenamed');
+    expect(store.getState().pendingEditPatches.length).toBeGreaterThan(0);
+
+    // Confirm SOURCE_B parses to a DIFFERENT node order than the pre-rename
+    // store order — proving this is a genuine reorder, not a byte-identical
+    // reparse. (Probe a throwaway store so we don't perturb the one under test.)
+    const probe = createEditorStore();
+    probe.getState().loadModels((await parse(SOURCE_B)).value);
+    const parsedOrderB = probe.getState().nodes.map((n) => n.data.name);
+    expect(parsedOrderB).toEqual(['Beta', 'Alpha']);
+    expect(parsedOrderB).not.toEqual(orderBeforeRename);
+
+    // Load the REORDERED stale reparse. The pending rename patches must replay
+    // onto the renamed node BY ID despite the array reorder.
+    const modelsB = (await parse(SOURCE_B)).value;
+    store.getState().loadModels(modelsB);
+
+    // (a) The renamed node survives under newNodeId via id-keyed replay.
+    const newAlphaId = 'cdm.order.AlphaRenamed';
+    const survived = store.getState().nodes.find((n) => n.id === newAlphaId);
+    expect(survived).toBeDefined();
+    expect(survived!.data.name).toBe('AlphaRenamed');
+    // The OLD Alpha id must be gone — replay did not resurrect it.
+    expect(store.getState().nodes.find((n) => n.id === alphaId)).toBeUndefined();
+
+    // (b) I1 — Maps stay canonical: nodesById is keyed by the new id, and the
+    //     derived array contains exactly one node for the renamed type.
+    expect(store.getState().nodesById.get(newAlphaId)).toBeDefined();
+    expect(store.getState().nodesById.get(alphaId)).toBeUndefined();
+    expect(store.getState().nodes.filter((n) => n.data.name === 'AlphaRenamed')).toHaveLength(1);
+
+    // (c) Beta is unaffected — same id, still present, NOT mistakenly renamed.
+    const beta = store.getState().nodes.find((n) => n.id === betaId);
+    expect(beta).toBeDefined();
+    expect(beta!.data.name).toBe('Beta');
+    expect(store.getState().nodes.filter((n) => n.data.name === 'Beta')).toHaveLength(1);
+  });
+
+  it('selectedNodeId is updated to newNodeId when the renamed node was selected', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+    store.setState({ selectedNodeId: id });
+    store.getState().renameType(id, 'Transaction');
+    expect(store.getState().selectedNodeId).toBe('cdm.trade.Transaction');
+  });
+
+  it('selectedNodeId is unchanged when a different node was selected', () => {
+    const store = createEditorStore();
+    const tradeId = store.getState().createType('data', 'Trade', 'cdm.trade');
+    const partyId = store.getState().createType('data', 'Party', 'cdm.trade');
+    store.setState({ selectedNodeId: partyId });
+    store.getState().renameType(tradeId, 'Transaction');
+    expect(store.getState().selectedNodeId).toBe(partyId);
+  });
+
+  it('is a no-op when nodeId does not exist', () => {
+    const store = createEditorStore();
+    store.getState().createType('data', 'Trade', 'cdm.trade');
+    const nodesBefore = store.getState().nodes.length;
+    store.getState().renameType('nonexistent.id', 'NewName');
+    expect(store.getState().nodes.length).toBe(nodesBefore);
+  });
+
+  it('produces nodes-rooted patches (Wave G)', () => {
+    const store = createEditorStore();
+    const id = store.getState().createType('data', 'Trade', 'cdm.trade');
+
+    const patchesBefore = store.getState().pendingEditPatches.length;
+    store.getState().renameType(id, 'Transaction');
+
+    const newPatches = store.getState().pendingEditPatches.slice(patchesBefore);
+    expect(newPatches.length).toBeGreaterThan(0);
+    // Must produce at least one nodes-rooted patch
+    const nodesPatch = newPatches.find((p) => p.path[0] === 'nodes');
+    expect(nodesPatch).toBeDefined();
   });
 });

@@ -60,7 +60,16 @@ import type { TrackedState } from './history.js';
 import { create as mutativeCreate } from 'mutative';
 import type { Patches } from 'mutative';
 import { reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById, toEdgesById, nodesFromMap, edgesFromMap } from './node-projection.js';
+import {
+  makeNodeId,
+  makeEdgeId,
+  parseEdgeId,
+  withGraphMetadata,
+  toNodesById,
+  toEdgesById,
+  nodesFromMap,
+  edgesFromMap
+} from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -609,6 +618,61 @@ function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string)
 }
 
 // ---------------------------------------------------------------------------
+// buildNewTypeNode — DRY helper for createType
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a minimal TypeGraphNode shell for a newly-created type.
+ * Extracted from createType so the same shape is reused without duplication.
+ * The `counter` value is the already-incremented nodeCounter at call time.
+ */
+function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, counter: number): TypeGraphNode {
+  const $type = NODE_TYPE_TO_AST_TYPE[kind] ?? 'Data';
+  const baseData: Record<string, unknown> = {
+    $type,
+    name,
+    namespace,
+    position: { x: counter * 50, y: counter * 50 },
+    hasExternalRefs: false,
+    errors: [],
+    definition: undefined,
+    annotations: [],
+    synonyms: []
+  };
+  switch ($type) {
+    case 'Data':
+      baseData.attributes = [];
+      baseData.conditions = [];
+      break;
+    case 'Choice':
+      baseData.attributes = [];
+      break;
+    case 'RosettaEnumeration':
+      baseData.enumValues = [];
+      break;
+    case 'RosettaFunction':
+      baseData.inputs = [];
+      baseData.conditions = [];
+      baseData.postConditions = [];
+      baseData.operations = [];
+      baseData.shortcuts = [];
+      break;
+    case 'RosettaRecordType':
+      baseData.features = [];
+      break;
+    case 'Annotation':
+      baseData.attributes = [];
+      break;
+  }
+  return {
+    id: makeNodeId(namespace, name),
+    type: kind,
+    position: { x: counter * 50, y: counter * 50 },
+    data: baseData as unknown as AnyGraphNode
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Initial state
 // ---------------------------------------------------------------------------
 
@@ -738,7 +802,7 @@ function mutateGraph(
   set({
     nodesById: next.nodes,
     edgesById: next.edges,
-    nodes: nodesFromMap(next.nodes),     // re-derive caches (interceptor skips: Maps changed)
+    nodes: nodesFromMap(next.nodes), // re-derive caches (interceptor skips: Maps changed)
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
     ...extra
@@ -889,189 +953,1491 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           rawSet(partial as never, replace as never);
           const next = get(); // snapshot AFTER
           const arraysChanged = next.nodes !== prev.nodes || next.edges !== prev.edges;
-          const mapsChanged   = next.nodesById !== prev.nodesById || next.edgesById !== prev.edgesById;
+          const mapsChanged = next.nodesById !== prev.nodesById || next.edgesById !== prev.edgesById;
           if (arraysChanged && !mapsChanged) {
             // A legacy array-only write: re-derive Maps to keep I1.
             // rawSet (not the wrapped set) to avoid recursion.
-            rawSet(
-              {
-                nodesById: toNodesById(next.nodes),
-                edgesById: toEdgesById(next.edges)
-              } as never
-            );
+            rawSet({
+              nodesById: toNodesById(next.nodes),
+              edgesById: toEdgesById(next.edges)
+            } as never);
           }
         };
 
         return {
-        ...initialState,
-        ...overrides,
+          ...initialState,
+          ...overrides,
 
-        // -----------------------------------------------------------------------
-        // Data loading
-        // -----------------------------------------------------------------------
+          // -----------------------------------------------------------------------
+          // Data loading
+          // -----------------------------------------------------------------------
 
-        loadModels(models, layoutOpts) {
-          // Clear layout cache on full model reload
-          clearLayoutCache();
+          loadModels(models, layoutOpts) {
+            // Clear layout cache on full model reload
+            clearLayoutCache();
 
-          const opts = layoutOpts ?? get().layoutOptions;
-          const filters = get().activeFilters;
-          const { nodes: rawNodes, edges } = astToModel(models, { filters });
+            const opts = layoutOpts ?? get().layoutOptions;
+            const filters = get().activeFilters;
+            const { nodes: rawNodes, edges } = astToModel(models, { filters });
 
-          // Merge deferred-export placeholder nodes for curated namespaces
-          // that haven't been materialized yet. This is the atomic version
-          // of "loadModels then loadDeferredExports" — keeps the API
-          // single-call so callers can't forget the merge step. Existing
-          // ids win (placeholders don't duplicate a now-materialized node).
-          const existingIds = new Set(rawNodes.map((n) => n.id));
-          const placeholders = buildDeferredPlaceholderNodes(get().deferredExports, existingIds);
-          const mergedNodes: TypeGraphNode[] = placeholders.length > 0 ? [...rawNodes, ...placeholders] : rawNodes;
+            // Merge deferred-export placeholder nodes for curated namespaces
+            // that haven't been materialized yet. This is the atomic version
+            // of "loadModels then loadDeferredExports" — keeps the API
+            // single-call so callers can't forget the merge step. Existing
+            // ids win (placeholders don't duplicate a now-materialized node).
+            const existingIds = new Set(rawNodes.map((n) => n.id));
+            const placeholders = buildDeferredPlaceholderNodes(get().deferredExports, existingIds);
+            const mergedNodes: TypeGraphNode[] = placeholders.length > 0 ? [...rawNodes, ...placeholders] : rawNodes;
 
-          // Determine initial visibility based on model size
-          const allNamespaces = new Set(mergedNodes.map((n) => n.data.namespace));
-          const shouldCollapse = mergedNodes.length > LARGE_MODEL_THRESHOLD;
+            // Determine initial visibility based on model size
+            const allNamespaces = new Set(mergedNodes.map((n) => n.data.namespace));
+            const shouldCollapse = mergedNodes.length > LARGE_MODEL_THRESHOLD;
 
-          const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
+            const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
 
-          // Lay out the visible nodes so the graph renders in position
-          // form. Previous code stored the layout result on an unused
-          // local — review caught the wasted compute. Use the laid-out
-          // nodes when available; fall back to mergedNodes when
-          // shouldCollapse is true (large workspace: no layout yet).
-          const visibleNodes = shouldCollapse ? [] : mergedNodes;
-          const visibleEdges = shouldCollapse ? [] : edges;
-          const laidOutNodes = visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : mergedNodes;
+            // Lay out the visible nodes so the graph renders in position
+            // form. Previous code stored the layout result on an unused
+            // local — review caught the wasted compute. Use the laid-out
+            // nodes when available; fall back to mergedNodes when
+            // shouldCollapse is true (large workspace: no layout yet).
+            const visibleNodes = shouldCollapse ? [] : mergedNodes;
+            const visibleEdges = shouldCollapse ? [] : edges;
+            const laidOutNodes =
+              visibleNodes.length > 0 ? computeLayout(visibleNodes, visibleEdges, opts) : mergedNodes;
 
-          // Preserve the current selection if the selected node still exists
-          // in the freshly-merged graph. EditorPage re-runs `loadModels` from
-          // a `useEffect` keyed on `[models, deferredExports]`; any time the
-          // server returns a new prop reference (debounced re-parse, async
-          // hydration completing, transient deferredExports churn), the
-          // effect re-fires. The previous unconditional `selectedNodeId:
-          // null` reset clobbered user selection on every re-parse — the
-          // explorer click would register, populate Inspector/Structure for
-          // a frame, then a subsequent re-parse would wipe it. The user's
-          // Form preview kept showing stale content because preview-store
-          // doesn't clear on selection drop, but Structure/Inspector/Graph
-          // (which read selectedNodeId directly) went empty. Only drop the
-          // selection when the previously-selected id no longer matches a
-          // node in the new graph (e.g. type was renamed or deleted).
-          // Degraded-parse guard: reject a reparse that strips source content
-          // from the live graph (parse worker unavailable → attributes return
-          // empty with no `errors`). Applying it would corrupt the source via
-          // the model→source serialize path. Keep the last good graph verbatim;
-          // a healthy reparse later replaces it. Compared against current nodes
-          // so legitimate user deletions are not mistaken for degradation.
-          if (isDegradedReparse(laidOutNodes, get().nodes)) {
-            console.warn(
-              '[editor-store] Rejected a degraded reparse (attributes stripped from the live graph) ' +
-                'to protect the source document. The parse worker is likely unavailable.'
-            );
-            return;
-          }
-
-          // Replay user edits made since the last parse on top of this one, then
-          // clear them (ONE-SHOT). This covers the dangerous in-flight case: an
-          // edit made just before its own reparse lands, where the reparse predates
-          // the edit and would otherwise momentarily revert it (and that reverted
-          // graph would then be re-serialized over source). Id-keyed, so replay
-          // targets the right node even if the parse re-orders the array.
-          //
-          // One-shot (clear below, don't carry remaining patches forward) is
-          // deliberate: the save-triggered reparse that DOES reflect the edit is
-          // the next parse, so a single replay window suffices. Carrying patches
-          // would let object-valued edits (typeCall, cardinality) — which a reparse
-          // re-derives with extra AST metadata, so they never compare byte-equal —
-          // accumulate and replay stale data indefinitely. See `edit-reconcile.ts`.
-          //
-          // reconcileParse now returns Maps (canonical substrate). We set them
-          // directly alongside the derived arrays so both invariants hold:
-          //   I1: nodes === [...nodesById.values()]
-          // The set-interceptor will harmlessly re-derive equal Maps after the set.
-          const { nodesById: reconciledById, edgesById: reconciledEdgesById } = reconcileParse(
-            laidOutNodes,
-            edges,
-            get().pendingEditPatches
-          );
-          const reconciledNodes = nodesFromMap(reconciledById);
-          const reconciledEdges = edgesFromMap(reconciledEdgesById);
-
-          const previousSelection = get().selectedNodeId;
-          const preservedSelection =
-            previousSelection && reconciledNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
-
-          set({
-            nodesById: reconciledById,
-            edgesById: reconciledEdgesById,
-            nodes: reconciledNodes,
-            edges: reconciledEdges,
-            layoutOptions: opts,
-            selectedNodeId: preservedSelection,
-            searchQuery: '',
-            searchResults: [],
-            // PARSE-origin change — bump parseEpoch so useModelSourceSync skips
-            // serializing this graph back to source (it came FROM the source).
-            parseEpoch: get().parseEpoch + 1,
-            // One-shot: edits since the last parse have now been replayed; clear
-            // so they can never accumulate or replay stale data across reparses.
-            pendingEditPatches: [],
-            visibility: {
-              expandedNamespaces,
-              hiddenNodeIds: new Set<string>(),
-              explorerOpen: true,
-              visibleNodeKinds: new Set(ALL_NODE_KINDS),
-              visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
+            // Preserve the current selection if the selected node still exists
+            // in the freshly-merged graph. EditorPage re-runs `loadModels` from
+            // a `useEffect` keyed on `[models, deferredExports]`; any time the
+            // server returns a new prop reference (debounced re-parse, async
+            // hydration completing, transient deferredExports churn), the
+            // effect re-fires. The previous unconditional `selectedNodeId:
+            // null` reset clobbered user selection on every re-parse — the
+            // explorer click would register, populate Inspector/Structure for
+            // a frame, then a subsequent re-parse would wipe it. The user's
+            // Form preview kept showing stale content because preview-store
+            // doesn't clear on selection drop, but Structure/Inspector/Graph
+            // (which read selectedNodeId directly) went empty. Only drop the
+            // selection when the previously-selected id no longer matches a
+            // node in the new graph (e.g. type was renamed or deleted).
+            // Degraded-parse guard: reject a reparse that strips source content
+            // from the live graph (parse worker unavailable → attributes return
+            // empty with no `errors`). Applying it would corrupt the source via
+            // the model→source serialize path. Keep the last good graph verbatim;
+            // a healthy reparse later replaces it. Compared against current nodes
+            // so legitimate user deletions are not mistaken for degradation.
+            if (isDegradedReparse(laidOutNodes, get().nodes)) {
+              console.warn(
+                '[editor-store] Rejected a degraded reparse (attributes stripped from the live graph) ' +
+                  'to protect the source document. The parse worker is likely unavailable.'
+              );
+              return;
             }
-          });
-        },
 
-        loadDeferredExports(entries) {
-          // Idempotence guard (Codex P1 review on PR #164): EditorPage's
-          // effect re-fires whenever its `deferredExports` prop reference
-          // changes. The prop default is an inline `[]` which is a fresh
-          // array on every render → unconditional re-dispatch would
-          // re-emit visibility state on every render and trigger a
-          // subscriber re-render cascade. Short-circuit if entries is
-          // the same reference or both-empty: the contract for "clear
-          // stale state on workspace switch" only fires on a genuine
-          // transition from non-empty to empty, which this guard preserves.
-          const current = get().deferredExports;
-          if (entries === current) return;
-          if (entries.length === 0 && current.length === 0) return;
-          // STATE-ONLY update (Codex P2 review on PR #164: "avoid recording
-          // a stale mixed graph before reload"). Touching `nodes` here would
-          // be tracked by zundo's temporal middleware — undo after a
-          // workspace switch would restore the intermediate "old workspace
-          // nodes + new curated placeholders" state. Instead, only stash
-          // the entries; loadModels is the single source of node mutation
-          // and reads these entries when it computes the merged graph.
-          // `deferredExports` is NOT in TrackedState (see history.ts) so
-          // this write doesn't pollute the undo history.
-          set({ deferredExports: entries });
-        },
+            // Replay user edits made since the last parse on top of this one, then
+            // clear them (ONE-SHOT). This covers the dangerous in-flight case: an
+            // edit made just before its own reparse lands, where the reparse predates
+            // the edit and would otherwise momentarily revert it (and that reverted
+            // graph would then be re-serialized over source). Id-keyed, so replay
+            // targets the right node even if the parse re-orders the array.
+            //
+            // One-shot (clear below, don't carry remaining patches forward) is
+            // deliberate: the save-triggered reparse that DOES reflect the edit is
+            // the next parse, so a single replay window suffices. Carrying patches
+            // would let object-valued edits (typeCall, cardinality) — which a reparse
+            // re-derives with extra AST metadata, so they never compare byte-equal —
+            // accumulate and replay stale data indefinitely. See `edit-reconcile.ts`.
+            //
+            // reconcileParse now returns Maps (canonical substrate). We set them
+            // directly alongside the derived arrays so both invariants hold:
+            //   I1: nodes === [...nodesById.values()]
+            // The set-interceptor will harmlessly re-derive equal Maps after the set.
+            const { nodesById: reconciledById, edgesById: reconciledEdgesById } = reconcileParse(
+              laidOutNodes,
+              edges,
+              get().pendingEditPatches
+            );
+            const reconciledNodes = nodesFromMap(reconciledById);
+            const reconciledEdges = edgesFromMap(reconciledEdgesById);
 
-        // -----------------------------------------------------------------------
-        // Navigation
-        // -----------------------------------------------------------------------
+            const previousSelection = get().selectedNodeId;
+            const preservedSelection =
+              previousSelection && reconciledNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
 
-        selectNode(nodeId, options) {
-          const nextDetailPanelOpen = nodeId !== null;
-          const { selectedNodeId, detailPanelOpen, focusMode, edges, visibility, nodes, focusRelatedExcludedKinds } =
-            get();
-          const selectionChanged = selectedNodeId !== nodeId;
-          if (selectionChanged || detailPanelOpen !== nextDetailPanelOpen) {
-            set({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
-          }
-          if (nodeId === null && focusMode && visibility.hiddenNodeIds.size > 0) {
-            get().showAllNodes();
-            return;
-          }
-          const shouldApplyFocusMode =
-            nodeId &&
-            focusMode &&
-            options?.isolateInFocusMode !== false &&
-            (selectionChanged || options?.reapplyFocusMode);
-          if (shouldApplyFocusMode) {
+            set({
+              nodesById: reconciledById,
+              edgesById: reconciledEdgesById,
+              nodes: reconciledNodes,
+              edges: reconciledEdges,
+              layoutOptions: opts,
+              selectedNodeId: preservedSelection,
+              searchQuery: '',
+              searchResults: [],
+              // PARSE-origin change — bump parseEpoch so useModelSourceSync skips
+              // serializing this graph back to source (it came FROM the source).
+              parseEpoch: get().parseEpoch + 1,
+              // One-shot: edits since the last parse have now been replayed; clear
+              // so they can never accumulate or replay stale data across reparses.
+              pendingEditPatches: [],
+              visibility: {
+                expandedNamespaces,
+                hiddenNodeIds: new Set<string>(),
+                explorerOpen: true,
+                visibleNodeKinds: new Set(ALL_NODE_KINDS),
+                visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
+              }
+            });
+          },
+
+          loadDeferredExports(entries) {
+            // Idempotence guard (Codex P1 review on PR #164): EditorPage's
+            // effect re-fires whenever its `deferredExports` prop reference
+            // changes. The prop default is an inline `[]` which is a fresh
+            // array on every render → unconditional re-dispatch would
+            // re-emit visibility state on every render and trigger a
+            // subscriber re-render cascade. Short-circuit if entries is
+            // the same reference or both-empty: the contract for "clear
+            // stale state on workspace switch" only fires on a genuine
+            // transition from non-empty to empty, which this guard preserves.
+            const current = get().deferredExports;
+            if (entries === current) return;
+            if (entries.length === 0 && current.length === 0) return;
+            // STATE-ONLY update (Codex P2 review on PR #164: "avoid recording
+            // a stale mixed graph before reload"). Touching `nodes` here would
+            // be tracked by zundo's temporal middleware — undo after a
+            // workspace switch would restore the intermediate "old workspace
+            // nodes + new curated placeholders" state. Instead, only stash
+            // the entries; loadModels is the single source of node mutation
+            // and reads these entries when it computes the merged graph.
+            // `deferredExports` is NOT in TrackedState (see history.ts) so
+            // this write doesn't pollute the undo history.
+            set({ deferredExports: entries });
+          },
+
+          // -----------------------------------------------------------------------
+          // Navigation
+          // -----------------------------------------------------------------------
+
+          selectNode(nodeId, options) {
+            const nextDetailPanelOpen = nodeId !== null;
+            const { selectedNodeId, detailPanelOpen, focusMode, edges, visibility, nodes, focusRelatedExcludedKinds } =
+              get();
+            const selectionChanged = selectedNodeId !== nodeId;
+            if (selectionChanged || detailPanelOpen !== nextDetailPanelOpen) {
+              set({ selectedNodeId: nodeId, detailPanelOpen: nextDetailPanelOpen });
+            }
+            if (nodeId === null && focusMode && visibility.hiddenNodeIds.size > 0) {
+              get().showAllNodes();
+              return;
+            }
+            const shouldApplyFocusMode =
+              nodeId &&
+              focusMode &&
+              options?.isolateInFocusMode !== false &&
+              (selectionChanged || options?.reapplyFocusMode);
+            if (shouldApplyFocusMode) {
+              const focusNodeIds = collectFocusClusterNodeIds(
+                nodeId,
+                edges,
+                buildNodeMap(nodes),
+                focusRelatedExcludedKinds
+              );
+              get().showOnly(focusNodeIds);
+            }
+          },
+
+          setSearchQuery(query) {
+            const nodes = get().nodes;
+            const results: string[] = [];
+
+            if (query.trim()) {
+              const regex = new RegExp(query, 'i');
+              for (const node of nodes) {
+                if (regex.test(node.data.name)) {
+                  results.push(node.id);
+                }
+              }
+            }
+
+            set({ searchQuery: query, searchResults: results });
+          },
+
+          setFilters(filters) {
+            set({ activeFilters: filters });
+          },
+
+          toggleDetailPanel() {
+            set((state) => ({ detailPanelOpen: !state.detailPanelOpen }));
+          },
+
+          // -----------------------------------------------------------------------
+          // Layout
+          // -----------------------------------------------------------------------
+
+          relayout(options) {
+            const opts = options ?? get().layoutOptions;
+            const nodes = computeLayout(get().nodes, get().edges, opts);
+            updateGraphView(set, get, { nodes }, { layoutOptions: opts });
+          },
+
+          setLayoutEngine(engine) {
+            const opts = { ...get().layoutOptions, engine };
+            const nodes = computeLayout(get().nodes, get().edges, opts);
+            updateGraphView(set, get, { nodes }, { layoutOptions: opts });
+          },
+
+          getNodes() {
+            return get().nodes;
+          },
+
+          getEdges() {
+            return get().edges;
+          },
+
+          // -----------------------------------------------------------------------
+          // Editing commands (P2)
+          // -----------------------------------------------------------------------
+
+          createType(kind: TypeKind, name: string, namespace: string): string {
+            const nodeId = makeNodeId(namespace, name);
+            nodeCounter++;
+            // Build node OUTSIDE the recipe so nodeCounter++ side-effect is stable
+            // and the constructed node is captured as a patch (fixes: raw set lost
+            // the node on next reparse since nodes array wasn't in the patch substrate).
+            const newNode = buildNewTypeNode(kind, name, namespace, nodeCounter);
+            mutateGraph(set, get, (draft) => {
+              draft.nodes.set(nodeId, newNode);
+            });
+            return nodeId;
+          },
+
+          deleteType(nodeId: string) {
+            const clearsSelection = get().selectedNodeId === nodeId;
+            mutateGraph(
+              set,
+              get,
+              (draft) => {
+                draft.nodes.delete(nodeId);
+                for (const [id, e] of draft.edges) {
+                  if (e.source === nodeId || e.target === nodeId) draft.edges.delete(id);
+                }
+              },
+              clearsSelection ? { selectedNodeId: null } : undefined
+            );
+          },
+
+          renameType(nodeId: string, newName: string) {
+            // Read-only lookups before the recipe (safe against stale draft reads).
+            const state = get();
+            const target = state.nodesById.get(nodeId);
+            if (!target) return;
+
+            const oldName = (target.data as AnyGraphNode).name as string;
+            const namespace = (target.data as AnyGraphNode).namespace as string;
+            const newNodeId = makeNodeId(namespace, newName);
+            const reselect = state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
+
+            mutateGraph(
+              set,
+              get,
+              (draft) => {
+                const n = draft.nodes.get(nodeId);
+                if (!n) return;
+
+                // 1. Re-key the renamed node (delete old id, insert new id + name)
+                draft.nodes.delete(nodeId);
+                draft.nodes.set(newNodeId, { ...n, id: newNodeId, data: { ...n.data, name: newName } });
+
+                // 2. Cascade typeCall/superType refs in every OTHER node
+                for (const [id, other] of draft.nodes) {
+                  if (id === newNodeId) continue;
+                  const updated = updateTypeRefsInNode(other.data as AnyGraphNode, oldName, newName);
+                  if (updated !== other.data) draft.nodes.set(id, { ...other, data: updated });
+                }
+
+                // 3. Re-key incident edges via parse+rebuild (NOT string .replace)
+                for (const [id, e] of [...draft.edges]) {
+                  const sourceChanged = e.source === nodeId;
+                  const targetChanged = e.target === nodeId;
+                  const labelChanged = e.data?.label === oldName;
+                  if (!sourceChanged && !targetChanged && !labelChanged) continue;
+
+                  const newSource = sourceChanged ? newNodeId : e.source;
+                  const newTarget = targetChanged ? newNodeId : e.target;
+                  const newLabel = labelChanged ? newName : e.data?.label;
+                  const parsed = parseEdgeId(id);
+                  const newEdgeId = parsed
+                    ? makeEdgeId(parsed.kind, { source: newSource, target: newTarget, label: newLabel })
+                    : id.replace(nodeId, newNodeId).replace(oldName, newName); // fallback (should not occur post-3A)
+                  draft.edges.delete(id);
+                  draft.edges.set(newEdgeId, {
+                    ...e,
+                    id: newEdgeId,
+                    source: newSource,
+                    target: newTarget,
+                    data: e.data ? { ...e.data, label: newLabel } : e.data
+                  });
+                }
+              },
+              reselect !== state.selectedNodeId ? { selectedNodeId: reselect } : undefined
+            );
+          },
+
+          addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string) {
+            const card = parseCardinalityString(cardinality);
+            const newAttr = {
+              $type: 'Attribute',
+              name: attrName,
+              override: false,
+              typeCall: {
+                $type: 'TypeCall',
+                type: { $refText: typeName },
+                arguments: []
+              },
+              card: { $type: 'RosettaCardinality', ...card },
+              annotations: [],
+              synonyms: []
+            };
+
+            const targetNodeId = get().nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            const newEdge: TypeGraphEdge | null =
+              targetNodeId && targetNodeId !== nodeId
+                ? {
+                    id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: attrName }),
+                    source: nodeId,
+                    target: targetNodeId,
+                    type: 'attribute-ref',
+                    data: {
+                      kind: 'attribute-ref' as const,
+                      label: attrName,
+                      cardinality: formatCardinalityString(cardinality)
+                    } as EdgeData
+                  }
+                : null;
+
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (n) {
+                const d = n.data as AnyGraphNode;
+                // Data and Annotation use 'attributes'
+                if (d.$type === 'Data' || d.$type === 'Annotation') {
+                  const dd = d as { attributes?: unknown[] };
+                  if (!Array.isArray(dd.attributes)) dd.attributes = [];
+                  dd.attributes.push(newAttr);
+                }
+              }
+              if (newEdge) draft.edges.set(newEdge.id, newEdge);
+            });
+          },
+
+          removeAttribute(nodeId: string, attrName: string) {
+            const edgeIdsToDrop = get()
+              .edges.filter(
+                (e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName
+              )
+              .map((e) => e.id);
+            mutateGraph(set, get, (draft) => {
+              const node = draft.nodes.get(nodeId);
+              if (node) {
+                const d = node.data as AnyGraphNode;
+                if (d.$type === 'Data' || d.$type === 'Annotation') {
+                  const attrs = (d as { attributes?: Array<{ name: string }> }).attributes;
+                  // Remove every attribute sharing the name (mirrors the prior
+                  // `.filter`; a malformed model may hold duplicate names).
+                  if (attrs) {
+                    for (let i = attrs.length - 1; i >= 0; i--) {
+                      if (attrs[i]?.name === attrName) attrs.splice(i, 1);
+                    }
+                  }
+                }
+              }
+              for (const id of edgeIdsToDrop) draft.edges.delete(id);
+            });
+          },
+
+          updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId: string) {
+            const current = get();
+            const node = current.nodes.find((n) => n.id === nodeId);
+            if (!node) return;
+            const d0 = node.data as AnyGraphNode;
+            // Allow Data, Annotation, AND Choice through — Choice arms are stored in
+            // `attributes` (typeCall.type.$refText), not in a separate array.
+            // Other $types (Enum, RosettaFunction, etc.) are still unsupported.
+            if (d0.$type !== 'Data' && d0.$type !== 'Annotation' && d0.$type !== 'Choice') return;
+
+            const isChoice = d0.$type === 'Choice';
+            const attrs0 = ((d0 as any).attributes ?? []) as any[];
+
+            // Data/Annotation arms are matched by `name`; Choice arms are matched
+            // by `typeCall.type.$refText` because they have no distinct `.name` field.
+            const firstMatch = isChoice
+              ? attrs0.find((a: any) => (a.typeCall?.type?.$refText ?? a.typeCall) === attrName)
+              : attrs0.find((a: any) => a.name === attrName);
+            if (!firstMatch) return;
+
+            // Choice arms carry no cardinality; only preserve it for Data/Annotation.
+            const preservedCardinality = isChoice ? undefined : formatCardinality(firstMatch.card);
+
+            // Phase 13 / Finding 3: validate that the canonical targetTypeId exists
+            // in the current store and pick a $refText that disambiguates against
+            // same-named types in other namespaces. Reject (no-op) stale or unknown
+            // ids — a drag payload pointing at a deleted node must NOT corrupt the AST.
+            const target = current.nodes.find((n) => n.id === targetTypeId);
+            if (!target) return; // stale payload — abort
+            const targetData = target.data as AnyGraphNode;
+            const targetNamespace = (targetData as { namespace?: string }).namespace;
+            if (!targetNamespace) return; // malformed target
+            const refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
+
+            // For Choice arms, the old edge is a choice-option keyed by old type name;
+            // for Data/Annotation it's an attribute-ref keyed by attribute name.
+            const oldEdgeIds = current.edges
+              .filter((e) =>
+                isChoice
+                  ? e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName
+                  : e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName
+              )
+              .map((e) => e.id);
+
+            // New edge unless the attribute points back at its own node.
+            const newEdge: TypeGraphEdge | null =
+              targetTypeId === nodeId
+                ? null
+                : isChoice
+                  ? {
+                      id: makeEdgeId('choice-option', { source: nodeId, target: targetTypeId, label: refText }),
+                      source: nodeId,
+                      target: targetTypeId,
+                      type: 'choice-option',
+                      data: { kind: 'choice-option' as const, label: refText } as EdgeData
+                    }
+                  : {
+                      id: makeEdgeId('attribute-ref', { source: nodeId, target: targetTypeId, label: attrName }),
+                      source: nodeId,
+                      target: targetTypeId,
+                      type: 'attribute-ref',
+                      data: {
+                        kind: 'attribute-ref' as const,
+                        label: attrName,
+                        cardinality: preservedCardinality
+                      } as EdgeData
+                    };
+
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (n) {
+                const d = n.data as AnyGraphNode;
+                if (d.$type === 'Data' || d.$type === 'Annotation' || d.$type === 'Choice') {
+                  const attrs = (d as { attributes?: any[] }).attributes;
+                  for (const a of attrs ?? []) {
+                    const matches = isChoice
+                      ? (a.typeCall?.type?.$refText ?? a.typeCall) === attrName
+                      : a.name === attrName;
+                    if (matches) {
+                      a.typeCall = {
+                        ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
+                        type: { $refText: refText }
+                      };
+                    }
+                  }
+                }
+              }
+              for (const id of oldEdgeIds) draft.edges.delete(id);
+              if (newEdge) draft.edges.set(newEdge.id, newEdge);
+            });
+          },
+
+          renameAttribute(nodeId: string, oldName: string, newName: string) {
+            const current = get();
+            const node = current.nodes.find((n) => n.id === nodeId);
+            if (!node) return;
+            const d0 = node.data as AnyGraphNode;
+            if (d0.$type !== 'Data' && d0.$type !== 'Annotation') return;
+            const attrs0 = ((d0 as any).attributes ?? []) as any[];
+            if (!attrs0.some((a) => a.name === oldName)) return;
+
+            // Precompute id-rewrites for the attribute-ref edges (their id encodes
+            // the attribute name) from the current base edges.
+            const edgeRewrites = current.edges
+              .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === oldName)
+              .map((e) => ({
+                oldId: e.id,
+                newEdge: {
+                  ...e,
+                  id: e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`),
+                  data: { ...e.data, label: newName }
+                } as TypeGraphEdge
+              }));
+
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (n) {
+                const d = n.data as AnyGraphNode;
+                if (d.$type === 'Data' || d.$type === 'Annotation') {
+                  // Rename every attribute sharing the old name (mirrors the prior `.map`).
+                  for (const a of (d as { attributes?: Array<{ name: string }> }).attributes ?? []) {
+                    if (a.name === oldName) a.name = newName;
+                  }
+                }
+              }
+              for (const { oldId, newEdge } of edgeRewrites) {
+                if (!draft.edges.has(oldId)) continue;
+                draft.edges.delete(oldId);
+                draft.edges.set(newEdge.id, newEdge);
+              }
+            });
+          },
+
+          updateCardinality(nodeId: string, attrName: string, cardinality: string) {
+            const card = parseCardinalityString(cardinality);
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (!n) return;
+              const d = n.data as AnyGraphNode;
+              if (d.$type !== 'Data' && d.$type !== 'Annotation') return;
+              // Update every attribute sharing the name (mirrors the prior `.map`).
+              for (const a of (d as { attributes?: Array<{ name: string; card?: unknown }> }).attributes ?? []) {
+                if (a.name === attrName) a.card = { $type: 'RosettaCardinality', ...card };
+              }
+            });
+          },
+
+          setInheritance(childId: string, parentId: string | null) {
+            // Phase 13 / Finding 3: validate parentId exists; reject stale payloads
+            // (drag target deleted between drag and drop). Read-only lookups happen
+            // BEFORE the recipe so the draft sees the committed state.
+            const state = get();
+            const parentNode = parentId ? state.nodesById.get(parentId) : null;
+            if (parentId && !parentNode) return; // stale parentId — no-op, leave state untouched
+
+            const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
+            const parentNamespace = (parentNode?.data as { namespace?: string } | undefined)?.namespace;
+            const superRefText =
+              parentName && parentNamespace && parentNode
+                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, [...state.nodesById.values()])
+                : parentName;
+            const superRef = superRefText
+              ? ({ ref: { name: parentName }, $refText: superRefText } as never)
+              : undefined;
+
+            mutateGraph(set, get, (draft) => {
+              // Remove existing extends edge from this child
+              for (const [id, e] of draft.edges) {
+                if (e.source === childId && e.data?.kind === 'extends') draft.edges.delete(id);
+              }
+              // Update child superType (Data nodes only)
+              const n = draft.nodes.get(childId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type === 'Data') (d as { superType?: unknown }).superType = superRef;
+              // Add new extends edge when a parent is supplied
+              if (parentId) {
+                const id = makeEdgeId('extends', { source: childId, target: parentId });
+                draft.edges.set(id, {
+                  id,
+                  source: childId,
+                  target: parentId,
+                  type: 'inheritance',
+                  data: { kind: 'extends' as const, label: 'extends' } as EdgeData
+                } as TypeGraphEdge);
+              }
+            });
+          },
+
+          validate(): ValidationError[] {
+            const errors = validateGraph(get().nodes, get().edges);
+            set({ validationErrors: errors });
+            return errors;
+          },
+
+          // -----------------------------------------------------------------------
+          // Attribute operations
+          // -----------------------------------------------------------------------
+
+          updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
+            // Combined name+type+cardinality edit from the inspector form. Routed
+            // through `mutateGraph` (like the field-level attribute actions) so an
+            // edit made just before its own reparse lands is captured as a pending
+            // patch and replayed, not dropped. See `edit-reconcile.ts`.
+            const card = parseCardinalityString(cardinality);
+            const { nodes, edges } = get();
+            const oldEdgeIds = edges
+              .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
+              .map((e) => e.id);
+            const targetNodeId = nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            const newEdge: TypeGraphEdge | null =
+              targetNodeId && targetNodeId !== nodeId
+                ? {
+                    id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
+                    source: nodeId,
+                    target: targetNodeId,
+                    type: 'attribute-ref',
+                    data: {
+                      kind: 'attribute-ref' as const,
+                      label: newName,
+                      cardinality: formatCardinalityString(cardinality)
+                    } as EdgeData
+                  }
+                : null;
+
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (n) {
+                const d = n.data as AnyGraphNode;
+                if (d.$type === 'Data' || d.$type === 'Annotation') {
+                  // Update every attribute sharing the old name (mirrors the prior `.map`).
+                  for (const a of (d as { attributes?: any[] }).attributes ?? []) {
+                    if (a.name === oldName) {
+                      a.name = newName;
+                      a.typeCall = { ...a.typeCall, $type: 'TypeCall', type: { $refText: typeName } };
+                      a.card = { $type: 'RosettaCardinality', ...card };
+                    }
+                  }
+                }
+              }
+              for (const id of oldEdgeIds) draft.edges.delete(id);
+              if (newEdge) draft.edges.set(newEdge.id, newEdge);
+            });
+          },
+
+          reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
+              const attrs = (d as { attributes?: unknown[] }).attributes;
+              if (!Array.isArray(attrs)) return;
+              const [moved] = attrs.splice(fromIndex, 1);
+              if (moved !== undefined) attrs.splice(toIndex, 0, moved);
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // Enum operations
+          // -----------------------------------------------------------------------
+
+          addEnumValue(nodeId: string, valueName: string, displayName?: string) {
+            const newValue = {
+              $type: 'RosettaEnumValue',
+              name: valueName,
+              display: displayName,
+              annotations: [],
+              enumSynonyms: []
+            };
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const vals = (d as { enumValues?: unknown[] }).enumValues;
+              if (Array.isArray(vals)) {
+                vals.push(newValue);
+              } else {
+                (d as { enumValues?: unknown[] }).enumValues = [newValue];
+              }
+            });
+          },
+
+          removeEnumValue(nodeId: string, valueName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const vals = (d as { enumValues?: { name: string }[] }).enumValues;
+              if (!Array.isArray(vals)) return;
+              const idx = vals.findIndex((v) => v.name === valueName);
+              if (idx !== -1) vals.splice(idx, 1);
+            });
+          },
+
+          updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const vals = (d as { enumValues?: { name: string; display?: string }[] }).enumValues;
+              if (!Array.isArray(vals)) return;
+              const v = vals.find((item) => item.name === oldName);
+              if (v) {
+                v.name = newName;
+                v.display = displayName;
+              }
+            });
+          },
+
+          reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const vals = (d as { enumValues?: unknown[] }).enumValues;
+              if (!Array.isArray(vals)) return;
+              const [moved] = vals.splice(fromIndex, 1);
+              if (moved !== undefined) vals.splice(toIndex, 0, moved);
+            });
+          },
+
+          setEnumParent(nodeId: string, parentId: string | null) {
+            const state = get();
+            const parentNode = parentId ? state.nodesById.get(parentId) : null;
+            const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
+            const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              (d as { parent?: unknown }).parent = parentRef;
+              for (const [id, e] of draft.edges) {
+                if (e.source === nodeId && e.data?.kind === 'enum-extends') draft.edges.delete(id);
+              }
+              if (parentId) {
+                const edgeId = makeEdgeId('enum-extends', { source: nodeId, target: parentId });
+                draft.edges.set(edgeId, {
+                  id: edgeId,
+                  source: nodeId,
+                  target: parentId,
+                  type: 'enum-extends',
+                  data: {
+                    kind: 'enum-extends' as const,
+                    label: 'extends'
+                  } as EdgeData
+                } as TypeGraphEdge);
+              }
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // Choice operations
+          // -----------------------------------------------------------------------
+
+          addChoiceOption(nodeId: string, typeName: string) {
+            const newOption = {
+              $type: 'ChoiceOption',
+              typeCall: {
+                $type: 'TypeCall',
+                type: { $refText: typeName },
+                arguments: []
+              },
+              annotations: [],
+              synonyms: []
+            };
+            // Resolve the target node id BEFORE the recipe (read-only against Maps).
+            const targetId = [...get().nodesById.values()].find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'Choice') return;
+              const attrs = (d as { attributes?: unknown[] }).attributes;
+              if (Array.isArray(attrs)) {
+                attrs.push(newOption);
+              } else {
+                (d as { attributes?: unknown[] }).attributes = [newOption];
+              }
+              if (targetId) {
+                const id = makeEdgeId('choice-option', { source: nodeId, target: targetId, label: typeName });
+                draft.edges.set(id, {
+                  id,
+                  source: nodeId,
+                  target: targetId,
+                  type: 'choice-option',
+                  data: { kind: 'choice-option' as const, label: typeName } as EdgeData
+                } as TypeGraphEdge);
+              }
+            });
+          },
+
+          removeChoiceOption(nodeId: string, typeName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'Choice') return;
+              const dd = d as { attributes?: { typeCall?: { type?: { $refText?: string } } }[] };
+              if (dd.attributes) {
+                dd.attributes = dd.attributes.filter((a) => a.typeCall?.type?.$refText !== typeName);
+              }
+              for (const [id, e] of draft.edges) {
+                if (e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName) {
+                  draft.edges.delete(id);
+                }
+              }
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // Function operations
+          // -----------------------------------------------------------------------
+
+          addInputParam(nodeId: string, paramName: string, typeName: string) {
+            const newInput = {
+              $type: 'Attribute',
+              name: paramName,
+              override: false,
+              typeCall: {
+                $type: 'TypeCall',
+                type: { $refText: typeName },
+                arguments: []
+              },
+              card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false },
+              annotations: [],
+              synonyms: []
+            };
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaFunction') return;
+              const inputs = (d as { inputs?: unknown[] }).inputs;
+              if (Array.isArray(inputs)) {
+                inputs.push(newInput);
+              } else {
+                (d as { inputs?: unknown[] }).inputs = [newInput];
+              }
+            });
+          },
+
+          removeInputParam(nodeId: string, paramName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaFunction') return;
+              const inputs = (d as { inputs?: { name: string }[] }).inputs;
+              if (!Array.isArray(inputs)) return;
+              const idx = inputs.findIndex((i) => i.name === paramName);
+              if (idx !== -1) inputs.splice(idx, 1);
+            });
+          },
+
+          updateInputParam(
+            nodeId: string,
+            oldName: string,
+            newName: string,
+            typeName: string,
+            cardinality: string,
+            targetTypeId?: string
+          ) {
+            const card = parseCardinalityString(cardinality);
+            // Resolve the qualified $refText using the same disambiguation logic
+            // as updateAttributeType (spec 020 Phase 13, Finding 3).  When a
+            // canonical targetTypeId is supplied and the node exists, qualify the
+            // name if any OTHER node shares the same bare name.  Fall back to the
+            // bare typeName when the id is absent or stale (backward-compatible).
+            // All reads are done BEFORE the recipe (read-only against Maps).
+            const targetNode = targetTypeId ? get().nodesById.get(targetTypeId) : undefined;
+            const targetNamespace = targetNode
+              ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
+              : undefined;
+            const refText =
+              targetNode && targetNamespace
+                ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, [...get().nodesById.values()])
+                : typeName;
+
+            // Add a new attribute-ref edge if the target type node exists.
+            // Prefer id-based lookup (avoids resolving to the wrong same-named
+            // node in a different namespace); fall back to name-based lookup for
+            // built-in / string types that have no graph node.
+            const targetNodeId =
+              targetNode?.id ??
+              [...get().nodesById.values()].find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            const newEdge: TypeGraphEdge | null =
+              targetNodeId && targetNodeId !== nodeId
+                ? {
+                    id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
+                    source: nodeId,
+                    target: targetNodeId,
+                    type: 'attribute-ref',
+                    data: {
+                      kind: 'attribute-ref' as const,
+                      label: newName,
+                      cardinality: formatCardinalityString(cardinality)
+                    } as EdgeData
+                  }
+                : null;
+
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaFunction') return;
+              for (const inp of (d as { inputs?: any[] }).inputs ?? []) {
+                if (inp.name === oldName) {
+                  inp.name = newName;
+                  // Mutate typeCall in-place so Mutative preserves the existing
+                  // `arguments` array (spreading a Mutative proxy discards the
+                  // proxy's array tracking; field-by-field mutation is safe here).
+                  if (!inp.typeCall) {
+                    inp.typeCall = { $type: 'TypeCall', type: { $refText: refText }, arguments: [] };
+                  } else {
+                    if (!inp.typeCall.type) inp.typeCall.type = {};
+                    inp.typeCall.type.$refText = refText;
+                    // arguments is left untouched — preserves parameterized TypeCall.arguments.
+                  }
+                  inp.card = { $type: 'RosettaCardinality', ...card };
+                }
+              }
+              // Remove the old attribute-ref edge for this input (keyed by old name).
+              for (const [id, e] of draft.edges) {
+                if (e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName) {
+                  draft.edges.delete(id);
+                }
+              }
+              if (newEdge) draft.edges.set(newEdge.id, newEdge);
+            });
+          },
+
+          reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaFunction') return;
+              const inputs = (d as { inputs?: unknown[] }).inputs;
+              if (!Array.isArray(inputs)) return;
+              const [moved] = inputs.splice(fromIndex, 1);
+              if (moved !== undefined) inputs.splice(toIndex, 0, moved);
+            });
+          },
+
+          updateOutputType(nodeId: string, typeName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (d?.$type !== 'RosettaFunction') return;
+              const fd = d as {
+                output?: {
+                  $type?: string;
+                  name?: string;
+                  override?: boolean;
+                  card?: unknown;
+                  typeCall?: { $type: string; type: { $refText: string }; arguments: unknown[] };
+                };
+              };
+              if (!fd.output) {
+                fd.output = {
+                  $type: 'Attribute',
+                  name: 'output',
+                  override: false,
+                  card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false }
+                };
+              }
+              fd.output.typeCall = {
+                $type: 'TypeCall',
+                type: { $refText: typeName },
+                arguments: []
+              };
+            });
+          },
+
+          updateExpression(nodeId: string, expressionText: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (!n) return;
+              const d = n.data as AnyGraphNode;
+              if (d.$type === 'RosettaFunction') {
+                // Function body is in operations[0].expression.$cstText.
+                // Also write expressionText as a display field.
+                const fd = d as { operations?: any[]; expressionText?: string };
+                if (!fd.operations || fd.operations.length === 0) {
+                  fd.operations = [
+                    {
+                      $type: 'Operation',
+                      operator: 'set',
+                      expression: { $cstText: expressionText }
+                    }
+                  ];
+                } else {
+                  if (!fd.operations[0].expression) {
+                    fd.operations[0].expression = {};
+                  }
+                  fd.operations[0].expression.$cstText = expressionText;
+                }
+                fd.expressionText = expressionText;
+              } else {
+                // For Data/TypeAlias, store as a display field only.
+                (d as { expressionText?: string }).expressionText = expressionText;
+              }
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // Condition operations
+          // -----------------------------------------------------------------------
+
+          addCondition(
+            nodeId: string,
+            condition: {
+              name?: string;
+              definition?: string;
+              expressionText: string;
+              isPostCondition?: boolean;
+            }
+          ) {
+            const newCondition = {
+              $type: 'Condition',
+              name: condition.name,
+              definition: condition.definition,
+              expression: { $cstText: condition.expressionText },
+              postCondition: condition.isPostCondition ?? false
+            };
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { conditions?: unknown[]; postConditions?: unknown[] };
+              if (condition.isPostCondition) {
+                if (Array.isArray(dd.postConditions)) {
+                  dd.postConditions.push(newCondition);
+                } else {
+                  dd.postConditions = [newCondition];
+                }
+              } else {
+                if (Array.isArray(dd.conditions)) {
+                  dd.conditions.push(newCondition);
+                } else {
+                  dd.conditions = [newCondition];
+                }
+              }
+            });
+          },
+
+          removeCondition(nodeId: string, index: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { conditions?: any[]; postConditions?: any[] };
+              const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
+              allConditions.splice(index, 1);
+              dd.conditions = allConditions.filter((c: any) => !c.postCondition);
+              dd.postConditions = allConditions.filter((c: any) => c.postCondition);
+            });
+          },
+
+          updateCondition(
+            nodeId: string,
+            index: number,
+            updates: { name?: string; definition?: string; expressionText?: string }
+          ) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { conditions?: any[]; postConditions?: any[] };
+              const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
+              if (index < 0 || index >= allConditions.length) return;
+              const cond = allConditions[index];
+              allConditions[index] = {
+                ...cond,
+                ...(updates.name !== undefined ? { name: updates.name } : {}),
+                ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
+                ...(updates.expressionText !== undefined
+                  ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
+                  : {})
+              };
+              dd.conditions = allConditions.filter((c: any) => !c.postCondition);
+              dd.postConditions = allConditions.filter((c: any) => c.postCondition);
+            });
+          },
+
+          reorderCondition(nodeId: string, fromIndex: number, toIndex: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { conditions?: any[] };
+              const conditions = [...(dd.conditions ?? [])];
+              const [moved] = conditions.splice(fromIndex, 1);
+              if (moved) {
+                conditions.splice(toIndex, 0, moved);
+              }
+              dd.conditions = conditions;
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // Metadata operations
+          // -----------------------------------------------------------------------
+
+          updateDefinition(nodeId: string, definition: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              (d as { definition?: string }).definition = definition;
+            });
+          },
+
+          updateComments(nodeId: string, comments: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              (d as { comments?: string }).comments = comments;
+            });
+          },
+
+          addSynonym(nodeId: string, synonym: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { synonyms?: any[] };
+              // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
+              if (d.$type === 'Data' || d.$type === 'Choice') {
+                const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
+                if (Array.isArray(dd.synonyms)) {
+                  dd.synonyms.push(newSyn);
+                } else {
+                  dd.synonyms = [newSyn];
+                }
+              } else if (d.$type === 'RosettaEnumeration') {
+                const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
+                if (Array.isArray(dd.synonyms)) {
+                  dd.synonyms.push(newSyn);
+                } else {
+                  dd.synonyms = [newSyn];
+                }
+              }
+              // other $types: no-op (no mutation → mutateGraph early-exits)
+            });
+          },
+
+          removeSynonym(nodeId: string, index: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { synonyms?: any[] };
+              if (Array.isArray(dd.synonyms)) {
+                dd.synonyms.splice(index, 1);
+              }
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // Annotation operations
+          // -----------------------------------------------------------------------
+
+          addAnnotation(nodeId: string, annotationName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { annotations?: any[] };
+              const newAnnotationRef = { $type: 'AnnotationRef', annotation: { $refText: annotationName } };
+              if (Array.isArray(dd.annotations)) {
+                dd.annotations.push(newAnnotationRef);
+              } else {
+                dd.annotations = [newAnnotationRef];
+              }
+            });
+          },
+
+          removeAnnotation(nodeId: string, index: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as AnyGraphNode | undefined;
+              if (!d) return;
+              const dd = d as { annotations?: any[] };
+              if (Array.isArray(dd.annotations)) {
+                dd.annotations.splice(index, 1);
+              }
+            });
+          },
+
+          // -----------------------------------------------------------------------
+          // ReactFlow integration
+          // -----------------------------------------------------------------------
+
+          // -----------------------------------------------------------------------
+          // On-demand curated hydration
+          // -----------------------------------------------------------------------
+
+          requestNamespaceHydration(ns: string) {
+            set((s) => {
+              if (s.hydratedNamespaces.includes(ns) || s.pendingHydrationNamespaces.includes(ns)) return s;
+              return { pendingHydrationNamespaces: [...s.pendingHydrationNamespaces, ns] };
+            });
+          },
+
+          markNamespacesHydrated(names: string[]) {
+            set((s) => ({
+              hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n)),
+              hydrationNonce: s.hydrationNonce + 1
+            }));
+          },
+
+          activeHydrationNamespaces() {
+            const s = get();
+            return [...new Set([...s.hydratedNamespaces, ...s.pendingHydrationNamespaces])];
+          },
+
+          dequeuePendingHydration: (names) =>
+            set((s) => ({
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
+            })),
+
+          resetHydration() {
+            set({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });
+          },
+
+          // -----------------------------------------------------------------------
+          // ReactFlow integration
+          // -----------------------------------------------------------------------
+
+          applyReactFlowNodeChanges(changes: NodeChange<TypeGraphNode>[]) {
+            // Filter out intermediate drag states to avoid polluting undo history.
+            // Only apply position changes when dragging is complete.
+            const meaningful = changes.filter((c) => {
+              if (c.type === 'position' && c.dragging) return false;
+              return true;
+            });
+            if (meaningful.length === 0) return;
+            updateGraphView(set, get, { nodes: applyNodeChanges(meaningful, get().nodes) });
+          },
+
+          applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]) {
+            updateGraphView(set, get, { edges: applyEdgeChanges(changes, get().edges) });
+          },
+
+          // -----------------------------------------------------------------------
+          // Namespace visibility
+          // -----------------------------------------------------------------------
+
+          toggleNamespace(namespace: string) {
+            set((state) => {
+              const next = new Set(state.visibility.expandedNamespaces);
+              if (next.has(namespace)) {
+                next.delete(namespace);
+              } else {
+                next.add(namespace);
+              }
+              return {
+                visibility: { ...state.visibility, expandedNamespaces: next }
+              };
+            });
+          },
+
+          toggleNodeVisibility(nodeId: string) {
+            set((state) => {
+              const next = new Set(state.visibility.hiddenNodeIds);
+              if (next.has(nodeId)) {
+                next.delete(nodeId);
+              } else {
+                next.add(nodeId);
+              }
+              return {
+                visibility: { ...state.visibility, hiddenNodeIds: next }
+              };
+            });
+          },
+
+          expandAllNamespaces() {
+            const nodes = get().nodes;
+            const allNs = [...new Set(nodes.map((n) => n.data.namespace))];
+
+            // For small models, expand all at once
+            if (nodes.length <= LARGE_MODEL_THRESHOLD) {
+              set((state) => ({
+                visibility: {
+                  ...state.visibility,
+                  expandedNamespaces: new Set(allNs),
+                  hiddenNodeIds: new Set<string>()
+                }
+              }));
+              return;
+            }
+
+            // Progressive expand: batch namespaces to keep each frame under ~100 nodes.
+            // Sort namespaces by node count (smallest first) for faster visual feedback.
+            const nsCountMap = new Map<string, number>();
+            for (const n of nodes) {
+              nsCountMap.set(n.data.namespace, (nsCountMap.get(n.data.namespace) ?? 0) + 1);
+            }
+            const nsByCount = allNs
+              .map((ns) => ({ ns, count: nsCountMap.get(ns) ?? 0 }))
+              .sort((a, b) => a.count - b.count);
+
+            const BATCH_NODE_LIMIT = 100;
+            const batches: string[][] = [];
+            let currentBatch: string[] = [];
+            let currentCount = 0;
+
+            for (const { ns, count } of nsByCount) {
+              if (currentCount + count > BATCH_NODE_LIMIT && currentBatch.length > 0) {
+                batches.push(currentBatch);
+                currentBatch = [ns];
+                currentCount = count;
+              } else {
+                currentBatch.push(ns);
+                currentCount += count;
+              }
+            }
+            if (currentBatch.length > 0) batches.push(currentBatch);
+
+            // Clear hidden nodes immediately
+            set((state) => ({
+              visibility: { ...state.visibility, hiddenNodeIds: new Set<string>() }
+            }));
+
+            // Expand batches progressively using requestAnimationFrame
+            const seq = ++expandSeq;
+            let batchIndex = 0;
+            const expandNextBatch = () => {
+              if (expandSeq !== seq || batchIndex >= batches.length) return;
+              const batch = batches[batchIndex++]!;
+              set((state) => {
+                const next = new Set(state.visibility.expandedNamespaces);
+                for (const ns of batch) next.add(ns);
+                return {
+                  visibility: { ...state.visibility, expandedNamespaces: next }
+                };
+              });
+              if (batchIndex < batches.length) {
+                requestAnimationFrame(expandNextBatch);
+              }
+            };
+            requestAnimationFrame(expandNextBatch);
+          },
+
+          collapseAllNamespaces() {
+            expandSeq++; // Cancel any in-flight progressive expansion
+            set((state) => ({
+              visibility: {
+                ...state.visibility,
+                expandedNamespaces: new Set<string>(),
+                hiddenNodeIds: new Set<string>()
+              }
+            }));
+          },
+
+          setInitialVisibility(totalNodeCount: number) {
+            set((state) => {
+              const shouldCollapse = totalNodeCount > LARGE_MODEL_THRESHOLD;
+              const allNs = new Set(state.nodes.map((n) => n.data.namespace));
+              return {
+                focusMode: true,
+                visibility: {
+                  ...state.visibility,
+                  expandedNamespaces: shouldCollapse ? new Set<string>() : allNs,
+                  hiddenNodeIds: new Set<string>()
+                }
+              };
+            });
+          },
+
+          toggleExplorer() {
+            set((state) => ({
+              visibility: {
+                ...state.visibility,
+                explorerOpen: !state.visibility.explorerOpen
+              }
+            }));
+          },
+
+          getVisibleNodes(): TypeGraphNode[] {
+            const { nodes, visibility } = get();
+            return nodes.filter(
+              (n) =>
+                visibility.expandedNamespaces.has(n.data.namespace) &&
+                !visibility.hiddenNodeIds.has(n.id) &&
+                visibility.visibleNodeKinds.has(n.type as TypeKind)
+            );
+          },
+
+          getVisibleEdges(): TypeGraphEdge[] {
+            const { edges, visibility } = get();
+            const visibleNodeIds = new Set(
+              get()
+                .getVisibleNodes()
+                .map((n) => n.id)
+            );
+            return edges.filter(
+              (e) =>
+                visibleNodeIds.has(e.source) &&
+                visibleNodeIds.has(e.target) &&
+                visibility.visibleEdgeKinds.has((e.data as EdgeData).kind)
+            );
+          },
+
+          // -----------------------------------------------------------------------
+          // Kind-based visibility
+          // -----------------------------------------------------------------------
+
+          toggleNodeKind(kind: TypeKind) {
+            set((state) => {
+              const next = new Set(state.visibility.visibleNodeKinds);
+              if (next.has(kind)) {
+                next.delete(kind);
+              } else {
+                next.add(kind);
+              }
+              return {
+                visibility: { ...state.visibility, visibleNodeKinds: next }
+              };
+            });
+          },
+
+          toggleEdgeKind(kind: EdgeKind) {
+            set((state) => {
+              const next = new Set(state.visibility.visibleEdgeKinds);
+              if (next.has(kind)) {
+                next.delete(kind);
+              } else {
+                next.add(kind);
+              }
+              return {
+                visibility: { ...state.visibility, visibleEdgeKinds: next }
+              };
+            });
+          },
+
+          showAllNodeKinds() {
+            set((state) => ({
+              visibility: {
+                ...state.visibility,
+                visibleNodeKinds: new Set(ALL_NODE_KINDS)
+              }
+            }));
+          },
+
+          showAllEdgeKinds() {
+            set((state) => ({
+              visibility: {
+                ...state.visibility,
+                visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
+              }
+            }));
+          },
+
+          // -----------------------------------------------------------------------
+          // Isolation / focus
+          // -----------------------------------------------------------------------
+
+          toggleFocusRelatedExcludedKind(kind: TypeKind) {
+            const { selectedNodeId, focusMode, edges, nodes } = get();
+            let nextExcludedKinds: Set<TypeKind> | null = null;
+
+            set((state) => {
+              nextExcludedKinds = new Set(state.focusRelatedExcludedKinds);
+              if (nextExcludedKinds.has(kind)) {
+                nextExcludedKinds.delete(kind);
+              } else {
+                nextExcludedKinds.add(kind);
+              }
+
+              return {
+                focusRelatedExcludedKinds: nextExcludedKinds
+              };
+            });
+
+            if (focusMode && selectedNodeId && nextExcludedKinds) {
+              const focusNodeIds = collectFocusClusterNodeIds(
+                selectedNodeId,
+                edges,
+                buildNodeMap(nodes),
+                nextExcludedKinds
+              );
+              get().showOnly(focusNodeIds);
+            }
+          },
+
+          isolateNode(nodeId: string) {
+            const { edges, nodes, focusRelatedExcludedKinds } = get();
             const focusNodeIds = collectFocusClusterNodeIds(
               nodeId,
               edges,
@@ -1079,1438 +2445,85 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               focusRelatedExcludedKinds
             );
             get().showOnly(focusNodeIds);
-          }
-        },
+          },
 
-        setSearchQuery(query) {
-          const nodes = get().nodes;
-          const results: string[] = [];
-
-          if (query.trim()) {
-            const regex = new RegExp(query, 'i');
-            for (const node of nodes) {
-              if (regex.test(node.data.name)) {
-                results.push(node.id);
-              }
+          revealNeighbors(nodeId: string) {
+            const { nodes, edges, visibility, focusRelatedExcludedKinds } = get();
+            const focusNodeIds = collectFocusClusterNodeIds(
+              nodeId,
+              edges,
+              buildNodeMap(nodes),
+              focusRelatedExcludedKinds
+            );
+            const nodeMap = buildNodeMap(nodes);
+            const hiddenNodeIds = new Set(visibility.hiddenNodeIds);
+            const expandedNamespaces = new Set(visibility.expandedNamespaces);
+            for (const id of focusNodeIds) {
+              hiddenNodeIds.delete(id);
+              const node = nodeMap.get(id);
+              if (node) expandedNamespaces.add(node.data.namespace);
             }
-          }
-
-          set({ searchQuery: query, searchResults: results });
-        },
-
-        setFilters(filters) {
-          set({ activeFilters: filters });
-        },
-
-        toggleDetailPanel() {
-          set((state) => ({ detailPanelOpen: !state.detailPanelOpen }));
-        },
-
-        // -----------------------------------------------------------------------
-        // Layout
-        // -----------------------------------------------------------------------
-
-        relayout(options) {
-          const opts = options ?? get().layoutOptions;
-          const nodes = computeLayout(get().nodes, get().edges, opts);
-          updateGraphView(set, get, { nodes }, { layoutOptions: opts });
-        },
-
-        setLayoutEngine(engine) {
-          const opts = { ...get().layoutOptions, engine };
-          const nodes = computeLayout(get().nodes, get().edges, opts);
-          updateGraphView(set, get, { nodes }, { layoutOptions: opts });
-        },
-
-        getNodes() {
-          return get().nodes;
-        },
-
-        getEdges() {
-          return get().edges;
-        },
-
-        // -----------------------------------------------------------------------
-        // Editing commands (P2)
-        // -----------------------------------------------------------------------
-
-        createType(kind: TypeKind, name: string, namespace: string): string {
-          const nodeId = makeNodeId(namespace, name);
-          nodeCounter++;
-
-          const $type = NODE_TYPE_TO_AST_TYPE[kind] ?? 'Data';
-
-          // Build a minimal AstNodeModel shell for the new type.
-          // Each kind gets its own empty member array field.
-          const baseData: Record<string, unknown> = {
-            $type,
-            name,
-            namespace,
-            position: { x: nodeCounter * 50, y: nodeCounter * 50 },
-            hasExternalRefs: false,
-            errors: [],
-            definition: undefined,
-            annotations: [],
-            synonyms: []
-          };
-
-          // Add kind-specific member arrays
-          switch ($type) {
-            case 'Data':
-              baseData.attributes = [];
-              baseData.conditions = [];
-              break;
-            case 'Choice':
-              baseData.attributes = [];
-              break;
-            case 'RosettaEnumeration':
-              baseData.enumValues = [];
-              break;
-            case 'RosettaFunction':
-              baseData.inputs = [];
-              baseData.conditions = [];
-              baseData.postConditions = [];
-              baseData.operations = [];
-              baseData.shortcuts = [];
-              break;
-            case 'RosettaRecordType':
-              baseData.features = [];
-              break;
-            case 'Annotation':
-              baseData.attributes = [];
-              break;
-          }
-
-          const newNode: TypeGraphNode = {
-            id: nodeId,
-            type: kind,
-            position: { x: nodeCounter * 50, y: nodeCounter * 50 },
-            data: baseData as unknown as AnyGraphNode
-          };
-
-          set((state) => ({
-            nodes: [...state.nodes, newNode]
-          }));
-
-          return nodeId;
-        },
-
-        deleteType(nodeId: string) {
-          set((state) => ({
-            nodes: state.nodes.filter((n) => n.id !== nodeId),
-            edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-            selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId
-          }));
-        },
-
-        renameType(nodeId: string, newName: string) {
-          set((state) => {
-            const targetNode = state.nodes.find((n) => n.id === nodeId);
-            if (!targetNode) return {};
-
-            const oldName = (targetNode.data as AnyGraphNode).name as string;
-            const namespace = (targetNode.data as AnyGraphNode).namespace as string;
-            const newNodeId = makeNodeId(namespace, newName);
-
-            // 1. Rename the target node and cascade type references in other nodes
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id === nodeId) {
-                return { ...n, id: newNodeId, data: { ...n.data, name: newName } };
-              }
-              // Cascade: update typeCall.$refText references in member arrays
-              const d = n.data as AnyGraphNode;
-              const updated = updateTypeRefsInNode(d, oldName, newName);
-              if (updated !== d) {
-                return { ...n, data: updated };
-              }
-              return n;
-            });
-
-            // 2. Update all edges
-            const updatedEdges = state.edges.map((e) => {
-              const sourceChanged = e.source === nodeId;
-              const targetChanged = e.target === nodeId;
-              const labelChanged = e.data?.label === oldName;
-
-              if (!sourceChanged && !targetChanged && !labelChanged) return e;
-
-              const newSource = sourceChanged ? newNodeId : e.source;
-              const newTarget = targetChanged ? newNodeId : e.target;
-              const newLabel = labelChanged ? newName : e.data?.label;
-              const newEdgeId = e.id.replace(nodeId, newNodeId).replace(oldName, newName);
-
-              return {
-                ...e,
-                id: newEdgeId,
-                source: newSource,
-                target: newTarget,
-                data: e.data ? { ...e.data, label: newLabel } : e.data
-              };
-            });
-
-            // 3. Update selectedNodeId
-            const updatedSelectedNodeId = state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
-
-            return {
-              nodes: updatedNodes,
-              edges: updatedEdges,
-              selectedNodeId: updatedSelectedNodeId
-            };
-          });
-        },
-
-        addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string) {
-          const card = parseCardinalityString(cardinality);
-          const newAttr = {
-            $type: 'Attribute',
-            name: attrName,
-            override: false,
-            typeCall: {
-              $type: 'TypeCall',
-              type: { $refText: typeName },
-              arguments: []
-            },
-            card: { $type: 'RosettaCardinality', ...card },
-            annotations: [],
-            synonyms: []
-          };
-
-          const targetNodeId = get().nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
-          const newEdge: TypeGraphEdge | null =
-            targetNodeId && targetNodeId !== nodeId
-              ? {
-                  id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: attrName }),
-                  source: nodeId,
-                  target: targetNodeId,
-                  type: 'attribute-ref',
-                  data: {
-                    kind: 'attribute-ref' as const,
-                    label: attrName,
-                    cardinality: formatCardinalityString(cardinality)
-                  } as EdgeData
-                }
-              : null;
-
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            if (n) {
-              const d = n.data as AnyGraphNode;
-              // Data and Annotation use 'attributes'
-              if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const dd = d as { attributes?: unknown[] };
-                if (!Array.isArray(dd.attributes)) dd.attributes = [];
-                dd.attributes.push(newAttr);
-              }
-            }
-            if (newEdge) draft.edges.set(newEdge.id, newEdge);
-          });
-        },
-
-        removeAttribute(nodeId: string, attrName: string) {
-          const edgeIdsToDrop = get()
-            .edges.filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
-            .map((e) => e.id);
-          mutateGraph(set, get, (draft) => {
-            const node = draft.nodes.get(nodeId);
-            if (node) {
-              const d = node.data as AnyGraphNode;
-              if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const attrs = (d as { attributes?: Array<{ name: string }> }).attributes;
-                // Remove every attribute sharing the name (mirrors the prior
-                // `.filter`; a malformed model may hold duplicate names).
-                if (attrs) {
-                  for (let i = attrs.length - 1; i >= 0; i--) {
-                    if (attrs[i]?.name === attrName) attrs.splice(i, 1);
-                  }
-                }
-              }
-            }
-            for (const id of edgeIdsToDrop) draft.edges.delete(id);
-          });
-        },
-
-        updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId: string) {
-          const current = get();
-          const node = current.nodes.find((n) => n.id === nodeId);
-          if (!node) return;
-          const d0 = node.data as AnyGraphNode;
-          // Allow Data, Annotation, AND Choice through — Choice arms are stored in
-          // `attributes` (typeCall.type.$refText), not in a separate array.
-          // Other $types (Enum, RosettaFunction, etc.) are still unsupported.
-          if (d0.$type !== 'Data' && d0.$type !== 'Annotation' && d0.$type !== 'Choice') return;
-
-          const isChoice = d0.$type === 'Choice';
-          const attrs0 = ((d0 as any).attributes ?? []) as any[];
-
-          // Data/Annotation arms are matched by `name`; Choice arms are matched
-          // by `typeCall.type.$refText` because they have no distinct `.name` field.
-          const firstMatch = isChoice
-            ? attrs0.find((a: any) => (a.typeCall?.type?.$refText ?? a.typeCall) === attrName)
-            : attrs0.find((a: any) => a.name === attrName);
-          if (!firstMatch) return;
-
-          // Choice arms carry no cardinality; only preserve it for Data/Annotation.
-          const preservedCardinality = isChoice ? undefined : formatCardinality(firstMatch.card);
-
-          // Phase 13 / Finding 3: validate that the canonical targetTypeId exists
-          // in the current store and pick a $refText that disambiguates against
-          // same-named types in other namespaces. Reject (no-op) stale or unknown
-          // ids — a drag payload pointing at a deleted node must NOT corrupt the AST.
-          const target = current.nodes.find((n) => n.id === targetTypeId);
-          if (!target) return; // stale payload — abort
-          const targetData = target.data as AnyGraphNode;
-          const targetNamespace = (targetData as { namespace?: string }).namespace;
-          if (!targetNamespace) return; // malformed target
-          const refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
-
-          // For Choice arms, the old edge is a choice-option keyed by old type name;
-          // for Data/Annotation it's an attribute-ref keyed by attribute name.
-          const oldEdgeIds = current.edges
-            .filter((e) =>
-              isChoice
-                ? e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName
-                : e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName
-            )
-            .map((e) => e.id);
-
-          // New edge unless the attribute points back at its own node.
-          const newEdge: TypeGraphEdge | null =
-            targetTypeId === nodeId
-              ? null
-              : isChoice
-                ? {
-                    id: makeEdgeId('choice-option', { source: nodeId, target: targetTypeId, label: refText }),
-                    source: nodeId,
-                    target: targetTypeId,
-                    type: 'choice-option',
-                    data: { kind: 'choice-option' as const, label: refText } as EdgeData
-                  }
-                : {
-                    id: makeEdgeId('attribute-ref', { source: nodeId, target: targetTypeId, label: attrName }),
-                    source: nodeId,
-                    target: targetTypeId,
-                    type: 'attribute-ref',
-                    data: {
-                      kind: 'attribute-ref' as const,
-                      label: attrName,
-                      cardinality: preservedCardinality
-                    } as EdgeData
-                  };
-
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            if (n) {
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Data' || d.$type === 'Annotation' || d.$type === 'Choice') {
-                const attrs = (d as { attributes?: any[] }).attributes;
-                for (const a of attrs ?? []) {
-                  const matches = isChoice ? (a.typeCall?.type?.$refText ?? a.typeCall) === attrName : a.name === attrName;
-                  if (matches) {
-                    a.typeCall = {
-                      ...(a.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                      type: { $refText: refText }
-                    };
-                  }
-                }
-              }
-            }
-            for (const id of oldEdgeIds) draft.edges.delete(id);
-            if (newEdge) draft.edges.set(newEdge.id, newEdge);
-          });
-        },
-
-        renameAttribute(nodeId: string, oldName: string, newName: string) {
-          const current = get();
-          const node = current.nodes.find((n) => n.id === nodeId);
-          if (!node) return;
-          const d0 = node.data as AnyGraphNode;
-          if (d0.$type !== 'Data' && d0.$type !== 'Annotation') return;
-          const attrs0 = ((d0 as any).attributes ?? []) as any[];
-          if (!attrs0.some((a) => a.name === oldName)) return;
-
-          // Precompute id-rewrites for the attribute-ref edges (their id encodes
-          // the attribute name) from the current base edges.
-          const edgeRewrites = current.edges
-            .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === oldName)
-            .map((e) => ({
-              oldId: e.id,
-              newEdge: {
-                ...e,
-                id: e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`),
-                data: { ...e.data, label: newName }
-              } as TypeGraphEdge
-            }));
-
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            if (n) {
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Data' || d.$type === 'Annotation') {
-                // Rename every attribute sharing the old name (mirrors the prior `.map`).
-                for (const a of (d as { attributes?: Array<{ name: string }> }).attributes ?? []) {
-                  if (a.name === oldName) a.name = newName;
-                }
-              }
-            }
-            for (const { oldId, newEdge } of edgeRewrites) {
-              if (!draft.edges.has(oldId)) continue;
-              draft.edges.delete(oldId);
-              draft.edges.set(newEdge.id, newEdge);
-            }
-          });
-        },
-
-        updateCardinality(nodeId: string, attrName: string, cardinality: string) {
-          const card = parseCardinalityString(cardinality);
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            if (!n) return;
-            const d = n.data as AnyGraphNode;
-            if (d.$type !== 'Data' && d.$type !== 'Annotation') return;
-            // Update every attribute sharing the name (mirrors the prior `.map`).
-            for (const a of (d as { attributes?: Array<{ name: string; card?: unknown }> }).attributes ?? []) {
-              if (a.name === attrName) a.card = { $type: 'RosettaCardinality', ...card };
-            }
-          });
-        },
-
-        setInheritance(childId: string, parentId: string | null) {
-          set((state) => {
-            const filteredEdges = state.edges.filter((e) => !(e.source === childId && e.data?.kind === 'extends'));
-
-            // Phase 13 / Finding 3: validate `parentId` exists; reject stale
-            // payloads (drag target deleted between drag and drop). When
-            // resolving the superType $refText, qualify against the
-            // namespace if any same-named sibling exists across namespaces
-            // — otherwise multi-namespace workspaces silently link to the
-            // first-by-name Party (or whichever node) regardless of intent.
-            const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
-            if (parentId && !parentNode) {
-              // Stale parentId — abort the mutation, preserve existing
-              // inheritance untouched. We still filtered the old edges out
-              // above; restore them by returning unchanged state.
-              return state;
-            }
-            const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
-            const parentNamespace = (parentNode?.data as { namespace?: string } | undefined)?.namespace;
-            const superRefText =
-              parentName && parentNamespace && parentNode
-                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
-                : parentName;
-
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== childId) return n;
-              const d = n.data as AnyGraphNode;
-              const superRef = superRefText
-                ? ({ ref: { name: parentName }, $refText: superRefText } as any)
-                : undefined;
-              if (d.$type === 'Data') {
-                return { ...n, data: { ...d, superType: superRef } } as TypeGraphNode;
-              }
-              return n;
-            });
-
-            if (parentId) {
-              const newEdge: TypeGraphEdge = {
-                id: makeEdgeId('extends', { source: childId, target: parentId }),
-                source: childId,
-                target: parentId,
-                type: 'inheritance',
-                data: {
-                  kind: 'extends' as const,
-                  label: 'extends'
-                } as EdgeData
-              };
-              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
-            }
-
-            return { nodes: updatedNodes, edges: filteredEdges };
-          });
-        },
-
-        validate(): ValidationError[] {
-          const errors = validateGraph(get().nodes, get().edges);
-          set({ validationErrors: errors });
-          return errors;
-        },
-
-        // -----------------------------------------------------------------------
-        // Attribute operations
-        // -----------------------------------------------------------------------
-
-        updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
-          // Combined name+type+cardinality edit from the inspector form. Routed
-          // through `mutateGraph` (like the field-level attribute actions) so an
-          // edit made just before its own reparse lands is captured as a pending
-          // patch and replayed, not dropped. See `edit-reconcile.ts`.
-          const card = parseCardinalityString(cardinality);
-          const { nodes, edges } = get();
-          const oldEdgeIds = edges
-            .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
-            .map((e) => e.id);
-          const targetNodeId = nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
-          const newEdge: TypeGraphEdge | null =
-            targetNodeId && targetNodeId !== nodeId
-              ? {
-                  id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
-                  source: nodeId,
-                  target: targetNodeId,
-                  type: 'attribute-ref',
-                  data: {
-                    kind: 'attribute-ref' as const,
-                    label: newName,
-                    cardinality: formatCardinalityString(cardinality)
-                  } as EdgeData
-                }
-              : null;
-
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            if (n) {
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Data' || d.$type === 'Annotation') {
-                // Update every attribute sharing the old name (mirrors the prior `.map`).
-                for (const a of (d as { attributes?: any[] }).attributes ?? []) {
-                  if (a.name === oldName) {
-                    a.name = newName;
-                    a.typeCall = { ...a.typeCall, $type: 'TypeCall', type: { $refText: typeName } };
-                    a.card = { $type: 'RosettaCardinality', ...card };
-                  }
-                }
-              }
-            }
-            for (const id of oldEdgeIds) draft.edges.delete(id);
-            if (newEdge) draft.edges.set(newEdge.id, newEdge);
-          });
-        },
-
-        reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
-            const attrs = (d as { attributes?: unknown[] }).attributes;
-            if (!Array.isArray(attrs)) return;
-            const [moved] = attrs.splice(fromIndex, 1);
-            if (moved !== undefined) attrs.splice(toIndex, 0, moved);
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // Enum operations
-        // -----------------------------------------------------------------------
-
-        addEnumValue(nodeId: string, valueName: string, displayName?: string) {
-          const newValue = {
-            $type: 'RosettaEnumValue',
-            name: valueName,
-            display: displayName,
-            annotations: [],
-            enumSynonyms: []
-          };
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaEnumeration') return;
-            const vals = (d as { enumValues?: unknown[] }).enumValues;
-            if (Array.isArray(vals)) {
-              vals.push(newValue);
-            } else {
-              (d as { enumValues?: unknown[] }).enumValues = [newValue];
-            }
-          });
-        },
-
-        removeEnumValue(nodeId: string, valueName: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaEnumeration') return;
-            const vals = (d as { enumValues?: { name: string }[] }).enumValues;
-            if (!Array.isArray(vals)) return;
-            const idx = vals.findIndex((v) => v.name === valueName);
-            if (idx !== -1) vals.splice(idx, 1);
-          });
-        },
-
-        updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaEnumeration') return;
-            const vals = (d as { enumValues?: { name: string; display?: string }[] }).enumValues;
-            if (!Array.isArray(vals)) return;
-            const v = vals.find((item) => item.name === oldName);
-            if (v) {
-              v.name = newName;
-              v.display = displayName;
-            }
-          });
-        },
-
-        reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaEnumeration') return;
-            const vals = (d as { enumValues?: unknown[] }).enumValues;
-            if (!Array.isArray(vals)) return;
-            const [moved] = vals.splice(fromIndex, 1);
-            if (moved !== undefined) vals.splice(toIndex, 0, moved);
-          });
-        },
-
-        setEnumParent(nodeId: string, parentId: string | null) {
-          const state = get();
-          const parentNode = parentId ? state.nodesById.get(parentId) : null;
-          const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
-          const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaEnumeration') return;
-            (d as { parent?: unknown }).parent = parentRef;
-            for (const [id, e] of draft.edges) {
-              if (e.source === nodeId && e.data?.kind === 'enum-extends') draft.edges.delete(id);
-            }
-            if (parentId) {
-              const edgeId = makeEdgeId('enum-extends', { source: nodeId, target: parentId });
-              draft.edges.set(edgeId, {
-                id: edgeId,
-                source: nodeId,
-                target: parentId,
-                type: 'enum-extends',
-                data: {
-                  kind: 'enum-extends' as const,
-                  label: 'extends'
-                } as EdgeData
-              } as TypeGraphEdge);
-            }
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // Choice operations
-        // -----------------------------------------------------------------------
-
-        addChoiceOption(nodeId: string, typeName: string) {
-          const newOption = {
-            $type: 'ChoiceOption',
-            typeCall: {
-              $type: 'TypeCall',
-              type: { $refText: typeName },
-              arguments: []
-            },
-            annotations: [],
-            synonyms: []
-          };
-          // Resolve the target node id BEFORE the recipe (read-only against Maps).
-          const targetId = [...get().nodesById.values()].find(
-            (n) => (n.data as AnyGraphNode).name === typeName
-          )?.id;
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'Choice') return;
-            const attrs = (d as { attributes?: unknown[] }).attributes;
-            if (Array.isArray(attrs)) {
-              attrs.push(newOption);
-            } else {
-              (d as { attributes?: unknown[] }).attributes = [newOption];
-            }
-            if (targetId) {
-              const id = makeEdgeId('choice-option', { source: nodeId, target: targetId, label: typeName });
-              draft.edges.set(id, {
-                id,
-                source: nodeId,
-                target: targetId,
-                type: 'choice-option',
-                data: { kind: 'choice-option' as const, label: typeName } as EdgeData
-              } as TypeGraphEdge);
-            }
-          });
-        },
-
-        removeChoiceOption(nodeId: string, typeName: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'Choice') return;
-            const dd = d as { attributes?: { typeCall?: { type?: { $refText?: string } } }[] };
-            if (dd.attributes) {
-              dd.attributes = dd.attributes.filter((a) => a.typeCall?.type?.$refText !== typeName);
-            }
-            for (const [id, e] of draft.edges) {
-              if (e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName) {
-                draft.edges.delete(id);
-              }
-            }
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // Function operations
-        // -----------------------------------------------------------------------
-
-        addInputParam(nodeId: string, paramName: string, typeName: string) {
-          const newInput = {
-            $type: 'Attribute',
-            name: paramName,
-            override: false,
-            typeCall: {
-              $type: 'TypeCall',
-              type: { $refText: typeName },
-              arguments: []
-            },
-            card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false },
-            annotations: [],
-            synonyms: []
-          };
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaFunction') return;
-            const inputs = (d as { inputs?: unknown[] }).inputs;
-            if (Array.isArray(inputs)) {
-              inputs.push(newInput);
-            } else {
-              (d as { inputs?: unknown[] }).inputs = [newInput];
-            }
-          });
-        },
-
-        removeInputParam(nodeId: string, paramName: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaFunction') return;
-            const inputs = (d as { inputs?: { name: string }[] }).inputs;
-            if (!Array.isArray(inputs)) return;
-            const idx = inputs.findIndex((i) => i.name === paramName);
-            if (idx !== -1) inputs.splice(idx, 1);
-          });
-        },
-
-        updateInputParam(
-          nodeId: string,
-          oldName: string,
-          newName: string,
-          typeName: string,
-          cardinality: string,
-          targetTypeId?: string
-        ) {
-          const card = parseCardinalityString(cardinality);
-          // Resolve the qualified $refText using the same disambiguation logic
-          // as updateAttributeType (spec 020 Phase 13, Finding 3).  When a
-          // canonical targetTypeId is supplied and the node exists, qualify the
-          // name if any OTHER node shares the same bare name.  Fall back to the
-          // bare typeName when the id is absent or stale (backward-compatible).
-          // All reads are done BEFORE the recipe (read-only against Maps).
-          const targetNode = targetTypeId ? get().nodesById.get(targetTypeId) : undefined;
-          const targetNamespace = targetNode
-            ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
-            : undefined;
-          const refText =
-            targetNode && targetNamespace
-              ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, [...get().nodesById.values()])
-              : typeName;
-
-          // Add a new attribute-ref edge if the target type node exists.
-          // Prefer id-based lookup (avoids resolving to the wrong same-named
-          // node in a different namespace); fall back to name-based lookup for
-          // built-in / string types that have no graph node.
-          const targetNodeId =
-            targetNode?.id ?? [...get().nodesById.values()].find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
-          const newEdge: TypeGraphEdge | null =
-            targetNodeId && targetNodeId !== nodeId
-              ? {
-                  id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
-                  source: nodeId,
-                  target: targetNodeId,
-                  type: 'attribute-ref',
-                  data: {
-                    kind: 'attribute-ref' as const,
-                    label: newName,
-                    cardinality: formatCardinalityString(cardinality)
-                  } as EdgeData
-                }
-              : null;
-
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaFunction') return;
-            for (const inp of (d as { inputs?: any[] }).inputs ?? []) {
-              if (inp.name === oldName) {
-                inp.name = newName;
-                // Mutate typeCall in-place so Mutative preserves the existing
-                // `arguments` array (spreading a Mutative proxy discards the
-                // proxy's array tracking; field-by-field mutation is safe here).
-                if (!inp.typeCall) {
-                  inp.typeCall = { $type: 'TypeCall', type: { $refText: refText }, arguments: [] };
-                } else {
-                  if (!inp.typeCall.type) inp.typeCall.type = {};
-                  inp.typeCall.type.$refText = refText;
-                  // arguments is left untouched — preserves parameterized TypeCall.arguments.
-                }
-                inp.card = { $type: 'RosettaCardinality', ...card };
-              }
-            }
-            // Remove the old attribute-ref edge for this input (keyed by old name).
-            for (const [id, e] of draft.edges) {
-              if (e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName) {
-                draft.edges.delete(id);
-              }
-            }
-            if (newEdge) draft.edges.set(newEdge.id, newEdge);
-          });
-        },
-
-        reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaFunction') return;
-            const inputs = (d as { inputs?: unknown[] }).inputs;
-            if (!Array.isArray(inputs)) return;
-            const [moved] = inputs.splice(fromIndex, 1);
-            if (moved !== undefined) inputs.splice(toIndex, 0, moved);
-          });
-        },
-
-        updateOutputType(nodeId: string, typeName: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (d?.$type !== 'RosettaFunction') return;
-            const fd = d as {
-              output?: {
-                $type?: string;
-                name?: string;
-                override?: boolean;
-                card?: unknown;
-                typeCall?: { $type: string; type: { $refText: string }; arguments: unknown[] };
-              };
-            };
-            if (!fd.output) {
-              fd.output = {
-                $type: 'Attribute',
-                name: 'output',
-                override: false,
-                card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false }
-              };
-            }
-            fd.output.typeCall = {
-              $type: 'TypeCall',
-              type: { $refText: typeName },
-              arguments: []
-            };
-          });
-        },
-
-        updateExpression(nodeId: string, expressionText: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            if (!n) return;
-            const d = n.data as AnyGraphNode;
-            if (d.$type === 'RosettaFunction') {
-              // Function body is in operations[0].expression.$cstText.
-              // Also write expressionText as a display field.
-              const fd = d as { operations?: any[]; expressionText?: string };
-              if (!fd.operations || fd.operations.length === 0) {
-                fd.operations = [
-                  {
-                    $type: 'Operation',
-                    operator: 'set',
-                    expression: { $cstText: expressionText }
-                  }
-                ];
-              } else {
-                if (!fd.operations[0].expression) {
-                  fd.operations[0].expression = {};
-                }
-                fd.operations[0].expression.$cstText = expressionText;
-              }
-              fd.expressionText = expressionText;
-            } else {
-              // For Data/TypeAlias, store as a display field only.
-              (d as { expressionText?: string }).expressionText = expressionText;
-            }
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // Condition operations
-        // -----------------------------------------------------------------------
-
-        addCondition(
-          nodeId: string,
-          condition: {
-            name?: string;
-            definition?: string;
-            expressionText: string;
-            isPostCondition?: boolean;
-          }
-        ) {
-          const newCondition = {
-            $type: 'Condition',
-            name: condition.name,
-            definition: condition.definition,
-            expression: { $cstText: condition.expressionText },
-            postCondition: condition.isPostCondition ?? false
-          };
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { conditions?: unknown[]; postConditions?: unknown[] };
-            if (condition.isPostCondition) {
-              if (Array.isArray(dd.postConditions)) {
-                dd.postConditions.push(newCondition);
-              } else {
-                dd.postConditions = [newCondition];
-              }
-            } else {
-              if (Array.isArray(dd.conditions)) {
-                dd.conditions.push(newCondition);
-              } else {
-                dd.conditions = [newCondition];
-              }
-            }
-          });
-        },
-
-        removeCondition(nodeId: string, index: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { conditions?: any[]; postConditions?: any[] };
-            const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
-            allConditions.splice(index, 1);
-            dd.conditions = allConditions.filter((c: any) => !c.postCondition);
-            dd.postConditions = allConditions.filter((c: any) => c.postCondition);
-          });
-        },
-
-        updateCondition(
-          nodeId: string,
-          index: number,
-          updates: { name?: string; definition?: string; expressionText?: string }
-        ) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { conditions?: any[]; postConditions?: any[] };
-            const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
-            if (index < 0 || index >= allConditions.length) return;
-            const cond = allConditions[index];
-            allConditions[index] = {
-              ...cond,
-              ...(updates.name !== undefined ? { name: updates.name } : {}),
-              ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
-              ...(updates.expressionText !== undefined
-                ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
-                : {})
-            };
-            dd.conditions = allConditions.filter((c: any) => !c.postCondition);
-            dd.postConditions = allConditions.filter((c: any) => c.postCondition);
-          });
-        },
-
-        reorderCondition(nodeId: string, fromIndex: number, toIndex: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { conditions?: any[] };
-            const conditions = [...(dd.conditions ?? [])];
-            const [moved] = conditions.splice(fromIndex, 1);
-            if (moved) {
-              conditions.splice(toIndex, 0, moved);
-            }
-            dd.conditions = conditions;
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // Metadata operations
-        // -----------------------------------------------------------------------
-
-        updateDefinition(nodeId: string, definition: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            (d as { definition?: string }).definition = definition;
-          });
-        },
-
-        updateComments(nodeId: string, comments: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            (d as { comments?: string }).comments = comments;
-          });
-        },
-
-        addSynonym(nodeId: string, synonym: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { synonyms?: any[] };
-            // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
-            if (d.$type === 'Data' || d.$type === 'Choice') {
-              const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
-              if (Array.isArray(dd.synonyms)) {
-                dd.synonyms.push(newSyn);
-              } else {
-                dd.synonyms = [newSyn];
-              }
-            } else if (d.$type === 'RosettaEnumeration') {
-              const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
-              if (Array.isArray(dd.synonyms)) {
-                dd.synonyms.push(newSyn);
-              } else {
-                dd.synonyms = [newSyn];
-              }
-            }
-            // other $types: no-op (no mutation → mutateGraph early-exits)
-          });
-        },
-
-        removeSynonym(nodeId: string, index: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { synonyms?: any[] };
-            if (Array.isArray(dd.synonyms)) {
-              dd.synonyms.splice(index, 1);
-            }
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // Annotation operations
-        // -----------------------------------------------------------------------
-
-        addAnnotation(nodeId: string, annotationName: string) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { annotations?: any[] };
-            const newAnnotationRef = { $type: 'AnnotationRef', annotation: { $refText: annotationName } };
-            if (Array.isArray(dd.annotations)) {
-              dd.annotations.push(newAnnotationRef);
-            } else {
-              dd.annotations = [newAnnotationRef];
-            }
-          });
-        },
-
-        removeAnnotation(nodeId: string, index: number) {
-          mutateGraph(set, get, (draft) => {
-            const n = draft.nodes.get(nodeId);
-            const d = n?.data as AnyGraphNode | undefined;
-            if (!d) return;
-            const dd = d as { annotations?: any[] };
-            if (Array.isArray(dd.annotations)) {
-              dd.annotations.splice(index, 1);
-            }
-          });
-        },
-
-        // -----------------------------------------------------------------------
-        // ReactFlow integration
-        // -----------------------------------------------------------------------
-
-        // -----------------------------------------------------------------------
-        // On-demand curated hydration
-        // -----------------------------------------------------------------------
-
-        requestNamespaceHydration(ns: string) {
-          set((s) => {
-            if (s.hydratedNamespaces.includes(ns) || s.pendingHydrationNamespaces.includes(ns)) return s;
-            return { pendingHydrationNamespaces: [...s.pendingHydrationNamespaces, ns] };
-          });
-        },
-
-        markNamespacesHydrated(names: string[]) {
-          set((s) => ({
-            hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
-            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n)),
-            hydrationNonce: s.hydrationNonce + 1
-          }));
-        },
-
-        activeHydrationNamespaces() {
-          const s = get();
-          return [...new Set([...s.hydratedNamespaces, ...s.pendingHydrationNamespaces])];
-        },
-
-        dequeuePendingHydration: (names) =>
-          set((s) => ({
-            pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
-          })),
-
-        resetHydration() {
-          set({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });
-        },
-
-        // -----------------------------------------------------------------------
-        // ReactFlow integration
-        // -----------------------------------------------------------------------
-
-        applyReactFlowNodeChanges(changes: NodeChange<TypeGraphNode>[]) {
-          // Filter out intermediate drag states to avoid polluting undo history.
-          // Only apply position changes when dragging is complete.
-          const meaningful = changes.filter((c) => {
-            if (c.type === 'position' && c.dragging) return false;
-            return true;
-          });
-          if (meaningful.length === 0) return;
-          updateGraphView(set, get, { nodes: applyNodeChanges(meaningful, get().nodes) });
-        },
-
-        applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]) {
-          updateGraphView(set, get, { edges: applyEdgeChanges(changes, get().edges) });
-        },
-
-        // -----------------------------------------------------------------------
-        // Namespace visibility
-        // -----------------------------------------------------------------------
-
-        toggleNamespace(namespace: string) {
-          set((state) => {
-            const next = new Set(state.visibility.expandedNamespaces);
-            if (next.has(namespace)) {
-              next.delete(namespace);
-            } else {
-              next.add(namespace);
-            }
-            return {
-              visibility: { ...state.visibility, expandedNamespaces: next }
-            };
-          });
-        },
-
-        toggleNodeVisibility(nodeId: string) {
-          set((state) => {
-            const next = new Set(state.visibility.hiddenNodeIds);
-            if (next.has(nodeId)) {
-              next.delete(nodeId);
-            } else {
-              next.add(nodeId);
-            }
-            return {
-              visibility: { ...state.visibility, hiddenNodeIds: next }
-            };
-          });
-        },
-
-        expandAllNamespaces() {
-          const nodes = get().nodes;
-          const allNs = [...new Set(nodes.map((n) => n.data.namespace))];
-
-          // For small models, expand all at once
-          if (nodes.length <= LARGE_MODEL_THRESHOLD) {
             set((state) => ({
               visibility: {
                 ...state.visibility,
-                expandedNamespaces: new Set(allNs),
+                hiddenNodeIds,
+                expandedNamespaces
+              }
+            }));
+          },
+
+          showOnly(nodeIds: Set<string>) {
+            const { nodes } = get();
+            const nodeMap = buildNodeMap(nodes);
+            const hiddenNodeIds = new Set<string>();
+            for (const n of nodes) {
+              if (!nodeIds.has(n.id)) hiddenNodeIds.add(n.id);
+            }
+            const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
+            for (const id of nodeIds) {
+              const node = nodeMap.get(id);
+              if (node) expandedNamespaces.add(node.data.namespace);
+            }
+            set((state) => ({
+              visibility: {
+                ...state.visibility,
+                hiddenNodeIds,
+                expandedNamespaces
+              }
+            }));
+          },
+
+          showAllNodes() {
+            set((state) => ({
+              visibility: {
+                ...state.visibility,
                 hiddenNodeIds: new Set<string>()
               }
             }));
-            return;
-          }
+          },
 
-          // Progressive expand: batch namespaces to keep each frame under ~100 nodes.
-          // Sort namespaces by node count (smallest first) for faster visual feedback.
-          const nsCountMap = new Map<string, number>();
-          for (const n of nodes) {
-            nsCountMap.set(n.data.namespace, (nsCountMap.get(n.data.namespace) ?? 0) + 1);
-          }
-          const nsByCount = allNs
-            .map((ns) => ({ ns, count: nsCountMap.get(ns) ?? 0 }))
-            .sort((a, b) => a.count - b.count);
-
-          const BATCH_NODE_LIMIT = 100;
-          const batches: string[][] = [];
-          let currentBatch: string[] = [];
-          let currentCount = 0;
-
-          for (const { ns, count } of nsByCount) {
-            if (currentCount + count > BATCH_NODE_LIMIT && currentBatch.length > 0) {
-              batches.push(currentBatch);
-              currentBatch = [ns];
-              currentCount = count;
-            } else {
-              currentBatch.push(ns);
-              currentCount += count;
-            }
-          }
-          if (currentBatch.length > 0) batches.push(currentBatch);
-
-          // Clear hidden nodes immediately
-          set((state) => ({
-            visibility: { ...state.visibility, hiddenNodeIds: new Set<string>() }
-          }));
-
-          // Expand batches progressively using requestAnimationFrame
-          const seq = ++expandSeq;
-          let batchIndex = 0;
-          const expandNextBatch = () => {
-            if (expandSeq !== seq || batchIndex >= batches.length) return;
-            const batch = batches[batchIndex++]!;
-            set((state) => {
-              const next = new Set(state.visibility.expandedNamespaces);
-              for (const ns of batch) next.add(ns);
-              return {
-                visibility: { ...state.visibility, expandedNamespaces: next }
-              };
-            });
-            if (batchIndex < batches.length) {
-              requestAnimationFrame(expandNextBatch);
-            }
-          };
-          requestAnimationFrame(expandNextBatch);
-        },
-
-        collapseAllNamespaces() {
-          expandSeq++; // Cancel any in-flight progressive expansion
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              expandedNamespaces: new Set<string>(),
-              hiddenNodeIds: new Set<string>()
-            }
-          }));
-        },
-
-        setInitialVisibility(totalNodeCount: number) {
-          set((state) => {
-            const shouldCollapse = totalNodeCount > LARGE_MODEL_THRESHOLD;
-            const allNs = new Set(state.nodes.map((n) => n.data.namespace));
-            return {
-              focusMode: true,
-              visibility: {
-                ...state.visibility,
-                expandedNamespaces: shouldCollapse ? new Set<string>() : allNs,
-                hiddenNodeIds: new Set<string>()
+          toggleFocusMode() {
+            const next = !get().focusMode;
+            set({ focusMode: next });
+            if (next) {
+              const { selectedNodeId, edges, nodes, focusRelatedExcludedKinds } = get();
+              if (selectedNodeId) {
+                const focusNodeIds = collectFocusClusterNodeIds(
+                  selectedNodeId,
+                  edges,
+                  buildNodeMap(nodes),
+                  focusRelatedExcludedKinds
+                );
+                if (focusNodeIds.size > 1) {
+                  get().showOnly(focusNodeIds);
+                } else {
+                  get().showAllNodes();
+                }
               }
-            };
-          });
-        },
-
-        toggleExplorer() {
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              explorerOpen: !state.visibility.explorerOpen
-            }
-          }));
-        },
-
-        getVisibleNodes(): TypeGraphNode[] {
-          const { nodes, visibility } = get();
-          return nodes.filter(
-            (n) =>
-              visibility.expandedNamespaces.has(n.data.namespace) &&
-              !visibility.hiddenNodeIds.has(n.id) &&
-              visibility.visibleNodeKinds.has(n.type as TypeKind)
-          );
-        },
-
-        getVisibleEdges(): TypeGraphEdge[] {
-          const { edges, visibility } = get();
-          const visibleNodeIds = new Set(
-            get()
-              .getVisibleNodes()
-              .map((n) => n.id)
-          );
-          return edges.filter(
-            (e) =>
-              visibleNodeIds.has(e.source) &&
-              visibleNodeIds.has(e.target) &&
-              visibility.visibleEdgeKinds.has((e.data as EdgeData).kind)
-          );
-        },
-
-        // -----------------------------------------------------------------------
-        // Kind-based visibility
-        // -----------------------------------------------------------------------
-
-        toggleNodeKind(kind: TypeKind) {
-          set((state) => {
-            const next = new Set(state.visibility.visibleNodeKinds);
-            if (next.has(kind)) {
-              next.delete(kind);
             } else {
-              next.add(kind);
+              get().showAllNodes();
             }
-            return {
-              visibility: { ...state.visibility, visibleNodeKinds: next }
-            };
-          });
-        },
-
-        toggleEdgeKind(kind: EdgeKind) {
-          set((state) => {
-            const next = new Set(state.visibility.visibleEdgeKinds);
-            if (next.has(kind)) {
-              next.delete(kind);
-            } else {
-              next.add(kind);
-            }
-            return {
-              visibility: { ...state.visibility, visibleEdgeKinds: next }
-            };
-          });
-        },
-
-        showAllNodeKinds() {
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              visibleNodeKinds: new Set(ALL_NODE_KINDS)
-            }
-          }));
-        },
-
-        showAllEdgeKinds() {
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              visibleEdgeKinds: new Set(ALL_EDGE_KINDS)
-            }
-          }));
-        },
-
-        // -----------------------------------------------------------------------
-        // Isolation / focus
-        // -----------------------------------------------------------------------
-
-        toggleFocusRelatedExcludedKind(kind: TypeKind) {
-          const { selectedNodeId, focusMode, edges, nodes } = get();
-          let nextExcludedKinds: Set<TypeKind> | null = null;
-
-          set((state) => {
-            nextExcludedKinds = new Set(state.focusRelatedExcludedKinds);
-            if (nextExcludedKinds.has(kind)) {
-              nextExcludedKinds.delete(kind);
-            } else {
-              nextExcludedKinds.add(kind);
-            }
-
-            return {
-              focusRelatedExcludedKinds: nextExcludedKinds
-            };
-          });
-
-          if (focusMode && selectedNodeId && nextExcludedKinds) {
-            const focusNodeIds = collectFocusClusterNodeIds(
-              selectedNodeId,
-              edges,
-              buildNodeMap(nodes),
-              nextExcludedKinds
-            );
-            get().showOnly(focusNodeIds);
           }
-        },
-
-        isolateNode(nodeId: string) {
-          const { edges, nodes, focusRelatedExcludedKinds } = get();
-          const focusNodeIds = collectFocusClusterNodeIds(
-            nodeId,
-            edges,
-            buildNodeMap(nodes),
-            focusRelatedExcludedKinds
-          );
-          get().showOnly(focusNodeIds);
-        },
-
-        revealNeighbors(nodeId: string) {
-          const { nodes, edges, visibility, focusRelatedExcludedKinds } = get();
-          const focusNodeIds = collectFocusClusterNodeIds(
-            nodeId,
-            edges,
-            buildNodeMap(nodes),
-            focusRelatedExcludedKinds
-          );
-          const nodeMap = buildNodeMap(nodes);
-          const hiddenNodeIds = new Set(visibility.hiddenNodeIds);
-          const expandedNamespaces = new Set(visibility.expandedNamespaces);
-          for (const id of focusNodeIds) {
-            hiddenNodeIds.delete(id);
-            const node = nodeMap.get(id);
-            if (node) expandedNamespaces.add(node.data.namespace);
-          }
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              hiddenNodeIds,
-              expandedNamespaces
-            }
-          }));
-        },
-
-        showOnly(nodeIds: Set<string>) {
-          const { nodes } = get();
-          const nodeMap = buildNodeMap(nodes);
-          const hiddenNodeIds = new Set<string>();
-          for (const n of nodes) {
-            if (!nodeIds.has(n.id)) hiddenNodeIds.add(n.id);
-          }
-          const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
-          for (const id of nodeIds) {
-            const node = nodeMap.get(id);
-            if (node) expandedNamespaces.add(node.data.namespace);
-          }
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              hiddenNodeIds,
-              expandedNamespaces
-            }
-          }));
-        },
-
-        showAllNodes() {
-          set((state) => ({
-            visibility: {
-              ...state.visibility,
-              hiddenNodeIds: new Set<string>()
-            }
-          }));
-        },
-
-        toggleFocusMode() {
-          const next = !get().focusMode;
-          set({ focusMode: next });
-          if (next) {
-            const { selectedNodeId, edges, nodes, focusRelatedExcludedKinds } = get();
-            if (selectedNodeId) {
-              const focusNodeIds = collectFocusClusterNodeIds(
-                selectedNodeId,
-                edges,
-                buildNodeMap(nodes),
-                focusRelatedExcludedKinds
-              );
-              if (focusNodeIds.size > 1) {
-                get().showOnly(focusNodeIds);
-              } else {
-                get().showAllNodes();
-              }
-            }
-          } else {
-            get().showAllNodes();
-          }
-        }
         }; // end return object
       }, // end creator function
       {
@@ -2544,10 +2557,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
   // next subscription call sees mapsChanged=false → skips. No infinite loop.
   // ---------------------------------------------------------------------------
   store.subscribe((state, prevState) => {
-    const mapsChanged =
-      state.nodesById !== prevState.nodesById || state.edgesById !== prevState.edgesById;
-    const arraysUnchanged =
-      state.nodes === prevState.nodes && state.edges === prevState.edges;
+    const mapsChanged = state.nodesById !== prevState.nodesById || state.edgesById !== prevState.edgesById;
+    const arraysUnchanged = state.nodes === prevState.nodes && state.edges === prevState.edges;
     if (mapsChanged && arraysUnchanged) {
       // undo/redo restored Maps but left arrays stale — re-derive without
       // triggering history (arrays-only write → equality short-circuits zundo).
