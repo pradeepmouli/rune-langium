@@ -29,7 +29,7 @@ describe('StructureView — empty state', () => {
   });
 
   it('renders empty-state when adapterDoc is undefined even with a focusedTypeId', () => {
-    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={undefined} />);
+    render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={undefined} />);
     expect(screen.getByTestId('structure-empty-state')).toBeInTheDocument();
   });
 
@@ -55,7 +55,7 @@ const tradeDoc: AdapterDocument = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::Economics',
+      id: 'cdm.trade.Economics',
       $type: 'Data' as const,
       name: 'Economics',
       namespace: 'cdm.trade',
@@ -68,7 +68,7 @@ const tradeDoc: AdapterDocument = {
       ]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -143,7 +143,7 @@ describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', 
       namespaces: [{ uri: 'cdm.settlement' }],
       nodes: [
         {
-          id: 'cdm.settlement::SettlementTerms',
+          id: 'cdm.settlement.SettlementTerms',
           $type: 'Choice' as const,
           name: 'SettlementTerms',
           namespace: 'cdm.settlement',
@@ -151,13 +151,13 @@ describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', 
         }
       ]
     };
-    render(<StructureView focusedTypeId="cdm.settlement::SettlementTerms" adapterDoc={docWithChoice} />);
+    render(<StructureView focusedTypeId="cdm.settlement.SettlementTerms" adapterDoc={docWithChoice} />);
     // No unsupported / empty state — the Choice mounts as the root.
     expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
     // The Choice's canonical id appears in the rendered nodes.
-    const choiceNode = document.querySelector('[data-canonical-id="cdm.settlement::SettlementTerms"]');
+    const choiceNode = document.querySelector('[data-canonical-id="cdm.settlement.SettlementTerms"]');
     expect(choiceNode).not.toBeNull();
   });
 
@@ -166,7 +166,7 @@ describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', 
       namespaces: [{ uri: 'cdm.base' }],
       nodes: [
         {
-          id: 'cdm.base::DayCountFraction',
+          id: 'cdm.base.DayCountFraction',
           $type: 'Enum' as const,
           name: 'DayCountFraction',
           namespace: 'cdm.base',
@@ -174,11 +174,11 @@ describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', 
         }
       ]
     };
-    render(<StructureView focusedTypeId="cdm.base::DayCountFraction" adapterDoc={docWithEnum} />);
+    render(<StructureView focusedTypeId="cdm.base.DayCountFraction" adapterDoc={docWithEnum} />);
     expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
-    const enumNode = document.querySelector('[data-canonical-id="cdm.base::DayCountFraction"]');
+    const enumNode = document.querySelector('[data-canonical-id="cdm.base.DayCountFraction"]');
     expect(enumNode).not.toBeNull();
   });
 
@@ -187,7 +187,7 @@ describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', 
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -195,13 +195,13 @@ describe('StructureView — Choice / Enum roots are first-class (Phase 14e/A)', 
         }
       ]
     };
-    render(<StructureView focusedTypeId="cdm.trade::DeletedType" adapterDoc={docWithoutStaleNode} />);
+    render(<StructureView focusedTypeId="cdm.trade.DeletedType" adapterDoc={docWithoutStaleNode} />);
     expect(screen.getByTestId('structure-unsupported-root-state')).toBeInTheDocument();
     expect(screen.queryByTestId('mock-react-flow')).toBeNull();
   });
 
   it('does NOT render unsupported-root for a valid Data selection', () => {
-    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} />);
+    render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} />);
     expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
     expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
   });
@@ -233,7 +233,7 @@ describe('StructureView — structureBase injection (Codex P2, PR #191)', () => 
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -246,7 +246,7 @@ describe('StructureView — structureBase injection (Codex P2, PR #191)', () => 
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -267,7 +267,7 @@ describe('StructureView — structureBase injection (Codex P2, PR #191)', () => 
 
     render(
       <StructureView
-        focusedTypeId="cdm.trade::Trade"
+        focusedTypeId="cdm.trade.Trade"
         adapterDoc={docWithBase}
         expansionMap={expansionMap}
         onToggleExpansion={onToggleExpansion}
@@ -280,17 +280,17 @@ describe('StructureView — structureBase injection (Codex P2, PR #191)', () => 
 
     // The mock ReactFlow rendered. When Trade extends TradeBase, the layout
     // wraps Trade in a base container. The root React Flow node id is the base
-    // container's instance id (`cdm.trade::Trade::__base::cdm.trade::TradeBase`),
+    // container's instance id (`cdm.trade.Trade::__base::cdm.trade.TradeBase`),
     // not the bare canonical Trade id. Assert via canonical id attributes
     // which the mock surfaces on `data-canonical-id`.
     const baseContainerNode = document.querySelector(
-      '[data-canonical-id="cdm.trade::Trade::__base::cdm.trade::TradeBase"]'
+      '[data-canonical-id="cdm.trade.Trade::__base::cdm.trade.TradeBase"]'
     );
     expect(baseContainerNode).not.toBeNull();
 
     // The derived Trade node is a child inside the base container. Its canonical
     // id is the plain Trade id; the instance id is path-qualified.
-    const derivedTradeNode = document.querySelector('[data-canonical-id="cdm.trade::Trade"]');
+    const derivedTradeNode = document.querySelector('[data-canonical-id="cdm.trade.Trade"]');
     expect(derivedTradeNode).not.toBeNull();
   });
 });
@@ -310,7 +310,7 @@ describe('StructureView — choice-node injection (Phase 14e/B)', () => {
       namespaces: [{ uri: 'cdm.payment' }],
       nodes: [
         {
-          id: 'cdm.payment::Method',
+          id: 'cdm.payment.Method',
           $type: 'Choice' as const,
           name: 'Method',
           namespace: 'cdm.payment',
@@ -322,7 +322,7 @@ describe('StructureView — choice-node injection (Phase 14e/B)', () => {
     const cellComponents = { type: () => <span data-testid="injected-type-cell" /> };
     render(
       <StructureView
-        focusedTypeId="cdm.payment::Method"
+        focusedTypeId="cdm.payment.Method"
         adapterDoc={docWithChoice}
         expansionMap={new Map()}
         onToggleExpansion={onToggleExpansion}
@@ -333,44 +333,44 @@ describe('StructureView — choice-node injection (Phase 14e/B)', () => {
     expect(screen.queryByTestId('structure-unsupported-root-state')).toBeNull();
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
-    expect(document.querySelector('[data-canonical-id="cdm.payment::Method"]')).not.toBeNull();
+    expect(document.querySelector('[data-canonical-id="cdm.payment.Method"]')).not.toBeNull();
   });
 });
 
 describe('StructureView — adapter + layout integration', () => {
   it('renders Trade node; Economics node absent when not expanded', () => {
-    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} expansionMap={new Map()} />);
+    render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} expansionMap={new Map()} />);
 
     // Flow container should be present (not empty state)
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     expect(screen.getByTestId('mock-react-flow')).toBeInTheDocument();
 
     // Root retains its canonical id, so the rf-node testid is stable.
-    const tradeNode = screen.queryByTestId('rf-node-cdm.trade::Trade');
+    const tradeNode = screen.queryByTestId('rf-node-cdm.trade.Trade');
     expect(tradeNode).toBeInTheDocument();
 
     // Economics should NOT appear (no expansion) — assert via canonical id.
-    const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade::Economics"]');
+    const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade.Economics"]');
     expect(economicsByCanonical).toBeNull();
   });
 
   it('renders Economics node when expansion map marks it as expanded', () => {
-    // Per-instance key: Trade's root instance id is its canonical id 'cdm.trade::Trade'.
+    // Per-instance key: Trade's root instance id is its canonical id 'cdm.trade.Trade'.
     // Root-row chevrons use instancePath = [rootInstanceId] (self-inclusive).
     const key = expansionKey({
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
       attrName: 'economics',
-      instancePath: ['cdm.trade::Trade']
+      instancePath: ['cdm.trade.Trade']
     });
     const expansionMap = new Map([[key, true]]);
 
-    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} expansionMap={expansionMap} />);
+    render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} expansionMap={expansionMap} />);
 
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     // Phase 13 / Finding 2: assert by canonical id since the React Flow `id`
-    // is a per-edge instance id (`cdm.trade::Trade::economics::cdm.trade::Economics`).
-    const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade::Economics"]');
+    // is a per-edge instance id (`cdm.trade.Trade::economics::cdm.trade.Economics`).
+    const economicsByCanonical = document.querySelector('[data-canonical-id="cdm.trade.Economics"]');
     expect(economicsByCanonical).not.toBeNull();
   });
 });
@@ -388,7 +388,7 @@ describe('StructureView — adapter + layout integration', () => {
 
 describe('StructureView — onlyRenderVisibleElements (Finding H)', () => {
   it('passes onlyRenderVisibleElements to ReactFlow', () => {
-    render(<StructureView focusedTypeId="cdm.trade::Trade" adapterDoc={tradeDoc} />);
+    render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} />);
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     const flow = screen.getByTestId('mock-react-flow');
     expect(flow.getAttribute('data-only-render-visible')).toBe('true');

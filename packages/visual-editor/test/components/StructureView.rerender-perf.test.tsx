@@ -95,7 +95,7 @@ const tradeDoc: AdapterDocument = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::Economics',
+      id: 'cdm.trade.Economics',
       $type: 'Data' as const,
       name: 'Economics',
       namespace: 'cdm.trade',
@@ -113,7 +113,7 @@ const tradeDoc: AdapterDocument = {
       ]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -140,7 +140,7 @@ const economicsKey = expansionKey({
   namespaceUri: 'cdm.trade',
   typeId: 'Trade',
   attrName: 'economics',
-  instancePath: ['cdm.trade::Trade']
+  instancePath: ['cdm.trade.Trade']
 });
 
 /**
@@ -160,7 +160,7 @@ function cloneTradeDoc(renameEconomicsAttrTo?: string): AdapterDocument {
     namespaces: [{ uri: 'cdm.trade' }],
     nodes: [
       {
-        id: 'cdm.trade::Economics',
+        id: 'cdm.trade.Economics',
         $type: 'Data' as const,
         name: 'Economics',
         namespace: 'cdm.trade',
@@ -176,7 +176,7 @@ function cloneTradeDoc(renameEconomicsAttrTo?: string): AdapterDocument {
         ]
       },
       {
-        id: 'cdm.trade::Trade',
+        id: 'cdm.trade.Trade',
         $type: 'Data' as const,
         name: 'Trade',
         namespace: 'cdm.trade',
@@ -211,7 +211,7 @@ describe('StructureView — single-cell edit rerenders ≤1 DataNode (Phase 14c)
 
     const { rerender, container } = render(
       <StructureView
-        focusedTypeId="cdm.trade::Trade"
+        focusedTypeId="cdm.trade.Trade"
         adapterDoc={cloneTradeDoc()}
         expansionMap={expansionMap}
         cellComponents={cellComponents}
@@ -240,7 +240,7 @@ describe('StructureView — single-cell edit rerenders ≤1 DataNode (Phase 14c)
     // structural content is unchanged. Post-fix: ZERO re-renders.
     rerender(
       <StructureView
-        focusedTypeId="cdm.trade::Trade"
+        focusedTypeId="cdm.trade.Trade"
         adapterDoc={cloneTradeDoc()}
         expansionMap={expansionMap}
         cellComponents={cellComponents}
@@ -271,7 +271,7 @@ describe('StructureView — single-cell edit rerenders ≤1 DataNode (Phase 14c)
 
     const { rerender } = render(
       <StructureView
-        focusedTypeId="cdm.trade::Trade"
+        focusedTypeId="cdm.trade.Trade"
         adapterDoc={cloneTradeDoc()}
         expansionMap={expansionMap}
         cellComponents={cellComponents}
@@ -288,7 +288,7 @@ describe('StructureView — single-cell edit rerenders ≤1 DataNode (Phase 14c)
     // Rename Economics.notional → 'principal' (a real edit on that subtree).
     rerender(
       <StructureView
-        focusedTypeId="cdm.trade::Trade"
+        focusedTypeId="cdm.trade.Trade"
         adapterDoc={cloneTradeDoc('principal')}
         expansionMap={expansionMap}
         cellComponents={cellComponents}
