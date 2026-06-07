@@ -21,6 +21,7 @@ import { InMemoryFs } from './in-memory-fs.js';
 import type { ModelSource, CachedModel, CachedFile, LoadProgress, LoadedModel } from '../types/model-types.js';
 import { ModelLoadError } from '../types/model-types.js';
 import { getCachedModel, getCachedModelIfFresh, setCachedModel } from './model-cache.js';
+import { namespaceFromSource } from '@rune-langium/core';
 
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
 
@@ -261,6 +262,5 @@ function matchGlob(filePath: string, pattern: string): boolean {
 
 /** Extract the namespace declaration from a .rosetta file. */
 function extractNamespace(content: string): string {
-  const match = content.match(/^\s*namespace\s+([\w.]+)/m);
-  return match?.[1] ?? '';
+  return namespaceFromSource(content);
 }

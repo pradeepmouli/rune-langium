@@ -50,6 +50,10 @@ export {
   serializeElement,
   serializeModels
 } from './serializer/rosetta-serializer.js';
+export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
+export { preserveCstText } from './serializer/preserve-cst-text.js';
+export { deserializeRuneModel, hydrateModelDocument } from './serializer/hydrate-model-document.js';
+export type { HydrateServices, HydrateOptions } from './serializer/hydrate-model-document.js';
 
 // Utility functions
 export {
@@ -73,3 +77,7 @@ export {
   collectNamespaceDependencies,
   closeNamespaceDependencies
 } from './analysis/cross-namespace-refs.js';
+
+// Naming utilities
+export { qualifiedExportPath } from './naming/qualified-export-path.js';
+export { namespaceFromSource, namespaceFromModelName } from './naming/namespace.js';

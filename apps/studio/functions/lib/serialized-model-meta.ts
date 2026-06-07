@@ -12,18 +12,14 @@
  * `importedNamespace` is a QualifiedNameWithWildcard, e.g. `cdm.base.datetime`
  * or `cdm.base.*`.
  */
+import { namespaceFromModelName } from '@rune-langium/core';
 export interface SerializedModelMeta {
   namespace: string;
   imports: string[];
 }
 
 function nameToNamespace(name: unknown): string | undefined {
-  if (typeof name === 'string') return name;
-  if (name && typeof name === 'object' && 'segments' in (name as object)) {
-    const segs = (name as { segments?: unknown }).segments;
-    if (Array.isArray(segs)) return segs.join('.');
-  }
-  return undefined;
+  return namespaceFromModelName(name);
 }
 
 export function readSerializedModelMeta(serializedModel: string): SerializedModelMeta | null {

@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -429,9 +429,9 @@ async function hydrateUserWorkspace(
     // serialized JSON — and the visual editor renders affected
     // expressions as blank even though the parse succeeded (Codex P2).
     //
-    // Mirrors apps/studio/src/workers/parser-worker.ts:preserveCstText,
-    // which the browser-side parse path already calls. Adding it here
-    // keeps the routed parse output equivalent to the in-worker output.
+    // `preserveCstText` is the shared @rune-langium/core helper, called on both the
+    // browser worker and this server path so the routed parse output keeps the
+    // expression CST text after the JSON round-trip (V7 — single source of truth).
     preserveCstText(model);
 
     // textRegions + refText preserve text-region offsets so language-
@@ -441,12 +441,7 @@ async function hydrateUserWorkspace(
     // outer stringifyWithBigInt also handles them, but doing it inside
     // the langium serializer is more efficient (avoids one re-scan of
     // the embedded model JSON).
-    const serializedModel = RuneDsl.serializer.JsonSerializer.serialize(model, {
-      refText: true,
-      textRegions: true,
-      replacer: (_key, value, defaultReplacer) =>
-        typeof value === 'bigint' ? Number(value) : defaultReplacer(_key, value)
-    });
+    const serializedModel = serializeRuneModel(RuneDsl.serializer.JsonSerializer, model);
     const rawName = model.name as string;
     const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
 
@@ -455,7 +450,7 @@ async function hydrateUserWorkspace(
       for (const elem of model.elements) {
         const e = elem as { $type: string; name?: string };
         if (e.name) {
-          exports.push({ type: e.$type, name: e.name, path: `${namespace}.${e.name}` });
+          exports.push({ type: e.$type, name: e.name, path: qualifiedExportPath(namespace, e.name) });
         }
       }
     }
@@ -481,49 +476,6 @@ async function hydrateUserWorkspace(
 
   return { shared, RuneDsl, userDocs: docs };
 }
-
-/**
- * Walk the parsed RosettaModel and copy `$cstNode.text` into a sibling
- * `$cstText` property on Function-body parts, condition nodes, and
- * expression nodes. Mirrors `preserveCstText` in
- * apps/studio/src/workers/parser-worker.ts — keep the two implementations
- * in sync.
- *
- * Why this is needed: the visual editor's expression cells render from
- * `$cstText` (a serializable string property) rather than `$cstNode`
- * (the live CST tree, which is non-serializable and lost during JSON
- * round-trip). The in-browser parse path attached `$cstText` before
- * postMessage; the server-side parse path needs the same step so its
- * downstream hydration payload contains the same source text.
- */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function preserveCstText(model: any): void {
-  for (const elem of model?.elements ?? []) {
-    if (elem.$type === 'RosettaFunction') {
-      for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
-        for (const part of arr ?? []) {
-          if (part?.$cstNode?.text) {
-            part.$cstText = part.$cstNode.text;
-          }
-          if (part?.expression?.$cstNode?.text) {
-            part.expression.$cstText = part.expression.$cstNode.text;
-          }
-        }
-      }
-    }
-    if (elem.conditions) {
-      for (const cond of elem.conditions) {
-        if (cond?.$cstNode?.text) {
-          cond.$cstText = cond.$cstNode.text;
-        }
-        if (cond?.expression?.$cstNode?.text) {
-          cond.expression.$cstText = cond.expression.$cstNode.text;
-        }
-      }
-    }
-  }
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
  * Extract the curated doc's namespace from its serialized model and append
@@ -565,16 +517,11 @@ function mergeCuratedDocIntoDeferredExports(
 }
 
 /**
- * `JSON.stringify` throws on BigInt by default. The Langium parser produces
- * BigInt values for some numeric literals in the Rune grammar (e.g. very
- * large integers parsed as bigint). Those leak into `documentsForHydration`
- * via `serializedModel` and `exports`, so we need a replacer that converts
- * them to strings. Browser-side deserialization treats them as strings —
- * acceptable because nothing on the client currently depends on numeric
- * comparison of these values.
+ * Envelope uses the canonical bigint policy (runeBigIntReplacer -> Number) so wire bytes
+ * agree across all serialize paths (V8).
  */
 function stringifyWithBigInt(value: unknown): string {
-  return JSON.stringify(value, (_key, v) => (typeof v === 'bigint' ? v.toString() : v));
+  return JSON.stringify(value, runeBigIntReplacer);
 }
 
 /**
@@ -636,7 +583,6 @@ async function populateDependencyGraph(
       const { RuneDsl, shared } = createRuneDslServices(EmptyFileSystem);
       context = { shared, RuneDsl, userDocs: [] };
     }
-    const factory = context.shared.workspace.LangiumDocumentFactory;
     const builder = context.shared.workspace.DocumentBuilder;
 
     // Hydrate curated docs into LangiumDocuments. User docs are already in
@@ -654,8 +600,12 @@ async function populateDependencyGraph(
       const meta = readSerializedModelMeta(entry.serializedModel);
       if (!meta || !closureNamespaces.has(meta.namespace)) continue;
       try {
-        const model = context.RuneDsl.serializer.JsonSerializer.deserialize(entry.serializedModel) as RosettaModel;
-        const doc = factory.fromModel(model, URI.parse(entry.uri));
+        const { document: doc } = hydrateModelDocument(
+          { RuneDsl: context.RuneDsl, shared: context.shared },
+          URI.parse(entry.uri),
+          entry.serializedModel,
+          { register: 'none' }
+        );
         curatedDocs.push(doc);
       } catch {
         // Skip individual malformed entries — the rest of the workspace

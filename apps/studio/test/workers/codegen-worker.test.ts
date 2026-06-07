@@ -48,7 +48,19 @@ vi.mock('@rune-langium/core', () => ({
         JsonSerializer: { deserialize: deserializeMock }
       }
     }
-  })
+  }),
+  hydrateModelDocument: (_services: unknown, uri: string, json: string, { register }: { register: string }) => {
+    const model = deserializeMock(json);
+    const existing = register === 'idempotent' ? getDocumentMock(uri) : undefined;
+    if (existing) {
+      return { model, document: existing };
+    }
+    const document = fromModelMock(model, uri);
+    if (register === 'always' || register === 'idempotent') {
+      addDocumentMock(document);
+    }
+    return { model, document };
+  }
 }));
 
 vi.mock('@rune-langium/codegen', () => ({

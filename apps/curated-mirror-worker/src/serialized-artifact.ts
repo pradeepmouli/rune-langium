@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createRuneDslServices } from '@rune-langium/core';
+import { createRuneDslServices, serializeRuneModel } from '@rune-langium/core';
 import type { CuratedModelId, CuratedSerializedWorkspaceArtifact } from '@rune-langium/curated-schema';
 import { URI } from 'langium';
 import { gzip, inflate } from 'pako';
@@ -82,12 +82,7 @@ export async function buildSerializedWorkspaceArtifact(
     }
     return {
       path: rosettaFiles[index]!.path,
-      modelJson: serializer.serialize(document.parseResult.value, {
-        refText: true,
-        textRegions: true,
-        replacer: (key, value, defaultReplacer) =>
-          typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
-      }),
+      modelJson: serializeRuneModel(serializer, document.parseResult.value),
       exports
     };
   });

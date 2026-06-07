@@ -43,10 +43,12 @@ function indent(text: string, level: number = 1): string {
 }
 
 function getNamespace(model: unknown): string {
+  // NOTE: this serializer re-emits .rosetta SOURCE, so it must preserve the raw
+  // name verbatim (including quotes for STRING-named namespaces) for round-trip
+  // validity. It intentionally does NOT use core's `namespaceFromModelName`,
+  // which quote-strips for key/scope computation (a different need).
   const m = model as { name?: string | { segments?: string[] } };
-  if (typeof m.name === 'string') {
-    return m.name;
-  }
+  if (typeof m.name === 'string') return m.name;
   if (m.name && typeof m.name === 'object' && 'segments' in m.name) {
     return (m.name as { segments: string[] }).segments.join('.');
   }

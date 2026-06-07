@@ -12,6 +12,9 @@
 import {
   createRuneDslServices,
   RuneDslIndexManager,
+  namespaceFromSource,
+  preserveCstText,
+  hydrateModelDocument,
   type DeferredModelProvider,
   type RosettaModel
 } from '@rune-langium/core';
@@ -200,43 +203,6 @@ export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspac
 }
 
 // ---------------------------------------------------------------------------
-// CST text preservation — $cstNode is lost during postMessage serialization
-// (structured clone can't handle circular refs). Save the text as $cstText.
-// ---------------------------------------------------------------------------
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function preserveCstText(model: any): void {
-  for (const elem of model?.elements ?? []) {
-    // Function body parts: shortcuts, conditions, operations, postConditions
-    if (elem.$type === 'RosettaFunction') {
-      for (const arr of [elem.shortcuts, elem.conditions, elem.operations, elem.postConditions]) {
-        for (const part of arr ?? []) {
-          if (part?.$cstNode?.text) {
-            part.$cstText = part.$cstNode.text;
-          }
-          // Also preserve expression-level text for the expression builder
-          if (part?.expression?.$cstNode?.text) {
-            part.expression.$cstText = part.expression.$cstNode.text;
-          }
-        }
-      }
-    }
-    // Data/Choice conditions
-    if (elem.conditions) {
-      for (const cond of elem.conditions) {
-        if (cond?.$cstNode?.text) {
-          cond.$cstText = cond.$cstNode.text;
-        }
-        if (cond?.expression?.$cstNode?.text) {
-          cond.expression.$cstText = cond.expression.$cstNode.text;
-        }
-      }
-    }
-  }
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
-// ---------------------------------------------------------------------------
 // Worker message handler
 // ---------------------------------------------------------------------------
 
@@ -322,7 +288,7 @@ async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWo
           indexManager.registerExports(uri, descriptions);
 
           // Emit namespace-explorer stubs for the UI (no Langium involvement).
-          const ns = file.content.match(/^\s*namespace\s+([\w.]+)/m)?.[1] ?? '';
+          const ns = namespaceFromSource(file.content);
           deferredExports.push({
             filePath: file.name,
             namespace: ns,
@@ -408,11 +374,14 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
     // Corpus documents are stored as raw JSON until first link request.
     // Materialize the target document now if it hasn't been deserialized yet.
     if (deferredModelJson.has(targetUri.toString())) {
-      const json = deferredModelJson.get(targetUri.toString())!;
-      const model = serializer.deserialize<RosettaModel>(json);
+      const { model, document } = hydrateModelDocument(
+        { RuneDsl, shared: RuneDsl.shared },
+        targetUri,
+        deferredModelJson.get(targetUri.toString())!,
+        { register: 'always' }
+      );
       newModelsAccumulator.push(model);
-      doc = factory.fromModel(model, targetUri);
-      activeLangiumDocs.addDocument(doc);
+      doc = document;
       deferredModelJson.delete(targetUri.toString());
     } else if (activeLangiumDocs.hasDocument(targetUri)) {
       doc = activeLangiumDocs.getDocument(targetUri);

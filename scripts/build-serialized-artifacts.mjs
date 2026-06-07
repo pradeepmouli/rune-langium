@@ -96,7 +96,7 @@ function extractRosettaFiles(tarGzBytes) {
 }
 
 async function buildArtifact(source, archiveBytes) {
-  const { createRuneDslServices } = await import('../packages/core/dist/index.js');
+  const { createRuneDslServices, serializeRuneModel, runeBigIntReplacer } = await import('../packages/core/dist/index.js');
 
   const rosettaFiles = extractRosettaFiles(archiveBytes);
   console.log(`  Found ${rosettaFiles.length} .rosetta files`);
@@ -149,20 +149,13 @@ async function buildArtifact(source, archiveBytes) {
       }
       return {
         path: rosettaFiles[i].path,
-        modelJson: serializer.serialize(doc.parseResult.value, {
-          refText: true,
-          textRegions: true,
-          replacer: (key, value, defaultReplacer) =>
-            typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value),
-        }),
+        modelJson: serializeRuneModel(serializer, doc.parseResult.value),
         exports,
       };
     }),
   };
 
-  const json = JSON.stringify(artifact, (_key, value) =>
-    typeof value === 'bigint' ? Number(value) : value
-  );
+  const json = JSON.stringify(artifact, runeBigIntReplacer);
   const gzipped = gzipSync(Buffer.from(json));
   return {
     bytes: gzipped,
@@ -213,7 +206,6 @@ async function main() {
       const nsDir = `${outDir}/ns`;
       await mkdir(nsDir, { recursive: true });
 
-      const bigintReplacer = (_key, value) => (typeof value === 'bigint' ? Number(value) : value);
       let totalNsBytes = 0;
       const nsCount = Object.keys(graph).length;
 
@@ -241,7 +233,7 @@ async function main() {
 
       for (const ns of Object.keys(graph)) {
         const nsDocList = nsDocs[ns] ?? [];
-        const nsJson = JSON.stringify({ documents: nsDocList }, bigintReplacer);
+        const nsJson = JSON.stringify({ documents: nsDocList }, runeBigIntReplacer);
         const nsGzipped = gzipSync(Buffer.from(nsJson));
         await writeFile(`${nsDir}/${nsToSlug.get(ns)}.json.gz`, nsGzipped);
         totalNsBytes += nsGzipped.byteLength;
