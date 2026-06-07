@@ -2039,47 +2039,59 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
         // -----------------------------------------------------------------------
 
         updateDefinition(nodeId: string, definition: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, definition } } : n))
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            (d as { definition?: string }).definition = definition;
+          });
         },
 
         updateComments(nodeId: string, comments: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, comments } } : n))
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            (d as { comments?: string }).comments = comments;
+          });
         },
 
         addSynonym(nodeId: string, synonym: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
-              if (d.$type === 'Data' || d.$type === 'Choice') {
-                const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
-                const synonyms = [...((d as any).synonyms ?? []), newSyn];
-                return { ...n, data: { ...d, synonyms } };
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { synonyms?: any[] };
+            // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
+            if (d.$type === 'Data' || d.$type === 'Choice') {
+              const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
+              if (Array.isArray(dd.synonyms)) {
+                dd.synonyms.push(newSyn);
+              } else {
+                dd.synonyms = [newSyn];
               }
-              if (d.$type === 'RosettaEnumeration') {
-                const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
-                const synonyms = [...((d as any).synonyms ?? []), newSyn];
-                return { ...n, data: { ...d, synonyms } };
+            } else if (d.$type === 'RosettaEnumeration') {
+              const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
+              if (Array.isArray(dd.synonyms)) {
+                dd.synonyms.push(newSyn);
+              } else {
+                dd.synonyms = [newSyn];
               }
-              return n;
-            })
-          }));
+            }
+            // other $types: no-op (no mutation → mutateGraph early-exits)
+          });
         },
 
         removeSynonym(nodeId: string, index: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              const synonyms = ((d as any).synonyms ?? []).filter((_: any, i: number) => i !== index);
-              return { ...n, data: { ...d, synonyms } };
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { synonyms?: any[] };
+            if (Array.isArray(dd.synonyms)) {
+              dd.synonyms.splice(index, 1);
+            }
+          });
         },
 
         // -----------------------------------------------------------------------
@@ -2087,30 +2099,30 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
         // -----------------------------------------------------------------------
 
         addAnnotation(nodeId: string, annotationName: string) {
-          const newAnnotationRef = {
-            $type: 'AnnotationRef',
-            annotation: { $refText: annotationName }
-          };
-
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              const annotations = [...((d as any).annotations ?? []), newAnnotationRef];
-              return { ...n, data: { ...d, annotations } };
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { annotations?: any[] };
+            const newAnnotationRef = { $type: 'AnnotationRef', annotation: { $refText: annotationName } };
+            if (Array.isArray(dd.annotations)) {
+              dd.annotations.push(newAnnotationRef);
+            } else {
+              dd.annotations = [newAnnotationRef];
+            }
+          });
         },
 
         removeAnnotation(nodeId: string, index: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              const annotations = ((d as any).annotations ?? []).filter((_: any, i: number) => i !== index);
-              return { ...n, data: { ...d, annotations } };
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { annotations?: any[] };
+            if (Array.isArray(dd.annotations)) {
+              dd.annotations.splice(index, 1);
+            }
+          });
         },
 
         // -----------------------------------------------------------------------

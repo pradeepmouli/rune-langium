@@ -1795,3 +1795,125 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave F — metadata actions → mutateGraph recipes (id-rooted patches)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — metadata actions — id-rooted patches (Wave F)', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(COMBINED_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  // -----------------------------------------------------------------------
+  // updateComments — nodes-rooted patch at ['nodes', id, 'data', 'comments']
+  // -----------------------------------------------------------------------
+
+  describe('updateComments — id-rooted patch (Wave F)', () => {
+    it('captures a patch rooted at nodes → nodeId → data.comments', () => {
+      const nodes = store.getState().nodes;
+      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+      expect(tradeNode).toBeDefined();
+      const nodeId = tradeNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().updateComments(nodeId, 'Wave F test comment');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('comments');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // updateDefinition — nodes-rooted patch at ['nodes', id, 'data', 'definition']
+  // -----------------------------------------------------------------------
+
+  describe('updateDefinition — id-rooted patch (Wave F)', () => {
+    it('captures a patch rooted at nodes → nodeId containing definition', () => {
+      const nodes = store.getState().nodes;
+      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+      expect(tradeNode).toBeDefined();
+      const nodeId = tradeNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().updateDefinition(nodeId, 'A financial instrument trade');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('definition');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // addSynonym — type-dispatched shapes (Data → RosettaClassSynonym)
+  // -----------------------------------------------------------------------
+
+  describe('addSynonym — id-rooted patch + type-dispatched shape (Wave F)', () => {
+    it('captures a nodes-rooted synonyms patch for a Data node (RosettaClassSynonym shape)', () => {
+      const nodes = store.getState().nodes;
+      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+      expect(tradeNode).toBeDefined();
+      const nodeId = tradeNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().addSynonym(nodeId, 'FpML_Trade');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('synonyms');
+
+      // Confirm the RosettaClassSynonym shape landed in state
+      const updated = store.getState().nodes.find((n) => n.id === nodeId);
+      const syns = (updated!.data as any).synonyms ?? [];
+      expect(syns[0].$type).toBe('RosettaClassSynonym');
+      expect(syns[0].value.name).toBe('FpML_Trade');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // addAnnotation — nodes-rooted patch (AnnotationRef shape)
+  // -----------------------------------------------------------------------
+
+  describe('addAnnotation — id-rooted patch (Wave F)', () => {
+    it('captures a nodes-rooted annotations patch with AnnotationRef shape', () => {
+      const nodes = store.getState().nodes;
+      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+      expect(tradeNode).toBeDefined();
+      const nodeId = tradeNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().addAnnotation(nodeId, 'deprecated');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('annotations');
+
+      // Confirm AnnotationRef shape
+      const updated = store.getState().nodes.find((n) => n.id === nodeId);
+      const anns = (updated!.data as any).annotations ?? [];
+      expect(anns[0].$type).toBe('AnnotationRef');
+      expect(anns[0].annotation.$refText).toBe('deprecated');
+    });
+  });
+});
