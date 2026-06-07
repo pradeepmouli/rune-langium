@@ -276,7 +276,9 @@ vi.mock('@rune-langium/visual-editor', () => ({
     if (idx < 0) return { namespace: '', name: nodeId };
     return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + 1) };
   },
-  makeNodeId: (namespace: string, name: string) => `${namespace}.${name}`
+  // Exact mirror of qualifiedExportPath/makeNodeId: bare name when namespace is
+  // empty (global), dotted otherwise — so empty-namespace ids stay valid (not `.Foo`).
+  makeNodeId: (namespace: string, name: string) => (namespace ? `${namespace}.${name}` : name)
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({
