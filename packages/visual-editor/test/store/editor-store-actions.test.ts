@@ -1455,7 +1455,7 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
   it('writes a QUALIFIED $refText when two namespaces have a type with the same bare name', () => {
     const store = createEditorStore();
     const funcId = store.getState().createType('func', 'CalcFunc', 'cdm.calc');
-    store.getState().addInputParam(funcId, 'payment', 'string', '(1..1)');
+    store.getState().addInputParam(funcId, 'payment', 'string');
 
     // Two "Amount" types in different namespaces — the canonical id identifies which one.
     store.getState().createType('data', 'Amount', 'ns.a');
@@ -1481,7 +1481,7 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
   it('writes the BARE $refText when the type name is unambiguous (single namespace)', () => {
     const store = createEditorStore();
     const funcId = store.getState().createType('func', 'CalcFunc', 'cdm.calc');
-    store.getState().addInputParam(funcId, 'payment', 'string', '(1..1)');
+    store.getState().addInputParam(funcId, 'payment', 'string');
     const amountId = store.getState().createType('data', 'Amount', 'cdm.calc');
 
     store.getState().updateInputParam(funcId, 'payment', 'payment', 'Amount', '(1..1)', amountId);
@@ -1496,7 +1496,7 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
   it('falls back to the bare typeName when targetTypeId is absent (backward-compatible)', () => {
     const store = createEditorStore();
     const funcId = store.getState().createType('func', 'CalcFunc', 'cdm.calc');
-    store.getState().addInputParam(funcId, 'x', 'string', '(1..1)');
+    store.getState().addInputParam(funcId, 'x', 'string');
 
     // No targetTypeId — legacy call path (name-only).
     store.getState().updateInputParam(funcId, 'x', 'x', 'number', '(1..1)');
@@ -1510,7 +1510,7 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
   it('preserves existing typeCall.arguments when retyping (no-reset regression)', () => {
     const store = createEditorStore();
     const funcId = store.getState().createType('func', 'Fn', 'cdm.fn');
-    store.getState().addInputParam(funcId, 'p', 'string', '(1..1)');
+    store.getState().addInputParam(funcId, 'p', 'string');
     const targetId = store.getState().createType('data', 'Wrapper', 'cdm.fn');
 
     // Inject a parameterized typeCall to simulate an existing parameterized type call.
@@ -1575,7 +1575,7 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
 
       const patchesBefore = store.getState().pendingEditPatches.length;
 
-      store.getState().addInputParam(nodeId, 'c', 'number', '(1..1)');
+      store.getState().addInputParam(nodeId, 'c', 'number');
 
       const patches = store.getState().pendingEditPatches;
       const newPatches = patches.slice(patchesBefore);
@@ -1752,7 +1752,7 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
       const nodeId = funcNode!.id;
 
       // Add Money-typed input 'payment' to Add
-      store.getState().addInputParam(nodeId, 'payment', 'Money', '(1..1)');
+      store.getState().addInputParam(nodeId, 'payment', 'Money');
       // Manually set the edge as addInputParam is node-only; inject via updateInputParam rename:
       // First rename+type to Money so the edge is established.
       store.getState().updateInputParam(nodeId, 'payment', 'payment', 'Money', '(1..1)', moneyNode!.id);
