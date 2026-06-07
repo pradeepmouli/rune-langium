@@ -58,7 +58,7 @@ import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from 
 import type { TrackedState } from './history.js';
 import type { Patches } from 'mutative';
 import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById } from './node-projection.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById, toEdgesById } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -113,6 +113,17 @@ export interface EditorState {
   // --- Graph state ---
   nodes: TypeGraphNode[];
   edges: TypeGraphEdge[];
+  /**
+   * Derived Map index of nodes by id (invariant I1: always === [...nodes]).
+   * Maintained by the transitional set-interceptor in createEditorStore.
+   * Read-only from actions — do NOT write directly; write `nodes` instead.
+   */
+  nodesById: Map<string, TypeGraphNode>;
+  /**
+   * Derived Map index of edges by id (invariant I1: always === [...edges]).
+   * Maintained by the transitional set-interceptor in createEditorStore.
+   */
+  edgesById: Map<string, TypeGraphEdge>;
   /**
    * Curated-bundle deferred-export entries, stored on the store so
    * `loadModels` can re-merge their placeholder graph nodes after
@@ -709,6 +720,8 @@ function commitEdit(
 const initialState: EditorState = {
   nodes: [],
   edges: [],
+  nodesById: new Map<string, TypeGraphNode>(),
+  edgesById: new Map<string, TypeGraphEdge>(),
   deferredExports: [],
   selectedNodeId: null,
   searchQuery: '',
@@ -769,7 +782,41 @@ const initialState: EditorState = {
 export const createEditorStore = (overrides?: Partial<EditorState>) =>
   create<EditorStore>()(
     temporal(
-      (set, get) => ({
+      (rawSet, get) => {
+        // -----------------------------------------------------------------------
+        // Transitional set-interceptor (Phase 3B, Task 2)
+        //
+        // During 3B, actions still author nodes/edges arrays directly. After every
+        // rawSet call we re-derive nodesById/edgesById whenever the nodes or edges
+        // array reference changed, maintaining invariant I1:
+        //   state.nodes === [...state.nodesById.values()]
+        //
+        // The re-derive uses rawSet (not the wrapped set) so there is no recursion.
+        // The temporal options below supply an `equality` fn that treats two
+        // TrackedState snapshots as equal when the nodes/edges refs are unchanged —
+        // this ensures the Map-only re-derive rawSet call does NOT push a redundant
+        // undo history entry (partialize only picks nodes+edges; the Map-only write
+        // produces an identical partialized snapshot, so equality short-circuits it).
+        // -----------------------------------------------------------------------
+        let lastNodes: TypeGraphNode[] | undefined;
+        let lastEdges: TypeGraphEdge[] | undefined;
+
+        const set: typeof rawSet = (partial, replace?) => {
+          rawSet(partial as never, replace as never);
+          const next = get();
+          if (next.nodes !== lastNodes || next.edges !== lastEdges) {
+            lastNodes = next.nodes;
+            lastEdges = next.edges;
+            rawSet(
+              {
+                nodesById: toNodesById(next.nodes),
+                edgesById: toEdgesById(next.edges)
+              } as never
+            );
+          }
+        };
+
+        return {
         ...initialState,
         ...overrides,
 
@@ -2396,12 +2443,18 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             get().showAllNodes();
           }
         }
-      }),
+        }; // end return object
+      }, // end creator function
       {
         partialize: (state): TrackedState => ({
           nodes: state.nodes,
           edges: state.edges
         }),
+        // Prevent the Map-only re-derive rawSet from creating a redundant
+        // undo history entry. partialize only picks nodes+edges; the
+        // Map-only write leaves those refs unchanged, so equality fires
+        // and zundo skips recording that transition.
+        equality: (a, b) => a.nodes === b.nodes && a.edges === b.edges,
         limit: 50
       }
     )
