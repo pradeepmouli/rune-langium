@@ -1704,50 +1704,48 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             annotations: [],
             synonyms: []
           };
-
-          set((state) => {
-            const targetNodeId = state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
-
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Choice') {
-                const attrs = [...((d as any).attributes ?? []), newOption];
-                return { ...n, data: { ...d, attributes: attrs } };
-              }
-              return n;
-            });
-
-            if (targetNodeId) {
-              const newEdge: TypeGraphEdge = {
-                id: makeEdgeId('choice-option', { source: nodeId, target: targetNodeId, label: typeName }),
+          // Resolve the target node id BEFORE the recipe (read-only against Maps).
+          const targetId = [...get().nodesById.values()].find(
+            (n) => (n.data as AnyGraphNode).name === typeName
+          )?.id;
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'Choice') return;
+            const attrs = (d as { attributes?: unknown[] }).attributes;
+            if (Array.isArray(attrs)) {
+              attrs.push(newOption);
+            } else {
+              (d as { attributes?: unknown[] }).attributes = [newOption];
+            }
+            if (targetId) {
+              const id = makeEdgeId('choice-option', { source: nodeId, target: targetId, label: typeName });
+              draft.edges.set(id, {
+                id,
                 source: nodeId,
-                target: targetNodeId,
+                target: targetId,
                 type: 'choice-option',
                 data: { kind: 'choice-option' as const, label: typeName } as EdgeData
-              };
-              return { nodes: updatedNodes, edges: [...state.edges, newEdge] };
+              } as TypeGraphEdge);
             }
-
-            return { nodes: updatedNodes };
           });
         },
 
         removeChoiceOption(nodeId: string, typeName: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Choice') {
-                const attrs = ((d as any).attributes ?? []).filter((a: any) => a.typeCall?.type?.$refText !== typeName);
-                return { ...n, data: { ...d, attributes: attrs } };
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'Choice') return;
+            const dd = d as { attributes?: { typeCall?: { type?: { $refText?: string } } }[] };
+            if (dd.attributes) {
+              dd.attributes = dd.attributes.filter((a) => a.typeCall?.type?.$refText !== typeName);
+            }
+            for (const [id, e] of draft.edges) {
+              if (e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName) {
+                draft.edges.delete(id);
               }
-              return n;
-            }),
-            edges: state.edges.filter(
-              (e) => !(e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName)
-            )
-          }));
+            }
+          });
         },
 
         // -----------------------------------------------------------------------

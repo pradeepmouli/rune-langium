@@ -422,6 +422,115 @@ describe('EditorStore — choice operations', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Wave C — mutateGraph patch assertions for choice actions
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — choice actions — id-rooted patches (Wave C)', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(CHOICE_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  describe('addChoiceOption — WITH matching target node present', () => {
+    it('captures a nodes-rooted patch (attributes) AND an edges-rooted patch (choice-option edge)', () => {
+      const nodes = store.getState().nodes;
+      const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+      expect(choiceNode).toBeDefined();
+      const nodeId = choiceNode!.id;
+
+      // 'CashPayment' already exists in the fixture as a sibling node — target lookup will succeed.
+      // Remove it first so we can add it cleanly.
+      store.getState().removeChoiceOption(nodeId, 'CashPayment');
+
+      // Clear patches accumulated so far, snapshot the count.
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().addChoiceOption(nodeId, 'CashPayment');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+
+      // Node patch: path must be ['nodes', choiceNodeId, 'data', 'attributes', ...]
+      const nodePatch = newPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === nodeId);
+      expect(nodePatch).toBeDefined();
+      expect(nodePatch!.path).toContain('attributes');
+
+      // Edge patch: an edges-rooted patch for the new choice-option edge.
+      const edgePatch = newPatches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeDefined();
+    });
+  });
+
+  describe('addChoiceOption — WITHOUT matching target node', () => {
+    it('captures only a nodes-rooted patch (no edge patch) when the typeName has no sibling node', () => {
+      const nodes = store.getState().nodes;
+      const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+      expect(choiceNode).toBeDefined();
+      const nodeId = choiceNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      // 'UnknownType' does not exist in the fixture — no target node, no edge.
+      store.getState().addChoiceOption(nodeId, 'UnknownType');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+
+      // Node patch must be present.
+      const nodePatch = newPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === nodeId);
+      expect(nodePatch).toBeDefined();
+      expect(nodePatch!.path).toContain('attributes');
+
+      // No edge patch — no target node existed.
+      const edgePatch = newPatches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeUndefined();
+    });
+  });
+
+  describe('removeChoiceOption — dual-patch (attribute removed + edge deleted)', () => {
+    it('produces a nodes-rooted attributes patch AND an edges-rooted remove patch', () => {
+      const nodes = store.getState().nodes;
+      const choiceNode = nodes.find((n) => (n.data as any).$type === 'Choice');
+      expect(choiceNode).toBeDefined();
+      const nodeId = choiceNode!.id;
+
+      // Use the first attribute's typeName — it has a sibling node so an edge exists.
+      const firstAttr = ((choiceNode!.data as any).attributes ?? [])[0];
+      const typeName = firstAttr!.typeCall?.type?.$refText as string;
+      expect(typeName).toBeDefined();
+
+      // Confirm the edge exists before removal.
+      const edgeBefore = store
+        .getState()
+        .edges.find((e) => e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName);
+      expect(edgeBefore).toBeDefined();
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().removeChoiceOption(nodeId, typeName);
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+
+      // Node patch: attributes array modified.
+      const nodePatch = newPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === nodeId);
+      expect(nodePatch).toBeDefined();
+      expect(nodePatch!.path).toContain('attributes');
+
+      // Edge patch: the choice-option edge was deleted.
+      const edgePatch = newPatches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeDefined();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // updateAttributeType — Choice node arm retype (Codex P2, PR #196)
 // ---------------------------------------------------------------------------
 
