@@ -295,6 +295,77 @@ describe('EditorStore — enum operations', () => {
       expect(extendsEdge).toBeUndefined();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Wave B — mutateGraph patch assertions
+  // -----------------------------------------------------------------------
+
+  describe('addEnumValue — id-rooted patch (Wave B)', () => {
+    it('captures a nodes-rooted patch with enumValues in path', () => {
+      const nodes = store.getState().nodes;
+      const enumNode = nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
+      expect(enumNode).toBeDefined();
+      const nodeId = enumNode!.id;
+
+      store.getState().addEnumValue(nodeId, 'JPY', 'Japanese Yen');
+
+      const patches = store.getState().pendingEditPatches;
+      expect(patches.length).toBeGreaterThan(0);
+      expect(patches[0]!.path[0]).toBe('nodes');
+      expect(patches[0]!.path[1]).toBe(nodeId);
+      expect(patches[0]!.path).toContain('enumValues');
+    });
+  });
+
+  describe('setEnumParent — dual-patch (node + edge) (Wave B)', () => {
+    it('produces both a nodes-rooted patch (data.parent) and an edges-rooted patch (enum-extends)', () => {
+      store.getState().createType('enum', 'BaseCurrency', 'test.enums');
+
+      const nodes = store.getState().nodes;
+      const childEnum = nodes.find((n) => n.data.name === 'CurrencyEnum');
+      const parentEnum = nodes.find((n) => n.data.name === 'BaseCurrency');
+      expect(childEnum).toBeDefined();
+      expect(parentEnum).toBeDefined();
+
+      // Clear any patches accumulated by createType
+      // (store reads pendingEditPatches at call time, so we snapshot after)
+      store.getState().setEnumParent(childEnum!.id, parentEnum!.id);
+
+      const patches = store.getState().pendingEditPatches;
+      expect(patches.length).toBeGreaterThan(0);
+
+      const nodePatch = patches.find((p) => p.path[0] === 'nodes' && p.path[1] === childEnum!.id);
+      expect(nodePatch).toBeDefined();
+      expect(nodePatch!.path).toContain('parent');
+
+      const edgePatch = patches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeDefined();
+    });
+
+    it('setEnumParent(id, null) removes the edge — produces an edges-rooted remove patch', () => {
+      store.getState().createType('enum', 'BaseCurrency', 'test.enums');
+
+      const nodes = store.getState().nodes;
+      const childEnum = nodes.find((n) => n.data.name === 'CurrencyEnum');
+      const parentEnum = nodes.find((n) => n.data.name === 'BaseCurrency');
+
+      store.getState().setEnumParent(childEnum!.id, parentEnum!.id);
+
+      // Snapshot patch count after setting parent
+      const patchesAfterSet = store.getState().pendingEditPatches.length;
+
+      store.getState().setEnumParent(childEnum!.id, null);
+
+      const patches = store.getState().pendingEditPatches;
+      // New patches were added by the clear operation
+      expect(patches.length).toBeGreaterThan(patchesAfterSet);
+
+      // The clear should produce an edges-rooted patch (edge deletion)
+      const newPatches = patches.slice(patchesAfterSet);
+      const edgePatch = newPatches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeDefined();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

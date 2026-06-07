@@ -1608,88 +1608,75 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             annotations: [],
             enumSynonyms: []
           };
-
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaEnumeration') {
-                const vals = [...((d as any).enumValues ?? []), newValue];
-                return { ...n, data: { ...d, enumValues: vals } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaEnumeration') return;
+            const vals = (d as { enumValues?: unknown[] }).enumValues;
+            if (Array.isArray(vals)) {
+              vals.push(newValue);
+            } else {
+              (d as { enumValues?: unknown[] }).enumValues = [newValue];
+            }
+          });
         },
 
         removeEnumValue(nodeId: string, valueName: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaEnumeration') {
-                const vals = ((d as any).enumValues ?? []).filter((v: any) => v.name !== valueName);
-                return { ...n, data: { ...d, enumValues: vals } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaEnumeration') return;
+            const vals = (d as { enumValues?: { name: string }[] }).enumValues;
+            if (!Array.isArray(vals)) return;
+            const idx = vals.findIndex((v) => v.name === valueName);
+            if (idx !== -1) vals.splice(idx, 1);
+          });
         },
 
         updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaEnumeration') {
-                const vals = ((d as any).enumValues ?? []).map((v: any) =>
-                  v.name === oldName ? { ...v, name: newName, display: displayName } : v
-                );
-                return { ...n, data: { ...d, enumValues: vals } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaEnumeration') return;
+            const vals = (d as { enumValues?: { name: string; display?: string }[] }).enumValues;
+            if (!Array.isArray(vals)) return;
+            const v = vals.find((item) => item.name === oldName);
+            if (v) {
+              v.name = newName;
+              v.display = displayName;
+            }
+          });
         },
 
         reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaEnumeration') {
-                const vals = [...((d as any).enumValues ?? [])];
-                const [moved] = vals.splice(fromIndex, 1);
-                if (moved) {
-                  vals.splice(toIndex, 0, moved);
-                }
-                return { ...n, data: { ...d, enumValues: vals } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaEnumeration') return;
+            const vals = (d as { enumValues?: unknown[] }).enumValues;
+            if (!Array.isArray(vals)) return;
+            const [moved] = vals.splice(fromIndex, 1);
+            if (moved !== undefined) vals.splice(toIndex, 0, moved);
+          });
         },
 
         setEnumParent(nodeId: string, parentId: string | null) {
-          set((state) => {
-            const filteredEdges = state.edges.filter((e) => !(e.source === nodeId && e.data?.kind === 'enum-extends'));
-
-            const parentNode = parentId ? state.nodes.find((n) => n.id === parentId) : null;
-            const parentName = (parentNode?.data as AnyGraphNode)?.name as string | undefined;
-            const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
-
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaEnumeration') {
-                return { ...n, data: { ...d, parent: parentRef } } as TypeGraphNode;
-              }
-              return n;
-            });
-
+          const state = get();
+          const parentNode = parentId ? state.nodesById.get(parentId) : null;
+          const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
+          const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaEnumeration') return;
+            (d as { parent?: unknown }).parent = parentRef;
+            for (const [id, e] of draft.edges) {
+              if (e.source === nodeId && e.data?.kind === 'enum-extends') draft.edges.delete(id);
+            }
             if (parentId) {
-              const newEdge: TypeGraphEdge = {
-                id: makeEdgeId('enum-extends', { source: nodeId, target: parentId }),
+              const edgeId = makeEdgeId('enum-extends', { source: nodeId, target: parentId });
+              draft.edges.set(edgeId, {
+                id: edgeId,
                 source: nodeId,
                 target: parentId,
                 type: 'enum-extends',
@@ -1697,11 +1684,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   kind: 'enum-extends' as const,
                   label: 'extends'
                 } as EdgeData
-              };
-              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
+              } as TypeGraphEdge);
             }
-
-            return { nodes: updatedNodes, edges: filteredEdges };
           });
         },
 
