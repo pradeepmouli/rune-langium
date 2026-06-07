@@ -58,6 +58,7 @@ import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from 
 import type { TrackedState } from './history.js';
 import type { Patches } from 'mutative';
 import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -387,7 +388,7 @@ function getEdgeKind(edge: TypeGraphEdge): EdgeKind | undefined {
 }
 
 function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
-  return new Map(nodes.map((node) => [node.id, node]));
+  return toNodesById(nodes);
 }
 
 /**
@@ -409,23 +410,25 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
       // are index-only (for cross-file reference resolution).
       if (!(exp.type in AST_TYPE_TO_NODE_TYPE)) continue;
       const nodeType = AST_TYPE_TO_NODE_TYPE[exp.type]!;
-      const nodeId = `${entry.namespace}::${exp.name}`;
+      const nodeId = makeNodeId(entry.namespace, exp.name);
       if (existingIds.has(nodeId)) continue;
       existingIds.add(nodeId);
       out.push({
         id: nodeId,
         type: nodeType,
         position: { x: 0, y: 0 },
-        data: {
-          $type: exp.type,
-          name: exp.name,
-          namespace: entry.namespace,
-          position: { x: 0, y: 0 },
-          errors: [],
-          isReadOnly: true,
-          hasExternalRefs: false,
-          deferred: true
-        } as unknown as AnyGraphNode
+        // `deferred: true` is passed as extra metadata (withGraphMetadata merges whatever is given).
+        data: withGraphMetadata(
+          { $type: exp.type, name: exp.name },
+          {
+            namespace: entry.namespace,
+            position: { x: 0, y: 0 },
+            errors: [],
+            isReadOnly: true,
+            hasExternalRefs: false,
+            deferred: true
+          }
+        )
       });
     }
   }
@@ -491,10 +494,6 @@ let nodeCounter = 0;
 
 /** Sequence counter to cancel in-flight progressive namespace expansion. */
 let expandSeq = 0;
-
-function makeNodeId(namespace: string, name: string): string {
-  return `${namespace}::${name}`;
-}
 
 function parseCardinalityString(card: string): { inf: number; sup?: number; unbounded: boolean } {
   const match = card.match(/\(?(\d+)\.\.(\*|\d+)\)?/);
@@ -1138,7 +1137,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const newEdge: TypeGraphEdge | null =
             targetNodeId && targetNodeId !== nodeId
               ? {
-                  id: `${nodeId}--attribute-ref--${attrName}--${targetNodeId}`,
+                  id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: attrName }),
                   source: nodeId,
                   target: targetNodeId,
                   type: 'attribute-ref',
@@ -1238,14 +1237,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               ? null
               : isChoice
                 ? {
-                    id: `${nodeId}--choice-option--${refText}--${targetTypeId}`,
+                    id: makeEdgeId('choice-option', { source: nodeId, target: targetTypeId, label: refText }),
                     source: nodeId,
                     target: targetTypeId,
                     type: 'choice-option',
                     data: { kind: 'choice-option' as const, label: refText } as EdgeData
                   }
                 : {
-                    id: `${nodeId}--attribute-ref--${attrName}--${targetTypeId}`,
+                    id: makeEdgeId('attribute-ref', { source: nodeId, target: targetTypeId, label: attrName }),
                     source: nodeId,
                     target: targetTypeId,
                     type: 'attribute-ref',
@@ -1371,7 +1370,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
             if (parentId) {
               const newEdge: TypeGraphEdge = {
-                id: `${childId}--extends--${parentId}`,
+                id: makeEdgeId('extends', { source: childId, target: parentId }),
                 source: childId,
                 target: parentId,
                 type: 'inheritance',
@@ -1411,7 +1410,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const newEdge: TypeGraphEdge | null =
             targetNodeId && targetNodeId !== nodeId
               ? {
-                  id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
+                  id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
                   source: nodeId,
                   target: targetNodeId,
                   type: 'attribute-ref',
@@ -1554,7 +1553,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
             if (parentId) {
               const newEdge: TypeGraphEdge = {
-                id: `${nodeId}--enum-extends--${parentId}`,
+                id: makeEdgeId('enum-extends', { source: nodeId, target: parentId }),
                 source: nodeId,
                 target: parentId,
                 type: 'enum-extends',
@@ -1601,7 +1600,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
             if (targetNodeId) {
               const newEdge: TypeGraphEdge = {
-                id: `${nodeId}--choice-option--${typeName}--${targetNodeId}`,
+                id: makeEdgeId('choice-option', { source: nodeId, target: targetNodeId, label: typeName }),
                 source: nodeId,
                 target: targetNodeId,
                 type: 'choice-option',
@@ -1739,7 +1738,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               targetNode?.id ?? state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
             if (targetNodeId && targetNodeId !== nodeId) {
               const newEdge: TypeGraphEdge = {
-                id: `${nodeId}--attribute-ref--${newName}--${targetNodeId}`,
+                id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
                 source: nodeId,
                 target: targetNodeId,
                 type: 'attribute-ref',

@@ -13,6 +13,7 @@
  */
 
 import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode } from '../types.js';
+import { nameFromNodeId, stripGraphMetadata } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,31 +38,6 @@ export type SyntheticElement = unknown;
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** GraphMetadata keys to strip when extracting the AST model. */
-const GRAPH_META_KEYS = new Set(['namespace', 'position', 'errors', 'isReadOnly', 'hasExternalRefs', 'comments']);
-
-/**
- * Strip GraphMetadata fields from a GraphNode to get the AST model.
- * Returns a plain object with only AST fields.
- */
-function stripMetadata(data: AnyGraphNode): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (!GRAPH_META_KEYS.has(key)) {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-
-/**
- * Extract parent name from a node ID like "namespace::ParentName".
- */
-function nameFromNodeId(nodeId: string): string {
-  const parts = nodeId.split('::');
-  return parts.length > 1 ? parts[parts.length - 1]! : nodeId;
-}
 
 /**
  * Build inheritance lookup from edges.
@@ -102,7 +78,7 @@ export function modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): Mod
 
     for (const node of nsNodes) {
       const d = node.data as AnyGraphNode;
-      const model = stripMetadata(d);
+      const model = stripGraphMetadata(d);
 
       // Ensure inheritance is reflected in the model
       const parentNodeId = inheritanceMap.get(node.id);

@@ -27,6 +27,7 @@
 import { useEffect, useRef } from 'react';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
+import { astRelevantProjection } from '../store/node-projection.js';
 import { serializeModel } from '@rune-langium/core';
 
 // ---------------------------------------------------------------------------
@@ -46,14 +47,9 @@ function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[
   // fingerprint — graph-content equivalence is what we care about.
   const sortedNodes = [...nodes].sort((a, b) => a.id.localeCompare(b.id));
   for (const n of sortedNodes) {
-    const d = n.data as Record<string, unknown>;
     // Project to the AST-relevant subset: skip GraphMetadata that
-    // changes on view-only operations.
-    const projection: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(d)) {
-      if (k === 'position' || k === 'errors' || k === 'hasExternalRefs') continue;
-      projection[k] = v;
-    }
+    // changes on view-only operations (position, errors, hasExternalRefs).
+    const projection = astRelevantProjection(n.data);
     try {
       nodeParts.push(`${n.id}:${JSON.stringify(projection)}`);
     } catch {
