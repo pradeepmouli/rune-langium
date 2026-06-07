@@ -159,6 +159,79 @@ describe('renameType — cascade', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Namespace-qualified ($refText / label) cascade — disambiguated refs
+  // -----------------------------------------------------------------------
+
+  it('cascades into namespace-qualified member references (<ns>.<oldName>)', () => {
+    const s = createEditorStore();
+    // Two `Trade` types in different namespaces → bare `Trade` is ambiguous, so a
+    // cross-namespace ref to one of them is stored qualified (`alpha.Trade`).
+    s.getState().createType('data', 'Trade', 'alpha');
+    s.getState().createType('data', 'Trade', 'beta');
+    s.getState().createType('data', 'Holder', 'beta');
+
+    const alphaTradeId = s
+      .getState()
+      .nodes.find((n) => n.data.name === 'Trade' && n.data.namespace === 'alpha')!.id;
+    const holderId = s.getState().nodes.find((n) => n.data.name === 'Holder')!.id;
+
+    // updateAttributeType disambiguates the $refText to the qualified `alpha.Trade`.
+    s.getState().addAttribute(holderId, 'ref', 'Trade', '(1..1)');
+    s.getState().updateAttributeType(holderId, 'ref', 'Trade', alphaTradeId);
+
+    const qualifiedBefore = (s.getState().nodes.find((n) => n.id === holderId)!.data as any)
+      .attributes[0].typeCall.type.$refText;
+    expect(qualifiedBefore).toBe('alpha.Trade'); // setup sanity — the ref really is qualified
+
+    s.getState().renameType(alphaTradeId, 'Execution');
+
+    const refAfter = (s.getState().nodes.find((n) => n.data.name === 'Holder')!.data as any)
+      .attributes[0].typeCall.type.$refText;
+    // The bug: qualified ref was missed and left as `alpha.Trade` (stale).
+    expect(refAfter).toBe('alpha.Execution');
+  });
+
+  it('cascades into namespace-qualified choice-option edge labels + ids', () => {
+    const s = createEditorStore();
+    s.getState().createType('data', 'Trade', 'alpha');
+    s.getState().createType('data', 'Trade', 'beta');
+    s.getState().createType('choice', 'Pick', 'beta');
+
+    const alphaTradeId = s
+      .getState()
+      .nodes.find((n) => n.data.name === 'Trade' && n.data.namespace === 'alpha')!.id;
+    const pickId = s.getState().nodes.find((n) => n.data.name === 'Pick')!.id;
+
+    // Add the option, then disambiguate it to alpha.Trade — updateAttributeType
+    // rebuilds the choice-option edge with the qualified `alpha.Trade` label.
+    s.getState().addChoiceOption(pickId, 'Trade');
+    s.getState().updateAttributeType(pickId, 'Trade', 'Trade', alphaTradeId);
+
+    const labelBefore = s
+      .getState()
+      .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option')!.data!.label;
+    expect(labelBefore).toBe('alpha.Trade'); // setup sanity — qualified label
+
+    s.getState().renameType(alphaTradeId, 'Execution');
+
+    const newAlphaId = s
+      .getState()
+      .nodes.find((n) => n.data.name === 'Execution' && n.data.namespace === 'alpha')!.id;
+    const optEdge = s
+      .getState()
+      .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option');
+    expect(optEdge).toBeDefined();
+    expect(optEdge!.data!.label).toBe('alpha.Execution'); // label cascaded (was stale `alpha.Trade`)
+    expect(optEdge!.target).toBe(newAlphaId); // target re-keyed
+    expect(optEdge!.id).toContain('alpha.Execution'); // id rebuilt from the new qualified label
+
+    // The choice ARM's $refText cascades too (not just the edge label).
+    const armRef = (s.getState().nodes.find((n) => n.data.name === 'Pick')!.data as any)
+      .attributes[0].typeCall.type.$refText;
+    expect(armRef).toBe('alpha.Execution');
+  });
+
+  // -----------------------------------------------------------------------
   // CDM-scale test (400 nodes) — performance gate < 100 ms
   // -----------------------------------------------------------------------
 

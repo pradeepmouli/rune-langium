@@ -538,21 +538,55 @@ function formatCardinalityString(card: string): string {
 }
 
 /**
+ * Rewrite a `$refText`/label that references the type being renamed.
+ *
+ * Matches both forms the codebase emits: a bare name (`oldName`, the same-scope
+ * ref) and the namespace-qualified name (`<namespace>.<oldName>`, the form
+ * `disambiguateTypeRef` writes when another node shares the bare name across
+ * namespaces). Returns the rewritten value (`newName` or `<namespace>.<newName>`)
+ * on a match, or `null` when `value` does not reference the renamed type.
+ *
+ * Qualified refs are authoritative — a dotted `$refText` resolves to exactly
+ * that namespace — so qualified matching is precise. Bare matching keeps its
+ * pre-existing same-scope semantics (a bare name that collides across
+ * namespaces is a separate, pre-existing resolution concern, untouched here).
+ */
+function renameRefText(
+  value: string | undefined,
+  oldName: string,
+  newName: string,
+  namespace: string
+): string | null {
+  if (value === oldName) return newName;
+  if (value === `${namespace}.${oldName}`) return `${namespace}.${newName}`;
+  return null;
+}
+
+/**
  * Update typeCall.type.$refText references in a node's member arrays.
  * Returns the same object if nothing changed, or a new object with updates.
+ *
+ * `namespace` is the renamed type's namespace, used to also match qualified
+ * (`<namespace>.<oldName>`) references — not just the bare name.
  */
-function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string): AnyGraphNode {
+function updateTypeRefsInNode(
+  d: AnyGraphNode,
+  oldName: string,
+  newName: string,
+  namespace: string
+): AnyGraphNode {
   let changed = false;
 
   function updateMemberRefs<T extends { typeCall?: { type?: { $refText?: string } } }>(members: T[]): T[] {
     const updated = members.map((m) => {
-      if (m.typeCall?.type?.$refText === oldName) {
+      const next = renameRefText(m.typeCall?.type?.$refText, oldName, newName, namespace);
+      if (next !== null) {
         changed = true;
         return {
           ...m,
           typeCall: {
             ...m.typeCall,
-            type: { ...m.typeCall!.type, $refText: newName }
+            type: { ...m.typeCall!.type, $refText: next }
           }
         } as T;
       }
@@ -562,9 +596,10 @@ function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string)
   }
 
   function updateRefText(ref: { $refText?: string } | undefined): { $refText?: string } | undefined {
-    if (ref?.$refText === oldName) {
+    const next = renameRefText(ref?.$refText, oldName, newName, namespace);
+    if (next !== null) {
       changed = true;
-      return { ...ref, $refText: newName };
+      return { ...ref, $refText: next };
     }
     return ref;
   }
@@ -586,12 +621,13 @@ function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string)
     case 'RosettaFunction': {
       const func = d as GraphNode<RosettaFunction>;
       result.inputs = updateMemberRefs(func.inputs as any[]);
-      if ((func.output as any)?.typeCall?.type?.$refText === oldName) {
+      const outNext = renameRefText((func.output as any)?.typeCall?.type?.$refText, oldName, newName, namespace);
+      if (outNext !== null) {
         changed = true;
         const out = func.output as any;
         result.output = {
           ...out,
-          typeCall: { ...out.typeCall, type: { ...out.typeCall.type, $refText: newName } }
+          typeCall: { ...out.typeCall, type: { ...out.typeCall.type, $refText: outNext } }
         };
       }
       result.superFunction = updateRefText(func.superFunction as any);
@@ -1207,20 +1243,23 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 // 2. Cascade typeCall/superType refs in every OTHER node
                 for (const [id, other] of originalNodes) {
                   if (id === nodeId) continue;
-                  const updated = updateTypeRefsInNode(other.data as AnyGraphNode, oldName, newName);
+                  const updated = updateTypeRefsInNode(other.data as AnyGraphNode, oldName, newName, namespace);
                   if (updated !== other.data) draft.nodes.set(id, { ...other, data: updated });
                 }
 
-                // 3. Re-key incident edges via parse+rebuild (NOT string .replace)
+                // 3. Re-key incident edges via parse+rebuild (NOT string .replace).
+                //    Labels on choice-option edges carry the (possibly qualified)
+                //    type name, so match bare AND `<namespace>.<oldName>` forms.
                 for (const [id, e] of originalEdges) {
                   const sourceChanged = e.source === nodeId;
                   const targetChanged = e.target === nodeId;
-                  const labelChanged = e.data?.label === oldName;
+                  const relabeled = renameRefText(e.data?.label, oldName, newName, namespace);
+                  const labelChanged = relabeled !== null;
                   if (!sourceChanged && !targetChanged && !labelChanged) continue;
 
                   const newSource = sourceChanged ? newNodeId : e.source;
                   const newTarget = targetChanged ? newNodeId : e.target;
-                  const newLabel = labelChanged ? newName : e.data?.label;
+                  const newLabel = labelChanged ? relabeled : e.data?.label;
                   const parsed = parseEdgeId(id);
                   const newEdgeId = parsed
                     ? makeEdgeId(parsed.kind, { source: newSource, target: newTarget, label: newLabel })
