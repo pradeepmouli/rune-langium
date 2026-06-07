@@ -910,17 +910,26 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           // would let object-valued edits (typeCall, cardinality) — which a reparse
           // re-derives with extra AST metadata, so they never compare byte-equal —
           // accumulate and replay stale data indefinitely. See `edit-reconcile.ts`.
-          const { nodes: reconciledNodes, edges: reconciledEdges } = reconcileParse(
+          //
+          // reconcileParse now returns Maps (canonical substrate). We set them
+          // directly alongside the derived arrays so both invariants hold:
+          //   I1: nodes === [...nodesById.values()]
+          // The set-interceptor will harmlessly re-derive equal Maps after the set.
+          const { nodesById: reconciledById, edgesById: reconciledEdgesById } = reconcileParse(
             laidOutNodes,
             edges,
             get().pendingEditPatches
           );
+          const reconciledNodes = nodesFromMap(reconciledById);
+          const reconciledEdges = edgesFromMap(reconciledEdgesById);
 
           const previousSelection = get().selectedNodeId;
           const preservedSelection =
             previousSelection && reconciledNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
 
           set({
+            nodesById: reconciledById,
+            edgesById: reconciledEdgesById,
             nodes: reconciledNodes,
             edges: reconciledEdges,
             layoutOptions: opts,
