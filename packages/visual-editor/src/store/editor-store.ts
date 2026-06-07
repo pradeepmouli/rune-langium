@@ -1186,11 +1186,18 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const newNodeId = makeNodeId(namespace, newName);
             const reselect = state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
 
+            // Read the pre-mutation Maps from the store (un-proxied): mutateGraph
+            // applies the recipe result AFTER create() returns, so get() here is the
+            // original state. Scanning these plain Maps — instead of the drafted ones —
+            // keeps Mutative from proxying all N entries just to read them; we only
+            // touch the draft for entries that actually change (O(changed), not O(N)).
+            const { nodesById: originalNodes, edgesById: originalEdges } = get();
+
             mutateGraph(
               set,
               get,
               (draft) => {
-                const n = draft.nodes.get(nodeId);
+                const n = originalNodes.get(nodeId);
                 if (!n) return;
 
                 // 1. Re-key the renamed node (delete old id, insert new id + name)
@@ -1198,14 +1205,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 draft.nodes.set(newNodeId, { ...n, id: newNodeId, data: { ...n.data, name: newName } });
 
                 // 2. Cascade typeCall/superType refs in every OTHER node
-                for (const [id, other] of draft.nodes) {
-                  if (id === newNodeId) continue;
+                for (const [id, other] of originalNodes) {
+                  if (id === nodeId) continue;
                   const updated = updateTypeRefsInNode(other.data as AnyGraphNode, oldName, newName);
                   if (updated !== other.data) draft.nodes.set(id, { ...other, data: updated });
                 }
 
                 // 3. Re-key incident edges via parse+rebuild (NOT string .replace)
-                for (const [id, e] of [...draft.edges]) {
+                for (const [id, e] of originalEdges) {
                   const sourceChanged = e.source === nodeId;
                   const targetChanged = e.target === nodeId;
                   const labelChanged = e.data?.label === oldName;
