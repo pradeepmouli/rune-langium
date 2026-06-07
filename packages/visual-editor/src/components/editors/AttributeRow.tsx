@@ -158,7 +158,7 @@ function AttributeRow({
       if (!value) return;
       const option = availableTypes.find((o) => o.value === value);
       const newTypeName = option?.label ?? value;
-      // Pass option.value (the canonical `namespace::Name` id) as targetTypeId
+      // Pass option.value (the canonical `namespace.Name` id) as targetTypeId
       // so the store can qualify the $refText when the bare name collides across
       // namespaces (mirrors the attribute-type-update path — DRY).
       const targetTypeId = option?.value;

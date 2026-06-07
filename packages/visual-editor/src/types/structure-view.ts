@@ -33,7 +33,7 @@ export type TypeRefKind = (typeof TYPE_REF_KINDS)[number];
  * Drag payload emitted by NamespaceExplorer items and consumed by drop targets.
  *
  * **Field semantics:**
- * - `typeId`   — canonical node id in `ns::Name` format (e.g. `cdm.trade::Trade`).
+ * - `typeId`   — canonical node id in `ns.Name` format (e.g. `cdm.trade.Trade`).
  *               Used by `setInheritance` and other operations that reference nodes
  *               by their fully-qualified id.
  * - `typeName` — bare display/AST name (e.g. `Trade`) used in `$refText` writes,
@@ -45,7 +45,7 @@ export type TypeRefKind = (typeof TYPE_REF_KINDS)[number];
 export interface TypeRefPayload {
   readonly rune: 'type-ref';
   readonly namespaceUri: string;
-  /** Canonical node id in `ns::Name` format. Used by setInheritance. */
+  /** Canonical node id in `ns.Name` format. Used by setInheritance. */
   readonly typeId: string;
   /** Bare AST/display name used in $refText writes. Used by updateAttributeType. */
   readonly typeName: string;
@@ -159,7 +159,7 @@ export interface StructureRow {
 /** A Data node in the Structure View graph. */
 export interface StructureDataNode {
   /**
-   * CANONICAL node id (e.g. `cdm.trade::Party`). Cells / editors look up the
+   * CANONICAL node id (e.g. `cdm.trade.Party`). Cells / editors look up the
    * shared type description by this id. Multiple visible instances of the same
    * type share the same `id` — they are distinguished by `instanceId`.
    */
@@ -275,7 +275,7 @@ export interface StructureEnumNode {
 /** A base-type GroupContainer wrap. */
 export interface StructureBaseContainer {
   /**
-   * Canonical wrapper id (e.g. `cdm.trade::Trade::__base::cdm.trade::TradeBase`).
+   * Canonical wrapper id (e.g. `cdm.trade.Trade::__base::cdm.trade.TradeBase`).
    * Multiple instances of the same wrapper (one per visible occurrence of the
    * outer type) share the canonical id but differ in `instanceId`.
    */

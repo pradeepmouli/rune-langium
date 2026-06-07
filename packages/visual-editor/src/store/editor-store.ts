@@ -69,7 +69,7 @@ import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById } from './node-p
  * namespace iff any OTHER node in the current store has the same bare name
  * (would resolve ambiguously). Otherwise returns the bare name verbatim.
  *
- * `targetTypeId` must be the canonical id (`namespace::Name`) of the actual
+ * `targetTypeId` must be the canonical id (`namespace.Name`) of the actual
  * drop target — caller is expected to have validated existence already.
  *
  * The qualified form matches the grammar's `QualifiedName` token shape used
@@ -260,7 +260,7 @@ export interface EditorActions {
    * Update the type ref on an attribute.
    *
    * @param targetTypeId Canonical node id of the resolved target
-   *   (`namespace::Name`). The store validates the id against current nodes
+   *   (`namespace.Name`). The store validates the id against current nodes
    *   and writes a fully-qualified `$refText` when any other node shares the
    *   bare name across namespaces (spec 020 Phase 13, Finding 3).
    *   Stale or unknown ids are rejected (no-op).
@@ -290,7 +290,7 @@ export interface EditorActions {
    * Update name, type, and cardinality for a function input parameter.
    *
    * @param targetTypeId Canonical node id of the resolved target
-   *   (`namespace::Name`). Mirrors `updateAttributeType`'s qualification
+   *   (`namespace.Name`). Mirrors `updateAttributeType`'s qualification
    *   contract: when provided, the store calls `disambiguateTypeRef` and
    *   writes a fully-qualified `$refText` when another node shares the bare
    *   name across namespaces. When omitted (or unknown), the bare `typeName`

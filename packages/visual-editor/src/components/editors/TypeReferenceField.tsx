@@ -123,7 +123,7 @@ export function TypeReferenceField({
 
   // Whole-field drop target — dropping a type-ref anywhere on the field selects
   // it (parity with the structure view). The dropped payload's `typeId` is the
-  // canonical `namespace::Name` id the store expects for cross-namespace
+  // canonical `namespace.Name` id the store expects for cross-namespace
   // resolution; forward it directly, matching a click in the picker.
   const acceptKinds = useMemo<ReadonlyArray<TypeRefPayload['kind']>>(() => {
     if (disabled || readOnly) return [];

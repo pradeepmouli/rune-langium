@@ -239,7 +239,7 @@ export function TypeSelector({
   // Accept a drag from the namespace explorer (same dual-MIME contract as
   // StructureView's TypePickerCell) so dropping a type-ref on the
   // Inspector's type selector picks that type. The dropped payload's
-  // `typeId` is the canonical `namespace::Name` identifier the store
+  // `typeId` is the canonical `namespace.Name` identifier the store
   // expects for cross-namespace resolution; we forward it directly to
   // `onSelect`, matching how a click on a SelectItem would behave
   // (the SelectItem's value is also the canonical id). `accept` mirrors
