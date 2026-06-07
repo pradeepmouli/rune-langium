@@ -78,6 +78,24 @@ describe('EditorStore — new actions', () => {
       expect(updatedAttrs[0]!.name).toBe(originalSecond);
       expect(updatedAttrs[1]!.name).toBe(originalFirst);
     });
+
+    it('captures an id-rooted patch at draft.nodes (Wave A — mutateGraph recipe)', () => {
+      const nodes = store.getState().nodes;
+      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+      expect(tradeNode).toBeDefined();
+      const nodeId = tradeNode!.id;
+
+      const attrs = (tradeNode!.data as any).attributes ?? [];
+      expect(attrs.length).toBeGreaterThanOrEqual(2);
+
+      store.getState().reorderAttribute(nodeId, 0, 1);
+
+      const patches = store.getState().pendingEditPatches;
+      expect(patches.length).toBeGreaterThan(0);
+      expect(patches[0]!.path[0]).toBe('nodes');     // draft Map key
+      expect(patches[0]!.path[1]).toBe(nodeId);      // keyed by id, NOT an array index
+      expect(patches[0]!.path).toContain('attributes');
+    });
   });
 
   // -----------------------------------------------------------------------

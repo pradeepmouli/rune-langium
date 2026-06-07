@@ -1585,21 +1585,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
         },
 
         reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'Data' || d.$type === 'Annotation') {
-                const attrs = [...((d as any).attributes ?? [])];
-                const [moved] = attrs.splice(fromIndex, 1);
-                if (moved) {
-                  attrs.splice(toIndex, 0, moved);
-                }
-                return { ...n, data: { ...d, attributes: attrs } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
+            const attrs = (d as { attributes?: unknown[] }).attributes;
+            if (!Array.isArray(attrs)) return;
+            const [moved] = attrs.splice(fromIndex, 1);
+            if (moved !== undefined) attrs.splice(toIndex, 0, moved);
+          });
         },
 
         // -----------------------------------------------------------------------
