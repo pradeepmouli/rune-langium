@@ -51,14 +51,16 @@ import type {
   RosettaRecordType,
   Annotation
 } from '@rune-langium/core';
+import { indexById } from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
 import { AST_TYPE_TO_NODE_TYPE, NODE_TYPE_TO_AST_TYPE, formatCardinality } from '../adapters/model-helpers.js';
 import type { TrackedState } from './history.js';
+import { create as mutativeCreate } from 'mutative';
 import type { Patches } from 'mutative';
-import { commitGraphEdit, reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById } from './node-projection.js';
+import { reconcileParse, type GraphEditRecipe } from './edit-reconcile.js';
+import { makeNodeId, makeEdgeId, withGraphMetadata, toNodesById, toEdgesById, nodesFromMap, edgesFromMap } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -113,6 +115,20 @@ export interface EditorState {
   // --- Graph state ---
   nodes: TypeGraphNode[];
   edges: TypeGraphEdge[];
+  /**
+   * Canonical id→node index — the edit SUBSTRATE (Phase 3B). `nodes` above is a
+   * derived render cache (invariant I1: `nodes === [...nodesById.values()]`).
+   * The chokepoints (`mutateGraph`/`updateGraphView`/`loadModels`) write this Map
+   * directly. The transitional set-interceptor re-derives it for the not-yet-migrated
+   * actions that still author the `nodes` array (those convert to recipes in 3C).
+   * Do NOT write the Maps ad-hoc from a new action — go through a chokepoint.
+   */
+  nodesById: Map<string, TypeGraphNode>;
+  /**
+   * Canonical id→edge index — the edit substrate (invariant I1:
+   * `edges === [...edgesById.values()]`). See `nodesById` for the write contract.
+   */
+  edgesById: Map<string, TypeGraphEdge>;
   /**
    * Curated-bundle deferred-export entries, stored on the store so
    * `loadModels` can re-merge their placeholder graph nodes after
@@ -182,7 +198,7 @@ export interface EditorState {
   parseEpoch: number;
   /**
    * Id-rooted Mutative patches for user edits that have NOT yet round-tripped
-   * through a reparse. Captured by `commitEdit` (semantic edit actions), replayed
+   * through a reparse. Captured by `mutateGraph` (semantic edit actions), replayed
    * by `loadModels` on top of each healthy parse so an edit made just before its
    * own reparse lands is not momentarily reverted, then pruned as the parse
    * catches up. See `edit-reconcile.ts` for the pure replay logic.
@@ -653,7 +669,7 @@ function nodeAttributeCount(n: TypeGraphNode): number {
  */
 export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphNode[]): boolean {
   if (current.length === 0) return false; // no baseline (initial load) → accept
-  const incomingById = new Map(incoming.map((n) => [n.id, n]));
+  const incomingById = indexById(incoming);
   let currentTotal = 0;
   let incomingTotal = 0;
   let common = 0;
@@ -674,41 +690,108 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
 }
 
 /**
- * Apply a semantic graph edit through the id-keyed Mutative projection, capturing
- * the resulting id-rooted patches as pending user intent.
- *
- * Every source-affecting edit action routes through here instead of calling
- * `set` directly so that:
- *   1. the change is recorded as field-precise, id-rooted patches (see
- *      `edit-reconcile.ts`) that survive a reparse re-ordering the node array,
- *   2. `parseEpoch` is NOT bumped — `useModelSourceSync` therefore treats this as
- *      a USER-origin change and serializes it back to source.
- *
- * A recipe that mutates nothing (an early-return guard inside it) produces zero
- * patches; we then skip `set` entirely to avoid allocating new array references
- * and triggering needless subscriber re-renders. `extra` carries non-graph state
- * the action also changes (e.g. `selectedNodeId`); when present we always `set`.
+ * Extra state a graph chokepoint caller may set alongside a mutation — never the
+ * graph substrate (`nodes`/`edges`/`nodesById`/`edgesById`) nor the patch/epoch
+ * fields, which the chokepoint owns. Excluding them keeps I1/I2 structurally
+ * enforced: a caller's `extra` cannot override the derived caches or the Maps,
+ * append/clobber patches, or bump `parseEpoch`.
  */
-function commitEdit(
+type GraphMutationExtra = Omit<
+  Partial<EditorState>,
+  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'parseEpoch'
+>;
+
+/**
+ * Apply a semantic graph edit DIRECTLY on the persistent state Maps, capturing
+ * id-rooted Mutative patches as pending user intent.
+ *
+ * Phase 3B Task 3 chokepoint. Operates on `nodesById`/`edgesById` (the canonical
+ * edit substrate) rather than projecting maps from arrays each call. The recipe
+ * draft uses `nodes`/`edges` key names (matching `GraphDraft`) so:
+ *   • all 6 recipe bodies are UNCHANGED (they already mutate draft.nodes/draft.edges),
+ *   • patches are id-rooted at `nodes`/`edges` — identical shape to `commitEdit`,
+ *     so `reconcileParse` (Task 4) and all reconcile tests stay valid.
+ *
+ * INTERCEPTOR INTERACTION (Task 2 → Task 6):
+ * This calls the WRAPPED `set`, which sets BOTH the Maps and the derived arrays
+ * in one write. The Task-2 interceptor only re-derives Maps when the arrays changed
+ * AND the Maps did NOT (`arraysChanged && !mapsChanged`) — the signature of a
+ * not-yet-migrated array-only action. Because mutateGraph changes the Maps too,
+ * `mapsChanged` is true, so the interceptor SKIPS its re-derive. zundo records
+ * exactly ONE history entry (this single Map-changing set; partialize tracks the
+ * Maps, equality is ref-based). I1 holds. 3C removes the interceptor entirely.
+ *
+ * @param set   The wrapped store set (from createEditorStore closure — routes through interceptor).
+ * @param get   Store getter.
+ * @param recipe Mutative recipe operating on `{ nodes: Map, edges: Map }`.
+ * @param extra  Optional additional state to merge (e.g. selectedNodeId changes).
+ */
+function mutateGraph(
   set: (partial: Partial<EditorState>) => void,
   get: () => EditorState,
   recipe: GraphEditRecipe,
-  extra?: Partial<EditorState>
+  extra?: GraphMutationExtra
 ): void {
-  const { nodes, edges, pendingEditPatches } = get();
-  const { nodes: nextNodes, edges: nextEdges, patches } = commitGraphEdit(nodes, edges, recipe);
-  if (patches.length === 0 && !extra) return; // no-op recipe (guard hit) — leave state untouched
+  const { nodesById, edgesById, pendingEditPatches } = get();
+  const [next, patches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
+  if (patches.length === 0 && !extra) return; // no-op recipe — leave state untouched
+  set({
+    nodesById: next.nodes,
+    edgesById: next.edges,
+    nodes: nodesFromMap(next.nodes),     // re-derive caches (interceptor skips: Maps changed)
+    edges: edgesFromMap(next.edges),
+    pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
+    ...extra
+  });
+}
+
+/**
+ * View-only update chokepoint (Phase 3B, Task 5).
+ *
+ * Writes nodes/edges arrays + re-derived Maps, but NEVER captures patches
+ * (pendingEditPatches) and NEVER bumps parseEpoch.
+ *
+ * INVARIANT I2: position/layout is VIEW state, not a source edit. The
+ * `relayout`, `setLayoutEngine`, `applyReactFlowNodeChanges`, and
+ * `applyReactFlowEdgeChanges` actions route through here so that when Task 3C
+ * removes the set-interceptor the view path still keeps Maps canonical.
+ *
+ * DEVIATION FROM PLAN'S RECIPE FORM: RF's `applyNodeChanges` and Dagre's
+ * `computeLayout` are array-centric — they consume and produce nodes/edges
+ * arrays, not Maps. Re-expressing them as Mutative Map recipes would require
+ * reimplementing `applyNodeChanges`'s batched change semantics. We accept
+ * array inputs here and rebuild the Maps from the result instead.
+ *
+ * @param set   The wrapped store set (from createEditorStore closure).
+ * @param get   Store getter.
+ * @param view  New nodes and/or edges arrays (either or both may be omitted to
+ *              keep the current value).
+ * @param extra Optional additional state to merge (e.g. layoutOptions).
+ *              Must NOT include pendingEditPatches or parseEpoch.
+ */
+function updateGraphView(
+  set: (partial: Partial<EditorState>) => void,
+  get: () => EditorState,
+  view: { nodes?: TypeGraphNode[]; edges?: TypeGraphEdge[] },
+  extra?: GraphMutationExtra
+): void {
+  const nextNodes = view.nodes ?? get().nodes;
+  const nextEdges = view.edges ?? get().edges;
   set({
     nodes: nextNodes,
     edges: nextEdges,
-    pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
+    nodesById: toNodesById(nextNodes),
+    edgesById: toEdgesById(nextEdges),
     ...extra
+    // NO pendingEditPatches, NO parseEpoch
   });
 }
 
 const initialState: EditorState = {
   nodes: [],
   edges: [],
+  nodesById: new Map<string, TypeGraphNode>(),
+  edgesById: new Map<string, TypeGraphEdge>(),
   deferredExports: [],
   selectedNodeId: null,
   searchQuery: '',
@@ -766,10 +849,60 @@ const initialState: EditorState = {
  *
  * @category Visual Editor
  */
-export const createEditorStore = (overrides?: Partial<EditorState>) =>
-  create<EditorStore>()(
+export const createEditorStore = (overrides?: Partial<EditorState>) => {
+  const store = create<EditorStore>()(
     temporal(
-      (set, get) => ({
+      (rawSet, get) => {
+        // -----------------------------------------------------------------------
+        // Transitional set-interceptor (Phase 3B, Task 2 → Task 6)
+        //
+        // During 3B, array-writing actions still author nodes/edges arrays
+        // directly (e.g. createType, deleteType). After every rawSet call the
+        // interceptor re-derives nodesById/edgesById when the array ref changed
+        // but the Map ref did NOT — meaning a legacy array-only write happened
+        // that the Map substrate doesn't yet own.
+        //
+        // Hazard A (Task 6): now that partialize tracks Maps, a chokepoint
+        // (mutateGraph, updateGraphView, loadModels) already writes BOTH arrays
+        // and Maps in a single set call. If the interceptor ran unconditionally
+        // on array changes it would derive a NEW Map ref → second history entry.
+        //
+        // Discriminator: re-derive only when the array ref changed AND the Map
+        // ref did NOT change in the same set call. When a chokepoint already set
+        // the Maps (Map ref changed), SKIP re-derive.
+        //
+        // The temporal options use an equality fn on {nodesById, edgesById} so
+        // that re-derive rawSet calls (which keep array refs identical) do not
+        // push a redundant undo entry.
+        // -----------------------------------------------------------------------
+        // The discriminator compares a fresh `prev` snapshot (read at the START
+        // of this wrapped-set call) against `next` (after the write). Using a
+        // per-call snapshot — rather than persistent closure refs — is essential:
+        // undo/redo (zundo's userSet) and the post-undo subscribe (store.setState)
+        // BYPASS this wrapped `set`, so any closure-captured "last seen" refs would
+        // go stale after an undo/redo and spuriously report mapsChanged on the next
+        // wrapped write (breaking I1 + dropping that edit from history). A fresh
+        // `get()` per call always reflects the true pre-write state.
+        // -----------------------------------------------------------------------
+        const set: typeof rawSet = (partial, replace?) => {
+          const prev = get(); // snapshot BEFORE this write
+          rawSet(partial as never, replace as never);
+          const next = get(); // snapshot AFTER
+          const arraysChanged = next.nodes !== prev.nodes || next.edges !== prev.edges;
+          const mapsChanged   = next.nodesById !== prev.nodesById || next.edgesById !== prev.edgesById;
+          if (arraysChanged && !mapsChanged) {
+            // A legacy array-only write: re-derive Maps to keep I1.
+            // rawSet (not the wrapped set) to avoid recursion.
+            rawSet(
+              {
+                nodesById: toNodesById(next.nodes),
+                edgesById: toEdgesById(next.edges)
+              } as never
+            );
+          }
+        };
+
+        return {
         ...initialState,
         ...overrides,
 
@@ -850,17 +983,26 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           // would let object-valued edits (typeCall, cardinality) — which a reparse
           // re-derives with extra AST metadata, so they never compare byte-equal —
           // accumulate and replay stale data indefinitely. See `edit-reconcile.ts`.
-          const { nodes: reconciledNodes, edges: reconciledEdges } = reconcileParse(
+          //
+          // reconcileParse now returns Maps (canonical substrate). We set them
+          // directly alongside the derived arrays so both invariants hold:
+          //   I1: nodes === [...nodesById.values()]
+          // The set-interceptor will harmlessly re-derive equal Maps after the set.
+          const { nodesById: reconciledById, edgesById: reconciledEdgesById } = reconcileParse(
             laidOutNodes,
             edges,
             get().pendingEditPatches
           );
+          const reconciledNodes = nodesFromMap(reconciledById);
+          const reconciledEdges = edgesFromMap(reconciledEdgesById);
 
           const previousSelection = get().selectedNodeId;
           const preservedSelection =
             previousSelection && reconciledNodes.some((n) => n.id === previousSelection) ? previousSelection : null;
 
           set({
+            nodesById: reconciledById,
+            edgesById: reconciledEdgesById,
             nodes: reconciledNodes,
             edges: reconciledEdges,
             layoutOptions: opts,
@@ -971,13 +1113,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         relayout(options) {
           const opts = options ?? get().layoutOptions;
           const nodes = computeLayout(get().nodes, get().edges, opts);
-          set({ nodes, layoutOptions: opts });
+          updateGraphView(set, get, { nodes }, { layoutOptions: opts });
         },
 
         setLayoutEngine(engine) {
           const opts = { ...get().layoutOptions, engine };
           const nodes = computeLayout(get().nodes, get().edges, opts);
-          set({ nodes, layoutOptions: opts });
+          updateGraphView(set, get, { nodes }, { layoutOptions: opts });
         },
 
         getNodes() {
@@ -1149,7 +1291,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                 }
               : null;
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -1168,7 +1310,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
           const edgeIdsToDrop = get()
             .edges.filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName)
             .map((e) => e.id);
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const node = draft.nodes.get(nodeId);
             if (node) {
               const d = node.data as AnyGraphNode;
@@ -1255,7 +1397,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                     } as EdgeData
                   };
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -1299,7 +1441,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               } as TypeGraphEdge
             }));
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -1320,7 +1462,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         updateCardinality(nodeId: string, attrName: string, cardinality: string) {
           const card = parseCardinalityString(cardinality);
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (!n) return;
             const d = n.data as AnyGraphNode;
@@ -1398,7 +1540,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
 
         updateAttribute(nodeId: string, oldName: string, newName: string, typeName: string, cardinality: string) {
           // Combined name+type+cardinality edit from the inspector form. Routed
-          // through `commitEdit` (like the field-level attribute actions) so an
+          // through `mutateGraph` (like the field-level attribute actions) so an
           // edit made just before its own reparse lands is captured as a pending
           // patch and replayed, not dropped. See `edit-reconcile.ts`.
           const card = parseCardinalityString(cardinality);
@@ -1422,7 +1564,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
                 }
               : null;
 
-          commitEdit(set, get, (draft) => {
+          mutateGraph(set, get, (draft) => {
             const n = draft.nodes.get(nodeId);
             if (n) {
               const d = n.data as AnyGraphNode;
@@ -2055,15 +2197,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             return true;
           });
           if (meaningful.length === 0) return;
-          set((state) => ({
-            nodes: applyNodeChanges(meaningful, state.nodes)
-          }));
+          updateGraphView(set, get, { nodes: applyNodeChanges(meaningful, get().nodes) });
         },
 
         applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]) {
-          set((state) => ({
-            edges: applyEdgeChanges(changes, state.edges)
-          }));
+          updateGraphView(set, get, { edges: applyEdgeChanges(changes, get().edges) });
         },
 
         // -----------------------------------------------------------------------
@@ -2396,16 +2534,55 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             get().showAllNodes();
           }
         }
-      }),
+        }; // end return object
+      }, // end creator function
       {
+        // Track Maps (the canonical SoT) rather than arrays. Equality on Map
+        // identity keeps array re-derives (which don't touch Maps) from
+        // pushing redundant undo entries.
         partialize: (state): TrackedState => ({
-          nodes: state.nodes,
-          edges: state.edges
+          nodesById: state.nodesById,
+          edgesById: state.edgesById
         }),
+        equality: (a, b) => a.nodesById === b.nodesById && a.edgesById === b.edgesById,
         limit: 50
       }
     )
   );
+
+  // ---------------------------------------------------------------------------
+  // Hazard B (Task 6): re-derive arrays after undo/redo.
+  //
+  // zundo's undo/redo restores ONLY partialized fields (nodesById, edgesById)
+  // via the internal userSet — which bypasses our wrapped `set` interceptor.
+  // After a restore, Maps hold the old values but nodes/edges arrays are stale.
+  //
+  // Fix: subscribe to the store. When Maps change but arrays didn't (the exact
+  // signature of an undo/redo restore), re-derive arrays via store.setState.
+  // store.setState goes through zundo's override, but the partialized snapshot
+  // {nodesById, edgesById} is unchanged by an arrays-only write, so the
+  // equality fn fires and zundo does NOT record the re-derive as a new entry.
+  //
+  // Loop-safety: after the re-derive, maps are unchanged and arrays match →
+  // next subscription call sees mapsChanged=false → skips. No infinite loop.
+  // ---------------------------------------------------------------------------
+  store.subscribe((state, prevState) => {
+    const mapsChanged =
+      state.nodesById !== prevState.nodesById || state.edgesById !== prevState.edgesById;
+    const arraysUnchanged =
+      state.nodes === prevState.nodes && state.edges === prevState.edges;
+    if (mapsChanged && arraysUnchanged) {
+      // undo/redo restored Maps but left arrays stale — re-derive without
+      // triggering history (arrays-only write → equality short-circuits zundo).
+      store.setState({
+        nodes: nodesFromMap(state.nodesById),
+        edges: edgesFromMap(state.edgesById)
+      });
+    }
+  });
+
+  return store;
+};
 
 /**
  * Default store instance for use with RuneTypeGraph.

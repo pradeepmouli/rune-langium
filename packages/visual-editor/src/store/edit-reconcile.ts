@@ -109,7 +109,11 @@ export function patchAlreadySatisfied(parse: GraphDraft, patch: Patch): boolean 
  * Reconcile pending user-edit patches with a fresh, healthy parse:
  *   1. drop patches the parse already satisfies (round-tripped through source),
  *   2. replay the rest on top of the parse so in-flight edits survive,
- *   3. return the merged arrays + the still-pending patches.
+ *   3. return the merged Maps + the still-pending patches.
+ *
+ * Returns Maps (the canonical edit substrate) so `loadModels` can set them
+ * directly without an extra array→Map round-trip. Callers that need arrays
+ * should call `nodesFromMap`/`edgesFromMap` on the returned Maps.
  *
  * If replay throws (a patch path no longer exists after a structural reparse),
  * fall back to the parse verbatim and clear the patches — the edit remains
@@ -120,17 +124,23 @@ export function reconcileParse(
   parseNodes: TypeGraphNode[],
   parseEdges: TypeGraphEdge[],
   pending: Patches
-): { nodes: TypeGraphNode[]; edges: TypeGraphEdge[]; remainingPatches: Patches } {
-  if (pending.length === 0) return { nodes: parseNodes, edges: parseEdges, remainingPatches: [] };
+): { nodesById: Map<string, TypeGraphNode>; edgesById: Map<string, TypeGraphEdge>; remainingPatches: Patches } {
+  const parse = projectGraph(parseNodes, parseEdges); // canonical Maps for this parse
 
-  const parse = projectGraph(parseNodes, parseEdges);
+  if (pending.length === 0) {
+    return { nodesById: parse.nodes, edgesById: parse.edges, remainingPatches: [] };
+  }
+
   const unsatisfied = pending.filter((p) => !patchAlreadySatisfied(parse, p));
-  if (unsatisfied.length === 0) return { nodes: parseNodes, edges: parseEdges, remainingPatches: [] };
+  if (unsatisfied.length === 0) {
+    return { nodesById: parse.nodes, edgesById: parse.edges, remainingPatches: [] };
+  }
 
   try {
     const replayed = apply(parse, unsatisfied) as GraphDraft;
-    return { ...flattenGraph(replayed), remainingPatches: unsatisfied };
+    return { nodesById: replayed.nodes, edgesById: replayed.edges, remainingPatches: unsatisfied };
   } catch {
-    return { nodes: parseNodes, edges: parseEdges, remainingPatches: [] };
+    // Fallback: parse verbatim, patches cleared.
+    return { nodesById: parse.nodes, edgesById: parse.edges, remainingPatches: [] };
   }
 }

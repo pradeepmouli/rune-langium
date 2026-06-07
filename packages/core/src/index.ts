@@ -81,3 +81,6 @@ export {
 // Naming utilities
 export { qualifiedExportPath } from './naming/qualified-export-path.js';
 export { namespaceFromSource, namespaceFromModelName } from './naming/namespace.js';
+
+// Collection utilities
+export { indexById, fromIndex } from './collections/index-by-id.js';

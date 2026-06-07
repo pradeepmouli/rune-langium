@@ -17,9 +17,21 @@ import {
   projectGraph,
   patchAlreadySatisfied
 } from '../../src/store/edit-reconcile.js';
+import { nodesFromMap } from '../../src/store/node-projection.js';
 import type { TypeGraphNode, TypeGraphEdge } from '../../src/types.js';
 
 function dataNode(id: string, name: string, attrs: Array<{ name: string; type: string }>): TypeGraphNode {
+  return {
+    id,
+    type: 'data',
+    position: { x: 0, y: 0 },
+    data: { $type: 'Data', name, namespace: 'ns', attributes: attrs }
+  } as unknown as TypeGraphNode;
+}
+
+type AttrWithCard = { name: string; type: string; card: { $type: string; inf: number; sup: number; unbounded: boolean } };
+
+function dataNodeWithCard(id: string, name: string, attrs: AttrWithCard[]): TypeGraphNode {
   return {
     id,
     type: 'data',
@@ -64,10 +76,9 @@ describe('edit-reconcile', () => {
       dataNode('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string' }])
     ];
 
-    const { nodes, remainingPatches } = reconcileParse(reparse, NO_EDGES, patches);
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const alphaAttrs = (byId.get('ns.Alpha')!.data as { attributes: Array<{ name: string }> }).attributes;
-    const betaAttrs = (byId.get('ns.Beta')!.data as { attributes: Array<{ name: string }> }).attributes;
+    const { nodesById, remainingPatches } = reconcileParse(reparse, NO_EDGES, patches);
+    const alphaAttrs = (nodesById.get('ns.Alpha')!.data as { attributes: Array<{ name: string }> }).attributes;
+    const betaAttrs = (nodesById.get('ns.Beta')!.data as { attributes: Array<{ name: string }> }).attributes;
 
     expect(alphaAttrs[0].name).toBe('z'); // edit applied to the RIGHT node
     expect(betaAttrs[0].name).toBe('y'); // Beta untouched (would be 'z' under index replay)
@@ -85,15 +96,18 @@ describe('edit-reconcile', () => {
     const parse = projectGraph(caughtUp, NO_EDGES);
     expect(patchAlreadySatisfied(parse, patches[0] as Patch)).toBe(true);
 
-    const { nodes, remainingPatches } = reconcileParse(caughtUp, NO_EDGES, patches);
-    expect((nodes[0].data as { attributes: Array<{ name: string }> }).attributes[0].name).toBe('z');
+    const { nodesById, remainingPatches } = reconcileParse(caughtUp, NO_EDGES, patches);
+    const nodes = nodesFromMap(nodesById);
+    expect((nodes[0]!.data as { attributes: Array<{ name: string }> }).attributes[0]!.name).toBe('z');
     expect(remainingPatches.length).toBe(0); // cleared — no longer pending
   });
 
   it('is a no-op when there are no pending patches', () => {
     const parse = [dataNode('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string' }])];
-    const { nodes, remainingPatches } = reconcileParse(parse, NO_EDGES, []);
-    expect(nodes).toBe(parse); // returns the parse array verbatim
+    const { nodesById, remainingPatches } = reconcileParse(parse, NO_EDGES, []);
+    // No patches → returns the projected parse Maps; data must match.
+    expect(nodesById).toBeInstanceOf(Map);
+    expect(nodesById.has('ns.Alpha')).toBe(true);
     expect(remainingPatches.length).toBe(0);
   });
 
@@ -115,8 +129,47 @@ describe('edit-reconcile', () => {
         { name: 'drop', type: 'string' }
       ])
     ];
-    const { nodes } = reconcileParse(reparse, NO_EDGES, patches);
-    const attrs = (nodes[0].data as { attributes: Array<{ name: string }> }).attributes;
+    const { nodesById } = reconcileParse(reparse, NO_EDGES, patches);
+    const attrs = (nodesById.get('ns.Alpha')!.data as { attributes: Array<{ name: string }> }).attributes;
     expect(attrs.map((a) => a.name)).toEqual(['keep']); // deletion preserved
+  });
+
+  it('reorder-safety with object-valued patch (cardinality card): edit lands on the CORRECT node after reorder', () => {
+    // Object-valued edits (like cardinality `card`) are the most dangerous case: they never
+    // compare byte-equal to parse values (`patchAlreadySatisfied` → false forever) because the
+    // parse re-derives them with extra AST metadata. This test proves they still address the
+    // RIGHT node by id even when the parse reorders the array.
+    const cardOneOne: AttrWithCard['card'] = { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false };
+    const live = [
+      dataNodeWithCard('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string', card: cardOneOne }]),
+      dataNodeWithCard('ns.Beta', 'Beta',  [{ name: 'y', type: 'string', card: cardOneOne }])
+    ];
+
+    // Edit: set Alpha.x cardinality to 0..1 (object-valued patch).
+    const { patches } = commitGraphEdit(live, NO_EDGES, (draft) => {
+      const d = draft.nodes.get('ns.Alpha')!.data as { attributes: AttrWithCard[] };
+      d.attributes[0]!.card = { $type: 'RosettaCardinality', inf: 0, sup: 1, unbounded: false };
+    });
+
+    // Reparse comes back with REVERSED order (Beta first) and stale cardinality on Alpha (1..1).
+    const cardOneOneParse: AttrWithCard['card'] = { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false };
+    const reparse = [
+      dataNodeWithCard('ns.Beta',  'Beta',  [{ name: 'y', type: 'string', card: cardOneOneParse }]),
+      dataNodeWithCard('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string', card: cardOneOneParse }])
+    ];
+
+    const { nodesById, remainingPatches } = reconcileParse(reparse, NO_EDGES, patches);
+
+    const alphaCard = (nodesById.get('ns.Alpha')!.data as { attributes: AttrWithCard[] }).attributes[0]!.card;
+    const betaCard  = (nodesById.get('ns.Beta')!.data  as { attributes: AttrWithCard[] }).attributes[0]!.card;
+
+    // The edit (0..1) must have landed on Alpha, NOT Beta (which would be wrong under index replay).
+    expect(alphaCard.inf).toBe(0);  // edit applied to the right node
+    expect(alphaCard.sup).toBe(1);
+    expect(betaCard.inf).toBe(1);   // Beta untouched (would be corrupted under index replay)
+
+    // The patch is still pending (object-valued patches are never `patchAlreadySatisfied`
+    // against a stale reparse, so they remain in remainingPatches).
+    expect(remainingPatches.length).toBeGreaterThan(0);
   });
 });
