@@ -150,11 +150,54 @@ const noRawNodeId = {
   },
 };
 
+// ── rune/no-raw-edge-id ─────────────────────────────────────────────
+// Guards against inline edge-id template construction outside the
+// sanctioned `node-projection.ts` chokepoint. All edge ids must be
+// built via `makeEdgeId`; inline templates like `` `${a}--extends--${b}` ``
+// or `` `${a}--attribute-ref--${label}--${b}` `` are retired.
+//
+// Detection: an interior quasi (an interpolation on BOTH sides) whose
+// cooked text contains `--<edgekind>--` (the EDGE_SEPARATOR + kind +
+// EDGE_SEPARATOR pattern, e.g. `--extends--`, `--attribute-ref--`, …).
+// Only `node-projection.ts` is allow-listed (the factory itself).
+//
+// Precision note: we test interior quasis only (same logic as
+// `no-raw-node-id`) to avoid flagging string constants that happen to
+// contain an edge-kind word without being an id template.
+const EDGE_KIND_QUASI = /--(?:extends|attribute-ref|choice-option|enum-extends|type-alias-ref)--/;
+const EDGE_ID_ALLOWLIST = ['node-projection.ts'];
+
+const noRawEdgeId = {
+  create(context) {
+    const filename = String(context.filename ?? '');
+    if (EDGE_ID_ALLOWLIST.some((f) => filename.endsWith(f))) return {};
+    return {
+      TemplateLiteral(node) {
+        const { quasis, expressions } = node;
+        for (let i = 0; i < quasis.length; i++) {
+          // Interior quasi only: an interpolation on BOTH sides.
+          if (i === 0 || i >= expressions.length) continue;
+          const cooked = quasis[i].value?.cooked ?? quasis[i].value?.raw;
+          if (typeof cooked === 'string' && EDGE_KIND_QUASI.test(cooked)) {
+            context.report({
+              message:
+                'Raw edge-id construction via template literal is retired — build edge ids via `makeEdgeId` (node-projection.ts chokepoint).',
+              node,
+            });
+            return;
+          }
+        }
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: 'rune' },
   rules: {
     'no-palette-utility': noPaletteUtility,
     'no-raw-arbitrary-value': noRawArbitraryValue,
     'no-raw-node-id': noRawNodeId,
+    'no-raw-edge-id': noRawEdgeId,
   },
 };

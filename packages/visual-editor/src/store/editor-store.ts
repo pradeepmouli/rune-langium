@@ -776,16 +776,7 @@ type GraphMutationExtra = Omit<
  *   • patches are id-rooted at `nodes`/`edges` — identical shape to `commitEdit`,
  *     so `reconcileParse` (Task 4) and all reconcile tests stay valid.
  *
- * INTERCEPTOR INTERACTION (Task 2 → Task 6):
- * This calls the WRAPPED `set`, which sets BOTH the Maps and the derived arrays
- * in one write. The Task-2 interceptor only re-derives Maps when the arrays changed
- * AND the Maps did NOT (`arraysChanged && !mapsChanged`) — the signature of a
- * not-yet-migrated array-only action. Because mutateGraph changes the Maps too,
- * `mapsChanged` is true, so the interceptor SKIPS its re-derive. zundo records
- * exactly ONE history entry (this single Map-changing set; partialize tracks the
- * Maps, equality is ref-based). I1 holds. 3C removes the interceptor entirely.
- *
- * @param set   The wrapped store set (from createEditorStore closure — routes through interceptor).
+ * @param set   The store set from createEditorStore closure.
  * @param get   Store getter.
  * @param recipe Mutative recipe operating on `{ nodes: Map, edges: Map }`.
  * @param extra  Optional additional state to merge (e.g. selectedNodeId changes).
@@ -802,7 +793,7 @@ function mutateGraph(
   set({
     nodesById: next.nodes,
     edgesById: next.edges,
-    nodes: nodesFromMap(next.nodes), // re-derive caches (interceptor skips: Maps changed)
+    nodes: nodesFromMap(next.nodes), // re-derive array caches from updated Maps
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
     ...extra
@@ -817,8 +808,7 @@ function mutateGraph(
  *
  * INVARIANT I2: position/layout is VIEW state, not a source edit. The
  * `relayout`, `setLayoutEngine`, `applyReactFlowNodeChanges`, and
- * `applyReactFlowEdgeChanges` actions route through here so that when Task 3C
- * removes the set-interceptor the view path still keeps Maps canonical.
+ * `applyReactFlowEdgeChanges` actions route through here to keep Maps canonical.
  *
  * DEVIATION FROM PLAN'S RECIPE FORM: RF's `applyNodeChanges` and Dagre's
  * `computeLayout` are array-centric — they consume and produce nodes/edges
@@ -826,7 +816,7 @@ function mutateGraph(
  * reimplementing `applyNodeChanges`'s batched change semantics. We accept
  * array inputs here and rebuild the Maps from the result instead.
  *
- * @param set   The wrapped store set (from createEditorStore closure).
+ * @param set   The store set from createEditorStore closure.
  * @param get   Store getter.
  * @param view  New nodes and/or edges arrays (either or both may be omitted to
  *              keep the current value).
@@ -916,53 +906,14 @@ const initialState: EditorState = {
 export const createEditorStore = (overrides?: Partial<EditorState>) => {
   const store = create<EditorStore>()(
     temporal(
-      (rawSet, get) => {
-        // -----------------------------------------------------------------------
-        // Transitional set-interceptor (Phase 3B, Task 2 → Task 6)
-        //
-        // During 3B, array-writing actions still author nodes/edges arrays
-        // directly (e.g. createType, deleteType). After every rawSet call the
-        // interceptor re-derives nodesById/edgesById when the array ref changed
-        // but the Map ref did NOT — meaning a legacy array-only write happened
-        // that the Map substrate doesn't yet own.
-        //
-        // Hazard A (Task 6): now that partialize tracks Maps, a chokepoint
-        // (mutateGraph, updateGraphView, loadModels) already writes BOTH arrays
-        // and Maps in a single set call. If the interceptor ran unconditionally
-        // on array changes it would derive a NEW Map ref → second history entry.
-        //
-        // Discriminator: re-derive only when the array ref changed AND the Map
-        // ref did NOT change in the same set call. When a chokepoint already set
-        // the Maps (Map ref changed), SKIP re-derive.
-        //
-        // The temporal options use an equality fn on {nodesById, edgesById} so
-        // that re-derive rawSet calls (which keep array refs identical) do not
-        // push a redundant undo entry.
-        // -----------------------------------------------------------------------
-        // The discriminator compares a fresh `prev` snapshot (read at the START
-        // of this wrapped-set call) against `next` (after the write). Using a
-        // per-call snapshot — rather than persistent closure refs — is essential:
-        // undo/redo (zundo's userSet) and the post-undo subscribe (store.setState)
-        // BYPASS this wrapped `set`, so any closure-captured "last seen" refs would
-        // go stale after an undo/redo and spuriously report mapsChanged on the next
-        // wrapped write (breaking I1 + dropping that edit from history). A fresh
-        // `get()` per call always reflects the true pre-write state.
-        // -----------------------------------------------------------------------
-        const set: typeof rawSet = (partial, replace?) => {
-          const prev = get(); // snapshot BEFORE this write
-          rawSet(partial as never, replace as never);
-          const next = get(); // snapshot AFTER
-          const arraysChanged = next.nodes !== prev.nodes || next.edges !== prev.edges;
-          const mapsChanged = next.nodesById !== prev.nodesById || next.edgesById !== prev.edgesById;
-          if (arraysChanged && !mapsChanged) {
-            // A legacy array-only write: re-derive Maps to keep I1.
-            // rawSet (not the wrapped set) to avoid recursion.
-            rawSet({
-              nodesById: toNodesById(next.nodes),
-              edgesById: toEdgesById(next.edges)
-            } as never);
-          }
-        };
+      (set, get) => {
+        // All 34 source-affecting actions now route through mutateGraph /
+        // updateGraphView / loadModels — the chokepoints set BOTH Maps and
+        // arrays explicitly in every write. The transitional set-interceptor
+        // (Phase 3B Task 2) that re-derived Maps from arrays is retired here
+        // (Phase 3C Task 8). The post-undo subscribe below handles the only
+        // remaining case where Maps and arrays diverge (zundo undo/redo restores
+        // Maps via userSet, bypassing the creator's set).
 
         return {
           ...initialState,
@@ -1459,14 +1410,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // the attribute name) from the current base edges.
             const edgeRewrites = current.edges
               .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === oldName)
-              .map((e) => ({
-                oldId: e.id,
-                newEdge: {
-                  ...e,
-                  id: e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`),
-                  data: { ...e.data, label: newName }
-                } as TypeGraphEdge
-              }));
+              .map((e) => {
+                const parsed = parseEdgeId(e.id);
+                const newId = parsed
+                  ? makeEdgeId(parsed.kind, { source: e.source, target: e.target, label: newName })
+                  : e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`); // fallback (should not occur post-3A)
+                return {
+                  oldId: e.id,
+                  newEdge: { ...e, id: newId, data: { ...e.data, label: newName } } as TypeGraphEdge
+                };
+              });
 
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2541,11 +2494,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
   );
 
   // ---------------------------------------------------------------------------
-  // Hazard B (Task 6): re-derive arrays after undo/redo.
+  // Post-undo array re-derive (Phase 3B Task 6, permanent).
   //
   // zundo's undo/redo restores ONLY partialized fields (nodesById, edgesById)
-  // via the internal userSet — which bypasses our wrapped `set` interceptor.
-  // After a restore, Maps hold the old values but nodes/edges arrays are stale.
+  // via the internal userSet — which bypasses the creator's set.
+  // After a restore, Maps hold the historical values but nodes/edges arrays are stale.
   //
   // Fix: subscribe to the store. When Maps change but arrays didn't (the exact
   // signature of an undo/redo restore), re-derive arrays via store.setState.
