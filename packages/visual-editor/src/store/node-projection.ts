@@ -14,7 +14,7 @@
  * 3A′ hard cutover: `::` separator has been retired from node ids.
  */
 
-import { qualifiedExportPath } from '@rune-langium/core';
+import { qualifiedExportPath, indexById, fromIndex } from '@rune-langium/core';
 import type { EdgeKind, AnyGraphNode, TypeGraphNode, TypeGraphEdge } from '../types.js';
 
 // Re-export so callers can import EdgeKind from a single surface.
@@ -182,22 +182,22 @@ export function forEachMember(node: { $type?: string } & Record<string, unknown>
 
 /** Build the id→node Map (insertion order preserved). */
 export function toNodesById(nodes: readonly TypeGraphNode[]): Map<string, TypeGraphNode> {
-  return new Map(nodes.map((n) => [n.id, n]));
+  return indexById(nodes);
 }
 
 /** Derive the node array from the Map (= [...map.values()]). */
 export function nodesFromMap(map: ReadonlyMap<string, TypeGraphNode>): TypeGraphNode[] {
-  return [...map.values()];
+  return fromIndex(map);
 }
 
 /** Build the id→edge Map. */
 export function toEdgesById(edges: readonly TypeGraphEdge[]): Map<string, TypeGraphEdge> {
-  return new Map(edges.map((e) => [e.id, e]));
+  return indexById(edges);
 }
 
 /** Derive the edge array from the Map. */
 export function edgesFromMap(map: ReadonlyMap<string, TypeGraphEdge>): TypeGraphEdge[] {
-  return [...map.values()];
+  return fromIndex(map);
 }
 
 // ---------------------------------------------------------------------------
