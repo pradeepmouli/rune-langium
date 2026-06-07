@@ -1766,32 +1766,29 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             annotations: [],
             synonyms: []
           };
-
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaFunction') {
-                const inputs = [...((d as any).inputs ?? []), newInput];
-                return { ...n, data: { ...d, inputs } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaFunction') return;
+            const inputs = (d as { inputs?: unknown[] }).inputs;
+            if (Array.isArray(inputs)) {
+              inputs.push(newInput);
+            } else {
+              (d as { inputs?: unknown[] }).inputs = [newInput];
+            }
+          });
         },
 
         removeInputParam(nodeId: string, paramName: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaFunction') {
-                const inputs = ((d as any).inputs ?? []).filter((i: any) => i.name !== paramName);
-                return { ...n, data: { ...d, inputs } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaFunction') return;
+            const inputs = (d as { inputs?: { name: string }[] }).inputs;
+            if (!Array.isArray(inputs)) return;
+            const idx = inputs.findIndex((i) => i.name === paramName);
+            if (idx !== -1) inputs.splice(idx, 1);
+          });
         },
 
         updateInputParam(
@@ -1803,155 +1800,143 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           targetTypeId?: string
         ) {
           const card = parseCardinalityString(cardinality);
-          set((state) => {
-            // Resolve the qualified $refText using the same disambiguation logic
-            // as updateAttributeType (spec 020 Phase 13, Finding 3).  When a
-            // canonical targetTypeId is supplied and the node exists, qualify the
-            // name if any OTHER node shares the same bare name.  Fall back to the
-            // bare typeName when the id is absent or stale (backward-compatible).
-            const targetNode = targetTypeId ? state.nodes.find((n) => n.id === targetTypeId) : undefined;
-            const targetNamespace = targetNode
-              ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
-              : undefined;
-            const refText =
-              targetNode && targetNamespace
-                ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, state.nodes)
-                : typeName;
+          // Resolve the qualified $refText using the same disambiguation logic
+          // as updateAttributeType (spec 020 Phase 13, Finding 3).  When a
+          // canonical targetTypeId is supplied and the node exists, qualify the
+          // name if any OTHER node shares the same bare name.  Fall back to the
+          // bare typeName when the id is absent or stale (backward-compatible).
+          // All reads are done BEFORE the recipe (read-only against Maps).
+          const targetNode = targetTypeId ? get().nodesById.get(targetTypeId) : undefined;
+          const targetNamespace = targetNode
+            ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
+            : undefined;
+          const refText =
+            targetNode && targetNamespace
+              ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, [...get().nodesById.values()])
+              : typeName;
 
-            const updatedNodes = state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaFunction') {
-                const inputs = ((d as any).inputs ?? []).map((inp: any) =>
-                  inp.name === oldName
-                    ? {
-                        ...inp,
-                        name: newName,
-                        // Spread existing typeCall so pre-existing TypeCall.arguments
-                        // (parameterized type calls) are preserved; only the type
-                        // reference and cardinality are overwritten.
-                        typeCall: {
-                          ...(inp.typeCall ?? { $type: 'TypeCall', arguments: [] }),
-                          type: { $refText: refText }
-                        },
-                        card: { $type: 'RosettaCardinality', ...card }
-                      }
-                    : inp
-                );
-                return { ...n, data: { ...d, inputs } };
+          // Add a new attribute-ref edge if the target type node exists.
+          // Prefer id-based lookup (avoids resolving to the wrong same-named
+          // node in a different namespace); fall back to name-based lookup for
+          // built-in / string types that have no graph node.
+          const targetNodeId =
+            targetNode?.id ?? [...get().nodesById.values()].find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+          const newEdge: TypeGraphEdge | null =
+            targetNodeId && targetNodeId !== nodeId
+              ? {
+                  id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
+                  source: nodeId,
+                  target: targetNodeId,
+                  type: 'attribute-ref',
+                  data: {
+                    kind: 'attribute-ref' as const,
+                    label: newName,
+                    cardinality: formatCardinalityString(cardinality)
+                  } as EdgeData
+                }
+              : null;
+
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaFunction') return;
+            for (const inp of (d as { inputs?: any[] }).inputs ?? []) {
+              if (inp.name === oldName) {
+                inp.name = newName;
+                // Mutate typeCall in-place so Mutative preserves the existing
+                // `arguments` array (spreading a Mutative proxy discards the
+                // proxy's array tracking; field-by-field mutation is safe here).
+                if (!inp.typeCall) {
+                  inp.typeCall = { $type: 'TypeCall', type: { $refText: refText }, arguments: [] };
+                } else {
+                  if (!inp.typeCall.type) inp.typeCall.type = {};
+                  inp.typeCall.type.$refText = refText;
+                  // arguments is left untouched — preserves parameterized TypeCall.arguments.
+                }
+                inp.card = { $type: 'RosettaCardinality', ...card };
               }
-              return n;
-            });
-
-            // Remove the old attribute-ref edge for this input (keyed by old name).
-            const filteredEdges = state.edges.filter(
-              (e) => !(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
-            );
-
-            // Add a new attribute-ref edge if the target type node exists.
-            // Prefer id-based lookup (avoids resolving to the wrong same-named
-            // node in a different namespace); fall back to name-based lookup for
-            // built-in / string types that have no graph node.
-            const targetNodeId =
-              targetNode?.id ?? state.nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
-            if (targetNodeId && targetNodeId !== nodeId) {
-              const newEdge: TypeGraphEdge = {
-                id: makeEdgeId('attribute-ref', { source: nodeId, target: targetNodeId, label: newName }),
-                source: nodeId,
-                target: targetNodeId,
-                type: 'attribute-ref',
-                data: {
-                  kind: 'attribute-ref' as const,
-                  label: newName,
-                  cardinality: formatCardinalityString(cardinality)
-                } as EdgeData
-              };
-              return { nodes: updatedNodes, edges: [...filteredEdges, newEdge] };
             }
-
-            return { nodes: updatedNodes, edges: filteredEdges };
+            // Remove the old attribute-ref edge for this input (keyed by old name).
+            for (const [id, e] of draft.edges) {
+              if (e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName) {
+                draft.edges.delete(id);
+              }
+            }
+            if (newEdge) draft.edges.set(newEdge.id, newEdge);
           });
         },
 
         reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaFunction') {
-                const inputs = [...((d as any).inputs ?? [])];
-                const [moved] = inputs.splice(fromIndex, 1);
-                if (moved) {
-                  inputs.splice(toIndex, 0, moved);
-                }
-                return { ...n, data: { ...d, inputs } };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaFunction') return;
+            const inputs = (d as { inputs?: unknown[] }).inputs;
+            if (!Array.isArray(inputs)) return;
+            const [moved] = inputs.splice(fromIndex, 1);
+            if (moved !== undefined) inputs.splice(toIndex, 0, moved);
+          });
         },
 
         updateOutputType(nodeId: string, typeName: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaFunction') {
-                const output = (d as any).output ?? {
-                  $type: 'Attribute',
-                  name: 'output',
-                  override: false,
-                  card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false }
-                };
-                return {
-                  ...n,
-                  data: {
-                    ...d,
-                    output: {
-                      ...output,
-                      typeCall: {
-                        $type: 'TypeCall',
-                        type: { $refText: typeName },
-                        arguments: []
-                      }
-                    }
-                  }
-                };
-              }
-              return n;
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (d?.$type !== 'RosettaFunction') return;
+            const fd = d as {
+              output?: {
+                $type?: string;
+                name?: string;
+                override?: boolean;
+                card?: unknown;
+                typeCall?: { $type: string; type: { $refText: string }; arguments: unknown[] };
+              };
+            };
+            if (!fd.output) {
+              fd.output = {
+                $type: 'Attribute',
+                name: 'output',
+                override: false,
+                card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false }
+              };
+            }
+            fd.output.typeCall = {
+              $type: 'TypeCall',
+              type: { $refText: typeName },
+              arguments: []
+            };
+          });
         },
 
         updateExpression(nodeId: string, expressionText: string) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (d.$type === 'RosettaFunction') {
-                // Function body is in operations[0].expression
-                const operations = [...((d as any).operations ?? [])];
-                if (operations.length === 0) {
-                  operations.push({
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            if (!n) return;
+            const d = n.data as AnyGraphNode;
+            if (d.$type === 'RosettaFunction') {
+              // Function body is in operations[0].expression.$cstText.
+              // Also write expressionText as a display field.
+              const fd = d as { operations?: any[]; expressionText?: string };
+              if (!fd.operations || fd.operations.length === 0) {
+                fd.operations = [
+                  {
                     $type: 'Operation',
                     operator: 'set',
                     expression: { $cstText: expressionText }
-                  });
-                } else {
-                  operations[0] = {
-                    ...operations[0],
-                    expression: {
-                      ...operations[0].expression,
-                      $cstText: expressionText
-                    }
-                  };
+                  }
+                ];
+              } else {
+                if (!fd.operations[0].expression) {
+                  fd.operations[0].expression = {};
                 }
-                return { ...n, data: { ...d, operations, expressionText } };
+                fd.operations[0].expression.$cstText = expressionText;
               }
-              // For Data/TypeAlias, store as a display field
-              return { ...n, data: { ...d, expressionText } };
-            })
-          }));
+              fd.expressionText = expressionText;
+            } else {
+              // For Data/TypeAlias, store as a display field only.
+              (d as { expressionText?: string }).expressionText = expressionText;
+            }
+          });
         },
 
         // -----------------------------------------------------------------------

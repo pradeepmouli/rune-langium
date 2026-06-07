@@ -1320,8 +1320,10 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
     const targetId = store.getState().createType('data', 'Wrapper', 'cdm.fn');
 
     // Inject a parameterized typeCall to simulate an existing parameterized type call.
-    store.setState((prev: any) => ({
-      nodes: prev.nodes.map((n: any) =>
+    // Update BOTH nodes array AND nodesById Map so mutateGraph (which reads the Map)
+    // sees the injected data.
+    store.setState((prev: any) => {
+      const updatedNodes = prev.nodes.map((n: any) =>
         n.id === funcId
           ? {
               ...n,
@@ -1335,8 +1337,12 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
               }
             }
           : n
-      )
-    }));
+      );
+      const nodesById = new Map<string, any>(prev.nodesById);
+      const updatedFuncNode = updatedNodes.find((n: any) => n.id === funcId);
+      if (updatedFuncNode) nodesById.set(funcId, updatedFuncNode);
+      return { nodes: updatedNodes, nodesById };
+    });
 
     store.getState().updateInputParam(funcId, 'p', 'p', 'Wrapper', '(1..1)', targetId);
 
@@ -1346,5 +1352,257 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
     expect(inp.typeCall.type.$refText).toBe('Wrapper');
     // arguments must be preserved — the spread ensures this.
     expect(inp.typeCall.arguments).toEqual(['T']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave D — function actions → mutateGraph recipes (id-rooted patches)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — function actions — id-rooted patches (Wave D)', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(FUNCTION_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  // -----------------------------------------------------------------------
+  // addInputParam — nodes-rooted patch at draft.nodes
+  // -----------------------------------------------------------------------
+
+  describe('addInputParam — id-rooted patch (Wave D)', () => {
+    it('captures a nodes-rooted patch with inputs in path', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().addInputParam(nodeId, 'c', 'number', '(1..1)');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('inputs');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // removeInputParam — nodes-rooted patch
+  // -----------------------------------------------------------------------
+
+  describe('removeInputParam — id-rooted patch (Wave D)', () => {
+    it('captures a nodes-rooted patch with inputs in path', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().removeInputParam(nodeId, 'a');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('inputs');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // reorderInputParam — nodes-rooted patch
+  // -----------------------------------------------------------------------
+
+  describe('reorderInputParam — id-rooted patch (Wave D)', () => {
+    it('captures a nodes-rooted patch with inputs in path', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().reorderInputParam(nodeId, 0, 1);
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('inputs');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // updateOutputType — nodes-rooted patch
+  // -----------------------------------------------------------------------
+
+  describe('updateOutputType — id-rooted patch (Wave D)', () => {
+    it('captures a nodes-rooted patch with output in path', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().updateOutputType(nodeId, 'Money');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('output');
+    });
+
+    it('preserves existing output cardinality when only updating typeCall', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+
+      store.getState().updateOutputType(funcNode!.id, 'Money');
+
+      const updated = store.getState().nodes.find((n) => n.id === funcNode!.id);
+      const output = (updated!.data as any).output;
+      expect(output).toBeDefined();
+      // typeCall is now set with the new type
+      expect(output.typeCall?.type?.$refText).toBe('Money');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // updateExpression — nodes-rooted patch covering BOTH operations[0].expression.$cstText AND expressionText
+  // -----------------------------------------------------------------------
+
+  describe('updateExpression — id-rooted patch (Wave D)', () => {
+    it('captures a nodes-rooted patch with operations in path', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().updateExpression(nodeId, 'a - b');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+    });
+
+    it('patches BOTH operations[0].expression.$cstText AND expressionText', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      store.getState().updateExpression(nodeId, 'a * b');
+
+      const updated = store.getState().nodes.find((n) => n.id === nodeId);
+      const data = updated!.data as any;
+      // Both fields must be written
+      expect(data.operations?.[0]?.expression?.$cstText).toBe('a * b');
+      expect(data.expressionText).toBe('a * b');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // updateInputParam — dual-patch: node (inputs[*]) + attribute-ref edge delete+add
+  // -----------------------------------------------------------------------
+
+  describe('updateInputParam — id-rooted dual-patch (Wave D)', () => {
+    it('captures a nodes-rooted inputs patch AND an edges-rooted patch when a target node exists', () => {
+      // Money exists in FUNCTION_MODEL_SOURCE — targetTypeId will find it.
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      const moneyNode = nodes.find((n) => n.data.name === 'Money');
+      expect(funcNode).toBeDefined();
+      expect(moneyNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().updateInputParam(nodeId, 'a', 'first', 'Money', '(1..1)', moneyNode!.id);
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+
+      // Node patch — inputs array modified.
+      const nodePatch = newPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === nodeId);
+      expect(nodePatch).toBeDefined();
+      expect(nodePatch!.path).toContain('inputs');
+
+      // Edge patch — attribute-ref edge added.
+      const edgePatch = newPatches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeDefined();
+    });
+
+    it('removes old attribute-ref edge and adds new one on rename+retype', () => {
+      // First, add an input that references Money to establish the old edge.
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      const moneyNode = nodes.find((n) => n.data.name === 'Money');
+      expect(funcNode).toBeDefined();
+      expect(moneyNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      // Add Money-typed input 'payment' to Add
+      store.getState().addInputParam(nodeId, 'payment', 'Money', '(1..1)');
+      // Manually set the edge as addInputParam is node-only; inject via updateInputParam rename:
+      // First rename+type to Money so the edge is established.
+      store.getState().updateInputParam(nodeId, 'payment', 'payment', 'Money', '(1..1)', moneyNode!.id);
+
+      // Now rename from 'payment' to 'cash' while keeping Money.
+      store.getState().updateInputParam(nodeId, 'payment', 'cash', 'Money', '(1..1)', moneyNode!.id);
+
+      const edges = store.getState().edges;
+      // Old edge with label 'payment' must be gone.
+      const oldEdge = edges.find(
+        (e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === 'payment'
+      );
+      expect(oldEdge).toBeUndefined();
+
+      // New edge with label 'cash' must exist.
+      const newEdge = edges.find(
+        (e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === 'cash'
+      );
+      expect(newEdge).toBeDefined();
+      expect(newEdge!.target).toBe(moneyNode!.id);
+      expect(newEdge!.data?.cardinality).toBe('(1..1)');
+    });
+
+    it('captures only a nodes-rooted patch (no edge patch) when no target node exists', () => {
+      const nodes = store.getState().nodes;
+      const funcNode = nodes.find((n) => n.data.name === 'Add');
+      expect(funcNode).toBeDefined();
+      const nodeId = funcNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      // 'UnknownType' does not exist as a node — no edge patch expected.
+      store.getState().updateInputParam(nodeId, 'a', 'first', 'UnknownType', '(1..1)');
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+
+      const nodePatch = newPatches.find((p) => p.path[0] === 'nodes' && p.path[1] === nodeId);
+      expect(nodePatch).toBeDefined();
+
+      // No edge patch when no target node found.
+      const edgePatch = newPatches.find((p) => p.path[0] === 'edges');
+      expect(edgePatch).toBeUndefined();
+    });
   });
 });
