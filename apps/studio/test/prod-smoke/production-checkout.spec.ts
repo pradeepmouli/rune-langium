@@ -5,11 +5,11 @@ import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 const CDM_BUTTON = 'CDM (Common Domain Model)';
-const ENUM_NODE_ID = 'cdm.base.datetime::BusinessCenterEnum';
-const DATA_NODE_ID = 'cdm.base.datetime::BusinessCenters';
+const ENUM_NODE_ID = 'cdm.base.datetime.BusinessCenterEnum';
+const DATA_NODE_ID = 'cdm.base.datetime.BusinessCenters';
 // Regression: cdm.base.staticdata.party is never pre-hydrated at load time.
 // First navigation to it must populate Inspector members (resolveNodeFileRef fix).
-const COUNTERPARTY_NODE_ID = 'cdm.base.staticdata.party::Counterparty';
+const COUNTERPARTY_NODE_ID = 'cdm.base.staticdata.party.Counterparty';
 const WORKSPACE_FILE_NAME = 'starter.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace example\n';
 
@@ -77,7 +77,7 @@ test.describe('production checkout smoke', () => {
     // deferred-model path, returned newModels:[], and Inspector stayed as a bare
     // header stub with no members.
     //
-    // This test navigates directly to cdm.base.staticdata.party::Counterparty
+    // This test navigates directly to cdm.base.staticdata.party.Counterparty
     // without first visiting any other namespace, then asserts that the Inspector
     // shows a populated "Members (N)" list. An empty inspector would mean the bug
     // regressed.

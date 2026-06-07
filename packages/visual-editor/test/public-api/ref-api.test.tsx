@@ -141,7 +141,7 @@ describe('RuneTypeGraph ref API', () => {
     fitViewSpy.mockClear();
     setCenterSpy.mockClear();
     act(() => {
-      ref.current!.focusNode('test.combined::Trade');
+      ref.current!.focusNode('test.combined.Trade');
     });
     expect(setCenterSpy).toHaveBeenCalled();
     await waitFor(() => {
@@ -167,9 +167,9 @@ describe('RuneTypeGraph ref API', () => {
     const store = useEditorStore.getState();
     expect(store.selectedNodeId).toBeNull();
     act(() => {
-      store.selectNode('test.combined::Trade');
+      store.selectNode('test.combined.Trade');
     });
-    expect(useEditorStore.getState().selectedNodeId).toBe('test.combined::Trade');
+    expect(useEditorStore.getState().selectedNodeId).toBe('test.combined.Trade');
   });
 
   it('exposes exportRosetta and validate on ref', async () => {

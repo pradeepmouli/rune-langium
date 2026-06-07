@@ -47,7 +47,7 @@ async function loadModel(page: Page) {
   });
   await page.waitForSelector('[data-testid="explore-workbench"]', { timeout: 15000 });
   await page.getByTestId('namespace-explorer').waitFor({ timeout: 10000 });
-  await page.getByTestId('ns-type-editor.panel::Customer').waitFor({ timeout: 10000 });
+  await page.getByTestId('ns-type-editor.panel.Customer').waitFor({ timeout: 10000 });
 }
 
 async function selectType(page: Page, nodeId: string) {
@@ -68,24 +68,24 @@ test.describe('Editor Form Panel', () => {
   });
 
   test('should keep panel visible when switching from one node to another', async ({ page }) => {
-    await selectType(page, 'editor.panel::Customer');
+    await selectType(page, 'editor.panel.Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
 
-    await selectType(page, 'editor.panel::Priority');
+    await selectType(page, 'editor.panel.Priority');
     await expect(panel).toBeVisible();
   });
 
   test('should open editor panel when clicking a data type node', async ({ page }) => {
-    await selectType(page, 'editor.panel::Customer');
+    await selectType(page, 'editor.panel.Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
   });
 
   test('should show enum form when clicking an enum node', async ({ page }) => {
-    await selectType(page, 'editor.panel::Priority');
+    await selectType(page, 'editor.panel.Priority');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
@@ -99,7 +99,7 @@ test.describe('Editor Form Panel', () => {
   });
 
   test('should show choice form when clicking a choice node', async ({ page }) => {
-    await selectType(page, 'editor.panel::ItemKind');
+    await selectType(page, 'editor.panel.ItemKind');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
@@ -108,17 +108,17 @@ test.describe('Editor Form Panel', () => {
   test('should switch forms when clicking different nodes', async ({ page }) => {
     const panel = page.locator('[data-slot="editor-form-panel"]');
 
-    await selectType(page, 'editor.panel::Customer');
+    await selectType(page, 'editor.panel.Customer');
     await expect(panel).toBeVisible({ timeout: 5000 });
 
-    await selectType(page, 'editor.panel::Priority');
+    await selectType(page, 'editor.panel.Priority');
     await expect(panel.getByRole('textbox', { name: /value name for active/i })).toBeVisible({
       timeout: 5000
     });
   });
 
   test('should show kind badge in panel header', async ({ page }) => {
-    await selectType(page, 'editor.panel::Customer');
+    await selectType(page, 'editor.panel.Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });
@@ -127,7 +127,7 @@ test.describe('Editor Form Panel', () => {
   });
 
   test('should display attributes for data type node', async ({ page }) => {
-    await selectType(page, 'editor.panel::Customer');
+    await selectType(page, 'editor.panel.Customer');
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
     await expect(panel).toBeVisible({ timeout: 5000 });

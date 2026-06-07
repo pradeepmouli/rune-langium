@@ -18,7 +18,7 @@ describe('TypePickerCell', () => {
     const payload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'cdm.trade',
-      typeId: 'cdm.trade::NewType',
+      typeId: 'cdm.trade.NewType',
       typeName: 'NewType',
       kind: 'Data'
     };
@@ -36,7 +36,7 @@ describe('TypePickerCell', () => {
     // Phase 13 / Finding 3: cell forwards the bare typeName AND the canonical
     // typeId so the store can validate existence and qualify against
     // cross-namespace ambiguity.
-    expect(updateAttributeType).toHaveBeenCalledWith('Trade', 'economics', 'NewType', 'cdm.trade::NewType');
+    expect(updateAttributeType).toHaveBeenCalledWith('Trade', 'economics', 'NewType', 'cdm.trade.NewType');
   });
 
   it('does not activate isOver when disabled', () => {
@@ -60,13 +60,13 @@ describe('TypePickerCell', () => {
     const payload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'payment',
-      typeId: 'payment::WirePayment',
+      typeId: 'payment.WirePayment',
       typeName: 'WirePayment',
       kind: 'Data'
     };
     // Simulate ChoiceNode's props: nodeId = canonical Choice id, attrName = arm.typeName.
     render(
-      <TypePickerCell typeName="CashPayment" typeKind="Data" nodeId="payment::PaymentMethod" attrName="CashPayment" />
+      <TypePickerCell typeName="CashPayment" typeKind="Data" nodeId="payment.PaymentMethod" attrName="CashPayment" />
     );
 
     const row = screen.getByTestId('type-picker-cell');
@@ -81,10 +81,10 @@ describe('TypePickerCell', () => {
     // The cell must pass the canonical Choice node id and the arm typeName
     // as attrName — the store's Choice branch matches by typeCall.$refText.
     expect(updateAttributeType).toHaveBeenCalledWith(
-      'payment::PaymentMethod', // choiceId
+      'payment.PaymentMethod', // choiceId
       'CashPayment', // attrName = arm.typeName (old type ref)
       'WirePayment', // newTypeName
-      'payment::WirePayment' // typeId for validation + disambiguation
+      'payment.WirePayment' // typeId for validation + disambiguation
     );
   });
 });

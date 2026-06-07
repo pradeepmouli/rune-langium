@@ -109,7 +109,7 @@ describe('DataTypeForm – read-only mode contract', () => {
   it('renders zero enabled inputs, textareas, or selects in the form', () => {
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedTrade"
+        nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -147,7 +147,7 @@ describe('DataTypeForm – read-only mode contract', () => {
   it('renders zero enabled buttons inside the attribute rows', () => {
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedTrade"
+        nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -168,7 +168,7 @@ describe('DataTypeForm – read-only mode contract', () => {
   it('does not render the "Add attribute" button', () => {
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedTrade"
+        nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -182,7 +182,7 @@ describe('DataTypeForm – read-only mode contract', () => {
   it('renders the type name as a static heading not an input', () => {
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedTrade"
+        nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -207,7 +207,7 @@ describe('DataTypeForm – read-only mode contract', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedTrade"
+        nodeId="test.LockedTrade"
         data={editableNode}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -253,8 +253,8 @@ function makeEnumActions(): EditorFormActions<'enum'> {
 }
 
 const ENUM_AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test.enums::CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test.enums' },
-  { value: 'test.enums::RatingEnum', label: 'RatingEnum', kind: 'enum', namespace: 'test.enums' }
+  { value: 'test.enums.CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test.enums' },
+  { value: 'test.enums.RatingEnum', label: 'RatingEnum', kind: 'enum', namespace: 'test.enums' }
 ];
 
 function makeReadOnlyEnumNode(): AnyGraphNode {
@@ -286,7 +286,7 @@ describe('EnumForm – read-only mode contract', () => {
   it('renders zero enabled inputs, textareas, or selects', () => {
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedCurrencyEnum"
+        nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -303,7 +303,7 @@ describe('EnumForm – read-only mode contract', () => {
   it('does not render the "Add value" button', () => {
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedCurrencyEnum"
+        nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -315,7 +315,7 @@ describe('EnumForm – read-only mode contract', () => {
   it('renders zero enabled buttons inside enum value rows', () => {
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedCurrencyEnum"
+        nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -333,7 +333,7 @@ describe('EnumForm – read-only mode contract', () => {
   it('renders the type name as a static heading not an input', () => {
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedCurrencyEnum"
+        nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -348,7 +348,7 @@ describe('EnumForm – read-only mode contract', () => {
   it('parent enum TypeReferenceField has no enabled selector', () => {
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedCurrencyEnum"
+        nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -381,8 +381,8 @@ function makeChoiceActions(): EditorFormActions<'choice'> {
 }
 
 const CHOICE_AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test.model::CashPayment', label: 'CashPayment', kind: 'data', namespace: 'test.model' },
-  { value: 'test.model::PhysicalSettlement', label: 'PhysicalSettlement', kind: 'data', namespace: 'test.model' }
+  { value: 'test.model.CashPayment', label: 'CashPayment', kind: 'data', namespace: 'test.model' },
+  { value: 'test.model.PhysicalSettlement', label: 'PhysicalSettlement', kind: 'data', namespace: 'test.model' }
 ];
 
 function makeReadOnlyChoiceNode(): AnyGraphNode {
@@ -415,7 +415,7 @@ describe('ChoiceForm – read-only mode contract', () => {
   it('renders zero enabled inputs, textareas, or selects', () => {
     const { container } = render(
       <ChoiceForm
-        nodeId="test.model::LockedPaymentType"
+        nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
@@ -432,7 +432,7 @@ describe('ChoiceForm – read-only mode contract', () => {
   it('does not render the "add-option" selector', () => {
     const { container } = render(
       <ChoiceForm
-        nodeId="test.model::LockedPaymentType"
+        nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
@@ -444,7 +444,7 @@ describe('ChoiceForm – read-only mode contract', () => {
   it('renders zero enabled buttons inside choice option rows', () => {
     const { container } = render(
       <ChoiceForm
-        nodeId="test.model::LockedPaymentType"
+        nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
@@ -468,7 +468,7 @@ describe('ChoiceForm – read-only mode contract', () => {
   it('renders the type name as a static heading not an input', () => {
     const { container } = render(
       <ChoiceForm
-        nodeId="test.model::LockedPaymentType"
+        nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
@@ -510,7 +510,7 @@ function makeFuncActions(): EditorFormActions<'func'> {
 }
 
 const FUNC_AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test.model::Trade', label: 'Trade', kind: 'data', namespace: 'test.model' },
+  { value: 'test.model.Trade', label: 'Trade', kind: 'data', namespace: 'test.model' },
   { value: 'builtin::number', label: 'number', kind: 'builtin' },
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
@@ -557,7 +557,7 @@ describe('FunctionForm – read-only mode contract', () => {
   it('renders zero enabled inputs, textareas, or selects', () => {
     const { container } = render(
       <FunctionForm
-        nodeId="test.model::LockedCalculateNotional"
+        nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
@@ -574,7 +574,7 @@ describe('FunctionForm – read-only mode contract', () => {
   it('does not render the add-input row controls', () => {
     const { container } = render(
       <FunctionForm
-        nodeId="test.model::LockedCalculateNotional"
+        nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
@@ -588,7 +588,7 @@ describe('FunctionForm – read-only mode contract', () => {
   it('renders zero enabled buttons inside input param rows', () => {
     const { container } = render(
       <FunctionForm
-        nodeId="test.model::LockedCalculateNotional"
+        nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
@@ -609,7 +609,7 @@ describe('FunctionForm – read-only mode contract', () => {
   it('renders the type name as a static heading not an input', () => {
     const { container } = render(
       <FunctionForm
-        nodeId="test.model::LockedCalculateNotional"
+        nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
@@ -624,7 +624,7 @@ describe('FunctionForm – read-only mode contract', () => {
   it('output TypeReferenceField has no enabled selector', () => {
     const { container } = render(
       <FunctionForm
-        nodeId="test.model::LockedCalculateNotional"
+        nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
@@ -702,7 +702,7 @@ describe('TypeAliasForm – read-only mode contract', () => {
   it('renders zero enabled inputs, textareas, or selects', () => {
     const { container } = render(
       <TypeAliasForm
-        nodeId="test.aliases::LockedShortText"
+        nodeId="test.aliases.LockedShortText"
         data={makeReadOnlyTypeAliasNode()}
         availableTypes={TYPE_ALIAS_AVAILABLE_TYPES}
         actions={makeTypeAliasActions()}
@@ -719,7 +719,7 @@ describe('TypeAliasForm – read-only mode contract', () => {
   it('renders the type name as a static heading not an input', () => {
     const { container } = render(
       <TypeAliasForm
-        nodeId="test.aliases::LockedShortText"
+        nodeId="test.aliases.LockedShortText"
         data={makeReadOnlyTypeAliasNode()}
         availableTypes={TYPE_ALIAS_AVAILABLE_TYPES}
         actions={makeTypeAliasActions()}
@@ -734,7 +734,7 @@ describe('TypeAliasForm – read-only mode contract', () => {
   it('wrapped-type TypeReferenceField has no enabled selector', () => {
     const { container } = render(
       <TypeAliasForm
-        nodeId="test.aliases::LockedShortText"
+        nodeId="test.aliases.LockedShortText"
         data={makeReadOnlyTypeAliasNode()}
         availableTypes={TYPE_ALIAS_AVAILABLE_TYPES}
         actions={makeTypeAliasActions()}
@@ -792,7 +792,7 @@ function makeReadOnlyDataNodeWithParent(): AnyGraphNode {
 
 function makeParentNodes(childData: AnyGraphNode, parentAttrs: Record<string, unknown>[]): TypeGraphNode[] {
   const parentNode: TypeGraphNode = {
-    id: 'test::BaseParent',
+    id: 'test.BaseParent',
     type: 'data',
     position: { x: 0, y: 0 },
     data: {
@@ -809,7 +809,7 @@ function makeParentNodes(childData: AnyGraphNode, parentAttrs: Record<string, un
     } as AnyGraphNode
   } as TypeGraphNode;
   const childNode: TypeGraphNode = {
-    id: 'test::LockedChild',
+    id: 'test.LockedChild',
     type: 'data',
     position: { x: 0, y: 0 },
     data: childData
@@ -834,7 +834,7 @@ describe('DataTypeForm – read-only mode with inherited attributes', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedChild"
+        nodeId="test.LockedChild"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -861,7 +861,7 @@ describe('DataTypeForm – read-only mode with inherited attributes', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedChild"
+        nodeId="test.LockedChild"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -888,7 +888,7 @@ describe('DataTypeForm – read-only mode with inherited attributes', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::LockedChild"
+        nodeId="test.LockedChild"
         data={editableChild}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -927,7 +927,7 @@ function makeReadOnlyEnumNodeWithParent(): AnyGraphNode {
 
 function makeParentEnumNodes(childData: AnyGraphNode, parentValues: Record<string, unknown>[]): TypeGraphNode[] {
   const parentNode: TypeGraphNode = {
-    id: 'test.enums::BaseEnum',
+    id: 'test.enums.BaseEnum',
     type: 'enum',
     position: { x: 0, y: 0 },
     data: {
@@ -943,7 +943,7 @@ function makeParentEnumNodes(childData: AnyGraphNode, parentValues: Record<strin
     } as AnyGraphNode
   } as TypeGraphNode;
   const childNode: TypeGraphNode = {
-    id: 'test.enums::LockedChildEnum',
+    id: 'test.enums.LockedChildEnum',
     type: 'enum',
     position: { x: 0, y: 0 },
     data: childData
@@ -968,7 +968,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
 
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedChildEnum"
+        nodeId="test.enums.LockedChildEnum"
         data={childData}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -996,7 +996,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
 
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedChildEnum"
+        nodeId="test.enums.LockedChildEnum"
         data={childData}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
@@ -1025,7 +1025,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
 
     const { container } = render(
       <EnumForm
-        nodeId="test.enums::LockedChildEnum"
+        nodeId="test.enums.LockedChildEnum"
         data={editableChild}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}

@@ -273,7 +273,7 @@ test.describe('Namespace Explorer', () => {
 
     // Phase 13 amend: navigate via the dedicated arrow button (single-click on the button).
     // The nav button testid is ns-type-nav-{nodeId}; Employee lives in demo.small namespace.
-    const navBtn = page.getByTestId('ns-type-nav-demo.small::Employee');
+    const navBtn = page.getByTestId('ns-type-nav-demo.small.Employee');
     await navBtn.waitFor({ state: 'visible', timeout: 10000 });
     await navBtn.click();
 

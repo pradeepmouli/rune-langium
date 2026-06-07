@@ -59,14 +59,14 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
   });
 
   test('graph should render all nodes from the model', async ({ page }) => {
-    await expect(page.getByTestId('rf__node-sync.test::Customer')).toBeVisible();
-    await expect(page.getByTestId('rf__node-sync.test::Tier')).toBeVisible();
+    await expect(page.getByTestId('rf__node-sync.test.Customer')).toBeVisible();
+    await expect(page.getByTestId('rf__node-sync.test.Tier')).toBeVisible();
   });
 
   test('double-clicking a node should open source editor', async ({ page }) => {
     // Use evaluate to dispatch dblclick directly (node may be outside viewport)
     await page.evaluate(() => {
-      const node = document.querySelector('[data-testid="rf__node-sync.test::Customer"]');
+      const node = document.querySelector('[data-testid="rf__node-sync.test.Customer"]');
       if (node) node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     });
     await page.waitForTimeout(3000);
@@ -77,17 +77,17 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
 
   test('graph nodes should reflect model structure', async ({ page }) => {
     // Verify Customer node shows its attributes
-    const customerNode = page.getByTestId('rf__node-sync.test::Customer');
+    const customerNode = page.getByTestId('rf__node-sync.test.Customer');
     await expect(customerNode.getByText('name')).toBeVisible({ timeout: 5000 });
 
     // Verify Tier node shows its enum values
-    const tierNode = page.getByTestId('rf__node-sync.test::Tier');
+    const tierNode = page.getByTestId('rf__node-sync.test.Tier');
     await expect(tierNode.getByText('Gold')).toBeVisible({ timeout: 5000 });
     await expect(tierNode.getByText('Silver')).toBeVisible();
   });
 
   test('clicking a graph node should open the editor form panel', async ({ page }) => {
-    await page.getByTestId('rf__node-sync.test::Tier').click({ force: true });
+    await page.getByTestId('rf__node-sync.test.Tier').click({ force: true });
     await page.waitForTimeout(1000);
 
     const panel = page.locator('[data-slot="editor-form-panel"]');
@@ -99,7 +99,7 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
 
     // Click Customer node using evaluate (may be outside viewport)
     await page.evaluate(() => {
-      const node = document.querySelector('[data-testid="rf__node-sync.test::Customer"]');
+      const node = document.querySelector('[data-testid="rf__node-sync.test.Customer"]');
       if (node) node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await page.waitForTimeout(1500);
@@ -107,7 +107,7 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
 
     // Click Tier
     await page.evaluate(() => {
-      const node = document.querySelector('[data-testid="rf__node-sync.test::Tier"]');
+      const node = document.querySelector('[data-testid="rf__node-sync.test.Tier"]');
       if (node) node.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await page.waitForTimeout(1500);

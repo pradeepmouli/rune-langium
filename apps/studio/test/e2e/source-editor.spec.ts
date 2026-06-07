@@ -83,7 +83,7 @@ test.describe('Source Editor', () => {
     page
   }) => {
     await loadFiles(page, [{ name: 'widget.rosetta', content: MODEL_A }]);
-    await openSourceViaDoubleClick(page, 'rf__node-source.test::Widget');
+    await openSourceViaDoubleClick(page, 'rf__node-source.test.Widget');
 
     // CodeMirror should now be visible
     const cmEditor = page.locator('.cm-editor');
@@ -95,7 +95,7 @@ test.describe('Source Editor', () => {
       { name: 'widget.rosetta', content: MODEL_A },
       { name: 'color.rosetta', content: MODEL_B }
     ]);
-    await openSourceViaDoubleClick(page, 'rf__node-source.test::Widget');
+    await openSourceViaDoubleClick(page, 'rf__node-source.test.Widget');
 
     // Should show at least the active file tab
     const widgetTab = page.locator('[role="tab"]', { hasText: 'widget.rosetta' });
@@ -104,7 +104,7 @@ test.describe('Source Editor', () => {
 
   test('should show CodeMirror editor with rosetta content', async ({ page }) => {
     await loadFiles(page, [{ name: 'widget.rosetta', content: MODEL_A }]);
-    await openSourceViaDoubleClick(page, 'rf__node-source.test::Widget');
+    await openSourceViaDoubleClick(page, 'rf__node-source.test.Widget');
 
     const cmContent = page.locator('.cm-content');
     await expect(cmContent).toContainText('namespace', { timeout: 10000 });

@@ -47,8 +47,8 @@ describe('InheritanceCell', () => {
   });
 
   it('renders extendsNodeId as data-extends-id attribute', () => {
-    render(<InheritanceCell childId="Trade" extendsName="TradeBase" extendsNodeId="ns::TradeBase" />);
+    render(<InheritanceCell childId="Trade" extendsName="TradeBase" extendsNodeId="ns.TradeBase" />);
     const el = screen.getByTestId('inheritance-cell');
-    expect(el).toHaveAttribute('data-extends-id', 'ns::TradeBase');
+    expect(el).toHaveAttribute('data-extends-id', 'ns.TradeBase');
   });
 });

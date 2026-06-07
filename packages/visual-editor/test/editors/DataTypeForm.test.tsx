@@ -39,7 +39,7 @@ function makeActions(overrides: Partial<EditorFormActions<'data'>> = {}): Editor
 const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
   { value: 'builtin::date', label: 'date', kind: 'builtin' },
-  { value: 'test::Event', label: 'Event', kind: 'data', namespace: 'test' }
+  { value: 'test.Event', label: 'Event', kind: 'data', namespace: 'test' }
 ];
 
 function makeDataNode(): AnyGraphNode {
@@ -88,7 +88,7 @@ describe('DataTypeForm', () => {
     const actions = makeActions({ renameType });
 
     render(
-      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const nameInput = screen.getByLabelText(/data type name/i);
@@ -100,21 +100,21 @@ describe('DataTypeForm', () => {
       vi.advanceTimersByTime(500);
     });
 
-    expect(renameType).toHaveBeenCalledWith('test::Trade', 'Execution');
+    expect(renameType).toHaveBeenCalledWith('test.Trade', 'Execution');
   });
 
   it('calls addAttribute when "Add Attribute" button is clicked', () => {
     const addAttribute = vi.fn();
     const actions = makeActions({ addAttribute });
     const { container } = render(
-      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const addBtn = container.querySelector('[data-slot="add-attribute-btn"]');
     expect(addBtn).toBeDefined();
     fireEvent.click(addBtn!);
 
-    expect(addAttribute).toHaveBeenCalledWith('test::Trade', '', 'string', '(1..1)');
+    expect(addAttribute).toHaveBeenCalledWith('test.Trade', '', 'string', '(1..1)');
   });
 
   it('calls removeAttribute when attribute remove button is clicked', () => {
@@ -122,13 +122,13 @@ describe('DataTypeForm', () => {
     const actions = makeActions({ removeAttribute });
 
     render(
-      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const removeBtns = screen.getAllByLabelText(/remove attribute/i);
     fireEvent.click(removeBtns[0]!);
 
-    expect(removeAttribute).toHaveBeenCalledWith('test::Trade', 'tradeDate');
+    expect(removeAttribute).toHaveBeenCalledWith('test.Trade', 'tradeDate');
   });
 
   it('shows empty state when no attributes', () => {
@@ -136,7 +136,7 @@ describe('DataTypeForm', () => {
     const data = makeDataNode();
     (data as any).attributes = [];
 
-    render(<DataTypeForm nodeId="test::Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(<DataTypeForm nodeId="test.Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     expect(screen.getByText(/no attributes defined/i)).toBeDefined();
   });
@@ -146,7 +146,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
   /** Build a parent node with given attributes, and a child node pointing to it. */
   function makeInheritanceNodes(childData: AnyGraphNode, parentAttrs: Record<string, unknown>[]): TypeGraphNode[] {
     const parentNode = {
-      id: 'test::BaseType',
+      id: 'test.BaseType',
       type: 'data',
       position: { x: 0, y: 0 },
       data: {
@@ -163,7 +163,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
       }
     } as TypeGraphNode;
     const childNode = {
-      id: 'test::Trade',
+      id: 'test.Trade',
       type: 'data',
       position: { x: 0, y: 0 },
       data: childData
@@ -191,7 +191,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -207,7 +207,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -222,7 +222,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -238,7 +238,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -263,7 +263,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -282,7 +282,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions({ addAttribute })}
@@ -291,7 +291,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     );
     const overrideBtn = container.querySelector('[data-slot="attribute-override"]');
     fireEvent.click(overrideBtn!);
-    expect(addAttribute).toHaveBeenCalledWith('test::Trade', 'id', 'string', '(1..1)');
+    expect(addAttribute).toHaveBeenCalledWith('test.Trade', 'id', 'string', '(1..1)');
   });
 
   it('after Override, addAttribute action is dispatched for the inherited attribute', () => {
@@ -300,7 +300,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions({ addAttribute })}
@@ -311,7 +311,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     fireEvent.click(overrideBtn!);
     // The action dispatches addAttribute; when the store updates and re-renders
     // with the new data, the inherited row will be shadowed by the local one.
-    expect(addAttribute).toHaveBeenCalledWith('test::Trade', 'id', 'string', '(1..1)');
+    expect(addAttribute).toHaveBeenCalledWith('test.Trade', 'id', 'string', '(1..1)');
   });
 
   it('inherited rows have no remove or drag controls', () => {
@@ -319,7 +319,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -365,7 +365,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     const data = makeDataNode();
     (data as any).comments = 'Initial comments';
     const { container } = render(
-      <DataTypeForm nodeId="test::Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
+      <DataTypeForm nodeId="test.Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
     );
 
     // Name must be the first text input in the form-header slot.
@@ -408,7 +408,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     const actions = makeActions({ renameType });
 
     render(
-      <DataTypeForm nodeId="test::Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const nameInput = screen.getByLabelText(/data type name/i);
@@ -427,7 +427,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
 
     // Exactly one commit, with the latest value
     expect(renameType).toHaveBeenCalledTimes(1);
-    expect(renameType).toHaveBeenCalledWith('test::Trade', 'Execution');
+    expect(renameType).toHaveBeenCalledWith('test.Trade', 'Execution');
   });
 
   // T012 — useExternalSync contract: form repopulates pristine fields when
@@ -447,7 +447,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     })();
 
     const { container, rerender } = render(
-      <DataTypeForm nodeId="test::Trade" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // Confirm initial state pulls from nodeA
@@ -460,7 +460,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     // Swap to nodeB (different reference identity, same nodeId for simplicity).
     // The form host flushes the pending debounce on unmount of the old binding
     // OR the next debounce tick — advance both to be deterministic.
-    rerender(<DataTypeForm nodeId="test::Position" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(<DataTypeForm nodeId="test.Position" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -580,7 +580,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={makeThreeAttrDataNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={actions}
@@ -606,7 +606,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
 
     // Exactly one reorder action — no double-fire from gesture + primitive
     expect(reorderAttribute).toHaveBeenCalledTimes(1);
-    expect(reorderAttribute).toHaveBeenCalledWith('test::Trade', 2, 0);
+    expect(reorderAttribute).toHaveBeenCalledWith('test.Trade', 2, 0);
 
     // Form state's members array reflects the new order [a3, a1, a2]
     const namesAfter = Array.from(container.querySelectorAll('[data-slot="attribute-name"]')).map(
@@ -638,14 +638,14 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
 
     const initial = makeThreeAttrDataNode();
     const { container, rerender } = render(
-      <DataTypeForm nodeId="test::Trade" data={initial} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={initial} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // ---- Step 1 — add a new attribute -------------------------------------
     const addBtn = container.querySelector('[data-slot="add-attribute-btn"]')!;
     fireEvent.click(addBtn);
     expect(addAttribute).toHaveBeenCalledTimes(1);
-    expect(addAttribute).toHaveBeenLastCalledWith('test::Trade', '', 'string', '(1..1)');
+    expect(addAttribute).toHaveBeenLastCalledWith('test.Trade', '', 'string', '(1..1)');
 
     // Simulate the parent's store updating: data now has 4 attrs (the new
     // row appended at the tail). Re-render to surface the next user-visible
@@ -661,7 +661,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
         override: false
       }
     ];
-    rerender(<DataTypeForm nodeId="test::Trade" data={afterAdd} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(<DataTypeForm nodeId="test.Trade" data={afterAdd} availableTypes={AVAILABLE_TYPES} actions={actions} />);
     let rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(4);
 
@@ -671,7 +671,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
     fireEvent.dragOver(rows[1]!, { dataTransfer });
     fireEvent.drop(rows[1]!, { dataTransfer });
     expect(reorderAttribute).toHaveBeenCalledTimes(1);
-    expect(reorderAttribute).toHaveBeenLastCalledWith('test::Trade', 3, 1);
+    expect(reorderAttribute).toHaveBeenLastCalledWith('test.Trade', 3, 1);
 
     // Simulate the store reordering attributes accordingly: [a1, a4, a2, a3].
     const afterReorder = makeThreeAttrDataNode();
@@ -680,7 +680,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
     reorderedAttrs.splice(1, 0, moved);
     (afterReorder as any).attributes = reorderedAttrs;
     rerender(
-      <DataTypeForm nodeId="test::Trade" data={afterReorder} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm nodeId="test.Trade" data={afterReorder} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
     rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(4);
@@ -691,7 +691,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
     fireEvent.click(removeBtns[0]!);
     expect(removeAttribute).toHaveBeenCalledTimes(1);
     // The committed name at index 1 is 'a4' (the moved row).
-    expect(removeAttribute).toHaveBeenLastCalledWith('test::Trade', 'a4');
+    expect(removeAttribute).toHaveBeenLastCalledWith('test.Trade', 'a4');
 
     // Actions fired in user-visible order: add, reorder, remove
     expect(callOrder).toEqual(['add', 'reorder', 'remove']);
@@ -746,7 +746,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
       errors: []
     } as AnyGraphNode;
     const parentNode = {
-      id: 'test::BaseType',
+      id: 'test.BaseType',
       type: 'data',
       position: { x: 0, y: 0 },
       data: {
@@ -763,7 +763,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
       }
     } as TypeGraphNode;
     const childNode = {
-      id: 'test::Trade',
+      id: 'test.Trade',
       type: 'data',
       position: { x: 0, y: 0 },
       data: childData
@@ -779,7 +779,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -812,7 +812,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -852,7 +852,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
 
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions({ addAttribute })}
@@ -866,7 +866,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     fireEvent.click(overrideButtons[1]!);
 
     expect(addAttribute).toHaveBeenCalledTimes(1);
-    expect(addAttribute).toHaveBeenCalledWith('test::Trade', 'createdAt', 'date', '(1..1)');
+    expect(addAttribute).toHaveBeenCalledWith('test.Trade', 'createdAt', 'date', '(1..1)');
   });
 
   // GT4 — reordering local rows does not move inherited rows
@@ -878,7 +878,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     const reorderAttribute = vi.fn();
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions({ reorderAttribute })}
@@ -924,7 +924,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     fireEvent.drop(toRow, { dataTransfer });
 
     // The reorder action fired against the local index space.
-    expect(reorderAttribute).toHaveBeenCalledWith('test::Trade', 2, 0);
+    expect(reorderAttribute).toHaveBeenCalledWith('test.Trade', 2, 0);
 
     // Inherited rows remain in their positions (above all locals); local
     // rows reorder among themselves only.
@@ -957,8 +957,8 @@ function buildDataTransfer(payload: TypeRefPayload): DataTransfer {
 
 const EXTENDS_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
-  { value: 'test::BaseType', label: 'BaseType', kind: 'data', namespace: 'test' },
-  { value: 'test::Side', label: 'Side', kind: 'enum', namespace: 'test' }
+  { value: 'test.BaseType', label: 'BaseType', kind: 'data', namespace: 'test' },
+  { value: 'test.Side', label: 'Side', kind: 'enum', namespace: 'test' }
 ];
 
 function makeSimpleDataNode(): AnyGraphNode {
@@ -982,7 +982,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
     const setInheritance = vi.fn();
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={makeSimpleDataNode()}
         availableTypes={EXTENDS_TYPES}
         actions={makeActions({ setInheritance })}
@@ -998,7 +998,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
     const enumPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test',
-      typeId: 'test::Side',
+      typeId: 'test.Side',
       typeName: 'Side',
       kind: 'Enum'
     };
@@ -1014,7 +1014,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
     const setInheritance = vi.fn();
     const { container } = render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={makeSimpleDataNode()}
         availableTypes={EXTENDS_TYPES}
         actions={makeActions({ setInheritance })}
@@ -1027,7 +1027,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
     const dataPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test',
-      typeId: 'test::BaseType',
+      typeId: 'test.BaseType',
       typeName: 'BaseType',
       kind: 'Data'
     };
@@ -1036,7 +1036,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
       fireEvent.drop(extendsDropTarget, { dataTransfer: buildDataTransfer(dataPayload) });
     });
 
-    expect(setInheritance).toHaveBeenCalledWith('test::Trade', 'test::BaseType');
+    expect(setInheritance).toHaveBeenCalledWith('test.Trade', 'test.BaseType');
   });
 
   // Gap 3: header "Reveal in graph" action.
@@ -1044,7 +1044,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
     const onNavigateToNode = vi.fn();
     render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={makeDataNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -1054,13 +1054,13 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
 
     const reveal = screen.getByLabelText('Reveal in graph');
     fireEvent.click(reveal);
-    expect(onNavigateToNode).toHaveBeenCalledWith('test::Trade');
+    expect(onNavigateToNode).toHaveBeenCalledWith('test.Trade');
   });
 
   it('hides the "Reveal in graph" action when no navigate callback is provided', () => {
     render(
       <DataTypeForm
-        nodeId="test::Trade"
+        nodeId="test.Trade"
         data={makeDataNode()}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}

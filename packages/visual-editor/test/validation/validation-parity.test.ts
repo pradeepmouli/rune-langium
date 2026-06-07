@@ -54,8 +54,8 @@ function makeInheritanceEdge(source: string, target: string): TypeGraphEdge {
 describe('Validation Parity — S-01: Duplicate Names', () => {
   it('should detect duplicate type names in same namespace', () => {
     const nodes: TypeGraphNode[] = [
-      makeNode('ns::Foo', 'Foo', 'ns'),
-      makeNode('ns::Bar', 'Bar', 'ns')
+      makeNode('ns.Foo', 'Foo', 'ns'),
+      makeNode('ns.Bar', 'Bar', 'ns')
     ];
     // 'Foo' already exists in 'ns'
     expect(detectDuplicateName('Foo', 'ns', nodes)).toBe(true);
@@ -63,8 +63,8 @@ describe('Validation Parity — S-01: Duplicate Names', () => {
 
   it('should allow same name in different namespaces', () => {
     const nodes: TypeGraphNode[] = [
-      makeNode('ns1::Foo', 'Foo', 'ns1'),
-      makeNode('ns2::Bar', 'Bar', 'ns2')
+      makeNode('ns1.Foo', 'Foo', 'ns1'),
+      makeNode('ns2.Bar', 'Bar', 'ns2')
     ];
     // 'Foo' does not exist in 'ns2'
     expect(detectDuplicateName('Foo', 'ns2', nodes)).toBe(false);
@@ -72,17 +72,17 @@ describe('Validation Parity — S-01: Duplicate Names', () => {
 
   it('should exclude the node being renamed', () => {
     const nodes: TypeGraphNode[] = [
-      makeNode('ns::Foo', 'Foo', 'ns'),
-      makeNode('ns::Bar', 'Bar', 'ns')
+      makeNode('ns.Foo', 'Foo', 'ns'),
+      makeNode('ns.Bar', 'Bar', 'ns')
     ];
     // Renaming 'Foo' to 'Foo' should not be a duplicate
-    expect(detectDuplicateName('Foo', 'ns', nodes, 'ns::Foo')).toBe(false);
+    expect(detectDuplicateName('Foo', 'ns', nodes, 'ns.Foo')).toBe(false);
   });
 
   it('should be found by validateGraph', () => {
     const nodes: TypeGraphNode[] = [
-      makeNode('ns::Foo', 'Foo', 'ns'),
-      makeNode('ns::Foo_2', 'Foo', 'ns') // duplicate name
+      makeNode('ns.Foo', 'Foo', 'ns'),
+      makeNode('ns.Foo_2', 'Foo', 'ns') // duplicate name
     ];
     const errors = validateGraph(nodes, []);
     const dupErrors = errors.filter((e) => e.ruleId === 'S-01');
@@ -110,10 +110,10 @@ describe('Validation Parity — S-02: Circular Inheritance', () => {
   });
 
   it('should be found by validateGraph', () => {
-    const nodes: TypeGraphNode[] = [makeNode('ns::A', 'A', 'ns'), makeNode('ns::B', 'B', 'ns')];
+    const nodes: TypeGraphNode[] = [makeNode('ns.A', 'A', 'ns'), makeNode('ns.B', 'B', 'ns')];
     const edges: TypeGraphEdge[] = [
-      makeInheritanceEdge('ns::A', 'ns::B'),
-      makeInheritanceEdge('ns::B', 'ns::A')
+      makeInheritanceEdge('ns.A', 'ns.B'),
+      makeInheritanceEdge('ns.B', 'ns.A')
     ];
     const errors = validateGraph(nodes, edges);
     const circErrors = errors.filter((e) => e.ruleId === 'S-02');

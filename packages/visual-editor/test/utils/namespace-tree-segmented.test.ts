@@ -37,7 +37,7 @@ const KIND_TO_AST_TYPE: Record<string, string> = {
 
 function makeNode(ns: string, name: string, kind: string = 'data'): TypeGraphNode {
   return {
-    id: `${ns}::${name}`,
+    id: `${ns}.${name}`,
     type: kind,
     position: { x: 0, y: 0 },
     data: {
@@ -232,10 +232,10 @@ describe('buildSegmentedNamespaceTree', () => {
   // Entry extraction parity
   // -------------------------------------------------------------------------
 
-  it('produces nodeId = "<ns>::<name>" (same as buildNamespaceTree)', () => {
+  it('produces nodeId = "<ns>.<name>" (same as buildNamespaceTree)', () => {
     const roots = buildSegmentedNamespaceTree([makeNode('com.example', 'MyType')]);
     const ns = findByPath(roots, 'com.example')!;
-    expect(ns.types[0]!.nodeId).toBe('com.example::MyType');
+    expect(ns.types[0]!.nodeId).toBe('com.example.MyType');
   });
 
   it('correctly resolves kind for all four node kinds', () => {
@@ -321,7 +321,7 @@ describe('flattenSegmentedTree (no compression)', () => {
     const partyType = rows.find((r) => r.kind === 'type' && (r as any).name === 'Party')!;
     expect(partyType).toMatchObject({
       kind: 'type',
-      nodeId: 'com.rosetta.party::Party',
+      nodeId: 'com.rosetta.party.Party',
       name: 'Party',
       typeKind: 'data',
       namespace: 'com.rosetta.party',
@@ -552,7 +552,7 @@ describe('filterSegmentedTree', () => {
   });
 
   it('prunes empty intermediate segments (no stale ancestors)', () => {
-    // Party is "com.rosetta.party::Party". Searching "Party" should NOT
+    // Party is "com.rosetta.party.Party". Searching "Party" should NOT
     // include the model branch (model has no matching types).
     const roots = buildSegmentedNamespaceTree(FIXTURE_NODES);
     const filtered = filterSegmentedTree(roots, 'Party');
@@ -631,7 +631,7 @@ describe('ancestorPathsForMatches', () => {
   });
 
   it('search that matches types in two branches includes ancestors for both', () => {
-    // Both com.rosetta.model::Trade and cdm.trade::Trade — use a fixture with both
+    // Both com.rosetta.model.Trade and cdm.trade.Trade — use a fixture with both
     const nodes = [makeNode('com.rosetta.model', 'Trade'), makeNode('cdm.trade', 'Trade')];
     const roots = buildSegmentedNamespaceTree(nodes);
     const paths = ancestorPathsForMatches(roots, 'Trade');
@@ -665,7 +665,7 @@ describe('ancestorPathsForMatches', () => {
 
 describe('buildSegmentedNamespaceTreeFromOptions', () => {
   function opt(namespace: string | undefined, label: string, kind: TypeOption['kind'] = 'data'): TypeOption {
-    return { value: `${namespace ?? ''}::${label}`, label, kind, namespace };
+    return { value: `${namespace ?? ''}.${label}`, label, kind, namespace };
   }
 
   it('returns [] for empty options', () => {
@@ -685,7 +685,7 @@ describe('buildSegmentedNamespaceTreeFromOptions', () => {
     ];
     const fromNodes = buildSegmentedNamespaceTree(nodes);
     const fromOptions = buildSegmentedNamespaceTreeFromOptions(options);
-    // nodeId is `${ns}::${name}` in both fixtures, so the trees are deep-equal.
+    // nodeId is `${ns}.${name}` in both fixtures, so the trees are deep-equal.
     expect(fromOptions).toEqual(fromNodes);
   });
 

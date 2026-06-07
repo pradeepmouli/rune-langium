@@ -42,8 +42,8 @@ function makeActions(): EditorFormActions<'func'> {
 }
 
 const AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test.model::Trade', label: 'Trade', kind: 'data', namespace: 'test.model' },
-  { value: 'test.model::Price', label: 'Price', kind: 'data', namespace: 'test.model' },
+  { value: 'test.model.Trade', label: 'Trade', kind: 'data', namespace: 'test.model' },
+  { value: 'test.model.Price', label: 'Price', kind: 'data', namespace: 'test.model' },
   { value: 'builtin::number', label: 'number', kind: 'builtin' },
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];

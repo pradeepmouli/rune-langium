@@ -1900,7 +1900,7 @@ export function ExplorePerspective() {
   // lands.
   // ---------------------------------------------------------------------------
 
-  // Resolve file path for the focused structure node (ns::TypeName format).
+  // Resolve file path for the focused structure node (ns.TypeName format).
   const structureFilePath = useMemo(() => {
     if (!structureFocusedTypeId) return undefined;
     return nodeIdToFilePath.get(structureFocusedTypeId);

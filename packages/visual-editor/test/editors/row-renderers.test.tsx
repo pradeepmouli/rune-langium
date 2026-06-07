@@ -57,8 +57,8 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
   { value: 'builtin::date', label: 'date', kind: 'builtin' },
   { value: 'builtin::number', label: 'number', kind: 'builtin' },
-  { value: 'test::Trade', label: 'Trade', kind: 'data', namespace: 'test' },
-  { value: 'test::Price', label: 'Price', kind: 'data', namespace: 'test' }
+  { value: 'test.Trade', label: 'Trade', kind: 'data', namespace: 'test' },
+  { value: 'test.Price', label: 'Price', kind: 'data', namespace: 'test' }
 ];
 
 function makeDataActions(
@@ -231,7 +231,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
     it('renders one AttributeRow per attribute in DataTypeForm (3 attributes → 3 rows)', () => {
       render(
         <DataTypeForm
-          nodeId="test::Trade"
+          nodeId="test.Trade"
           data={makeDataNodeWithAttrs(3)}
           availableTypes={AVAILABLE_TYPES}
           actions={makeDataActions()}
@@ -247,7 +247,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
     it('updates the visible name when the user edits the attribute name input', () => {
       render(
         <DataTypeForm
-          nodeId="test::Trade"
+          nodeId="test.Trade"
           data={makeDataNodeWithAttrs(2)}
           availableTypes={AVAILABLE_TYPES}
           actions={makeDataActions()}
@@ -274,7 +274,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       const actions = makeDataActions();
       render(
         <DataTypeForm
-          nodeId="test::Trade"
+          nodeId="test.Trade"
           data={makeDataNodeWithAttrs(2)}
           availableTypes={AVAILABLE_TYPES}
           actions={actions}
@@ -291,7 +291,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       fireEvent.click(removeBtn);
 
       expect(actions.removeAttribute).toHaveBeenCalledTimes(1);
-      expect(actions.removeAttribute).toHaveBeenCalledWith('test::Trade', 'currency');
+      expect(actions.removeAttribute).toHaveBeenCalledWith('test.Trade', 'currency');
     });
   });
 
@@ -304,7 +304,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
 
       render(
         <ChoiceForm
-          nodeId="test::PaymentType"
+          nodeId="test.PaymentType"
           data={makeChoiceNode()}
           availableTypes={AVAILABLE_TYPES}
           actions={makeChoiceActions()}
@@ -323,7 +323,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
 
       render(
         <EnumForm
-          nodeId="test::CurrencyEnum"
+          nodeId="test.CurrencyEnum"
           data={makeEnumNode()}
           availableTypes={AVAILABLE_TYPES}
           actions={makeEnumActions()}
@@ -347,7 +347,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
 
       render(
         <FunctionForm
-          nodeId="test::CalculateNotional"
+          nodeId="test.CalculateNotional"
           data={makeFunctionNode()}
           availableTypes={AVAILABLE_TYPES}
           actions={makeFunctionActions()}

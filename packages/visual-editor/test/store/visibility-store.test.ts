@@ -13,7 +13,7 @@ import type { AnyGraphNode, EdgeData, TypeGraphEdge, TypeGraphNode } from '../..
 
 function makeNode(namespace: string, name: string): TypeGraphNode {
   return {
-    id: `${namespace}::${name}`,
+    id: `${namespace}.${name}`,
     type: 'data',
     position: { x: 0, y: 0 },
     data: {
@@ -101,14 +101,14 @@ describe('EditorStore — Namespace Visibility', () => {
 
   describe('toggleNodeVisibility', () => {
     it('adds node ID to hidden set', () => {
-      store.getState().toggleNodeVisibility('test::Trade');
-      expect(store.getState().visibility.hiddenNodeIds.has('test::Trade')).toBe(true);
+      store.getState().toggleNodeVisibility('test.Trade');
+      expect(store.getState().visibility.hiddenNodeIds.has('test.Trade')).toBe(true);
     });
 
     it('removes node ID from hidden set when toggled again', () => {
-      store.getState().toggleNodeVisibility('test::Trade');
-      store.getState().toggleNodeVisibility('test::Trade');
-      expect(store.getState().visibility.hiddenNodeIds.has('test::Trade')).toBe(false);
+      store.getState().toggleNodeVisibility('test.Trade');
+      store.getState().toggleNodeVisibility('test.Trade');
+      expect(store.getState().visibility.hiddenNodeIds.has('test.Trade')).toBe(false);
     });
   });
 
@@ -117,7 +117,7 @@ describe('EditorStore — Namespace Visibility', () => {
       const result = await parse(COMBINED_MODEL_SOURCE);
       store.getState().loadModels(result.value);
       store.getState().collapseAllNamespaces();
-      store.getState().toggleNodeVisibility('test.combined::Trade');
+      store.getState().toggleNodeVisibility('test.combined.Trade');
 
       store.getState().expandAllNamespaces();
       const state = store.getState();
@@ -130,7 +130,7 @@ describe('EditorStore — Namespace Visibility', () => {
     it('collapses all namespaces and clears hidden nodes', async () => {
       const result = await parse(COMBINED_MODEL_SOURCE);
       store.getState().loadModels(result.value);
-      store.getState().toggleNodeVisibility('test.combined::Trade');
+      store.getState().toggleNodeVisibility('test.combined.Trade');
 
       store.getState().collapseAllNamespaces();
       const state = store.getState();

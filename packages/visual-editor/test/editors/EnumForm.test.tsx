@@ -43,12 +43,12 @@ function makeActions(overrides: Partial<EditorFormActions<'enum'>> = {}): Editor
 
 const AVAILABLE_TYPES: TypeOption[] = [
   {
-    value: 'test.enums::CurrencyEnum',
+    value: 'test.enums.CurrencyEnum',
     label: 'CurrencyEnum',
     kind: 'enum',
     namespace: 'test.enums'
   },
-  { value: 'test.enums::RatingEnum', label: 'RatingEnum', kind: 'enum', namespace: 'test.enums' },
+  { value: 'test.enums.RatingEnum', label: 'RatingEnum', kind: 'enum', namespace: 'test.enums' },
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
 
@@ -321,7 +321,7 @@ describe('EnumForm – merged inherited enum value list', () => {
   /** Build parent and child enum nodes for inheritance tests. */
   function makeEnumInheritanceNodes(childData: AnyGraphNode, parentValues: Record<string, unknown>[]): TypeGraphNode[] {
     const parentNode = {
-      id: 'test::BaseEnum',
+      id: 'test.BaseEnum',
       type: 'enum',
       position: { x: 0, y: 0 },
       data: {
@@ -478,8 +478,8 @@ function buildEnumDataTransfer(payload: TypeRefPayload): DataTransfer {
 }
 
 const EXTENDS_TYPES: TypeOption[] = [
-  { value: 'test.enums::CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test.enums' },
-  { value: 'test::Trade', label: 'Trade', kind: 'data', namespace: 'test' }
+  { value: 'test.enums.CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test.enums' },
+  { value: 'test.Trade', label: 'Trade', kind: 'data', namespace: 'test' }
 ];
 
 function makeSimpleEnumData(): AnyGraphNode {
@@ -501,7 +501,7 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
     const setEnumParent = vi.fn();
     const { container } = render(
       <EnumForm
-        nodeId="test::PaymentEnum"
+        nodeId="test.PaymentEnum"
         data={makeSimpleEnumData()}
         availableTypes={EXTENDS_TYPES}
         actions={makeActions({ setEnumParent })}
@@ -515,7 +515,7 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
     const dataPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test',
-      typeId: 'test::Trade',
+      typeId: 'test.Trade',
       typeName: 'Trade',
       kind: 'Data'
     };
@@ -531,7 +531,7 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
     const setEnumParent = vi.fn();
     const { container } = render(
       <EnumForm
-        nodeId="test::PaymentEnum"
+        nodeId="test.PaymentEnum"
         data={makeSimpleEnumData()}
         availableTypes={EXTENDS_TYPES}
         actions={makeActions({ setEnumParent })}
@@ -544,7 +544,7 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
     const enumPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test.enums',
-      typeId: 'test.enums::CurrencyEnum',
+      typeId: 'test.enums.CurrencyEnum',
       typeName: 'CurrencyEnum',
       kind: 'Enum'
     };
@@ -553,6 +553,6 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
       fireEvent.drop(extendsDropTarget, { dataTransfer: buildEnumDataTransfer(enumPayload) });
     });
 
-    expect(setEnumParent).toHaveBeenCalledWith('test::PaymentEnum', 'test.enums::CurrencyEnum');
+    expect(setEnumParent).toHaveBeenCalledWith('test.PaymentEnum', 'test.enums.CurrencyEnum');
   });
 });

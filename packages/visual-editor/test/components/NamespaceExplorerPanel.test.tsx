@@ -43,7 +43,7 @@ function makeNode(ns: string, name: string, astType: string = 'Data'): TypeGraph
     RosettaFunction: 'func'
   };
   return {
-    id: `${ns}::${name}`,
+    id: `${ns}.${name}`,
     type: nodeTypeMap[astType] ?? 'data',
     position: { x: 0, y: 0 },
     data: {
@@ -117,7 +117,7 @@ describe('NamespaceExplorerPanel', () => {
   it('single-click on the row body is a no-op (drag-source-mark removed)', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
 
     fireEvent.click(typeRow);
 
@@ -127,7 +127,7 @@ describe('NamespaceExplorerPanel', () => {
 
   it('click on nav button calls onSelectNode', () => {
     const { props } = renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
 
     fireEvent.click(navBtn);
 
@@ -142,7 +142,7 @@ describe('NamespaceExplorerPanel', () => {
     // dead in Safari while still working in Chrome. JSDOM can't exercise the
     // real drag, so we assert the structural invariant instead.
     renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
     const wrapper = typeRow.parentElement!;
     expect(wrapper.style.transform).toBe('');
     expect(wrapper.style.top).toMatch(/px$/);
@@ -155,8 +155,8 @@ describe('NamespaceExplorerPanel', () => {
     // `studio-type-row--just-navigated` class, toggled by a useState +
     // 500ms setTimeout in TypeItemRow.
     const { props } = renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
 
     fireEvent.click(navBtn);
 
@@ -166,7 +166,7 @@ describe('NamespaceExplorerPanel', () => {
 
   it('keyboard activate nav button (Enter) calls onSelectNode', async () => {
     const { props } = renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
 
     // Tab to focus the nav button and press Enter
     navBtn.focus();
@@ -184,7 +184,7 @@ describe('NamespaceExplorerPanel', () => {
     // bubble, once via click). handleNavKeyDown's stopPropagation prevents
     // that, so the count stays exactly 1.
     const { props } = renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
 
     navBtn.focus();
     fireEvent.keyDown(navBtn, { key: 'Enter' });
@@ -195,7 +195,7 @@ describe('NamespaceExplorerPanel', () => {
 
   it('Space on nav button does NOT bubble to row keydown', () => {
     const { props } = renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
 
     navBtn.focus();
     fireEvent.keyDown(navBtn, { key: ' ' });
@@ -212,7 +212,7 @@ describe('NamespaceExplorerPanel', () => {
     expect(searchInput).toHaveAttribute('placeholder', 'Filter types or namespaces...');
     fireEvent.change(searchInput, { target: { value: 'Trade' } });
 
-    // Both Trade rows (com.model::Trade and cdm.trade::Trade) should be visible
+    // Both Trade rows (com.model.Trade and cdm.trade.Trade) should be visible
     expect(screen.getAllByText('Trade').length).toBeGreaterThanOrEqual(1);
     // Asset should not be visible (name doesn't match 'Trade')
     expect(screen.queryByText('Asset')).toBeNull();
@@ -226,8 +226,8 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   it('highlights selected node', () => {
-    renderPanel({ selectedNodeId: 'com.model::Trade' });
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    renderPanel({ selectedNodeId: 'com.model.Trade' });
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
     expect(typeRow.className).toContain('bg-accent');
   });
 
@@ -241,9 +241,9 @@ describe('NamespaceExplorerPanel', () => {
 
   it('shows reduced visible count when individual nodes hidden', () => {
     const allNamespaces = new Set(defaultNodes.map((n) => n.data.namespace));
-    const hidden = new Set(['com.model::Trade']);
+    const hidden = new Set(['com.model.Trade']);
     renderPanel({ expandedNamespaces: allNamespaces, hiddenNodeIds: hidden });
-    // 4 visible / 5 total (com.model::Trade is hidden; cdm.trade::Trade is still visible)
+    // 4 visible / 5 total (com.model.Trade is hidden; cdm.trade.Trade is still visible)
     expect(screen.getByText('4/5')).toBeTruthy();
   });
 
@@ -253,7 +253,7 @@ describe('NamespaceExplorerPanel', () => {
 
   it('dragstart registers canonical MIME with JSON payload and kind-specific marker MIME', () => {
     renderPanel();
-    const tradeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const tradeRow = screen.getByTestId('ns-type-com.model.Trade');
 
     // Simulate dataTransfer to capture setData calls
     const setData = vi.fn();
@@ -266,7 +266,7 @@ describe('NamespaceExplorerPanel', () => {
     expect(canonicalCall).toBeTruthy();
     const parsed = JSON.parse(canonicalCall![1] as string);
     expect(isTypeRefPayload(parsed)).toBe(true);
-    expect(parsed.typeId).toBe('com.model::Trade');
+    expect(parsed.typeId).toBe('com.model.Trade');
     expect(parsed.kind).toBe('Data');
 
     // Kind-specific marker MIME must also be registered
@@ -291,41 +291,41 @@ describe('NamespaceExplorerPanel', () => {
 
   it('row body has no button role and is not in the tab order', () => {
     renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
     expect(typeRow.getAttribute('role')).toBeNull();
     expect(typeRow.getAttribute('tabindex')).toBeNull();
   });
 
   it('Enter key on row body does NOT fire onSelectNode (no button semantics)', () => {
     const { props } = renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
     fireEvent.keyDown(typeRow, { key: 'Enter' });
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
   it('Space key on row body does NOT fire onSelectNode (no button semantics)', () => {
     const { props } = renderPanel();
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
     fireEvent.keyDown(typeRow, { key: ' ' });
     expect(props.onSelectNode).not.toHaveBeenCalled();
   });
 
   it('nav button has independent tabIndex=0 (keyboard-focusable)', () => {
     renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
     expect(navBtn.getAttribute('tabindex')).toBe('0');
   });
 
   it('nav button has descriptive aria-label', () => {
     renderPanel();
-    const navBtn = screen.getByTestId('ns-type-nav-com.model::Trade');
+    const navBtn = screen.getByTestId('ns-type-nav-com.model.Trade');
     expect(navBtn.getAttribute('aria-label')).toBe('Navigate to Trade');
   });
 
   it('non-activation keys on row body (e.g. ArrowDown) do not fire any callback', () => {
     const onSetDragSource = vi.fn();
     const { props } = renderPanel({ onSetDragSource });
-    const typeRow = screen.getByTestId('ns-type-com.model::Trade');
+    const typeRow = screen.getByTestId('ns-type-com.model.Trade');
     fireEvent.keyDown(typeRow, { key: 'ArrowDown' });
     expect(props.onSelectNode).not.toHaveBeenCalled();
     expect(onSetDragSource).not.toHaveBeenCalled();
@@ -350,7 +350,7 @@ describe('NamespaceExplorerPanel', () => {
         onSelectNode={vi.fn()}
       />
     );
-    const funcRow = screen.getByTestId('ns-type-cdm.func::MyFunc');
+    const funcRow = screen.getByTestId('ns-type-cdm.func.MyFunc');
     expect((funcRow as HTMLElement).draggable).toBe(true);
   });
 
@@ -367,7 +367,7 @@ describe('NamespaceExplorerPanel', () => {
         onSelectNode={vi.fn()}
       />
     );
-    const funcRow = screen.getByTestId('ns-type-cdm.func::MyFunc');
+    const funcRow = screen.getByTestId('ns-type-cdm.func.MyFunc');
     const setData = vi.fn();
     const dataTransfer = { setData, effectAllowed: '' as DataTransfer['effectAllowed'] };
     fireEvent.dragStart(funcRow, { dataTransfer });
@@ -427,13 +427,13 @@ describe('NamespaceExplorerPanel — kind filter pills', () => {
   it('hides types of a kind when its pill is toggled off', () => {
     renderMixed();
     // All five types visible initially.
-    expect(screen.getByTestId('ns-type-pkg::C1')).toBeTruthy();
+    expect(screen.getByTestId('ns-type-pkg.C1')).toBeTruthy();
     fireEvent.click(screen.getByTestId('kind-filter-choice'));
     expect(screen.getByTestId('kind-filter-choice').getAttribute('aria-pressed')).toBe('false');
     // Choice row gone; data/enum/func rows remain.
-    expect(screen.queryByTestId('ns-type-pkg::C1')).toBeNull();
-    expect(screen.getByTestId('ns-type-pkg::D1')).toBeTruthy();
-    expect(screen.getByTestId('ns-type-pkg::E1')).toBeTruthy();
+    expect(screen.queryByTestId('ns-type-pkg.C1')).toBeNull();
+    expect(screen.getByTestId('ns-type-pkg.D1')).toBeTruthy();
+    expect(screen.getByTestId('ns-type-pkg.E1')).toBeTruthy();
   });
 
   it('prunes a now-empty namespace from the tree when its only kind is filtered off', () => {
@@ -448,9 +448,9 @@ describe('NamespaceExplorerPanel — kind filter pills', () => {
         onSelectNode={vi.fn()}
       />
     );
-    expect(screen.getByTestId('ns-type-only.choice::C')).toBeTruthy();
+    expect(screen.getByTestId('ns-type-only.choice.C')).toBeTruthy();
     fireEvent.click(screen.getByTestId('kind-filter-choice'));
-    expect(screen.queryByTestId('ns-type-only.choice::C')).toBeNull();
+    expect(screen.queryByTestId('ns-type-only.choice.C')).toBeNull();
     // Empty-state message replaces the pruned tree.
     expect(screen.getByText('No types loaded')).toBeTruthy();
   });

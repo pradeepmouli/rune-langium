@@ -53,7 +53,7 @@ const outputRow: StructureRow = {
 };
 
 const data = {
-  id: 'cdm.calc::FixedAmount',
+  id: 'cdm.calc.FixedAmount',
   kind: 'function',
   name: 'FixedAmount',
   namespaceUri: 'cdm.calc',
@@ -71,14 +71,14 @@ function renderInFlow(jsx: React.ReactNode) {
 
 describe('FunctionNode — structure variant (Phase C)', () => {
   it('renders the function name and a Func kind badge', () => {
-    renderInFlow(<FunctionNode data={data as any} selected={false} id="cdm.calc::FixedAmount" type="function" />);
+    renderInFlow(<FunctionNode data={data as any} selected={false} id="cdm.calc.FixedAmount" type="function" />);
     expect(screen.getByText('FixedAmount')).toBeInTheDocument();
     // KindBadge for func renders its label.
     expect(screen.getByText(/Function/i)).toBeInTheDocument();
   });
 
   it('renders each input parameter as a row (name + type + cardinality)', () => {
-    renderInFlow(<FunctionNode data={data as any} selected={false} id="cdm.calc::FixedAmount" type="function" />);
+    renderInFlow(<FunctionNode data={data as any} selected={false} id="cdm.calc.FixedAmount" type="function" />);
     expect(screen.getByText('notional')).toBeInTheDocument();
     expect(screen.getByText('rate')).toBeInTheDocument();
     expect(screen.getByText('number')).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('FunctionNode — structure variant (Phase C)', () => {
 
   it('renders a distinct, marked output row', () => {
     const { container } = renderInFlow(
-      <FunctionNode data={data as any} selected={false} id="cdm.calc::FixedAmount" type="function" />
+      <FunctionNode data={data as any} selected={false} id="cdm.calc.FixedAmount" type="function" />
     );
     expect(screen.getByText('amount')).toBeInTheDocument();
     expect(screen.getByText('Money')).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('FunctionNode — structure variant (Phase C)', () => {
   });
 
   it('forwards Phase-A meta to StructureMetaIndicators', () => {
-    renderInFlow(<FunctionNode data={data as any} selected={false} id="cdm.calc::FixedAmount" type="function" />);
+    renderInFlow(<FunctionNode data={data as any} selected={false} id="cdm.calc.FixedAmount" type="function" />);
     expect(screen.getByRole('button', { name: 'Documentation' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Conditions/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Annotations/ })).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('FunctionNode — structure variant (Phase C)', () => {
   it('renders inputs only (no separator / output row) when the function has no output', () => {
     const noOutput = { ...data, outputRow: undefined };
     const { container } = renderInFlow(
-      <FunctionNode data={noOutput as any} selected={false} id="cdm.calc::FixedAmount" type="function" />
+      <FunctionNode data={noOutput as any} selected={false} id="cdm.calc.FixedAmount" type="function" />
     );
     expect(container.querySelector('.rune-node-row--output')).toBeNull();
     expect(container.querySelector('.rune-node-func-output-sep')).toBeNull();

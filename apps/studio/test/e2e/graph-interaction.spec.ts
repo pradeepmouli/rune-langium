@@ -89,9 +89,9 @@ test.describe('Graph Interactions', () => {
     await loadFiles(page, [{ name: 'model.rosetta', content: INHERITANCE_MODEL }]);
 
     // 3 types: Vehicle, Sedan, Fuel
-    await expect(page.getByTestId('rf__node-graph.test::Vehicle')).toBeVisible();
-    await expect(page.getByTestId('rf__node-graph.test::Sedan')).toBeVisible();
-    await expect(page.getByTestId('rf__node-graph.test::Fuel')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.test.Vehicle')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.test.Sedan')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.test.Fuel')).toBeVisible();
   });
 
   test('should render edges for inheritance relationships', async ({ page }) => {
@@ -107,7 +107,7 @@ test.describe('Graph Interactions', () => {
     await loadFiles(page, [{ name: 'model.rosetta', content: INHERITANCE_MODEL }]);
     await page.waitForTimeout(2000); // Wait for layout animation
 
-    const vehicleNode = page.getByTestId('rf__node-graph.test::Vehicle');
+    const vehicleNode = page.getByTestId('rf__node-graph.test.Vehicle');
     await vehicleNode.click({ force: true });
     await page.waitForTimeout(500);
 
@@ -127,8 +127,8 @@ test.describe('Graph Interactions', () => {
     await page.waitForTimeout(500);
 
     // All nodes should still be visible after fit view
-    await expect(page.getByTestId('rf__node-graph.test::Vehicle')).toBeVisible();
-    await expect(page.getByTestId('rf__node-graph.test::Sedan')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.test.Vehicle')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.test.Sedan')).toBeVisible();
   });
 
   test('Re-layout button should rearrange nodes', async ({ page }) => {
@@ -142,7 +142,7 @@ test.describe('Graph Interactions', () => {
       await page.waitForTimeout(1000);
 
       // Nodes should still be visible after re-layout
-      await expect(page.getByTestId('rf__node-graph.test::Vehicle')).toBeVisible();
+      await expect(page.getByTestId('rf__node-graph.test.Vehicle')).toBeVisible();
     }
   });
 
@@ -152,16 +152,16 @@ test.describe('Graph Interactions', () => {
       { name: 'beta.rosetta', content: MULTI_FILE_MODEL_B }
     ]);
 
-    await expect(page.getByTestId('rf__node-graph.alpha::AlphaOne')).toBeVisible();
-    await expect(page.getByTestId('rf__node-graph.alpha::AlphaTwo')).toBeVisible();
-    await expect(page.getByTestId('rf__node-graph.beta::BetaItem')).toBeVisible();
-    await expect(page.getByTestId('rf__node-graph.beta::BetaStatus')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.alpha.AlphaOne')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.alpha.AlphaTwo')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.beta.BetaItem')).toBeVisible();
+    await expect(page.getByTestId('rf__node-graph.beta.BetaStatus')).toBeVisible();
   });
 
   test('should show node attributes in graph nodes', async ({ page }) => {
     await loadFiles(page, [{ name: 'model.rosetta', content: INHERITANCE_MODEL }]);
 
-    const vehicleNode = page.getByTestId('rf__node-graph.test::Vehicle');
+    const vehicleNode = page.getByTestId('rf__node-graph.test.Vehicle');
     await expect(vehicleNode.getByText('vin')).toBeVisible();
   });
 
