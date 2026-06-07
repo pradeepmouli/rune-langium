@@ -15,23 +15,11 @@ import type { EditorState } from './editor-store.js';
 import { useEditorStore } from './editor-store.js';
 
 /**
- * Fields tracked by undo/redo.
+ * Fields tracked by undo/redo (Phase 3B, Task 6).
+ * Maps are the canonical SoT; arrays are derived caches (invariant I1).
  * UI state (selection, viewport) is NOT tracked.
  */
-export type TrackedState = Pick<EditorState, 'nodes' | 'edges'>;
-
-/**
- * Create the temporal middleware options.
- */
-export const temporalOptions = {
-  /** Only track graph state, not UI state */
-  partialize: (state: EditorState): TrackedState => ({
-    nodes: state.nodes,
-    edges: state.edges
-  }),
-  /** Limit history size */
-  limit: 50
-};
+export type TrackedState = Pick<EditorState, 'nodesById' | 'edgesById'>;
 
 export { temporal };
 

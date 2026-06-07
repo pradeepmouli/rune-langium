@@ -834,34 +834,49 @@ const initialState: EditorState = {
  *
  * @category Visual Editor
  */
-export const createEditorStore = (overrides?: Partial<EditorState>) =>
-  create<EditorStore>()(
+export const createEditorStore = (overrides?: Partial<EditorState>) => {
+  const store = create<EditorStore>()(
     temporal(
       (rawSet, get) => {
         // -----------------------------------------------------------------------
-        // Transitional set-interceptor (Phase 3B, Task 2)
+        // Transitional set-interceptor (Phase 3B, Task 2 → Task 6)
         //
-        // During 3B, actions still author nodes/edges arrays directly. After every
-        // rawSet call we re-derive nodesById/edgesById whenever the nodes or edges
-        // array reference changed, maintaining invariant I1:
-        //   state.nodes === [...state.nodesById.values()]
+        // During 3B, array-writing actions still author nodes/edges arrays
+        // directly (e.g. createType, deleteType). After every rawSet call the
+        // interceptor re-derives nodesById/edgesById when the array ref changed
+        // but the Map ref did NOT — meaning a legacy array-only write happened
+        // that the Map substrate doesn't yet own.
         //
-        // The re-derive uses rawSet (not the wrapped set) so there is no recursion.
-        // The temporal options below supply an `equality` fn that treats two
-        // TrackedState snapshots as equal when the nodes/edges refs are unchanged —
-        // this ensures the Map-only re-derive rawSet call does NOT push a redundant
-        // undo history entry (partialize only picks nodes+edges; the Map-only write
-        // produces an identical partialized snapshot, so equality short-circuits it).
+        // Hazard A (Task 6): now that partialize tracks Maps, a chokepoint
+        // (mutateGraph, updateGraphView, loadModels) already writes BOTH arrays
+        // and Maps in a single set call. If the interceptor ran unconditionally
+        // on array changes it would derive a NEW Map ref → second history entry.
+        //
+        // Discriminator: re-derive only when the array ref changed AND the Map
+        // ref did NOT change in the same set call. When a chokepoint already set
+        // the Maps (Map ref changed), SKIP re-derive.
+        //
+        // The temporal options use an equality fn on {nodesById, edgesById} so
+        // that re-derive rawSet calls (which keep array refs identical) do not
+        // push a redundant undo entry.
         // -----------------------------------------------------------------------
-        let lastNodes: TypeGraphNode[] | undefined;
-        let lastEdges: TypeGraphEdge[] | undefined;
+        // Seed last-seen refs from the effective initial state so the first
+        // comparison has a proper baseline (avoids treating "not undefined" as
+        // "Maps changed" on the very first set call).
+        const _init = { ...initialState, ...overrides } as EditorState;
+        let lastNodes: TypeGraphNode[]               = _init.nodes;
+        let lastEdges: TypeGraphEdge[]               = _init.edges;
+        let lastNodesById: Map<string, TypeGraphNode> = _init.nodesById;
+        let lastEdgesById: Map<string, TypeGraphEdge> = _init.edgesById;
 
         const set: typeof rawSet = (partial, replace?) => {
           rawSet(partial as never, replace as never);
           const next = get();
-          if (next.nodes !== lastNodes || next.edges !== lastEdges) {
-            lastNodes = next.nodes;
-            lastEdges = next.edges;
+          const arraysChanged = next.nodes !== lastNodes || next.edges !== lastEdges;
+          const mapsChanged   = next.nodesById !== lastNodesById || next.edgesById !== lastEdgesById;
+          if (arraysChanged && !mapsChanged) {
+            // A legacy array-only write: re-derive Maps to keep I1.
+            // rawSet (not the wrapped set) to avoid recursion.
             rawSet(
               {
                 nodesById: toNodesById(next.nodes),
@@ -869,6 +884,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
               } as never
             );
           }
+          // Refresh all four last-seen refs to the post-write state.
+          const after = get();
+          lastNodes    = after.nodes;
+          lastEdges    = after.edges;
+          lastNodesById = after.nodesById;
+          lastEdgesById = after.edgesById;
         };
 
         return {
@@ -2506,19 +2527,52 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         }; // end return object
       }, // end creator function
       {
+        // Track Maps (the canonical SoT) rather than arrays. Equality on Map
+        // identity keeps array re-derives (which don't touch Maps) from
+        // pushing redundant undo entries.
         partialize: (state): TrackedState => ({
-          nodes: state.nodes,
-          edges: state.edges
+          nodesById: state.nodesById,
+          edgesById: state.edgesById
         }),
-        // Prevent the Map-only re-derive rawSet from creating a redundant
-        // undo history entry. partialize only picks nodes+edges; the
-        // Map-only write leaves those refs unchanged, so equality fires
-        // and zundo skips recording that transition.
-        equality: (a, b) => a.nodes === b.nodes && a.edges === b.edges,
+        equality: (a, b) => a.nodesById === b.nodesById && a.edgesById === b.edgesById,
         limit: 50
       }
     )
   );
+
+  // ---------------------------------------------------------------------------
+  // Hazard B (Task 6): re-derive arrays after undo/redo.
+  //
+  // zundo's undo/redo restores ONLY partialized fields (nodesById, edgesById)
+  // via the internal userSet — which bypasses our wrapped `set` interceptor.
+  // After a restore, Maps hold the old values but nodes/edges arrays are stale.
+  //
+  // Fix: subscribe to the store. When Maps change but arrays didn't (the exact
+  // signature of an undo/redo restore), re-derive arrays via store.setState.
+  // store.setState goes through zundo's override, but the partialized snapshot
+  // {nodesById, edgesById} is unchanged by an arrays-only write, so the
+  // equality fn fires and zundo does NOT record the re-derive as a new entry.
+  //
+  // Loop-safety: after the re-derive, maps are unchanged and arrays match →
+  // next subscription call sees mapsChanged=false → skips. No infinite loop.
+  // ---------------------------------------------------------------------------
+  store.subscribe((state, prevState) => {
+    const mapsChanged =
+      state.nodesById !== prevState.nodesById || state.edgesById !== prevState.edgesById;
+    const arraysUnchanged =
+      state.nodes === prevState.nodes && state.edges === prevState.edges;
+    if (mapsChanged && arraysUnchanged) {
+      // undo/redo restored Maps but left arrays stale — re-derive without
+      // triggering history (arrays-only write → equality short-circuits zundo).
+      store.setState({
+        nodes: nodesFromMap(state.nodesById),
+        edges: edgesFromMap(state.edgesById)
+      });
+    }
+  });
+
+  return store;
+};
 
 /**
  * Default store instance for use with RuneTypeGraph.
