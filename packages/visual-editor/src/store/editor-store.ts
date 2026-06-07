@@ -1959,33 +1959,38 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             expression: { $cstText: condition.expressionText },
             postCondition: condition.isPostCondition ?? false
           };
-
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              if (condition.isPostCondition) {
-                const postConditions = [...((d as any).postConditions ?? []), newCondition];
-                return { ...n, data: { ...d, postConditions } };
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { conditions?: unknown[]; postConditions?: unknown[] };
+            if (condition.isPostCondition) {
+              if (Array.isArray(dd.postConditions)) {
+                dd.postConditions.push(newCondition);
+              } else {
+                dd.postConditions = [newCondition];
               }
-              const conditions = [...((d as any).conditions ?? []), newCondition];
-              return { ...n, data: { ...d, conditions } };
-            })
-          }));
+            } else {
+              if (Array.isArray(dd.conditions)) {
+                dd.conditions.push(newCondition);
+              } else {
+                dd.conditions = [newCondition];
+              }
+            }
+          });
         },
 
         removeCondition(nodeId: string, index: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              const allConditions = [...((d as any).conditions ?? []), ...((d as any).postConditions ?? [])];
-              allConditions.splice(index, 1);
-              const conditions = allConditions.filter((c: any) => !c.postCondition);
-              const postConditions = allConditions.filter((c: any) => c.postCondition);
-              return { ...n, data: { ...d, conditions, postConditions } };
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { conditions?: any[]; postConditions?: any[] };
+            const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
+            allConditions.splice(index, 1);
+            dd.conditions = allConditions.filter((c: any) => !c.postCondition);
+            dd.postConditions = allConditions.filter((c: any) => c.postCondition);
+          });
         },
 
         updateCondition(
@@ -1993,41 +1998,40 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           index: number,
           updates: { name?: string; definition?: string; expressionText?: string }
         ) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              const allConditions = [...((d as any).conditions ?? []), ...((d as any).postConditions ?? [])];
-              if (index < 0 || index >= allConditions.length) return n;
-              const cond = allConditions[index];
-              allConditions[index] = {
-                ...cond,
-                ...(updates.name !== undefined ? { name: updates.name } : {}),
-                ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
-                ...(updates.expressionText !== undefined
-                  ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
-                  : {})
-              };
-              const conditions = allConditions.filter((c: any) => !c.postCondition);
-              const postConditions = allConditions.filter((c: any) => c.postCondition);
-              return { ...n, data: { ...d, conditions, postConditions } };
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { conditions?: any[]; postConditions?: any[] };
+            const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
+            if (index < 0 || index >= allConditions.length) return;
+            const cond = allConditions[index];
+            allConditions[index] = {
+              ...cond,
+              ...(updates.name !== undefined ? { name: updates.name } : {}),
+              ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
+              ...(updates.expressionText !== undefined
+                ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
+                : {})
+            };
+            dd.conditions = allConditions.filter((c: any) => !c.postCondition);
+            dd.postConditions = allConditions.filter((c: any) => c.postCondition);
+          });
         },
 
         reorderCondition(nodeId: string, fromIndex: number, toIndex: number) {
-          set((state) => ({
-            nodes: state.nodes.map((n) => {
-              if (n.id !== nodeId) return n;
-              const d = n.data as AnyGraphNode;
-              const conditions = [...((d as any).conditions ?? [])];
-              const [moved] = conditions.splice(fromIndex, 1);
-              if (moved) {
-                conditions.splice(toIndex, 0, moved);
-              }
-              return { ...n, data: { ...d, conditions } };
-            })
-          }));
+          mutateGraph(set, get, (draft) => {
+            const n = draft.nodes.get(nodeId);
+            const d = n?.data as AnyGraphNode | undefined;
+            if (!d) return;
+            const dd = d as { conditions?: any[] };
+            const conditions = [...(dd.conditions ?? [])];
+            const [moved] = conditions.splice(fromIndex, 1);
+            if (moved) {
+              conditions.splice(toIndex, 0, moved);
+            }
+            dd.conditions = conditions;
+          });
         },
 
         // -----------------------------------------------------------------------

@@ -821,6 +821,195 @@ describe('EditorStore — condition and expression operations', () => {
     });
   });
 
+  // -----------------------------------------------------------------------
+  // Wave E — condition actions: nodes-rooted recipe patches
+  // -----------------------------------------------------------------------
+
+  describe('addCondition — id-rooted patch (Wave E)', () => {
+    it('captures a nodes-rooted patch with conditions in path', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().addCondition(nodeId, { name: 'WaveE', expressionText: 'x > 0' });
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('conditions');
+    });
+
+    it('captures a nodes-rooted patch with postConditions in path for postCondition add', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().addCondition(nodeId, { name: 'PostC', expressionText: 'y > 0', isPostCondition: true });
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('postConditions');
+    });
+  });
+
+  describe('removeCondition — id-rooted patch (Wave E)', () => {
+    it('captures a nodes-rooted patch with conditions in path', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      store.getState().addCondition(nodeId, { name: 'C1', expressionText: 'a > 0' });
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().removeCondition(nodeId, 0);
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+    });
+
+    it('removes the correct postCondition when merged index ≥ conditions.length', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      // Seed: 2 conditions + 2 postConditions
+      store.getState().addCondition(nodeId, { name: 'C1', expressionText: 'c1' });
+      store.getState().addCondition(nodeId, { name: 'C2', expressionText: 'c2' });
+      store.getState().addCondition(nodeId, { name: 'P1', expressionText: 'p1', isPostCondition: true });
+      store.getState().addCondition(nodeId, { name: 'P2', expressionText: 'p2', isPostCondition: true });
+
+      // merged index 2 → first postCondition (P1)
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().removeCondition(nodeId, 2);
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+
+      // conditions array untouched (still C1, C2)
+      const updated = store.getState().nodes.find((n) => n.id === nodeId)!;
+      const conditions = (updated.data as any).conditions ?? [];
+      const postConditions = (updated.data as any).postConditions ?? [];
+      expect(conditions.length).toBe(2);
+      expect(conditions[0].name).toBe('C1');
+      expect(conditions[1].name).toBe('C2');
+      // P1 removed, only P2 remains
+      expect(postConditions.length).toBe(1);
+      expect(postConditions[0].name).toBe('P2');
+    });
+  });
+
+  describe('updateCondition — id-rooted patch (Wave E)', () => {
+    it('captures a nodes-rooted patch with conditions in path', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      store.getState().addCondition(nodeId, { name: 'C1', expressionText: 'old' });
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().updateCondition(nodeId, 0, { name: 'C1Updated' });
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+    });
+
+    it('updates the correct postCondition when merged index ≥ conditions.length', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      // Seed: 2 conditions + 2 postConditions
+      store.getState().addCondition(nodeId, { name: 'C1', expressionText: 'c1' });
+      store.getState().addCondition(nodeId, { name: 'C2', expressionText: 'c2' });
+      store.getState().addCondition(nodeId, { name: 'P1', expressionText: 'p1', isPostCondition: true });
+      store.getState().addCondition(nodeId, { name: 'P2', expressionText: 'p2', isPostCondition: true });
+
+      // merged index 3 → P2
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().updateCondition(nodeId, 3, { name: 'P2_Updated', expressionText: 'p2_new' });
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+
+      // conditions untouched
+      const updated = store.getState().nodes.find((n) => n.id === nodeId)!;
+      const conditions = (updated.data as any).conditions ?? [];
+      const postConditions = (updated.data as any).postConditions ?? [];
+      expect(conditions.length).toBe(2);
+      expect(conditions[0].name).toBe('C1');
+      expect(conditions[1].name).toBe('C2');
+      // P2 updated, P1 untouched
+      expect(postConditions.length).toBe(2);
+      expect(postConditions[0].name).toBe('P1');
+      expect(postConditions[1].name).toBe('P2_Updated');
+      expect(postConditions[1].expression.$cstText).toBe('p2_new');
+    });
+
+    it('is a no-op (no patch) when index is out of bounds', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      store.getState().addCondition(nodeId, { name: 'C1', expressionText: 'c1' });
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().updateCondition(nodeId, 99, { name: 'Should not apply' });
+
+      const patches = store.getState().pendingEditPatches;
+      expect(patches.length).toBe(patchesBefore); // no new patches
+    });
+  });
+
+  describe('reorderCondition — id-rooted patch (Wave E)', () => {
+    it('captures a nodes-rooted patch with conditions in path', () => {
+      const nodes = store.getState().nodes;
+      const dataNode = nodes.find((n) => (n.data as any).$type === 'Data');
+      expect(dataNode).toBeDefined();
+      const nodeId = dataNode!.id;
+
+      store.getState().addCondition(nodeId, { name: 'First', expressionText: 'e1' });
+      store.getState().addCondition(nodeId, { name: 'Second', expressionText: 'e2' });
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().reorderCondition(nodeId, 0, 1);
+
+      const patches = store.getState().pendingEditPatches;
+      const newPatches = patches.slice(patchesBefore);
+      expect(newPatches.length).toBeGreaterThan(0);
+      expect(newPatches[0]!.path[0]).toBe('nodes');
+      expect(newPatches[0]!.path[1]).toBe(nodeId);
+      expect(newPatches[0]!.path).toContain('conditions');
+    });
+  });
+
   describe('updateExpression', () => {
     it('updates the function body expression via operations', async () => {
       const funcStore = createEditorStore();
