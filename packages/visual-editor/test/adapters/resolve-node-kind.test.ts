@@ -9,22 +9,22 @@ import { resolveNodeKind } from '../../src/adapters/model-helpers.js';
 
 describe('resolveNodeKind', () => {
   it('resolves a user-authored AST node via data.$type', () => {
-    const node = { id: 'ns::Foo', type: 'data', data: { $type: 'Data', name: 'Foo' } };
+    const node = { id: 'ns.Foo', type: 'data', data: { $type: 'Data', name: 'Foo' } };
     expect(resolveNodeKind(node)).toBe('data');
   });
 
   it('resolves a curated enum via data.typeKind when $type is missing', () => {
-    const node = { id: 'ns::E', type: 'enum', data: { typeKind: 'enum', name: 'E' } };
+    const node = { id: 'ns.E', type: 'enum', data: { typeKind: 'enum', name: 'E' } };
     expect(resolveNodeKind(node)).toBe('enum');
   });
 
   it('resolves a curated choice via data.typeKind in AST form (Choice)', () => {
-    const node = { id: 'ns::C', type: 'choice', data: { typeKind: 'Choice', name: 'C' } };
+    const node = { id: 'ns.C', type: 'choice', data: { typeKind: 'Choice', name: 'C' } };
     expect(resolveNodeKind(node)).toBe('choice');
   });
 
   it('falls back to React-Flow node.type when both $type and typeKind are missing', () => {
-    const node = { id: 'ns::F', type: 'func', data: { name: 'F' } };
+    const node = { id: 'ns.F', type: 'func', data: { name: 'F' } };
     expect(resolveNodeKind(node)).toBe('func');
   });
 

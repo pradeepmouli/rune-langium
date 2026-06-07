@@ -59,11 +59,11 @@ describe('NavigationHistory', () => {
 
   it('pushes and pops a single entry', () => {
     const history = new NavigationHistory<string>();
-    history.push('cdm.base.math::Quantity');
+    history.push('cdm.base.math.Quantity');
     expect(history.length).toBe(1);
 
     const popped = history.pop();
-    expect(popped).toBe('cdm.base.math::Quantity');
+    expect(popped).toBe('cdm.base.math.Quantity');
     expect(history.length).toBe(0);
   });
 
@@ -99,11 +99,11 @@ describe('NavigationHistory', () => {
 
     const history = new NavigationHistory<NavEntry>();
     const entry1: NavEntry = {
-      nodeId: 'cdm.base.math::Quantity',
+      nodeId: 'cdm.base.math.Quantity',
       viewport: { x: 100, y: 200, zoom: 1.5 }
     };
     const entry2: NavEntry = {
-      nodeId: 'cdm.product::Trade',
+      nodeId: 'cdm.product.Trade',
       viewport: { x: 300, y: 400, zoom: 1.0 }
     };
 

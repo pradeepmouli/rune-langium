@@ -36,7 +36,7 @@ import { TypeSelector } from '../../src/components/editors/TypeSelector.js';
 
 const OPTIONS: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
-  { value: 'test.ns::Trade', label: 'Trade', kind: 'data', namespace: 'test.ns' }
+  { value: 'test.ns.Trade', label: 'Trade', kind: 'data', namespace: 'test.ns' }
 ];
 
 describe('TypeSelector', () => {
@@ -81,7 +81,7 @@ describe('TypeSelector', () => {
     const dataPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test.ns',
-      typeId: 'test.ns::Trade',
+      typeId: 'test.ns.Trade',
       typeName: 'Trade',
       kind: 'Data'
     };
@@ -106,7 +106,7 @@ describe('TypeSelector', () => {
     const dataPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test.ns',
-      typeId: 'test.ns::Trade',
+      typeId: 'test.ns.Trade',
       typeName: 'Trade',
       kind: 'Data'
     };
@@ -116,7 +116,7 @@ describe('TypeSelector', () => {
       fireEvent.drop(dropTarget!, { dataTransfer });
     });
 
-    expect(onSelect).toHaveBeenCalledWith('test.ns::Trade');
+    expect(onSelect).toHaveBeenCalledWith('test.ns.Trade');
   });
 
   it('omitting filterKinds (no filter) accepts any draggable kind', () => {
@@ -129,7 +129,7 @@ describe('TypeSelector', () => {
     const enumPayload: TypeRefPayload = {
       rune: 'type-ref',
       namespaceUri: 'test.ns',
-      typeId: 'test.ns::Side',
+      typeId: 'test.ns.Side',
       typeName: 'Side',
       kind: 'Enum'
     };
@@ -139,6 +139,6 @@ describe('TypeSelector', () => {
       fireEvent.drop(dropTarget!, { dataTransfer });
     });
 
-    expect(onSelect).toHaveBeenCalledWith('test.ns::Side');
+    expect(onSelect).toHaveBeenCalledWith('test.ns.Side');
   });
 });

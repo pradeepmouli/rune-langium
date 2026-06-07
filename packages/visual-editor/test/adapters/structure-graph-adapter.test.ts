@@ -23,7 +23,7 @@ const fixtureSimple = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -39,13 +39,13 @@ const fixtureSimple = {
 describe('buildStructureGraph — standalone Data type', () => {
   it('produces a single root node with rows for each attribute', () => {
     const result = buildStructureGraph(fixtureSimple, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
 
-    expect(result.rootNodeId).toBe('cdm.trade::Trade');
+    expect(result.rootNodeId).toBe('cdm.trade.Trade');
     expect(result.nodes.size).toBe(1);
-    const root = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const root = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
     expect(root.kind).toBe('data');
     expect(root.rows).toHaveLength(2);
     expect(root.rows[0]!.attrName).toBe('tradeDate');
@@ -57,7 +57,7 @@ describe('buildStructureGraph — standalone Data type', () => {
 
   it('returns empty graph when focusedTypeId is unknown', () => {
     const result = buildStructureGraph(fixtureSimple, {
-      focusedTypeId: 'cdm.trade::Missing',
+      focusedTypeId: 'cdm.trade.Missing',
       expansionMap: new Map()
     });
 
@@ -69,7 +69,7 @@ const fixtureExtends = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::TradeBase',
+      id: 'cdm.trade.TradeBase',
       $type: 'Data' as const,
       name: 'TradeBase',
       namespace: 'cdm.trade',
@@ -79,7 +79,7 @@ const fixtureExtends = {
       ]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -94,7 +94,7 @@ const fixtureExtends = {
 describe('buildStructureGraph — inheritance', () => {
   it('produces a base-type container wrapping the derived Data', () => {
     const result = buildStructureGraph(fixtureExtends, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
 
@@ -109,7 +109,7 @@ describe('buildStructureGraph — inheritance', () => {
     // Phase 14e: per-instance materialization. `childNodeId` now carries the
     // child's INSTANCE id (a derivation of the parent). The derived Data node
     // is found via its canonical id with the helper.
-    const derived = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const derived = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(derived?.kind).toBe('data');
     expect(base.childNodeId).toBe(derived.instanceId);
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeDate']); // ONLY new additions
@@ -126,7 +126,7 @@ describe('buildStructureGraph — inheritance', () => {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::TradeRoot',
+          id: 'cdm.trade.TradeRoot',
           $type: 'Data' as const,
           name: 'TradeRoot',
           namespace: 'cdm.trade',
@@ -139,7 +139,7 @@ describe('buildStructureGraph — inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -153,7 +153,7 @@ describe('buildStructureGraph — inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -170,15 +170,15 @@ describe('buildStructureGraph — inheritance', () => {
     };
 
     const result = buildStructureGraph(fixtureDeep, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
 
     // Three nodes: 2 base containers + 1 data node.
     expect(result.nodes.size).toBe(3);
 
-    const outerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
-    const innerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outerCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeRoot`;
+    const innerCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeBase`;
 
     // Phase 14e: rootNodeId is the outermost wrapper's INSTANCE id; for a
     // root placement the instance id equals the canonical id (no parent prefix).
@@ -198,7 +198,7 @@ describe('buildStructureGraph — inheritance', () => {
     // Child links are per-instance ids; verify by lineage rather than literal.
     expect(outer.childNodeId).toBe(inner.instanceId);
 
-    const derived = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const derived = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(derived.kind).toBe('data');
     expect(inner.childNodeId).toBe(derived.instanceId);
     expect(derived.rows.map((r) => r.attrName)).toEqual(['tradeField']);
@@ -216,7 +216,7 @@ describe('buildStructureGraph — inheritance', () => {
       namespaces: [{ uri: 'cdm.cycle' }],
       nodes: [
         {
-          id: 'cdm.cycle::A',
+          id: 'cdm.cycle.A',
           $type: 'Data' as const,
           name: 'A',
           namespace: 'cdm.cycle',
@@ -226,7 +226,7 @@ describe('buildStructureGraph — inheritance', () => {
           ]
         },
         {
-          id: 'cdm.cycle::B',
+          id: 'cdm.cycle.B',
           $type: 'Data' as const,
           name: 'B',
           namespace: 'cdm.cycle',
@@ -241,19 +241,19 @@ describe('buildStructureGraph — inheritance', () => {
     // The call must return — vitest will mark this test failing on timeout
     // if the walker loops.
     const result = buildStructureGraph(fixtureCyclicExtends, {
-      focusedTypeId: 'cdm.cycle::A',
+      focusedTypeId: 'cdm.cycle.A',
       expansionMap: new Map()
     });
 
     // Graph is finite. Focused A is present.
-    const a = findByCanonicalId(result.nodes, 'cdm.cycle::A') as StructureDataNode;
+    const a = findByCanonicalId(result.nodes, 'cdm.cycle.A') as StructureDataNode;
     expect(a).toBeDefined();
     expect(a.kind).toBe('data');
     // The walker stops before re-entering A: B is allowed once (the direct
     // base), then B.extends → A is rejected by the visited guard. So we
     // expect exactly one base container wrapping A.
     expect(result.nodes.size).toBe(2);
-    const baseCanonicalId = `cdm.cycle::A::__base::cdm.cycle::B`;
+    const baseCanonicalId = `cdm.cycle.A::__base::cdm.cycle.B`;
     expect(result.rootNodeId).toBe(baseCanonicalId);
     const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     expect(base.kind).toBe('base');
@@ -266,7 +266,7 @@ const fixtureRef = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::Economics',
+      id: 'cdm.trade.Economics',
       $type: 'Data' as const,
       name: 'Economics',
       namespace: 'cdm.trade',
@@ -275,7 +275,7 @@ const fixtureRef = {
       ]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -293,34 +293,34 @@ const fixtureRef = {
 describe('buildStructureGraph — type-reference expansion', () => {
   it('does NOT expand when the attribute is collapsed', () => {
     const result = buildStructureGraph(fixtureRef, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
     expect(result.nodes.size).toBe(1);
-    expect(result.nodes.has('cdm.trade::Economics')).toBe(false);
+    expect(result.nodes.has('cdm.trade.Economics')).toBe(false);
   });
 
   it('expands target type when the attribute is expanded', () => {
-    // Per-instance key: Trade has no inheritance, so rootInstanceId = 'cdm.trade::Trade'.
+    // Per-instance key: Trade has no inheritance, so rootInstanceId = 'cdm.trade.Trade'.
     // Root-row instancePath = [rootInstanceId].
     const key: StructureExpansionKey = {
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
       attrName: 'economics',
-      instancePath: ['cdm.trade::Trade']
+      instancePath: ['cdm.trade.Trade']
     };
     const expansionMap = new Map([[expansionKey(key), true]]);
 
     const result = buildStructureGraph(fixtureRef, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap
     });
 
     // Phase 14e: lookup the expansion target by canonical id; the actual key
     // in `nodes` is the per-instance id assigned by the adapter.
-    const economics = findByCanonicalId(result.nodes, 'cdm.trade::Economics') as StructureDataNode;
+    const economics = findByCanonicalId(result.nodes, 'cdm.trade.Economics') as StructureDataNode;
     expect(economics).toBeDefined();
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(trade.expansions.get('economics')).toBe(economics.instanceId);
   });
 });
@@ -329,7 +329,7 @@ const fixtureChoice = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::Payout',
+      id: 'cdm.trade.Payout',
       $type: 'Choice' as const,
       name: 'Payout',
       namespace: 'cdm.trade',
@@ -337,7 +337,7 @@ const fixtureChoice = {
       choiceOptions: [{ typeCall: { type: { $refText: 'Cash' } } }]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -352,14 +352,14 @@ const fixtureEnumAndUnresolved = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
-      id: 'cdm.trade::DayCount',
+      id: 'cdm.trade.DayCount',
       $type: 'Enum' as const,
       name: 'DayCount',
       namespace: 'cdm.trade',
       values: [{ name: 'ACT_360' }, { name: 'ACT_365' }]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -385,15 +385,15 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
       attrName: 'payout',
-      instancePath: ['cdm.trade::Trade']
+      instancePath: ['cdm.trade.Trade']
     };
     const result = buildStructureGraph(fixtureChoice, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map([[expansionKey(key), true]])
     });
-    const choice = findByCanonicalId(result.nodes, 'cdm.trade::Payout');
+    const choice = findByCanonicalId(result.nodes, 'cdm.trade.Payout');
     expect(choice?.kind).toBe('choice');
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(trade.rows.find((r) => r.attrName === 'payout')?.typeKind).toBe('Choice');
   });
 
@@ -404,20 +404,20 @@ describe('buildStructureGraph — Choice / Enum / Unresolved', () => {
       attrName: 'dayCount'
     };
     const result = buildStructureGraph(fixtureEnumAndUnresolved, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map([[expansionKey(key), true]])
     });
-    expect(result.nodes.has('cdm.trade::DayCount')).toBe(false);
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    expect(result.nodes.has('cdm.trade.DayCount')).toBe(false);
+    const trade = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
     expect(trade.rows.find((r) => r.attrName === 'dayCount')?.typeKind).toBe('Enum');
   });
 
   it('marks unresolved references with kind=Unresolved', () => {
     const result = buildStructureGraph(fixtureEnumAndUnresolved, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
     const row = trade.rows.find((r) => r.attrName === 'mystery')!;
     expect(row.typeKind).toBe('Unresolved');
     expect(row.targetNodeId).toBeUndefined();
@@ -440,21 +440,21 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       namespaces: [{ uri: 'cdm.payment' }],
       nodes: [
         {
-          id: 'cdm.payment::CashSettlement',
+          id: 'cdm.payment.CashSettlement',
           $type: 'Data' as const,
           name: 'CashSettlement',
           namespace: 'cdm.payment',
           attributes: []
         },
         {
-          id: 'cdm.payment::BankTransfer',
+          id: 'cdm.payment.BankTransfer',
           $type: 'Data' as const,
           name: 'BankTransfer',
           namespace: 'cdm.payment',
           attributes: []
         },
         {
-          id: 'cdm.payment::SettlementMethod',
+          id: 'cdm.payment.SettlementMethod',
           $type: 'Choice' as const,
           name: 'SettlementMethod',
           namespace: 'cdm.payment',
@@ -465,7 +465,7 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
           ]
         },
         {
-          id: 'cdm.payment::Payment',
+          id: 'cdm.payment.Payment',
           $type: 'Data' as const,
           name: 'Payment',
           namespace: 'cdm.payment',
@@ -486,11 +486,11 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       namespaceUri: 'cdm.payment',
       typeId: 'Payment',
       attrName: 'method',
-      instancePath: ['cdm.payment::Payment']
+      instancePath: ['cdm.payment.Payment']
     });
     expect(() =>
       buildStructureGraph(fixture, {
-        focusedTypeId: 'cdm.payment::Payment',
+        focusedTypeId: 'cdm.payment.Payment',
         expansionMap: new Map([[expansionKey_, true]])
       })
     ).not.toThrow();
@@ -501,21 +501,21 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       namespaces: [{ uri: 'cdm.payment' }],
       nodes: [
         {
-          id: 'cdm.payment::CashSettlement',
+          id: 'cdm.payment.CashSettlement',
           $type: 'Data' as const,
           name: 'CashSettlement',
           namespace: 'cdm.payment',
           attributes: []
         },
         {
-          id: 'cdm.payment::BankTransfer',
+          id: 'cdm.payment.BankTransfer',
           $type: 'Data' as const,
           name: 'BankTransfer',
           namespace: 'cdm.payment',
           attributes: []
         },
         {
-          id: 'cdm.payment::SettlementMethod',
+          id: 'cdm.payment.SettlementMethod',
           $type: 'Choice' as const,
           name: 'SettlementMethod',
           namespace: 'cdm.payment',
@@ -525,7 +525,7 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
           ]
         },
         {
-          id: 'cdm.payment::Payment',
+          id: 'cdm.payment.Payment',
           $type: 'Data' as const,
           name: 'Payment',
           namespace: 'cdm.payment',
@@ -544,14 +544,14 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       namespaceUri: 'cdm.payment',
       typeId: 'Payment',
       attrName: 'method',
-      instancePath: ['cdm.payment::Payment']
+      instancePath: ['cdm.payment.Payment']
     });
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.payment::Payment',
+      focusedTypeId: 'cdm.payment.Payment',
       expansionMap: new Map([[expansionKey_, true]])
     });
 
-    const choiceNode = findByCanonicalId(result.nodes, 'cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const choiceNode = findByCanonicalId(result.nodes, 'cdm.payment.SettlementMethod') as StructureChoiceNode;
     expect(choiceNode).toBeDefined();
     expect(choiceNode.kind).toBe('choice');
     expect(choiceNode.options).toHaveLength(2);
@@ -559,11 +559,11 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
     // StructureChoiceArm: typeName from $refText, typeKind resolved by lookup.
     expect(choiceNode.options[0]!.typeName).toBe('CashSettlement');
     expect(choiceNode.options[0]!.typeKind).toBe('Data');
-    expect(choiceNode.options[0]!.targetNodeId).toBe('cdm.payment::CashSettlement');
+    expect(choiceNode.options[0]!.targetNodeId).toBe('cdm.payment.CashSettlement');
 
     expect(choiceNode.options[1]!.typeName).toBe('BankTransfer');
     expect(choiceNode.options[1]!.typeKind).toBe('Data');
-    expect(choiceNode.options[1]!.targetNodeId).toBe('cdm.payment::BankTransfer');
+    expect(choiceNode.options[1]!.targetNodeId).toBe('cdm.payment.BankTransfer');
   });
 
   it('marks an unresolvable arm as Unresolved (no targetNodeId)', () => {
@@ -571,7 +571,7 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       namespaces: [{ uri: 'cdm.payment' }],
       nodes: [
         {
-          id: 'cdm.payment::SettlementMethod',
+          id: 'cdm.payment.SettlementMethod',
           $type: 'Choice' as const,
           name: 'SettlementMethod',
           namespace: 'cdm.payment',
@@ -579,7 +579,7 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
           choiceOptions: [{ typeCall: { type: { $refText: 'UnknownType' } } }]
         },
         {
-          id: 'cdm.payment::Payment',
+          id: 'cdm.payment.Payment',
           $type: 'Data' as const,
           name: 'Payment',
           namespace: 'cdm.payment',
@@ -598,14 +598,14 @@ describe('buildStructureGraph — ChoiceOption real AST shape (no name/card)', (
       namespaceUri: 'cdm.payment',
       typeId: 'Payment',
       attrName: 'method',
-      instancePath: ['cdm.payment::Payment']
+      instancePath: ['cdm.payment.Payment']
     });
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.payment::Payment',
+      focusedTypeId: 'cdm.payment.Payment',
       expansionMap: new Map([[expansionKey_, true]])
     });
 
-    const choiceNode = findByCanonicalId(result.nodes, 'cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const choiceNode = findByCanonicalId(result.nodes, 'cdm.payment.SettlementMethod') as StructureChoiceNode;
     expect(choiceNode.options[0]!.typeName).toBe('UnknownType');
     expect(choiceNode.options[0]!.typeKind).toBe('Unresolved');
     expect(choiceNode.options[0]!.targetNodeId).toBeUndefined();
@@ -624,7 +624,7 @@ describe('buildStructureGraph — BasicType classification', () => {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
         {
-          id: 'cdm.misc::Thing',
+          id: 'cdm.misc.Thing',
           $type: 'Data' as const,
           name: 'Thing',
           namespace: 'cdm.misc',
@@ -639,10 +639,10 @@ describe('buildStructureGraph — BasicType classification', () => {
       ]
     };
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.misc::Thing',
+      focusedTypeId: 'cdm.misc.Thing',
       expansionMap: new Map()
     });
-    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    const row = (result.nodes.get('cdm.misc.Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('NotARealType');
     expect(row.typeKind).toBe('Unresolved');
   });
@@ -654,7 +654,7 @@ describe('buildStructureGraph — BasicType classification', () => {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
         {
-          id: 'cdm.misc::Thing',
+          id: 'cdm.misc.Thing',
           $type: 'Data' as const,
           name: 'Thing',
           namespace: 'cdm.misc',
@@ -665,10 +665,10 @@ describe('buildStructureGraph — BasicType classification', () => {
       ]
     };
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.misc::Thing',
+      focusedTypeId: 'cdm.misc.Thing',
       expansionMap: new Map()
     });
-    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    const row = (result.nodes.get('cdm.misc.Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('pattern');
     expect(row.typeKind).toBe('BasicType');
   });
@@ -682,7 +682,7 @@ describe('buildStructureGraph — BasicType classification', () => {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
         {
-          id: 'cdm.misc::Thing',
+          id: 'cdm.misc.Thing',
           $type: 'Data' as const,
           name: 'Thing',
           namespace: 'cdm.misc',
@@ -693,10 +693,10 @@ describe('buildStructureGraph — BasicType classification', () => {
       ]
     };
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.misc::Thing',
+      focusedTypeId: 'cdm.misc.Thing',
       expansionMap: new Map()
     });
-    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    const row = (result.nodes.get('cdm.misc.Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('int');
     expect(row.typeKind).toBe('BasicType');
   });
@@ -709,7 +709,7 @@ describe('buildStructureGraph — BasicType classification', () => {
       namespaces: [{ uri: 'cdm.misc' }],
       nodes: [
         {
-          id: 'cdm.misc::Thing',
+          id: 'cdm.misc.Thing',
           $type: 'Data' as const,
           name: 'Thing',
           namespace: 'cdm.misc',
@@ -720,10 +720,10 @@ describe('buildStructureGraph — BasicType classification', () => {
       ]
     };
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.misc::Thing',
+      focusedTypeId: 'cdm.misc.Thing',
       expansionMap: new Map()
     });
-    const row = (result.nodes.get('cdm.misc::Thing') as StructureDataNode).rows[0]!;
+    const row = (result.nodes.get('cdm.misc.Thing') as StructureDataNode).rows[0]!;
     expect(row.typeName).toBe('date');
     expect(row.typeKind).toBe('BasicType');
   });
@@ -934,9 +934,9 @@ describe('buildStructureGraph — malformed typeCall', () => {
 describe('buildStructureGraph — cardinality formatting', () => {
   it('formats 0..* cardinality without a doubled max marker', () => {
     const trade = buildStructureGraph(fixtureRef, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
-    }).nodes.get('cdm.trade::Trade') as StructureDataNode;
+    }).nodes.get('cdm.trade.Trade') as StructureDataNode;
     const row = trade.rows.find((r) => r.attrName === 'economics')!;
     expect(row.cardinality).toBe('0..*');
   });
@@ -946,7 +946,7 @@ const fixtureCrossNs = {
   namespaces: [{ uri: 'cdm.trade' }, { uri: 'cdm.product' }],
   nodes: [
     {
-      id: 'cdm.product::Party',
+      id: 'cdm.product.Party',
       $type: 'Data' as const,
       name: 'Party',
       namespace: 'cdm.product',
@@ -955,7 +955,7 @@ const fixtureCrossNs = {
       ]
     },
     {
-      id: 'cdm.trade::Trade',
+      id: 'cdm.trade.Trade',
       $type: 'Data' as const,
       name: 'Trade',
       namespace: 'cdm.trade',
@@ -969,13 +969,13 @@ const fixtureCrossNs = {
 describe('buildStructureGraph — cross-namespace references', () => {
   it('resolves a reference to a type in a different namespace and surfaces targetNamespaceUri', () => {
     const result = buildStructureGraph(fixtureCrossNs, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
     const row = trade.rows.find((r) => r.attrName === 'party')!;
     expect(row.typeKind).toBe('Data');
-    expect(row.targetNodeId).toBe('cdm.product::Party');
+    expect(row.targetNodeId).toBe('cdm.product.Party');
     expect(row.targetNamespaceUri).toBe('cdm.product');
   });
 
@@ -1061,7 +1061,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Payout',
+          id: 'cdm.trade.Payout',
           $type: 'Choice' as const,
           name: 'Payout',
           namespace: 'cdm.trade',
@@ -1072,16 +1072,16 @@ describe('buildStructureGraph — cross-namespace references', () => {
     };
 
     const result = buildStructureGraph(fixtureChoiceRoot, {
-      focusedTypeId: 'cdm.trade::Payout',
+      focusedTypeId: 'cdm.trade.Payout',
       expansionMap: new Map()
     });
 
     // Phase 14e/A: Choice roots are now first-class — rootNodeId echoes the
     // focused id (also the root instance id) and the Choice node materializes
     // with its arm options.
-    expect(result.rootNodeId).toBe('cdm.trade::Payout');
+    expect(result.rootNodeId).toBe('cdm.trade.Payout');
     expect(result.nodes.size).toBe(1);
-    const root = result.nodes.get('cdm.trade::Payout') as StructureChoiceNode;
+    const root = result.nodes.get('cdm.trade.Payout') as StructureChoiceNode;
     expect(root.kind).toBe('choice');
     expect(root.options).toHaveLength(1);
     expect(root.options[0].typeName).toBe('string');
@@ -1098,7 +1098,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
       namespaces: [{ uri: 'cdm.trade' }, { uri: 'cdm.product' }],
       nodes: [
         {
-          id: 'cdm.product::Party',
+          id: 'cdm.product.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.product',
@@ -1107,7 +1107,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -1123,29 +1123,29 @@ describe('buildStructureGraph — cross-namespace references', () => {
     };
 
     const result = buildStructureGraph(fixtureQualified, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
     const row = trade.rows.find((r) => r.attrName === 'party')!;
     expect(row.typeKind).toBe('Data');
-    expect(row.targetNodeId).toBe('cdm.product::Party');
+    expect(row.targetNodeId).toBe('cdm.product.Party');
     expect(row.targetNamespaceUri).toBe('cdm.product');
   });
 
   it('prefers exact qualified match over same-name unqualified collision', () => {
     // Two `Money` nodes in different namespaces. The caller is in `cdm.other`
     // — without qualification, same-namespace tiebreak would fail and the
-    // first-listed (cdm.product::Money) would win. With the qualified ref
-    // "cdm.trade.Money", we must resolve to cdm.trade::Money regardless of
+    // first-listed (cdm.product.Money) would win. With the qualified ref
+    // "cdm.trade.Money", we must resolve to cdm.trade.Money regardless of
     // caller namespace.
     const fixtureQualifiedCollision = {
       namespaces: [{ uri: 'cdm.product' }, { uri: 'cdm.trade' }, { uri: 'cdm.other' }],
       nodes: [
-        { id: 'cdm.product::Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.product', attributes: [] },
-        { id: 'cdm.trade::Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.trade', attributes: [] },
+        { id: 'cdm.product.Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.product', attributes: [] },
+        { id: 'cdm.trade.Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.trade', attributes: [] },
         {
-          id: 'cdm.other::Holding',
+          id: 'cdm.other.Holding',
           $type: 'Data' as const,
           name: 'Holding',
           namespace: 'cdm.other',
@@ -1161,12 +1161,12 @@ describe('buildStructureGraph — cross-namespace references', () => {
     };
 
     const result = buildStructureGraph(fixtureQualifiedCollision, {
-      focusedTypeId: 'cdm.other::Holding',
+      focusedTypeId: 'cdm.other.Holding',
       expansionMap: new Map()
     });
-    const row = (result.nodes.get('cdm.other::Holding') as StructureDataNode).rows[0]!;
+    const row = (result.nodes.get('cdm.other.Holding') as StructureDataNode).rows[0]!;
     expect(row.typeKind).toBe('Data');
-    expect(row.targetNodeId).toBe('cdm.trade::Money');
+    expect(row.targetNodeId).toBe('cdm.trade.Money');
     expect(row.targetNamespaceUri).toBe('cdm.trade');
   });
 
@@ -1177,7 +1177,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
       namespaces: [{ uri: 'cdm.base' }, { uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.base::TradeBase',
+          id: 'cdm.base.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.base',
@@ -1186,7 +1186,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -1203,7 +1203,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
     };
 
     const result = buildStructureGraph(fixtureQualifiedExtends, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
     const base = result.nodes.get(result.rootNodeId) as StructureBaseContainer;
@@ -1223,7 +1223,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
       namespaces: [{ uri: 'cdm.product' }, { uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.product::Party',
+          id: 'cdm.product.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.product',
@@ -1232,7 +1232,7 @@ describe('buildStructureGraph — cross-namespace references', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -1250,10 +1250,10 @@ describe('buildStructureGraph — cross-namespace references', () => {
     };
 
     const result = buildStructureGraph(fixtureBrokenQualified, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map()
     });
-    const trade = result.nodes.get('cdm.trade::Trade') as StructureDataNode;
+    const trade = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
     const row = trade.rows.find((r) => r.attrName === 'party')!;
     expect(row.typeKind).toBe('Unresolved');
     expect(row.targetNodeId).toBeUndefined();
@@ -1310,7 +1310,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -1319,7 +1319,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -1333,7 +1333,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Portfolio',
+          id: 'cdm.trade.Portfolio',
           $type: 'Data' as const,
           name: 'Portfolio',
           namespace: 'cdm.trade',
@@ -1349,14 +1349,14 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     };
 
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Portfolio',
+      focusedTypeId: 'cdm.trade.Portfolio',
       expansionMap: new Map([
         [
           expansionKey({
             namespaceUri: 'cdm.trade',
             typeId: 'Portfolio',
             attrName: 'trade',
-            instancePath: ['cdm.trade::Portfolio']
+            instancePath: ['cdm.trade.Portfolio']
           }),
           true
         ]
@@ -1365,22 +1365,22 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
 
     // Portfolio + Trade data node + TradeBase container = 3 nodes total.
     expect(result.nodes.size).toBe(3);
-    expect(findByCanonicalId(result.nodes, 'cdm.trade::Portfolio')).toBeDefined();
-    expect(findByCanonicalId(result.nodes, 'cdm.trade::Trade')).toBeDefined();
+    expect(findByCanonicalId(result.nodes, 'cdm.trade.Portfolio')).toBeDefined();
+    expect(findByCanonicalId(result.nodes, 'cdm.trade.Trade')).toBeDefined();
 
-    const baseCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const baseCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeBase`;
     const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     expect(base.kind).toBe('base');
     expect(base.baseTypeName).toBe('TradeBase');
     expect(base.baseRows.map((r) => r.attrName)).toEqual(['tradeID']);
     expect(base.baseRows.every((r) => r.isInherited)).toBe(true);
 
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(trade.rows.map((r) => r.attrName)).toEqual(['tradeDate']);
     expect(base.childNodeId).toBe(trade.instanceId);
 
     // The expansion edge points at the OUTERMOST wrapper's INSTANCE id.
-    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade::Portfolio') as StructureDataNode;
+    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade.Portfolio') as StructureDataNode;
     expect(portfolio.expansions.get('trade')).toBe(base.instanceId);
   });
 
@@ -1389,7 +1389,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::TradeRoot',
+          id: 'cdm.trade.TradeRoot',
           $type: 'Data' as const,
           name: 'TradeRoot',
           namespace: 'cdm.trade',
@@ -1402,7 +1402,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -1416,7 +1416,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -1430,7 +1430,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Portfolio',
+          id: 'cdm.trade.Portfolio',
           $type: 'Data' as const,
           name: 'Portfolio',
           namespace: 'cdm.trade',
@@ -1446,14 +1446,14 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     };
 
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Portfolio',
+      focusedTypeId: 'cdm.trade.Portfolio',
       expansionMap: new Map([
         [
           expansionKey({
             namespaceUri: 'cdm.trade',
             typeId: 'Portfolio',
             attrName: 'trade',
-            instancePath: ['cdm.trade::Portfolio']
+            instancePath: ['cdm.trade.Portfolio']
           }),
           true
         ]
@@ -1462,12 +1462,12 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
 
     // Portfolio + Trade data + TradeBase container + TradeRoot container = 4.
     expect(result.nodes.size).toBe(4);
-    const outerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
-    const innerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outerCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeRoot`;
+    const innerCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeBase`;
 
     const outer = findByCanonicalId(result.nodes, outerCanonicalId) as StructureBaseContainer;
     const inner = findByCanonicalId(result.nodes, innerCanonicalId) as StructureBaseContainer;
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(outer).toBeDefined();
     expect(inner).toBeDefined();
     expect(trade).toBeDefined();
@@ -1481,7 +1481,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     expect(inner.childNodeId).toBe(trade.instanceId);
 
     // Expansion edge points at the outermost (TradeRoot's) container instance id.
-    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade::Portfolio') as StructureDataNode;
+    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade.Portfolio') as StructureDataNode;
     expect(portfolio.expansions.get('trade')).toBe(outer.instanceId);
   });
 
@@ -1497,7 +1497,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -1506,7 +1506,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -1520,7 +1520,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
           ]
         },
         {
-          id: 'cdm.trade::Portfolio',
+          id: 'cdm.trade.Portfolio',
           $type: 'Data' as const,
           name: 'Portfolio',
           namespace: 'cdm.trade',
@@ -1541,14 +1541,14 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
     };
 
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Portfolio',
+      focusedTypeId: 'cdm.trade.Portfolio',
       expansionMap: new Map([
         [
           expansionKey({
             namespaceUri: 'cdm.trade',
             typeId: 'Portfolio',
             attrName: 'trade1',
-            instancePath: ['cdm.trade::Portfolio']
+            instancePath: ['cdm.trade.Portfolio']
           }),
           true
         ],
@@ -1557,7 +1557,7 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
             namespaceUri: 'cdm.trade',
             typeId: 'Portfolio',
             attrName: 'trade2',
-            instancePath: ['cdm.trade::Portfolio']
+            instancePath: ['cdm.trade.Portfolio']
           }),
           true
         ]
@@ -1566,12 +1566,12 @@ describe('buildStructureGraph — expansion target with inheritance', () => {
 
     // Portfolio + 2 Trade data nodes + 2 TradeBase containers = 5 nodes total.
     expect(result.nodes.size).toBe(5);
-    const baseInstances = findAllByCanonicalId(result.nodes, `cdm.trade::Trade::__base::cdm.trade::TradeBase`);
+    const baseInstances = findAllByCanonicalId(result.nodes, `cdm.trade.Trade::__base::cdm.trade.TradeBase`);
     expect(baseInstances).toHaveLength(2);
-    const tradeInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Trade');
+    const tradeInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Trade');
     expect(tradeInstances).toHaveLength(2);
 
-    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade::Portfolio') as StructureDataNode;
+    const portfolio = findByCanonicalId(result.nodes, 'cdm.trade.Portfolio') as StructureDataNode;
     // Each edge resolves to a DIFFERENT outermost-wrapper instance id (one
     // per visible occurrence).
     const trade1Id = portfolio.expansions.get('trade1');
@@ -2067,7 +2067,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Party',
+          id: 'cdm.trade.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.trade',
@@ -2076,7 +2076,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
           ]
         },
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -2089,7 +2089,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -2105,11 +2105,11 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ]
     };
 
-    // Trade extends TradeBase: outermostCanonicalId = 'cdm.trade::Trade::__base::cdm.trade::TradeBase'.
+    // Trade extends TradeBase: outermostCanonicalId = 'cdm.trade.Trade::__base::cdm.trade.TradeBase'.
     // Base container rfId = outermostInstanceId. childExpansionInstancePath = [baseRfId].
-    const baseRfId = 'cdm.trade::Trade::__base::cdm.trade::TradeBase';
+    const baseRfId = 'cdm.trade.Trade::__base::cdm.trade.TradeBase';
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map([
         // Key uses the BASE's ns/name — TradeBase, not Trade.
         [
@@ -2121,16 +2121,16 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
 
     // 3 nodes: TradeBase container, Trade data, Party data.
     expect(result.nodes.size).toBe(3);
-    const baseCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const baseCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeBase`;
     const base = findByCanonicalId(result.nodes, baseCanonicalId) as StructureBaseContainer;
     expect(base.kind).toBe('base');
     // The derived Data node has no expansion for `party` — it doesn't own
     // that attribute.
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     expect(trade.expansions.size).toBe(0);
 
     // Party itself is materialized with its own rows.
-    const party = findByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode;
+    const party = findByCanonicalId(result.nodes, 'cdm.trade.Party') as StructureDataNode;
     expect(party).toBeDefined();
     expect(party.kind).toBe('data');
     expect(party.rows.map((r) => r.attrName)).toEqual(['id']);
@@ -2207,7 +2207,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Party',
+          id: 'cdm.trade.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.trade',
@@ -2216,7 +2216,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
           ]
         },
         {
-          id: 'cdm.trade::TradeRoot',
+          id: 'cdm.trade.TradeRoot',
           $type: 'Data' as const,
           name: 'TradeRoot',
           namespace: 'cdm.trade',
@@ -2229,7 +2229,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
           ]
         },
         {
-          id: 'cdm.trade::TradeBase',
+          id: 'cdm.trade.TradeBase',
           $type: 'Data' as const,
           name: 'TradeBase',
           namespace: 'cdm.trade',
@@ -2243,7 +2243,7 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
           ]
         },
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -2259,10 +2259,10 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ]
     };
 
-    // Trade extends TradeBase extends TradeRoot: outermost = 'cdm.trade::Trade::__base::cdm.trade::TradeRoot'.
-    const outerBaseRfId = 'cdm.trade::Trade::__base::cdm.trade::TradeRoot';
+    // Trade extends TradeBase extends TradeRoot: outermost = 'cdm.trade.Trade::__base::cdm.trade.TradeRoot'.
+    const outerBaseRfId = 'cdm.trade.Trade::__base::cdm.trade.TradeRoot';
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map([
         [
           expansionKey({
@@ -2276,12 +2276,12 @@ describe('buildStructureGraph — base container row expansion (inherited rows c
       ])
     });
 
-    const outerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeRoot`;
-    const innerCanonicalId = `cdm.trade::Trade::__base::cdm.trade::TradeBase`;
+    const outerCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeRoot`;
+    const innerCanonicalId = `cdm.trade.Trade::__base::cdm.trade.TradeBase`;
     const outer = findByCanonicalId(result.nodes, outerCanonicalId) as StructureBaseContainer;
     const inner = findByCanonicalId(result.nodes, innerCanonicalId) as StructureBaseContainer;
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
-    const party = findByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
+    const party = findByCanonicalId(result.nodes, 'cdm.trade.Party') as StructureDataNode;
 
     // The OUTER (TradeRoot) container owns the `party` expansion. Edge value
     // is Party's per-instance id.
@@ -2538,7 +2538,7 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -2548,7 +2548,7 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
           ]
         },
         {
-          id: 'cdm.trade::Party',
+          id: 'cdm.trade.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.trade',
@@ -2559,25 +2559,25 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
       ]
     };
     // Only the buyer row is expanded. Per-instance key: Trade has no inheritance,
-    // rootInstanceId = 'cdm.trade::Trade'. Root-row instancePath = [rootInstanceId].
+    // rootInstanceId = 'cdm.trade.Trade'. Root-row instancePath = [rootInstanceId].
     const buyerKey: StructureExpansionKey = {
       namespaceUri: 'cdm.trade',
       typeId: 'Trade',
       attrName: 'buyer',
-      instancePath: ['cdm.trade::Trade']
+      instancePath: ['cdm.trade.Trade']
     };
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map([[expansionKey(buyerKey), true]])
     });
 
-    const trade = findByCanonicalId(result.nodes, 'cdm.trade::Trade') as StructureDataNode;
+    const trade = findByCanonicalId(result.nodes, 'cdm.trade.Trade') as StructureDataNode;
     // Buyer expansion edge present (resolves to a per-instance Party id);
     // seller is collapsed.
     expect(trade.expansions.get('buyer')).toBeDefined();
     expect(trade.expansions.has('seller')).toBe(false);
     // Phase 14e: the buyer's Party is its own per-instance subtree.
-    const partyInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Party');
+    const partyInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Party');
     expect(partyInstances).toHaveLength(1);
     expect(trade.expansions.get('buyer')).toBe(partyInstances[0].instanceId);
   });
@@ -2587,16 +2587,16 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
     // row expansion (Trade.party) and the nested row expansion (Party.address).
     //
     // Per-instance key for Trade.party: Trade's rows are checked with
-    //   childInstancePath = ['cdm.trade::Trade'] (= [...[], TradeRfId])
+    //   childInstancePath = ['cdm.trade.Trade'] (= [...[], TradeRfId])
     //
     // Per-instance key for Party.address: Party's rows are checked with
-    //   childInstancePath = ['cdm.trade::Trade', 'cdm.trade::Trade::party::cdm.trade::Party']
+    //   childInstancePath = ['cdm.trade.Trade', 'cdm.trade.Trade::party::cdm.trade.Party']
     // This is the self-inclusive format (ancestors + self rfId).
     const fixture = {
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -2605,7 +2605,7 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
           ]
         },
         {
-          id: 'cdm.trade::Party',
+          id: 'cdm.trade.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.trade',
@@ -2614,7 +2614,7 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
           ]
         },
         {
-          id: 'cdm.trade::Address',
+          id: 'cdm.trade.Address',
           $type: 'Data' as const,
           name: 'Address',
           namespace: 'cdm.trade',
@@ -2622,10 +2622,10 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
         }
       ]
     };
-    const tradeRfId = 'cdm.trade::Trade';
-    const partyRfId = `${tradeRfId}::party::cdm.trade::Party`;
+    const tradeRfId = 'cdm.trade.Trade';
+    const partyRfId = `${tradeRfId}::party::cdm.trade.Party`;
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap: new Map([
         [
           expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'party', instancePath: [tradeRfId] }),
@@ -2643,8 +2643,8 @@ describe('buildStructureGraph — per-instance expansion (Phase 14d)', () => {
       ])
     });
 
-    const party = findByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode;
-    const address = findByCanonicalId(result.nodes, 'cdm.trade::Address') as StructureDataNode;
+    const party = findByCanonicalId(result.nodes, 'cdm.trade.Party') as StructureDataNode;
+    const address = findByCanonicalId(result.nodes, 'cdm.trade.Address') as StructureDataNode;
     expect(party).toBeDefined();
     expect(address).toBeDefined();
     expect(party.expansions.get('address')).toBe(address.instanceId);
@@ -2667,9 +2667,9 @@ describe('expansionKey — serialization contract (Phase 14d single shape)', () 
       namespaceUri: 'cdm.trade',
       typeId: 'Party',
       attrName: 'address',
-      instancePath: ['cdm.trade::Trade']
+      instancePath: ['cdm.trade.Trade']
     });
-    expect(k).toBe('cdm.trade::Party::address::cdm.trade::Trade');
+    expect(k).toBe('cdm.trade::Party::address::cdm.trade.Trade');
   });
 
   it('uses `>` between path entries to keep them distinguishable from `::` field separators', () => {
@@ -2677,9 +2677,9 @@ describe('expansionKey — serialization contract (Phase 14d single shape)', () 
       namespaceUri: 'cdm.trade',
       typeId: 'Address',
       attrName: 'street',
-      instancePath: ['cdm.trade::Trade', 'cdm.trade::Trade::party::cdm.trade::Party']
+      instancePath: ['cdm.trade.Trade', 'cdm.trade.Trade::party::cdm.trade.Party']
     });
-    expect(k).toBe('cdm.trade::Address::street::cdm.trade::Trade>cdm.trade::Trade::party::cdm.trade::Party');
+    expect(k).toBe('cdm.trade::Address::street::cdm.trade.Trade>cdm.trade.Trade::party::cdm.trade.Party');
   });
 });
 
@@ -2699,7 +2699,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
     namespaces: [{ uri: 'cdm.trade' }],
     nodes: [
       {
-        id: 'cdm.trade::Trade',
+        id: 'cdm.trade.Trade',
         $type: 'Data' as const,
         name: 'Trade',
         namespace: 'cdm.trade',
@@ -2709,7 +2709,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
         ]
       },
       {
-        id: 'cdm.trade::Party',
+        id: 'cdm.trade.Party',
         $type: 'Data' as const,
         name: 'Party',
         namespace: 'cdm.trade',
@@ -2718,7 +2718,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
         ]
       },
       {
-        id: 'cdm.trade::Address',
+        id: 'cdm.trade.Address',
         $type: 'Data' as const,
         name: 'Address',
         namespace: 'cdm.trade',
@@ -2733,9 +2733,9 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
     // Expand: Trade.buyer (root row), Trade.seller (root row),
     // AND buyer.Party.address ONLY — using the per-instance key with
     // buyer.Party's instance id in the path.
-    // Trade has no inheritance, rootInstanceId = 'cdm.trade::Trade'.
-    const tradeRfId = 'cdm.trade::Trade';
-    const buyerPartyInstanceId = `${tradeRfId}::buyer::cdm.trade::Party`;
+    // Trade has no inheritance, rootInstanceId = 'cdm.trade.Trade'.
+    const tradeRfId = 'cdm.trade.Trade';
+    const buyerPartyInstanceId = `${tradeRfId}::buyer::cdm.trade.Party`;
     const expansionMap = new Map([
       [
         expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'buyer', instancePath: [tradeRfId] }),
@@ -2756,12 +2756,12 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
       ]
     ]);
     const result = buildStructureGraph(buyerSellerFixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap
     });
 
     // Both Party instances are present, each with its own expansions map.
-    const partyInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Party') as StructureDataNode[];
+    const partyInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Party') as StructureDataNode[];
     expect(partyInstances).toHaveLength(2);
     const buyerParty = partyInstances.find((p) => p.instanceId === buyerPartyInstanceId)!;
     const sellerParty = partyInstances.find((p) => p.instanceId !== buyerPartyInstanceId)!;
@@ -2773,7 +2773,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
     expect(sellerParty.expansions.has('address')).toBe(false);
 
     // Exactly one Address materialized (buyer's), not two.
-    const addressInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Address');
+    const addressInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Address');
     expect(addressInstances).toHaveLength(1);
 
     // Total: Trade + 2 Party + 1 Address = 4 nodes.
@@ -2781,9 +2781,9 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
   });
 
   it('expanding both buyer.Party.address AND seller.Party.address materializes TWO distinct Address subtrees', () => {
-    const tradeRfId = 'cdm.trade::Trade';
-    const buyerPartyInstanceId = `${tradeRfId}::buyer::cdm.trade::Party`;
-    const sellerPartyInstanceId = `${tradeRfId}::seller::cdm.trade::Party`;
+    const tradeRfId = 'cdm.trade.Trade';
+    const buyerPartyInstanceId = `${tradeRfId}::buyer::cdm.trade.Party`;
+    const sellerPartyInstanceId = `${tradeRfId}::seller::cdm.trade.Party`;
     const expansionMap = new Map([
       [
         expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'buyer', instancePath: [tradeRfId] }),
@@ -2813,13 +2813,13 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
       ]
     ]);
     const result = buildStructureGraph(buyerSellerFixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap
     });
 
     // Total: Trade + 2 Party + 2 Address = 5 nodes.
     expect(result.nodes.size).toBe(5);
-    const addressInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Address');
+    const addressInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Address');
     expect(addressInstances).toHaveLength(2);
     // Each Address sits under its own Party instance.
     const addrUnderBuyer = addressInstances.find((a) => a.instanceId.startsWith(buyerPartyInstanceId));
@@ -2861,7 +2861,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
       namespaces: [{ uri: 'cdm.trade' }],
       nodes: [
         {
-          id: 'cdm.trade::Trade',
+          id: 'cdm.trade.Trade',
           $type: 'Data' as const,
           name: 'Trade',
           namespace: 'cdm.trade',
@@ -2872,7 +2872,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
           ]
         },
         {
-          id: 'cdm.trade::Party',
+          id: 'cdm.trade.Party',
           $type: 'Data' as const,
           name: 'Party',
           namespace: 'cdm.trade',
@@ -2882,7 +2882,7 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
           ]
         },
         {
-          id: 'cdm.trade::Address',
+          id: 'cdm.trade.Address',
           $type: 'Data' as const,
           name: 'Address',
           namespace: 'cdm.trade',
@@ -2891,13 +2891,13 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
       ]
     };
     // Expand all three Party rows + both Address rows on each Party.
-    // Per-instance keys: Trade has no inheritance, rootInstanceId = 'cdm.trade::Trade'.
+    // Per-instance keys: Trade has no inheritance, rootInstanceId = 'cdm.trade.Trade'.
     // Each Party instance has its own id; to expand address on ALL three, we
     // need per-instance keys for each Party instance's home/work rows.
-    const tradeRfId = 'cdm.trade::Trade';
-    const buyerPartyId = `${tradeRfId}::buyer::cdm.trade::Party`;
-    const sellerPartyId = `${tradeRfId}::seller::cdm.trade::Party`;
-    const brokerPartyId = `${tradeRfId}::broker::cdm.trade::Party`;
+    const tradeRfId = 'cdm.trade.Trade';
+    const buyerPartyId = `${tradeRfId}::buyer::cdm.trade.Party`;
+    const sellerPartyId = `${tradeRfId}::seller::cdm.trade.Party`;
+    const brokerPartyId = `${tradeRfId}::broker::cdm.trade.Party`;
     const expansionMap = new Map([
       [
         expansionKey({ namespaceUri: 'cdm.trade', typeId: 'Trade', attrName: 'buyer', instancePath: [tradeRfId] }),
@@ -2967,13 +2967,13 @@ describe('buildStructureGraph — full per-instance materialization (Phase 14e)'
       ]
     ]);
     const result = buildStructureGraph(fixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap
     });
     // Trade + 3 Party + 6 Address = 10 nodes.
     expect(result.nodes.size).toBe(10);
-    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::Party')).toHaveLength(3);
-    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::Address')).toHaveLength(6);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade.Party')).toHaveLength(3);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade.Address')).toHaveLength(6);
   });
 });
 
@@ -2992,7 +2992,7 @@ describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
     namespaces: [{ uri: 'cdm.payment' }],
     nodes: [
       {
-        id: 'cdm.payment::SettlementMethod',
+        id: 'cdm.payment.SettlementMethod',
         $type: 'Choice' as const,
         name: 'SettlementMethod',
         namespace: 'cdm.payment',
@@ -3004,7 +3004,7 @@ describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
         ]
       },
       {
-        id: 'cdm.payment::CashPayment',
+        id: 'cdm.payment.CashPayment',
         $type: 'Data' as const,
         name: 'CashPayment',
         namespace: 'cdm.payment',
@@ -3013,14 +3013,14 @@ describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
         ]
       },
       {
-        id: 'cdm.payment::PhysicalDelivery',
+        id: 'cdm.payment.PhysicalDelivery',
         $type: 'Data' as const,
         name: 'PhysicalDelivery',
         namespace: 'cdm.payment',
         attributes: []
       },
       {
-        id: 'cdm.payment::DayCount',
+        id: 'cdm.payment.DayCount',
         $type: 'Enum' as const,
         name: 'DayCount',
         namespace: 'cdm.payment',
@@ -3031,12 +3031,12 @@ describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
 
   it('materializes the focused Choice as the root with all four arms visible', () => {
     const result = buildStructureGraph(choiceRootFixture, {
-      focusedTypeId: 'cdm.payment::SettlementMethod',
+      focusedTypeId: 'cdm.payment.SettlementMethod',
       expansionMap: new Map()
     });
-    expect(result.rootNodeId).toBe('cdm.payment::SettlementMethod');
+    expect(result.rootNodeId).toBe('cdm.payment.SettlementMethod');
     expect(result.nodes.size).toBe(1);
-    const root = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const root = result.nodes.get('cdm.payment.SettlementMethod') as StructureChoiceNode;
     expect(root.kind).toBe('choice');
     expect(root.options).toHaveLength(4);
     expect(root.options.map((a) => a.typeName)).toEqual(['CashPayment', 'PhysicalDelivery', 'DayCount', 'string']);
@@ -3052,13 +3052,13 @@ describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
       namespaceUri: 'cdm.payment',
       typeId: 'SettlementMethod',
       attrName: 'CashPayment',
-      instancePath: ['cdm.payment::SettlementMethod']
+      instancePath: ['cdm.payment.SettlementMethod']
     };
     const result = buildStructureGraph(choiceRootFixture, {
-      focusedTypeId: 'cdm.payment::SettlementMethod',
+      focusedTypeId: 'cdm.payment.SettlementMethod',
       expansionMap: new Map([[expansionKey(armKey), true]])
     });
-    const root = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const root = result.nodes.get('cdm.payment.SettlementMethod') as StructureChoiceNode;
     expect(root.expansions.size).toBe(1);
     const cashInstanceId = root.expansions.get('CashPayment');
     expect(cashInstanceId).toBeDefined();
@@ -3076,17 +3076,17 @@ describe('buildStructureGraph — Choice as focused root (Phase 14e/A)', () => {
       namespaceUri: 'cdm.payment',
       typeId: 'SettlementMethod',
       attrName: 'DayCount', // Enum arm — terminal
-      instancePath: ['cdm.payment::SettlementMethod']
+      instancePath: ['cdm.payment.SettlementMethod']
     };
     const result = buildStructureGraph(choiceRootFixture, {
-      focusedTypeId: 'cdm.payment::SettlementMethod',
+      focusedTypeId: 'cdm.payment.SettlementMethod',
       expansionMap: new Map([[expansionKey(strayKey), true]])
     });
-    const root = result.nodes.get('cdm.payment::SettlementMethod') as StructureChoiceNode;
+    const root = result.nodes.get('cdm.payment.SettlementMethod') as StructureChoiceNode;
     expect(root.expansions.size).toBe(0);
     expect(root.expansions.has('DayCount')).toBe(false);
     // No DayCount instance materialized.
-    expect(findAllByCanonicalId(result.nodes, 'cdm.payment::DayCount')).toHaveLength(0);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.payment.DayCount')).toHaveLength(0);
   });
 });
 
@@ -3096,7 +3096,7 @@ describe('buildStructureGraph — Enum as focused root (Phase 14e/A)', () => {
       namespaces: [{ uri: 'cdm.base' }],
       nodes: [
         {
-          id: 'cdm.base::DayCountFraction',
+          id: 'cdm.base.DayCountFraction',
           $type: 'Enum' as const,
           name: 'DayCountFraction',
           namespace: 'cdm.base',
@@ -3105,12 +3105,12 @@ describe('buildStructureGraph — Enum as focused root (Phase 14e/A)', () => {
       ]
     };
     const result = buildStructureGraph(enumFixture, {
-      focusedTypeId: 'cdm.base::DayCountFraction',
+      focusedTypeId: 'cdm.base.DayCountFraction',
       expansionMap: new Map()
     });
-    expect(result.rootNodeId).toBe('cdm.base::DayCountFraction');
+    expect(result.rootNodeId).toBe('cdm.base.DayCountFraction');
     expect(result.nodes.size).toBe(1);
-    const root = result.nodes.get('cdm.base::DayCountFraction') as StructureEnumNode;
+    const root = result.nodes.get('cdm.base.DayCountFraction') as StructureEnumNode;
     expect(root.kind).toBe('enum');
     expect(root.name).toBe('DayCountFraction');
     expect(root.values).toEqual(['ACT_360', 'ACT_365', 'THIRTY_360']);
@@ -3122,7 +3122,7 @@ describe('buildStructureGraph — Enum as focused root (Phase 14e/A)', () => {
         namespaces: [{ uri: 'cdm.base' }],
         nodes: [
           {
-            id: 'cdm.base::Empty',
+            id: 'cdm.base.Empty',
             $type: 'Enum' as const,
             name: 'Empty',
             namespace: 'cdm.base',
@@ -3130,9 +3130,9 @@ describe('buildStructureGraph — Enum as focused root (Phase 14e/A)', () => {
           }
         ]
       },
-      { focusedTypeId: 'cdm.base::Empty', expansionMap: new Map() }
+      { focusedTypeId: 'cdm.base.Empty', expansionMap: new Map() }
     );
-    const root = result.nodes.get('cdm.base::Empty') as StructureEnumNode;
+    const root = result.nodes.get('cdm.base.Empty') as StructureEnumNode;
     expect(root.kind).toBe('enum');
     expect(root.values).toEqual([]);
   });
@@ -3151,7 +3151,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
     namespaces: [{ uri: 'cdm.trade' }],
     nodes: [
       {
-        id: 'cdm.trade::Trade',
+        id: 'cdm.trade.Trade',
         $type: 'Data' as const,
         name: 'Trade',
         namespace: 'cdm.trade',
@@ -3161,7 +3161,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
         ]
       },
       {
-        id: 'cdm.trade::Payment',
+        id: 'cdm.trade.Payment',
         $type: 'Choice' as const,
         name: 'Payment',
         namespace: 'cdm.trade',
@@ -3171,7 +3171,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
         ]
       },
       {
-        id: 'cdm.trade::CashPayment',
+        id: 'cdm.trade.CashPayment',
         $type: 'Data' as const,
         name: 'CashPayment',
         namespace: 'cdm.trade',
@@ -3180,7 +3180,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
         ]
       },
       {
-        id: 'cdm.trade::BondPayment',
+        id: 'cdm.trade.BondPayment',
         $type: 'Data' as const,
         name: 'BondPayment',
         namespace: 'cdm.trade',
@@ -3192,8 +3192,8 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
   it('expanding payment.CashPayment when payment is a row of a Data type drills the Choice arm', () => {
     // Focus a Data type with one Choice-typed attr; expand the attr; then expand
     // one of the Choice's arms. The full per-instance chain must resolve.
-    const tradeRfId = 'cdm.trade::Trade';
-    const paymentInstanceId = `${tradeRfId}::primary::cdm.trade::Payment`;
+    const tradeRfId = 'cdm.trade.Trade';
+    const paymentInstanceId = `${tradeRfId}::primary::cdm.trade.Payment`;
     const expansionMap = new Map([
       // 1. expand Trade.primary (the Choice arm-bearer row)
       [
@@ -3217,10 +3217,10 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
       ]
     ]);
     const result = buildStructureGraph(tradeWithTwoChoicesFixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap
     });
-    const payment = findByCanonicalId(result.nodes, 'cdm.trade::Payment') as StructureChoiceNode;
+    const payment = findByCanonicalId(result.nodes, 'cdm.trade.Payment') as StructureChoiceNode;
     expect(payment).toBeDefined();
     expect(payment.expansions.size).toBe(1);
     const cashInstanceId = payment.expansions.get('CashPayment');
@@ -3234,9 +3234,9 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
     // Expand BOTH primary and secondary; then expand the CashPayment arm on
     // ONLY the primary's Payment instance. The secondary's Payment must
     // remain collapsed.
-    const tradeRfId = 'cdm.trade::Trade';
-    const primaryPaymentId = `${tradeRfId}::primary::cdm.trade::Payment`;
-    const secondaryPaymentId = `${tradeRfId}::secondary::cdm.trade::Payment`;
+    const tradeRfId = 'cdm.trade.Trade';
+    const primaryPaymentId = `${tradeRfId}::primary::cdm.trade.Payment`;
+    const secondaryPaymentId = `${tradeRfId}::secondary::cdm.trade.Payment`;
     const expansionMap = new Map([
       [
         expansionKey({
@@ -3268,10 +3268,10 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
       ]
     ]);
     const result = buildStructureGraph(tradeWithTwoChoicesFixture, {
-      focusedTypeId: 'cdm.trade::Trade',
+      focusedTypeId: 'cdm.trade.Trade',
       expansionMap
     });
-    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment') as StructureChoiceNode[];
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Payment') as StructureChoiceNode[];
     expect(paymentInstances).toHaveLength(2);
     const primary = paymentInstances.find((p) => p.instanceId === primaryPaymentId)!;
     const secondary = paymentInstances.find((p) => p.instanceId === secondaryPaymentId)!;
@@ -3282,7 +3282,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
     expect(primary.expansions.has('CashPayment')).toBe(true);
     expect(secondary.expansions.size).toBe(0);
     // Only one CashPayment instance materializes (under the primary).
-    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::CashPayment')).toHaveLength(1);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade.CashPayment')).toHaveLength(1);
   });
 
   it('Choice-as-root: expanding two arms produces two child subtrees side-by-side', () => {
@@ -3293,7 +3293,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
         namespaces: [{ uri: 'cdm.payment' }],
         nodes: [
           {
-            id: 'cdm.payment::Payment',
+            id: 'cdm.payment.Payment',
             $type: 'Choice' as const,
             name: 'Payment',
             namespace: 'cdm.payment',
@@ -3303,7 +3303,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
             ]
           },
           {
-            id: 'cdm.payment::CashPayment',
+            id: 'cdm.payment.CashPayment',
             $type: 'Data' as const,
             name: 'CashPayment',
             namespace: 'cdm.payment',
@@ -3316,7 +3316,7 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
             ]
           },
           {
-            id: 'cdm.payment::BondPayment',
+            id: 'cdm.payment.BondPayment',
             $type: 'Data' as const,
             name: 'BondPayment',
             namespace: 'cdm.payment',
@@ -3327,14 +3327,14 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
         ]
       },
       {
-        focusedTypeId: 'cdm.payment::Payment',
+        focusedTypeId: 'cdm.payment.Payment',
         expansionMap: new Map([
           [
             expansionKey({
               namespaceUri: 'cdm.payment',
               typeId: 'Payment',
               attrName: 'CashPayment',
-              instancePath: ['cdm.payment::Payment']
+              instancePath: ['cdm.payment.Payment']
             }),
             true
           ],
@@ -3343,19 +3343,19 @@ describe('buildStructureGraph — Choice arm per-instance expansion (Phase 14e/B
               namespaceUri: 'cdm.payment',
               typeId: 'Payment',
               attrName: 'BondPayment',
-              instancePath: ['cdm.payment::Payment']
+              instancePath: ['cdm.payment.Payment']
             }),
             true
           ]
         ])
       }
     );
-    const payment = result.nodes.get('cdm.payment::Payment') as StructureChoiceNode;
+    const payment = result.nodes.get('cdm.payment.Payment') as StructureChoiceNode;
     expect(payment.expansions.size).toBe(2);
     expect(payment.expansions.has('CashPayment')).toBe(true);
     expect(payment.expansions.has('BondPayment')).toBe(true);
-    expect(findAllByCanonicalId(result.nodes, 'cdm.payment::CashPayment')).toHaveLength(1);
-    expect(findAllByCanonicalId(result.nodes, 'cdm.payment::BondPayment')).toHaveLength(1);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.payment.CashPayment')).toHaveLength(1);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.payment.BondPayment')).toHaveLength(1);
     // Total: 1 Payment + 2 expanded children = 3.
     expect(result.nodes.size).toBe(3);
   });
@@ -3380,7 +3380,7 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
     namespaces: [{ uri: 'cdm.trade' }],
     nodes: [
       {
-        id: 'cdm.trade::Outer',
+        id: 'cdm.trade.Outer',
         $type: 'Data' as const,
         name: 'Outer',
         namespace: 'cdm.trade',
@@ -3389,7 +3389,7 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
         ]
       },
       {
-        id: 'cdm.trade::Payment',
+        id: 'cdm.trade.Payment',
         $type: 'Choice' as const,
         name: 'Payment',
         namespace: 'cdm.trade',
@@ -3399,7 +3399,7 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
         ]
       },
       {
-        id: 'cdm.trade::CashPayment',
+        id: 'cdm.trade.CashPayment',
         $type: 'Data' as const,
         name: 'CashPayment',
         namespace: 'cdm.trade',
@@ -3414,8 +3414,8 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
     // Step 1: expand Outer.payment so Payment materialises as a Choice node.
     // Step 2: expand the Payment self-arm on that Payment instance.
     // Expected: graph contains Outer + Payment + CashPayment; NO second Payment.
-    const outerRfId = 'cdm.trade::Outer';
-    const paymentInstanceId = `${outerRfId}::payment::cdm.trade::Payment`;
+    const outerRfId = 'cdm.trade.Outer';
+    const paymentInstanceId = `${outerRfId}::payment::cdm.trade.Payment`;
 
     const expansionMap = new Map([
       // Expand Outer.payment
@@ -3441,12 +3441,12 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
     ]);
 
     const result = buildStructureGraph(selfRefChoiceFixture, {
-      focusedTypeId: 'cdm.trade::Outer',
+      focusedTypeId: 'cdm.trade.Outer',
       expansionMap
     });
 
     // Payment appears exactly once — no nested second copy from the self-arm.
-    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment');
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Payment');
     expect(paymentInstances).toHaveLength(1);
 
     // The Payment Choice node must NOT have an expansion for the self-arm.
@@ -3457,7 +3457,7 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
 
     // CashPayment is NOT expanded in this test (no key for it) — arms are visible
     // as chips but their expansion key is false, so no child materialises.
-    expect(findAllByCanonicalId(result.nodes, 'cdm.trade::CashPayment')).toHaveLength(0);
+    expect(findAllByCanonicalId(result.nodes, 'cdm.trade.CashPayment')).toHaveLength(0);
 
     // Total: Outer + Payment = 2.
     expect(result.nodes.size).toBe(2);
@@ -3466,7 +3466,7 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
   it('Choice-as-root: expanding the self-arm does not materialise a nested copy (symmetric lock)', () => {
     // Focus Payment directly.  Expand the self-arm Payment.
     // Expected: graph contains only Payment; no nested second Payment.
-    const rootInstanceId = 'cdm.trade::Payment';
+    const rootInstanceId = 'cdm.trade.Payment';
 
     const expansionMap = new Map([
       [
@@ -3481,12 +3481,12 @@ describe('buildStructureGraph — Choice self-arm cycle protection (Codex P2)', 
     ]);
 
     const result = buildStructureGraph(selfRefChoiceFixture, {
-      focusedTypeId: 'cdm.trade::Payment',
+      focusedTypeId: 'cdm.trade.Payment',
       expansionMap
     });
 
     // Payment appears exactly once.
-    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade::Payment');
+    const paymentInstances = findAllByCanonicalId(result.nodes, 'cdm.trade.Payment');
     expect(paymentInstances).toHaveLength(1);
 
     // Self-arm is suppressed: no expansion entry for 'Payment'.
@@ -3515,19 +3515,19 @@ describe('buildStructureGraph — Record / TypeAlias attribute classification (l
     namespaces: [{ uri: 'cdm.types' }],
     nodes: [
       {
-        id: 'cdm.types::MyRec',
+        id: 'cdm.types.MyRec',
         $type: 'Record' as const,
         name: 'MyRec',
         namespace: 'cdm.types'
       },
       {
-        id: 'cdm.types::MyAlias',
+        id: 'cdm.types.MyAlias',
         $type: 'TypeAlias' as const,
         name: 'MyAlias',
         namespace: 'cdm.types'
       },
       {
-        id: 'cdm.types::Foo',
+        id: 'cdm.types.Foo',
         $type: 'Data' as const,
         name: 'Foo',
         namespace: 'cdm.types',
@@ -3549,20 +3549,20 @@ describe('buildStructureGraph — Record / TypeAlias attribute classification (l
 
   it('classifies a Record-typed attribute as typeKind="Record" (was "Enum" before fix)', () => {
     const result = buildStructureGraph(fixtureRecordAlias, {
-      focusedTypeId: 'cdm.types::Foo',
+      focusedTypeId: 'cdm.types.Foo',
       expansionMap: new Map()
     });
-    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    const foo = result.nodes.get('cdm.types.Foo') as StructureDataNode;
     const row = foo.rows.find((r) => r.attrName === 'd')!;
     expect(row.typeKind).toBe('Record');
   });
 
   it('classifies a TypeAlias-typed attribute as typeKind="TypeAlias" (was "Unresolved" or "Enum" before fix)', () => {
     const result = buildStructureGraph(fixtureRecordAlias, {
-      focusedTypeId: 'cdm.types::Foo',
+      focusedTypeId: 'cdm.types.Foo',
       expansionMap: new Map()
     });
-    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    const foo = result.nodes.get('cdm.types.Foo') as StructureDataNode;
     const row = foo.rows.find((r) => r.attrName === 'a')!;
     expect(row.typeKind).toBe('TypeAlias');
   });
@@ -3573,15 +3573,15 @@ describe('buildStructureGraph — Record / TypeAlias attribute classification (l
       namespaceUri: 'cdm.types',
       typeId: 'Foo',
       attrName: 'd',
-      instancePath: ['cdm.types::Foo']
+      instancePath: ['cdm.types.Foo']
     });
     const result = buildStructureGraph(fixtureRecordAlias, {
-      focusedTypeId: 'cdm.types::Foo',
+      focusedTypeId: 'cdm.types.Foo',
       expansionMap: new Map([[key, true]])
     });
     // Only the Foo Data node itself — no child for MyRec.
     expect(result.nodes.size).toBe(1);
-    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    const foo = result.nodes.get('cdm.types.Foo') as StructureDataNode;
     expect(foo.expansions.size).toBe(0);
   });
 
@@ -3590,14 +3590,14 @@ describe('buildStructureGraph — Record / TypeAlias attribute classification (l
       namespaceUri: 'cdm.types',
       typeId: 'Foo',
       attrName: 'a',
-      instancePath: ['cdm.types::Foo']
+      instancePath: ['cdm.types.Foo']
     });
     const result = buildStructureGraph(fixtureRecordAlias, {
-      focusedTypeId: 'cdm.types::Foo',
+      focusedTypeId: 'cdm.types.Foo',
       expansionMap: new Map([[key, true]])
     });
     expect(result.nodes.size).toBe(1);
-    const foo = result.nodes.get('cdm.types::Foo') as StructureDataNode;
+    const foo = result.nodes.get('cdm.types.Foo') as StructureDataNode;
     expect(foo.expansions.size).toBe(0);
   });
 });
@@ -3618,19 +3618,19 @@ describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR
     namespaces: [{ uri: 'cdm.types' }],
     nodes: [
       {
-        id: 'cdm.types::MyRec',
+        id: 'cdm.types.MyRec',
         $type: 'Record' as const,
         name: 'MyRec',
         namespace: 'cdm.types'
       },
       {
-        id: 'cdm.types::MyAlias',
+        id: 'cdm.types.MyAlias',
         $type: 'TypeAlias' as const,
         name: 'MyAlias',
         namespace: 'cdm.types'
       },
       {
-        id: 'cdm.types::Pick',
+        id: 'cdm.types.Pick',
         $type: 'Choice' as const,
         name: 'Pick',
         namespace: 'cdm.types',
@@ -3641,28 +3641,28 @@ describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR
 
   it('classifies a Record arm as typeKind="Record" (not "Enum")', () => {
     const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
-      focusedTypeId: 'cdm.types::Pick',
+      focusedTypeId: 'cdm.types.Pick',
       expansionMap: new Map()
     });
-    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    const pick = result.nodes.get('cdm.types.Pick') as StructureChoiceNode;
     expect(pick).toBeDefined();
     expect(pick.kind).toBe('choice');
     const arm = pick.options.find((o) => o.typeName === 'MyRec');
     expect(arm).toBeDefined();
     expect(arm!.typeKind).toBe('Record');
-    expect(arm!.targetNodeId).toBe('cdm.types::MyRec');
+    expect(arm!.targetNodeId).toBe('cdm.types.MyRec');
   });
 
   it('classifies a TypeAlias arm as typeKind="TypeAlias" (not "Enum")', () => {
     const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
-      focusedTypeId: 'cdm.types::Pick',
+      focusedTypeId: 'cdm.types.Pick',
       expansionMap: new Map()
     });
-    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    const pick = result.nodes.get('cdm.types.Pick') as StructureChoiceNode;
     const arm = pick.options.find((o) => o.typeName === 'MyAlias');
     expect(arm).toBeDefined();
     expect(arm!.typeKind).toBe('TypeAlias');
-    expect(arm!.targetNodeId).toBe('cdm.types::MyAlias');
+    expect(arm!.targetNodeId).toBe('cdm.types.MyAlias');
   });
 
   it('does NOT materialise a child node for a Record arm (leaf — isArmExpandable only expands Data/Choice)', () => {
@@ -3671,15 +3671,15 @@ describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR
       namespaceUri: 'cdm.types',
       typeId: 'Pick',
       attrName: 'MyRec',
-      instancePath: ['cdm.types::Pick']
+      instancePath: ['cdm.types.Pick']
     });
     const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
-      focusedTypeId: 'cdm.types::Pick',
+      focusedTypeId: 'cdm.types.Pick',
       expansionMap: new Map([[key, true]])
     });
     // Only the Choice root itself — no child node for MyRec.
     expect(result.nodes.size).toBe(1);
-    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    const pick = result.nodes.get('cdm.types.Pick') as StructureChoiceNode;
     expect(pick.expansions.size).toBe(0);
   });
 
@@ -3688,14 +3688,14 @@ describe('buildStructureGraph — choice arms referencing Record / TypeAlias (PR
       namespaceUri: 'cdm.types',
       typeId: 'Pick',
       attrName: 'MyAlias',
-      instancePath: ['cdm.types::Pick']
+      instancePath: ['cdm.types.Pick']
     });
     const result = buildStructureGraph(fixtureChoiceWithRecordAndAlias, {
-      focusedTypeId: 'cdm.types::Pick',
+      focusedTypeId: 'cdm.types.Pick',
       expansionMap: new Map([[key, true]])
     });
     expect(result.nodes.size).toBe(1);
-    const pick = result.nodes.get('cdm.types::Pick') as StructureChoiceNode;
+    const pick = result.nodes.get('cdm.types.Pick') as StructureChoiceNode;
     expect(pick.expansions.size).toBe(0);
   });
 });
@@ -3709,7 +3709,7 @@ describe('buildStructureGraph — Function as focused root (Phase C)', () => {
     namespaces: [{ uri: 'cdm.calc' }],
     nodes: [
       {
-        id: 'cdm.calc::FixedAmount',
+        id: 'cdm.calc.FixedAmount',
         $type: 'Function' as const,
         name: 'FixedAmount',
         namespace: 'cdm.calc',
@@ -3735,19 +3735,19 @@ describe('buildStructureGraph — Function as focused root (Phase C)', () => {
         conditions: [{ name: 'Positive', preview: 'amount > 0' }]
       },
       // A referenced Data node so the input/output types classify as Data (not Unresolved).
-      { id: 'cdm.calc::Rate', $type: 'Data' as const, name: 'Rate', namespace: 'cdm.calc', attributes: [] },
-      { id: 'cdm.calc::Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.calc', attributes: [] }
+      { id: 'cdm.calc.Rate', $type: 'Data' as const, name: 'Rate', namespace: 'cdm.calc', attributes: [] },
+      { id: 'cdm.calc.Money', $type: 'Data' as const, name: 'Money', namespace: 'cdm.calc', attributes: [] }
     ]
   };
 
   it('materializes inputs as rows and the output as a distinct row', () => {
     const result = buildStructureGraph(fnFixture, {
-      focusedTypeId: 'cdm.calc::FixedAmount',
+      focusedTypeId: 'cdm.calc.FixedAmount',
       expansionMap: new Map()
     });
-    expect(result.rootNodeId).toBe('cdm.calc::FixedAmount');
+    expect(result.rootNodeId).toBe('cdm.calc.FixedAmount');
     expect(result.nodes.size).toBe(1);
-    const fn = result.nodes.get('cdm.calc::FixedAmount') as StructureFunctionNode;
+    const fn = result.nodes.get('cdm.calc.FixedAmount') as StructureFunctionNode;
     expect(fn.kind).toBe('function');
     expect(fn.name).toBe('FixedAmount');
     expect(fn.inputRows.map((r) => r.attrName)).toEqual(['notional', 'rate']);
@@ -3762,10 +3762,10 @@ describe('buildStructureGraph — Function as focused root (Phase C)', () => {
 
   it('forwards Phase-A meta (definition / annotations / conditions)', () => {
     const result = buildStructureGraph(fnFixture, {
-      focusedTypeId: 'cdm.calc::FixedAmount',
+      focusedTypeId: 'cdm.calc.FixedAmount',
       expansionMap: new Map()
     });
-    const fn = result.nodes.get('cdm.calc::FixedAmount') as StructureFunctionNode;
+    const fn = result.nodes.get('cdm.calc.FixedAmount') as StructureFunctionNode;
     expect(fn.definition).toBe('Computes a fixed amount.');
     expect(fn.annotations).toEqual(['calculation']);
     expect(fn.conditions).toEqual([{ name: 'Positive', preview: 'amount > 0' }]);
@@ -3775,11 +3775,11 @@ describe('buildStructureGraph — Function as focused root (Phase C)', () => {
     const result = buildStructureGraph(
       {
         namespaces: [{ uri: 'cdm.calc' }],
-        nodes: [{ id: 'cdm.calc::Noop', $type: 'Function' as const, name: 'Noop', namespace: 'cdm.calc' }]
+        nodes: [{ id: 'cdm.calc.Noop', $type: 'Function' as const, name: 'Noop', namespace: 'cdm.calc' }]
       },
-      { focusedTypeId: 'cdm.calc::Noop', expansionMap: new Map() }
+      { focusedTypeId: 'cdm.calc.Noop', expansionMap: new Map() }
     );
-    const fn = result.nodes.get('cdm.calc::Noop') as StructureFunctionNode;
+    const fn = result.nodes.get('cdm.calc.Noop') as StructureFunctionNode;
     expect(fn.kind).toBe('function');
     expect(fn.inputRows).toEqual([]);
     expect(fn.outputRow).toBeUndefined();
@@ -3791,7 +3791,7 @@ describe('buildStructureGraph — Function as focused root (Phase C)', () => {
         namespaces: [{ uri: 'cdm.calc' }],
         nodes: [
           {
-            id: 'cdm.calc::Partial',
+            id: 'cdm.calc.Partial',
             $type: 'Function' as const,
             name: 'Partial',
             namespace: 'cdm.calc',
@@ -3802,9 +3802,9 @@ describe('buildStructureGraph — Function as focused root (Phase C)', () => {
           }
         ]
       },
-      { focusedTypeId: 'cdm.calc::Partial', expansionMap: new Map() }
+      { focusedTypeId: 'cdm.calc.Partial', expansionMap: new Map() }
     );
-    const fn = result.nodes.get('cdm.calc::Partial') as StructureFunctionNode;
+    const fn = result.nodes.get('cdm.calc.Partial') as StructureFunctionNode;
     expect(fn.inputRows.map((r) => r.attrName)).toEqual(['x']);
   });
 });

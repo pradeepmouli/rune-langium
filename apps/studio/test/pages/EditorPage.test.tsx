@@ -264,7 +264,21 @@ vi.mock('@rune-langium/visual-editor', () => ({
       return { name: cond.name ?? undefined, expressionText: '' };
     }),
   useEditorStore,
-  useModelSourceSync: () => {}
+  useModelSourceSync: () => {},
+  // Node-id utilities (3A′ dot-form helpers) — exact mirrors of node-projection.ts
+  // so ExplorePerspective can call them inside the mock module boundary.
+  nameFromNodeId: (nodeId: string) => {
+    const idx = nodeId.lastIndexOf('.');
+    return idx < 0 ? nodeId : nodeId.slice(idx + 1);
+  },
+  splitNodeId: (nodeId: string) => {
+    const idx = nodeId.lastIndexOf('.');
+    if (idx < 0) return { namespace: '', name: nodeId };
+    return { namespace: nodeId.slice(0, idx), name: nodeId.slice(idx + 1) };
+  },
+  // Exact mirror of qualifiedExportPath/makeNodeId: bare name when namespace is
+  // empty (global), dotted otherwise — so empty-namespace ids stay valid (not `.Foo`).
+  makeNodeId: (namespace: string, name: string) => (namespace ? `${namespace}.${name}` : name)
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({
@@ -559,11 +573,11 @@ describe('EditorPage preview target identity', () => {
   it('re-generates preview for a renamed target after the previous selection is transiently cleared', async () => {
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::Trade',
+        id: 'preview.alpha.Trade',
         data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+    editorStoreState.selectedNodeId = 'preview.alpha.Trade';
 
     const { rerenderEditorPage } = renderEditorPage({
       models: [modelWithType('Trade') as never],
@@ -603,7 +617,7 @@ describe('EditorPage preview target identity', () => {
 
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::RenamedTrade',
+        id: 'preview.alpha.RenamedTrade',
         data: { namespace: 'preview.alpha', name: 'RenamedTrade', $type: 'data' }
       }
     ];
@@ -634,11 +648,11 @@ describe('EditorPage preview target identity', () => {
   it('re-syncs preview files when workspace files change without re-posting duplicate preview:generate messages', async () => {
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::Trade',
+        id: 'preview.alpha.Trade',
         data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+    editorStoreState.selectedNodeId = 'preview.alpha.Trade';
 
     const { rerenderEditorPage } = renderEditorPage({
       models: [modelWithType('Trade') as never],
@@ -706,11 +720,11 @@ describe('EditorPage preview target identity', () => {
   it('ignores out-of-order stale preview responses for the same target', async () => {
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::Trade',
+        id: 'preview.alpha.Trade',
         data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+    editorStoreState.selectedNodeId = 'preview.alpha.Trade';
 
     const { rerenderEditorPage } = renderEditorPage({
       models: [modelWithType('Trade') as never],
@@ -792,11 +806,11 @@ describe('EditorPage preview target identity', () => {
   it('derives preview target source identity from parsedModels when worker-cloned models lack document metadata', async () => {
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::Trade',
+        id: 'preview.alpha.Trade',
         data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+    editorStoreState.selectedNodeId = 'preview.alpha.Trade';
 
     const parsedModel = {
       name: 'preview.alpha',
@@ -828,11 +842,11 @@ describe('EditorPage preview target identity', () => {
   it('marks preview stale when a cached schema exists and the worker later crashes', async () => {
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::Trade',
+        id: 'preview.alpha.Trade',
         data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+    editorStoreState.selectedNodeId = 'preview.alpha.Trade';
 
     renderEditorPage({
       models: [modelWithType('Trade') as never],
@@ -887,11 +901,11 @@ describe('EditorPage preview target identity', () => {
   it('marks preview unavailable when the worker rejects a message before any schema is cached', async () => {
     editorStoreState.nodes = [
       {
-        id: 'preview.alpha::Trade',
+        id: 'preview.alpha.Trade',
         data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'preview.alpha::Trade';
+    editorStoreState.selectedNodeId = 'preview.alpha.Trade';
 
     renderEditorPage({
       models: [modelWithType('Trade') as never],
@@ -1040,11 +1054,11 @@ describe('EditorPage workspace chrome', () => {
   it('requests inspector focus when a node is selected', async () => {
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::AdjustableDate',
+        id: 'cdm.base.datetime.AdjustableDate',
         data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
 
     renderEditorPage({
       models: [],
@@ -1069,7 +1083,7 @@ describe('EditorPage workspace chrome', () => {
   it('shows a destructive toast when navigating to a type that is not loaded', () => {
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::AdjustableDate',
+        id: 'cdm.base.datetime.AdjustableDate',
         data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
       }
     ];
@@ -1087,7 +1101,7 @@ describe('EditorPage workspace chrome', () => {
     });
 
     act(() => {
-      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::GhostType');
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.GhostType');
     });
 
     expect(showToastSpy).toHaveBeenCalledWith({
@@ -1101,7 +1115,7 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.edges = [];
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::AdjustableDate',
+        id: 'cdm.base.datetime.AdjustableDate',
         data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
       }
     ];
@@ -1119,12 +1133,12 @@ describe('EditorPage workspace chrome', () => {
     });
 
     act(() => {
-      namespaceExplorerMockState.latestProps?.onSelectNode?.('cdm.base.datetime::AdjustableDate');
+      namespaceExplorerMockState.latestProps?.onSelectNode?.('cdm.base.datetime.AdjustableDate');
     });
 
-    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime::AdjustableDate');
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
     expect(editorStoreState.detailPanelOpen).toBe(true);
-    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate', {
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime.AdjustableDate', {
       reapplyFocusMode: true
     });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
@@ -1134,7 +1148,7 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.edges = [];
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::Standalone',
+        id: 'cdm.base.datetime.Standalone',
         data: { namespace: 'cdm.base.datetime', name: 'Standalone', $type: 'data' }
       }
     ];
@@ -1152,10 +1166,10 @@ describe('EditorPage workspace chrome', () => {
     });
 
     act(() => {
-      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::Standalone');
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.Standalone');
     });
 
-    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::Standalone', {
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime.Standalone', {
       reapplyFocusMode: true
     });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
@@ -1165,7 +1179,7 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.edges = [];
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::DeferredDate',
+        id: 'cdm.base.datetime.DeferredDate',
         data: { namespace: 'cdm.base.datetime', name: 'DeferredDate', $type: 'data', deferred: true }
       }
     ];
@@ -1183,10 +1197,10 @@ describe('EditorPage workspace chrome', () => {
     });
 
     act(() => {
-      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::DeferredDate');
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.DeferredDate');
     });
 
-    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime::DeferredDate', {
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.datetime.DeferredDate', {
       reapplyFocusMode: true
     });
     expect(editorStoreState.requestNamespaceHydration).toHaveBeenCalledWith('cdm.base.datetime');
@@ -1276,18 +1290,18 @@ describe('EditorPage workspace chrome', () => {
   it('re-centers connected navigation targets when focus mode hides nothing', () => {
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::AdjustableDate',
+        id: 'cdm.base.datetime.AdjustableDate',
         data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
       },
       {
-        id: 'cdm.base.datetime::BusinessCenter',
+        id: 'cdm.base.datetime.BusinessCenter',
         data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
       }
     ];
     editorStoreState.edges = [
-      { source: 'cdm.base.datetime::AdjustableDate', target: 'cdm.base.datetime::BusinessCenter' }
+      { source: 'cdm.base.datetime.AdjustableDate', target: 'cdm.base.datetime.BusinessCenter' }
     ];
-    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
 
     renderEditorPage({
       models: [],
@@ -1302,7 +1316,7 @@ describe('EditorPage workspace chrome', () => {
     });
 
     act(() => {
-      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
     });
 
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
@@ -1317,15 +1331,15 @@ describe('EditorPage workspace chrome', () => {
   it('shows a destructive toast when navigating back to a node that is no longer in the graph', () => {
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::AdjustableDate',
+        id: 'cdm.base.datetime.AdjustableDate',
         data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }
       },
       {
-        id: 'cdm.base.datetime::BusinessCenter',
+        id: 'cdm.base.datetime.BusinessCenter',
         data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'cdm.base.datetime::AdjustableDate';
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
 
     const view = renderEditorPage({
       models: [],
@@ -1340,12 +1354,12 @@ describe('EditorPage workspace chrome', () => {
     });
 
     act(() => {
-      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime::BusinessCenter');
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
     });
 
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::BusinessCenter',
+        id: 'cdm.base.datetime.BusinessCenter',
         data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
       }
     ];
@@ -1364,7 +1378,7 @@ describe('EditorPage workspace chrome', () => {
     fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
 
     expect(showToastSpy).toHaveBeenCalledWith({
-      description: 'Previous node "cdm.base.datetime::AdjustableDate" is no longer in the graph',
+      description: 'Previous node "cdm.base.datetime.AdjustableDate" is no longer in the graph',
       variant: 'destructive',
       duration: 3000
     });
@@ -1491,11 +1505,11 @@ describe('EditorPage workspace chrome', () => {
     runeTypeGraphMockState.relayout.mockClear();
     editorStoreState.nodes = [
       {
-        id: 'cdm.base.datetime::BusinessCenter',
+        id: 'cdm.base.datetime.BusinessCenter',
         data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }
       }
     ];
-    editorStoreState.selectedNodeId = 'cdm.base.datetime::BusinessCenter';
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.BusinessCenter';
 
     rerenderEditorPage({
       models: [],
@@ -1616,7 +1630,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
 
       editorStoreState.nodes = [
         {
-          id: 'cdm.base.datetime::BusinessCenters',
+          id: 'cdm.base.datetime.BusinessCenters',
           data: {
             namespace: 'cdm.base.datetime',
             name: 'BusinessCenters',
@@ -1625,7 +1639,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
           }
         }
       ];
-      editorStoreState.selectedNodeId = 'cdm.base.datetime::BusinessCenters';
+      editorStoreState.selectedNodeId = 'cdm.base.datetime.BusinessCenters';
 
       const { rerenderEditorPage } = renderEditorPage({
         workspaceId: 'ws-curated',
@@ -1691,7 +1705,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
 
       editorStoreState.nodes = [
         {
-          id: 'cdm.base.staticdata.party::Counterparty',
+          id: 'cdm.base.staticdata.party.Counterparty',
           data: {
             namespace: 'cdm.base.staticdata.party',
             name: 'Counterparty',
@@ -1700,7 +1714,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
           }
         }
       ];
-      editorStoreState.selectedNodeId = 'cdm.base.staticdata.party::Counterparty';
+      editorStoreState.selectedNodeId = 'cdm.base.staticdata.party.Counterparty';
       editorStoreState.hydrationNonce = 1;
 
       const { rerenderEditorPage } = renderEditorPage({
@@ -1720,7 +1734,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
 
       editorStoreState.nodes = [
         {
-          id: 'cdm.base.staticdata.party::Counterparty',
+          id: 'cdm.base.staticdata.party.Counterparty',
           data: {
             namespace: 'cdm.base.staticdata.party',
             name: 'Counterparty',
@@ -1776,7 +1790,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
 
       editorStoreState.nodes = [
         {
-          id: 'cdm.base.datetime::BusinessCenters',
+          id: 'cdm.base.datetime.BusinessCenters',
           data: {
             namespace: 'cdm.base.datetime',
             name: 'BusinessCenters',
@@ -1785,7 +1799,7 @@ describe('EditorPage StructureView cell-editor wiring (Phase 5/8 regression guar
           }
         }
       ];
-      editorStoreState.selectedNodeId = 'cdm.base.datetime::BusinessCenters';
+      editorStoreState.selectedNodeId = 'cdm.base.datetime.BusinessCenters';
 
       const { rerenderEditorPage } = renderEditorPage({
         workspaceId: 'ws-curated',

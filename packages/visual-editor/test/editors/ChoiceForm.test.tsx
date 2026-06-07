@@ -93,14 +93,14 @@ function makeActions(): EditorFormActions<'choice'> {
 }
 
 const AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test.model::CashPayment', label: 'CashPayment', kind: 'data', namespace: 'test.model' },
+  { value: 'test.model.CashPayment', label: 'CashPayment', kind: 'data', namespace: 'test.model' },
   {
-    value: 'test.model::PhysicalSettlement',
+    value: 'test.model.PhysicalSettlement',
     label: 'PhysicalSettlement',
     kind: 'data',
     namespace: 'test.model'
   },
-  { value: 'test.model::Trade', label: 'Trade', kind: 'data', namespace: 'test.model' },
+  { value: 'test.model.Trade', label: 'Trade', kind: 'data', namespace: 'test.model' },
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
 
@@ -319,7 +319,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
 
     // Pick a type that is not already used as an option (Trade — the fixture
     // has CashPayment and PhysicalSettlement).
-    fireEvent.change(addSelect, { target: { value: 'test.model::Trade' } });
+    fireEvent.change(addSelect, { target: { value: 'test.model.Trade' } });
 
     expect(addChoiceOption).toHaveBeenCalledTimes(1);
     expect(addChoiceOption).toHaveBeenCalledWith('node-1', 'Trade');

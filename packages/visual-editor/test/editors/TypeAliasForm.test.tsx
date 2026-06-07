@@ -90,7 +90,7 @@ function makeActions(overrides: Partial<EditorFormActions<'typeAlias'>> = {}): E
 const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'builtin::string', label: 'string', kind: 'builtin' },
   { value: 'builtin::int', label: 'int', kind: 'builtin' },
-  { value: 'test.model::Trade', label: 'Trade', kind: 'data', namespace: 'test.model' }
+  { value: 'test.model.Trade', label: 'Trade', kind: 'data', namespace: 'test.model' }
 ];
 
 function makeTypeAliasNode(overrides: Record<string, unknown> = {}): AnyGraphNode {
@@ -148,7 +148,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     const actions = makeActions();
     const { container } = render(
       <TypeAliasForm
-        nodeId="test.aliases::ShortText"
+        nodeId="test.aliases.ShortText"
         data={makeTypeAliasNode()}
         actions={actions}
         availableTypes={AVAILABLE_TYPES}
@@ -183,7 +183,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
 
     render(
       <TypeAliasForm
-        nodeId="test.aliases::ShortText"
+        nodeId="test.aliases.ShortText"
         data={makeTypeAliasNode()}
         actions={actions}
         availableTypes={AVAILABLE_TYPES}
@@ -204,7 +204,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     });
 
     expect(renameType).toHaveBeenCalledTimes(1);
-    expect(renameType).toHaveBeenCalledWith('test.aliases::ShortText', 'TinyText');
+    expect(renameType).toHaveBeenCalledWith('test.aliases.ShortText', 'TinyText');
   });
 
   // -------------------------------------------------------------------------
@@ -220,7 +220,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     });
 
     const { container, rerender } = render(
-      <TypeAliasForm nodeId="test.aliases::ShortText" data={nodeA} actions={actions} availableTypes={AVAILABLE_TYPES} />
+      <TypeAliasForm nodeId="test.aliases.ShortText" data={nodeA} actions={actions} availableTypes={AVAILABLE_TYPES} />
     );
 
     // Initial state pulled from nodeA
@@ -229,7 +229,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
 
     // Swap to nodeB (different reference identity)
     rerender(
-      <TypeAliasForm nodeId="test.aliases::TinyInt" data={nodeB} actions={actions} availableTypes={AVAILABLE_TYPES} />
+      <TypeAliasForm nodeId="test.aliases.TinyInt" data={nodeB} actions={actions} availableTypes={AVAILABLE_TYPES} />
     );
 
     act(() => {
@@ -254,7 +254,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     const actions = makeActions();
     const { container } = render(
       <TypeAliasForm
-        nodeId="test.aliases::ShortText"
+        nodeId="test.aliases.ShortText"
         data={makeTypeAliasNode()}
         actions={actions}
         availableTypes={AVAILABLE_TYPES}

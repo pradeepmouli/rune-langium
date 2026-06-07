@@ -39,7 +39,9 @@ import {
   annotationsToDisplay,
   conditionsToDisplay,
   useEditorStore,
-  useModelSourceSync
+  useModelSourceSync,
+  nameFromNodeId,
+  splitNodeId
 } from '@rune-langium/visual-editor';
 import type {
   RuneTypeGraphRef,
@@ -56,6 +58,7 @@ import type {
 } from '@rune-langium/visual-editor';
 import { useStructureViewStore } from '../store/structure-view-store.js';
 import type { RosettaModel } from '@rune-langium/core';
+import { qualifiedExportPath, namespaceFromModelName } from '@rune-langium/core';
 import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
@@ -836,12 +839,7 @@ export function ExplorePerspective() {
         }
       ).$document?.uri;
       const sourceUri = pathToUri(modelUriValue?.path ?? modelUriValue?.toString() ?? entry.filePath);
-      const namespace =
-        typeof model.name === 'string'
-          ? model.name
-          : Array.isArray((model.name as { segments?: string[] } | undefined)?.segments)
-            ? ((model.name as { segments: string[] }).segments.join('.') ?? 'unknown')
-            : 'unknown';
+      const namespace = namespaceFromModelName(model.name) ?? 'unknown';
       for (const [sourceIndex, element] of (model.elements ?? []).entries()) {
         const name = (element as { name?: string }).name;
         if (!name) {
@@ -1021,7 +1019,7 @@ export function ExplorePerspective() {
     // resolve to the enum file even when a data type is selected. Linking every
     // deferred file in the namespace ensures every model (enum, data, choice)
     // gets deserialized and merged into the graph.
-    const [namespace] = selectedNodeId.split('::');
+    const { namespace } = splitNodeId(selectedNodeId);
     if (!namespace) return;
     const relinkedKey = `${hydrationNonce}:${namespace}`;
     if (relinkedRef.current.has(relinkedKey)) return;
@@ -1107,12 +1105,8 @@ export function ExplorePerspective() {
   const namespaceToFile = useMemo(() => {
     const map = new Map<string, string>();
     for (const entry of resolvedModelFiles) {
-      const model = entry.model as { name?: string | { segments?: string[] } };
-      let ns = 'unknown';
-      if (typeof model.name === 'string') ns = model.name;
-      else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
-        ns = (model.name as { segments: string[] }).segments.join('.');
-      }
+      const model = entry.model as { name?: unknown };
+      const ns = namespaceFromModelName(model.name) ?? 'unknown';
       map.set(ns, entry.filePath);
     }
     return map;
@@ -1122,24 +1116,20 @@ export function ExplorePerspective() {
     const map = new Map<string, string>();
     for (const entry of resolvedModelFiles) {
       const model = entry.model as {
-        name?: string | { segments?: string[] };
+        name?: unknown;
         elements?: Array<{ name?: string }>;
       };
-      let ns = 'unknown';
-      if (typeof model.name === 'string') ns = model.name;
-      else if (model.name && typeof model.name === 'object' && 'segments' in model.name) {
-        ns = (model.name as { segments: string[] }).segments.join('.');
-      }
+      const ns = namespaceFromModelName(model.name) ?? 'unknown';
       for (const element of model.elements ?? []) {
         const name = element.name ?? 'unknown';
-        const nodeId = `${ns}::${name}`;
+        const nodeId = qualifiedExportPath(ns, name);
         if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
       }
     }
     // Include deferred corpus entries so linkDocument can resolve their file paths.
     for (const entry of deferredExports) {
       for (const exp of entry.exports) {
-        const nodeId = `${entry.namespace}::${exp.name}`;
+        const nodeId = qualifiedExportPath(entry.namespace, exp.name);
         if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
       }
     }
@@ -1159,7 +1149,7 @@ export function ExplorePerspective() {
           if (byName) return byName.path;
         }
       }
-      const nodeId = `${d.namespace}::${d.name}`;
+      const nodeId = qualifiedExportPath(d.namespace, d.name);
       return nodeIdToFilePath.get(nodeId);
     },
     [files, nodeIdToFilePath]
@@ -1244,7 +1234,7 @@ export function ExplorePerspective() {
       const targetNode = storeNodes.find((n) => n.id === nodeId);
       const exists = Boolean(targetNode);
       if (!exists) {
-        const shortName = nodeId.includes('::') ? nodeId.split('::').pop() : nodeId;
+        const shortName = nameFromNodeId(nodeId);
         showToast({
           description: `Type "${shortName}" not loaded — load the file containing this type`,
           variant: 'destructive',
@@ -1817,7 +1807,7 @@ export function ExplorePerspective() {
     if (!selectedNodeType) return undefined;
     const node = storeNodes.find((n) => n.id === selectedNodeId);
     const name =
-      (node?.data as { name?: string } | undefined)?.name ?? selectedNodeId.split('::').pop() ?? selectedNodeId;
+      (node?.data as { name?: string } | undefined)?.name ?? nameFromNodeId(selectedNodeId);
     // Map AST $type → user-friendly kind label. Codex review (e2e-batch
     // adversarial) flagged the previous map as non-exhaustive — it omitted
     // RosettaTypeAlias, RosettaBasicType, RosettaSynonymSource,
@@ -1910,7 +1900,7 @@ export function ExplorePerspective() {
   // lands.
   // ---------------------------------------------------------------------------
 
-  // Resolve file path for the focused structure node (ns::TypeName format).
+  // Resolve file path for the focused structure node (ns.TypeName format).
   const structureFilePath = useMemo(() => {
     if (!structureFocusedTypeId) return undefined;
     return nodeIdToFilePath.get(structureFocusedTypeId);

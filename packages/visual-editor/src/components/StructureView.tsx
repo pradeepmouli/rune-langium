@@ -271,7 +271,7 @@ export interface StructureCellComponents {
 }
 
 export interface StructureViewProps {
-  /** Canonical node id of the type to focus (e.g. `'cdm.trade::Trade'`). */
+  /** Canonical node id of the type to focus (e.g. `'cdm.trade.Trade'`). */
   readonly focusedTypeId: string | undefined;
   /** In-memory document representation produced by the studio's store adapter. */
   readonly adapterDoc: AdapterDocument | undefined;
@@ -304,7 +304,7 @@ export interface StructureViewProps {
   /**
    * Selection sync (e2e-batch fix #3): fired when the user clicks any node in
    * the rendered Structure tree. Receives the canonical type id (e.g.
-   * `'cdm.trade::Trade'`) — NOT the per-instance React Flow node id, so the
+   * `'cdm.trade.Trade'`) — NOT the per-instance React Flow node id, so the
    * receiver can write straight to a single `selectedNodeId` slice that the
    * Graph / Source / Inspector also read from. EditorPage wires this to
    * `useEditorStore.selectNode`.
@@ -313,7 +313,7 @@ export interface StructureViewProps {
   /**
    * Spec §8 / §3.3 — navigate-to-enum callback. When provided, rows whose
    * `typeKind === 'Enum'` (and arms in ChoiceNode) render an ↗ inspect button
-   * that fires this callback with the enum's canonical type id (ns::Name
+   * that fires this callback with the enum's canonical type id (ns.Name
    * format). EditorPage wires this to set `focusedTypeId` on the structure
    * view, drilling into the enum's values.
    */
@@ -515,7 +515,7 @@ function StructureFlowInner({
         // e2e-batch fix #3: selection sync — clicking any node in the
         // Structure tree writes the OWNER type's canonical id to the shared
         // selection slice. We extract `node.data.id` (the canonical type id
-        // stamped by the adapter, e.g. `cdm.trade::Trade`) rather than the
+        // stamped by the adapter, e.g. `cdm.trade.Trade`) rather than the
         // React Flow `node.id` (which carries the per-instance suffix like
         // `Trade::buyer::Party` and would not match the explorer / inspector
         // selection contract). Falls back to `node.id` when `data.id` is
@@ -524,7 +524,7 @@ function StructureFlowInner({
         // Codex P1 review: skip clicks on synthetic wrapper nodes
         // (`structureBase` — the GroupContainerNode renderer for base-type
         // wraps). Their `data.id` is the synthetic wrapper key like
-        // `cdm.trade::Trade::__base::cdm.trade::TradeBase`, not a real
+        // `cdm.trade.Trade::__base::cdm.trade.TradeBase`, not a real
         // graph node id — writing it to selectedNodeId would put the cross-
         // pane sync into a no-such-node state. The base's actual selectable
         // contents (header → base type, child → derived type) are accessed

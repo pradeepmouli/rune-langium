@@ -440,7 +440,7 @@ describe('EditorStore — updateAttributeType on Choice nodes (Codex P2 silent-d
     const attrsBefore = [...((choiceNode!.data as any).attributes ?? [])];
 
     // Pass a targetTypeId that does not exist in the store.
-    store.getState().updateAttributeType(choiceNode!.id, 'CashPayment', 'WirePayment', 'stale::NodeId');
+    store.getState().updateAttributeType(choiceNode!.id, 'CashPayment', 'WirePayment', 'stale.NodeId');
 
     const updated = store.getState().nodes.find((n) => n.id === choiceNode!.id);
     const attrsAfter = (updated!.data as any).attributes ?? [];
@@ -460,7 +460,7 @@ describe('EditorStore — updateAttributeType on Choice nodes (Codex P2 silent-d
     expect(cashNode).toBeDefined();
 
     // Inject a synthetic Enum node into the store state to confirm the guard holds.
-    const fakeEnumId = 'fake::EnumNode';
+    const fakeEnumId = 'fake.EnumNode';
     store.setState((prev: any) => ({
       nodes: [
         ...prev.nodes,
@@ -857,7 +857,7 @@ describe('EditorStore — updateAttributeType (Finding 3: cross-namespace qualif
     store.getState().createType('data', 'Party', 'ns.a');
     const bPartyId = store.getState().createType('data', 'Party', 'ns.b');
 
-    // Drop ns.b::Party onto Trade.p with the full canonical id (Finding 3 path).
+    // Drop ns.b.Party onto Trade.p with the full canonical id (Finding 3 path).
     store.getState().updateAttributeType(tradeId, 'p', 'Party', bPartyId);
 
     const node = store.getState().nodes.find((n) => n.id === tradeId)!;
@@ -898,7 +898,7 @@ describe('EditorStore — updateAttributeType (Finding 3: cross-namespace qualif
     // target was deleted between drag start and drop). The action must abort
     // without touching the AST.
     const before = store.getState();
-    store.getState().updateAttributeType(tradeId, 'p', 'Ghost', 'ns.x::Ghost');
+    store.getState().updateAttributeType(tradeId, 'p', 'Ghost', 'ns.x.Ghost');
 
     const node = store.getState().nodes.find((n) => n.id === tradeId)!;
     const attrs = ((node.data as any).attributes ?? []) as Array<any>;
@@ -947,7 +947,7 @@ describe('EditorStore — setInheritance (Finding 3: cross-namespace qualificati
     const beforeRefText = ((store.getState().nodes.find((n) => n.id === childId)!.data as any).superType as any)
       ?.$refText;
 
-    store.getState().setInheritance(childId, 'ns.x::DeletedBase');
+    store.getState().setInheritance(childId, 'ns.x.DeletedBase');
 
     // Inheritance unchanged — stale payload was rejected.
     const node = store.getState().nodes.find((n) => n.id === childId)!;
@@ -1069,7 +1069,7 @@ describe('EditorStore — updateInputParam (cross-namespace qualification)', () 
     store.getState().createType('data', 'Amount', 'ns.a');
     const bAmountId = store.getState().createType('data', 'Amount', 'ns.b');
 
-    // Update the input with the id of ns.b::Amount.
+    // Update the input with the id of ns.b.Amount.
     store.getState().updateInputParam(funcId, 'payment', 'payment', 'Amount', '(1..1)', bAmountId);
 
     const node = store.getState().nodes.find((n) => n.id === funcId)!;

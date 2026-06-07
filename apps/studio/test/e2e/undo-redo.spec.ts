@@ -58,7 +58,7 @@ test.describe('Undo / Redo', () => {
   });
 
   test('should undo node position change with Ctrl+Z', async ({ page }) => {
-    const widgetNode = page.getByTestId('rf__node-undo.test::Widget');
+    const widgetNode = page.getByTestId('rf__node-undo.test.Widget');
     const initialBox = await widgetNode.boundingBox();
     expect(initialBox).toBeTruthy();
 
@@ -81,7 +81,7 @@ test.describe('Undo / Redo', () => {
   });
 
   test('should redo with Ctrl+Shift+Z after undo', async ({ page }) => {
-    const widgetNode = page.getByTestId('rf__node-undo.test::Widget');
+    const widgetNode = page.getByTestId('rf__node-undo.test.Widget');
     const initialBox = await widgetNode.boundingBox();
 
     // Drag node
@@ -111,7 +111,7 @@ test.describe('Undo / Redo', () => {
     await page.waitForTimeout(1000);
 
     // Select enum node
-    const categoryNode = page.getByTestId('rf__node-undo.test::Category');
+    const categoryNode = page.getByTestId('rf__node-undo.test.Category');
     await categoryNode.click({ force: true });
     await page.waitForTimeout(1000);
 
@@ -131,7 +131,7 @@ test.describe('Undo / Redo', () => {
   });
 
   test('multiple sequential undos should work', async ({ page }) => {
-    const widgetNode = page.getByTestId('rf__node-undo.test::Widget');
+    const widgetNode = page.getByTestId('rf__node-undo.test.Widget');
 
     // Perform multiple drag operations
     for (let i = 0; i < 3; i++) {

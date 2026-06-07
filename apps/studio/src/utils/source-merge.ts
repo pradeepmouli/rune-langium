@@ -114,7 +114,10 @@ async function extractElementRanges(source: string): Promise<ElementRange[] | nu
  * distinct.
  */
 function elementKey(name: string, kind: string): string {
-  return `${kind}::${name}`;
+  // Internal composite Map key for matching elements across the original /
+  // serialized passes — NOT a node id. A NUL separator (unrepresentable in
+  // identifiers) keeps it unambiguous and out of the retired `::` node-id shape.
+  return `${kind}\x00${name}`;
 }
 
 /**

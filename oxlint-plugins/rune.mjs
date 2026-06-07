@@ -103,10 +103,58 @@ const noRawArbitraryValue = {
   },
 };
 
+// ── rune/no-raw-node-id ─────────────────────────────────────────────
+// Guards the Phase 3A′ `::`→`.` node-id migration. Visual-editor node ids are
+// now built EXCLUSIVELY via `qualifiedExportPath`/`makeNodeId` (dot form,
+// `namespace.Name`). A residual `::` sitting BETWEEN two interpolations is the
+// retired raw node-id construction (`${ns}::${name}`) and is always wrong now.
+//
+// Precision (false positives block CI), reasoning from the oxlint TemplateLiteral
+// AST where `quasis.length === expressions.length + 1`:
+//   • quasi `i` is preceded by expression `i-1` (iff `i > 0`) and followed by
+//     expression `i` (iff `i < expressions.length`). The `${a}::${b}` shape is an
+//     INTERIOR quasi: an expression on BOTH sides ⇒ `i > 0 && i < expressions.length`.
+// Deliberately NOT flagged (legitimate `::`, not node-id construction):
+//   • a LEADING/TRAILING quasi with `::` — `builtin::${t}` (quasi[0], nothing
+//     before it) is the namespace-less builtin prefix, not `${a}::${b}`.
+//   • dotted ids `${ns}.${name}` (interior quasi has no `::`).
+//   • instance-path / expansion-key composition in the sanctioned sites —
+//     `structure-graph-adapter.ts` (`${id}::__base::${parentId}`),
+//     `structure-view.ts` (`${namespaceUri}::${typeId}::${attrName}`) — and the
+//     node-id construction site `node-projection.ts`. These three are allow-listed
+//     by filename (`context.filename`, an absolute path in the oxlint alpha API).
+const NODE_ID_ALLOWLIST = ['node-projection.ts', 'structure-graph-adapter.ts', 'structure-view.ts'];
+
+const noRawNodeId = {
+  create(context) {
+    const filename = String(context.filename ?? '');
+    if (NODE_ID_ALLOWLIST.some((f) => filename.endsWith(f))) return {};
+    return {
+      TemplateLiteral(node) {
+        const { quasis, expressions } = node;
+        for (let i = 0; i < quasis.length; i++) {
+          // Interior quasi only: an interpolation on BOTH sides.
+          if (i === 0 || i >= expressions.length) continue;
+          const cooked = quasis[i].value?.cooked ?? quasis[i].value?.raw;
+          if (typeof cooked === 'string' && cooked.includes('::')) {
+            context.report({
+              message:
+                'Raw node-id construction `${a}::${b}` is retired (Phase 3A′ `::`→`.`) — build node ids via `makeNodeId`/`qualifiedExportPath` (dot form `namespace.Name`).',
+              node,
+            });
+            return;
+          }
+        }
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: 'rune' },
   rules: {
     'no-palette-utility': noPaletteUtility,
     'no-raw-arbitrary-value': noRawArbitraryValue,
+    'no-raw-node-id': noRawNodeId,
   },
 };

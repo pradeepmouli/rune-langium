@@ -182,7 +182,7 @@ function makeDataNode(
     hasExternalRefs: false
   };
   return {
-    id: `test::${name}`,
+    id: `test.${name}`,
     type: 'data',
     position: { x: 0, y: 0 },
     data
@@ -202,7 +202,7 @@ function makeEnumNode(name: string, parent: string | undefined, values: Record<s
     hasExternalRefs: false
   };
   return {
-    id: `test::${name}`,
+    id: `test.${name}`,
     type: 'enum',
     position: { x: 0, y: 0 },
     data

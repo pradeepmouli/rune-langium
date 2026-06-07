@@ -22,7 +22,7 @@ const KIND_TO_AST_TYPE: Record<string, string> = {
 
 function makeNode(ns: string, name: string, kind: string = 'data'): TypeGraphNode {
   return {
-    id: `${ns}::${name}`,
+    id: `${ns}.${name}`,
     type: kind,
     position: { x: 0, y: 0 },
     data: {
@@ -79,7 +79,7 @@ describe('buildNamespaceTree', () => {
   it('preserves node IDs in type entries', () => {
     const nodes = [makeNode('com.example', 'MyType')];
     const tree = buildNamespaceTree(nodes);
-    expect(tree[0]!.types[0]!.nodeId).toBe('com.example::MyType');
+    expect(tree[0]!.types[0]!.nodeId).toBe('com.example.MyType');
   });
 });
 
@@ -218,7 +218,7 @@ describe('flattenNamespaceTree', () => {
   });
 
   it('marks hidden nodes correctly', () => {
-    const hidden = new Set(['ns.a::TypeA']);
+    const hidden = new Set(['ns.a.TypeA']);
     const rows = flattenNamespaceTree(tree, new Set(['ns.a']), hidden);
     const typeARow = rows.find((r) => r.kind === 'type' && r.name === 'TypeA');
     const typeBRow = rows.find((r) => r.kind === 'type' && r.name === 'TypeB');

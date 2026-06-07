@@ -23,8 +23,8 @@ import type { AnyGraphNode, TypeOption, EditorFormActions } from '../src/types.j
 // ---------------------------------------------------------------------------
 
 const AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test::Money', label: 'Money', kind: 'data', namespace: 'test' },
-  { value: 'test::string', label: 'string', kind: 'builtin' }
+  { value: 'test.Money', label: 'Money', kind: 'data', namespace: 'test' },
+  { value: 'builtin::string', label: 'string', kind: 'builtin' }
 ];
 
 /** Build a minimal AnyGraphNode fixture for any AST type. */

@@ -42,7 +42,7 @@ function makeActions(): EditorFormActions<'enum'> {
 }
 
 const AVAILABLE_TYPES: TypeOption[] = [
-  { value: 'test::CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test' }
+  { value: 'test.CurrencyEnum', label: 'CurrencyEnum', kind: 'enum', namespace: 'test' }
 ];
 
 function makeEnumData(overrides: Record<string, unknown> = {}): AnyGraphNode {

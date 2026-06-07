@@ -405,7 +405,7 @@ test.describe('Form Preview', () => {
       'Select a type from the graph, file tree, or source editor to preview a generated form.'
     );
 
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
 
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();
     await expect(previewPanel.getByText('preview.alpha.Trade [Data]')).toBeVisible();
@@ -423,11 +423,11 @@ test.describe('Form Preview', () => {
 
     const previewPanel = page.getByTestId('panel-formPreview');
 
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();
     await expect(previewPanel.getByText('preview.alpha.Trade [Data]')).toBeVisible();
 
-    await selectTypeFromNavigate(page, 'preview.beta::Trade');
+    await selectTypeFromNavigate(page, 'preview.beta.Trade');
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();
     await expect(previewPanel.getByText('preview.beta.Trade [Data]')).toBeVisible();
     await expect(previewPanel.getByLabel('betaOnly')).toBeVisible();
@@ -436,7 +436,7 @@ test.describe('Form Preview', () => {
 
   test('validates required fields and bounded arrays, then clears errors after valid input', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
 
     const previewPanel = page.getByTestId('panel-formPreview');
     await previewPanel.getByLabel('tradeId').click();
@@ -460,7 +460,7 @@ test.describe('Form Preview', () => {
 
   test('supports keyboard-only reset and sample-data copy without extra network requests', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
     await resetPreviewNetworkState(page);
 
     const previewPanel = page.getByTestId('panel-formPreview');
@@ -489,19 +489,19 @@ test.describe('Form Preview', () => {
 
   test('refreshes the selected preview after valid model changes', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
 
     const previewPanel = page.getByTestId('panel-formPreview');
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();
 
     await replaceActiveSource(page, PREVIEW_MODEL_UPDATED);
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
     await expect(previewPanel.getByLabel('Settlement date')).toBeVisible();
   });
 
   test('returns to the empty state when the selected type is deleted', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
 
     const previewPanel = page.getByTestId('panel-formPreview');
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();
@@ -513,7 +513,7 @@ test.describe('Form Preview', () => {
 
   test('follows the selected preview target when the type is renamed during reload', async ({ page }) => {
     await loadFiles(page, [{ name: 'preview-alpha.rosetta', content: PREVIEW_MODEL }]);
-    await selectTypeFromNavigate(page, 'preview.alpha::Trade');
+    await selectTypeFromNavigate(page, 'preview.alpha.Trade');
 
     const previewPanel = page.getByTestId('panel-formPreview');
     await expect(previewPanel.getByRole('heading', { name: 'Trade' })).toBeVisible();

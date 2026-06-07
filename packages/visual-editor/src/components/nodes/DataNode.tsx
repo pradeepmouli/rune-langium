@@ -87,7 +87,7 @@ interface StructureNodeData extends StructureDataNode {
   /**
    * Spec §8 / §3.3 — navigate-to-enum callback. Injected by StructureView
    * alongside cellComponents. Rows with `typeKind === 'Enum'` render an ↗
-   * button that fires this with the enum's canonical typeId (ns::Name).
+   * button that fires this with the enum's canonical typeId (ns.Name).
    */
   readonly onNavigateToEnumType?: (typeId: string) => void;
   /**

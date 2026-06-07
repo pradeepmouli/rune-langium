@@ -11,7 +11,7 @@
  * - Renders disabled button when type doesn't resolve to any nodeId
  * - Calls onNavigateToNode with correct nodeId when clicked
  * - resolveNodeId matches exact IDs
- * - resolveNodeId matches ::suffix pattern
+ * - resolveNodeId matches .name suffix (exact last-segment, no namespace-collision)
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -24,9 +24,9 @@ import { TypeLink } from '../../src/components/editors/TypeLink.js';
 
 describe('TypeLink', () => {
   const ALL_NODE_IDS = [
-    'cdm.base.math::Quantity',
-    'cdm.base.datetime::AdjustableDate',
-    'cdm.product.template::EconomicTerms',
+    'cdm.base.math.Quantity',
+    'cdm.base.datetime.AdjustableDate',
+    'cdm.product.template.EconomicTerms',
     'CompareOp'
   ];
 
@@ -78,7 +78,7 @@ describe('TypeLink', () => {
     fireEvent.click(btn);
 
     expect(onNavigate).toHaveBeenCalledOnce();
-    expect(onNavigate).toHaveBeenCalledWith('cdm.base.math::Quantity');
+    expect(onNavigate).toHaveBeenCalledWith('cdm.base.math.Quantity');
   });
 
   it('does not call onNavigateToNode when allNodeIds is not provided', () => {
@@ -102,17 +102,17 @@ describe('TypeLink', () => {
       expect(onNavigate).toHaveBeenCalledWith('CompareOp');
     });
 
-    it('matches ::suffix pattern (e.g., "Quantity" matches "cdm.base.math::Quantity")', () => {
+    it('matches dot-suffix pattern (e.g., "Quantity" matches "cdm.base.math.Quantity")', () => {
       const onNavigate = vi.fn();
       render(
         <TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />
       );
 
       fireEvent.click(screen.getByRole('button'));
-      expect(onNavigate).toHaveBeenCalledWith('cdm.base.math::Quantity');
+      expect(onNavigate).toHaveBeenCalledWith('cdm.base.math.Quantity');
     });
 
-    it('matches ::suffix for AdjustableDate', () => {
+    it('matches dot-suffix for AdjustableDate', () => {
       const onNavigate = vi.fn();
       render(
         <TypeLink
@@ -123,7 +123,20 @@ describe('TypeLink', () => {
       );
 
       fireEvent.click(screen.getByRole('button'));
-      expect(onNavigate).toHaveBeenCalledWith('cdm.base.datetime::AdjustableDate');
+      expect(onNavigate).toHaveBeenCalledWith('cdm.base.datetime.AdjustableDate');
+    });
+
+    it('exact last-segment match: "Foo" picks "a.b.Foo" not "a.Foo.Bar" (namespace-collision proof)', () => {
+      // "a.Foo.Bar" has "Foo" as a namespace segment, not the name segment.
+      // Naive endsWith('.Foo') would match "a.Foo.Bar" — exact nameFromNodeId must not.
+      const onNavigate = vi.fn();
+      const collisionIds = ['a.b.Foo', 'a.Foo.Bar'];
+      render(
+        <TypeLink typeName="Foo" onNavigateToNode={onNavigate} allNodeIds={collisionIds} />
+      );
+
+      fireEvent.click(screen.getByRole('button'));
+      expect(onNavigate).toHaveBeenCalledWith('a.b.Foo');
     });
   });
 });

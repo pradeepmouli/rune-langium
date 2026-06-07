@@ -13,48 +13,49 @@ import {
 import { getMemberArray, ensureMemberArray, forEachMember } from '../../src/store/node-projection.js';
 import { toNodesById, nodesFromMap, toEdgesById, edgesFromMap } from '../../src/store/node-projection.js';
 
-describe('node-projection id builders (V1)', () => {
-  it('makeNodeId joins namespace and name with the :: separator', () => {
-    expect(makeNodeId('cdm.base', 'Foo')).toBe('cdm.base::Foo');
+describe('node-projection id builders (V1, dot form)', () => {
+  it('makeNodeId joins namespace and name with a dot (via qualifiedExportPath)', () => {
+    expect(makeNodeId('cdm.base', 'Foo')).toBe('cdm.base.Foo');
+    expect(makeNodeId('', 'Foo')).toBe('Foo'); // empty namespace → no leading dot
   });
-  it('nameFromNodeId returns the trailing name', () => {
-    expect(nameFromNodeId('cdm.base::Foo')).toBe('Foo');
-    expect(nameFromNodeId('Foo')).toBe('Foo'); // no separator → whole string
+  it('nameFromNodeId returns the trailing name via last-dot split', () => {
+    expect(nameFromNodeId('cdm.base.Foo')).toBe('Foo');
+    expect(nameFromNodeId('Foo')).toBe('Foo'); // no dot → whole string
   });
-  it('splitNodeId returns namespace + name', () => {
-    expect(splitNodeId('cdm.base::Foo')).toEqual({ namespace: 'cdm.base', name: 'Foo' });
+  it('splitNodeId returns namespace + name via last-dot split', () => {
+    expect(splitNodeId('cdm.base.Foo')).toEqual({ namespace: 'cdm.base', name: 'Foo' });
     expect(splitNodeId('Foo')).toEqual({ namespace: '', name: 'Foo' });
   });
 });
 
 describe('node-projection edge-id builders (V3)', () => {
   it('builds and parses a label-bearing edge id (attribute-ref)', () => {
-    const id = makeEdgeId('attribute-ref', { source: 'ns::A', target: 'ns::B', label: 'foo' });
-    expect(id).toBe('ns::A--attribute-ref--foo--ns::B');
-    expect(parseEdgeId(id)).toEqual({ kind: 'attribute-ref', source: 'ns::A', target: 'ns::B', label: 'foo' });
+    const id = makeEdgeId('attribute-ref', { source: 'ns.A', target: 'ns.B', label: 'foo' });
+    expect(id).toBe('ns.A--attribute-ref--foo--ns.B');
+    expect(parseEdgeId(id)).toEqual({ kind: 'attribute-ref', source: 'ns.A', target: 'ns.B', label: 'foo' });
   });
   it('builds and parses a label-less edge id (extends)', () => {
-    const id = makeEdgeId('extends', { source: 'ns::Child', target: 'ns::Parent' });
-    expect(id).toBe('ns::Child--extends--ns::Parent');
-    expect(parseEdgeId(id)).toEqual({ kind: 'extends', source: 'ns::Child', target: 'ns::Parent' });
+    const id = makeEdgeId('extends', { source: 'ns.Child', target: 'ns.Parent' });
+    expect(id).toBe('ns.Child--extends--ns.Parent');
+    expect(parseEdgeId(id)).toEqual({ kind: 'extends', source: 'ns.Child', target: 'ns.Parent' });
   });
   it('returns null for a non-edge string', () => {
-    expect(parseEdgeId('ns::A')).toBeNull();
+    expect(parseEdgeId('ns.A')).toBeNull();
   });
   it('makeEdgeId is kind-driven: a stray label on a label-less kind is ignored', () => {
     // extends is label-less → label ignored → 3-segment, round-trips
-    const id = makeEdgeId('extends', { source: 'ns::A', target: 'ns::B', label: 'ignored' } as never);
-    expect(id).toBe('ns::A--extends--ns::B');
-    expect(parseEdgeId(id)).toEqual({ kind: 'extends', source: 'ns::A', target: 'ns::B' });
+    const id = makeEdgeId('extends', { source: 'ns.A', target: 'ns.B', label: 'ignored' } as never);
+    expect(id).toBe('ns.A--extends--ns.B');
+    expect(parseEdgeId(id)).toEqual({ kind: 'extends', source: 'ns.A', target: 'ns.B' });
   });
   it('parseEdgeId rejects an unknown kind segment', () => {
-    expect(parseEdgeId('ns::A--bogus--ns::B')).toBeNull();
+    expect(parseEdgeId('ns.A--bogus--ns.B')).toBeNull();
   });
   it('parseEdgeId rejects a label-less kind with an extra (4th) segment', () => {
-    expect(parseEdgeId('ns::A--extends--x--ns::B')).toBeNull();
+    expect(parseEdgeId('ns.A--extends--x--ns.B')).toBeNull();
   });
   it('parseEdgeId rejects a label-bearing kind missing its label (3 segments)', () => {
-    expect(parseEdgeId('ns::A--attribute-ref--ns::B')).toBeNull();
+    expect(parseEdgeId('ns.A--attribute-ref--ns.B')).toBeNull();
   });
 });
 

@@ -325,7 +325,7 @@ function makeDragEvent(overrides: {
 const VALID_PAYLOAD = {
   rune: 'type-ref',
   namespaceUri: 'cdm.trade',
-  typeId: 'cdm.trade::Trade',
+  typeId: 'cdm.trade.Trade',
   typeName: 'Trade',
   kind: 'Data'
 };

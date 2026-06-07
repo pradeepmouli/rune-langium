@@ -274,7 +274,7 @@ test.describe('Form Preview — Extended Types', () => {
     );
 
     // Select the Order type (which uses the Price typeAlias)
-    await selectTypeFromNavigate(page, 'preview.alias::Order');
+    await selectTypeFromNavigate(page, 'preview.alias.Order');
 
     // Schema renders without errors — heading and field labels are visible
     await expect(previewPanel.getByRole('heading', { name: 'Order' })).toBeVisible();
@@ -289,7 +289,7 @@ test.describe('Form Preview — Extended Types', () => {
     const previewPanel = page.getByTestId('panel-formPreview');
 
     // Select the Transfer choice type
-    await selectTypeFromNavigate(page, 'preview.choice::Transfer');
+    await selectTypeFromNavigate(page, 'preview.choice.Transfer');
 
     // Schema renders without errors
     await expect(previewPanel.getByRole('heading', { name: 'Transfer' })).toBeVisible();
@@ -309,7 +309,7 @@ test.describe('Form Preview — Extended Types', () => {
     const previewPanel = page.getByTestId('panel-formPreview');
 
     // Select the AddAmounts function
-    await selectTypeFromNavigate(page, 'preview.func::AddAmounts');
+    await selectTypeFromNavigate(page, 'preview.func.AddAmounts');
 
     // Schema renders without errors
     await expect(previewPanel.getByRole('heading', { name: 'AddAmounts' })).toBeVisible();

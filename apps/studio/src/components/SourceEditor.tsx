@@ -177,7 +177,7 @@ function scrollToPosition(view: EditorView | null, position: { line: number; cha
 }
 
 /**
- * Extract a graph nodeId (namespace::TypeName) from the cursor position
+ * Extract a graph nodeId (namespace.TypeName) from the cursor position
  * after a go-to-definition jump (Task 7).
  *
  * When jumpToDefinition places the cursor at a type definition, we scan
@@ -227,7 +227,7 @@ function extractNodeIdAtPosition(state: EditorState, pos: number): string | null
   // Skip graph navigation if namespace can't be determined
   if (!namespace) return null;
 
-  return `${namespace}::${typeName}`;
+  return `${namespace}.${typeName}`;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
