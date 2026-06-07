@@ -730,6 +730,48 @@ function mutateGraph(
   });
 }
 
+/**
+ * View-only update chokepoint (Phase 3B, Task 5).
+ *
+ * Writes nodes/edges arrays + re-derived Maps, but NEVER captures patches
+ * (pendingEditPatches) and NEVER bumps parseEpoch.
+ *
+ * INVARIANT I2: position/layout is VIEW state, not a source edit. The
+ * `relayout`, `setLayoutEngine`, `applyReactFlowNodeChanges`, and
+ * `applyReactFlowEdgeChanges` actions route through here so that when Task 3C
+ * removes the set-interceptor the view path still keeps Maps canonical.
+ *
+ * DEVIATION FROM PLAN'S RECIPE FORM: RF's `applyNodeChanges` and Dagre's
+ * `computeLayout` are array-centric — they consume and produce nodes/edges
+ * arrays, not Maps. Re-expressing them as Mutative Map recipes would require
+ * reimplementing `applyNodeChanges`'s batched change semantics. We accept
+ * array inputs here and rebuild the Maps from the result instead.
+ *
+ * @param set   The wrapped store set (from createEditorStore closure).
+ * @param get   Store getter.
+ * @param view  New nodes and/or edges arrays (either or both may be omitted to
+ *              keep the current value).
+ * @param extra Optional additional state to merge (e.g. layoutOptions).
+ *              Must NOT include pendingEditPatches or parseEpoch.
+ */
+function updateGraphView(
+  set: (partial: Partial<EditorState>) => void,
+  get: () => EditorState,
+  view: { nodes?: TypeGraphNode[]; edges?: TypeGraphEdge[] },
+  extra?: Omit<Partial<EditorState>, 'pendingEditPatches' | 'parseEpoch'>
+): void {
+  const nextNodes = view.nodes ?? get().nodes;
+  const nextEdges = view.edges ?? get().edges;
+  set({
+    nodes: nextNodes,
+    edges: nextEdges,
+    nodesById: toNodesById(nextNodes),
+    edgesById: toEdgesById(nextEdges),
+    ...extra
+    // NO pendingEditPatches, NO parseEpoch
+  });
+}
+
 const initialState: EditorState = {
   nodes: [],
   edges: [],
@@ -1040,13 +1082,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
         relayout(options) {
           const opts = options ?? get().layoutOptions;
           const nodes = computeLayout(get().nodes, get().edges, opts);
-          set({ nodes, layoutOptions: opts });
+          updateGraphView(set, get, { nodes }, { layoutOptions: opts });
         },
 
         setLayoutEngine(engine) {
           const opts = { ...get().layoutOptions, engine };
           const nodes = computeLayout(get().nodes, get().edges, opts);
-          set({ nodes, layoutOptions: opts });
+          updateGraphView(set, get, { nodes }, { layoutOptions: opts });
         },
 
         getNodes() {
@@ -2124,15 +2166,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) =>
             return true;
           });
           if (meaningful.length === 0) return;
-          set((state) => ({
-            nodes: applyNodeChanges(meaningful, state.nodes)
-          }));
+          updateGraphView(set, get, { nodes: applyNodeChanges(meaningful, get().nodes) });
         },
 
         applyReactFlowEdgeChanges(changes: EdgeChange<TypeGraphEdge>[]) {
-          set((state) => ({
-            edges: applyEdgeChanges(changes, state.edges)
-          }));
+          updateGraphView(set, get, { edges: applyEdgeChanges(changes, get().edges) });
         },
 
         // -----------------------------------------------------------------------
