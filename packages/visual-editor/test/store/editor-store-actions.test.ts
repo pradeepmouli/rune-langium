@@ -805,6 +805,22 @@ describe('EditorStore — condition and expression operations', () => {
       expect(conditions.length).toBe(1);
       expect(conditions[0].name).toBe('C2');
     });
+
+    it('negative / out-of-range index is a true no-op (does not delete the last condition or emit a patch)', () => {
+      const dataNode = store.getState().nodes.find((n) => (n.data as any).$type === 'Data');
+      store.getState().addCondition(dataNode!.id, { name: 'C1', expressionText: 'e1' });
+      store.getState().addCondition(dataNode!.id, { name: 'C2', expressionText: 'e2' });
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().removeCondition(dataNode!.id, -1); // would splice(-1,1) → delete last
+      store.getState().removeCondition(dataNode!.id, 99); // out of range
+
+      const conditions = (store.getState().nodes.find((n) => n.id === dataNode!.id)!.data as any)
+        .conditions ?? [];
+      expect(conditions.map((c: any) => c.name)).toEqual(['C1', 'C2']); // both intact
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
+    });
   });
 
   describe('updateCondition', () => {
@@ -847,6 +863,22 @@ describe('EditorStore — condition and expression operations', () => {
       expect(conditions[0].name).toBe('Second');
       expect(conditions[1].name).toBe('Third');
       expect(conditions[2].name).toBe('First');
+    });
+
+    it('negative / out-of-range fromIndex is a true no-op (order preserved, no patch)', () => {
+      const dataNode = store.getState().nodes.find((n) => (n.data as any).$type === 'Data');
+      store.getState().addCondition(dataNode!.id, { name: 'First', expressionText: 'e1' });
+      store.getState().addCondition(dataNode!.id, { name: 'Second', expressionText: 'e2' });
+
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().reorderCondition(dataNode!.id, -1, 0); // would splice the last element
+      store.getState().reorderCondition(dataNode!.id, 5, 0); // out of range
+
+      const conditions = (store.getState().nodes.find((n) => n.id === dataNode!.id)!.data as any)
+        .conditions ?? [];
+      expect(conditions.map((c: any) => c.name)).toEqual(['First', 'Second']); // order intact
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });
   });
 

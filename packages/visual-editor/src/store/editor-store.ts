@@ -2008,6 +2008,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d) return;
               const dd = d as { conditions?: any[]; postConditions?: any[] };
               const allConditions = [...(dd.conditions ?? []), ...(dd.postConditions ?? [])];
+              // Bounds guard (mirrors updateCondition): a negative index would make
+              // splice(-1, 1) delete the LAST condition; an out-of-range index would
+              // splice nothing yet still reassign + emit a spurious patch.
+              if (index < 0 || index >= allConditions.length) return;
               allConditions.splice(index, 1);
               dd.conditions = allConditions.filter((c: any) => !c.postCondition);
               dd.postConditions = allConditions.filter((c: any) => c.postCondition);
@@ -2047,10 +2051,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d) return;
               const dd = d as { conditions?: any[] };
               const conditions = [...(dd.conditions ?? [])];
+              // Bounds guard (mirrors updateCondition): a negative/out-of-range
+              // fromIndex would splice the wrong element (or nothing) yet still
+              // reassign + emit a spurious patch. toIndex is clamped by splice.
+              if (fromIndex < 0 || fromIndex >= conditions.length) return;
               const [moved] = conditions.splice(fromIndex, 1);
-              if (moved) {
-                conditions.splice(toIndex, 0, moved);
-              }
+              conditions.splice(toIndex, 0, moved);
               dd.conditions = conditions;
             });
           },
