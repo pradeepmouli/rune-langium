@@ -156,6 +156,32 @@ describe('OtherForm parent name rendering (Deliverable C baseline)', () => {
     render(<OtherForm nodeData={CHOICE_NODE} />);
     expect(screen.queryByText('Extends')).toBeNull();
   });
+
+  // Regression guard: curated `refOnly` nodes hydrated from /api/parse arrive
+  // WITHOUT a Langium `$type` (they carry `typeKind` instead — see
+  // resolveNodeKind's doc). OtherForm exists specifically to render these.
+  // Routing the parent-name through the generated `toDomain` (which throws
+  // `Unknown node type: …` on an unrecognized `$type`) would crash the form
+  // via FormErrorBoundary on exactly these nodes. The direct getRefText chain
+  // returns `undefined` gracefully — this test locks that in.
+  it('curated $type-less node (typeKind only): renders without throwing, no Extends', () => {
+    const curatedNode = {
+      typeKind: 'enum',
+      name: 'CuratedEnum',
+      namespace: 'curated.ns',
+      enumValues: [{ name: 'A' }, { name: 'B' }],
+      position: { x: 0, y: 0 },
+      hasExternalRefs: false,
+      errors: []
+    } as unknown as AnyGraphNode;
+
+    expect(() => render(<OtherForm nodeData={curatedNode} refOnly />)).not.toThrow();
+    // The node still renders (name visible), and no error-boundary fallback text.
+    expect(screen.getByText('CuratedEnum')).toBeTruthy();
+    expect(screen.queryByText(/Failed to render/i)).toBeNull();
+    // No inheritance field present → no Extends section.
+    expect(screen.queryByText('Extends')).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -183,7 +209,7 @@ describe('OtherForm member list rendering (Deliverable C baseline)', () => {
     render(<OtherForm nodeData={FUNC_NODE} />);
     expect(screen.getByText('principal')).toBeTruthy();
     expect(screen.getByText('rate')).toBeTruthy();
-    expect(screen.getAllByText('number')).toBeTruthy();
+    expect(screen.getAllByText('number').length).toBeGreaterThan(0);
   });
 
   it('Choice: uses TYPE name as member display name', () => {
