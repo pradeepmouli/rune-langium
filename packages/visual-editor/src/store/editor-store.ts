@@ -565,7 +565,9 @@ function renameRefText(
 /**
  * Move `arr[fromIndex]` to `toIndex`, mutating in place. Returns false (no-op)
  * when `fromIndex` is out of range — a negative index would otherwise splice
- * from the END and move the wrong element. `toIndex` is clamped by splice.
+ * from the END and move the wrong element. `toIndex` follows native splice
+ * semantics (a value >= length inserts at the end; a negative value counts back
+ * from the end — NOT clamped to 0); callers pass in-range drag-drop indices.
  * Shared by the reorder* actions so the bounds guard can't drift between them.
  */
 function reorderInPlace<T>(arr: T[], fromIndex: number, toIndex: number): boolean {
