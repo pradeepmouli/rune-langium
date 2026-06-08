@@ -1253,7 +1253,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 for (const [id, e] of originalEdges) {
                   const sourceChanged = e.source === nodeId;
                   const targetChanged = e.target === nodeId;
-                  const relabeled = renameRefText(e.data?.label, oldName, newName, namespace);
+                  // Only choice-option edges carry a *type name* in data.label.
+                  // attribute-ref labels are attribute NAMES (and enum-extends a
+                  // literal) — never rewrite those, or an attribute that happens
+                  // to share the renamed type's name would corrupt its edge.
+                  const relabeled =
+                    e.data?.kind === 'choice-option'
+                      ? renameRefText(e.data?.label, oldName, newName, namespace)
+                      : null;
                   const labelChanged = relabeled !== null;
                   if (!sourceChanged && !targetChanged && !labelChanged) continue;
 
@@ -1514,7 +1521,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
                 : parentName;
             const superRef = superRefText
-              ? ({ ref: { name: parentName }, $refText: superRefText } as never)
+              ? ({ ref: { name: parentName }, $refText: superRefText } as any)
               : undefined;
 
             mutateGraph(set, get, (draft) => {

@@ -231,6 +231,35 @@ describe('renameType — cascade', () => {
     expect(armRef).toBe('alpha.Execution');
   });
 
+  it('does NOT relabel attribute-ref edges when an attribute shares the renamed type name', () => {
+    const s = createEditorStore();
+    // An attribute-ref edge label is the ATTRIBUTE NAME, not a type name. An
+    // attribute named the same as the renamed type must not have its edge mangled.
+    const tradeId = s.getState().createType('data', 'Trade', 'cdm');
+    const otherId = s.getState().createType('data', 'Other', 'cdm');
+    const holderId = s.getState().createType('data', 'Holder', 'cdm');
+
+    // Attribute literally named `Trade`, referencing the unrelated `Other` type.
+    s.getState().addAttribute(holderId, 'Trade', 'Other', '(1..1)');
+
+    const edgeBefore = s
+      .getState()
+      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
+    expect(edgeBefore?.data?.label).toBe('Trade');
+    expect(edgeBefore?.target).toBe(otherId);
+
+    // Rename the TYPE Trade → Execution. The attribute-ref edge must be untouched.
+    s.getState().renameType(tradeId, 'Execution');
+
+    const edgeAfter = s
+      .getState()
+      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
+    expect(edgeAfter?.data?.label).toBe('Trade'); // NOT relabeled to 'Execution'
+    expect(edgeAfter?.target).toBe(otherId); // still points at Other, id intact
+    const attr = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes[0];
+    expect(attr.name).toBe('Trade'); // the attribute name is unchanged
+  });
+
   // -----------------------------------------------------------------------
   // CDM-scale test (400 nodes) — performance gate < 100 ms
   // -----------------------------------------------------------------------
