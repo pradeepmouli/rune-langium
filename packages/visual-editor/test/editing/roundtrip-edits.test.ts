@@ -122,3 +122,97 @@ describe('Round-trip edits', () => {
     expect(text).toContain('type Foo extends SuperBase:');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3D-2 conformance: generated-accessor write paths produce valid output
+// ---------------------------------------------------------------------------
+
+const ENUM_SOURCE = `
+namespace test.enum.conformance
+version "1.0.0"
+
+enum Status:
+  Active
+  Inactive
+`;
+
+const FUNCTION_SOURCE = `
+namespace test.func.conformance
+version "1.0.0"
+
+type Money:
+  amount number (1..1)
+
+func Compute:
+  inputs:
+    a number (1..1)
+  output:
+    result number (1..1)
+  set result:
+    a
+`;
+
+describe('Phase 3D-2 generated-accessor conformance (T060-3D2)', () => {
+  it('addEnumValue (via addRosettaEnumerationEnumValues) round-trips with valid serialization', async () => {
+    const result = await parse(ENUM_SOURCE);
+    expect(result.value).toBeDefined();
+
+    const store = createEditorStore();
+    store.getState().loadModels(result.value);
+
+    const enumNode = store.getState().nodes.find((n) => (n.data as any).name === 'Status');
+    expect(enumNode).toBeDefined();
+
+    // Apply the converted action — now backed by addRosettaEnumerationEnumValues
+    store.getState().addEnumValue(enumNode!.id, 'Pending');
+
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
+    const text = serializeModel(models[0]);
+
+    // New value must be present in serialized output
+    expect(text).toContain('Pending');
+    // Original values must be preserved
+    expect(text).toContain('Active');
+    expect(text).toContain('Inactive');
+
+    // Re-parse: value must round-trip (same check pattern as existing roundtrip-edits tests)
+    const reparsed = await parse(text);
+    const elements = (reparsed.value as { elements?: unknown[] }).elements ?? [];
+    const enumEl = elements.find((e) => (e as { name?: string }).name === 'Status') as
+      | { enumValues?: { name: string }[] }
+      | undefined;
+    expect(enumEl).toBeDefined();
+    const valueNames = (enumEl?.enumValues ?? []).map((v) => v.name);
+    expect(valueNames).toContain('Pending');
+    expect(valueNames).toContain('Active');
+    expect(valueNames).toContain('Inactive');
+  });
+
+  it('addInputParam (via addRosettaFunctionInputs) writes to graph node data correctly', async () => {
+    // Note: serializeModel silently drops RosettaFunction elements (documented limitation).
+    // We verify the accessor wrote correctly at the graph-data level via modelsToAst,
+    // which strips GraphMetadata and exposes the raw AST model on the node.
+    const result = await parse(FUNCTION_SOURCE);
+    expect(result.value).toBeDefined();
+
+    const store = createEditorStore();
+    store.getState().loadModels(result.value);
+
+    const funcNode = store.getState().nodes.find((n) => (n.data as any).name === 'Compute');
+    expect(funcNode).toBeDefined();
+
+    // Apply the converted action — now backed by addRosettaFunctionInputs
+    store.getState().addInputParam(funcNode!.id, 'b', 'number');
+
+    // Verify the write was applied to the graph node data
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
+    const funcModel = models[0].elements.find((e) => (e as { name?: string }).name === 'Compute') as
+      | { inputs?: { name: string }[] }
+      | undefined;
+    expect(funcModel).toBeDefined();
+    const inputNames = (funcModel?.inputs ?? []).map((i) => i.name);
+    // Both the original and new input must be present (behavior-identity proof)
+    expect(inputNames).toContain('a');
+    expect(inputNames).toContain('b');
+  });
+});

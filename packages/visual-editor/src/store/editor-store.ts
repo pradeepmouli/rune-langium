@@ -68,7 +68,12 @@ import {
   toNodesById,
   toEdgesById,
   nodesFromMap,
-  edgesFromMap
+  edgesFromMap,
+  // Phase 3D-2: generated domain write accessors (via node-projection SSoT re-export)
+  addRosettaEnumerationEnumValues,
+  addChoiceAttributes,
+  addRosettaFunctionInputs,
+  removeRosettaFunctionInputsAt
 } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
@@ -1305,6 +1310,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             );
           },
 
+          // no 1:1 generated accessor: kind-agnostic (Data+Annotation) + edge-coupled + name-based remove
           addAttribute(nodeId: string, attrName: string, typeName: string, cardinality: string) {
             const card = parseCardinalityString(cardinality);
             const newAttr = {
@@ -1623,6 +1629,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no 1:1 generated accessor: no generated reorder accessor
           reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1650,15 +1657,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaEnumeration') return;
-              const vals = (d as { enumValues?: unknown[] }).enumValues;
-              if (Array.isArray(vals)) {
-                vals.push(newValue);
-              } else {
-                (d as { enumValues?: unknown[] }).enumValues = [newValue];
-              }
+              addRosettaEnumerationEnumValues(d, newValue);
             });
           },
 
+          // no 1:1 generated accessor: name-based filter, not index splice
           removeEnumValue(nodeId: string, valueName: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1690,6 +1693,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no 1:1 generated accessor: no generated reorder accessor
           reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1753,12 +1757,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'Choice') return;
-              const attrs = (d as { attributes?: unknown[] }).attributes;
-              if (Array.isArray(attrs)) {
-                attrs.push(newOption);
-              } else {
-                (d as { attributes?: unknown[] }).attributes = [newOption];
-              }
+              addChoiceAttributes(d, newOption);
               if (targetId) {
                 const id = makeEdgeId('choice-option', { source: nodeId, target: targetId, label: typeName });
                 draft.edges.set(id, {
@@ -1811,12 +1810,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaFunction') return;
-              const inputs = (d as { inputs?: unknown[] }).inputs;
-              if (Array.isArray(inputs)) {
-                inputs.push(newInput);
-              } else {
-                (d as { inputs?: unknown[] }).inputs = [newInput];
-              }
+              addRosettaFunctionInputs(d, newInput);
             });
           },
 
@@ -1828,7 +1822,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const inputs = (d as { inputs?: { name: string }[] }).inputs;
               if (!Array.isArray(inputs)) return;
               const idx = inputs.findIndex((i) => i.name === paramName);
-              if (idx !== -1) inputs.splice(idx, 1);
+              if (idx !== -1) removeRosettaFunctionInputsAt(d, idx);
             });
           },
 
@@ -1909,6 +1903,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no 1:1 generated accessor: no generated reorder accessor
           reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2099,6 +2094,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no 1:1 generated accessor: kind-agnostic / rich-ref construction
           addSynonym(nodeId: string, synonym: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2125,6 +2121,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no 1:1 generated accessor: kind-agnostic / rich-ref
           removeSynonym(nodeId: string, index: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2143,6 +2140,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           // Annotation operations
           // -----------------------------------------------------------------------
 
+          // no 1:1 generated accessor: kind-agnostic / rich-ref construction
           addAnnotation(nodeId: string, annotationName: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2158,6 +2156,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no 1:1 generated accessor: kind-agnostic / rich-ref
           removeAnnotation(nodeId: string, index: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
