@@ -260,6 +260,21 @@ describe('renameType — cascade', () => {
     expect(attr.name).toBe('Trade'); // the attribute name is unchanged
   });
 
+  it('is a no-op when the new name collides with an existing type (no node dropped)', () => {
+    const s = createEditorStore();
+    const tradeId = s.getState().createType('data', 'Trade', 'cdm');
+    const execId = s.getState().createType('data', 'Execution', 'cdm');
+
+    // Rename Trade → Execution, but `cdm.Execution` already exists. Re-keying
+    // onto the occupied Map id would silently drop the existing Execution node.
+    s.getState().renameType(tradeId, 'Execution');
+
+    const nodes = s.getState().nodes;
+    expect(nodes.find((n) => n.id === tradeId)?.data.name).toBe('Trade'); // unchanged
+    expect(nodes.find((n) => n.id === execId)).toBeDefined(); // existing node intact
+    expect(nodes.filter((n) => n.data.name === 'Execution')).toHaveLength(1); // not duplicated/overwritten
+  });
+
   // -----------------------------------------------------------------------
   // CDM-scale test (400 nodes) — performance gate < 100 ms
   // -----------------------------------------------------------------------

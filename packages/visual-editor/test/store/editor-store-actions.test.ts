@@ -101,6 +101,22 @@ describe('EditorStore — new actions', () => {
       expect(patches[0]!.path[1]).toBe(nodeId); // keyed by id, NOT an array index
       expect(patches[0]!.path).toContain('attributes');
     });
+
+    it('negative / out-of-range fromIndex is a true no-op (order preserved, no patch)', () => {
+      const tradeNode = store.getState().nodes.find((n) => n.data.name === 'Trade');
+      const namesBefore = ((tradeNode!.data as any).attributes ?? []).map((a: any) => a.name);
+      expect(namesBefore.length).toBeGreaterThanOrEqual(2);
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().reorderAttribute(tradeNode!.id, -1, 0); // would splice the last attribute
+      store.getState().reorderAttribute(tradeNode!.id, 99, 0); // out of range
+
+      const namesAfter = (
+        store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any
+      ).attributes.map((a: any) => a.name);
+      expect(namesAfter).toEqual(namesBefore); // order intact
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -181,6 +197,20 @@ describe('EditorStore — new actions', () => {
       expect(syns).toHaveLength(1);
       expect(syns[0].value.name).toBe('FIX_Trade');
     });
+
+    it('negative / out-of-range index is a true no-op (does not delete the last synonym)', () => {
+      const tradeNode = store.getState().nodes.find((n) => n.data.name === 'Trade');
+      store.getState().addSynonym(tradeNode!.id, 'FpML_Trade');
+      store.getState().addSynonym(tradeNode!.id, 'FIX_Trade');
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().removeSynonym(tradeNode!.id, -1); // would splice(-1,1) → delete last
+      store.getState().removeSynonym(tradeNode!.id, 99); // out of range
+
+      const syns = (store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any).synonyms;
+      expect(syns.map((s: any) => s.value.name)).toEqual(['FpML_Trade', 'FIX_Trade']); // both intact
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
+    });
   });
 });
 
@@ -209,6 +239,31 @@ describe('EditorStore — enum operations', () => {
       const newValue = ((updated!.data as any).enumValues ?? []).find((m: any) => m.name === 'JPY');
       expect(newValue).toBeDefined();
       expect(newValue!.display).toBe('Japanese Yen');
+    });
+  });
+
+  describe('duplicate-named enum values (all-matches semantics)', () => {
+    it('removeEnumValue removes ALL entries with the name, not just the first', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
+      store.getState().addEnumValue(enumNode!.id, 'DUP', 'first');
+      store.getState().addEnumValue(enumNode!.id, 'DUP', 'second'); // malformed: duplicate name
+
+      store.getState().removeEnumValue(enumNode!.id, 'DUP');
+
+      const vals = (store.getState().nodes.find((n) => n.id === enumNode!.id)!.data as any).enumValues;
+      expect(vals.filter((v: any) => v.name === 'DUP')).toHaveLength(0); // BOTH removed
+    });
+
+    it('updateEnumValue renames ALL entries with the old name', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration');
+      store.getState().addEnumValue(enumNode!.id, 'DUP', 'first');
+      store.getState().addEnumValue(enumNode!.id, 'DUP', 'second');
+
+      store.getState().updateEnumValue(enumNode!.id, 'DUP', 'RENAMED', 'd');
+
+      const vals = (store.getState().nodes.find((n) => n.id === enumNode!.id)!.data as any).enumValues;
+      expect(vals.filter((v: any) => v.name === 'DUP')).toHaveLength(0); // none stale
+      expect(vals.filter((v: any) => v.name === 'RENAMED')).toHaveLength(2); // BOTH renamed
     });
   });
 

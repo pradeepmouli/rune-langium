@@ -563,6 +563,19 @@ function renameRefText(
 }
 
 /**
+ * Move `arr[fromIndex]` to `toIndex`, mutating in place. Returns false (no-op)
+ * when `fromIndex` is out of range — a negative index would otherwise splice
+ * from the END and move the wrong element. `toIndex` is clamped by splice.
+ * Shared by the reorder* actions so the bounds guard can't drift between them.
+ */
+function reorderInPlace<T>(arr: T[], fromIndex: number, toIndex: number): boolean {
+  if (fromIndex < 0 || fromIndex >= arr.length) return false;
+  const moved = arr.splice(fromIndex, 1)[0]!; // guard guarantees a defined element
+  arr.splice(toIndex, 0, moved);
+  return true;
+}
+
+/**
  * Update typeCall.type.$refText references in a node's member arrays.
  * Returns the same object if nothing changed, or a new object with updates.
  *
@@ -1220,6 +1233,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const oldName = (target.data as AnyGraphNode).name as string;
             const namespace = (target.data as AnyGraphNode).namespace as string;
             const newNodeId = makeNodeId(namespace, newName);
+            // No-op if the new id is already taken: with nodesById canonical, the
+            // re-key's `set(newNodeId, …)` would silently overwrite the occupant
+            // (a same-name no-op, or a real collision dropping another type). Bail
+            // before mutating so neither node is lost.
+            if (state.nodesById.has(newNodeId)) return;
             const reselect = state.selectedNodeId === nodeId ? newNodeId : state.selectedNodeId;
 
             // Read the pre-mutation Maps from the store (un-proxied): mutateGraph
@@ -1610,8 +1628,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
               const attrs = (d as { attributes?: unknown[] }).attributes;
               if (!Array.isArray(attrs)) return;
-              const [moved] = attrs.splice(fromIndex, 1);
-              if (moved !== undefined) attrs.splice(toIndex, 0, moved);
+              reorderInPlace(attrs, fromIndex, toIndex);
             });
           },
 
@@ -1647,8 +1664,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: { name: string }[] }).enumValues;
               if (!Array.isArray(vals)) return;
-              const idx = vals.findIndex((v) => v.name === valueName);
-              if (idx !== -1) vals.splice(idx, 1);
+              // Remove ALL matches by name (master behavior) — robust against a
+              // malformed graph with duplicate enum-value names. find+splice would
+              // drop only the first, leaving stale duplicates behind.
+              (d as { enumValues?: unknown[] }).enumValues = vals.filter((v) => v.name !== valueName);
             });
           },
 
@@ -1659,10 +1678,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: { name: string; display?: string }[] }).enumValues;
               if (!Array.isArray(vals)) return;
-              const v = vals.find((item) => item.name === oldName);
-              if (v) {
-                v.name = newName;
-                v.display = displayName;
+              // Update ALL matches by name (master behavior) — see removeEnumValue.
+              for (const item of vals) {
+                if (item.name === oldName) {
+                  item.name = newName;
+                  item.display = displayName;
+                }
               }
             });
           },
@@ -1674,8 +1695,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: unknown[] }).enumValues;
               if (!Array.isArray(vals)) return;
-              const [moved] = vals.splice(fromIndex, 1);
-              if (moved !== undefined) vals.splice(toIndex, 0, moved);
+              reorderInPlace(vals, fromIndex, toIndex);
             });
           },
 
@@ -1894,8 +1914,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: unknown[] }).inputs;
               if (!Array.isArray(inputs)) return;
-              const [moved] = inputs.splice(fromIndex, 1);
-              if (moved !== undefined) inputs.splice(toIndex, 0, moved);
+              reorderInPlace(inputs, fromIndex, toIndex);
             });
           },
 
@@ -2051,12 +2070,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d) return;
               const dd = d as { conditions?: any[] };
               const conditions = [...(dd.conditions ?? [])];
-              // Bounds guard (mirrors updateCondition): a negative/out-of-range
-              // fromIndex would splice the wrong element (or nothing) yet still
-              // reassign + emit a spurious patch. toIndex is clamped by splice.
-              if (fromIndex < 0 || fromIndex >= conditions.length) return;
-              const [moved] = conditions.splice(fromIndex, 1);
-              conditions.splice(toIndex, 0, moved);
+              if (!reorderInPlace(conditions, fromIndex, toIndex)) return; // out-of-range → no-op, no patch
               dd.conditions = conditions;
             });
           },
@@ -2115,7 +2129,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data as AnyGraphNode | undefined;
               if (!d) return;
               const dd = d as { synonyms?: any[] };
-              if (Array.isArray(dd.synonyms)) {
+              // Bounds guard (master used a bounds-safe filter): splice(-1, 1)
+              // would delete the LAST synonym; out-of-range would emit a no-op patch.
+              if (Array.isArray(dd.synonyms) && index >= 0 && index < dd.synonyms.length) {
                 dd.synonyms.splice(index, 1);
               }
             });
@@ -2146,7 +2162,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data as AnyGraphNode | undefined;
               if (!d) return;
               const dd = d as { annotations?: any[] };
-              if (Array.isArray(dd.annotations)) {
+              // Bounds guard (master used a bounds-safe filter): splice(-1, 1)
+              // would delete the LAST annotation; out-of-range would emit a no-op patch.
+              if (Array.isArray(dd.annotations) && index >= 0 && index < dd.annotations.length) {
                 dd.annotations.splice(index, 1);
               }
             });
