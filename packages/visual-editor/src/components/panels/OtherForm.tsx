@@ -15,7 +15,8 @@ import { AlertCircle } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { resolveNodeKind, formatCardinality, getTypeRefText, getRefText } from '../../adapters/model-helpers.js';
+import { resolveNodeKind, formatCardinality, getTypeRefText } from '../../adapters/model-helpers.js';
+import { toDomain } from '../../generated/domain.js';
 import { TypeLink } from '../editors/TypeLink.js';
 import { TypeHeader } from '../TypeHeader.js';
 import { DefinitionField } from '../DefinitionField.js';
@@ -83,7 +84,17 @@ export function OtherForm({ nodeData, nodeId, onNavigateToNode, allNodeIds, refO
 
   const d = nodeData as any;
   const kind = resolveNodeKind(d);
-  const parentName = getRefText(d.superType) ?? getRefText(d.parent) ?? getRefText(d.superFunction);
+  // Parent-name: route the three inheritance-carrying kinds (Data, RosettaFunction,
+  // RosettaEnumeration) through the generated `toDomain` projection, which normalises
+  // all three source fields (superType / superFunction / parent) to the single
+  // `extends` alias. This is provably behavior-identical: `toDomain(d).extends`
+  // returns `d.superType?.$refText` for Data, `d.superFunction?.$refText` for
+  // RosettaFunction, and `d.parent?.$refText` for RosettaEnumeration — the same
+  // values as the prior getRefText chain. For kinds without an inheritance field
+  // (Choice, RosettaBasicType, RosettaRecordType, Annotation) `extends` is absent
+  // on the domain object, so the access returns `undefined` — identical to before.
+  const dom = toDomain(d);
+  const parentName = (dom as { extends?: string }).extends;
   const members = extractMembers(d);
   const errors: ValidationError[] = d.errors ?? [];
 
