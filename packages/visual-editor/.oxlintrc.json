@@ -3,6 +3,7 @@
   "rules": {
     "rune/no-palette-utility": "error",
     "rune/no-raw-arbitrary-value": "error",
-    "rune/no-raw-node-id": "error"
+    "rune/no-raw-node-id": "error",
+    "rune/no-raw-edge-id": "error"
   }
 }

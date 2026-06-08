@@ -159,6 +159,123 @@ describe('renameType — cascade', () => {
   });
 
   // -----------------------------------------------------------------------
+  // Namespace-qualified ($refText / label) cascade — disambiguated refs
+  // -----------------------------------------------------------------------
+
+  it('cascades into namespace-qualified member references (<ns>.<oldName>)', () => {
+    const s = createEditorStore();
+    // Two `Trade` types in different namespaces → bare `Trade` is ambiguous, so a
+    // cross-namespace ref to one of them is stored qualified (`alpha.Trade`).
+    s.getState().createType('data', 'Trade', 'alpha');
+    s.getState().createType('data', 'Trade', 'beta');
+    s.getState().createType('data', 'Holder', 'beta');
+
+    const alphaTradeId = s
+      .getState()
+      .nodes.find((n) => n.data.name === 'Trade' && n.data.namespace === 'alpha')!.id;
+    const holderId = s.getState().nodes.find((n) => n.data.name === 'Holder')!.id;
+
+    // updateAttributeType disambiguates the $refText to the qualified `alpha.Trade`.
+    s.getState().addAttribute(holderId, 'ref', 'Trade', '(1..1)');
+    s.getState().updateAttributeType(holderId, 'ref', 'Trade', alphaTradeId);
+
+    const qualifiedBefore = (s.getState().nodes.find((n) => n.id === holderId)!.data as any)
+      .attributes[0].typeCall.type.$refText;
+    expect(qualifiedBefore).toBe('alpha.Trade'); // setup sanity — the ref really is qualified
+
+    s.getState().renameType(alphaTradeId, 'Execution');
+
+    const refAfter = (s.getState().nodes.find((n) => n.data.name === 'Holder')!.data as any)
+      .attributes[0].typeCall.type.$refText;
+    // The bug: qualified ref was missed and left as `alpha.Trade` (stale).
+    expect(refAfter).toBe('alpha.Execution');
+  });
+
+  it('cascades into namespace-qualified choice-option edge labels + ids', () => {
+    const s = createEditorStore();
+    s.getState().createType('data', 'Trade', 'alpha');
+    s.getState().createType('data', 'Trade', 'beta');
+    s.getState().createType('choice', 'Pick', 'beta');
+
+    const alphaTradeId = s
+      .getState()
+      .nodes.find((n) => n.data.name === 'Trade' && n.data.namespace === 'alpha')!.id;
+    const pickId = s.getState().nodes.find((n) => n.data.name === 'Pick')!.id;
+
+    // Add the option, then disambiguate it to alpha.Trade — updateAttributeType
+    // rebuilds the choice-option edge with the qualified `alpha.Trade` label.
+    s.getState().addChoiceOption(pickId, 'Trade');
+    s.getState().updateAttributeType(pickId, 'Trade', 'Trade', alphaTradeId);
+
+    const labelBefore = s
+      .getState()
+      .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option')!.data!.label;
+    expect(labelBefore).toBe('alpha.Trade'); // setup sanity — qualified label
+
+    s.getState().renameType(alphaTradeId, 'Execution');
+
+    const newAlphaId = s
+      .getState()
+      .nodes.find((n) => n.data.name === 'Execution' && n.data.namespace === 'alpha')!.id;
+    const optEdge = s
+      .getState()
+      .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option');
+    expect(optEdge).toBeDefined();
+    expect(optEdge!.data!.label).toBe('alpha.Execution'); // label cascaded (was stale `alpha.Trade`)
+    expect(optEdge!.target).toBe(newAlphaId); // target re-keyed
+    expect(optEdge!.id).toContain('alpha.Execution'); // id rebuilt from the new qualified label
+
+    // The choice ARM's $refText cascades too (not just the edge label).
+    const armRef = (s.getState().nodes.find((n) => n.data.name === 'Pick')!.data as any)
+      .attributes[0].typeCall.type.$refText;
+    expect(armRef).toBe('alpha.Execution');
+  });
+
+  it('does NOT relabel attribute-ref edges when an attribute shares the renamed type name', () => {
+    const s = createEditorStore();
+    // An attribute-ref edge label is the ATTRIBUTE NAME, not a type name. An
+    // attribute named the same as the renamed type must not have its edge mangled.
+    const tradeId = s.getState().createType('data', 'Trade', 'cdm');
+    const otherId = s.getState().createType('data', 'Other', 'cdm');
+    const holderId = s.getState().createType('data', 'Holder', 'cdm');
+
+    // Attribute literally named `Trade`, referencing the unrelated `Other` type.
+    s.getState().addAttribute(holderId, 'Trade', 'Other', '(1..1)');
+
+    const edgeBefore = s
+      .getState()
+      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
+    expect(edgeBefore?.data?.label).toBe('Trade');
+    expect(edgeBefore?.target).toBe(otherId);
+
+    // Rename the TYPE Trade → Execution. The attribute-ref edge must be untouched.
+    s.getState().renameType(tradeId, 'Execution');
+
+    const edgeAfter = s
+      .getState()
+      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
+    expect(edgeAfter?.data?.label).toBe('Trade'); // NOT relabeled to 'Execution'
+    expect(edgeAfter?.target).toBe(otherId); // still points at Other, id intact
+    const attr = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes[0];
+    expect(attr.name).toBe('Trade'); // the attribute name is unchanged
+  });
+
+  it('is a no-op when the new name collides with an existing type (no node dropped)', () => {
+    const s = createEditorStore();
+    const tradeId = s.getState().createType('data', 'Trade', 'cdm');
+    const execId = s.getState().createType('data', 'Execution', 'cdm');
+
+    // Rename Trade → Execution, but `cdm.Execution` already exists. Re-keying
+    // onto the occupied Map id would silently drop the existing Execution node.
+    s.getState().renameType(tradeId, 'Execution');
+
+    const nodes = s.getState().nodes;
+    expect(nodes.find((n) => n.id === tradeId)?.data.name).toBe('Trade'); // unchanged
+    expect(nodes.find((n) => n.id === execId)).toBeDefined(); // existing node intact
+    expect(nodes.filter((n) => n.data.name === 'Execution')).toHaveLength(1); // not duplicated/overwritten
+  });
+
+  // -----------------------------------------------------------------------
   // CDM-scale test (400 nodes) — performance gate < 100 ms
   // -----------------------------------------------------------------------
 
