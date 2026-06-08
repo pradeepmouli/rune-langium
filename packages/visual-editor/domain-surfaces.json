@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "Domain-surface projection config for `langium-zod generate --domain`.",
+    "",
+    "FULL, LOSSLESS, INFORMATION-COMPLETE surface (Phase 3D, constraint 4b):",
+    "  - NO per-type `fields` whitelist — every grammar-authored field is kept,",
+    "    including ones the FORM surface (form-surfaces.json) drops (typeCallArgs,",
+    "    references, enumSynonyms, synonyms, annotations, conditions, postConditions,",
+    "    operations, RosettaFunction.superFunction, ...).",
+    "  - Only `$`-internals are stripped, via the `--strip-internals` CLI flag",
+    "    ($container/$containerProperty/$containerIndex/$cstNode/$document/$refNode/$nodeDescription).",
+    "  - Cross-refs project to branded `Ref<'Target'>`; `$type` retained as the",
+    "    discriminant (both from the emitter, Phase 3D-1).",
+    "  - Expressions are projected FULLY (decision 2026-06-08): the emitter's",
+    "    inline-union read projection (domainReadExpr union arm) handles `typeRef:",
+    "    RosettaSuperCall | RosettaSymbolReference` and the rest of the expression",
+    "    tree via the master `toDomain` dispatch. No exclude.",
+    "",
+    "Normalizations (constraint 4c) — additive, read-only, lossless canonical views:",
+    "  inheritance → `extends`: unifies Data.superType / RosettaFunction.superFunction /",
+    "    RosettaEnumeration.parent (each aliases its source's projected Ref<T>).",
+    "  members → `members`: unifies attributes / enumValues / inputs / features",
+    "    (each aliases its source's projected element-Domain[]; cross-kind union on AnyDomain).",
+    "  `from` values are the POST-rename domain field names (no renames here, so == AST names)."
+  ],
+  "normalizations": {
+    "inheritance": {
+      "as": "extends",
+      "from": {
+        "Data": "superType",
+        "RosettaFunction": "superFunction",
+        "RosettaEnumeration": "parent"
+      }
+    },
+    "members": {
+      "as": "members",
+      "from": {
+        "Data": "attributes",
+        "Choice": "attributes",
+        "RosettaEnumeration": "enumValues",
+        "RosettaFunction": "inputs",
+        "RosettaRecordType": "features",
+        "Annotation": "attributes"
+      }
+    }
+  }
+}
