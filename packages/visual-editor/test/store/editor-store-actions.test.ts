@@ -299,6 +299,30 @@ describe('EditorStore — enum operations', () => {
         .edges.find((e) => e.source === childEnum!.id && e.data?.kind === 'enum-extends');
       expect(extendsEdge).toBeUndefined();
     });
+
+    it('stale parentId is a no-op — existing parent is PRESERVED (not cleared, no dangling edge)', () => {
+      store.getState().createType('enum', 'BaseCurrency', 'test.enums');
+
+      const nodes = store.getState().nodes;
+      const childEnum = nodes.find((n) => n.data.name === 'CurrencyEnum');
+      const parentEnum = nodes.find((n) => n.data.name === 'BaseCurrency');
+
+      store.getState().setEnumParent(childEnum!.id, parentEnum!.id);
+
+      const refBefore = (store.getState().nodes.find((n) => n.id === childEnum!.id)!.data as any)
+        .parent?.$refText;
+
+      // Stale id — not present in the store (mirrors setInheritance's guard).
+      store.getState().setEnumParent(childEnum!.id, 'test.enums.Deleted');
+
+      const node = store.getState().nodes.find((n) => n.id === childEnum!.id)!;
+      expect((node.data as any).parent?.$refText).toBe(refBefore); // parent ref unchanged (not cleared)
+
+      const extendsEdge = store
+        .getState()
+        .edges.find((e) => e.source === childEnum!.id && e.data?.kind === 'enum-extends');
+      expect(extendsEdge?.target).toBe(parentEnum!.id); // still the real parent — no dangling edge to the stale id
+    });
   });
 
   // -----------------------------------------------------------------------

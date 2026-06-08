@@ -1511,7 +1511,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const parentNamespace = (parentNode?.data as { namespace?: string } | undefined)?.namespace;
             const superRefText =
               parentName && parentNamespace && parentNode
-                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, [...state.nodesById.values()])
+                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
                 : parentName;
             const superRef = superRefText
               ? ({ ref: { name: parentName }, $refText: superRefText } as never)
@@ -1675,6 +1675,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           setEnumParent(nodeId: string, parentId: string | null) {
             const state = get();
             const parentNode = parentId ? state.nodesById.get(parentId) : null;
+            if (parentId && !parentNode) return; // stale parentId — no-op, leave state untouched (mirrors setInheritance)
             const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
             const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
             mutateGraph(set, get, (draft) => {
@@ -1716,8 +1717,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               annotations: [],
               synonyms: []
             };
-            // Resolve the target node id BEFORE the recipe (read-only against Maps).
-            const targetId = [...get().nodesById.values()].find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+            // Resolve the target node id BEFORE the recipe (read-only against the
+            // derived `nodes` array — I1 keeps it equal to nodesById.values()).
+            const targetId = get().nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
@@ -1815,14 +1817,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // canonical targetTypeId is supplied and the node exists, qualify the
             // name if any OTHER node shares the same bare name.  Fall back to the
             // bare typeName when the id is absent or stale (backward-compatible).
-            // All reads are done BEFORE the recipe (read-only against Maps).
-            const targetNode = targetTypeId ? get().nodesById.get(targetTypeId) : undefined;
+            // All reads are done BEFORE the recipe, once, against the committed
+            // state — `nodes` is the derived I1 array (=== nodesById.values()).
+            const { nodes, nodesById } = get();
+            const targetNode = targetTypeId ? nodesById.get(targetTypeId) : undefined;
             const targetNamespace = targetNode
               ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
               : undefined;
             const refText =
               targetNode && targetNamespace
-                ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, [...get().nodesById.values()])
+                ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, nodes)
                 : typeName;
 
             // Add a new attribute-ref edge if the target type node exists.
@@ -1830,8 +1834,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // node in a different namespace); fall back to name-based lookup for
             // built-in / string types that have no graph node.
             const targetNodeId =
-              targetNode?.id ??
-              [...get().nodesById.values()].find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
+              targetNode?.id ?? nodes.find((n) => (n.data as AnyGraphNode).name === typeName)?.id;
             const newEdge: TypeGraphEdge | null =
               targetNodeId && targetNodeId !== nodeId
                 ? {
