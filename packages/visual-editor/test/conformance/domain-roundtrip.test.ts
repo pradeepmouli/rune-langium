@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parse,
   createRuneDslServices,
+  serializeModel,
   type RuneDslServices
 } from '@rune-langium/core';
 import {
@@ -197,5 +198,63 @@ describe('Domain round-trip conformance (Phase 1)', () => {
     const parsed = await parse(FUNCTION_SOURCE);
     const d = toDomain(elementByName(parsed.value, 'Add') as never);
     expect(stableClone(jsonRoundtrip(d))).toEqual(stableClone(d));
+  });
+});
+
+describe('Domain .rosetta-text round-trip (Data/Choice/Enum; Function = downstream gap)', () => {
+  /** Wrap a single AST element back into a minimal RosettaModel for the text serializer. */
+  function wrapModel(namespace: string, astEl: unknown) {
+    return {
+      $type: 'RosettaModel',
+      name: namespace,
+      version: '1.0.0',
+      imports: [],
+      configs: [],
+      elements: [astEl]
+    } as never;
+  }
+
+  it('Data: domain -> toAst -> serializeModel -> parse re-parses cleanly', async () => {
+    const parsed = await parse(DATA_SOURCE);
+    const ast = elementByName(parsed.value, 'Trade');
+    const d = toDomain(ast as never);
+    const text = serializeModel(wrapModel('test.rnd.data', toAst(d)));
+    expect(text).toContain('type Trade extends Base');
+    const reparsed = await parse(text);
+    expect(reparsed.parserErrors).toHaveLength(0);
+  });
+
+  it('Choice: domain -> toAst -> serializeModel -> parse re-parses cleanly', async () => {
+    const parsed = await parse(CHOICE_SOURCE);
+    const ast = elementByName(parsed.value, 'Payment');
+    const d = toDomain(ast as never);
+    // NOTE: avoid namespace segments that are Rosetta keywords (choice, enum, func …).
+    // ValidID only admits: ID | 'condition' | 'source' | 'value' | 'version' | 'pattern' | 'scope'.
+    // Using a keyword-free namespace guarantees the serialized text re-parses cleanly.
+    const text = serializeModel(wrapModel('test.rnd.selection', toAst(d)));
+    expect(text).toContain('choice Payment');
+    const reparsed = await parse(text);
+    expect(reparsed.parserErrors).toHaveLength(0);
+  });
+
+  it('Enum: domain -> toAst -> serializeModel -> parse re-parses cleanly', async () => {
+    const parsed = await parse(ENUM_SOURCE);
+    const ast = elementByName(parsed.value, 'Color');
+    const d = toDomain(ast as never);
+    // NOTE: avoid namespace segments that are Rosetta keywords — same as Choice above.
+    const text = serializeModel(wrapModel('test.rnd.colors', toAst(d)));
+    expect(text).toContain('enum Color');
+    const reparsed = await parse(text);
+    expect(reparsed.parserErrors).toHaveLength(0);
+  });
+
+  it('Function: .rosetta text-render is a documented downstream gap (serializeModel drops it)', async () => {
+    const parsed = await parse(FUNCTION_SOURCE);
+    const ast = elementByName(parsed.value, 'Add');
+    const d = toDomain(ast as never);
+    const text = serializeModel(wrapModel('test.rnd.calc', toAst(d)));
+    // The hand-written .rosetta serializer does NOT emit `func` (out of scope; own later spec).
+    // The domain model + JSON round-trip (Task 9) DO cover Function — only TEXT rendering is the gap.
+    expect(text).not.toContain('func Add');
   });
 });
