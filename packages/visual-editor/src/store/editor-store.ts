@@ -69,11 +69,8 @@ import {
   toEdgesById,
   nodesFromMap,
   edgesFromMap,
-  // Phase 3D-2: generated domain write accessors (via node-projection SSoT re-export)
-  addRosettaEnumerationEnumValues,
-  addChoiceAttributes,
-  addRosettaFunctionInputs,
-  removeRosettaFunctionInputsAt
+  ensureMemberArray,
+  getMemberArray
 } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
@@ -1657,7 +1654,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaEnumeration') return;
-              addRosettaEnumerationEnumValues(d, newValue);
+              ensureMemberArray(d).push(newValue);
             });
           },
 
@@ -1757,7 +1754,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'Choice') return;
-              addChoiceAttributes(d, newOption);
+              ensureMemberArray(d).push(newOption);
               if (targetId) {
                 const id = makeEdgeId('choice-option', { source: nodeId, target: targetId, label: typeName });
                 draft.edges.set(id, {
@@ -1810,7 +1807,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaFunction') return;
-              addRosettaFunctionInputs(d, newInput);
+              ensureMemberArray(d).push(newInput);
             });
           },
 
@@ -1822,7 +1819,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const inputs = (d as { inputs?: { name: string }[] }).inputs;
               if (!Array.isArray(inputs)) return;
               const idx = inputs.findIndex((i) => i.name === paramName);
-              if (idx !== -1) removeRosettaFunctionInputsAt(d, idx);
+              if (idx !== -1) getMemberArray(d)?.members.splice(idx, 1);
             });
           },
 
