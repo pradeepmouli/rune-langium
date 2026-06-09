@@ -206,9 +206,3 @@ export function edgesFromMap(map: ReadonlyMap<string, TypeGraphEdge>): TypeGraph
 // model-helpers.ts and is NOT re-implemented here).
 // ---------------------------------------------------------------------------
 export { resolveNodeKind } from '../adapters/model-helpers.js';
-
-// ---------------------------------------------------------------------------
-// Phase 3D-2: the generated domain surface is the SSoT for node write accessors.
-// Re-export it here so recipes import accessors from the projection module.
-// ---------------------------------------------------------------------------
-export * from '../generated/domain.js';
