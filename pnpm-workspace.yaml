@@ -19,15 +19,14 @@ allowBuilds:
   simple-git-hooks: false
   workerd: false
 
+minimumReleaseAgeExclude:
+  - langium-zod@0.7.0
+
 # pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
 # `pnpm` field, which they ignore). Migrated from package.json so the
 # lockfile's overrides match the running config under pnpm@11.x.
 overrides:
-  # Phase 3D dev link: consume the local langium-zod `feat/domain-discriminant-repository`
-  # branch (0.6.0 + $type retention / branded refs / emitRepository / normalizations) so rune
-  # can author + generate the domain surface before that work is released. Replaced by a pinned
-  # version in 3D-3. Path is relative to this workspace root (ts/rune-langium → ts/langium-zod).
-  langium-zod: link:../langium-zod/packages/langium-zod
+  langium-zod: 0.7.0
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.9.1
   '@zod-to-form/react': ^0.9.1
