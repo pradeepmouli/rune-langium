@@ -34,6 +34,7 @@ export { RuneDslLinker } from './services/rune-dsl-linker.js';
 export type { DeferredModelProvider } from './services/rune-dsl-linker.js';
 export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
 export { RuneDslValidator } from './services/rune-dsl-validator.js';
+export { RuneStoreHydrator } from './services/rune-store-hydrator.js';
 export {
   RuneDslParser,
   createRuneDslParser,
