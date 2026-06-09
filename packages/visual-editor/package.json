@@ -27,7 +27,6 @@
     "lint:js": "oxlint .",
     "lint:css": "stylelint 'src/**/*.css'",
     "generate:schemas": "langium-zod generate --config ../core/langium-config.json --out src/generated/zod-schemas.ts --strip-internals --projection form-surfaces.json --cross-ref-validation --conformance --ast-types ../core/src/generated/ast.ts --conformance-out src/generated/zod-schemas.conformance.ts",
-    "generate:domain": "langium-zod generate --config ../core/langium-config.json --domain-only --domain-out src/generated/domain.ts --projection domain-surfaces.json --strip-internals --ast-types ../core/src/generated/ast.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit"
