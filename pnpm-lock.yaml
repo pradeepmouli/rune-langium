@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  langium-zod: 0.7.0
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.9.1
   '@zod-to-form/react': ^0.9.1
@@ -539,8 +540,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1
       langium-zod:
-        specifier: ^0.5.4
-        version: 0.5.4
+        specifier: 0.7.0
+        version: 0.7.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -738,8 +739,8 @@ importers:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
       langium-zod:
-        specifier: ^0.5.4
-        version: 0.5.4
+        specifier: 0.7.0
+        version: 0.7.0
       react:
         specifier: 19.2.6
         version: 19.2.6
@@ -2932,6 +2933,7 @@ packages:
 
   '@to-skills/cli@0.3.14':
     resolution: {integrity: sha512-AaTn4fUtcr1nA+pR1dM369GinUDpPYbVt+OFDqXAt23Ry8XnQnb0Ie/1pBMXyyyOtwO5RwqFfpPEEomDeiFLHw==}
+    deprecated: Renamed to @skillit/cli — install @skillit/cli instead.
     peerDependencies:
       commander: '>=12.0.0'
     peerDependenciesMeta:
@@ -2943,11 +2945,13 @@ packages:
 
   '@to-skills/typedoc@1.0.9':
     resolution: {integrity: sha512-gR1FpCvi4Ppi7KmUpBy3MKJ6E6o8V7n6+t8xq1A1sCmeO8HzfIRELtbiFBbi0DOwBcfH6AZ/EJXS7/BCZJb2hA==}
+    deprecated: Renamed to @skillit/typedoc — install @skillit/typedoc instead.
     peerDependencies:
       typedoc: '>=0.28.0'
 
   '@to-skills/vitepress@0.2.26':
     resolution: {integrity: sha512-4l51qLdntaKZPygceYtHvvHndAGA2zUAtXSP9zBhyqDTMpOBml89chW7QmxnVamOWGHuNuMPgqQsQFp0r6Cfag==}
+    deprecated: Renamed to @skillit/vitepress — install @skillit/vitepress instead.
     peerDependencies:
       vitepress: '>=1.0.0'
     peerDependenciesMeta:
@@ -4621,8 +4625,8 @@ packages:
   langium-railroad@4.2.0:
     resolution: {integrity: sha512-LYR22GV14iz0GTUtR91pZY6yNImYRk1HbAuHBP8k8GESMcSkCJh+iewJooH9k8H8dJOteXvvI7aFkz6rfU9oLQ==}
 
-  langium-zod@0.5.4:
-    resolution: {integrity: sha512-a8ey2Qm+3naRtglMzPUIwck/MxDbRJLacW7dRWG7n6yiaiuBfGCF0X3tiyyyJXiSAR+Xj+ZapPwfurdA/28mng==}
+  langium-zod@0.7.0:
+    resolution: {integrity: sha512-mx1IC/2jLKXinSIJORzkgFoff4/Wj768zE834owc7VcFdar70zRnUuOcHHKbLUU0Hz1mbfVA7ufMGnOZS+1YHA==}
     hasBin: true
 
   langium@4.2.4:
@@ -9953,7 +9957,7 @@ snapshots:
       langium: 4.2.4
       railroad-diagrams: 1.0.0
 
-  langium-zod@0.5.4:
+  langium-zod@0.7.0:
     dependencies:
       humanize-string: 3.1.0
       langium: 4.2.4

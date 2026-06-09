@@ -49,6 +49,16 @@ function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[
   for (const n of sortedNodes) {
     // Project to the AST-relevant subset: skip GraphMetadata that
     // changes on view-only operations (position, errors, hasExternalRefs).
+    //
+    // NOTE (Deliverable B — Phase 3D-2): `toDomain(n.data)` is intentionally
+    // NOT used here. `toDomain` produces a different key-set than
+    // `astRelevantProjection`: it adds the `extends`/`members` normalisation
+    // keys and drops GraphMetadata fields (`namespace`, `comments`, …).
+    // Switching to
+    // `toDomain` here would silently re-fingerprint every model node on
+    // first load and trigger a spurious `onModelChanged` emission (source
+    // churn). `astRelevantProjection` is the STABLE content-fingerprint
+    // contract — its key-set must not change.
     const projection = astRelevantProjection(n.data);
     try {
       nodeParts.push(`${n.id}:${JSON.stringify(projection)}`);

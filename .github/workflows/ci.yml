@@ -190,11 +190,16 @@ jobs:
       - name: Regenerate Zod schemas from Langium grammar
         run: pnpm --filter @rune-langium/visual-editor generate:schemas
 
+      - name: Regenerate domain surface from Langium grammar
+        run: pnpm --filter @rune-langium/visual-editor generate:domain
+
       - name: Normalise formatting on generated schemas
         run: |
           pnpm --filter @rune-langium/visual-editor exec oxfmt \
             src/generated/zod-schemas.ts \
             src/generated/zod-schemas.conformance.ts
 
+      # Note: domain.ts is committed as raw generator output (not oxfmt-normalised),
+      # so the drift assert below compares regenerated-raw against committed-raw.
       - name: Assert no drift between committed and freshly-generated schemas
         run: git diff --exit-code -- packages/visual-editor/src/generated/
