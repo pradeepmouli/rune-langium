@@ -45,6 +45,10 @@ export {
 export { RuneDslLanguageMetaData } from './generated/module.js';
 export { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from './generated/module.js';
 
+// Domain substrate (generated placeholder — will be replaced by langium-zod emitter)
+export type { Dehydrated } from './serializer/dehydrated.js';
+export * from './generated/domain-ops.js';
+
 // Serializer
 export {
   serializeModel,

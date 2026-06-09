@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import type { Dehydrated } from '../../src/types.js';
+import type { Dehydrated } from '../../src/serializer/dehydrated.js';
 import type {
   Annotation,
   Attribute,
@@ -14,7 +14,7 @@ import type {
   RosettaFunction,
   RosettaRecordFeature,
   RosettaRecordType,
-} from '@rune-langium/core';
+} from '../../src/generated/ast.js';
 import {
   addAttribute,
   addChoiceOption,

@@ -4,9 +4,11 @@
 /**
  * domain-ops — typed get/add/removeAt operations over Dehydrated<T> nodes.
  *
- * One function group per member-container (field + element type). Replaces the
- * deleted domain.ts @ts-nocheck artifact; these are minimal, correctly-typed
- * wrappers that the Phase-3 recipes and store cutover will consume.
+ * One function group per member-container (field + element type). These are
+ * minimal, correctly-typed wrappers over the editable store substrate.
+ *
+ * This file is hand-authored as a placeholder and will be replaced by the
+ * langium-zod domain-ops emitter target in Phase 2.
  *
  * Groups:
  *   Data / Annotation  →  .attributes  : Attribute[]
@@ -27,8 +29,8 @@ import type {
   RosettaFunction,
   RosettaRecordFeature,
   RosettaRecordType,
-} from '@rune-langium/core';
-import type { Dehydrated } from '../types.js';
+} from './ast.js';
+import type { Dehydrated } from '../serializer/dehydrated.js';
 
 // ---------------------------------------------------------------------------
 // Data / Annotation — .attributes: Attribute[]

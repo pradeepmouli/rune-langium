@@ -105,54 +105,8 @@ export type AstNodeModel<T extends AstNodeShape> = {
   -readonly [K in Exclude<keyof T, ExcludedFields | '$type'>]: SerializeField<T[K]>;
 };
 
-// ---------------------------------------------------------------------------
-// Dehydrated<T> — lossless editable wire model
-// ---------------------------------------------------------------------------
-
-/**
- * Structural marker for Langium `Reference<T>` objects.
- * Used to detect cross-refs without importing langium directly.
- */
-interface ReferenceShape {
-  readonly $refText: string;
-}
-
-/** Langium runtime internals stripped from Dehydrated<T>. */
-type LangiumRuntimeFields = '$container' | '$containerProperty' | '$containerIndex' | '$cstNode' | '$document';
-
-/**
- * Recursively maps a field type to its dehydrated equivalent:
- * - `Reference<T>` (detected by `$refText`) → `{ $refText: string }` (editable, round-trippable)
- * - `AstNode[]` → `Dehydrated<element>[]`
- * - `AstNode` → `Dehydrated<child>`
- * - Primitives and other types → unchanged; `undefined` for optional fields is preserved
- */
-type DehydratedField<F> =
-  NonNullable<F> extends ReferenceShape
-    ? { $refText: string } | Extract<F, undefined | null>
-    : F extends Array<infer E extends AstNodeShape>
-    ? Dehydrated<E>[]
-    : NonNullable<F> extends AstNodeShape
-    ? Dehydrated<NonNullable<F>> | Extract<F, undefined | null>
-    : F;
-
-/**
- * `Dehydrated<T>` — the lossless editable wire model for an AST node.
- *
- * Unlike `AstNodeModel<T>`, Dehydrated:
- * - Keeps ALL semantic fields (references, labels, ruleReferences, typeCallArgs, enumSynonyms)
- * - Converts `Reference<T>` → `{ $refText: string }` (editable and round-trippable)
- * - Strips only Langium runtime internals ($container, $cstNode, $document, …)
- * - Makes fields mutable for in-place editing
- *
- * This is the store substrate targeted by `domain-ops.ts` and the Phase-3 editor cutover.
- * `AstNodeModel<T>` remains in use until Phase 3 completes the store cutover.
- */
-export type Dehydrated<T extends AstNodeShape> = {
-  readonly $type: T['$type'];
-} & {
-  -readonly [K in Exclude<keyof T, LangiumRuntimeFields | '$type'>]: DehydratedField<T[K]>;
-};
+// Dehydrated<T> — canonical editable wire model (defined in @rune-langium/core)
+export type { Dehydrated } from '@rune-langium/core';
 
 // ---------------------------------------------------------------------------
 // GraphNode — AstNodeModel + graph/editor metadata

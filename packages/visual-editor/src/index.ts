@@ -114,9 +114,6 @@ export type {
 } from './types.js';
 export { BUILTIN_TYPES } from './types.js';
 
-// Domain operations (typed get/add/removeAt over Dehydrated<T>)
-export * from './generated/domain-ops.js';
-
 // Adapter utilities
 export { astToModel, astToGraph } from './adapters/ast-to-model.js';
 export { modelsToAst, graphToModels } from './adapters/model-to-ast.js';
