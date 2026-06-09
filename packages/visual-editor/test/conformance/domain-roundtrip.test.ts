@@ -5,8 +5,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parse,
   createRuneDslServices,
-  serializeModel,
-  type RuneDslServices
+  serializeModel
 } from '@rune-langium/core';
 import {
   toDomain,
@@ -28,7 +27,10 @@ import {
 //
 // This mirrors how `hydrateModelDocument` works in the worker: it also calls
 // `JsonSerializer.deserialize` on a raw JSON string.
-const services: RuneDslServices = createRuneDslServices();
+// `createRuneDslServices()` returns the Langium service CONTAINER
+// (`{ shared, RuneDsl }`), not the inner `RuneDslServices` bundle — so we let
+// inference type `services` and reach into `.RuneDsl` for the language services.
+const services = createRuneDslServices();
 const deserialize = services.RuneDsl.serializer.JsonSerializer.deserialize.bind(
   services.RuneDsl.serializer.JsonSerializer
 );
