@@ -52,9 +52,9 @@ function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[
     //
     // NOTE (Deliverable B — Phase 3D-2): `toDomain(n.data)` is intentionally
     // NOT used here. `toDomain` produces a different key-set than
-    // `astRelevantProjection`: it flattens cross-refs to plain strings, adds
-    // the additive `extends`/`members` normalisation keys, and drops
-    // GraphMetadata fields (`namespace`, `comments`, …). Switching to
+    // `astRelevantProjection`: it adds the `extends`/`members` normalisation
+    // keys and drops GraphMetadata fields (`namespace`, `comments`, …).
+    // Switching to
     // `toDomain` here would silently re-fingerprint every model node on
     // first load and trigger a spurious `onModelChanged` emission (source
     // churn). `astRelevantProjection` is the STABLE content-fingerprint

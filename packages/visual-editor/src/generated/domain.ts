@@ -74,7 +74,7 @@ export function toAstAnnotationDeepPath(node: any): any {
     $type: 'AnnotationDeepPath',
     receiver: node.receiver ? toAstAnnotationPathExpression(node.receiver) : undefined,
     operator: node.operator,
-    attribute: node.attribute,
+    attribute: (node.attribute != null ? { $refText: node.attribute.$refText } : node.attribute),
   };
 }
 
@@ -104,7 +104,7 @@ export function toAstAnnotationPath(node: any): any {
     $type: 'AnnotationPath',
     receiver: node.receiver ? toAstAnnotationPathExpression(node.receiver) : undefined,
     operator: node.operator,
-    attribute: node.attribute,
+    attribute: (node.attribute != null ? { $refText: node.attribute.$refText } : node.attribute),
   };
 }
 
@@ -128,7 +128,7 @@ export function toDomainAnnotationPathAttributeReference(node: any): AnnotationP
 export function toAstAnnotationPathAttributeReference(node: any): any {
   return {
     $type: 'AnnotationPathAttributeReference',
-    attribute: node.attribute,
+    attribute: (node.attribute != null ? { $refText: node.attribute.$refText } : node.attribute),
   };
 }
 
@@ -189,8 +189,8 @@ export function toDomainAnnotationRef(node: any): AnnotationRefDomain {
 export function toAstAnnotationRef(node: any): any {
   return {
     $type: 'AnnotationRef',
-    annotation: node.annotation,
-    attribute: node.attribute,
+    annotation: (node.annotation != null ? { $refText: node.annotation.$refText } : node.annotation),
+    attribute: (node.attribute != null ? { $refText: node.attribute.$refText } : node.attribute),
     qualifiers: (node.qualifiers ?? []).map((item) => item ? toAstAnnotationQualifier(item) : undefined),
   };
 }
@@ -458,7 +458,7 @@ export function toAstChoiceOperation(node: any): any {
     argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     necessity: node.necessity,
     operator: node.operator,
-    attributes: (node.attributes ?? []).map((item) => item),
+    attributes: (node.attributes ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
   };
 }
 
@@ -689,7 +689,7 @@ export function toDomainConstructorKeyValuePair(node: any): ConstructorKeyValueP
 export function toAstConstructorKeyValuePair(node: any): any {
   return {
     $type: 'ConstructorKeyValuePair',
-    key: node.key,
+    key: (node.key != null ? { $refText: node.key.$refText } : node.key),
     value: node.value ? toAstRosettaExpression(node.value) : undefined,
   };
 }
@@ -733,7 +733,7 @@ export function toAstData(node: any): any {
   return {
     $type: 'Data',
     name: node.name,
-    superType: node.superType,
+    superType: (node.superType != null ? { $refText: node.superType.$refText } : node.superType),
     definition: node.definition,
     attributes: (node.attributes ?? []).map((item) => item ? toAstAttribute(item) : undefined),
     conditions: (node.conditions ?? []).map((item) => item ? toAstCondition(item) : undefined),
@@ -1289,7 +1289,7 @@ export function toDomainOperation(node: any): OperationDomain {
 export function toAstOperation(node: any): any {
   return {
     $type: 'Operation',
-    assignRoot: node.assignRoot,
+    assignRoot: (node.assignRoot != null ? { $refText: node.assignRoot.$refText } : node.assignRoot),
     path: node.path ? toAstSegment(node.path) : undefined,
     definition: node.definition,
     expression: node.expression ? toAstRosettaExpression(node.expression) : undefined,
@@ -1354,8 +1354,8 @@ export function toDomainRegulatoryDocumentReference(node: any): RegulatoryDocume
 export function toAstRegulatoryDocumentReference(node: any): any {
   return {
     $type: 'RegulatoryDocumentReference',
-    body: node.body,
-    corpusList: (node.corpusList ?? []).map((item) => item),
+    body: (node.body != null ? { $refText: node.body.$refText } : node.body),
+    corpusList: (node.corpusList ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
     segments: (node.segments ?? []).map((item) => item ? toAstRosettaSegmentRef(item) : undefined),
   };
 }
@@ -1443,7 +1443,7 @@ export function toAstRosettaAttributeReference(node: any): any {
   return {
     $type: 'RosettaAttributeReference',
     receiver: node.receiver ? toAstRosettaDataReference(node.receiver) : undefined,
-    attribute: node.attribute,
+    attribute: (node.attribute != null ? { $refText: node.attribute.$refText } : node.attribute),
   };
 }
 
@@ -1609,7 +1609,7 @@ export function toDomainRosettaClassSynonym(node: any): RosettaClassSynonymDomai
 export function toAstRosettaClassSynonym(node: any): any {
   return {
     $type: 'RosettaClassSynonym',
-    sources: (node.sources ?? []).map((item) => item),
+    sources: (node.sources ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
     value: node.value ? toAstRosettaSynonymValueBase(node.value) : undefined,
     metaValue: node.metaValue ? toAstRosettaSynonymValueBase(node.metaValue) : undefined,
   };
@@ -1753,7 +1753,7 @@ export function toAstRosettaCorpus(node: any): any {
     $type: 'RosettaCorpus',
     corpusType: node.corpusType,
     displayName: node.displayName,
-    body: node.body,
+    body: (node.body != null ? { $refText: node.body.$refText } : node.body),
     name: node.name,
     definition: node.definition,
   };
@@ -1817,7 +1817,7 @@ export function toDomainRosettaDataReference(node: any): RosettaDataReferenceDom
 export function toAstRosettaDataReference(node: any): any {
   return {
     $type: 'RosettaDataReference',
-    data: node.data,
+    data: (node.data != null ? { $refText: node.data.$refText } : node.data),
   };
 }
 
@@ -1844,7 +1844,7 @@ export function toAstRosettaDeepFeatureCall(node: any): any {
   return {
     $type: 'RosettaDeepFeatureCall',
     receiver: node.receiver ? toAstRosettaExpression(node.receiver) : undefined,
-    feature: node.feature,
+    feature: (node.feature != null ? { $refText: node.feature.$refText } : node.feature),
   };
 }
 
@@ -1967,7 +1967,7 @@ export function toAstRosettaEnumeration(node: any): any {
   return {
     $type: 'RosettaEnumeration',
     name: node.name,
-    parent: node.parent,
+    parent: (node.parent != null ? { $refText: node.parent.$refText } : node.parent),
     definition: node.definition,
     enumValues: (node.enumValues ?? []).map((item) => item ? toAstRosettaEnumValue(item) : undefined),
     references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
@@ -2046,7 +2046,7 @@ export function toDomainRosettaEnumSynonym(node: any): RosettaEnumSynonymDomain 
 export function toAstRosettaEnumSynonym(node: any): any {
   return {
     $type: 'RosettaEnumSynonym',
-    sources: (node.sources ?? []).map((item) => item),
+    sources: (node.sources ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
     synonymValue: node.synonymValue,
     definition: node.definition,
     patternMatch: node.patternMatch,
@@ -2170,8 +2170,8 @@ export function toDomainRosettaEnumValueReference(node: any): RosettaEnumValueRe
 export function toAstRosettaEnumValueReference(node: any): any {
   return {
     $type: 'RosettaEnumValueReference',
-    enumeration: node.enumeration,
-    value: node.value,
+    enumeration: (node.enumeration != null ? { $refText: node.enumeration.$refText } : node.enumeration),
+    value: (node.value != null ? { $refText: node.value.$refText } : node.value),
   };
 }
 
@@ -2233,7 +2233,7 @@ export function toDomainRosettaExternalClass(node: any): RosettaExternalClassDom
 export function toAstRosettaExternalClass(node: any): any {
   return {
     $type: 'RosettaExternalClass',
-    data: node.data,
+    data: (node.data != null ? { $refText: node.data.$refText } : node.data),
     externalClassSynonyms: (node.externalClassSynonyms ?? []).map((item) => item ? toAstRosettaExternalClassSynonym(item) : undefined),
     regularAttributes: (node.regularAttributes ?? []).map((item) => item ? toAstRosettaExternalRegularAttribute(item) : undefined),
   };
@@ -2299,7 +2299,7 @@ export function toDomainRosettaExternalEnum(node: any): RosettaExternalEnumDomai
 export function toAstRosettaExternalEnum(node: any): any {
   return {
     $type: 'RosettaExternalEnum',
-    enumeration: node.enumeration,
+    enumeration: (node.enumeration != null ? { $refText: node.enumeration.$refText } : node.enumeration),
     regularValues: (node.regularValues ?? []).map((item) => item ? toAstRosettaExternalEnumValue(item) : undefined),
   };
 }
@@ -2337,7 +2337,7 @@ export function toAstRosettaExternalEnumValue(node: any): any {
   return {
     $type: 'RosettaExternalEnumValue',
     operator: node.operator,
-    enumRef: node.enumRef,
+    enumRef: (node.enumRef != null ? { $refText: node.enumRef.$refText } : node.enumRef),
     externalEnumSynonyms: (node.externalEnumSynonyms ?? []).map((item) => item ? toAstRosettaEnumSynonym(item) : undefined),
   };
 }
@@ -2425,7 +2425,7 @@ export function toAstRosettaExternalRegularAttribute(node: any): any {
   return {
     $type: 'RosettaExternalRegularAttribute',
     operator: node.operator,
-    attributeRef: node.attributeRef,
+    attributeRef: (node.attributeRef != null ? { $refText: node.attributeRef.$refText } : node.attributeRef),
     externalSynonyms: (node.externalSynonyms ?? []).map((item) => item ? toAstRosettaExternalSynonym(item) : undefined),
     externalRuleReferences: (node.externalRuleReferences ?? []).map((item) => item ? toAstRuleReferenceAnnotation(item) : undefined),
   };
@@ -2480,7 +2480,7 @@ export function toAstRosettaExternalRuleSource(node: any): any {
     name: node.name,
     externalClasses: (node.externalClasses ?? []).map((item) => item ? toAstRosettaExternalClass(item) : undefined),
     externalEnums: (node.externalEnums ?? []).map((item) => item ? toAstRosettaExternalEnum(item) : undefined),
-    superSources: (node.superSources ?? []).map((item) => item),
+    superSources: (node.superSources ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
   };
 }
 
@@ -2549,7 +2549,7 @@ export function toAstRosettaFeatureCall(node: any): any {
   return {
     $type: 'RosettaFeatureCall',
     receiver: node.receiver ? toAstRosettaExpression(node.receiver) : undefined,
-    feature: node.feature,
+    feature: (node.feature != null ? { $refText: node.feature.$refText } : node.feature),
   };
 }
 
@@ -2602,9 +2602,9 @@ export function toAstRosettaFunction(node: any): any {
   return {
     $type: 'RosettaFunction',
     name: node.name,
-    dispatchAttribute: node.dispatchAttribute,
+    dispatchAttribute: (node.dispatchAttribute != null ? { $refText: node.dispatchAttribute.$refText } : node.dispatchAttribute),
     dispatchValue: node.dispatchValue ? toAstRosettaEnumValueReference(node.dispatchValue) : undefined,
-    superFunction: node.superFunction,
+    superFunction: (node.superFunction != null ? { $refText: node.superFunction.$refText } : node.superFunction),
     definition: node.definition,
     references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
     annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
@@ -2957,7 +2957,7 @@ export function toDomainRosettaMapTestFunc(node: any): RosettaMapTestFuncDomain 
 export function toAstRosettaMapTestFunc(node: any): any {
   return {
     $type: 'RosettaMapTestFunc',
-    func: node.func,
+    func: (node.func != null ? { $refText: node.func.$refText } : node.func),
     predicatePath: node.predicatePath ? toAstRosettaMapPathValue(node.predicatePath) : undefined,
   };
 }
@@ -3228,7 +3228,7 @@ export function toAstRosettaQualifiableConfiguration(node: any): any {
   return {
     $type: 'RosettaQualifiableConfiguration',
     qType: node.qType,
-    rosettaClass: node.rosettaClass,
+    rosettaClass: (node.rosettaClass != null ? { $refText: node.rosettaClass.$refText } : node.rosettaClass),
   };
 }
 
@@ -3337,10 +3337,10 @@ export function toAstRosettaReport(node: any): any {
     $type: 'RosettaReport',
     regulatoryBody: node.regulatoryBody ? toAstRegulatoryDocumentReference(node.regulatoryBody) : undefined,
     inputType: node.inputType ? toAstTypeCall(node.inputType) : undefined,
-    eligibilityRules: (node.eligibilityRules ?? []).map((item) => item),
-    reportingStandard: node.reportingStandard,
-    reportType: node.reportType,
-    ruleSource: node.ruleSource,
+    eligibilityRules: (node.eligibilityRules ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
+    reportingStandard: (node.reportingStandard != null ? { $refText: node.reportingStandard.$refText } : node.reportingStandard),
+    reportType: (node.reportType != null ? { $refText: node.reportType.$refText } : node.reportType),
+    ruleSource: (node.ruleSource != null ? { $refText: node.ruleSource.$refText } : node.ruleSource),
   };
 }
 
@@ -3494,7 +3494,7 @@ export function toDomainRosettaSegmentRef(node: any): RosettaSegmentRefDomain {
 export function toAstRosettaSegmentRef(node: any): any {
   return {
     $type: 'RosettaSegmentRef',
-    segment: node.segment,
+    segment: (node.segment != null ? { $refText: node.segment.$refText } : node.segment),
     segmentRef: node.segmentRef,
   };
 }
@@ -3587,7 +3587,7 @@ export function toDomainRosettaSymbolReference(node: any): RosettaSymbolReferenc
 export function toAstRosettaSymbolReference(node: any): any {
   return {
     $type: 'RosettaSymbolReference',
-    symbol: node.symbol,
+    symbol: (node.symbol != null ? { $refText: node.symbol.$refText } : node.symbol),
     explicitArguments: node.explicitArguments,
     rawArgs: (node.rawArgs ?? []).map((item) => item ? toAstRosettaExpression(item) : undefined),
   };
@@ -3627,7 +3627,7 @@ export function toDomainRosettaSynonym(node: any): RosettaSynonymDomain {
 export function toAstRosettaSynonym(node: any): any {
   return {
     $type: 'RosettaSynonym',
-    sources: (node.sources ?? []).map((item) => item),
+    sources: (node.sources ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
     body: node.body ? toAstRosettaSynonymBody(node.body) : undefined,
   };
 }
@@ -3752,7 +3752,7 @@ export function toAstRosettaSynonymSource(node: any): any {
   return {
     $type: 'RosettaSynonymSource',
     name: node.name,
-    superSources: (node.superSources ?? []).map((item) => item),
+    superSources: (node.superSources ?? []).map((item) => (item != null ? { $refText: item.$refText } : item)),
     externalClasses: (node.externalClasses ?? []).map((item) => item ? toAstRosettaExternalClass(item) : undefined),
     externalEnums: (node.externalEnums ?? []).map((item) => item ? toAstRosettaExternalEnum(item) : undefined),
   };
@@ -3915,7 +3915,7 @@ export function toAstRuleReferenceAnnotation(node: any): any {
     $type: 'RuleReferenceAnnotation',
     name: node.name,
     path: node.path ? toAstAnnotationPathExpression(node.path) : undefined,
-    reportingRule: node.reportingRule,
+    reportingRule: (node.reportingRule != null ? { $refText: node.reportingRule.$refText } : node.reportingRule),
     empty: node.empty,
   };
 }
@@ -3946,7 +3946,7 @@ export function toDomainSegment(node: any): SegmentDomain {
 export function toAstSegment(node: any): any {
   return {
     $type: 'Segment',
-    feature: node.feature,
+    feature: (node.feature != null ? { $refText: node.feature.$refText } : node.feature),
     next: node.next ? toAstSegment(node.next) : undefined,
   };
 }
@@ -4054,7 +4054,7 @@ export function toAstSwitchCaseGuard(node: any): any {
   return {
     $type: 'SwitchCaseGuard',
     literalGuard: node.literalGuard ? toAstRosettaLiteral(node.literalGuard) : undefined,
-    referenceGuard: node.referenceGuard,
+    referenceGuard: (node.referenceGuard != null ? { $refText: node.referenceGuard.$refText } : node.referenceGuard),
   };
 }
 
@@ -4208,7 +4208,7 @@ export function toAstToEnumOperation(node: any): any {
     $type: 'ToEnumOperation',
     argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     operator: node.operator,
-    enumeration: node.enumeration,
+    enumeration: (node.enumeration != null ? { $refText: node.enumeration.$refText } : node.enumeration),
   };
 }
 
@@ -4344,7 +4344,7 @@ export function toDomainTypeCall(node: any): TypeCallDomain {
 export function toAstTypeCall(node: any): any {
   return {
     $type: 'TypeCall',
-    type: node.type,
+    type: (node.type != null ? { $refText: node.type.$refText } : node.type),
     arguments: (node.arguments ?? []).map((item) => item ? toAstTypeCallArgument(item) : undefined),
   };
 }
@@ -4379,7 +4379,7 @@ export function toDomainTypeCallArgument(node: any): TypeCallArgumentDomain {
 export function toAstTypeCallArgument(node: any): any {
   return {
     $type: 'TypeCallArgument',
-    parameter: node.parameter,
+    parameter: (node.parameter != null ? { $refText: node.parameter.$refText } : node.parameter),
     value: node.value ? toAstRosettaExpression(node.value) : undefined,
   };
 }
@@ -4439,7 +4439,7 @@ export function toDomainWithMetaEntry(node: any): WithMetaEntryDomain {
 export function toAstWithMetaEntry(node: any): any {
   return {
     $type: 'WithMetaEntry',
-    key: node.key,
+    key: (node.key != null ? { $refText: node.key.$refText } : node.key),
     value: node.value ? toAstRosettaExpression(node.value) : undefined,
   };
 }
