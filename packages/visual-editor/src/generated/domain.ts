@@ -1,7 +1,7 @@
 // @ts-nocheck — generated domain surface; edit the grammar / domain-surfaces.json to regenerate
 
-/** Branded cross-reference type: runtime value is a `$refText` string, but the type carries the target node kind. */
-export type Ref<T extends string> = string & { readonly __target?: T };
+/** Editable cross-reference: the runtime ref shape. Resolution stays derived/external. */
+export interface DomainRef { $refText: string }
 
 export interface AnnotationDomain {
   $type: 'Annotation';
@@ -20,6 +20,16 @@ export function toDomainAnnotation(node: any): AnnotationDomain {
     prefix: node.prefix,
     attributes: (node.attributes ?? []).map((item) => item ? toDomainAttribute(item) : undefined),
     members: (node.attributes ?? []).map((item) => item ? toDomainAttribute(item) : undefined),
+  };
+}
+
+export function toAstAnnotation(node: any): any {
+  return {
+    $type: 'Annotation',
+    name: node.name,
+    definition: node.definition,
+    prefix: node.prefix,
+    attributes: (node.attributes ?? []).map((item) => item ? toAstAttribute(item) : undefined),
   };
 }
 
@@ -47,7 +57,7 @@ export interface AnnotationDeepPathDomain {
   $type: 'AnnotationDeepPath';
   receiver: AnnotationPathExpressionDomain;
   operator: "->>";
-  attribute: Ref<'AttributeOrChoiceOption'>;
+  attribute: DomainRef;
 }
 
 export function toDomainAnnotationDeepPath(node: any): AnnotationDeepPathDomain {
@@ -55,11 +65,20 @@ export function toDomainAnnotationDeepPath(node: any): AnnotationDeepPathDomain 
     $type: node.$type,
     receiver: node.receiver ? toDomainAnnotationPathExpression(node.receiver) : undefined,
     operator: node.operator,
-    attribute: node.attribute?.$refText,
+    attribute: node.attribute,
   };
 }
 
-export function setAnnotationDeepPathAttribute(node: any, value: Ref<'AttributeOrChoiceOption'>): void {
+export function toAstAnnotationDeepPath(node: any): any {
+  return {
+    $type: 'AnnotationDeepPath',
+    receiver: node.receiver ? toAstAnnotationPathExpression(node.receiver) : undefined,
+    operator: node.operator,
+    attribute: node.attribute,
+  };
+}
+
+export function setAnnotationDeepPathAttribute(node: any, value: string): void {
   if (node.attribute) node.attribute.$refText = value;
   else node.attribute = { $refText: value };
 }
@@ -68,7 +87,7 @@ export interface AnnotationPathDomain {
   $type: 'AnnotationPath';
   receiver: AnnotationPathExpressionDomain;
   operator: "->";
-  attribute: Ref<'AttributeOrChoiceOption'>;
+  attribute: DomainRef;
 }
 
 export function toDomainAnnotationPath(node: any): AnnotationPathDomain {
@@ -76,28 +95,44 @@ export function toDomainAnnotationPath(node: any): AnnotationPathDomain {
     $type: node.$type,
     receiver: node.receiver ? toDomainAnnotationPathExpression(node.receiver) : undefined,
     operator: node.operator,
-    attribute: node.attribute?.$refText,
+    attribute: node.attribute,
   };
 }
 
-export function setAnnotationPathAttribute(node: any, value: Ref<'AttributeOrChoiceOption'>): void {
+export function toAstAnnotationPath(node: any): any {
+  return {
+    $type: 'AnnotationPath',
+    receiver: node.receiver ? toAstAnnotationPathExpression(node.receiver) : undefined,
+    operator: node.operator,
+    attribute: node.attribute,
+  };
+}
+
+export function setAnnotationPathAttribute(node: any, value: string): void {
   if (node.attribute) node.attribute.$refText = value;
   else node.attribute = { $refText: value };
 }
 
 export interface AnnotationPathAttributeReferenceDomain {
   $type: 'AnnotationPathAttributeReference';
-  attribute: Ref<'AttributeOrChoiceOption'>;
+  attribute: DomainRef;
 }
 
 export function toDomainAnnotationPathAttributeReference(node: any): AnnotationPathAttributeReferenceDomain {
   return {
     $type: node.$type,
-    attribute: node.attribute?.$refText,
+    attribute: node.attribute,
   };
 }
 
-export function setAnnotationPathAttributeReferenceAttribute(node: any, value: Ref<'AttributeOrChoiceOption'>): void {
+export function toAstAnnotationPathAttributeReference(node: any): any {
+  return {
+    $type: 'AnnotationPathAttributeReference',
+    attribute: node.attribute,
+  };
+}
+
+export function setAnnotationPathAttributeReferenceAttribute(node: any, value: string): void {
   if (node.attribute) node.attribute.$refText = value;
   else node.attribute = { $refText: value };
 }
@@ -118,6 +153,15 @@ export function toDomainAnnotationQualifier(node: any): AnnotationQualifierDomai
   };
 }
 
+export function toAstAnnotationQualifier(node: any): any {
+  return {
+    $type: 'AnnotationQualifier',
+    qualName: node.qualName,
+    qualValue: node.qualValue,
+    qualPath: node.qualPath ? toAstRosettaAttributeReference(node.qualPath) : undefined,
+  };
+}
+
 export function setAnnotationQualifierQualName(node: any, value: string): void {
   node.qualName = value;
 }
@@ -128,26 +172,35 @@ export function setAnnotationQualifierQualValue(node: any, value: string): void 
 
 export interface AnnotationRefDomain {
   $type: 'AnnotationRef';
-  annotation: Ref<'Annotation'>;
-  attribute?: Ref<'Attribute'>;
+  annotation: DomainRef;
+  attribute?: DomainRef;
   qualifiers?: AnnotationQualifierDomain[];
 }
 
 export function toDomainAnnotationRef(node: any): AnnotationRefDomain {
   return {
     $type: node.$type,
-    annotation: node.annotation?.$refText,
-    attribute: node.attribute?.$refText,
+    annotation: node.annotation,
+    attribute: node.attribute,
     qualifiers: (node.qualifiers ?? []).map((item) => item ? toDomainAnnotationQualifier(item) : undefined),
   };
 }
 
-export function setAnnotationRefAnnotation(node: any, value: Ref<'Annotation'>): void {
+export function toAstAnnotationRef(node: any): any {
+  return {
+    $type: 'AnnotationRef',
+    annotation: node.annotation,
+    attribute: node.attribute,
+    qualifiers: (node.qualifiers ?? []).map((item) => item ? toAstAnnotationQualifier(item) : undefined),
+  };
+}
+
+export function setAnnotationRefAnnotation(node: any, value: string): void {
   if (node.annotation) node.annotation.$refText = value;
   else node.annotation = { $refText: value };
 }
 
-export function setAnnotationRefAttribute(node: any, value: Ref<'Attribute'>): void {
+export function setAnnotationRefAttribute(node: any, value: string): void {
   if (node.attribute) node.attribute.$refText = value;
   else node.attribute = { $refText: value };
 }
@@ -171,8 +224,17 @@ export function toDomainArithmeticOperation(node: any): ArithmeticOperationDomai
   return {
     $type: node.$type,
     left: node.left ? toDomainRosettaExpression(node.left) : undefined,
-    operator: node.operator == null ? undefined : (typeof node.operator === 'object' && '$type' in node.operator) ? toDomain(node.operator) : (typeof node.operator === 'object' && '$refText' in node.operator) ? node.operator.$refText : node.operator,
+    operator: node.operator,
     right: node.right ? toDomainRosettaExpression(node.right) : undefined,
+  };
+}
+
+export function toAstArithmeticOperation(node: any): any {
+  return {
+    $type: 'ArithmeticOperation',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
   };
 }
 
@@ -186,6 +248,14 @@ export function toDomainAsKeyOperation(node: any): AsKeyOperationDomain {
   return {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
+export function toAstAsKeyOperation(node: any): any {
+  return {
+    $type: 'AsKeyOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     operator: node.operator,
   };
 }
@@ -219,6 +289,23 @@ export function toDomainAttribute(node: any): AttributeDomain {
     synonyms: (node.synonyms ?? []).map((item) => item ? toDomainRosettaSynonym(item) : undefined),
     labels: (node.labels ?? []).map((item) => item ? toDomainLabelAnnotation(item) : undefined),
     ruleReferences: (node.ruleReferences ?? []).map((item) => item ? toDomainRuleReferenceAnnotation(item) : undefined),
+  };
+}
+
+export function toAstAttribute(node: any): any {
+  return {
+    $type: 'Attribute',
+    override: node.override,
+    name: node.name,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+    typeCallArgs: (node.typeCallArgs ?? []).map((item) => item ? toAstTypeCallArgument(item) : undefined),
+    card: node.card ? toAstRosettaCardinality(node.card) : undefined,
+    definition: node.definition,
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    synonyms: (node.synonyms ?? []).map((item) => item ? toAstRosettaSynonym(item) : undefined),
+    labels: (node.labels ?? []).map((item) => item ? toAstLabelAnnotation(item) : undefined),
+    ruleReferences: (node.ruleReferences ?? []).map((item) => item ? toAstRuleReferenceAnnotation(item) : undefined),
   };
 }
 
@@ -304,6 +391,17 @@ export function toDomainChoice(node: any): ChoiceDomain {
   };
 }
 
+export function toAstChoice(node: any): any {
+  return {
+    $type: 'Choice',
+    name: node.name,
+    definition: node.definition,
+    attributes: (node.attributes ?? []).map((item) => item ? toAstChoiceOption(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    synonyms: (node.synonyms ?? []).map((item) => item ? toAstRosettaClassSynonym(item) : undefined),
+  };
+}
+
 export function setChoiceName(node: any, value: string): void {
   node.name = value;
 }
@@ -341,7 +439,7 @@ export interface ChoiceOperationDomain {
   argument?: RosettaExpressionDomain;
   necessity: string;
   operator: "choice";
-  attributes: Ref<'Attribute'>[];
+  attributes: DomainRef[];
 }
 
 export function toDomainChoiceOperation(node: any): ChoiceOperationDomain {
@@ -350,7 +448,17 @@ export function toDomainChoiceOperation(node: any): ChoiceOperationDomain {
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
     necessity: node.necessity,
     operator: node.operator,
-    attributes: (node.attributes ?? []).map((item) => item?.$refText),
+    attributes: (node.attributes ?? []).map((item) => item),
+  };
+}
+
+export function toAstChoiceOperation(node: any): any {
+  return {
+    $type: 'ChoiceOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    necessity: node.necessity,
+    operator: node.operator,
+    attributes: (node.attributes ?? []).map((item) => item),
   };
 }
 
@@ -358,7 +466,7 @@ export function setChoiceOperationNecessity(node: any, value: string): void {
   node.necessity = value;
 }
 
-export function addChoiceOperationAttributes(node: any, item: Ref<'Attribute'>): void {
+export function addChoiceOperationAttributes(node: any, item: string): void {
   (node.attributes ??= []).push({ $refText: item });
 }
 
@@ -387,6 +495,19 @@ export function toDomainChoiceOption(node: any): ChoiceOptionDomain {
     synonyms: (node.synonyms ?? []).map((item) => item ? toDomainRosettaSynonym(item) : undefined),
     labels: (node.labels ?? []).map((item) => item ? toDomainLabelAnnotation(item) : undefined),
     ruleReferences: (node.ruleReferences ?? []).map((item) => item ? toDomainRuleReferenceAnnotation(item) : undefined),
+  };
+}
+
+export function toAstChoiceOption(node: any): any {
+  return {
+    $type: 'ChoiceOption',
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+    definition: node.definition,
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    synonyms: (node.synonyms ?? []).map((item) => item ? toAstRosettaSynonym(item) : undefined),
+    labels: (node.labels ?? []).map((item) => item ? toAstLabelAnnotation(item) : undefined),
+    ruleReferences: (node.ruleReferences ?? []).map((item) => item ? toAstRuleReferenceAnnotation(item) : undefined),
   };
 }
 
@@ -446,6 +567,13 @@ export function toDomainClosureParameter(node: any): ClosureParameterDomain {
   };
 }
 
+export function toAstClosureParameter(node: any): any {
+  return {
+    $type: 'ClosureParameter',
+    name: node.name,
+  };
+}
+
 export function setClosureParameterName(node: any, value: string): void {
   node.name = value;
 }
@@ -463,8 +591,18 @@ export function toDomainComparisonOperation(node: any): ComparisonOperationDomai
     $type: node.$type,
     left: node.left ? toDomainRosettaExpression(node.left) : undefined,
     cardMod: node.cardMod,
-    operator: node.operator == null ? undefined : (typeof node.operator === 'object' && '$type' in node.operator) ? toDomain(node.operator) : (typeof node.operator === 'object' && '$refText' in node.operator) ? node.operator.$refText : node.operator,
+    operator: node.operator,
     right: node.right ? toDomainRosettaExpression(node.right) : undefined,
+  };
+}
+
+export function toAstComparisonOperation(node: any): any {
+  return {
+    $type: 'ComparisonOperation',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    cardMod: node.cardMod,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
   };
 }
 
@@ -490,6 +628,18 @@ export function toDomainCondition(node: any): ConditionDomain {
     expression: node.expression ? toDomainRosettaExpression(node.expression) : undefined,
     references: (node.references ?? []).map((item) => item ? toDomainRosettaDocReference(item) : undefined),
     annotations: (node.annotations ?? []).map((item) => item ? toDomainAnnotationRef(item) : undefined),
+    postCondition: node.postCondition,
+  };
+}
+
+export function toAstCondition(node: any): any {
+  return {
+    $type: 'Condition',
+    name: node.name,
+    definition: node.definition,
+    expression: node.expression ? toAstRosettaExpression(node.expression) : undefined,
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
     postCondition: node.postCondition,
   };
 }
@@ -524,19 +674,27 @@ export function setConditionPostCondition(node: any, value: boolean): void {
 
 export interface ConstructorKeyValuePairDomain {
   $type: 'ConstructorKeyValuePair';
-  key: Ref<'RosettaFeature'>;
+  key: DomainRef;
   value: RosettaExpressionDomain;
 }
 
 export function toDomainConstructorKeyValuePair(node: any): ConstructorKeyValuePairDomain {
   return {
     $type: node.$type,
-    key: node.key?.$refText,
+    key: node.key,
     value: node.value ? toDomainRosettaExpression(node.value) : undefined,
   };
 }
 
-export function setConstructorKeyValuePairKey(node: any, value: Ref<'RosettaFeature'>): void {
+export function toAstConstructorKeyValuePair(node: any): any {
+  return {
+    $type: 'ConstructorKeyValuePair',
+    key: node.key,
+    value: node.value ? toAstRosettaExpression(node.value) : undefined,
+  };
+}
+
+export function setConstructorKeyValuePairKey(node: any, value: string): void {
   if (node.key) node.key.$refText = value;
   else node.key = { $refText: value };
 }
@@ -544,14 +702,14 @@ export function setConstructorKeyValuePairKey(node: any, value: Ref<'RosettaFeat
 export interface DataDomain {
   $type: 'Data';
   name: string;
-  superType?: Ref<'DataOrChoice'>;
+  superType?: DomainRef;
   definition?: string;
   attributes?: AttributeDomain[];
   conditions?: ConditionDomain[];
   references?: RosettaDocReferenceDomain[];
   annotations?: AnnotationRefDomain[];
   synonyms?: RosettaClassSynonymDomain[];
-  extends?: Ref<'DataOrChoice'>;
+  extends?: DomainRef;
   members?: AttributeDomain[];
 }
 
@@ -559,15 +717,29 @@ export function toDomainData(node: any): DataDomain {
   return {
     $type: node.$type,
     name: node.name,
-    superType: node.superType?.$refText,
+    superType: node.superType,
     definition: node.definition,
     attributes: (node.attributes ?? []).map((item) => item ? toDomainAttribute(item) : undefined),
     conditions: (node.conditions ?? []).map((item) => item ? toDomainCondition(item) : undefined),
     references: (node.references ?? []).map((item) => item ? toDomainRosettaDocReference(item) : undefined),
     annotations: (node.annotations ?? []).map((item) => item ? toDomainAnnotationRef(item) : undefined),
     synonyms: (node.synonyms ?? []).map((item) => item ? toDomainRosettaClassSynonym(item) : undefined),
-    extends: node.superType?.$refText,
+    extends: node.superType,
     members: (node.attributes ?? []).map((item) => item ? toDomainAttribute(item) : undefined),
+  };
+}
+
+export function toAstData(node: any): any {
+  return {
+    $type: 'Data',
+    name: node.name,
+    superType: node.superType,
+    definition: node.definition,
+    attributes: (node.attributes ?? []).map((item) => item ? toAstAttribute(item) : undefined),
+    conditions: (node.conditions ?? []).map((item) => item ? toAstCondition(item) : undefined),
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    synonyms: (node.synonyms ?? []).map((item) => item ? toAstRosettaClassSynonym(item) : undefined),
   };
 }
 
@@ -575,7 +747,7 @@ export function setDataName(node: any, value: string): void {
   node.name = value;
 }
 
-export function setDataSuperType(node: any, value: Ref<'DataOrChoice'>): void {
+export function setDataSuperType(node: any, value: string): void {
   if (node.superType) node.superType.$refText = value;
   else node.superType = { $refText: value };
 }
@@ -640,6 +812,15 @@ export function toDomainDefaultOperation(node: any): DefaultOperationDomain {
   };
 }
 
+export function toAstDefaultOperation(node: any): any {
+  return {
+    $type: 'DefaultOperation',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
+  };
+}
+
 export interface DistinctOperationDomain {
   $type: 'DistinctOperation';
   argument?: RosettaExpressionDomain;
@@ -654,6 +835,14 @@ export function toDomainDistinctOperation(node: any): DistinctOperationDomain {
   };
 }
 
+export function toAstDistinctOperation(node: any): any {
+  return {
+    $type: 'DistinctOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface DocumentRationaleDomain {
   $type: 'DocumentRationale';
   rationale: string;
@@ -663,6 +852,14 @@ export interface DocumentRationaleDomain {
 export function toDomainDocumentRationale(node: any): DocumentRationaleDomain {
   return {
     $type: node.$type,
+    rationale: node.rationale,
+    rationaleAuthor: node.rationaleAuthor,
+  };
+}
+
+export function toAstDocumentRationale(node: any): any {
+  return {
+    $type: 'DocumentRationale',
     rationale: node.rationale,
     rationaleAuthor: node.rationaleAuthor,
   };
@@ -689,8 +886,18 @@ export function toDomainEqualityOperation(node: any): EqualityOperationDomain {
     $type: node.$type,
     left: node.left ? toDomainRosettaExpression(node.left) : undefined,
     cardMod: node.cardMod,
-    operator: node.operator == null ? undefined : (typeof node.operator === 'object' && '$type' in node.operator) ? toDomain(node.operator) : (typeof node.operator === 'object' && '$refText' in node.operator) ? node.operator.$refText : node.operator,
+    operator: node.operator,
     right: node.right ? toDomainRosettaExpression(node.right) : undefined,
+  };
+}
+
+export function toAstEqualityOperation(node: any): any {
+  return {
+    $type: 'EqualityOperation',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    cardMod: node.cardMod,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
   };
 }
 
@@ -714,6 +921,15 @@ export function toDomainFilterOperation(node: any): FilterOperationDomain {
   };
 }
 
+export function toAstFilterOperation(node: any): any {
+  return {
+    $type: 'FilterOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
+  };
+}
+
 export interface FirstOperationDomain {
   $type: 'FirstOperation';
   argument?: RosettaExpressionDomain;
@@ -724,6 +940,14 @@ export function toDomainFirstOperation(node: any): FirstOperationDomain {
   return {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
+export function toAstFirstOperation(node: any): any {
+  return {
+    $type: 'FirstOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     operator: node.operator,
   };
 }
@@ -742,6 +966,14 @@ export function toDomainFlattenOperation(node: any): FlattenOperationDomain {
   };
 }
 
+export function toAstFlattenOperation(node: any): any {
+  return {
+    $type: 'FlattenOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface ImportDomain {
   $type: 'Import';
   importedNamespace: string;
@@ -751,6 +983,14 @@ export interface ImportDomain {
 export function toDomainImport(node: any): ImportDomain {
   return {
     $type: node.$type,
+    importedNamespace: node.importedNamespace,
+    namespaceAlias: node.namespaceAlias,
+  };
+}
+
+export function toAstImport(node: any): any {
+  return {
+    $type: 'Import',
     importedNamespace: node.importedNamespace,
     namespaceAlias: node.namespaceAlias,
   };
@@ -778,6 +1018,14 @@ export function toDomainInlineFunction(node: any): InlineFunctionDomain {
   };
 }
 
+export function toAstInlineFunction(node: any): any {
+  return {
+    $type: 'InlineFunction',
+    body: node.body ? toAstRosettaExpression(node.body) : undefined,
+    parameters: (node.parameters ?? []).map((item) => item ? toAstClosureParameter(item) : undefined),
+  };
+}
+
 export function addInlineFunctionParameters(node: any, item: unknown): void {
   (node.parameters ??= []).push(item);
 }
@@ -802,6 +1050,15 @@ export function toDomainJoinOperation(node: any): JoinOperationDomain {
   };
 }
 
+export function toAstJoinOperation(node: any): any {
+  return {
+    $type: 'JoinOperation',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
+  };
+}
+
 export interface LabelAnnotationDomain {
   $type: 'LabelAnnotation';
   name: "label";
@@ -816,6 +1073,16 @@ export function toDomainLabelAnnotation(node: any): LabelAnnotationDomain {
     name: node.name,
     label: node.label,
     path: node.path ? toDomainAnnotationPathExpression(node.path) : undefined,
+    deprecatedAs: node.deprecatedAs,
+  };
+}
+
+export function toAstLabelAnnotation(node: any): any {
+  return {
+    $type: 'LabelAnnotation',
+    name: node.name,
+    label: node.label,
+    path: node.path ? toAstAnnotationPathExpression(node.path) : undefined,
     deprecatedAs: node.deprecatedAs,
   };
 }
@@ -842,6 +1109,14 @@ export function toDomainLastOperation(node: any): LastOperationDomain {
   };
 }
 
+export function toAstLastOperation(node: any): any {
+  return {
+    $type: 'LastOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface ListLiteralDomain {
   $type: 'ListLiteral';
   elements?: RosettaExpressionDomain[];
@@ -851,6 +1126,13 @@ export function toDomainListLiteral(node: any): ListLiteralDomain {
   return {
     $type: node.$type,
     elements: (node.elements ?? []).map((item) => item ? toDomainRosettaExpression(item) : undefined),
+  };
+}
+
+export function toAstListLiteral(node: any): any {
+  return {
+    $type: 'ListLiteral',
+    elements: (node.elements ?? []).map((item) => item ? toAstRosettaExpression(item) : undefined),
   };
 }
 
@@ -873,8 +1155,17 @@ export function toDomainLogicalOperation(node: any): LogicalOperationDomain {
   return {
     $type: node.$type,
     left: node.left ? toDomainRosettaExpression(node.left) : undefined,
-    operator: node.operator == null ? undefined : (typeof node.operator === 'object' && '$type' in node.operator) ? toDomain(node.operator) : (typeof node.operator === 'object' && '$refText' in node.operator) ? node.operator.$refText : node.operator,
+    operator: node.operator,
     right: node.right ? toDomainRosettaExpression(node.right) : undefined,
+  };
+}
+
+export function toAstLogicalOperation(node: any): any {
+  return {
+    $type: 'LogicalOperation',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
   };
 }
 
@@ -894,6 +1185,15 @@ export function toDomainMapOperation(node: any): MapOperationDomain {
   };
 }
 
+export function toAstMapOperation(node: any): any {
+  return {
+    $type: 'MapOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
+  };
+}
+
 export interface MaxOperationDomain {
   $type: 'MaxOperation';
   argument?: RosettaExpressionDomain;
@@ -907,6 +1207,15 @@ export function toDomainMaxOperation(node: any): MaxOperationDomain {
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
     operator: node.operator,
     function: node.function ? toDomainInlineFunction(node.function) : undefined,
+  };
+}
+
+export function toAstMaxOperation(node: any): any {
+  return {
+    $type: 'MaxOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
   };
 }
 
@@ -926,6 +1235,15 @@ export function toDomainMinOperation(node: any): MinOperationDomain {
   };
 }
 
+export function toAstMinOperation(node: any): any {
+  return {
+    $type: 'MinOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
+  };
+}
+
 export interface OneOfOperationDomain {
   $type: 'OneOfOperation';
   argument?: RosettaExpressionDomain;
@@ -940,9 +1258,17 @@ export function toDomainOneOfOperation(node: any): OneOfOperationDomain {
   };
 }
 
+export function toAstOneOfOperation(node: any): any {
+  return {
+    $type: 'OneOfOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface OperationDomain {
   $type: 'Operation';
-  assignRoot: Ref<'AssignPathRoot'>;
+  assignRoot: DomainRef;
   path?: SegmentDomain;
   definition?: string;
   expression: RosettaExpressionDomain;
@@ -952,7 +1278,7 @@ export interface OperationDomain {
 export function toDomainOperation(node: any): OperationDomain {
   return {
     $type: node.$type,
-    assignRoot: node.assignRoot?.$refText,
+    assignRoot: node.assignRoot,
     path: node.path ? toDomainSegment(node.path) : undefined,
     definition: node.definition,
     expression: node.expression ? toDomainRosettaExpression(node.expression) : undefined,
@@ -960,7 +1286,18 @@ export function toDomainOperation(node: any): OperationDomain {
   };
 }
 
-export function setOperationAssignRoot(node: any, value: Ref<'AssignPathRoot'>): void {
+export function toAstOperation(node: any): any {
+  return {
+    $type: 'Operation',
+    assignRoot: node.assignRoot,
+    path: node.path ? toAstSegment(node.path) : undefined,
+    definition: node.definition,
+    expression: node.expression ? toAstRosettaExpression(node.expression) : undefined,
+    add: node.add,
+  };
+}
+
+export function setOperationAssignRoot(node: any, value: string): void {
   if (node.assignRoot) node.assignRoot.$refText = value;
   else node.assignRoot = { $refText: value };
 }
@@ -989,28 +1326,46 @@ export function toDomainReduceOperation(node: any): ReduceOperationDomain {
   };
 }
 
+export function toAstReduceOperation(node: any): any {
+  return {
+    $type: 'ReduceOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
+  };
+}
+
 export interface RegulatoryDocumentReferenceDomain {
   $type: 'RegulatoryDocumentReference';
-  body: Ref<'RosettaBody'>;
-  corpusList: Ref<'RosettaCorpus'>[];
+  body: DomainRef;
+  corpusList: DomainRef[];
   segments?: RosettaSegmentRefDomain[];
 }
 
 export function toDomainRegulatoryDocumentReference(node: any): RegulatoryDocumentReferenceDomain {
   return {
     $type: node.$type,
-    body: node.body?.$refText,
-    corpusList: (node.corpusList ?? []).map((item) => item?.$refText),
+    body: node.body,
+    corpusList: (node.corpusList ?? []).map((item) => item),
     segments: (node.segments ?? []).map((item) => item ? toDomainRosettaSegmentRef(item) : undefined),
   };
 }
 
-export function setRegulatoryDocumentReferenceBody(node: any, value: Ref<'RosettaBody'>): void {
+export function toAstRegulatoryDocumentReference(node: any): any {
+  return {
+    $type: 'RegulatoryDocumentReference',
+    body: node.body,
+    corpusList: (node.corpusList ?? []).map((item) => item),
+    segments: (node.segments ?? []).map((item) => item ? toAstRosettaSegmentRef(item) : undefined),
+  };
+}
+
+export function setRegulatoryDocumentReferenceBody(node: any, value: string): void {
   if (node.body) node.body.$refText = value;
   else node.body = { $refText: value };
 }
 
-export function addRegulatoryDocumentReferenceCorpusList(node: any, item: Ref<'RosettaCorpus'>): void {
+export function addRegulatoryDocumentReferenceCorpusList(node: any, item: string): void {
   (node.corpusList ??= []).push({ $refText: item });
 }
 
@@ -1040,6 +1395,14 @@ export function toDomainReverseOperation(node: any): ReverseOperationDomain {
   };
 }
 
+export function toAstReverseOperation(node: any): any {
+  return {
+    $type: 'ReverseOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface RosettaAbsentExpressionDomain {
   $type: 'RosettaAbsentExpression';
   argument?: RosettaExpressionDomain;
@@ -1054,21 +1417,37 @@ export function toDomainRosettaAbsentExpression(node: any): RosettaAbsentExpress
   };
 }
 
+export function toAstRosettaAbsentExpression(node: any): any {
+  return {
+    $type: 'RosettaAbsentExpression',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface RosettaAttributeReferenceDomain {
   $type: 'RosettaAttributeReference';
   receiver: RosettaDataReferenceDomain;
-  attribute: Ref<'AttributeOrChoiceOption'>;
+  attribute: DomainRef;
 }
 
 export function toDomainRosettaAttributeReference(node: any): RosettaAttributeReferenceDomain {
   return {
     $type: node.$type,
     receiver: node.receiver ? toDomainRosettaDataReference(node.receiver) : undefined,
-    attribute: node.attribute?.$refText,
+    attribute: node.attribute,
   };
 }
 
-export function setRosettaAttributeReferenceAttribute(node: any, value: Ref<'AttributeOrChoiceOption'>): void {
+export function toAstRosettaAttributeReference(node: any): any {
+  return {
+    $type: 'RosettaAttributeReference',
+    receiver: node.receiver ? toAstRosettaDataReference(node.receiver) : undefined,
+    attribute: node.attribute,
+  };
+}
+
+export function setRosettaAttributeReferenceAttribute(node: any, value: string): void {
   if (node.attribute) node.attribute.$refText = value;
   else node.attribute = { $refText: value };
 }
@@ -1085,6 +1464,15 @@ export function toDomainRosettaBasicType(node: any): RosettaBasicTypeDomain {
     $type: node.$type,
     name: node.name,
     parameters: (node.parameters ?? []).map((item) => item ? toDomainTypeParameter(item) : undefined),
+    definition: node.definition,
+  };
+}
+
+export function toAstRosettaBasicType(node: any): any {
+  return {
+    $type: 'RosettaBasicType',
+    name: node.name,
+    parameters: (node.parameters ?? []).map((item) => item ? toAstTypeParameter(item) : undefined),
     definition: node.definition,
   };
 }
@@ -1121,6 +1509,15 @@ export function toDomainRosettaBody(node: any): RosettaBodyDomain {
   };
 }
 
+export function toAstRosettaBody(node: any): any {
+  return {
+    $type: 'RosettaBody',
+    bodyType: node.bodyType,
+    name: node.name,
+    definition: node.definition,
+  };
+}
+
 export function setRosettaBodyBodyType(node: any, value: string): void {
   node.bodyType = value;
 }
@@ -1145,6 +1542,13 @@ export function toDomainRosettaBooleanLiteral(node: any): RosettaBooleanLiteralD
   };
 }
 
+export function toAstRosettaBooleanLiteral(node: any): any {
+  return {
+    $type: 'RosettaBooleanLiteral',
+    value: node.value,
+  };
+}
+
 export function setRosettaBooleanLiteralValue(node: any, value: boolean): void {
   node.value = value;
 }
@@ -1165,6 +1569,15 @@ export function toDomainRosettaCardinality(node: any): RosettaCardinalityDomain 
   };
 }
 
+export function toAstRosettaCardinality(node: any): any {
+  return {
+    $type: 'RosettaCardinality',
+    inf: node.inf,
+    sup: node.sup,
+    unbounded: node.unbounded,
+  };
+}
+
 export function setRosettaCardinalityInf(node: any, value: number): void {
   node.inf = value;
 }
@@ -1179,7 +1592,7 @@ export function setRosettaCardinalityUnbounded(node: any, value: boolean): void 
 
 export interface RosettaClassSynonymDomain {
   $type: 'RosettaClassSynonym';
-  sources: Ref<'RosettaSynonymSource'>[];
+  sources: DomainRef[];
   value?: RosettaSynonymValueBaseDomain;
   metaValue?: RosettaSynonymValueBaseDomain;
 }
@@ -1187,13 +1600,22 @@ export interface RosettaClassSynonymDomain {
 export function toDomainRosettaClassSynonym(node: any): RosettaClassSynonymDomain {
   return {
     $type: node.$type,
-    sources: (node.sources ?? []).map((item) => item?.$refText),
+    sources: (node.sources ?? []).map((item) => item),
     value: node.value ? toDomainRosettaSynonymValueBase(node.value) : undefined,
     metaValue: node.metaValue ? toDomainRosettaSynonymValueBase(node.metaValue) : undefined,
   };
 }
 
-export function addRosettaClassSynonymSources(node: any, item: Ref<'RosettaSynonymSource'>): void {
+export function toAstRosettaClassSynonym(node: any): any {
+  return {
+    $type: 'RosettaClassSynonym',
+    sources: (node.sources ?? []).map((item) => item),
+    value: node.value ? toAstRosettaSynonymValueBase(node.value) : undefined,
+    metaValue: node.metaValue ? toAstRosettaSynonymValueBase(node.metaValue) : undefined,
+  };
+}
+
+export function addRosettaClassSynonymSources(node: any, item: string): void {
   (node.sources ??= []).push({ $refText: item });
 }
 
@@ -1219,6 +1641,16 @@ export function toDomainRosettaConditionalExpression(node: any): RosettaConditio
   };
 }
 
+export function toAstRosettaConditionalExpression(node: any): any {
+  return {
+    $type: 'RosettaConditionalExpression',
+    if: node.if ? toAstRosettaExpression(node.if) : undefined,
+    ifthen: node.ifthen ? toAstRosettaExpression(node.ifthen) : undefined,
+    full: node.full,
+    elsethen: node.elsethen ? toAstRosettaExpression(node.elsethen) : undefined,
+  };
+}
+
 export function setRosettaConditionalExpressionFull(node: any, value: boolean): void {
   node.full = value;
 }
@@ -1234,10 +1666,20 @@ export interface RosettaConstructorExpressionDomain {
 export function toDomainRosettaConstructorExpression(node: any): RosettaConstructorExpressionDomain {
   return {
     $type: node.$type,
-    typeRef: node.typeRef == null ? undefined : (typeof node.typeRef === 'object' && '$type' in node.typeRef) ? toDomain(node.typeRef) : (typeof node.typeRef === 'object' && '$refText' in node.typeRef) ? node.typeRef.$refText : node.typeRef,
+    typeRef: node.typeRef,
     constructorTypeArgs: (node.constructorTypeArgs ?? []).map((item) => item ? toDomainTypeCallArgument(item) : undefined),
     implicitEmpty: node.implicitEmpty,
     values: (node.values ?? []).map((item) => item ? toDomainConstructorKeyValuePair(item) : undefined),
+  };
+}
+
+export function toAstRosettaConstructorExpression(node: any): any {
+  return {
+    $type: 'RosettaConstructorExpression',
+    typeRef: node.typeRef,
+    constructorTypeArgs: (node.constructorTypeArgs ?? []).map((item) => item ? toAstTypeCallArgument(item) : undefined),
+    implicitEmpty: node.implicitEmpty,
+    values: (node.values ?? []).map((item) => item ? toAstConstructorKeyValuePair(item) : undefined),
   };
 }
 
@@ -1277,11 +1719,20 @@ export function toDomainRosettaContainsExpression(node: any): RosettaContainsExp
   };
 }
 
+export function toAstRosettaContainsExpression(node: any): any {
+  return {
+    $type: 'RosettaContainsExpression',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
+  };
+}
+
 export interface RosettaCorpusDomain {
   $type: 'RosettaCorpus';
   corpusType: string;
   displayName?: string;
-  body?: Ref<'RosettaBody'>;
+  body?: DomainRef;
   name: string;
   definition?: string;
 }
@@ -1291,7 +1742,18 @@ export function toDomainRosettaCorpus(node: any): RosettaCorpusDomain {
     $type: node.$type,
     corpusType: node.corpusType,
     displayName: node.displayName,
-    body: node.body?.$refText,
+    body: node.body,
+    name: node.name,
+    definition: node.definition,
+  };
+}
+
+export function toAstRosettaCorpus(node: any): any {
+  return {
+    $type: 'RosettaCorpus',
+    corpusType: node.corpusType,
+    displayName: node.displayName,
+    body: node.body,
     name: node.name,
     definition: node.definition,
   };
@@ -1305,7 +1767,7 @@ export function setRosettaCorpusDisplayName(node: any, value: string): void {
   node.displayName = value;
 }
 
-export function setRosettaCorpusBody(node: any, value: Ref<'RosettaBody'>): void {
+export function setRosettaCorpusBody(node: any, value: string): void {
   if (node.body) node.body.$refText = value;
   else node.body = { $refText: value };
 }
@@ -1332,19 +1794,34 @@ export function toDomainRosettaCountOperation(node: any): RosettaCountOperationD
   };
 }
 
+export function toAstRosettaCountOperation(node: any): any {
+  return {
+    $type: 'RosettaCountOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface RosettaDataReferenceDomain {
   $type: 'RosettaDataReference';
-  data: Ref<'DataOrChoice'>;
+  data: DomainRef;
 }
 
 export function toDomainRosettaDataReference(node: any): RosettaDataReferenceDomain {
   return {
     $type: node.$type,
-    data: node.data?.$refText,
+    data: node.data,
   };
 }
 
-export function setRosettaDataReferenceData(node: any, value: Ref<'DataOrChoice'>): void {
+export function toAstRosettaDataReference(node: any): any {
+  return {
+    $type: 'RosettaDataReference',
+    data: node.data,
+  };
+}
+
+export function setRosettaDataReferenceData(node: any, value: string): void {
   if (node.data) node.data.$refText = value;
   else node.data = { $refText: value };
 }
@@ -1352,18 +1829,26 @@ export function setRosettaDataReferenceData(node: any, value: Ref<'DataOrChoice'
 export interface RosettaDeepFeatureCallDomain {
   $type: 'RosettaDeepFeatureCall';
   receiver: RosettaExpressionDomain;
-  feature?: Ref<'Attribute'>;
+  feature?: DomainRef;
 }
 
 export function toDomainRosettaDeepFeatureCall(node: any): RosettaDeepFeatureCallDomain {
   return {
     $type: node.$type,
     receiver: node.receiver ? toDomainRosettaExpression(node.receiver) : undefined,
-    feature: node.feature?.$refText,
+    feature: node.feature,
   };
 }
 
-export function setRosettaDeepFeatureCallFeature(node: any, value: Ref<'Attribute'>): void {
+export function toAstRosettaDeepFeatureCall(node: any): any {
+  return {
+    $type: 'RosettaDeepFeatureCall',
+    receiver: node.receiver ? toAstRosettaExpression(node.receiver) : undefined,
+    feature: node.feature,
+  };
+}
+
+export function setRosettaDeepFeatureCallFeature(node: any, value: string): void {
   if (node.feature) node.feature.$refText = value;
   else node.feature = { $refText: value };
 }
@@ -1384,6 +1869,15 @@ export function toDomainRosettaDisjointExpression(node: any): RosettaDisjointExp
   };
 }
 
+export function toAstRosettaDisjointExpression(node: any): any {
+  return {
+    $type: 'RosettaDisjointExpression',
+    left: node.left ? toAstRosettaExpression(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaExpression(node.right) : undefined,
+  };
+}
+
 export interface RosettaDocReferenceDomain {
   $type: 'RosettaDocReference';
   name: ("regulatoryReference" | "docReference");
@@ -1398,10 +1892,23 @@ export interface RosettaDocReferenceDomain {
 export function toDomainRosettaDocReference(node: any): RosettaDocReferenceDomain {
   return {
     $type: node.$type,
-    name: node.name == null ? undefined : (typeof node.name === 'object' && '$type' in node.name) ? toDomain(node.name) : (typeof node.name === 'object' && '$refText' in node.name) ? node.name.$refText : node.name,
+    name: node.name,
     path: node.path ? toDomainAnnotationPathExpression(node.path) : undefined,
     docReference: node.docReference ? toDomainRegulatoryDocumentReference(node.docReference) : undefined,
     rationales: (node.rationales ?? []).map((item) => item ? toDomainDocumentRationale(item) : undefined),
+    structuredProvision: node.structuredProvision,
+    provision: node.provision,
+    reportedField: node.reportedField,
+  };
+}
+
+export function toAstRosettaDocReference(node: any): any {
+  return {
+    $type: 'RosettaDocReference',
+    name: node.name,
+    path: node.path ? toAstAnnotationPathExpression(node.path) : undefined,
+    docReference: node.docReference ? toAstRegulatoryDocumentReference(node.docReference) : undefined,
+    rationales: (node.rationales ?? []).map((item) => item ? toAstDocumentRationale(item) : undefined),
     structuredProvision: node.structuredProvision,
     provision: node.provision,
     reportedField: node.reportedField,
@@ -1431,13 +1938,13 @@ export function setRosettaDocReferenceReportedField(node: any, value: boolean): 
 export interface RosettaEnumerationDomain {
   $type: 'RosettaEnumeration';
   name: string;
-  parent?: Ref<'RosettaEnumeration'>;
+  parent?: DomainRef;
   definition?: string;
   enumValues?: RosettaEnumValueDomain[];
   references?: RosettaDocReferenceDomain[];
   annotations?: AnnotationRefDomain[];
   synonyms?: RosettaSynonymDomain[];
-  extends?: Ref<'RosettaEnumeration'>;
+  extends?: DomainRef;
   members?: RosettaEnumValueDomain[];
 }
 
@@ -1445,14 +1952,27 @@ export function toDomainRosettaEnumeration(node: any): RosettaEnumerationDomain 
   return {
     $type: node.$type,
     name: node.name,
-    parent: node.parent?.$refText,
+    parent: node.parent,
     definition: node.definition,
     enumValues: (node.enumValues ?? []).map((item) => item ? toDomainRosettaEnumValue(item) : undefined),
     references: (node.references ?? []).map((item) => item ? toDomainRosettaDocReference(item) : undefined),
     annotations: (node.annotations ?? []).map((item) => item ? toDomainAnnotationRef(item) : undefined),
     synonyms: (node.synonyms ?? []).map((item) => item ? toDomainRosettaSynonym(item) : undefined),
-    extends: node.parent?.$refText,
+    extends: node.parent,
     members: (node.enumValues ?? []).map((item) => item ? toDomainRosettaEnumValue(item) : undefined),
+  };
+}
+
+export function toAstRosettaEnumeration(node: any): any {
+  return {
+    $type: 'RosettaEnumeration',
+    name: node.name,
+    parent: node.parent,
+    definition: node.definition,
+    enumValues: (node.enumValues ?? []).map((item) => item ? toAstRosettaEnumValue(item) : undefined),
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    synonyms: (node.synonyms ?? []).map((item) => item ? toAstRosettaSynonym(item) : undefined),
   };
 }
 
@@ -1460,7 +1980,7 @@ export function setRosettaEnumerationName(node: any, value: string): void {
   node.name = value;
 }
 
-export function setRosettaEnumerationParent(node: any, value: Ref<'RosettaEnumeration'>): void {
+export function setRosettaEnumerationParent(node: any, value: string): void {
   if (node.parent) node.parent.$refText = value;
   else node.parent = { $refText: value };
 }
@@ -1503,7 +2023,7 @@ export function removeRosettaEnumerationSynonymsAt(node: any, index: number): vo
 
 export interface RosettaEnumSynonymDomain {
   $type: 'RosettaEnumSynonym';
-  sources?: Ref<'RosettaSynonymSource'>[];
+  sources?: DomainRef[];
   synonymValue: string;
   definition?: string;
   patternMatch?: string;
@@ -1514,7 +2034,7 @@ export interface RosettaEnumSynonymDomain {
 export function toDomainRosettaEnumSynonym(node: any): RosettaEnumSynonymDomain {
   return {
     $type: node.$type,
-    sources: (node.sources ?? []).map((item) => item?.$refText),
+    sources: (node.sources ?? []).map((item) => item),
     synonymValue: node.synonymValue,
     definition: node.definition,
     patternMatch: node.patternMatch,
@@ -1523,7 +2043,19 @@ export function toDomainRosettaEnumSynonym(node: any): RosettaEnumSynonymDomain 
   };
 }
 
-export function addRosettaEnumSynonymSources(node: any, item: Ref<'RosettaSynonymSource'>): void {
+export function toAstRosettaEnumSynonym(node: any): any {
+  return {
+    $type: 'RosettaEnumSynonym',
+    sources: (node.sources ?? []).map((item) => item),
+    synonymValue: node.synonymValue,
+    definition: node.definition,
+    patternMatch: node.patternMatch,
+    patternReplace: node.patternReplace,
+    removeHtml: node.removeHtml,
+  };
+}
+
+export function addRosettaEnumSynonymSources(node: any, item: string): void {
   (node.sources ??= []).push({ $refText: item });
 }
 
@@ -1573,6 +2105,18 @@ export function toDomainRosettaEnumValue(node: any): RosettaEnumValueDomain {
   };
 }
 
+export function toAstRosettaEnumValue(node: any): any {
+  return {
+    $type: 'RosettaEnumValue',
+    name: node.name,
+    display: node.display,
+    definition: node.definition,
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    enumSynonyms: (node.enumSynonyms ?? []).map((item) => item ? toAstRosettaEnumSynonym(item) : undefined),
+  };
+}
+
 export function setRosettaEnumValueName(node: any, value: string): void {
   node.name = value;
 }
@@ -1611,24 +2155,32 @@ export function removeRosettaEnumValueEnumSynonymsAt(node: any, index: number): 
 
 export interface RosettaEnumValueReferenceDomain {
   $type: 'RosettaEnumValueReference';
-  enumeration: Ref<'RosettaEnumeration'>;
-  value: Ref<'RosettaEnumValue'>;
+  enumeration: DomainRef;
+  value: DomainRef;
 }
 
 export function toDomainRosettaEnumValueReference(node: any): RosettaEnumValueReferenceDomain {
   return {
     $type: node.$type,
-    enumeration: node.enumeration?.$refText,
-    value: node.value?.$refText,
+    enumeration: node.enumeration,
+    value: node.value,
   };
 }
 
-export function setRosettaEnumValueReferenceEnumeration(node: any, value: Ref<'RosettaEnumeration'>): void {
+export function toAstRosettaEnumValueReference(node: any): any {
+  return {
+    $type: 'RosettaEnumValueReference',
+    enumeration: node.enumeration,
+    value: node.value,
+  };
+}
+
+export function setRosettaEnumValueReferenceEnumeration(node: any, value: string): void {
   if (node.enumeration) node.enumeration.$refText = value;
   else node.enumeration = { $refText: value };
 }
 
-export function setRosettaEnumValueReferenceValue(node: any, value: Ref<'RosettaEnumValue'>): void {
+export function setRosettaEnumValueReferenceValue(node: any, value: string): void {
   if (node.value) node.value.$refText = value;
   else node.value = { $refText: value };
 }
@@ -1649,13 +2201,22 @@ export function toDomainRosettaExistsExpression(node: any): RosettaExistsExpress
   };
 }
 
+export function toAstRosettaExistsExpression(node: any): any {
+  return {
+    $type: 'RosettaExistsExpression',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    modifier: node.modifier,
+    operator: node.operator,
+  };
+}
+
 export function setRosettaExistsExpressionModifier(node: any, value: string): void {
   node.modifier = value;
 }
 
 export interface RosettaExternalClassDomain {
   $type: 'RosettaExternalClass';
-  data: Ref<'DataOrChoice'>;
+  data: DomainRef;
   externalClassSynonyms?: RosettaExternalClassSynonymDomain[];
   regularAttributes?: RosettaExternalRegularAttributeDomain[];
 }
@@ -1663,13 +2224,22 @@ export interface RosettaExternalClassDomain {
 export function toDomainRosettaExternalClass(node: any): RosettaExternalClassDomain {
   return {
     $type: node.$type,
-    data: node.data?.$refText,
+    data: node.data,
     externalClassSynonyms: (node.externalClassSynonyms ?? []).map((item) => item ? toDomainRosettaExternalClassSynonym(item) : undefined),
     regularAttributes: (node.regularAttributes ?? []).map((item) => item ? toDomainRosettaExternalRegularAttribute(item) : undefined),
   };
 }
 
-export function setRosettaExternalClassData(node: any, value: Ref<'DataOrChoice'>): void {
+export function toAstRosettaExternalClass(node: any): any {
+  return {
+    $type: 'RosettaExternalClass',
+    data: node.data,
+    externalClassSynonyms: (node.externalClassSynonyms ?? []).map((item) => item ? toAstRosettaExternalClassSynonym(item) : undefined),
+    regularAttributes: (node.regularAttributes ?? []).map((item) => item ? toAstRosettaExternalRegularAttribute(item) : undefined),
+  };
+}
+
+export function setRosettaExternalClassData(node: any, value: string): void {
   if (node.data) node.data.$refText = value;
   else node.data = { $refText: value };
 }
@@ -1704,21 +2274,37 @@ export function toDomainRosettaExternalClassSynonym(node: any): RosettaExternalC
   };
 }
 
+export function toAstRosettaExternalClassSynonym(node: any): any {
+  return {
+    $type: 'RosettaExternalClassSynonym',
+    value: node.value ? toAstRosettaSynonymValueBase(node.value) : undefined,
+    metaValue: node.metaValue ? toAstRosettaSynonymValueBase(node.metaValue) : undefined,
+  };
+}
+
 export interface RosettaExternalEnumDomain {
   $type: 'RosettaExternalEnum';
-  enumeration: Ref<'RosettaEnumeration'>;
+  enumeration: DomainRef;
   regularValues?: RosettaExternalEnumValueDomain[];
 }
 
 export function toDomainRosettaExternalEnum(node: any): RosettaExternalEnumDomain {
   return {
     $type: node.$type,
-    enumeration: node.enumeration?.$refText,
+    enumeration: node.enumeration,
     regularValues: (node.regularValues ?? []).map((item) => item ? toDomainRosettaExternalEnumValue(item) : undefined),
   };
 }
 
-export function setRosettaExternalEnumEnumeration(node: any, value: Ref<'RosettaEnumeration'>): void {
+export function toAstRosettaExternalEnum(node: any): any {
+  return {
+    $type: 'RosettaExternalEnum',
+    enumeration: node.enumeration,
+    regularValues: (node.regularValues ?? []).map((item) => item ? toAstRosettaExternalEnumValue(item) : undefined),
+  };
+}
+
+export function setRosettaExternalEnumEnumeration(node: any, value: string): void {
   if (node.enumeration) node.enumeration.$refText = value;
   else node.enumeration = { $refText: value };
 }
@@ -1734,7 +2320,7 @@ export function removeRosettaExternalEnumRegularValuesAt(node: any, index: numbe
 export interface RosettaExternalEnumValueDomain {
   $type: 'RosettaExternalEnumValue';
   operator: string;
-  enumRef: Ref<'RosettaEnumValue'>;
+  enumRef: DomainRef;
   externalEnumSynonyms?: RosettaEnumSynonymDomain[];
 }
 
@@ -1742,8 +2328,17 @@ export function toDomainRosettaExternalEnumValue(node: any): RosettaExternalEnum
   return {
     $type: node.$type,
     operator: node.operator,
-    enumRef: node.enumRef?.$refText,
+    enumRef: node.enumRef,
     externalEnumSynonyms: (node.externalEnumSynonyms ?? []).map((item) => item ? toDomainRosettaEnumSynonym(item) : undefined),
+  };
+}
+
+export function toAstRosettaExternalEnumValue(node: any): any {
+  return {
+    $type: 'RosettaExternalEnumValue',
+    operator: node.operator,
+    enumRef: node.enumRef,
+    externalEnumSynonyms: (node.externalEnumSynonyms ?? []).map((item) => item ? toAstRosettaEnumSynonym(item) : undefined),
   };
 }
 
@@ -1751,7 +2346,7 @@ export function setRosettaExternalEnumValueOperator(node: any, value: string): v
   node.operator = value;
 }
 
-export function setRosettaExternalEnumValueEnumRef(node: any, value: Ref<'RosettaEnumValue'>): void {
+export function setRosettaExternalEnumValueEnumRef(node: any, value: string): void {
   if (node.enumRef) node.enumRef.$refText = value;
   else node.enumRef = { $refText: value };
 }
@@ -1782,6 +2377,16 @@ export function toDomainRosettaExternalFunction(node: any): RosettaExternalFunct
   };
 }
 
+export function toAstRosettaExternalFunction(node: any): any {
+  return {
+    $type: 'RosettaExternalFunction',
+    name: node.name,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+    definition: node.definition,
+    parameters: (node.parameters ?? []).map((item) => item ? toAstRosettaParameter(item) : undefined),
+  };
+}
+
 export function setRosettaExternalFunctionName(node: any, value: string): void {
   node.name = value;
 }
@@ -1801,7 +2406,7 @@ export function removeRosettaExternalFunctionParametersAt(node: any, index: numb
 export interface RosettaExternalRegularAttributeDomain {
   $type: 'RosettaExternalRegularAttribute';
   operator: string;
-  attributeRef: Ref<'RosettaFeature'>;
+  attributeRef: DomainRef;
   externalSynonyms?: RosettaExternalSynonymDomain[];
   externalRuleReferences?: RuleReferenceAnnotationDomain[];
 }
@@ -1810,9 +2415,19 @@ export function toDomainRosettaExternalRegularAttribute(node: any): RosettaExter
   return {
     $type: node.$type,
     operator: node.operator,
-    attributeRef: node.attributeRef?.$refText,
+    attributeRef: node.attributeRef,
     externalSynonyms: (node.externalSynonyms ?? []).map((item) => item ? toDomainRosettaExternalSynonym(item) : undefined),
     externalRuleReferences: (node.externalRuleReferences ?? []).map((item) => item ? toDomainRuleReferenceAnnotation(item) : undefined),
+  };
+}
+
+export function toAstRosettaExternalRegularAttribute(node: any): any {
+  return {
+    $type: 'RosettaExternalRegularAttribute',
+    operator: node.operator,
+    attributeRef: node.attributeRef,
+    externalSynonyms: (node.externalSynonyms ?? []).map((item) => item ? toAstRosettaExternalSynonym(item) : undefined),
+    externalRuleReferences: (node.externalRuleReferences ?? []).map((item) => item ? toAstRuleReferenceAnnotation(item) : undefined),
   };
 }
 
@@ -1820,7 +2435,7 @@ export function setRosettaExternalRegularAttributeOperator(node: any, value: str
   node.operator = value;
 }
 
-export function setRosettaExternalRegularAttributeAttributeRef(node: any, value: Ref<'RosettaFeature'>): void {
+export function setRosettaExternalRegularAttributeAttributeRef(node: any, value: string): void {
   if (node.attributeRef) node.attributeRef.$refText = value;
   else node.attributeRef = { $refText: value };
 }
@@ -1846,7 +2461,7 @@ export interface RosettaExternalRuleSourceDomain {
   name: string;
   externalClasses?: RosettaExternalClassDomain[];
   externalEnums?: RosettaExternalEnumDomain[];
-  superSources?: Ref<'RosettaExternalRuleSource'>[];
+  superSources?: DomainRef[];
 }
 
 export function toDomainRosettaExternalRuleSource(node: any): RosettaExternalRuleSourceDomain {
@@ -1855,7 +2470,17 @@ export function toDomainRosettaExternalRuleSource(node: any): RosettaExternalRul
     name: node.name,
     externalClasses: (node.externalClasses ?? []).map((item) => item ? toDomainRosettaExternalClass(item) : undefined),
     externalEnums: (node.externalEnums ?? []).map((item) => item ? toDomainRosettaExternalEnum(item) : undefined),
-    superSources: (node.superSources ?? []).map((item) => item?.$refText),
+    superSources: (node.superSources ?? []).map((item) => item),
+  };
+}
+
+export function toAstRosettaExternalRuleSource(node: any): any {
+  return {
+    $type: 'RosettaExternalRuleSource',
+    name: node.name,
+    externalClasses: (node.externalClasses ?? []).map((item) => item ? toAstRosettaExternalClass(item) : undefined),
+    externalEnums: (node.externalEnums ?? []).map((item) => item ? toAstRosettaExternalEnum(item) : undefined),
+    superSources: (node.superSources ?? []).map((item) => item),
   };
 }
 
@@ -1879,7 +2504,7 @@ export function removeRosettaExternalRuleSourceExternalEnumsAt(node: any, index:
   node.externalEnums?.splice(index, 1);
 }
 
-export function addRosettaExternalRuleSourceSuperSources(node: any, item: Ref<'RosettaExternalRuleSource'>): void {
+export function addRosettaExternalRuleSourceSuperSources(node: any, item: string): void {
   (node.superSources ??= []).push({ $refText: item });
 }
 
@@ -1899,21 +2524,36 @@ export function toDomainRosettaExternalSynonym(node: any): RosettaExternalSynony
   };
 }
 
+export function toAstRosettaExternalSynonym(node: any): any {
+  return {
+    $type: 'RosettaExternalSynonym',
+    body: node.body ? toAstRosettaSynonymBody(node.body) : undefined,
+  };
+}
+
 export interface RosettaFeatureCallDomain {
   $type: 'RosettaFeatureCall';
   receiver: RosettaExpressionDomain;
-  feature?: Ref<'RosettaFeature'>;
+  feature?: DomainRef;
 }
 
 export function toDomainRosettaFeatureCall(node: any): RosettaFeatureCallDomain {
   return {
     $type: node.$type,
     receiver: node.receiver ? toDomainRosettaExpression(node.receiver) : undefined,
-    feature: node.feature?.$refText,
+    feature: node.feature,
   };
 }
 
-export function setRosettaFeatureCallFeature(node: any, value: Ref<'RosettaFeature'>): void {
+export function toAstRosettaFeatureCall(node: any): any {
+  return {
+    $type: 'RosettaFeatureCall',
+    receiver: node.receiver ? toAstRosettaExpression(node.receiver) : undefined,
+    feature: node.feature,
+  };
+}
+
+export function setRosettaFeatureCallFeature(node: any, value: string): void {
   if (node.feature) node.feature.$refText = value;
   else node.feature = { $refText: value };
 }
@@ -1921,9 +2561,9 @@ export function setRosettaFeatureCallFeature(node: any, value: Ref<'RosettaFeatu
 export interface RosettaFunctionDomain {
   $type: 'RosettaFunction';
   name: string;
-  dispatchAttribute?: Ref<'Attribute'>;
+  dispatchAttribute?: DomainRef;
   dispatchValue?: RosettaEnumValueReferenceDomain;
-  superFunction?: Ref<'RosettaFunction'>;
+  superFunction?: DomainRef;
   definition?: string;
   references?: RosettaDocReferenceDomain[];
   annotations?: AnnotationRefDomain[];
@@ -1933,7 +2573,7 @@ export interface RosettaFunctionDomain {
   conditions?: ConditionDomain[];
   operations?: OperationDomain[];
   postConditions?: ConditionDomain[];
-  extends?: Ref<'RosettaFunction'>;
+  extends?: DomainRef;
   members?: AttributeDomain[];
 }
 
@@ -1941,9 +2581,9 @@ export function toDomainRosettaFunction(node: any): RosettaFunctionDomain {
   return {
     $type: node.$type,
     name: node.name,
-    dispatchAttribute: node.dispatchAttribute?.$refText,
+    dispatchAttribute: node.dispatchAttribute,
     dispatchValue: node.dispatchValue ? toDomainRosettaEnumValueReference(node.dispatchValue) : undefined,
-    superFunction: node.superFunction?.$refText,
+    superFunction: node.superFunction,
     definition: node.definition,
     references: (node.references ?? []).map((item) => item ? toDomainRosettaDocReference(item) : undefined),
     annotations: (node.annotations ?? []).map((item) => item ? toDomainAnnotationRef(item) : undefined),
@@ -1953,8 +2593,27 @@ export function toDomainRosettaFunction(node: any): RosettaFunctionDomain {
     conditions: (node.conditions ?? []).map((item) => item ? toDomainCondition(item) : undefined),
     operations: (node.operations ?? []).map((item) => item ? toDomainOperation(item) : undefined),
     postConditions: (node.postConditions ?? []).map((item) => item ? toDomainCondition(item) : undefined),
-    extends: node.superFunction?.$refText,
+    extends: node.superFunction,
     members: (node.inputs ?? []).map((item) => item ? toDomainAttribute(item) : undefined),
+  };
+}
+
+export function toAstRosettaFunction(node: any): any {
+  return {
+    $type: 'RosettaFunction',
+    name: node.name,
+    dispatchAttribute: node.dispatchAttribute,
+    dispatchValue: node.dispatchValue ? toAstRosettaEnumValueReference(node.dispatchValue) : undefined,
+    superFunction: node.superFunction,
+    definition: node.definition,
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    annotations: (node.annotations ?? []).map((item) => item ? toAstAnnotationRef(item) : undefined),
+    inputs: (node.inputs ?? []).map((item) => item ? toAstAttribute(item) : undefined),
+    output: node.output ? toAstAttribute(node.output) : undefined,
+    shortcuts: (node.shortcuts ?? []).map((item) => item ? toAstShortcutDeclaration(item) : undefined),
+    conditions: (node.conditions ?? []).map((item) => item ? toAstCondition(item) : undefined),
+    operations: (node.operations ?? []).map((item) => item ? toAstOperation(item) : undefined),
+    postConditions: (node.postConditions ?? []).map((item) => item ? toAstCondition(item) : undefined),
   };
 }
 
@@ -1962,12 +2621,12 @@ export function setRosettaFunctionName(node: any, value: string): void {
   node.name = value;
 }
 
-export function setRosettaFunctionDispatchAttribute(node: any, value: Ref<'Attribute'>): void {
+export function setRosettaFunctionDispatchAttribute(node: any, value: string): void {
   if (node.dispatchAttribute) node.dispatchAttribute.$refText = value;
   else node.dispatchAttribute = { $refText: value };
 }
 
-export function setRosettaFunctionSuperFunction(node: any, value: Ref<'RosettaFunction'>): void {
+export function setRosettaFunctionSuperFunction(node: any, value: string): void {
   if (node.superFunction) node.superFunction.$refText = value;
   else node.superFunction = { $refText: value };
 }
@@ -2044,6 +2703,13 @@ export function toDomainRosettaImplicitVariable(node: any): RosettaImplicitVaria
   };
 }
 
+export function toAstRosettaImplicitVariable(node: any): any {
+  return {
+    $type: 'RosettaImplicitVariable',
+    name: node.name,
+  };
+}
+
 export interface RosettaIntLiteralDomain {
   $type: 'RosettaIntLiteral';
   value: bigint;
@@ -2052,6 +2718,13 @@ export interface RosettaIntLiteralDomain {
 export function toDomainRosettaIntLiteral(node: any): RosettaIntLiteralDomain {
   return {
     $type: node.$type,
+    value: node.value,
+  };
+}
+
+export function toAstRosettaIntLiteral(node: any): any {
+  return {
+    $type: 'RosettaIntLiteral',
     value: node.value,
   };
 }
@@ -2072,6 +2745,13 @@ export function toDomainRosettaMapPath(node: any): RosettaMapPathDomain {
   };
 }
 
+export function toAstRosettaMapPath(node: any): any {
+  return {
+    $type: 'RosettaMapPath',
+    path: node.path ? toAstRosettaMapPathValue(node.path) : undefined,
+  };
+}
+
 export interface RosettaMapPathValueDomain {
   $type: 'RosettaMapPathValue';
   path: string;
@@ -2080,6 +2760,13 @@ export interface RosettaMapPathValueDomain {
 export function toDomainRosettaMapPathValue(node: any): RosettaMapPathValueDomain {
   return {
     $type: node.$type,
+    path: node.path,
+  };
+}
+
+export function toAstRosettaMapPathValue(node: any): any {
+  return {
+    $type: 'RosettaMapPathValue',
     path: node.path,
   };
 }
@@ -2097,6 +2784,13 @@ export function toDomainRosettaMapping(node: any): RosettaMappingDomain {
   return {
     $type: node.$type,
     instances: (node.instances ?? []).map((item) => item ? toDomainRosettaMappingInstance(item) : undefined),
+  };
+}
+
+export function toAstRosettaMapping(node: any): any {
+  return {
+    $type: 'RosettaMapping',
+    instances: (node.instances ?? []).map((item) => item ? toAstRosettaMappingInstance(item) : undefined),
   };
 }
 
@@ -2124,6 +2818,15 @@ export function toDomainRosettaMappingInstance(node: any): RosettaMappingInstanc
   };
 }
 
+export function toAstRosettaMappingInstance(node: any): any {
+  return {
+    $type: 'RosettaMappingInstance',
+    when: node.when ? toAstRosettaMappingPathTests(node.when) : undefined,
+    default: node.default,
+    set: node.set ? toAstRosettaMapTestExpression(node.set) : undefined,
+  };
+}
+
 export function setRosettaMappingInstanceDefault(node: any, value: boolean): void {
   node.default = value;
 }
@@ -2137,6 +2840,13 @@ export function toDomainRosettaMappingPathTests(node: any): RosettaMappingPathTe
   return {
     $type: node.$type,
     tests: (node.tests ?? []).map((item) => item ? toDomainRosettaMapTest(item) : undefined),
+  };
+}
+
+export function toAstRosettaMappingPathTests(node: any): any {
+  return {
+    $type: 'RosettaMappingPathTests',
+    tests: (node.tests ?? []).map((item) => item ? toAstRosettaMapTest(item) : undefined),
   };
 }
 
@@ -2160,6 +2870,13 @@ export function toDomainRosettaMapRosettaPath(node: any): RosettaMapRosettaPathD
   };
 }
 
+export function toAstRosettaMapRosettaPath(node: any): any {
+  return {
+    $type: 'RosettaMapRosettaPath',
+    path: node.path ? toAstRosettaAttributeReference(node.path) : undefined,
+  };
+}
+
 export interface RosettaMapTestAbsentExpressionDomain {
   $type: 'RosettaMapTestAbsentExpression';
   argument: RosettaMapPathValueDomain;
@@ -2169,6 +2886,13 @@ export function toDomainRosettaMapTestAbsentExpression(node: any): RosettaMapTes
   return {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaMapPathValue(node.argument) : undefined,
+  };
+}
+
+export function toAstRosettaMapTestAbsentExpression(node: any): any {
+  return {
+    $type: 'RosettaMapTestAbsentExpression',
+    argument: node.argument ? toAstRosettaMapPathValue(node.argument) : undefined,
   };
 }
 
@@ -2183,8 +2907,17 @@ export function toDomainRosettaMapTestEqualityOperation(node: any): RosettaMapTe
   return {
     $type: node.$type,
     left: node.left ? toDomainRosettaMapPathValue(node.left) : undefined,
-    operator: node.operator == null ? undefined : (typeof node.operator === 'object' && '$type' in node.operator) ? toDomain(node.operator) : (typeof node.operator === 'object' && '$refText' in node.operator) ? node.operator.$refText : node.operator,
+    operator: node.operator,
     right: node.right ? toDomainRosettaMapTestExpression(node.right) : undefined,
+  };
+}
+
+export function toAstRosettaMapTestEqualityOperation(node: any): any {
+  return {
+    $type: 'RosettaMapTestEqualityOperation',
+    left: node.left ? toAstRosettaMapPathValue(node.left) : undefined,
+    operator: node.operator,
+    right: node.right ? toAstRosettaMapTestExpression(node.right) : undefined,
   };
 }
 
@@ -2200,21 +2933,36 @@ export function toDomainRosettaMapTestExistsExpression(node: any): RosettaMapTes
   };
 }
 
+export function toAstRosettaMapTestExistsExpression(node: any): any {
+  return {
+    $type: 'RosettaMapTestExistsExpression',
+    argument: node.argument ? toAstRosettaMapPathValue(node.argument) : undefined,
+  };
+}
+
 export interface RosettaMapTestFuncDomain {
   $type: 'RosettaMapTestFunc';
-  func: Ref<'RosettaCallableWithArgs'>;
+  func: DomainRef;
   predicatePath?: RosettaMapPathValueDomain;
 }
 
 export function toDomainRosettaMapTestFunc(node: any): RosettaMapTestFuncDomain {
   return {
     $type: node.$type,
-    func: node.func?.$refText,
+    func: node.func,
     predicatePath: node.predicatePath ? toDomainRosettaMapPathValue(node.predicatePath) : undefined,
   };
 }
 
-export function setRosettaMapTestFuncFunc(node: any, value: Ref<'RosettaCallableWithArgs'>): void {
+export function toAstRosettaMapTestFunc(node: any): any {
+  return {
+    $type: 'RosettaMapTestFunc',
+    func: node.func,
+    predicatePath: node.predicatePath ? toAstRosettaMapPathValue(node.predicatePath) : undefined,
+  };
+}
+
+export function setRosettaMapTestFuncFunc(node: any, value: string): void {
   if (node.func) node.func.$refText = value;
   else node.func = { $refText: value };
 }
@@ -2228,6 +2976,14 @@ export interface RosettaMergeSynonymValueDomain {
 export function toDomainRosettaMergeSynonymValue(node: any): RosettaMergeSynonymValueDomain {
   return {
     $type: node.$type,
+    name: node.name,
+    excludePath: node.excludePath,
+  };
+}
+
+export function toAstRosettaMergeSynonymValue(node: any): any {
+  return {
+    $type: 'RosettaMergeSynonymValue',
     name: node.name,
     excludePath: node.excludePath,
   };
@@ -2255,6 +3011,14 @@ export function toDomainRosettaMetaType(node: any): RosettaMetaTypeDomain {
   };
 }
 
+export function toAstRosettaMetaType(node: any): any {
+  return {
+    $type: 'RosettaMetaType',
+    name: node.name,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+  };
+}
+
 export function setRosettaMetaTypeName(node: any, value: string): void {
   node.name = value;
 }
@@ -2275,13 +3039,27 @@ export function toDomainRosettaModel(node: any): RosettaModelDomain {
   return {
     $type: node.$type,
     overridden: node.overridden,
-    name: node.name == null ? undefined : (typeof node.name === 'object' && '$type' in node.name) ? toDomain(node.name) : (typeof node.name === 'object' && '$refText' in node.name) ? node.name.$refText : node.name,
+    name: node.name,
     definition: node.definition,
     scope: node.scope ? toDomainRosettaScope(node.scope) : undefined,
     version: node.version,
     imports: (node.imports ?? []).map((item) => item ? toDomainImport(item) : undefined),
     configurations: (node.configurations ?? []).map((item) => item ? toDomainRosettaQualifiableConfiguration(item) : undefined),
     elements: (node.elements ?? []).map((item) => item ? toDomainRosettaRootElement(item) : undefined),
+  };
+}
+
+export function toAstRosettaModel(node: any): any {
+  return {
+    $type: 'RosettaModel',
+    overridden: node.overridden,
+    name: node.name,
+    definition: node.definition,
+    scope: node.scope ? toAstRosettaScope(node.scope) : undefined,
+    version: node.version,
+    imports: (node.imports ?? []).map((item) => item ? toAstImport(item) : undefined),
+    configurations: (node.configurations ?? []).map((item) => item ? toAstRosettaQualifiableConfiguration(item) : undefined),
+    elements: (node.elements ?? []).map((item) => item ? toAstRosettaRootElement(item) : undefined),
   };
 }
 
@@ -2333,6 +3111,13 @@ export function toDomainRosettaNumberLiteral(node: any): RosettaNumberLiteralDom
   };
 }
 
+export function toAstRosettaNumberLiteral(node: any): any {
+  return {
+    $type: 'RosettaNumberLiteral',
+    value: node.value,
+  };
+}
+
 export function setRosettaNumberLiteralValue(node: any, value: string): void {
   node.value = value;
 }
@@ -2351,6 +3136,14 @@ export function toDomainRosettaOnlyElement(node: any): RosettaOnlyElementDomain 
   };
 }
 
+export function toAstRosettaOnlyElement(node: any): any {
+  return {
+    $type: 'RosettaOnlyElement',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface RosettaOnlyExistsExpressionDomain {
   $type: 'RosettaOnlyExistsExpression';
   argument?: RosettaExpressionDomain;
@@ -2364,6 +3157,15 @@ export function toDomainRosettaOnlyExistsExpression(node: any): RosettaOnlyExist
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
     operator: node.operator,
     args: (node.args ?? []).map((item) => item ? toDomainRosettaExpression(item) : undefined),
+  };
+}
+
+export function toAstRosettaOnlyExistsExpression(node: any): any {
+  return {
+    $type: 'RosettaOnlyExistsExpression',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    args: (node.args ?? []).map((item) => item ? toAstRosettaExpression(item) : undefined),
   };
 }
 
@@ -2391,6 +3193,15 @@ export function toDomainRosettaParameter(node: any): RosettaParameterDomain {
   };
 }
 
+export function toAstRosettaParameter(node: any): any {
+  return {
+    $type: 'RosettaParameter',
+    name: node.name,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+    isArray: node.isArray,
+  };
+}
+
 export function setRosettaParameterName(node: any, value: string): void {
   node.name = value;
 }
@@ -2402,14 +3213,22 @@ export function setRosettaParameterIsArray(node: any, value: boolean): void {
 export interface RosettaQualifiableConfigurationDomain {
   $type: 'RosettaQualifiableConfiguration';
   qType: string;
-  rosettaClass: Ref<'Data'>;
+  rosettaClass: DomainRef;
 }
 
 export function toDomainRosettaQualifiableConfiguration(node: any): RosettaQualifiableConfigurationDomain {
   return {
     $type: node.$type,
     qType: node.qType,
-    rosettaClass: node.rosettaClass?.$refText,
+    rosettaClass: node.rosettaClass,
+  };
+}
+
+export function toAstRosettaQualifiableConfiguration(node: any): any {
+  return {
+    $type: 'RosettaQualifiableConfiguration',
+    qType: node.qType,
+    rosettaClass: node.rosettaClass,
   };
 }
 
@@ -2417,7 +3236,7 @@ export function setRosettaQualifiableConfigurationQType(node: any, value: string
   node.qType = value;
 }
 
-export function setRosettaQualifiableConfigurationRosettaClass(node: any, value: Ref<'Data'>): void {
+export function setRosettaQualifiableConfigurationRosettaClass(node: any, value: string): void {
   if (node.rosettaClass) node.rosettaClass.$refText = value;
   else node.rosettaClass = { $refText: value };
 }
@@ -2433,6 +3252,14 @@ export function toDomainRosettaRecordFeature(node: any): RosettaRecordFeatureDom
     $type: node.$type,
     name: node.name,
     typeCall: node.typeCall ? toDomainTypeCall(node.typeCall) : undefined,
+  };
+}
+
+export function toAstRosettaRecordFeature(node: any): any {
+  return {
+    $type: 'RosettaRecordFeature',
+    name: node.name,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
   };
 }
 
@@ -2458,6 +3285,15 @@ export function toDomainRosettaRecordType(node: any): RosettaRecordTypeDomain {
   };
 }
 
+export function toAstRosettaRecordType(node: any): any {
+  return {
+    $type: 'RosettaRecordType',
+    name: node.name,
+    definition: node.definition,
+    features: (node.features ?? []).map((item) => item ? toAstRosettaRecordFeature(item) : undefined),
+  };
+}
+
 export function setRosettaRecordTypeName(node: any, value: string): void {
   node.name = value;
 }
@@ -2478,10 +3314,10 @@ export interface RosettaReportDomain {
   $type: 'RosettaReport';
   regulatoryBody: RegulatoryDocumentReferenceDomain;
   inputType: TypeCallDomain;
-  eligibilityRules: Ref<'RosettaRule'>[];
-  reportingStandard?: Ref<'RosettaCorpus'>;
-  reportType: Ref<'Data'>;
-  ruleSource?: Ref<'RosettaExternalRuleSource'>;
+  eligibilityRules: DomainRef[];
+  reportingStandard?: DomainRef;
+  reportType: DomainRef;
+  ruleSource?: DomainRef;
 }
 
 export function toDomainRosettaReport(node: any): RosettaReportDomain {
@@ -2489,14 +3325,26 @@ export function toDomainRosettaReport(node: any): RosettaReportDomain {
     $type: node.$type,
     regulatoryBody: node.regulatoryBody ? toDomainRegulatoryDocumentReference(node.regulatoryBody) : undefined,
     inputType: node.inputType ? toDomainTypeCall(node.inputType) : undefined,
-    eligibilityRules: (node.eligibilityRules ?? []).map((item) => item?.$refText),
-    reportingStandard: node.reportingStandard?.$refText,
-    reportType: node.reportType?.$refText,
-    ruleSource: node.ruleSource?.$refText,
+    eligibilityRules: (node.eligibilityRules ?? []).map((item) => item),
+    reportingStandard: node.reportingStandard,
+    reportType: node.reportType,
+    ruleSource: node.ruleSource,
   };
 }
 
-export function addRosettaReportEligibilityRules(node: any, item: Ref<'RosettaRule'>): void {
+export function toAstRosettaReport(node: any): any {
+  return {
+    $type: 'RosettaReport',
+    regulatoryBody: node.regulatoryBody ? toAstRegulatoryDocumentReference(node.regulatoryBody) : undefined,
+    inputType: node.inputType ? toAstTypeCall(node.inputType) : undefined,
+    eligibilityRules: (node.eligibilityRules ?? []).map((item) => item),
+    reportingStandard: node.reportingStandard,
+    reportType: node.reportType,
+    ruleSource: node.ruleSource,
+  };
+}
+
+export function addRosettaReportEligibilityRules(node: any, item: string): void {
   (node.eligibilityRules ??= []).push({ $refText: item });
 }
 
@@ -2504,17 +3352,17 @@ export function removeRosettaReportEligibilityRulesAt(node: any, index: number):
   node.eligibilityRules?.splice(index, 1);
 }
 
-export function setRosettaReportReportingStandard(node: any, value: Ref<'RosettaCorpus'>): void {
+export function setRosettaReportReportingStandard(node: any, value: string): void {
   if (node.reportingStandard) node.reportingStandard.$refText = value;
   else node.reportingStandard = { $refText: value };
 }
 
-export function setRosettaReportReportType(node: any, value: Ref<'Data'>): void {
+export function setRosettaReportReportType(node: any, value: string): void {
   if (node.reportType) node.reportType.$refText = value;
   else node.reportType = { $refText: value };
 }
 
-export function setRosettaReportRuleSource(node: any, value: Ref<'RosettaExternalRuleSource'>): void {
+export function setRosettaReportRuleSource(node: any, value: string): void {
   if (node.ruleSource) node.ruleSource.$refText = value;
   else node.ruleSource = { $refText: value };
 }
@@ -2539,6 +3387,19 @@ export function toDomainRosettaRule(node: any): RosettaRuleDomain {
     definition: node.definition,
     references: (node.references ?? []).map((item) => item ? toDomainRosettaDocReference(item) : undefined),
     expression: node.expression ? toDomainRosettaExpression(node.expression) : undefined,
+    identifier: node.identifier,
+  };
+}
+
+export function toAstRosettaRule(node: any): any {
+  return {
+    $type: 'RosettaRule',
+    name: node.name,
+    eligibility: node.eligibility,
+    input: node.input ? toAstTypeCall(node.input) : undefined,
+    definition: node.definition,
+    references: (node.references ?? []).map((item) => item ? toAstRosettaDocReference(item) : undefined),
+    expression: node.expression ? toAstRosettaExpression(node.expression) : undefined,
     identifier: node.identifier,
   };
 }
@@ -2581,6 +3442,14 @@ export function toDomainRosettaScope(node: any): RosettaScopeDomain {
   };
 }
 
+export function toAstRosettaScope(node: any): any {
+  return {
+    $type: 'RosettaScope',
+    name: node.name,
+    definition: node.definition,
+  };
+}
+
 export function setRosettaScopeName(node: any, value: string): void {
   node.name = value;
 }
@@ -2597,25 +3466,40 @@ export interface RosettaSegmentDomain {
 export function toDomainRosettaSegment(node: any): RosettaSegmentDomain {
   return {
     $type: node.$type,
-    name: node.name == null ? undefined : (typeof node.name === 'object' && '$type' in node.name) ? toDomain(node.name) : (typeof node.name === 'object' && '$refText' in node.name) ? node.name.$refText : node.name,
+    name: node.name,
+  };
+}
+
+export function toAstRosettaSegment(node: any): any {
+  return {
+    $type: 'RosettaSegment',
+    name: node.name,
   };
 }
 
 export interface RosettaSegmentRefDomain {
   $type: 'RosettaSegmentRef';
-  segment: Ref<'RosettaSegment'>;
+  segment: DomainRef;
   segmentRef: string;
 }
 
 export function toDomainRosettaSegmentRef(node: any): RosettaSegmentRefDomain {
   return {
     $type: node.$type,
-    segment: node.segment?.$refText,
+    segment: node.segment,
     segmentRef: node.segmentRef,
   };
 }
 
-export function setRosettaSegmentRefSegment(node: any, value: Ref<'RosettaSegment'>): void {
+export function toAstRosettaSegmentRef(node: any): any {
+  return {
+    $type: 'RosettaSegmentRef',
+    segment: node.segment,
+    segmentRef: node.segmentRef,
+  };
+}
+
+export function setRosettaSegmentRefSegment(node: any, value: string): void {
   if (node.segment) node.segment.$refText = value;
   else node.segment = { $refText: value };
 }
@@ -2632,6 +3516,13 @@ export interface RosettaStringLiteralDomain {
 export function toDomainRosettaStringLiteral(node: any): RosettaStringLiteralDomain {
   return {
     $type: node.$type,
+    value: node.value,
+  };
+}
+
+export function toAstRosettaStringLiteral(node: any): any {
+  return {
+    $type: 'RosettaStringLiteral',
     value: node.value,
   };
 }
@@ -2656,6 +3547,15 @@ export function toDomainRosettaSuperCall(node: any): RosettaSuperCallDomain {
   };
 }
 
+export function toAstRosettaSuperCall(node: any): any {
+  return {
+    $type: 'RosettaSuperCall',
+    name: node.name,
+    explicitArguments: node.explicitArguments,
+    rawArgs: (node.rawArgs ?? []).map((item) => item ? toAstRosettaExpression(item) : undefined),
+  };
+}
+
 export function setRosettaSuperCallExplicitArguments(node: any, value: boolean): void {
   node.explicitArguments = value;
 }
@@ -2670,7 +3570,7 @@ export function removeRosettaSuperCallRawArgsAt(node: any, index: number): void 
 
 export interface RosettaSymbolReferenceDomain {
   $type: 'RosettaSymbolReference';
-  symbol: Ref<'RosettaSymbol'>;
+  symbol: DomainRef;
   explicitArguments?: boolean;
   rawArgs?: RosettaExpressionDomain[];
 }
@@ -2678,13 +3578,22 @@ export interface RosettaSymbolReferenceDomain {
 export function toDomainRosettaSymbolReference(node: any): RosettaSymbolReferenceDomain {
   return {
     $type: node.$type,
-    symbol: node.symbol?.$refText,
+    symbol: node.symbol,
     explicitArguments: node.explicitArguments,
     rawArgs: (node.rawArgs ?? []).map((item) => item ? toDomainRosettaExpression(item) : undefined),
   };
 }
 
-export function setRosettaSymbolReferenceSymbol(node: any, value: Ref<'RosettaSymbol'>): void {
+export function toAstRosettaSymbolReference(node: any): any {
+  return {
+    $type: 'RosettaSymbolReference',
+    symbol: node.symbol,
+    explicitArguments: node.explicitArguments,
+    rawArgs: (node.rawArgs ?? []).map((item) => item ? toAstRosettaExpression(item) : undefined),
+  };
+}
+
+export function setRosettaSymbolReferenceSymbol(node: any, value: string): void {
   if (node.symbol) node.symbol.$refText = value;
   else node.symbol = { $refText: value };
 }
@@ -2703,19 +3612,27 @@ export function removeRosettaSymbolReferenceRawArgsAt(node: any, index: number):
 
 export interface RosettaSynonymDomain {
   $type: 'RosettaSynonym';
-  sources: Ref<'RosettaSynonymSource'>[];
+  sources: DomainRef[];
   body: RosettaSynonymBodyDomain;
 }
 
 export function toDomainRosettaSynonym(node: any): RosettaSynonymDomain {
   return {
     $type: node.$type,
-    sources: (node.sources ?? []).map((item) => item?.$refText),
+    sources: (node.sources ?? []).map((item) => item),
     body: node.body ? toDomainRosettaSynonymBody(node.body) : undefined,
   };
 }
 
-export function addRosettaSynonymSources(node: any, item: Ref<'RosettaSynonymSource'>): void {
+export function toAstRosettaSynonym(node: any): any {
+  return {
+    $type: 'RosettaSynonym',
+    sources: (node.sources ?? []).map((item) => item),
+    body: node.body ? toAstRosettaSynonymBody(node.body) : undefined,
+  };
+}
+
+export function addRosettaSynonymSources(node: any, item: string): void {
   (node.sources ??= []).push({ $refText: item });
 }
 
@@ -2750,6 +3667,22 @@ export function toDomainRosettaSynonymBody(node: any): RosettaSynonymBodyDomain 
     removeHtml: node.removeHtml,
     mapper: node.mapper,
     values: (node.values ?? []).map((item) => item ? toDomainRosettaSynonymValueBase(item) : undefined),
+  };
+}
+
+export function toAstRosettaSynonymBody(node: any): any {
+  return {
+    $type: 'RosettaSynonymBody',
+    hints: (node.hints ?? []).map((item) => item),
+    format: node.format,
+    merge: node.merge ? toAstRosettaMergeSynonymValue(node.merge) : undefined,
+    mappingLogic: node.mappingLogic ? toAstRosettaMapping(node.mappingLogic) : undefined,
+    metaValues: (node.metaValues ?? []).map((item) => item),
+    patternMatch: node.patternMatch,
+    patternReplace: node.patternReplace,
+    removeHtml: node.removeHtml,
+    mapper: node.mapper,
+    values: (node.values ?? []).map((item) => item ? toAstRosettaSynonymValueBase(item) : undefined),
   };
 }
 
@@ -2800,7 +3733,7 @@ export function removeRosettaSynonymBodyValuesAt(node: any, index: number): void
 export interface RosettaSynonymSourceDomain {
   $type: 'RosettaSynonymSource';
   name: string;
-  superSources?: Ref<'RosettaSynonymSource'>[];
+  superSources?: DomainRef[];
   externalClasses?: RosettaExternalClassDomain[];
   externalEnums?: RosettaExternalEnumDomain[];
 }
@@ -2809,9 +3742,19 @@ export function toDomainRosettaSynonymSource(node: any): RosettaSynonymSourceDom
   return {
     $type: node.$type,
     name: node.name,
-    superSources: (node.superSources ?? []).map((item) => item?.$refText),
+    superSources: (node.superSources ?? []).map((item) => item),
     externalClasses: (node.externalClasses ?? []).map((item) => item ? toDomainRosettaExternalClass(item) : undefined),
     externalEnums: (node.externalEnums ?? []).map((item) => item ? toDomainRosettaExternalEnum(item) : undefined),
+  };
+}
+
+export function toAstRosettaSynonymSource(node: any): any {
+  return {
+    $type: 'RosettaSynonymSource',
+    name: node.name,
+    superSources: (node.superSources ?? []).map((item) => item),
+    externalClasses: (node.externalClasses ?? []).map((item) => item ? toAstRosettaExternalClass(item) : undefined),
+    externalEnums: (node.externalEnums ?? []).map((item) => item ? toAstRosettaExternalEnum(item) : undefined),
   };
 }
 
@@ -2819,7 +3762,7 @@ export function setRosettaSynonymSourceName(node: any, value: string): void {
   node.name = value;
 }
 
-export function addRosettaSynonymSourceSuperSources(node: any, item: Ref<'RosettaSynonymSource'>): void {
+export function addRosettaSynonymSourceSuperSources(node: any, item: string): void {
   (node.superSources ??= []).push({ $refText: item });
 }
 
@@ -2855,6 +3798,17 @@ export interface RosettaSynonymValueBaseDomain {
 export function toDomainRosettaSynonymValueBase(node: any): RosettaSynonymValueBaseDomain {
   return {
     $type: node.$type,
+    name: node.name,
+    refType: node.refType,
+    value: node.value,
+    path: node.path,
+    maps: node.maps,
+  };
+}
+
+export function toAstRosettaSynonymValueBase(node: any): any {
+  return {
+    $type: 'RosettaSynonymValueBase',
     name: node.name,
     refType: node.refType,
     value: node.value,
@@ -2903,6 +3857,17 @@ export function toDomainRosettaTypeAlias(node: any): RosettaTypeAliasDomain {
   };
 }
 
+export function toAstRosettaTypeAlias(node: any): any {
+  return {
+    $type: 'RosettaTypeAlias',
+    name: node.name,
+    parameters: (node.parameters ?? []).map((item) => item ? toAstTypeParameter(item) : undefined),
+    definition: node.definition,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+    conditions: (node.conditions ?? []).map((item) => item ? toAstCondition(item) : undefined),
+  };
+}
+
 export function setRosettaTypeAliasName(node: any, value: string): void {
   node.name = value;
 }
@@ -2931,7 +3896,7 @@ export interface RuleReferenceAnnotationDomain {
   $type: 'RuleReferenceAnnotation';
   name: "ruleReference";
   path?: AnnotationPathExpressionDomain;
-  reportingRule?: Ref<'RosettaRule'>;
+  reportingRule?: DomainRef;
   empty?: boolean;
 }
 
@@ -2940,12 +3905,22 @@ export function toDomainRuleReferenceAnnotation(node: any): RuleReferenceAnnotat
     $type: node.$type,
     name: node.name,
     path: node.path ? toDomainAnnotationPathExpression(node.path) : undefined,
-    reportingRule: node.reportingRule?.$refText,
+    reportingRule: node.reportingRule,
     empty: node.empty,
   };
 }
 
-export function setRuleReferenceAnnotationReportingRule(node: any, value: Ref<'RosettaRule'>): void {
+export function toAstRuleReferenceAnnotation(node: any): any {
+  return {
+    $type: 'RuleReferenceAnnotation',
+    name: node.name,
+    path: node.path ? toAstAnnotationPathExpression(node.path) : undefined,
+    reportingRule: node.reportingRule,
+    empty: node.empty,
+  };
+}
+
+export function setRuleReferenceAnnotationReportingRule(node: any, value: string): void {
   if (node.reportingRule) node.reportingRule.$refText = value;
   else node.reportingRule = { $refText: value };
 }
@@ -2956,19 +3931,27 @@ export function setRuleReferenceAnnotationEmpty(node: any, value: boolean): void
 
 export interface SegmentDomain {
   $type: 'Segment';
-  feature: Ref<'RosettaTypedFeature'>;
+  feature: DomainRef;
   next?: SegmentDomain;
 }
 
 export function toDomainSegment(node: any): SegmentDomain {
   return {
     $type: node.$type,
-    feature: node.feature?.$refText,
+    feature: node.feature,
     next: node.next ? toDomainSegment(node.next) : undefined,
   };
 }
 
-export function setSegmentFeature(node: any, value: Ref<'RosettaTypedFeature'>): void {
+export function toAstSegment(node: any): any {
+  return {
+    $type: 'Segment',
+    feature: node.feature,
+    next: node.next ? toAstSegment(node.next) : undefined,
+  };
+}
+
+export function setSegmentFeature(node: any, value: string): void {
   if (node.feature) node.feature.$refText = value;
   else node.feature = { $refText: value };
 }
@@ -2986,6 +3969,15 @@ export function toDomainShortcutDeclaration(node: any): ShortcutDeclarationDomai
     name: node.name,
     definition: node.definition,
     expression: node.expression ? toDomainRosettaExpression(node.expression) : undefined,
+  };
+}
+
+export function toAstShortcutDeclaration(node: any): any {
+  return {
+    $type: 'ShortcutDeclaration',
+    name: node.name,
+    definition: node.definition,
+    expression: node.expression ? toAstRosettaExpression(node.expression) : undefined,
   };
 }
 
@@ -3013,6 +4005,15 @@ export function toDomainSortOperation(node: any): SortOperationDomain {
   };
 }
 
+export function toAstSortOperation(node: any): any {
+  return {
+    $type: 'SortOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
+  };
+}
+
 export interface SumOperationDomain {
   $type: 'SumOperation';
   argument?: RosettaExpressionDomain;
@@ -3027,21 +4028,37 @@ export function toDomainSumOperation(node: any): SumOperationDomain {
   };
 }
 
+export function toAstSumOperation(node: any): any {
+  return {
+    $type: 'SumOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface SwitchCaseGuardDomain {
   $type: 'SwitchCaseGuard';
   literalGuard?: RosettaLiteralDomain;
-  referenceGuard?: Ref<'SwitchCaseTarget'>;
+  referenceGuard?: DomainRef;
 }
 
 export function toDomainSwitchCaseGuard(node: any): SwitchCaseGuardDomain {
   return {
     $type: node.$type,
     literalGuard: node.literalGuard ? toDomainRosettaLiteral(node.literalGuard) : undefined,
-    referenceGuard: node.referenceGuard?.$refText,
+    referenceGuard: node.referenceGuard,
   };
 }
 
-export function setSwitchCaseGuardReferenceGuard(node: any, value: Ref<'SwitchCaseTarget'>): void {
+export function toAstSwitchCaseGuard(node: any): any {
+  return {
+    $type: 'SwitchCaseGuard',
+    literalGuard: node.literalGuard ? toAstRosettaLiteral(node.literalGuard) : undefined,
+    referenceGuard: node.referenceGuard,
+  };
+}
+
+export function setSwitchCaseGuardReferenceGuard(node: any, value: string): void {
   if (node.referenceGuard) node.referenceGuard.$refText = value;
   else node.referenceGuard = { $refText: value };
 }
@@ -3060,6 +4077,14 @@ export function toDomainSwitchCaseOrDefault(node: any): SwitchCaseOrDefaultDomai
   };
 }
 
+export function toAstSwitchCaseOrDefault(node: any): any {
+  return {
+    $type: 'SwitchCaseOrDefault',
+    expression: node.expression ? toAstRosettaExpression(node.expression) : undefined,
+    guard: node.guard ? toAstSwitchCaseGuard(node.guard) : undefined,
+  };
+}
+
 export interface SwitchOperationDomain {
   $type: 'SwitchOperation';
   argument?: RosettaExpressionDomain;
@@ -3073,6 +4098,15 @@ export function toDomainSwitchOperation(node: any): SwitchOperationDomain {
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
     operator: node.operator,
     cases: (node.cases ?? []).map((item) => item ? toDomainSwitchCaseOrDefault(item) : undefined),
+  };
+}
+
+export function toAstSwitchOperation(node: any): any {
+  return {
+    $type: 'SwitchOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    cases: (node.cases ?? []).map((item) => item ? toAstSwitchCaseOrDefault(item) : undefined),
   };
 }
 
@@ -3100,6 +4134,15 @@ export function toDomainThenOperation(node: any): ThenOperationDomain {
   };
 }
 
+export function toAstThenOperation(node: any): any {
+  return {
+    $type: 'ThenOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    function: node.function ? toAstInlineFunction(node.function) : undefined,
+  };
+}
+
 export interface ToDateOperationDomain {
   $type: 'ToDateOperation';
   argument?: RosettaExpressionDomain;
@@ -3110,6 +4153,14 @@ export function toDomainToDateOperation(node: any): ToDateOperationDomain {
   return {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
+export function toAstToDateOperation(node: any): any {
+  return {
+    $type: 'ToDateOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     operator: node.operator,
   };
 }
@@ -3128,11 +4179,19 @@ export function toDomainToDateTimeOperation(node: any): ToDateTimeOperationDomai
   };
 }
 
+export function toAstToDateTimeOperation(node: any): any {
+  return {
+    $type: 'ToDateTimeOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface ToEnumOperationDomain {
   $type: 'ToEnumOperation';
   argument?: RosettaExpressionDomain;
   operator: "to-enum";
-  enumeration: Ref<'RosettaEnumeration'>;
+  enumeration: DomainRef;
 }
 
 export function toDomainToEnumOperation(node: any): ToEnumOperationDomain {
@@ -3140,11 +4199,20 @@ export function toDomainToEnumOperation(node: any): ToEnumOperationDomain {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
     operator: node.operator,
-    enumeration: node.enumeration?.$refText,
+    enumeration: node.enumeration,
   };
 }
 
-export function setToEnumOperationEnumeration(node: any, value: Ref<'RosettaEnumeration'>): void {
+export function toAstToEnumOperation(node: any): any {
+  return {
+    $type: 'ToEnumOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    enumeration: node.enumeration,
+  };
+}
+
+export function setToEnumOperationEnumeration(node: any, value: string): void {
   if (node.enumeration) node.enumeration.$refText = value;
   else node.enumeration = { $refText: value };
 }
@@ -3163,6 +4231,14 @@ export function toDomainToIntOperation(node: any): ToIntOperationDomain {
   };
 }
 
+export function toAstToIntOperation(node: any): any {
+  return {
+    $type: 'ToIntOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface ToNumberOperationDomain {
   $type: 'ToNumberOperation';
   argument?: RosettaExpressionDomain;
@@ -3173,6 +4249,14 @@ export function toDomainToNumberOperation(node: any): ToNumberOperationDomain {
   return {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
+export function toAstToNumberOperation(node: any): any {
+  return {
+    $type: 'ToNumberOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     operator: node.operator,
   };
 }
@@ -3191,6 +4275,14 @@ export function toDomainToStringOperation(node: any): ToStringOperationDomain {
   };
 }
 
+export function toAstToStringOperation(node: any): any {
+  return {
+    $type: 'ToStringOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface ToTimeOperationDomain {
   $type: 'ToTimeOperation';
   argument?: RosettaExpressionDomain;
@@ -3201,6 +4293,14 @@ export function toDomainToTimeOperation(node: any): ToTimeOperationDomain {
   return {
     $type: node.$type,
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
+export function toAstToTimeOperation(node: any): any {
+  return {
+    $type: 'ToTimeOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
     operator: node.operator,
   };
 }
@@ -3219,21 +4319,37 @@ export function toDomainToZonedDateTimeOperation(node: any): ToZonedDateTimeOper
   };
 }
 
+export function toAstToZonedDateTimeOperation(node: any): any {
+  return {
+    $type: 'ToZonedDateTimeOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+  };
+}
+
 export interface TypeCallDomain {
   $type: 'TypeCall';
-  type: Ref<'RosettaType'>;
+  type: DomainRef;
   arguments?: TypeCallArgumentDomain[];
 }
 
 export function toDomainTypeCall(node: any): TypeCallDomain {
   return {
     $type: node.$type,
-    type: node.type?.$refText,
+    type: node.type,
     arguments: (node.arguments ?? []).map((item) => item ? toDomainTypeCallArgument(item) : undefined),
   };
 }
 
-export function setTypeCallType(node: any, value: Ref<'RosettaType'>): void {
+export function toAstTypeCall(node: any): any {
+  return {
+    $type: 'TypeCall',
+    type: node.type,
+    arguments: (node.arguments ?? []).map((item) => item ? toAstTypeCallArgument(item) : undefined),
+  };
+}
+
+export function setTypeCallType(node: any, value: string): void {
   if (node.type) node.type.$refText = value;
   else node.type = { $refText: value };
 }
@@ -3248,19 +4364,27 @@ export function removeTypeCallArgumentsAt(node: any, index: number): void {
 
 export interface TypeCallArgumentDomain {
   $type: 'TypeCallArgument';
-  parameter: Ref<'TypeParameter'>;
+  parameter: DomainRef;
   value: RosettaExpressionDomain;
 }
 
 export function toDomainTypeCallArgument(node: any): TypeCallArgumentDomain {
   return {
     $type: node.$type,
-    parameter: node.parameter?.$refText,
+    parameter: node.parameter,
     value: node.value ? toDomainRosettaExpression(node.value) : undefined,
   };
 }
 
-export function setTypeCallArgumentParameter(node: any, value: Ref<'TypeParameter'>): void {
+export function toAstTypeCallArgument(node: any): any {
+  return {
+    $type: 'TypeCallArgument',
+    parameter: node.parameter,
+    value: node.value ? toAstRosettaExpression(node.value) : undefined,
+  };
+}
+
+export function setTypeCallArgumentParameter(node: any, value: string): void {
   if (node.parameter) node.parameter.$refText = value;
   else node.parameter = { $refText: value };
 }
@@ -3281,6 +4405,15 @@ export function toDomainTypeParameter(node: any): TypeParameterDomain {
   };
 }
 
+export function toAstTypeParameter(node: any): any {
+  return {
+    $type: 'TypeParameter',
+    name: node.name,
+    typeCall: node.typeCall ? toAstTypeCall(node.typeCall) : undefined,
+    definition: node.definition,
+  };
+}
+
 export function setTypeParameterName(node: any, value: string): void {
   node.name = value;
 }
@@ -3291,19 +4424,27 @@ export function setTypeParameterDefinition(node: any, value: string): void {
 
 export interface WithMetaEntryDomain {
   $type: 'WithMetaEntry';
-  key: Ref<'RosettaFeature'>;
+  key: DomainRef;
   value: RosettaExpressionDomain;
 }
 
 export function toDomainWithMetaEntry(node: any): WithMetaEntryDomain {
   return {
     $type: node.$type,
-    key: node.key?.$refText,
+    key: node.key,
     value: node.value ? toDomainRosettaExpression(node.value) : undefined,
   };
 }
 
-export function setWithMetaEntryKey(node: any, value: Ref<'RosettaFeature'>): void {
+export function toAstWithMetaEntry(node: any): any {
+  return {
+    $type: 'WithMetaEntry',
+    key: node.key,
+    value: node.value ? toAstRosettaExpression(node.value) : undefined,
+  };
+}
+
+export function setWithMetaEntryKey(node: any, value: string): void {
   if (node.key) node.key.$refText = value;
   else node.key = { $refText: value };
 }
@@ -3321,6 +4462,15 @@ export function toDomainWithMetaOperation(node: any): WithMetaOperationDomain {
     argument: node.argument ? toDomainRosettaExpression(node.argument) : undefined,
     operator: node.operator,
     entries: (node.entries ?? []).map((item) => item ? toDomainWithMetaEntry(item) : undefined),
+  };
+}
+
+export function toAstWithMetaOperation(node: any): any {
+  return {
+    $type: 'WithMetaOperation',
+    argument: node.argument ? toAstRosettaExpression(node.argument) : undefined,
+    operator: node.operator,
+    entries: (node.entries ?? []).map((item) => item ? toAstWithMetaEntry(item) : undefined),
   };
 }
 
@@ -3344,12 +4494,30 @@ export function toDomainAnnotationPathExpression(node: any): AnnotationPathExpre
   throw new Error(`Unknown AnnotationPathExpression member: ${node.$type}`);
 }
 
+export function toAstAnnotationPathExpression(node: any): any {
+  switch (node.$type) {
+    case "RosettaImplicitVariable": return toAstRosettaImplicitVariable(node);
+    case "AnnotationPath": return toAstAnnotationPath(node);
+    case "AnnotationDeepPath": return toAstAnnotationDeepPath(node);
+    case "AnnotationPathAttributeReference": return toAstAnnotationPathAttributeReference(node);
+  }
+  throw new Error(`Unknown AnnotationPathExpression member: ${node.$type}`);
+}
+
 export type AssignPathRootDomain = AttributeDomain | ShortcutDeclarationDomain;
 
 export function toDomainAssignPathRoot(node: any): AssignPathRootDomain {
   switch (node.$type) {
     case "Attribute": return toDomainAttribute(node);
     case "ShortcutDeclaration": return toDomainShortcutDeclaration(node);
+  }
+  throw new Error(`Unknown AssignPathRoot member: ${node.$type}`);
+}
+
+export function toAstAssignPathRoot(node: any): any {
+  switch (node.$type) {
+    case "Attribute": return toAstAttribute(node);
+    case "ShortcutDeclaration": return toAstShortcutDeclaration(node);
   }
   throw new Error(`Unknown AssignPathRoot member: ${node.$type}`);
 }
@@ -3364,12 +4532,28 @@ export function toDomainAttributeOrChoiceOption(node: any): AttributeOrChoiceOpt
   throw new Error(`Unknown AttributeOrChoiceOption member: ${node.$type}`);
 }
 
+export function toAstAttributeOrChoiceOption(node: any): any {
+  switch (node.$type) {
+    case "Attribute": return toAstAttribute(node);
+    case "ChoiceOption": return toAstChoiceOption(node);
+  }
+  throw new Error(`Unknown AttributeOrChoiceOption member: ${node.$type}`);
+}
+
 export type DataOrChoiceDomain = DataDomain | ChoiceDomain;
 
 export function toDomainDataOrChoice(node: any): DataOrChoiceDomain {
   switch (node.$type) {
     case "Data": return toDomainData(node);
     case "Choice": return toDomainChoice(node);
+  }
+  throw new Error(`Unknown DataOrChoice member: ${node.$type}`);
+}
+
+export function toAstDataOrChoice(node: any): any {
+  switch (node.$type) {
+    case "Data": return toAstData(node);
+    case "Choice": return toAstChoice(node);
   }
   throw new Error(`Unknown DataOrChoice member: ${node.$type}`);
 }
@@ -3381,6 +4565,15 @@ export function toDomainRosettaCallableWithArgs(node: any): RosettaCallableWithA
     case "RosettaFunction": return toDomainRosettaFunction(node);
     case "RosettaExternalFunction": return toDomainRosettaExternalFunction(node);
     case "RosettaRule": return toDomainRosettaRule(node);
+  }
+  throw new Error(`Unknown RosettaCallableWithArgs member: ${node.$type}`);
+}
+
+export function toAstRosettaCallableWithArgs(node: any): any {
+  switch (node.$type) {
+    case "RosettaFunction": return toAstRosettaFunction(node);
+    case "RosettaExternalFunction": return toAstRosettaExternalFunction(node);
+    case "RosettaRule": return toAstRosettaRule(node);
   }
   throw new Error(`Unknown RosettaCallableWithArgs member: ${node.$type}`);
 }
@@ -3440,6 +4633,59 @@ export function toDomainRosettaExpression(node: any): RosettaExpressionDomain {
   throw new Error(`Unknown RosettaExpression member: ${node.$type}`);
 }
 
+export function toAstRosettaExpression(node: any): any {
+  switch (node.$type) {
+    case "RosettaSymbolReference": return toAstRosettaSymbolReference(node);
+    case "AsKeyOperation": return toAstAsKeyOperation(node);
+    case "ThenOperation": return toAstThenOperation(node);
+    case "LogicalOperation": return toAstLogicalOperation(node);
+    case "ComparisonOperation": return toAstComparisonOperation(node);
+    case "EqualityOperation": return toAstEqualityOperation(node);
+    case "ArithmeticOperation": return toAstArithmeticOperation(node);
+    case "RosettaContainsExpression": return toAstRosettaContainsExpression(node);
+    case "RosettaDisjointExpression": return toAstRosettaDisjointExpression(node);
+    case "DefaultOperation": return toAstDefaultOperation(node);
+    case "JoinOperation": return toAstJoinOperation(node);
+    case "RosettaFeatureCall": return toAstRosettaFeatureCall(node);
+    case "RosettaDeepFeatureCall": return toAstRosettaDeepFeatureCall(node);
+    case "RosettaExistsExpression": return toAstRosettaExistsExpression(node);
+    case "RosettaAbsentExpression": return toAstRosettaAbsentExpression(node);
+    case "RosettaOnlyElement": return toAstRosettaOnlyElement(node);
+    case "RosettaOnlyExistsExpression": return toAstRosettaOnlyExistsExpression(node);
+    case "RosettaCountOperation": return toAstRosettaCountOperation(node);
+    case "FlattenOperation": return toAstFlattenOperation(node);
+    case "DistinctOperation": return toAstDistinctOperation(node);
+    case "ReverseOperation": return toAstReverseOperation(node);
+    case "FirstOperation": return toAstFirstOperation(node);
+    case "LastOperation": return toAstLastOperation(node);
+    case "SumOperation": return toAstSumOperation(node);
+    case "OneOfOperation": return toAstOneOfOperation(node);
+    case "ToStringOperation": return toAstToStringOperation(node);
+    case "ToNumberOperation": return toAstToNumberOperation(node);
+    case "ToIntOperation": return toAstToIntOperation(node);
+    case "ToTimeOperation": return toAstToTimeOperation(node);
+    case "ToEnumOperation": return toAstToEnumOperation(node);
+    case "ToDateOperation": return toAstToDateOperation(node);
+    case "ToDateTimeOperation": return toAstToDateTimeOperation(node);
+    case "ToZonedDateTimeOperation": return toAstToZonedDateTimeOperation(node);
+    case "ChoiceOperation": return toAstChoiceOperation(node);
+    case "SwitchOperation": return toAstSwitchOperation(node);
+    case "WithMetaOperation": return toAstWithMetaOperation(node);
+    case "SortOperation": return toAstSortOperation(node);
+    case "MinOperation": return toAstMinOperation(node);
+    case "MaxOperation": return toAstMaxOperation(node);
+    case "ReduceOperation": return toAstReduceOperation(node);
+    case "FilterOperation": return toAstFilterOperation(node);
+    case "MapOperation": return toAstMapOperation(node);
+    case "RosettaSuperCall": return toAstRosettaSuperCall(node);
+    case "RosettaConstructorExpression": return toAstRosettaConstructorExpression(node);
+    case "ListLiteral": return toAstListLiteral(node);
+    case "RosettaImplicitVariable": return toAstRosettaImplicitVariable(node);
+    case "RosettaConditionalExpression": return toAstRosettaConditionalExpression(node);
+  }
+  throw new Error(`Unknown RosettaExpression member: ${node.$type}`);
+}
+
 export type RosettaFeatureDomain = AttributeDomain | RosettaRecordFeatureDomain | RosettaEnumValueDomain | RosettaMetaTypeDomain | ChoiceOptionDomain;
 
 export function toDomainRosettaFeature(node: any): RosettaFeatureDomain {
@@ -3449,6 +4695,17 @@ export function toDomainRosettaFeature(node: any): RosettaFeatureDomain {
     case "RosettaEnumValue": return toDomainRosettaEnumValue(node);
     case "RosettaMetaType": return toDomainRosettaMetaType(node);
     case "ChoiceOption": return toDomainChoiceOption(node);
+  }
+  throw new Error(`Unknown RosettaFeature member: ${node.$type}`);
+}
+
+export function toAstRosettaFeature(node: any): any {
+  switch (node.$type) {
+    case "Attribute": return toAstAttribute(node);
+    case "RosettaRecordFeature": return toAstRosettaRecordFeature(node);
+    case "RosettaEnumValue": return toAstRosettaEnumValue(node);
+    case "RosettaMetaType": return toAstRosettaMetaType(node);
+    case "ChoiceOption": return toAstChoiceOption(node);
   }
   throw new Error(`Unknown RosettaFeature member: ${node.$type}`);
 }
@@ -3465,6 +4722,16 @@ export function toDomainRosettaLiteral(node: any): RosettaLiteralDomain {
   throw new Error(`Unknown RosettaLiteral member: ${node.$type}`);
 }
 
+export function toAstRosettaLiteral(node: any): any {
+  switch (node.$type) {
+    case "RosettaBooleanLiteral": return toAstRosettaBooleanLiteral(node);
+    case "RosettaStringLiteral": return toAstRosettaStringLiteral(node);
+    case "RosettaNumberLiteral": return toAstRosettaNumberLiteral(node);
+    case "RosettaIntLiteral": return toAstRosettaIntLiteral(node);
+  }
+  throw new Error(`Unknown RosettaLiteral member: ${node.$type}`);
+}
+
 export type RosettaMapTestDomain = RosettaMapPathDomain | RosettaMapRosettaPathDomain | RosettaMapTestFuncDomain;
 
 export function toDomainRosettaMapTest(node: any): RosettaMapTestDomain {
@@ -3472,6 +4739,15 @@ export function toDomainRosettaMapTest(node: any): RosettaMapTestDomain {
     case "RosettaMapPath": return toDomainRosettaMapPath(node);
     case "RosettaMapRosettaPath": return toDomainRosettaMapRosettaPath(node);
     case "RosettaMapTestFunc": return toDomainRosettaMapTestFunc(node);
+  }
+  throw new Error(`Unknown RosettaMapTest member: ${node.$type}`);
+}
+
+export function toAstRosettaMapTest(node: any): any {
+  switch (node.$type) {
+    case "RosettaMapPath": return toAstRosettaMapPath(node);
+    case "RosettaMapRosettaPath": return toAstRosettaMapRosettaPath(node);
+    case "RosettaMapTestFunc": return toAstRosettaMapTestFunc(node);
   }
   throw new Error(`Unknown RosettaMapTest member: ${node.$type}`);
 }
@@ -3485,6 +4761,17 @@ export function toDomainRosettaMapTestExpression(node: any): RosettaMapTestExpre
     case "RosettaMapTestAbsentExpression": return toDomainRosettaMapTestAbsentExpression(node);
     case "RosettaMapTestEqualityOperation": return toDomainRosettaMapTestEqualityOperation(node);
     case "RosettaMapPathValue": return toDomainRosettaMapPathValue(node);
+  }
+  throw new Error(`Unknown RosettaMapTestExpression member: ${node.$type}`);
+}
+
+export function toAstRosettaMapTestExpression(node: any): any {
+  switch (node.$type) {
+    case "RosettaEnumValueReference": return toAstRosettaEnumValueReference(node);
+    case "RosettaMapTestExistsExpression": return toAstRosettaMapTestExistsExpression(node);
+    case "RosettaMapTestAbsentExpression": return toAstRosettaMapTestAbsentExpression(node);
+    case "RosettaMapTestEqualityOperation": return toAstRosettaMapTestEqualityOperation(node);
+    case "RosettaMapPathValue": return toAstRosettaMapPathValue(node);
   }
   throw new Error(`Unknown RosettaMapTestExpression member: ${node.$type}`);
 }
@@ -3514,6 +4801,29 @@ export function toDomainRosettaRootElement(node: any): RosettaRootElementDomain 
   throw new Error(`Unknown RosettaRootElement member: ${node.$type}`);
 }
 
+export function toAstRosettaRootElement(node: any): any {
+  switch (node.$type) {
+    case "Annotation": return toAstAnnotation(node);
+    case "Data": return toAstData(node);
+    case "Choice": return toAstChoice(node);
+    case "RosettaEnumeration": return toAstRosettaEnumeration(node);
+    case "RosettaFunction": return toAstRosettaFunction(node);
+    case "RosettaBasicType": return toAstRosettaBasicType(node);
+    case "RosettaSynonymSource": return toAstRosettaSynonymSource(node);
+    case "RosettaRecordType": return toAstRosettaRecordType(node);
+    case "RosettaExternalFunction": return toAstRosettaExternalFunction(node);
+    case "RosettaTypeAlias": return toAstRosettaTypeAlias(node);
+    case "RosettaMetaType": return toAstRosettaMetaType(node);
+    case "RosettaBody": return toAstRosettaBody(node);
+    case "RosettaCorpus": return toAstRosettaCorpus(node);
+    case "RosettaSegment": return toAstRosettaSegment(node);
+    case "RosettaExternalRuleSource": return toAstRosettaExternalRuleSource(node);
+    case "RosettaReport": return toAstRosettaReport(node);
+    case "RosettaRule": return toAstRosettaRule(node);
+  }
+  throw new Error(`Unknown RosettaRootElement member: ${node.$type}`);
+}
+
 export type RosettaSymbolDomain = AttributeDomain | ShortcutDeclarationDomain | RosettaFunctionDomain | RosettaExternalFunctionDomain | RosettaRuleDomain | TypeParameterDomain | RosettaMetaTypeDomain | ClosureParameterDomain | RosettaEnumerationDomain | RosettaEnumValueDomain | RosettaParameterDomain | DataDomain | ChoiceDomain;
 
 export function toDomainRosettaSymbol(node: any): RosettaSymbolDomain {
@@ -3535,6 +4845,25 @@ export function toDomainRosettaSymbol(node: any): RosettaSymbolDomain {
   throw new Error(`Unknown RosettaSymbol member: ${node.$type}`);
 }
 
+export function toAstRosettaSymbol(node: any): any {
+  switch (node.$type) {
+    case "Attribute": return toAstAttribute(node);
+    case "ShortcutDeclaration": return toAstShortcutDeclaration(node);
+    case "RosettaFunction": return toAstRosettaFunction(node);
+    case "RosettaExternalFunction": return toAstRosettaExternalFunction(node);
+    case "RosettaRule": return toAstRosettaRule(node);
+    case "TypeParameter": return toAstTypeParameter(node);
+    case "RosettaMetaType": return toAstRosettaMetaType(node);
+    case "ClosureParameter": return toAstClosureParameter(node);
+    case "RosettaEnumeration": return toAstRosettaEnumeration(node);
+    case "RosettaEnumValue": return toAstRosettaEnumValue(node);
+    case "RosettaParameter": return toAstRosettaParameter(node);
+    case "Data": return toAstData(node);
+    case "Choice": return toAstChoice(node);
+  }
+  throw new Error(`Unknown RosettaSymbol member: ${node.$type}`);
+}
+
 export type RosettaTypeDomain = DataDomain | ChoiceDomain | RosettaBasicTypeDomain | RosettaRecordTypeDomain | RosettaEnumerationDomain | RosettaTypeAliasDomain;
 
 export function toDomainRosettaType(node: any): RosettaTypeDomain {
@@ -3545,6 +4874,18 @@ export function toDomainRosettaType(node: any): RosettaTypeDomain {
     case "RosettaRecordType": return toDomainRosettaRecordType(node);
     case "RosettaEnumeration": return toDomainRosettaEnumeration(node);
     case "RosettaTypeAlias": return toDomainRosettaTypeAlias(node);
+  }
+  throw new Error(`Unknown RosettaType member: ${node.$type}`);
+}
+
+export function toAstRosettaType(node: any): any {
+  switch (node.$type) {
+    case "Data": return toAstData(node);
+    case "Choice": return toAstChoice(node);
+    case "RosettaBasicType": return toAstRosettaBasicType(node);
+    case "RosettaRecordType": return toAstRosettaRecordType(node);
+    case "RosettaEnumeration": return toAstRosettaEnumeration(node);
+    case "RosettaTypeAlias": return toAstRosettaTypeAlias(node);
   }
   throw new Error(`Unknown RosettaType member: ${node.$type}`);
 }
@@ -3560,6 +4901,15 @@ export function toDomainRosettaTypedFeature(node: any): RosettaTypedFeatureDomai
   throw new Error(`Unknown RosettaTypedFeature member: ${node.$type}`);
 }
 
+export function toAstRosettaTypedFeature(node: any): any {
+  switch (node.$type) {
+    case "Attribute": return toAstAttribute(node);
+    case "RosettaRecordFeature": return toAstRosettaRecordFeature(node);
+    case "RosettaMetaType": return toAstRosettaMetaType(node);
+  }
+  throw new Error(`Unknown RosettaTypedFeature member: ${node.$type}`);
+}
+
 export type SwitchCaseTargetDomain = DataDomain | ChoiceDomain | RosettaEnumValueDomain | RosettaEnumerationDomain;
 
 export function toDomainSwitchCaseTarget(node: any): SwitchCaseTargetDomain {
@@ -3568,6 +4918,16 @@ export function toDomainSwitchCaseTarget(node: any): SwitchCaseTargetDomain {
     case "Choice": return toDomainChoice(node);
     case "RosettaEnumValue": return toDomainRosettaEnumValue(node);
     case "RosettaEnumeration": return toDomainRosettaEnumeration(node);
+  }
+  throw new Error(`Unknown SwitchCaseTarget member: ${node.$type}`);
+}
+
+export function toAstSwitchCaseTarget(node: any): any {
+  switch (node.$type) {
+    case "Data": return toAstData(node);
+    case "Choice": return toAstChoice(node);
+    case "RosettaEnumValue": return toAstRosettaEnumValue(node);
+    case "RosettaEnumeration": return toAstRosettaEnumeration(node);
   }
   throw new Error(`Unknown SwitchCaseTarget member: ${node.$type}`);
 }
@@ -3707,24 +5067,135 @@ export function toDomain(node: any): AnyDomain {
   throw new Error(`Unknown node type: ${node.$type}`);
 }
 
-
-/** Index source AST nodes by a caller-supplied key (e.g. qualified name); projects via toDomain lazily. */
-export function createRepository(
-  nodes: any[],
-  keyOf: (node: any) => string = (n) => n.name
-): {
-  get(qualifiedName: string): AnyDomain | undefined;
-  all(): AnyDomain[];
-  byType<K extends AnyDomain["$type"]>(type: K): Extract<AnyDomain, { $type: K }>[];
-  byNamespace(ns: string): AnyDomain[];
-} {
-  const byKey = new Map<string, any>(nodes.map((n) => [keyOf(n), n]));
-  return {
-    get: (qn) => { const n = byKey.get(qn); return n ? toDomain(n) : undefined; },
-    all: () => [...byKey.values()].map(toDomain),
-    byType: (type) => [...byKey.values()].filter((n) => n.$type === type).map(toDomain) as never,
-    byNamespace: (ns) => [...byKey.entries()]
-      .filter(([k]) => k === ns || k.startsWith(ns + "."))
-      .map(([, n]) => toDomain(n))
-  };
+export function toAst(node: any): any {
+  switch (node.$type) {
+    case "Annotation": return toAstAnnotation(node);
+    case "AnnotationDeepPath": return toAstAnnotationDeepPath(node);
+    case "AnnotationPath": return toAstAnnotationPath(node);
+    case "AnnotationPathAttributeReference": return toAstAnnotationPathAttributeReference(node);
+    case "AnnotationQualifier": return toAstAnnotationQualifier(node);
+    case "AnnotationRef": return toAstAnnotationRef(node);
+    case "ArithmeticOperation": return toAstArithmeticOperation(node);
+    case "AsKeyOperation": return toAstAsKeyOperation(node);
+    case "Attribute": return toAstAttribute(node);
+    case "Choice": return toAstChoice(node);
+    case "ChoiceOperation": return toAstChoiceOperation(node);
+    case "ChoiceOption": return toAstChoiceOption(node);
+    case "ClosureParameter": return toAstClosureParameter(node);
+    case "ComparisonOperation": return toAstComparisonOperation(node);
+    case "Condition": return toAstCondition(node);
+    case "ConstructorKeyValuePair": return toAstConstructorKeyValuePair(node);
+    case "Data": return toAstData(node);
+    case "DefaultOperation": return toAstDefaultOperation(node);
+    case "DistinctOperation": return toAstDistinctOperation(node);
+    case "DocumentRationale": return toAstDocumentRationale(node);
+    case "EqualityOperation": return toAstEqualityOperation(node);
+    case "FilterOperation": return toAstFilterOperation(node);
+    case "FirstOperation": return toAstFirstOperation(node);
+    case "FlattenOperation": return toAstFlattenOperation(node);
+    case "Import": return toAstImport(node);
+    case "InlineFunction": return toAstInlineFunction(node);
+    case "JoinOperation": return toAstJoinOperation(node);
+    case "LabelAnnotation": return toAstLabelAnnotation(node);
+    case "LastOperation": return toAstLastOperation(node);
+    case "ListLiteral": return toAstListLiteral(node);
+    case "LogicalOperation": return toAstLogicalOperation(node);
+    case "MapOperation": return toAstMapOperation(node);
+    case "MaxOperation": return toAstMaxOperation(node);
+    case "MinOperation": return toAstMinOperation(node);
+    case "OneOfOperation": return toAstOneOfOperation(node);
+    case "Operation": return toAstOperation(node);
+    case "ReduceOperation": return toAstReduceOperation(node);
+    case "RegulatoryDocumentReference": return toAstRegulatoryDocumentReference(node);
+    case "ReverseOperation": return toAstReverseOperation(node);
+    case "RosettaAbsentExpression": return toAstRosettaAbsentExpression(node);
+    case "RosettaAttributeReference": return toAstRosettaAttributeReference(node);
+    case "RosettaBasicType": return toAstRosettaBasicType(node);
+    case "RosettaBody": return toAstRosettaBody(node);
+    case "RosettaBooleanLiteral": return toAstRosettaBooleanLiteral(node);
+    case "RosettaCardinality": return toAstRosettaCardinality(node);
+    case "RosettaClassSynonym": return toAstRosettaClassSynonym(node);
+    case "RosettaConditionalExpression": return toAstRosettaConditionalExpression(node);
+    case "RosettaConstructorExpression": return toAstRosettaConstructorExpression(node);
+    case "RosettaContainsExpression": return toAstRosettaContainsExpression(node);
+    case "RosettaCorpus": return toAstRosettaCorpus(node);
+    case "RosettaCountOperation": return toAstRosettaCountOperation(node);
+    case "RosettaDataReference": return toAstRosettaDataReference(node);
+    case "RosettaDeepFeatureCall": return toAstRosettaDeepFeatureCall(node);
+    case "RosettaDisjointExpression": return toAstRosettaDisjointExpression(node);
+    case "RosettaDocReference": return toAstRosettaDocReference(node);
+    case "RosettaEnumeration": return toAstRosettaEnumeration(node);
+    case "RosettaEnumSynonym": return toAstRosettaEnumSynonym(node);
+    case "RosettaEnumValue": return toAstRosettaEnumValue(node);
+    case "RosettaEnumValueReference": return toAstRosettaEnumValueReference(node);
+    case "RosettaExistsExpression": return toAstRosettaExistsExpression(node);
+    case "RosettaExternalClass": return toAstRosettaExternalClass(node);
+    case "RosettaExternalClassSynonym": return toAstRosettaExternalClassSynonym(node);
+    case "RosettaExternalEnum": return toAstRosettaExternalEnum(node);
+    case "RosettaExternalEnumValue": return toAstRosettaExternalEnumValue(node);
+    case "RosettaExternalFunction": return toAstRosettaExternalFunction(node);
+    case "RosettaExternalRegularAttribute": return toAstRosettaExternalRegularAttribute(node);
+    case "RosettaExternalRuleSource": return toAstRosettaExternalRuleSource(node);
+    case "RosettaExternalSynonym": return toAstRosettaExternalSynonym(node);
+    case "RosettaFeatureCall": return toAstRosettaFeatureCall(node);
+    case "RosettaFunction": return toAstRosettaFunction(node);
+    case "RosettaImplicitVariable": return toAstRosettaImplicitVariable(node);
+    case "RosettaIntLiteral": return toAstRosettaIntLiteral(node);
+    case "RosettaMapPath": return toAstRosettaMapPath(node);
+    case "RosettaMapPathValue": return toAstRosettaMapPathValue(node);
+    case "RosettaMapping": return toAstRosettaMapping(node);
+    case "RosettaMappingInstance": return toAstRosettaMappingInstance(node);
+    case "RosettaMappingPathTests": return toAstRosettaMappingPathTests(node);
+    case "RosettaMapRosettaPath": return toAstRosettaMapRosettaPath(node);
+    case "RosettaMapTestAbsentExpression": return toAstRosettaMapTestAbsentExpression(node);
+    case "RosettaMapTestEqualityOperation": return toAstRosettaMapTestEqualityOperation(node);
+    case "RosettaMapTestExistsExpression": return toAstRosettaMapTestExistsExpression(node);
+    case "RosettaMapTestFunc": return toAstRosettaMapTestFunc(node);
+    case "RosettaMergeSynonymValue": return toAstRosettaMergeSynonymValue(node);
+    case "RosettaMetaType": return toAstRosettaMetaType(node);
+    case "RosettaModel": return toAstRosettaModel(node);
+    case "RosettaNumberLiteral": return toAstRosettaNumberLiteral(node);
+    case "RosettaOnlyElement": return toAstRosettaOnlyElement(node);
+    case "RosettaOnlyExistsExpression": return toAstRosettaOnlyExistsExpression(node);
+    case "RosettaParameter": return toAstRosettaParameter(node);
+    case "RosettaQualifiableConfiguration": return toAstRosettaQualifiableConfiguration(node);
+    case "RosettaRecordFeature": return toAstRosettaRecordFeature(node);
+    case "RosettaRecordType": return toAstRosettaRecordType(node);
+    case "RosettaReport": return toAstRosettaReport(node);
+    case "RosettaRule": return toAstRosettaRule(node);
+    case "RosettaScope": return toAstRosettaScope(node);
+    case "RosettaSegment": return toAstRosettaSegment(node);
+    case "RosettaSegmentRef": return toAstRosettaSegmentRef(node);
+    case "RosettaStringLiteral": return toAstRosettaStringLiteral(node);
+    case "RosettaSuperCall": return toAstRosettaSuperCall(node);
+    case "RosettaSymbolReference": return toAstRosettaSymbolReference(node);
+    case "RosettaSynonym": return toAstRosettaSynonym(node);
+    case "RosettaSynonymBody": return toAstRosettaSynonymBody(node);
+    case "RosettaSynonymSource": return toAstRosettaSynonymSource(node);
+    case "RosettaSynonymValueBase": return toAstRosettaSynonymValueBase(node);
+    case "RosettaTypeAlias": return toAstRosettaTypeAlias(node);
+    case "RuleReferenceAnnotation": return toAstRuleReferenceAnnotation(node);
+    case "Segment": return toAstSegment(node);
+    case "ShortcutDeclaration": return toAstShortcutDeclaration(node);
+    case "SortOperation": return toAstSortOperation(node);
+    case "SumOperation": return toAstSumOperation(node);
+    case "SwitchCaseGuard": return toAstSwitchCaseGuard(node);
+    case "SwitchCaseOrDefault": return toAstSwitchCaseOrDefault(node);
+    case "SwitchOperation": return toAstSwitchOperation(node);
+    case "ThenOperation": return toAstThenOperation(node);
+    case "ToDateOperation": return toAstToDateOperation(node);
+    case "ToDateTimeOperation": return toAstToDateTimeOperation(node);
+    case "ToEnumOperation": return toAstToEnumOperation(node);
+    case "ToIntOperation": return toAstToIntOperation(node);
+    case "ToNumberOperation": return toAstToNumberOperation(node);
+    case "ToStringOperation": return toAstToStringOperation(node);
+    case "ToTimeOperation": return toAstToTimeOperation(node);
+    case "ToZonedDateTimeOperation": return toAstToZonedDateTimeOperation(node);
+    case "TypeCall": return toAstTypeCall(node);
+    case "TypeCallArgument": return toAstTypeCallArgument(node);
+    case "TypeParameter": return toAstTypeParameter(node);
+    case "WithMetaEntry": return toAstWithMetaEntry(node);
+    case "WithMetaOperation": return toAstWithMetaOperation(node);
+  }
+  throw new Error(`Unknown node type: ${node.$type}`);
 }

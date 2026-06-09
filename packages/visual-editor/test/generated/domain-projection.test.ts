@@ -10,8 +10,9 @@
  *  2. Information-completeness: every non-$internal, non-GraphMetadata key on
  *     the source node is represented on the domain projection (directly or via
  *     its normalised alias).
- *  3. Cross-ref faithfulness: a cross-ref source `{ $refText }` object is
- *     flattened to a plain string on the domain.
+ *  3. Cross-ref faithfulness: a cross-ref is preserved as an editable
+ *     `{ $refText }` object on the domain (Phase 1: editable substrate, not a
+ *     flattened read-only string), so an edit to the ref survives a round-trip.
  *  4. No-merge / lossless: `conditions` and `postConditions` on a
  *     RosettaFunction are BOTH preserved and distinct.
  *  5. Additive normalisations: `extends` aliases the inheritance ref, `members`
@@ -106,15 +107,17 @@ describe('toDomain — DataDomain (information-completeness + faithfulness)', ()
     }
   });
 
-  it('3. cross-ref faithfulness: superType is a string equal to $refText', () => {
-    expect(typeof dom.superType).toBe('string');
-    expect(dom.superType).toBe('Event');
+  it('3. cross-ref faithfulness: superType is an editable {$refText} object', () => {
+    // Editable domain model (Phase 1): cross-refs stay {$refText} OBJECTS (not flattened
+    // to strings) so an edit to the ref survives a round-trip.
+    expect(typeof dom.superType).toBe('object');
+    expect(dom.superType?.$refText).toBe('Event');
   });
 
   it('5a. additive normalisation: dom.extends aliases superType', () => {
-    expect(dom.extends).toBe('Event');
+    expect(dom.extends?.$refText).toBe('Event');
     // original field still present
-    expect(dom.superType).toBe('Event');
+    expect(dom.superType?.$refText).toBe('Event');
   });
 
   it('5b. additive normalisation: dom.members aliases dom.attributes', () => {
@@ -193,9 +196,9 @@ describe('toDomain — RosettaFunctionDomain (no-merge + faithfulness)', () => {
     }
   });
 
-  it('3. cross-ref faithfulness: superFunction is a plain string', () => {
-    expect(typeof dom.superFunction).toBe('string');
-    expect(dom.superFunction).toBe('BaseCalc');
+  it('3. cross-ref faithfulness: superFunction is an editable {$refText} object', () => {
+    expect(typeof dom.superFunction).toBe('object');
+    expect(dom.superFunction?.$refText).toBe('BaseCalc');
   });
 
   it('4. no-merge: conditions and postConditions are BOTH present and DISTINCT', () => {
@@ -208,8 +211,8 @@ describe('toDomain — RosettaFunctionDomain (no-merge + faithfulness)', () => {
   });
 
   it('5a. additive normalisation: dom.extends aliases superFunction', () => {
-    expect(dom.extends).toBe('BaseCalc');
-    expect(dom.superFunction).toBe('BaseCalc');
+    expect(dom.extends?.$refText).toBe('BaseCalc');
+    expect(dom.superFunction?.$refText).toBe('BaseCalc');
   });
 
   it('5b. additive normalisation: dom.members aliases dom.inputs', () => {
