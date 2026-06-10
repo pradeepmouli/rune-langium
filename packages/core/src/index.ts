@@ -49,6 +49,10 @@ export { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from './generate
 export type { Dehydrated } from './serializer/dehydrated.js';
 export * from './generated/domain-ops.js';
 
+// Source adapters
+export { parsedAdapter } from './adapters/parsed-adapter.js';
+export { curatedAdapter } from './adapters/curated-adapter.js';
+
 // Serializer
 export {
   serializeModel,
