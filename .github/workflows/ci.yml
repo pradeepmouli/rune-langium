@@ -197,4 +197,4 @@ jobs:
         run: pnpm --filter @rune-langium/core generate:domain
 
       - name: Assert no drift in generated domain surface
-        run: git diff --exit-code -- packages/core/src/generated/domain.ts
+        run: git diff --exit-code -- packages/core/src/generated/domain.ts packages/core/src/generated/domain-ops.ts
