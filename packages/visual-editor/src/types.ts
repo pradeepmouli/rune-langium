@@ -105,6 +105,9 @@ export type AstNodeModel<T extends AstNodeShape> = {
   -readonly [K in Exclude<keyof T, ExcludedFields | '$type'>]: SerializeField<T[K]>;
 };
 
+// Dehydrated<T> — canonical editable wire model (defined in @rune-langium/core)
+export type { Dehydrated } from '@rune-langium/core';
+
 // ---------------------------------------------------------------------------
 // GraphNode — AstNodeModel + graph/editor metadata
 // ---------------------------------------------------------------------------

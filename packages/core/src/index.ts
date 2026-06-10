@@ -34,6 +34,7 @@ export { RuneDslLinker } from './services/rune-dsl-linker.js';
 export type { DeferredModelProvider } from './services/rune-dsl-linker.js';
 export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
 export { RuneDslValidator } from './services/rune-dsl-validator.js';
+export { RuneStoreHydrator } from './services/rune-store-hydrator.js';
 export {
   RuneDslParser,
   createRuneDslParser,
@@ -43,6 +44,10 @@ export {
 // Generated module essentials — needed for LSP server integration
 export { RuneDslLanguageMetaData } from './generated/module.js';
 export { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from './generated/module.js';
+
+// Domain substrate (generated placeholder — will be replaced by langium-zod emitter)
+export type { Dehydrated } from './serializer/dehydrated.js';
+export * from './generated/domain-ops.js';
 
 // Serializer
 export {

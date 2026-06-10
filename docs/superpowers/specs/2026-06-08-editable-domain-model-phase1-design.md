@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Editable Domain Model — Phase 1 Design
 
-**Status:** Approved design (2026-06-08). Phase 1 of a multi-phase effort.
+**Status:** Phase 1 MERGED (2026-06-09) — langium-zod PR #75 + rune PR #322. The generated `domain.ts` artifact (`@ts-nocheck`, 593 `any`-typed functions) is being torn down; see `docs/superpowers/plans/2026-06-09-revert-domain-emitter.md` for teardown tasks and the corrected follow-on architecture (`Dehydrated<T>`, `RuneStoreHydrator`, typed `domain-ops.ts`). The §3.1 design intent remains correct; the execution output needs replacement.
 
 **Goal:** Produce a generated, editable, round-trippable **domain model** that can become the single representation the rune visual editor edits, the serializer round-trips, and every surface speaks — replacing the three shapes that coexist today.
 

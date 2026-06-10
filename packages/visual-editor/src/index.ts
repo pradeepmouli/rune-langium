@@ -77,6 +77,7 @@ export type { FunctionFormProps } from './components/editors/FunctionForm.js';
 export type {
   AstNodeModel,
   AstNodeShape,
+  Dehydrated,
   GraphNode,
   AnyGraphNode,
   GraphMetadata,
