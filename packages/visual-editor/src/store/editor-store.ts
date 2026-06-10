@@ -52,6 +52,7 @@ import type {
   Annotation
 } from '@rune-langium/core';
 import { indexById } from '@rune-langium/core';
+import * as DomainOps from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
@@ -1365,14 +1366,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const node = draft.nodes.get(nodeId);
               if (node) {
                 const d = node.data as AnyGraphNode;
-                if (d.$type === 'Data' || d.$type === 'Annotation') {
-                  const attrs = (d as { attributes?: Array<{ name: string }> }).attributes;
-                  // Remove every attribute sharing the name (mirrors the prior
-                  // `.filter`; a malformed model may hold duplicate names).
-                  if (attrs) {
-                    for (let i = attrs.length - 1; i >= 0; i--) {
-                      if (attrs[i]?.name === attrName) attrs.splice(i, 1);
-                    }
+                const key = { name: attrName } as unknown as Parameters<typeof DomainOps.Data.removeAttribute>[1];
+                if (d.$type === 'Data') {
+                  while (DomainOps.Data.removeAttribute(d as never, key)) {
+                    /* drain duplicates */
+                  }
+                } else if (d.$type === 'Annotation') {
+                  while (DomainOps.Annotation.removeAttribute(d as never, key)) {
+                    /* drain duplicates */
                   }
                 }
               }
