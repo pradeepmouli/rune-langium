@@ -1659,7 +1659,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: name-based filter, not index splice
           removeEnumValue(nodeId: string, valueName: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1667,10 +1666,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: { name: string }[] }).enumValues;
               if (!Array.isArray(vals)) return;
-              // Remove ALL matches by name (master behavior) — robust against a
-              // malformed graph with duplicate enum-value names. find+splice would
-              // drop only the first, leaving stale duplicates behind.
-              (d as { enumValues?: unknown[] }).enumValues = vals.filter((v) => v.name !== valueName);
+              // Drain ALL matches by name (master behavior) — robust against a
+              // malformed graph with duplicate enum-value names. A single removeX
+              // call would drop only the first, leaving stale duplicates behind.
+              const key = { name: valueName } as unknown as Parameters<
+                typeof DomainOps.RosettaEnumeration.removeEnumValue
+              >[1];
+              while (DomainOps.RosettaEnumeration.removeEnumValue(d as never, key)) {
+                /* drain duplicates */
+              }
             });
           },
 
