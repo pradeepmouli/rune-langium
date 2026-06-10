@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import {
+  AstUtils,
   DefaultHydrator,
   type AstNode,
   type CstNode,
@@ -9,6 +10,8 @@ import {
   type HydrateContext,
   type Reference,
 } from 'langium';
+import { isRosettaModel } from '../generated/ast.js';
+import type { Dehydrated } from '../serializer/dehydrated.js';
 
 /**
  * Hydrator variant for the Rune store substrate.
@@ -18,8 +21,24 @@ import {
  *  - References are stored as `{ $refText: string }` only — the editable `Dehydrated<T>` wire format.
  *  - Re-hydration rebuilds a proper `Reference` via `this.linker.buildReference`, passing
  *    `undefined` for the CST node (consistent with the drop above).
+ *  - $namespace is stamped from the enclosing RosettaModel before $container is stripped.
  */
 export class RuneStoreHydrator extends DefaultHydrator {
+  /** Dehydrate a single AST node to its Dehydrated<T> wire form. */
+  dehydrateNode<T extends AstNode>(node: T): Dehydrated<T> {
+    const context = this.createDehyrationContext(node);
+    return this.dehydrateAstNode(node, context) as Dehydrated<T>;
+  }
+
+  protected override dehydrateAstNode(node: AstNode, context: DehydrateContext): object {
+    const result = super.dehydrateAstNode(node, context) as Record<string, unknown>;
+    const model = AstUtils.getContainerOfType(node, isRosettaModel);
+    if (model) {
+      result.$namespace = model.name;
+    }
+    return result;
+  }
+
   protected override dehydrateCstNode(_node: CstNode, _context: DehydrateContext): Record<string, never> {
     return {};
   }
