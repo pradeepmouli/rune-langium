@@ -1630,7 +1630,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: no generated reorder accessor
           reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1638,6 +1637,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
               const attrs = (d as { attributes?: unknown[] }).attributes;
               if (!Array.isArray(attrs)) return;
+              // kept reorderInPlace: moveAttributeAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op; pinned by editor-store-actions.test.ts)
               reorderInPlace(attrs, fromIndex, toIndex);
             });
           },
@@ -1699,7 +1699,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: no generated reorder accessor
           reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1707,6 +1706,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: unknown[] }).enumValues;
               if (!Array.isArray(vals)) return;
+              // kept reorderInPlace: moveEnumValueAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op)
               reorderInPlace(vals, fromIndex, toIndex);
             });
           },
@@ -1916,7 +1916,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: no generated reorder accessor
           reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1924,6 +1923,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: unknown[] }).inputs;
               if (!Array.isArray(inputs)) return;
+              // kept reorderInPlace: moveInputAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op)
               reorderInPlace(inputs, fromIndex, toIndex);
             });
           },
@@ -2075,6 +2075,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // kept reorderInPlace: moveConditionAt differs on kind-agnostic dispatch (per-type only) and would splice the draft on out-of-range indices, emitting a spurious patch
           reorderCondition(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
