@@ -216,7 +216,9 @@ describe('POST /api/parse — curatedBundles', () => {
     }
   });
 
-  it('stamps $namespace on each element in serializedModel for curated docs', async () => {
+  it('passes through $namespace baked into curated artifact elements', async () => {
+    // $namespace is stamped at build time (scripts/build-serialized-artifacts.mjs),
+    // not at runtime — the worker passes it through unchanged from the artifact.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
       schemaVersion: 1,
@@ -237,7 +239,7 @@ describe('POST /api/parse — curatedBundles', () => {
         serializedModel: JSON.stringify({
           $type: 'RosettaModel',
           name: 'cdm.base.math',
-          elements: [{ $type: 'Data', name: 'Quantity' }]
+          elements: [{ $type: 'Data', name: 'Quantity', $namespace: 'cdm.base.math' }]
         }),
         exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
       }
