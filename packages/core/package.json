@@ -27,7 +27,7 @@
     "dev": "tsgo -b --watch",
     "generate": "langium generate && langium-zod generate && oxfmt src/generated/zod-schemas.ts",
     "generate:zod": "langium-zod generate && oxfmt src/generated/zod-schemas.ts",
-    "generate:domain": "langium-zod generate --namespace-ops --namespace-ops-out src/generated/domain.ts && oxfmt src/generated/domain.ts",
+    "generate:domain": "langium-zod generate --namespace-ops --namespace-ops-out src/generated/domain.ts --domain-surface-config domain-surface.config.json && oxfmt src/generated/domain.ts",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
