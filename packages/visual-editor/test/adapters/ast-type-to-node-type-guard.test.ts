@@ -20,7 +20,6 @@ import { join, relative } from 'node:path';
 describe('AST_TYPE_TO_NODE_TYPE raw-lookup guard', () => {
   const ALLOWED = new Set<string>([
     'packages/visual-editor/src/adapters/model-helpers.ts',
-    'packages/visual-editor/src/store/editor-store.ts'
   ]);
 
   const PATTERN = /AST_TYPE_TO_NODE_TYPE\s*\[[^\]]*\$type[^\]]*\]/;

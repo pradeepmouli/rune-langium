@@ -221,15 +221,13 @@ export const NODE_TYPE_TO_AST_TYPE: Record<string, string> = {
 
 /**
  * Lookup that accepts EITHER an AST `$type` (e.g. `'Data'`, `'RosettaEnumeration'`)
- * or a React-Flow node-type / `typeKind` value (e.g. `'data'`, `'enum'`) and
- * returns the React-Flow node-type. Combines AST_TYPE_TO_NODE_TYPE with
- * identity entries so a single keyed lookup handles both shapes — needed
- * because the curated hydration path attaches `typeKind` (node-type form)
- * to node data while user-authored Langium ASTs carry `$type` (AST form).
+ * or a React-Flow node-type (e.g. `'data'`, `'enum'`) and returns the React-Flow
+ * node-type. Combines AST_TYPE_TO_NODE_TYPE with identity entries so a single
+ * keyed lookup handles both shapes.
  */
 const NODE_KIND_LOOKUP: Record<string, string> = {
   ...AST_TYPE_TO_NODE_TYPE,
-  // Identity entries so node-type/typeKind values resolve without a second pass.
+  // Identity entries so node-type string values resolve without a second pass.
   data: 'data',
   choice: 'choice',
   enum: 'enum',
