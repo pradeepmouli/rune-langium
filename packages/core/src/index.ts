@@ -15,12 +15,11 @@
  * preserve original formatting.
  */
 
-// Core AST types + generated domain surface (mutators, converters, domain interfaces)
+// Core AST types
 export * from './generated/ast.js';
-export * from './generated/domain.js';
 // Namespace-merged ops: import { DomainOps } from '@rune-langium/core' → DomainOps.Data.getAttributes(node)
 // Requires langium-zod >= 0.8.0 to regenerate.
-export * as DomainOps from './generated/domain-ops.js';
+export * as DomainOps from './generated/domain.js';
 
 // Parse API
 export { parse, parseWorkspace } from './api/parse.js';

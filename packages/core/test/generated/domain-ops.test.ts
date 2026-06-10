@@ -3,18 +3,12 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  addAnnotationAttributes,
-  addChoiceAttributes,
-  addDataAttributes,
-  addRosettaEnumerationEnumValues,
-  addRosettaFunctionInputs,
-  addRosettaRecordTypeFeatures,
-  removeAnnotationAttributesAt,
-  removeChoiceAttributesAt,
-  removeDataAttributesAt,
-  removeRosettaEnumerationEnumValuesAt,
-  removeRosettaFunctionInputsAt,
-  removeRosettaRecordTypeFeaturesAt,
+  Annotation,
+  Choice,
+  Data,
+  RosettaEnumeration,
+  RosettaFunction,
+  RosettaRecordType
 } from '../../src/generated/domain.js';
 
 // ---------------------------------------------------------------------------
@@ -65,29 +59,29 @@ function makeRecordType(features: ReturnType<typeof makeRecordFeature>[] = []) {
 // Data attributes
 // ---------------------------------------------------------------------------
 
-describe('addDataAttributes / removeDataAttributesAt', () => {
-  it('addDataAttributes appends in-place', () => {
+describe('Data.addAttribute / Data.removeAttributeAt', () => {
+  it('addAttribute appends in-place', () => {
     const node = makeData();
     const a = makeAttr('a');
-    addDataAttributes(node, a);
+    Data.addAttribute(node as any, a as any);
     expect(node.attributes).toHaveLength(1);
     expect(node.attributes[0]).toBe(a);
   });
 
-  it('removeDataAttributesAt splices the correct index', () => {
+  it('removeAttributeAt splices the correct index', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const c = makeAttr('c');
     const node = makeData([a, b, c]);
-    removeDataAttributesAt(node, 1);
+    Data.removeAttributeAt(node as any, 1);
     expect(node.attributes).toEqual([a, c]);
   });
 
-  it('removeDataAttributesAt index 0 leaves tail intact', () => {
+  it('removeAttributeAt index 0 leaves tail intact', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const node = makeData([a, b]);
-    removeDataAttributesAt(node, 0);
+    Data.removeAttributeAt(node as any, 0);
     expect(node.attributes).toEqual([b]);
   });
 });
@@ -96,20 +90,20 @@ describe('addDataAttributes / removeDataAttributesAt', () => {
 // Annotation attributes
 // ---------------------------------------------------------------------------
 
-describe('addAnnotationAttributes / removeAnnotationAttributesAt', () => {
-  it('addAnnotationAttributes appends in-place', () => {
+describe('Annotation.addAttribute / Annotation.removeAttributeAt', () => {
+  it('addAttribute appends in-place', () => {
     const node = makeAnnotation();
     const a = makeAttr('x');
-    addAnnotationAttributes(node, a);
+    Annotation.addAttribute(node as any, a as any);
     expect(node.attributes).toHaveLength(1);
     expect(node.attributes[0]).toBe(a);
   });
 
-  it('removeAnnotationAttributesAt splices correctly', () => {
+  it('removeAttributeAt splices correctly', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const node = makeAnnotation([a, b]);
-    removeAnnotationAttributesAt(node, 0);
+    Annotation.removeAttributeAt(node as any, 0);
     expect(node.attributes).toEqual([b]);
   });
 });
@@ -118,21 +112,21 @@ describe('addAnnotationAttributes / removeAnnotationAttributesAt', () => {
 // Choice attributes (ChoiceOption items)
 // ---------------------------------------------------------------------------
 
-describe('addChoiceAttributes / removeChoiceAttributesAt', () => {
-  it('addChoiceAttributes appends', () => {
+describe('Choice.addAttribute / Choice.removeAttributeAt', () => {
+  it('addAttribute appends', () => {
     const node = makeChoice();
     const opt = makeChoiceOption('o');
-    addChoiceAttributes(node, opt);
+    Choice.addAttribute(node as any, opt as any);
     expect(node.attributes).toHaveLength(1);
     expect(node.attributes[0]).toBe(opt);
   });
 
-  it('removeChoiceAttributesAt removes middle element', () => {
+  it('removeAttributeAt removes middle element', () => {
     const a = makeChoiceOption('a');
     const b = makeChoiceOption('b');
     const c = makeChoiceOption('c');
     const node = makeChoice([a, b, c]);
-    removeChoiceAttributesAt(node, 1);
+    Choice.removeAttributeAt(node as any, 1);
     expect(node.attributes).toEqual([a, c]);
   });
 });
@@ -141,20 +135,20 @@ describe('addChoiceAttributes / removeChoiceAttributesAt', () => {
 // RosettaEnumeration enumValues
 // ---------------------------------------------------------------------------
 
-describe('addRosettaEnumerationEnumValues / removeRosettaEnumerationEnumValuesAt', () => {
-  it('addRosettaEnumerationEnumValues appends', () => {
+describe('RosettaEnumeration.addEnumValue / RosettaEnumeration.removeEnumValueAt', () => {
+  it('addEnumValue appends', () => {
     const node = makeEnum();
     const v = makeEnumValue('V');
-    addRosettaEnumerationEnumValues(node, v);
+    RosettaEnumeration.addEnumValue(node as any, v as any);
     expect(node.enumValues).toHaveLength(1);
     expect(node.enumValues[0]).toBe(v);
   });
 
-  it('removeRosettaEnumerationEnumValuesAt removes last element', () => {
+  it('removeEnumValueAt removes last element', () => {
     const a = makeEnumValue('a');
     const b = makeEnumValue('b');
     const node = makeEnum([a, b]);
-    removeRosettaEnumerationEnumValuesAt(node, 1);
+    RosettaEnumeration.removeEnumValueAt(node as any, 1);
     expect(node.enumValues).toEqual([a]);
   });
 });
@@ -163,20 +157,20 @@ describe('addRosettaEnumerationEnumValues / removeRosettaEnumerationEnumValuesAt
 // RosettaFunction inputs
 // ---------------------------------------------------------------------------
 
-describe('addRosettaFunctionInputs / removeRosettaFunctionInputsAt', () => {
-  it('addRosettaFunctionInputs appends', () => {
+describe('RosettaFunction.addInput / RosettaFunction.removeInputAt', () => {
+  it('addInput appends', () => {
     const node = makeFunction();
     const a = makeAttr('arg');
-    addRosettaFunctionInputs(node, a);
+    RosettaFunction.addInput(node as any, a as any);
     expect(node.inputs).toHaveLength(1);
     expect(node.inputs[0]).toBe(a);
   });
 
-  it('removeRosettaFunctionInputsAt removes first element', () => {
+  it('removeInputAt removes first element', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const node = makeFunction([a, b]);
-    removeRosettaFunctionInputsAt(node, 0);
+    RosettaFunction.removeInputAt(node as any, 0);
     expect(node.inputs).toEqual([b]);
   });
 });
@@ -185,21 +179,21 @@ describe('addRosettaFunctionInputs / removeRosettaFunctionInputsAt', () => {
 // RosettaRecordType features
 // ---------------------------------------------------------------------------
 
-describe('addRosettaRecordTypeFeatures / removeRosettaRecordTypeFeaturesAt', () => {
-  it('addRosettaRecordTypeFeatures appends', () => {
+describe('RosettaRecordType.addFeature / RosettaRecordType.removeFeatureAt', () => {
+  it('addFeature appends', () => {
     const node = makeRecordType();
     const f = makeRecordFeature('feat');
-    addRosettaRecordTypeFeatures(node, f);
+    RosettaRecordType.addFeature(node as any, f as any);
     expect(node.features).toHaveLength(1);
     expect(node.features[0]).toBe(f);
   });
 
-  it('removeRosettaRecordTypeFeaturesAt removes middle element', () => {
+  it('removeFeatureAt removes middle element', () => {
     const a = makeRecordFeature('a');
     const b = makeRecordFeature('b');
     const c = makeRecordFeature('c');
     const node = makeRecordType([a, b, c]);
-    removeRosettaRecordTypeFeaturesAt(node, 1);
+    RosettaRecordType.removeFeatureAt(node as any, 1);
     expect(node.features).toEqual([a, c]);
   });
 });
