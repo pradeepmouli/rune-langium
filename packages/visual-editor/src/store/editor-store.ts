@@ -1348,7 +1348,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 if (d.$type === 'Data' || d.$type === 'Annotation') {
                   const dd = d as { attributes?: unknown[] };
                   if (!Array.isArray(dd.attributes)) dd.attributes = [];
-                  dd.attributes.push(newAttr);
+                  if (d.$type === 'Data') {
+                    DomainOps.Data.addAttribute(d as never, newAttr as never);
+                  } else {
+                    DomainOps.Annotation.addAttribute(d as never, newAttr as never);
+                  }
                 }
               }
               if (newEdge) draft.edges.set(newEdge.id, newEdge);
@@ -1654,7 +1658,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaEnumeration') return;
-              ensureMemberArray(d).push(newValue);
+              ensureMemberArray(d); // init guard: enumValues may be absent on a fresh node
+              DomainOps.RosettaEnumeration.addEnumValue(d as never, newValue as never);
             });
           },
 
@@ -1815,7 +1820,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaFunction') return;
-              ensureMemberArray(d).push(newInput);
+              ensureMemberArray(d); // init guard: inputs may be absent on a fresh node
+              DomainOps.RosettaFunction.addInput(d as never, newInput as never);
             });
           },
 
@@ -1987,6 +1993,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           // Condition operations
           // -----------------------------------------------------------------------
 
+          // no 1:1 generated accessor: kind-agnostic (any node kind) + pre/post split;
+          // DomainOps addCondition exists only per-type (Data/RosettaFunction/RosettaTypeAlias)
           addCondition(
             nodeId: string,
             condition: {
@@ -2101,7 +2109,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: kind-agnostic / rich-ref construction
+          // item construction stays bespoke (rich-ref synonym shapes); append delegated to DomainOps
           addSynonym(nodeId: string, synonym: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2111,18 +2119,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
               if (d.$type === 'Data' || d.$type === 'Choice') {
                 const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
-                if (Array.isArray(dd.synonyms)) {
-                  dd.synonyms.push(newSyn);
+                if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
+                if (d.$type === 'Data') {
+                  DomainOps.Data.addSynonym(d as never, newSyn as never);
                 } else {
-                  dd.synonyms = [newSyn];
+                  DomainOps.Choice.addSynonym(d as never, newSyn as never);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
                 const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
-                if (Array.isArray(dd.synonyms)) {
-                  dd.synonyms.push(newSyn);
-                } else {
-                  dd.synonyms = [newSyn];
-                }
+                if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
+                DomainOps.RosettaEnumeration.addSynonym(d as never, newSyn as never);
               }
               // other $types: no-op (no mutation → mutateGraph early-exits)
             });
