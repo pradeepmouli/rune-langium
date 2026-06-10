@@ -15,19 +15,16 @@
  * preserve original formatting.
  */
 
-// Core AST types — re-export generated types
+// Core AST types + generated domain surface (mutators, converters, domain interfaces)
 export * from './generated/ast.js';
+export * from './generated/domain.js';
 
 // Parse API
 export { parse, parseWorkspace } from './api/parse.js';
 export type { ParseResult } from './api/parse.js';
 
 // Services
-export {
-  createRuneDslServices,
-  RuneDslModule,
-  RuneDslSharedModule
-} from './services/rune-dsl-module.js';
+export { createRuneDslServices, RuneDslModule, RuneDslSharedModule } from './services/rune-dsl-module.js';
 export type { RuneDslServices } from './services/rune-dsl-module.js';
 export { RuneDslIndexManager } from './services/rune-dsl-index-manager.js';
 export { RuneDslLinker } from './services/rune-dsl-linker.js';
@@ -35,39 +32,28 @@ export type { DeferredModelProvider } from './services/rune-dsl-linker.js';
 export { RuneDslScopeProvider } from './services/rune-dsl-scope-provider.js';
 export { RuneDslValidator } from './services/rune-dsl-validator.js';
 export { RuneStoreHydrator } from './services/rune-store-hydrator.js';
-export {
-  RuneDslParser,
-  createRuneDslParser,
-  insertImplicitBrackets
-} from './services/rune-dsl-parser.js';
+export { RuneDslParser, createRuneDslParser, insertImplicitBrackets } from './services/rune-dsl-parser.js';
 
 // Generated module essentials — needed for LSP server integration
 export { RuneDslLanguageMetaData } from './generated/module.js';
 export { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from './generated/module.js';
 
-// Domain substrate (generated placeholder — will be replaced by langium-zod emitter)
+// Domain substrate
 export type { Dehydrated } from './serializer/dehydrated.js';
-export * from './generated/domain-ops.js';
+
+// Source adapters
+export { parsedAdapter } from './adapters/parsed-adapter.js';
+export { curatedAdapter } from './adapters/curated-adapter.js';
 
 // Serializer
-export {
-  serializeModel,
-  serializeElement,
-  serializeModels
-} from './serializer/rosetta-serializer.js';
+export { serializeModel, serializeElement, serializeModels } from './serializer/rosetta-serializer.js';
 export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
 export { preserveCstText } from './serializer/preserve-cst-text.js';
 export { deserializeRuneModel, hydrateModelDocument } from './serializer/hydrate-model-document.js';
 export type { HydrateServices, HydrateOptions } from './serializer/hydrate-model-document.js';
 
 // Utility functions
-export {
-  isOptional,
-  isSingular,
-  isPlural,
-  isRequired,
-  toConstraintString
-} from './utils/cardinality-utils.js';
+export { isOptional, isSingular, isPlural, isRequired, toConstraintString } from './utils/cardinality-utils.js';
 export { getOptions, getEffectiveConditions } from './utils/choice-utils.js';
 export {
   hasGeneratedInput,

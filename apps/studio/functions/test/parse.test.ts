@@ -91,6 +91,20 @@ describe('POST /api/parse', () => {
     expect(allExports.some((e) => e.path === 'x.T')).toBe(true);
   });
 
+  it('stamps $namespace on each element in serializedModel for user files', async () => {
+    const res = await onRequestPost({
+      request: makeRequest({ files: [{ name: 'x.rune', content: SIMPLE_RUNE }] })
+    } as never);
+    const body = (await res.json()) as {
+      hydrationState: { documents: Array<{ uri: string; serializedModel: string }> };
+    };
+    const doc = body.hydrationState.documents.find((d) => d.uri === 'x.rune');
+    expect(doc).toBeDefined();
+    const model = JSON.parse(doc!.serializedModel) as { elements?: Array<{ $namespace?: string }> };
+    expect(Array.isArray(model.elements)).toBe(true);
+    expect(model.elements!.every((el) => el.$namespace === 'x')).toBe(true);
+  });
+
   it('returns errors field per filePath for parse failures', async () => {
     // 'namespace x\ntype Broken:' has a type declaration with no body.
     // Whether this produces a parser error depends on the Rune grammar; if the
@@ -197,6 +211,55 @@ describe('POST /api/parse — curatedBundles', () => {
       const cdmEntry = body.deferredExports.find((d) => d.namespace === 'cdm.base.math');
       expect(cdmEntry?.filePath).toBe('cdm/base/math.rosetta');
       expect(cdmEntry?.exports.some((e) => e.name === 'Quantity')).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('passes through $namespace baked into curated artifact elements', async () => {
+    // $namespace is stamped at build time (scripts/build-serialized-artifacts.mjs),
+    // not at runtime — the worker passes it through unchanged from the artifact.
+    const curatedFetchModule = await import('../lib/curated-fetch.js');
+    vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 1,
+      modelId: 'cdm',
+      version: '2026-05-01',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'x',
+      upstreamCommit: '',
+      upstreamRef: 'master',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: []
+    } as never);
+    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+      {
+        uri: 'cdm/base/math.rosetta',
+        content: '',
+        serializedModel: JSON.stringify({
+          $type: 'RosettaModel',
+          name: 'cdm.base.math',
+          elements: [{ $type: 'Data', name: 'Quantity', $namespace: 'cdm.base.math' }]
+        }),
+        exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
+      }
+    ]);
+    try {
+      const res = await onRequestPost({
+        request: makeRequest({
+          files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      } as never);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        hydrationState: { documents: Array<{ uri: string; serializedModel: string }> };
+      };
+      const doc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
+      expect(doc).toBeDefined();
+      const model = JSON.parse(doc!.serializedModel) as { elements?: Array<{ $namespace?: string }> };
+      expect(Array.isArray(model.elements)).toBe(true);
+      expect(model.elements!.every((el) => el.$namespace === 'cdm.base.math')).toBe(true);
     } finally {
       spy.mockRestore();
     }

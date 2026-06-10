@@ -95,8 +95,18 @@ function extractRosettaFiles(tarGzBytes) {
   return files;
 }
 
+function stampNamespacesIntoModelJson(modelJson, namespace, bigIntReplacer) {
+  let parsed;
+  try { parsed = JSON.parse(modelJson); } catch { return modelJson; }
+  if (!parsed || !Array.isArray(parsed.elements)) return modelJson;
+  for (const el of parsed.elements) {
+    if (el && typeof el === 'object') el.$namespace = namespace;
+  }
+  return JSON.stringify(parsed, bigIntReplacer);
+}
+
 async function buildArtifact(source, archiveBytes) {
-  const { createRuneDslServices, serializeRuneModel, runeBigIntReplacer } = await import('../packages/core/dist/index.js');
+  const { createRuneDslServices, serializeRuneModel, runeBigIntReplacer, namespaceFromModelName } = await import('../packages/core/dist/index.js');
 
   const rosettaFiles = extractRosettaFiles(archiveBytes);
   console.log(`  Found ${rosettaFiles.length} .rosetta files`);
@@ -147,9 +157,11 @@ async function buildArtifact(source, archiveBytes) {
           }
         }
       }
+      const ns = namespaceFromModelName(model.name);
+      const rawModelJson = serializeRuneModel(serializer, model);
       return {
         path: rosettaFiles[i].path,
-        modelJson: serializeRuneModel(serializer, doc.parseResult.value),
+        modelJson: ns ? stampNamespacesIntoModelJson(rawModelJson, ns, runeBigIntReplacer) : rawModelJson,
         exports,
       };
     }),
@@ -233,7 +245,7 @@ async function main() {
 
       for (const ns of Object.keys(graph)) {
         const nsDocList = nsDocs[ns] ?? [];
-        const nsJson = JSON.stringify({ documents: nsDocList }, runeBigIntReplacer);
+        const nsJson = JSON.stringify({ documents: nsDocList });
         const nsGzipped = gzipSync(Buffer.from(nsJson));
         await writeFile(`${nsDir}/${nsToSlug.get(ns)}.json.gz`, nsGzipped);
         totalNsBytes += nsGzipped.byteLength;

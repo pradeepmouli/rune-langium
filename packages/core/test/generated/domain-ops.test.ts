@@ -2,230 +2,204 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import type { Dehydrated } from '../../src/serializer/dehydrated.js';
-import type {
-  Annotation,
-  Attribute,
-  Choice,
-  ChoiceOption,
-  Data,
-  RosettaEnumeration,
-  RosettaEnumValue,
-  RosettaFunction,
-  RosettaRecordFeature,
-  RosettaRecordType,
-} from '../../src/generated/ast.js';
 import {
-  addAttribute,
-  addChoiceOption,
-  addEnumValue,
-  addFunctionInput,
-  addRecordFeature,
-  getAttributes,
-  getChoiceOptions,
-  getEnumValues,
-  getFunctionInputs,
-  getRecordFeatures,
-  removeAttributeAt,
-  removeChoiceOptionAt,
-  removeEnumValueAt,
-  removeFunctionInputAt,
-  removeRecordFeatureAt,
-} from '../../src/generated/domain-ops.js';
+  addAnnotationAttributes,
+  addChoiceAttributes,
+  addDataAttributes,
+  addRosettaEnumerationEnumValues,
+  addRosettaFunctionInputs,
+  addRosettaRecordTypeFeatures,
+  removeAnnotationAttributesAt,
+  removeChoiceAttributesAt,
+  removeDataAttributesAt,
+  removeRosettaEnumerationEnumValuesAt,
+  removeRosettaFunctionInputsAt,
+  removeRosettaRecordTypeFeaturesAt,
+} from '../../src/generated/domain.js';
 
 // ---------------------------------------------------------------------------
 // Minimal test-fixture factories (type-level only — no Langium runtime)
 // ---------------------------------------------------------------------------
 
-function makeAttr(name: string): Dehydrated<Attribute> {
-  return { $type: 'Attribute', name: { $type: 'ValidID', value: name } } as unknown as Dehydrated<Attribute>;
+function makeAttr(name: string) {
+  return { $type: 'Attribute' as const, name };
 }
 
-function makeChoiceOption(name: string): Dehydrated<ChoiceOption> {
-  return { $type: 'ChoiceOption', name } as unknown as Dehydrated<ChoiceOption>;
+function makeChoiceOption(name: string) {
+  return { $type: 'ChoiceOption' as const, name };
 }
 
-function makeEnumValue(name: string): Dehydrated<RosettaEnumValue> {
-  return { $type: 'RosettaEnumValue', name: { $type: 'ValidID', value: name } } as unknown as Dehydrated<RosettaEnumValue>;
+function makeEnumValue(name: string) {
+  return { $type: 'RosettaEnumValue' as const, name };
 }
 
-function makeRecordFeature(name: string): Dehydrated<RosettaRecordFeature> {
-  return { $type: 'RosettaRecordFeature', name: { $type: 'ValidID', value: name } } as unknown as Dehydrated<RosettaRecordFeature>;
+function makeRecordFeature(name: string) {
+  return { $type: 'RosettaRecordFeature' as const, name };
 }
 
-function makeData(attrs: Dehydrated<Attribute>[] = []): Dehydrated<Data> {
-  return { $type: 'Data', attributes: attrs } as unknown as Dehydrated<Data>;
+function makeData(attributes: ReturnType<typeof makeAttr>[] = []) {
+  return { $type: 'Data' as const, name: 'TestData', attributes };
 }
 
-function makeAnnotation(attrs: Dehydrated<Attribute>[] = []): Dehydrated<Annotation> {
-  return { $type: 'Annotation', attributes: attrs } as unknown as Dehydrated<Annotation>;
+function makeAnnotation(attributes: ReturnType<typeof makeAttr>[] = []) {
+  return { $type: 'Annotation' as const, name: 'TestAnnotation', attributes };
 }
 
-function makeChoice(attrs: Dehydrated<ChoiceOption>[] = []): Dehydrated<Choice> {
-  return { $type: 'Choice', attributes: attrs } as unknown as Dehydrated<Choice>;
+function makeChoice(attributes: ReturnType<typeof makeChoiceOption>[] = []) {
+  return { $type: 'Choice' as const, name: 'TestChoice', attributes };
 }
 
-function makeEnum(vals: Dehydrated<RosettaEnumValue>[] = []): Dehydrated<RosettaEnumeration> {
-  return { $type: 'RosettaEnumeration', enumValues: vals } as unknown as Dehydrated<RosettaEnumeration>;
+function makeEnum(enumValues: ReturnType<typeof makeEnumValue>[] = []) {
+  return { $type: 'RosettaEnumeration' as const, name: 'TestEnum', enumValues };
 }
 
-function makeFunction(inputs: Dehydrated<Attribute>[] = []): Dehydrated<RosettaFunction> {
-  return { $type: 'RosettaFunction', inputs } as unknown as Dehydrated<RosettaFunction>;
+function makeFunction(inputs: ReturnType<typeof makeAttr>[] = []) {
+  return { $type: 'RosettaFunction' as const, name: 'testFunc', inputs };
 }
 
-function makeRecordType(features: Dehydrated<RosettaRecordFeature>[] = []): Dehydrated<RosettaRecordType> {
-  return { $type: 'RosettaRecordType', features } as unknown as Dehydrated<RosettaRecordType>;
+function makeRecordType(features: ReturnType<typeof makeRecordFeature>[] = []) {
+  return { $type: 'RosettaRecordType' as const, name: 'TestRecord', features };
 }
 
 // ---------------------------------------------------------------------------
-// Data / Annotation attributes
+// Data attributes
 // ---------------------------------------------------------------------------
 
-describe('getAttributes / addAttribute / removeAttributeAt', () => {
-  it('getAttributes returns same array reference', () => {
-    const arr: Dehydrated<Attribute>[] = [makeAttr('foo')];
-    expect(getAttributes(makeData(arr))).toBe(arr);
-    expect(getAttributes(makeAnnotation(arr))).toBe(arr);
-  });
-
-  it('addAttribute appends in-place on Data', () => {
+describe('addDataAttributes / removeDataAttributesAt', () => {
+  it('addDataAttributes appends in-place', () => {
     const node = makeData();
     const a = makeAttr('a');
-    addAttribute(node, a);
-    expect(getAttributes(node)).toHaveLength(1);
-    expect(getAttributes(node)[0]).toBe(a);
+    addDataAttributes(node, a);
+    expect(node.attributes).toHaveLength(1);
+    expect(node.attributes[0]).toBe(a);
   });
 
-  it('addAttribute appends in-place on Annotation', () => {
-    const node = makeAnnotation();
-    const a = makeAttr('x');
-    addAttribute(node, a);
-    expect(getAttributes(node)).toHaveLength(1);
-    expect(getAttributes(node)[0]).toBe(a);
-  });
-
-  it('removeAttributeAt splices the correct index', () => {
+  it('removeDataAttributesAt splices the correct index', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const c = makeAttr('c');
     const node = makeData([a, b, c]);
-    removeAttributeAt(node, 1);
-    expect(getAttributes(node)).toEqual([a, c]);
+    removeDataAttributesAt(node, 1);
+    expect(node.attributes).toEqual([a, c]);
   });
 
-  it('removeAttributeAt index 0 leaves tail intact', () => {
+  it('removeDataAttributesAt index 0 leaves tail intact', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const node = makeData([a, b]);
-    removeAttributeAt(node, 0);
-    expect(getAttributes(node)).toEqual([b]);
+    removeDataAttributesAt(node, 0);
+    expect(node.attributes).toEqual([b]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Choice options
+// Annotation attributes
 // ---------------------------------------------------------------------------
 
-describe('getChoiceOptions / addChoiceOption / removeChoiceOptionAt', () => {
-  it('getChoiceOptions returns same array reference', () => {
-    const arr: Dehydrated<ChoiceOption>[] = [makeChoiceOption('opt')];
-    expect(getChoiceOptions(makeChoice(arr))).toBe(arr);
+describe('addAnnotationAttributes / removeAnnotationAttributesAt', () => {
+  it('addAnnotationAttributes appends in-place', () => {
+    const node = makeAnnotation();
+    const a = makeAttr('x');
+    addAnnotationAttributes(node, a);
+    expect(node.attributes).toHaveLength(1);
+    expect(node.attributes[0]).toBe(a);
   });
 
-  it('addChoiceOption appends', () => {
+  it('removeAnnotationAttributesAt splices correctly', () => {
+    const a = makeAttr('a');
+    const b = makeAttr('b');
+    const node = makeAnnotation([a, b]);
+    removeAnnotationAttributesAt(node, 0);
+    expect(node.attributes).toEqual([b]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Choice attributes (ChoiceOption items)
+// ---------------------------------------------------------------------------
+
+describe('addChoiceAttributes / removeChoiceAttributesAt', () => {
+  it('addChoiceAttributes appends', () => {
     const node = makeChoice();
     const opt = makeChoiceOption('o');
-    addChoiceOption(node, opt);
-    expect(getChoiceOptions(node)).toHaveLength(1);
-    expect(getChoiceOptions(node)[0]).toBe(opt);
+    addChoiceAttributes(node, opt);
+    expect(node.attributes).toHaveLength(1);
+    expect(node.attributes[0]).toBe(opt);
   });
 
-  it('removeChoiceOptionAt removes middle element', () => {
+  it('removeChoiceAttributesAt removes middle element', () => {
     const a = makeChoiceOption('a');
     const b = makeChoiceOption('b');
     const c = makeChoiceOption('c');
     const node = makeChoice([a, b, c]);
-    removeChoiceOptionAt(node, 1);
-    expect(getChoiceOptions(node)).toEqual([a, c]);
+    removeChoiceAttributesAt(node, 1);
+    expect(node.attributes).toEqual([a, c]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Enum values
+// RosettaEnumeration enumValues
 // ---------------------------------------------------------------------------
 
-describe('getEnumValues / addEnumValue / removeEnumValueAt', () => {
-  it('getEnumValues returns same array reference', () => {
-    const arr: Dehydrated<RosettaEnumValue>[] = [makeEnumValue('E')];
-    expect(getEnumValues(makeEnum(arr))).toBe(arr);
-  });
-
-  it('addEnumValue appends', () => {
+describe('addRosettaEnumerationEnumValues / removeRosettaEnumerationEnumValuesAt', () => {
+  it('addRosettaEnumerationEnumValues appends', () => {
     const node = makeEnum();
     const v = makeEnumValue('V');
-    addEnumValue(node, v);
-    expect(getEnumValues(node)).toHaveLength(1);
-    expect(getEnumValues(node)[0]).toBe(v);
+    addRosettaEnumerationEnumValues(node, v);
+    expect(node.enumValues).toHaveLength(1);
+    expect(node.enumValues[0]).toBe(v);
   });
 
-  it('removeEnumValueAt removes last element', () => {
+  it('removeRosettaEnumerationEnumValuesAt removes last element', () => {
     const a = makeEnumValue('a');
     const b = makeEnumValue('b');
     const node = makeEnum([a, b]);
-    removeEnumValueAt(node, 1);
-    expect(getEnumValues(node)).toEqual([a]);
+    removeRosettaEnumerationEnumValuesAt(node, 1);
+    expect(node.enumValues).toEqual([a]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Function inputs
+// RosettaFunction inputs
 // ---------------------------------------------------------------------------
 
-describe('getFunctionInputs / addFunctionInput / removeFunctionInputAt', () => {
-  it('getFunctionInputs returns same array reference', () => {
-    const arr: Dehydrated<Attribute>[] = [makeAttr('in')];
-    expect(getFunctionInputs(makeFunction(arr))).toBe(arr);
-  });
-
-  it('addFunctionInput appends', () => {
+describe('addRosettaFunctionInputs / removeRosettaFunctionInputsAt', () => {
+  it('addRosettaFunctionInputs appends', () => {
     const node = makeFunction();
     const a = makeAttr('arg');
-    addFunctionInput(node, a);
-    expect(getFunctionInputs(node)).toHaveLength(1);
+    addRosettaFunctionInputs(node, a);
+    expect(node.inputs).toHaveLength(1);
+    expect(node.inputs[0]).toBe(a);
   });
 
-  it('removeFunctionInputAt removes first element', () => {
+  it('removeRosettaFunctionInputsAt removes first element', () => {
     const a = makeAttr('a');
     const b = makeAttr('b');
     const node = makeFunction([a, b]);
-    removeFunctionInputAt(node, 0);
-    expect(getFunctionInputs(node)).toEqual([b]);
+    removeRosettaFunctionInputsAt(node, 0);
+    expect(node.inputs).toEqual([b]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Record features
+// RosettaRecordType features
 // ---------------------------------------------------------------------------
 
-describe('getRecordFeatures / addRecordFeature / removeRecordFeatureAt', () => {
-  it('getRecordFeatures returns same array reference', () => {
-    const arr: Dehydrated<RosettaRecordFeature>[] = [makeRecordFeature('f')];
-    expect(getRecordFeatures(makeRecordType(arr))).toBe(arr);
-  });
-
-  it('addRecordFeature appends', () => {
+describe('addRosettaRecordTypeFeatures / removeRosettaRecordTypeFeaturesAt', () => {
+  it('addRosettaRecordTypeFeatures appends', () => {
     const node = makeRecordType();
     const f = makeRecordFeature('feat');
-    addRecordFeature(node, f);
-    expect(getRecordFeatures(node)).toHaveLength(1);
+    addRosettaRecordTypeFeatures(node, f);
+    expect(node.features).toHaveLength(1);
+    expect(node.features[0]).toBe(f);
   });
 
-  it('removeRecordFeatureAt removes middle element', () => {
+  it('removeRosettaRecordTypeFeaturesAt removes middle element', () => {
     const a = makeRecordFeature('a');
     const b = makeRecordFeature('b');
     const c = makeRecordFeature('c');
     const node = makeRecordType([a, b, c]);
-    removeRecordFeatureAt(node, 1);
-    expect(getRecordFeatures(node)).toEqual([a, c]);
+    removeRosettaRecordTypeFeaturesAt(node, 1);
+    expect(node.features).toEqual([a, c]);
   });
 });

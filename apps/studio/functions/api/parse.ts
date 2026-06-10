@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument, namespaceFromModelName } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -441,9 +441,19 @@ async function hydrateUserWorkspace(
     // outer stringifyWithBigInt also handles them, but doing it inside
     // the langium serializer is more efficient (avoids one re-scan of
     // the embedded model JSON).
-    const serializedModel = serializeRuneModel(RuneDsl.serializer.JsonSerializer, model);
-    const rawName = model.name as string;
-    const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
+    const namespace = namespaceFromModelName(model.name) ?? '';
+    const rawSerialized = serializeRuneModel(RuneDsl.serializer.JsonSerializer, model);
+    const serializedModel = (() => {
+      if (!namespace) return rawSerialized;
+      const parsed = JSON.parse(rawSerialized) as Record<string, unknown>;
+      const elements = parsed['elements'];
+      if (Array.isArray(elements)) {
+        for (const el of elements) {
+          if (el && typeof el === 'object') (el as Record<string, unknown>)['$namespace'] = namespace;
+        }
+      }
+      return JSON.stringify(parsed, runeBigIntReplacer);
+    })();
 
     const exports: Array<{ type: string; name: string; path: string }> = [];
     if (namespace) {
@@ -515,6 +525,7 @@ function mergeCuratedDocIntoDeferredExports(
     entries: doc.exports.map((e) => ({ type: e.type, name: e.name }))
   });
 }
+
 
 /**
  * Envelope uses the canonical bigint policy (runeBigIntReplacer -> Number) so wire bytes

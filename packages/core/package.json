@@ -25,8 +25,9 @@
     "build": "tsgo -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "dev": "tsgo -b --watch",
-    "generate": "langium generate && langium-zod generate",
-    "generate:zod": "langium-zod generate",
+    "generate": "langium generate && langium-zod generate && oxfmt src/generated/zod-schemas.ts",
+    "generate:zod": "langium-zod generate && oxfmt src/generated/zod-schemas.ts",
+    "generate:domain": "langium-zod generate --domain-only --domain-out src/generated/domain.ts && oxfmt src/generated/domain.ts",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -38,7 +39,7 @@
   },
   "devDependencies": {
     "langium-cli": "^4.2.1",
-    "langium-zod": "^0.5.4",
+    "langium-zod": "^0.7.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },
