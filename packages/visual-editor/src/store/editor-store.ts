@@ -43,16 +43,18 @@ import type {
   AnyGraphNode,
   GraphNode
 } from '../types.js';
-import type {
+// Merged type + ops namespaces: `Data` is both the interface type (GraphNode<Data>)
+// and the generated ops namespace (Data.addAttribute / Data.removeAttribute …),
+// from the single core barrel. Imported as values so the namespace ops resolve.
+import {
   Data,
   Choice,
   RosettaEnumeration,
   RosettaFunction,
-  RosettaRecordType,
   Annotation
 } from '@rune-langium/core';
+import type { RosettaRecordType } from '@rune-langium/core';
 import { indexById } from '@rune-langium/core';
-import * as DomainOps from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
@@ -1349,9 +1351,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   const dd = d as { attributes?: unknown[] };
                   if (!Array.isArray(dd.attributes)) dd.attributes = [];
                   if (d.$type === 'Data') {
-                    DomainOps.Data.addAttribute(d as never, newAttr as never);
+                    Data.addAttribute(d as never, newAttr as never);
                   } else {
-                    DomainOps.Annotation.addAttribute(d as never, newAttr as never);
+                    Annotation.addAttribute(d as never, newAttr as never);
                   }
                 }
               }
@@ -1369,13 +1371,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const node = draft.nodes.get(nodeId);
               if (node) {
                 const d = node.data as AnyGraphNode;
-                const key = { name: attrName } as unknown as Parameters<typeof DomainOps.Data.removeAttribute>[1];
+                const key = { name: attrName } as unknown as Parameters<typeof Data.removeAttribute>[1];
                 if (d.$type === 'Data') {
-                  while (DomainOps.Data.removeAttribute(d as never, key)) {
+                  while (Data.removeAttribute(d as never, key)) {
                     /* drain duplicates */
                   }
                 } else if (d.$type === 'Annotation') {
-                  while (DomainOps.Annotation.removeAttribute(d as never, key)) {
+                  while (Annotation.removeAttribute(d as never, key)) {
                     /* drain duplicates */
                   }
                 }
@@ -1659,7 +1661,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaEnumeration') return;
               ensureMemberArray(d); // init guard: enumValues may be absent on a fresh node
-              DomainOps.RosettaEnumeration.addEnumValue(d as never, newValue as never);
+              RosettaEnumeration.addEnumValue(d as never, newValue as never);
             });
           },
 
@@ -1674,9 +1676,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // malformed graph with duplicate enum-value names. A single removeX
               // call would drop only the first, leaving stale duplicates behind.
               const key = { name: valueName } as unknown as Parameters<
-                typeof DomainOps.RosettaEnumeration.removeEnumValue
+                typeof RosettaEnumeration.removeEnumValue
               >[1];
-              while (DomainOps.RosettaEnumeration.removeEnumValue(d as never, key)) {
+              while (RosettaEnumeration.removeEnumValue(d as never, key)) {
                 /* drain duplicates */
               }
             });
@@ -1784,9 +1786,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'Choice') return;
               if (Array.isArray((d as { attributes?: unknown[] }).attributes)) {
                 const key = { typeCall: { type: { $refText: typeName } } } as unknown as Parameters<
-                  typeof DomainOps.Choice.removeAttribute
+                  typeof Choice.removeAttribute
                 >[1];
-                while (DomainOps.Choice.removeAttribute(d as never, key)) {
+                while (Choice.removeAttribute(d as never, key)) {
                   /* drain duplicates */
                 }
               }
@@ -1821,7 +1823,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaFunction') return;
               ensureMemberArray(d); // init guard: inputs may be absent on a fresh node
-              DomainOps.RosettaFunction.addInput(d as never, newInput as never);
+              RosettaFunction.addInput(d as never, newInput as never);
             });
           },
 
@@ -1835,8 +1837,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // Original semantics: remove only the FIRST input matching the name
               // (findIndex + splice-one), NOT a drain. The generated removeInput
               // removes the first match, so a single call preserves behavior exactly.
-              const key = { name: paramName } as unknown as Parameters<typeof DomainOps.RosettaFunction.removeInput>[1];
-              DomainOps.RosettaFunction.removeInput(d as never, key);
+              const key = { name: paramName } as unknown as Parameters<typeof RosettaFunction.removeInput>[1];
+              RosettaFunction.removeInput(d as never, key);
             });
           },
 
@@ -2123,14 +2125,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 if (d.$type === 'Data') {
-                  DomainOps.Data.addSynonym(d as never, newSyn as never);
+                  Data.addSynonym(d as never, newSyn as never);
                 } else {
-                  DomainOps.Choice.addSynonym(d as never, newSyn as never);
+                  Choice.addSynonym(d as never, newSyn as never);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
                 const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
-                DomainOps.RosettaEnumeration.addSynonym(d as never, newSyn as never);
+                RosettaEnumeration.addSynonym(d as never, newSyn as never);
               }
               // other $types: no-op (no mutation → mutateGraph early-exits)
             });
