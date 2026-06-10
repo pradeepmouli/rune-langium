@@ -15,9 +15,7 @@ export const RosettaQualifiableTypeSchema = z.union([z.literal('isEvent'), z.lit
 
 export const RosettaSynonymRefSchema = z.union([z.literal('tag'), z.literal('componentID')]);
 
-export const BigDecimalSchema = z
-  .string()
-  .regex(new RegExp('^[+-]?(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([eE][+-]?[0-9]+)?$'));
+export const BigDecimalSchema = z.string().regex(new RegExp('^[+-]?(\\.[0-9]+|[0-9]+(\\.[0-9]*)?)([eE][+-]?[0-9]+)?$'));
 
 export const ValidIDSchema = z.union([
   z.string().regex(new RegExp('\\^?[a-zA-Z_][a-zA-Z_0-9]*')),
@@ -269,10 +267,7 @@ export const ChoiceOperationSchema = z.looseObject({
   attributes: z.array(ReferenceSchema)
 });
 
-export const ClosureParameterSchema = z.looseObject({
-  $type: z.literal('ClosureParameter'),
-  name: z.string()
-});
+export const ClosureParameterSchema = z.looseObject({ $type: z.literal('ClosureParameter'), name: z.string() });
 
 export const ComparisonOperationSchema = z.looseObject({
   $type: z.literal('ComparisonOperation'),
@@ -682,15 +677,9 @@ export const RosettaImplicitVariableSchema = z.looseObject({
   name: z.literal('item')
 });
 
-export const RosettaIntLiteralSchema = z.looseObject({
-  $type: z.literal('RosettaIntLiteral'),
-  value: IntegerSchema
-});
+export const RosettaIntLiteralSchema = z.looseObject({ $type: z.literal('RosettaIntLiteral'), value: IntegerSchema });
 
-export const RosettaMapPathValueSchema = z.looseObject({
-  $type: z.literal('RosettaMapPathValue'),
-  path: z.string()
-});
+export const RosettaMapPathValueSchema = z.looseObject({ $type: z.literal('RosettaMapPathValue'), path: z.string() });
 
 export const RosettaMapPathSchema = z.looseObject({
   $type: z.literal('RosettaMapPath'),
@@ -947,15 +936,9 @@ export const AnnotationPathExpressionSchema = z.discriminatedUnion('$type', [
   AnnotationPathAttributeReferenceSchema
 ]);
 
-export const AssignPathRootSchema = z.discriminatedUnion('$type', [
-  AttributeSchema,
-  ShortcutDeclarationSchema
-]);
+export const AssignPathRootSchema = z.discriminatedUnion('$type', [AttributeSchema, ShortcutDeclarationSchema]);
 
-export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [
-  AttributeSchema,
-  ChoiceOptionSchema
-]);
+export const AttributeOrChoiceOptionSchema = z.discriminatedUnion('$type', [AttributeSchema, ChoiceOptionSchema]);
 
 export const DataOrChoiceSchema = z.discriminatedUnion('$type', [DataSchema, ChoiceSchema]);
 
