@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  langium-zod: 0.8.0
+  langium-zod: 0.8.1
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.9.1
   '@zod-to-form/react': ^0.9.1
@@ -540,8 +540,8 @@ importers:
         specifier: ^4.2.1
         version: 4.2.1
       langium-zod:
-        specifier: 0.8.0
-        version: 0.8.0
+        specifier: 0.8.1
+        version: 0.8.1
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -739,8 +739,8 @@ importers:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@1.8.0)
       langium-zod:
-        specifier: 0.8.0
-        version: 0.8.0
+        specifier: 0.8.1
+        version: 0.8.1
       react:
         specifier: 19.2.6
         version: 19.2.6
@@ -4625,8 +4625,8 @@ packages:
   langium-railroad@4.2.0:
     resolution: {integrity: sha512-LYR22GV14iz0GTUtR91pZY6yNImYRk1HbAuHBP8k8GESMcSkCJh+iewJooH9k8H8dJOteXvvI7aFkz6rfU9oLQ==}
 
-  langium-zod@0.8.0:
-    resolution: {integrity: sha512-w3HHXq4ENXRhU9k7GU77FGAYPfJzJWNOYriIXi98pqN19k1VJXFfY4Sar+hIEffcLM7GlGE0ZkpQDfy2nYMSEA==}
+  langium-zod@0.8.1:
+    resolution: {integrity: sha512-JTD4vQv2QMCPRFQAZHQdESCtoih2oqSAPcs2OvckHGSSF8iKLVxY/jfnsxU526pMa36JxIy9bMuILvPQ2+d4jw==}
     hasBin: true
 
   langium@4.2.4:
@@ -9957,7 +9957,7 @@ snapshots:
       langium: 4.2.4
       railroad-diagrams: 1.0.0
 
-  langium-zod@0.8.0:
+  langium-zod@0.8.1:
     dependencies:
       humanize-string: 3.1.0
       langium: 4.2.4

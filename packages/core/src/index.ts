@@ -15,11 +15,11 @@
  * preserve original formatting.
  */
 
-// Core AST types
-export * from './generated/ast.js';
-// Namespace-merged ops: import { DomainOps } from '@rune-langium/core' → DomainOps.Data.getAttributes(node)
-// Requires langium-zod >= 0.8.0 to regenerate.
-export * as DomainOps from './generated/domain.js';
+// Core AST surface + namespace-merged domain ops, from a single barrel.
+// domain.ts re-exports everything from ast.ts (interfaces, type guards, reflection,
+// terminals, union types) and adds a merged `namespace` per member-container type, so
+// `Data` is both the interface type AND the ops namespace: Data.getAttributes(node), etc.
+export * from './generated/domain.js';
 
 // Parse API
 export { parse, parseWorkspace } from './api/parse.js';
