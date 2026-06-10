@@ -245,7 +245,7 @@ async function main() {
 
       for (const ns of Object.keys(graph)) {
         const nsDocList = nsDocs[ns] ?? [];
-        const nsJson = JSON.stringify({ documents: nsDocList }, runeBigIntReplacer);
+        const nsJson = JSON.stringify({ documents: nsDocList });
         const nsGzipped = gzipSync(Buffer.from(nsJson));
         await writeFile(`${nsDir}/${nsToSlug.get(ns)}.json.gz`, nsGzipped);
         totalNsBytes += nsGzipped.byteLength;
