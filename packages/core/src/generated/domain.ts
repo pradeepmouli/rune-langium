@@ -33,6 +33,13 @@ export namespace Annotation {
     if (item === undefined) return;
     node.attributes.splice(to, 0, item);
   }
+  export function removeAttribute(node: Dehydrated<ast.Annotation>, attribute: Dehydrated<ast.Attribute>): boolean {
+    const __k = attribute.name;
+    const __i = node.attributes.findIndex((e) => e.name === __k);
+    if (__i < 0) return false;
+    node.attributes.splice(__i, 1);
+    return true;
+  }
 }
 
 export type AnnotationDeepPath = ast.AnnotationDeepPath;
@@ -323,6 +330,13 @@ export namespace Choice {
     const [item] = node.attributes.splice(from, 1);
     if (item === undefined) return;
     node.attributes.splice(to, 0, item);
+  }
+  export function removeAttribute(node: Dehydrated<ast.Choice>, attribute: Dehydrated<ast.ChoiceOption>): boolean {
+    const __k = attribute.typeCall?.type?.$refText;
+    const __i = node.attributes.findIndex((e) => e.typeCall?.type?.$refText === __k);
+    if (__i < 0) return false;
+    node.attributes.splice(__i, 1);
+    return true;
   }
   export function getAnnotations(node: Dehydrated<ast.Choice>): Dehydrated<ast.AnnotationRef>[] {
     return node.annotations;
@@ -637,6 +651,13 @@ export namespace Data {
     const [item] = node.attributes.splice(from, 1);
     if (item === undefined) return;
     node.attributes.splice(to, 0, item);
+  }
+  export function removeAttribute(node: Dehydrated<ast.Data>, attribute: Dehydrated<ast.Attribute>): boolean {
+    const __k = attribute.name;
+    const __i = node.attributes.findIndex((e) => e.name === __k);
+    if (__i < 0) return false;
+    node.attributes.splice(__i, 1);
+    return true;
   }
   export function getConditions(node: Dehydrated<ast.Data>): Dehydrated<ast.Condition>[] {
     return node.conditions;
@@ -1135,6 +1156,16 @@ export namespace RosettaEnumeration {
     const [item] = node.enumValues.splice(from, 1);
     if (item === undefined) return;
     node.enumValues.splice(to, 0, item);
+  }
+  export function removeEnumValue(
+    node: Dehydrated<ast.RosettaEnumeration>,
+    enumValue: Dehydrated<ast.RosettaEnumValue>
+  ): boolean {
+    const __k = enumValue.name;
+    const __i = node.enumValues.findIndex((e) => e.name === __k);
+    if (__i < 0) return false;
+    node.enumValues.splice(__i, 1);
+    return true;
   }
   export function getReferences(node: Dehydrated<ast.RosettaEnumeration>): Dehydrated<ast.RosettaDocReference>[] {
     return node.references;
@@ -1843,6 +1874,13 @@ export namespace RosettaFunction {
     const [item] = node.inputs.splice(from, 1);
     if (item === undefined) return;
     node.inputs.splice(to, 0, item);
+  }
+  export function removeInput(node: Dehydrated<ast.RosettaFunction>, input: Dehydrated<ast.Attribute>): boolean {
+    const __k = input.name;
+    const __i = node.inputs.findIndex((e) => e.name === __k);
+    if (__i < 0) return false;
+    node.inputs.splice(__i, 1);
+    return true;
   }
   export function setOutput(node: Dehydrated<ast.RosettaFunction>, output: Dehydrated<ast.Attribute>): void {
     node.output = output;
