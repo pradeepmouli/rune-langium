@@ -1832,10 +1832,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: { name: string }[] }).inputs;
               if (!Array.isArray(inputs)) return;
+              // Original semantics: remove only the FIRST input matching the name
+              // (findIndex + splice-one), NOT a drain. The generated removeInput
+              // removes the first match, so a single call preserves behavior exactly.
               const key = { name: paramName } as unknown as Parameters<typeof DomainOps.RosettaFunction.removeInput>[1];
-              while (DomainOps.RosettaFunction.removeInput(d as never, key)) {
-                /* drain duplicates */
-              }
+              DomainOps.RosettaFunction.removeInput(d as never, key);
             });
           },
 
