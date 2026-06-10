@@ -27,7 +27,7 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument } from '@rune-langium/core';
+import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument, namespaceFromModelName } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
@@ -252,7 +252,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
               );
               for (const nsDocs of fetchedPerNs) {
                 for (const doc of nsDocs) {
-                  documentsForHydration.push({ ...doc, bundleId: bundle.id });
+                  const stamped = { ...doc, serializedModel: stampElementNamespaces(doc.serializedModel), bundleId: bundle.id };
+                  documentsForHydration.push(stamped);
                   // Per-FILE entry so node-id → filePath → hydrationState linking stays correct.
                   mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
                 }
@@ -284,7 +285,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
               // for user files saved under `${bundleId}/...` paths). The
               // field is optional on the hydration shape so user-file
               // entries omit it.
-              documentsForHydration.push({ ...doc, bundleId: bundle.id });
+              documentsForHydration.push({ ...doc, serializedModel: stampElementNamespaces(doc.serializedModel), bundleId: bundle.id });
               // Surface curated namespaces in the deferredExports response so
               // the studio's namespace explorer / graph view (which reads from
               // deferredExports) lists CDM/FpML/rune-dsl entries alongside
@@ -441,7 +442,9 @@ async function hydrateUserWorkspace(
     // outer stringifyWithBigInt also handles them, but doing it inside
     // the langium serializer is more efficient (avoids one re-scan of
     // the embedded model JSON).
-    const serializedModel = serializeRuneModel(RuneDsl.serializer.JsonSerializer, model);
+    const serializedModel = stampElementNamespaces(
+      serializeRuneModel(RuneDsl.serializer.JsonSerializer, model)
+    );
     const rawName = model.name as string;
     const namespace = rawName ? rawName.replace(/^"|"$/g, '') : '';
 
@@ -514,6 +517,35 @@ function mergeCuratedDocIntoDeferredExports(
     namespace,
     entries: doc.exports.map((e) => ({ type: e.type, name: e.name }))
   });
+}
+
+/**
+ * Stamp `$namespace` (from the top-level `RosettaModel.name`) onto each
+ * element object in the serialized model JSON so downstream adapters
+ * (curatedAdapter, parsedAdapter) can safely cast elements to `Dehydrated<T>`
+ * without a separate mapping step.
+ *
+ * Operates on the serialized JSON string to handle both user-file and curated
+ * paths uniformly (curated docs arrive as pre-built strings from the artifact).
+ * Returns the original string unchanged on parse failure (fail-soft).
+ */
+function stampElementNamespaces(serializedModel: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serializedModel);
+  } catch {
+    return serializedModel;
+  }
+  if (!parsed || typeof parsed !== 'object') return serializedModel;
+  const m = parsed as { name?: unknown; elements?: unknown[] };
+  const namespace = namespaceFromModelName(m.name);
+  if (!namespace || !Array.isArray(m.elements) || m.elements.length === 0) return serializedModel;
+  for (const el of m.elements) {
+    if (el && typeof el === 'object') {
+      (el as Record<string, unknown>)['$namespace'] = namespace;
+    }
+  }
+  return JSON.stringify(parsed, runeBigIntReplacer);
 }
 
 /**
