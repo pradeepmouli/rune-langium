@@ -33,6 +33,7 @@ type DehydratedField<F> =
  */
 export type Dehydrated<T extends AstNode> = {
   readonly $type: T['$type'];
+  readonly $namespace?: string;
 } & {
   -readonly [K in Exclude<keyof T, LangiumRuntimeFields | '$type'>]: DehydratedField<T[K]>;
 };
