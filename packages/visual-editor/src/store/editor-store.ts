@@ -1777,9 +1777,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'Choice') return;
-              const dd = d as { attributes?: { typeCall?: { type?: { $refText?: string } } }[] };
-              if (dd.attributes) {
-                dd.attributes = dd.attributes.filter((a) => a.typeCall?.type?.$refText !== typeName);
+              if (Array.isArray((d as { attributes?: unknown[] }).attributes)) {
+                const key = { typeCall: { type: { $refText: typeName } } } as unknown as Parameters<
+                  typeof DomainOps.Choice.removeAttribute
+                >[1];
+                while (DomainOps.Choice.removeAttribute(d as never, key)) {
+                  /* drain duplicates */
+                }
               }
               for (const [id, e] of draft.edges) {
                 if (e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName) {
