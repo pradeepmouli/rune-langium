@@ -198,3 +198,9 @@ jobs:
 
       - name: Assert no drift between committed and freshly-generated schemas
         run: git diff --exit-code -- packages/visual-editor/src/generated/
+
+      - name: Regenerate domain surface from Langium grammar
+        run: pnpm --filter @rune-langium/core generate:domain
+
+      - name: Assert no drift in generated domain surface
+        run: git diff --exit-code -- packages/core/src/generated/domain.ts
