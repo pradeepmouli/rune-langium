@@ -70,8 +70,7 @@ import {
   toEdgesById,
   nodesFromMap,
   edgesFromMap,
-  ensureMemberArray,
-  getMemberArray
+  ensureMemberArray
 } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
@@ -1823,8 +1822,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: { name: string }[] }).inputs;
               if (!Array.isArray(inputs)) return;
-              const idx = inputs.findIndex((i) => i.name === paramName);
-              if (idx !== -1) getMemberArray(d)?.members.splice(idx, 1);
+              const key = { name: paramName } as unknown as Parameters<typeof DomainOps.RosettaFunction.removeInput>[1];
+              while (DomainOps.RosettaFunction.removeInput(d as never, key)) {
+                /* drain duplicates */
+              }
             });
           },
 
