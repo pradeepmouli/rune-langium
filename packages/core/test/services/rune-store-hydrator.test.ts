@@ -30,6 +30,40 @@ function makeDataInNamespace(namespace: string): Data {
   } as unknown as Data;
 }
 
+describe('RuneStoreHydrator.dehydrateNode — Dehydrated<T> runtime shape', () => {
+  it('strips $containerIndex, $containerProperty, and $cstNode from the output', () => {
+    const hydrator = new RuneStoreHydrator(minimalServices);
+    const data = makeDataInNamespace('rosetta.base.staticnode');
+    (data as unknown as Record<string, unknown>).$cstNode = { text: 'type MyData:' };
+    const dehydrated = hydrator.dehydrateNode(data) as unknown as Record<string, unknown>;
+    expect(dehydrated).not.toHaveProperty('$containerIndex');
+    expect(dehydrated).not.toHaveProperty('$containerProperty');
+    expect(dehydrated).not.toHaveProperty('$cstNode');
+    expect(dehydrated).not.toHaveProperty('$container');
+    expect(dehydrated).not.toHaveProperty('$document');
+  });
+
+  it('preserves the preserveCstText $cstText stamp', () => {
+    const hydrator = new RuneStoreHydrator(minimalServices);
+    const data = makeDataInNamespace('rosetta.base.staticnode');
+    (data as unknown as Record<string, unknown>).$cstText = 'type MyData:';
+    const dehydrated = hydrator.dehydrateNode(data) as unknown as Record<string, unknown>;
+    expect(dehydrated.$cstText).toBe('type MyData:');
+  });
+
+  it('converts references to strict { $refText } (no ref/$refNode)', () => {
+    const hydrator = new RuneStoreHydrator(minimalServices);
+    const data = makeDataInNamespace('rosetta.base.staticnode');
+    (data as unknown as Record<string, unknown>).superType = {
+      $refText: 'Parent',
+      ref: { $type: 'Data', name: 'Parent' },
+      $refNode: {},
+    };
+    const dehydrated = hydrator.dehydrateNode(data) as unknown as Record<string, unknown>;
+    expect(dehydrated.superType).toEqual({ $refText: 'Parent' });
+  });
+});
+
 describe('RuneStoreHydrator.$namespace stamping', () => {
   it('stamps $namespace from containing RosettaModel', () => {
     const hydrator = new RuneStoreHydrator(minimalServices);

@@ -20,7 +20,9 @@ import {
   isRosettaBasicType,
   isRosettaRecordType,
   isRosettaTypeAlias,
-  isAnnotation
+  isAnnotation,
+  parsedAdapter,
+  curatedAdapter
 } from '@rune-langium/core';
 import type {
   RosettaModel,
@@ -34,7 +36,6 @@ import type {
 } from '@rune-langium/core';
 import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
-import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
 import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,18 @@ function passesFilter(kind: TypeKind, namespace: string, name: string, filters?:
 // Per-kind node builders
 // ---------------------------------------------------------------------------
 
+/**
+ * True when the element is a live (or structurally-cloned) Langium AST node —
+ * it carries runtime linkage (`$container`/`$cstNode`/`$document`) that must be
+ * stripped via `parsedAdapter.dehydrate`. Plain already-dehydrated objects
+ * (curated JSON, synthetic fixtures) carry none of these and pass through the
+ * `curatedAdapter.parse` boundary (an identity cast).
+ */
+function isLiveAstElement(element: object): boolean {
+  const e = element as { $container?: unknown; $cstNode?: unknown; $document?: unknown };
+  return e.$container !== undefined || e.$cstNode !== undefined || e.$document !== undefined;
+}
+
 function buildGraphNode<T extends { $type: string; name: string }>(
   element: T,
   namespace: string,
@@ -82,8 +95,17 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   const nodeType = resolveNodeKind(element);
   // Phase 3 step 3: `data` is the PURE domain payload (no UI metadata merged
   // in); all UI/editor metadata lives on the `meta` sibling exclusively.
+  // Parsed elements go through the LOSSLESS `parsedAdapter.dehydrate`
+  // (strict `{ $refText }` refs, `$namespace` stamped, `$cstText` preserved);
+  // curated/pre-dehydrated JSON goes through `curatedAdapter.parse`.
   // Note: `comments` is intentionally absent here (not set at read time).
-  const data = stripAdditionalAstFields(element) as unknown as TypeGraphNode['data'];
+  // langium is not a direct visual-editor dependency (see AstNodeShape in
+  // types.ts) — thread the adapters' AstNode constraint structurally.
+  const data = (
+    isLiveAstElement(element)
+      ? parsedAdapter.dehydrate(element as unknown as Parameters<typeof parsedAdapter.dehydrate>[0])
+      : curatedAdapter.parse(element)
+  ) as unknown as TypeGraphNode['data'];
   const meta: GraphNodeMeta = {
     namespace,
     errors: [],
