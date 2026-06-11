@@ -1461,6 +1461,37 @@ describe('EditorStore — setInheritance (Finding 3: cross-namespace qualificati
 });
 
 // ---------------------------------------------------------------------------
+// setEnumParent — cross-namespace qualification (mirrors setInheritance)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — setEnumParent (cross-namespace qualification)', () => {
+  it('writes a QUALIFIED parent $refText when the parent name collides across namespaces', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('enum', 'SideEnum', 'cdm.trade');
+    store.getState().createType('enum', 'BaseEnum', 'ns.a');
+    const bBaseId = store.getState().createType('enum', 'BaseEnum', 'ns.b');
+
+    store.getState().setEnumParent(childId, bBaseId);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const parent = (node.data as { parent?: { $refText?: string } }).parent;
+    expect(parent?.$refText).toBe('ns.b.BaseEnum');
+  });
+
+  it('writes the BARE parent $refText when the parent name is unambiguous', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('enum', 'SideEnum', 'cdm.trade');
+    const baseId = store.getState().createType('enum', 'BaseEnum', 'cdm.trade');
+
+    store.getState().setEnumParent(childId, baseId);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const parent = (node.data as { parent?: { $refText?: string } }).parent;
+    expect(parent?.$refText).toBe('BaseEnum');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Function input param operations (R-func-input)
 // ---------------------------------------------------------------------------
 

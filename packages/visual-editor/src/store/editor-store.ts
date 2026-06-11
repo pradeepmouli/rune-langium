@@ -1715,8 +1715,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const parentNode = parentId ? state.nodesById.get(parentId) : null;
             if (parentId && !parentNode) return; // stale parentId — no-op, leave state untouched (mirrors setInheritance)
             const parentName = parentNode?.data.name;
-            // Strict `{ $refText }` ref shape (Phase 3 prep) — mirrors setInheritance.
-            const parentRef = parentName ? { $refText: parentName } : undefined;
+            const parentNamespace = parentNode?.meta.namespace;
+            const parentRefText =
+              parentName && parentNamespace && parentNode
+                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
+                : parentName;
+            // Strict `{ $refText }` ref shape (Phase 3 prep) — mirrors setInheritance,
+            // including cross-namespace qualification via disambiguateTypeRef.
+            const parentRef = parentRefText ? { $refText: parentRefText } : undefined;
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data;

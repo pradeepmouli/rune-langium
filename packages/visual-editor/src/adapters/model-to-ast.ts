@@ -85,16 +85,27 @@ export function modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): Mod
       // Ensure inheritance is reflected in the model
       const parentNodeId = inheritanceMap.get(node.id);
       if (parentNodeId) {
+        // Prefer the ref already on the lossless `data` payload: parse/edit
+        // stores the correctly-QUALIFIED `$refText` there (e.g. "ns.a.Base"
+        // for a cross-namespace parent), and re-emitting it verbatim is
+        // byte-stable. Re-deriving from the edge id strips the namespace and
+        // mislinks on reparse — only synthesize the bare name as a fallback
+        // when `data` lacks the ref (edge created without the data-side ref).
+        const existing = d as {
+          superType?: { $refText?: string };
+          parent?: { $refText?: string };
+          superFunction?: { $refText?: string };
+        };
         const parentName = nameFromNodeId(parentNodeId);
         // Strict `{ $refText }` ref shape (Phase 3 prep): the serializer reads
         // `$refText` when `ref` is absent, and hydration re-resolves the real
         // Reference from `$refText` — the synthesized `ref: { name }` was dead weight.
         if (d.$type === 'Data') {
-          model.superType = { $refText: parentName };
+          model.superType = { $refText: existing.superType?.$refText || parentName };
         } else if (d.$type === 'RosettaEnumeration') {
-          model.parent = { $refText: parentName };
+          model.parent = { $refText: existing.parent?.$refText || parentName };
         } else if (d.$type === 'RosettaFunction') {
-          model.superFunction = { $refText: parentName };
+          model.superFunction = { $refText: existing.superFunction?.$refText || parentName };
         }
       }
 
