@@ -20,13 +20,13 @@ allowBuilds:
   workerd: false
 
 minimumReleaseAgeExclude:
-  - langium-zod@0.8.2
+  - langium-zod@0.8.3
 
 # pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
 # `pnpm` field, which they ignore). Migrated from package.json so the
 # lockfile's overrides match the running config under pnpm@11.x.
 overrides:
-  langium-zod: 0.8.2
+  langium-zod: 0.8.3
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.9.1
   '@zod-to-form/react': ^0.9.1

@@ -1639,8 +1639,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
               const attrs = (d as { attributes?: unknown[] }).attributes;
               if (!Array.isArray(attrs)) return;
-              // kept reorderInPlace: moveAttributeAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op; pinned by editor-store-actions.test.ts)
-              reorderInPlace(attrs, fromIndex, toIndex);
+              // moveAttributeAt guards out-of-range from (langium-zod 0.8.3) — a true
+              // no-op there, in-place splice otherwise; equivalent to reorderInPlace.
+              if (d.$type === 'Data') Data.moveAttributeAt(d as never, fromIndex, toIndex);
+              else Annotation.moveAttributeAt(d as never, fromIndex, toIndex);
             });
           },
 
@@ -1708,8 +1710,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: unknown[] }).enumValues;
               if (!Array.isArray(vals)) return;
-              // kept reorderInPlace: moveEnumValueAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op)
-              reorderInPlace(vals, fromIndex, toIndex);
+              // moveEnumValueAt guards out-of-range from (0.8.3) — equivalent to reorderInPlace.
+              RosettaEnumeration.moveEnumValueAt(d as never, fromIndex, toIndex);
             });
           },
 
@@ -1926,8 +1928,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: unknown[] }).inputs;
               if (!Array.isArray(inputs)) return;
-              // kept reorderInPlace: moveInputAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op)
-              reorderInPlace(inputs, fromIndex, toIndex);
+              // moveInputAt guards out-of-range from (0.8.3) — equivalent to reorderInPlace.
+              RosettaFunction.moveInputAt(d as never, fromIndex, toIndex);
             });
           },
 

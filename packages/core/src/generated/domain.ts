@@ -29,6 +29,7 @@ export namespace Annotation {
     node.attributes[index] = attribute;
   }
   export function moveAttributeAt(node: Dehydrated<ast.Annotation>, from: number, to: number): void {
+    if (from < 0 || from >= node.attributes.length) return;
     const [item] = node.attributes.splice(from, 1);
     if (item === undefined) return;
     node.attributes.splice(to, 0, item);
@@ -114,6 +115,7 @@ export namespace AnnotationRef {
     node.qualifiers[index] = qualifier;
   }
   export function moveQualifierAt(node: Dehydrated<ast.AnnotationRef>, from: number, to: number): void {
+    if (from < 0 || from >= node.qualifiers.length) return;
     const [item] = node.qualifiers.splice(from, 1);
     if (item === undefined) return;
     node.qualifiers.splice(to, 0, item);
@@ -149,6 +151,7 @@ export namespace Attribute {
     node.typeCallArgs[index] = typeCallArg;
   }
   export function moveTypeCallArgAt(node: Dehydrated<ast.Attribute>, from: number, to: number): void {
+    if (from < 0 || from >= node.typeCallArgs.length) return;
     const [item] = node.typeCallArgs.splice(from, 1);
     if (item === undefined) return;
     node.typeCallArgs.splice(to, 0, item);
@@ -180,6 +183,7 @@ export namespace Attribute {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.Attribute>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -208,6 +212,7 @@ export namespace Attribute {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.Attribute>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -236,6 +241,7 @@ export namespace Attribute {
     node.synonyms[index] = synonym;
   }
   export function moveSynonymAt(node: Dehydrated<ast.Attribute>, from: number, to: number): void {
+    if (from < 0 || from >= node.synonyms.length) return;
     const [item] = node.synonyms.splice(from, 1);
     if (item === undefined) return;
     node.synonyms.splice(to, 0, item);
@@ -264,6 +270,7 @@ export namespace Attribute {
     node.labels[index] = label;
   }
   export function moveLabelAt(node: Dehydrated<ast.Attribute>, from: number, to: number): void {
+    if (from < 0 || from >= node.labels.length) return;
     const [item] = node.labels.splice(from, 1);
     if (item === undefined) return;
     node.labels.splice(to, 0, item);
@@ -295,6 +302,7 @@ export namespace Attribute {
     node.ruleReferences[index] = ruleReference;
   }
   export function moveRuleReferenceAt(node: Dehydrated<ast.Attribute>, from: number, to: number): void {
+    if (from < 0 || from >= node.ruleReferences.length) return;
     const [item] = node.ruleReferences.splice(from, 1);
     if (item === undefined) return;
     node.ruleReferences.splice(to, 0, item);
@@ -327,6 +335,7 @@ export namespace Choice {
     node.attributes[index] = attribute;
   }
   export function moveAttributeAt(node: Dehydrated<ast.Choice>, from: number, to: number): void {
+    if (from < 0 || from >= node.attributes.length) return;
     const [item] = node.attributes.splice(from, 1);
     if (item === undefined) return;
     node.attributes.splice(to, 0, item);
@@ -362,6 +371,7 @@ export namespace Choice {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.Choice>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -390,6 +400,7 @@ export namespace Choice {
     node.synonyms[index] = synonym;
   }
   export function moveSynonymAt(node: Dehydrated<ast.Choice>, from: number, to: number): void {
+    if (from < 0 || from >= node.synonyms.length) return;
     const [item] = node.synonyms.splice(from, 1);
     if (item === undefined) return;
     node.synonyms.splice(to, 0, item);
@@ -428,6 +439,7 @@ export namespace ChoiceOption {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.ChoiceOption>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -456,6 +468,7 @@ export namespace ChoiceOption {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.ChoiceOption>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -484,6 +497,7 @@ export namespace ChoiceOption {
     node.synonyms[index] = synonym;
   }
   export function moveSynonymAt(node: Dehydrated<ast.ChoiceOption>, from: number, to: number): void {
+    if (from < 0 || from >= node.synonyms.length) return;
     const [item] = node.synonyms.splice(from, 1);
     if (item === undefined) return;
     node.synonyms.splice(to, 0, item);
@@ -512,6 +526,7 @@ export namespace ChoiceOption {
     node.labels[index] = label;
   }
   export function moveLabelAt(node: Dehydrated<ast.ChoiceOption>, from: number, to: number): void {
+    if (from < 0 || from >= node.labels.length) return;
     const [item] = node.labels.splice(from, 1);
     if (item === undefined) return;
     node.labels.splice(to, 0, item);
@@ -543,6 +558,7 @@ export namespace ChoiceOption {
     node.ruleReferences[index] = ruleReference;
   }
   export function moveRuleReferenceAt(node: Dehydrated<ast.ChoiceOption>, from: number, to: number): void {
+    if (from < 0 || from >= node.ruleReferences.length) return;
     const [item] = node.ruleReferences.splice(from, 1);
     if (item === undefined) return;
     node.ruleReferences.splice(to, 0, item);
@@ -575,6 +591,7 @@ export namespace Condition {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.Condition>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -603,6 +620,7 @@ export namespace Condition {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.Condition>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -648,6 +666,7 @@ export namespace Data {
     node.attributes[index] = attribute;
   }
   export function moveAttributeAt(node: Dehydrated<ast.Data>, from: number, to: number): void {
+    if (from < 0 || from >= node.attributes.length) return;
     const [item] = node.attributes.splice(from, 1);
     if (item === undefined) return;
     node.attributes.splice(to, 0, item);
@@ -683,6 +702,7 @@ export namespace Data {
     node.conditions[index] = condition;
   }
   export function moveConditionAt(node: Dehydrated<ast.Data>, from: number, to: number): void {
+    if (from < 0 || from >= node.conditions.length) return;
     const [item] = node.conditions.splice(from, 1);
     if (item === undefined) return;
     node.conditions.splice(to, 0, item);
@@ -711,6 +731,7 @@ export namespace Data {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.Data>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -739,6 +760,7 @@ export namespace Data {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.Data>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -767,6 +789,7 @@ export namespace Data {
     node.synonyms[index] = synonym;
   }
   export function moveSynonymAt(node: Dehydrated<ast.Data>, from: number, to: number): void {
+    if (from < 0 || from >= node.synonyms.length) return;
     const [item] = node.synonyms.splice(from, 1);
     if (item === undefined) return;
     node.synonyms.splice(to, 0, item);
@@ -812,6 +835,7 @@ export namespace InlineFunction {
     node.parameters[index] = parameter;
   }
   export function moveParameterAt(node: Dehydrated<ast.InlineFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.parameters.length) return;
     const [item] = node.parameters.splice(from, 1);
     if (item === undefined) return;
     node.parameters.splice(to, 0, item);
@@ -903,6 +927,7 @@ export namespace RegulatoryDocumentReference {
     node.segments[index] = segment;
   }
   export function moveSegmentAt(node: Dehydrated<ast.RegulatoryDocumentReference>, from: number, to: number): void {
+    if (from < 0 || from >= node.segments.length) return;
     const [item] = node.segments.splice(from, 1);
     if (item === undefined) return;
     node.segments.splice(to, 0, item);
@@ -948,6 +973,7 @@ export namespace RosettaBasicType {
     node.parameters[index] = parameter;
   }
   export function moveParameterAt(node: Dehydrated<ast.RosettaBasicType>, from: number, to: number): void {
+    if (from < 0 || from >= node.parameters.length) return;
     const [item] = node.parameters.splice(from, 1);
     if (item === undefined) return;
     node.parameters.splice(to, 0, item);
@@ -1011,6 +1037,7 @@ export namespace RosettaConstructorExpression {
     from: number,
     to: number
   ): void {
+    if (from < 0 || from >= node.constructorTypeArgs.length) return;
     const [item] = node.constructorTypeArgs.splice(from, 1);
     if (item === undefined) return;
     node.constructorTypeArgs.splice(to, 0, item);
@@ -1044,6 +1071,7 @@ export namespace RosettaConstructorExpression {
     node.values[index] = value;
   }
   export function moveValueAt(node: Dehydrated<ast.RosettaConstructorExpression>, from: number, to: number): void {
+    if (from < 0 || from >= node.values.length) return;
     const [item] = node.values.splice(from, 1);
     if (item === undefined) return;
     node.values.splice(to, 0, item);
@@ -1112,6 +1140,7 @@ export namespace RosettaDocReference {
     node.rationales[index] = rationale;
   }
   export function moveRationaleAt(node: Dehydrated<ast.RosettaDocReference>, from: number, to: number): void {
+    if (from < 0 || from >= node.rationales.length) return;
     const [item] = node.rationales.splice(from, 1);
     if (item === undefined) return;
     node.rationales.splice(to, 0, item);
@@ -1153,6 +1182,7 @@ export namespace RosettaEnumeration {
     node.enumValues[index] = enumValue;
   }
   export function moveEnumValueAt(node: Dehydrated<ast.RosettaEnumeration>, from: number, to: number): void {
+    if (from < 0 || from >= node.enumValues.length) return;
     const [item] = node.enumValues.splice(from, 1);
     if (item === undefined) return;
     node.enumValues.splice(to, 0, item);
@@ -1194,6 +1224,7 @@ export namespace RosettaEnumeration {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.RosettaEnumeration>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -1225,6 +1256,7 @@ export namespace RosettaEnumeration {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.RosettaEnumeration>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -1253,6 +1285,7 @@ export namespace RosettaEnumeration {
     node.synonyms[index] = synonym;
   }
   export function moveSynonymAt(node: Dehydrated<ast.RosettaEnumeration>, from: number, to: number): void {
+    if (from < 0 || from >= node.synonyms.length) return;
     const [item] = node.synonyms.splice(from, 1);
     if (item === undefined) return;
     node.synonyms.splice(to, 0, item);
@@ -1288,6 +1321,7 @@ export namespace RosettaEnumValue {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.RosettaEnumValue>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -1319,6 +1353,7 @@ export namespace RosettaEnumValue {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.RosettaEnumValue>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -1350,6 +1385,7 @@ export namespace RosettaEnumValue {
     node.enumSynonyms[index] = enumSynonym;
   }
   export function moveEnumSynonymAt(node: Dehydrated<ast.RosettaEnumValue>, from: number, to: number): void {
+    if (from < 0 || from >= node.enumSynonyms.length) return;
     const [item] = node.enumSynonyms.splice(from, 1);
     if (item === undefined) return;
     node.enumSynonyms.splice(to, 0, item);
@@ -1404,6 +1440,7 @@ export namespace RosettaExternalClass {
     from: number,
     to: number
   ): void {
+    if (from < 0 || from >= node.externalClassSynonyms.length) return;
     const [item] = node.externalClassSynonyms.splice(from, 1);
     if (item === undefined) return;
     node.externalClassSynonyms.splice(to, 0, item);
@@ -1437,6 +1474,7 @@ export namespace RosettaExternalClass {
     node.regularAttributes[index] = regularAttribute;
   }
   export function moveRegularAttributeAt(node: Dehydrated<ast.RosettaExternalClass>, from: number, to: number): void {
+    if (from < 0 || from >= node.regularAttributes.length) return;
     const [item] = node.regularAttributes.splice(from, 1);
     if (item === undefined) return;
     node.regularAttributes.splice(to, 0, item);
@@ -1496,6 +1534,7 @@ export namespace RosettaExternalEnum {
     node.regularValues[index] = regularValue;
   }
   export function moveRegularValueAt(node: Dehydrated<ast.RosettaExternalEnum>, from: number, to: number): void {
+    if (from < 0 || from >= node.regularValues.length) return;
     const [item] = node.regularValues.splice(from, 1);
     if (item === undefined) return;
     node.regularValues.splice(to, 0, item);
@@ -1540,6 +1579,7 @@ export namespace RosettaExternalEnumValue {
     from: number,
     to: number
   ): void {
+    if (from < 0 || from >= node.externalEnumSynonyms.length) return;
     const [item] = node.externalEnumSynonyms.splice(from, 1);
     if (item === undefined) return;
     node.externalEnumSynonyms.splice(to, 0, item);
@@ -1578,6 +1618,7 @@ export namespace RosettaExternalFunction {
     node.parameters[index] = parameter;
   }
   export function moveParameterAt(node: Dehydrated<ast.RosettaExternalFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.parameters.length) return;
     const [item] = node.parameters.splice(from, 1);
     if (item === undefined) return;
     node.parameters.splice(to, 0, item);
@@ -1622,6 +1663,7 @@ export namespace RosettaExternalRegularAttribute {
     from: number,
     to: number
   ): void {
+    if (from < 0 || from >= node.externalSynonyms.length) return;
     const [item] = node.externalSynonyms.splice(from, 1);
     if (item === undefined) return;
     node.externalSynonyms.splice(to, 0, item);
@@ -1662,6 +1704,7 @@ export namespace RosettaExternalRegularAttribute {
     from: number,
     to: number
   ): void {
+    if (from < 0 || from >= node.externalRuleReferences.length) return;
     const [item] = node.externalRuleReferences.splice(from, 1);
     if (item === undefined) return;
     node.externalRuleReferences.splice(to, 0, item);
@@ -1703,6 +1746,7 @@ export namespace RosettaExternalRuleSource {
     from: number,
     to: number
   ): void {
+    if (from < 0 || from >= node.externalClasses.length) return;
     const [item] = node.externalClasses.splice(from, 1);
     if (item === undefined) return;
     node.externalClasses.splice(to, 0, item);
@@ -1736,6 +1780,7 @@ export namespace RosettaExternalRuleSource {
     node.externalEnums[index] = externalEnum;
   }
   export function moveExternalEnumAt(node: Dehydrated<ast.RosettaExternalRuleSource>, from: number, to: number): void {
+    if (from < 0 || from >= node.externalEnums.length) return;
     const [item] = node.externalEnums.splice(from, 1);
     if (item === undefined) return;
     node.externalEnums.splice(to, 0, item);
@@ -1812,6 +1857,7 @@ export namespace RosettaFunction {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -1843,6 +1889,7 @@ export namespace RosettaFunction {
     node.annotations[index] = annotation;
   }
   export function moveAnnotationAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.annotations.length) return;
     const [item] = node.annotations.splice(from, 1);
     if (item === undefined) return;
     node.annotations.splice(to, 0, item);
@@ -1871,6 +1918,7 @@ export namespace RosettaFunction {
     node.inputs[index] = input;
   }
   export function moveInputAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.inputs.length) return;
     const [item] = node.inputs.splice(from, 1);
     if (item === undefined) return;
     node.inputs.splice(to, 0, item);
@@ -1915,6 +1963,7 @@ export namespace RosettaFunction {
     node.shortcuts[index] = shortcut;
   }
   export function moveShortcutAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.shortcuts.length) return;
     const [item] = node.shortcuts.splice(from, 1);
     if (item === undefined) return;
     node.shortcuts.splice(to, 0, item);
@@ -1943,6 +1992,7 @@ export namespace RosettaFunction {
     node.conditions[index] = condition;
   }
   export function moveConditionAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.conditions.length) return;
     const [item] = node.conditions.splice(from, 1);
     if (item === undefined) return;
     node.conditions.splice(to, 0, item);
@@ -1971,6 +2021,7 @@ export namespace RosettaFunction {
     node.operations[index] = operation;
   }
   export function moveOperationAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.operations.length) return;
     const [item] = node.operations.splice(from, 1);
     if (item === undefined) return;
     node.operations.splice(to, 0, item);
@@ -2002,6 +2053,7 @@ export namespace RosettaFunction {
     node.postConditions[index] = postCondition;
   }
   export function movePostConditionAt(node: Dehydrated<ast.RosettaFunction>, from: number, to: number): void {
+    if (from < 0 || from >= node.postConditions.length) return;
     const [item] = node.postConditions.splice(from, 1);
     if (item === undefined) return;
     node.postConditions.splice(to, 0, item);
@@ -2044,6 +2096,7 @@ export namespace RosettaMapping {
     node.instances[index] = instance;
   }
   export function moveInstanceAt(node: Dehydrated<ast.RosettaMapping>, from: number, to: number): void {
+    if (from < 0 || from >= node.instances.length) return;
     const [item] = node.instances.splice(from, 1);
     if (item === undefined) return;
     node.instances.splice(to, 0, item);
@@ -2158,6 +2211,7 @@ export namespace RosettaModel {
     node.imports[index] = import_;
   }
   export function moveImportAt(node: Dehydrated<ast.RosettaModel>, from: number, to: number): void {
+    if (from < 0 || from >= node.imports.length) return;
     const [item] = node.imports.splice(from, 1);
     if (item === undefined) return;
     node.imports.splice(to, 0, item);
@@ -2191,6 +2245,7 @@ export namespace RosettaModel {
     node.configurations[index] = configuration;
   }
   export function moveConfigurationAt(node: Dehydrated<ast.RosettaModel>, from: number, to: number): void {
+    if (from < 0 || from >= node.configurations.length) return;
     const [item] = node.configurations.splice(from, 1);
     if (item === undefined) return;
     node.configurations.splice(to, 0, item);
@@ -2247,6 +2302,7 @@ export namespace RosettaRecordType {
     node.features[index] = feature;
   }
   export function moveFeatureAt(node: Dehydrated<ast.RosettaRecordType>, from: number, to: number): void {
+    if (from < 0 || from >= node.features.length) return;
     const [item] = node.features.splice(from, 1);
     if (item === undefined) return;
     node.features.splice(to, 0, item);
@@ -2316,6 +2372,7 @@ export namespace RosettaRule {
     node.references[index] = reference;
   }
   export function moveReferenceAt(node: Dehydrated<ast.RosettaRule>, from: number, to: number): void {
+    if (from < 0 || from >= node.references.length) return;
     const [item] = node.references.splice(from, 1);
     if (item === undefined) return;
     node.references.splice(to, 0, item);
@@ -2390,6 +2447,7 @@ export namespace RosettaSynonymBody {
     node.values[index] = value;
   }
   export function moveValueAt(node: Dehydrated<ast.RosettaSynonymBody>, from: number, to: number): void {
+    if (from < 0 || from >= node.values.length) return;
     const [item] = node.values.splice(from, 1);
     if (item === undefined) return;
     node.values.splice(to, 0, item);
@@ -2427,6 +2485,7 @@ export namespace RosettaSynonymSource {
     node.externalClasses[index] = externalClasse;
   }
   export function moveExternalClasseAt(node: Dehydrated<ast.RosettaSynonymSource>, from: number, to: number): void {
+    if (from < 0 || from >= node.externalClasses.length) return;
     const [item] = node.externalClasses.splice(from, 1);
     if (item === undefined) return;
     node.externalClasses.splice(to, 0, item);
@@ -2458,6 +2517,7 @@ export namespace RosettaSynonymSource {
     node.externalEnums[index] = externalEnum;
   }
   export function moveExternalEnumAt(node: Dehydrated<ast.RosettaSynonymSource>, from: number, to: number): void {
+    if (from < 0 || from >= node.externalEnums.length) return;
     const [item] = node.externalEnums.splice(from, 1);
     if (item === undefined) return;
     node.externalEnums.splice(to, 0, item);
@@ -2490,6 +2550,7 @@ export namespace RosettaTypeAlias {
     node.parameters[index] = parameter;
   }
   export function moveParameterAt(node: Dehydrated<ast.RosettaTypeAlias>, from: number, to: number): void {
+    if (from < 0 || from >= node.parameters.length) return;
     const [item] = node.parameters.splice(from, 1);
     if (item === undefined) return;
     node.parameters.splice(to, 0, item);
@@ -2521,6 +2582,7 @@ export namespace RosettaTypeAlias {
     node.conditions[index] = condition;
   }
   export function moveConditionAt(node: Dehydrated<ast.RosettaTypeAlias>, from: number, to: number): void {
+    if (from < 0 || from >= node.conditions.length) return;
     const [item] = node.conditions.splice(from, 1);
     if (item === undefined) return;
     node.conditions.splice(to, 0, item);
@@ -2606,6 +2668,7 @@ export namespace SwitchOperation {
     node.cases[index] = case_;
   }
   export function moveCaseAt(node: Dehydrated<ast.SwitchOperation>, from: number, to: number): void {
+    if (from < 0 || from >= node.cases.length) return;
     const [item] = node.cases.splice(from, 1);
     if (item === undefined) return;
     node.cases.splice(to, 0, item);
@@ -2658,6 +2721,7 @@ export namespace TypeCall {
     node.arguments[index] = argument;
   }
   export function moveArgumentAt(node: Dehydrated<ast.TypeCall>, from: number, to: number): void {
+    if (from < 0 || from >= node.arguments.length) return;
     const [item] = node.arguments.splice(from, 1);
     if (item === undefined) return;
     node.arguments.splice(to, 0, item);
@@ -2711,6 +2775,7 @@ export namespace WithMetaOperation {
     node.entries[index] = entrie;
   }
   export function moveEntrieAt(node: Dehydrated<ast.WithMetaOperation>, from: number, to: number): void {
+    if (from < 0 || from >= node.entries.length) return;
     const [item] = node.entries.splice(from, 1);
     if (item === undefined) return;
     node.entries.splice(to, 0, item);
