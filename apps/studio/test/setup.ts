@@ -5,6 +5,43 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach } from 'vitest';
 import { usePerspectiveStore } from '../src/store/perspective-store.js';
 
+// vitest's jsdom build does not expose Web Storage (`window.localStorage` is
+// undefined), so App-level tests that render <App> — which reads
+// `window.localStorage` for the theme at App.tsx:530 — throw
+// "Cannot read properties of undefined (reading 'getItem')". Provide a minimal
+// in-memory Storage polyfill on both `window` and `globalThis`.
+if (typeof globalThis.localStorage === 'undefined') {
+  class MemoryStorage implements Storage {
+    private store = new Map<string, string>();
+    get length(): number {
+      return this.store.size;
+    }
+    clear(): void {
+      this.store.clear();
+    }
+    getItem(key: string): string | null {
+      return this.store.has(key) ? this.store.get(key)! : null;
+    }
+    key(index: number): string | null {
+      return [...this.store.keys()][index] ?? null;
+    }
+    removeItem(key: string): void {
+      this.store.delete(key);
+    }
+    setItem(key: string, value: string): void {
+      this.store.set(key, String(value));
+    }
+  }
+  const local = new MemoryStorage();
+  const session = new MemoryStorage();
+  Object.defineProperty(globalThis, 'localStorage', { value: local, configurable: true });
+  Object.defineProperty(globalThis, 'sessionStorage', { value: session, configurable: true });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', { value: local, configurable: true });
+    Object.defineProperty(window, 'sessionStorage', { value: session, configurable: true });
+  }
+}
+
 // zustand stores are process-global singletons shared across test files within
 // a worker. PerspectiveHost / EditorPage tests deliberately set
 // activePerspective to 'explore'; without a reset that state leaks into
