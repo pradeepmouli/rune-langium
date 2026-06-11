@@ -1005,7 +1005,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const mergedNodes: TypeGraphNode[] = placeholders.length > 0 ? [...rawNodes, ...placeholders] : rawNodes;
 
             // Determine initial visibility based on model size
-            const allNamespaces = new Set(mergedNodes.map((n) => n.data.namespace));
+            const allNamespaces = new Set(mergedNodes.map((n) => n.meta.namespace));
             const shouldCollapse = mergedNodes.length > LARGE_MODEL_THRESHOLD;
 
             const expandedNamespaces = shouldCollapse ? new Set<string>() : new Set(allNamespaces);
@@ -1246,7 +1246,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             if (!target) return;
 
             const oldName = (target.data as AnyGraphNode).name as string;
-            const namespace = (target.data as AnyGraphNode).namespace as string;
+            const namespace = target.meta.namespace;
             const newNodeId = makeNodeId(namespace, newName);
             // No-op if the new id is already taken: with nodesById canonical, the
             // re-key's `set(newNodeId, …)` would silently overwrite the occupant
@@ -1424,8 +1424,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // ids — a drag payload pointing at a deleted node must NOT corrupt the AST.
             const target = current.nodes.find((n) => n.id === targetTypeId);
             if (!target) return; // stale payload — abort
-            const targetData = target.data as AnyGraphNode;
-            const targetNamespace = (targetData as { namespace?: string }).namespace;
+            const targetNamespace = target.meta.namespace;
             if (!targetNamespace) return; // malformed target
             const refText = disambiguateTypeRef(targetTypeId, newTypeName, targetNamespace, current.nodes);
 
@@ -1553,7 +1552,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             if (parentId && !parentNode) return; // stale parentId — no-op, leave state untouched
 
             const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
-            const parentNamespace = (parentNode?.data as { namespace?: string } | undefined)?.namespace;
+            const parentNamespace = parentNode?.meta.namespace;
             const superRefText =
               parentName && parentNamespace && parentNode
                 ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
@@ -1874,7 +1873,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const { nodes, nodesById } = get();
             const targetNode = targetTypeId ? nodesById.get(targetTypeId) : undefined;
             const targetNamespace = targetNode
-              ? (targetNode.data as AnyGraphNode as { namespace?: string }).namespace
+              ? targetNode.meta.namespace
               : undefined;
             const refText =
               targetNode && targetNamespace
@@ -2293,7 +2292,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
 
           expandAllNamespaces() {
             const nodes = get().nodes;
-            const allNs = [...new Set(nodes.map((n) => n.data.namespace))];
+            const allNs = [...new Set(nodes.map((n) => n.meta.namespace))];
 
             // For small models, expand all at once
             if (nodes.length <= LARGE_MODEL_THRESHOLD) {
@@ -2311,7 +2310,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // Sort namespaces by node count (smallest first) for faster visual feedback.
             const nsCountMap = new Map<string, number>();
             for (const n of nodes) {
-              nsCountMap.set(n.data.namespace, (nsCountMap.get(n.data.namespace) ?? 0) + 1);
+              nsCountMap.set(n.meta.namespace, (nsCountMap.get(n.meta.namespace) ?? 0) + 1);
             }
             const nsByCount = allNs
               .map((ns) => ({ ns, count: nsCountMap.get(ns) ?? 0 }))
@@ -2373,7 +2372,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           setInitialVisibility(totalNodeCount: number) {
             set((state) => {
               const shouldCollapse = totalNodeCount > LARGE_MODEL_THRESHOLD;
-              const allNs = new Set(state.nodes.map((n) => n.data.namespace));
+              const allNs = new Set(state.nodes.map((n) => n.meta.namespace));
               return {
                 focusMode: true,
                 visibility: {
@@ -2398,7 +2397,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const { nodes, visibility } = get();
             return nodes.filter(
               (n) =>
-                visibility.expandedNamespaces.has(n.data.namespace) &&
+                visibility.expandedNamespaces.has(n.meta.namespace) &&
                 !visibility.hiddenNodeIds.has(n.id) &&
                 visibility.visibleNodeKinds.has(n.type as TypeKind)
             );
@@ -2526,7 +2525,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             for (const id of focusNodeIds) {
               hiddenNodeIds.delete(id);
               const node = nodeMap.get(id);
-              if (node) expandedNamespaces.add(node.data.namespace);
+              if (node) expandedNamespaces.add(node.meta.namespace);
             }
             set((state) => ({
               visibility: {
@@ -2547,7 +2546,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const expandedNamespaces = new Set(get().visibility.expandedNamespaces);
             for (const id of nodeIds) {
               const node = nodeMap.get(id);
-              if (node) expandedNamespaces.add(node.data.namespace);
+              if (node) expandedNamespaces.add(node.meta.namespace);
             }
             set((state) => ({
               visibility: {

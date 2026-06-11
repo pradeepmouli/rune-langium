@@ -17,6 +17,7 @@ import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
 import type { TypeRefPayload } from '../../src/types/structure-view.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 function makeActions(overrides: Partial<EditorFormActions<'data'>> = {}): EditorFormActions<'data'> {
   return {
@@ -160,13 +161,15 @@ describe('DataTypeForm – merged inherited attribute list', () => {
         position: { x: 0, y: 0 },
         hasExternalRefs: false,
         errors: []
-      }
+      },
+      meta: testMeta('test')
     } as TypeGraphNode;
     const childNode = {
       id: 'test.Trade',
       type: 'data',
       position: { x: 0, y: 0 },
-      data: childData
+      data: childData,
+      meta: testMeta('test')
     } as TypeGraphNode;
     return [childNode, parentNode];
   }
@@ -760,13 +763,15 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
         position: { x: 0, y: 0 },
         hasExternalRefs: false,
         errors: []
-      }
+      },
+      meta: testMeta('test')
     } as TypeGraphNode;
     const childNode = {
       id: 'test.Trade',
       type: 'data',
       position: { x: 0, y: 0 },
-      data: childData
+      data: childData,
+      meta: testMeta('test')
     } as TypeGraphNode;
     return { childData, allNodes: [childNode, parentNode] };
   }

@@ -66,7 +66,7 @@ export function modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): Mod
   // Group nodes by namespace
   const byNamespace = new Map<string, TypeGraphNode[]>();
   for (const node of nodes) {
-    const ns = (node.data as AnyGraphNode).namespace as string;
+    const ns = node.meta.namespace;
     if (!byNamespace.has(ns)) byNamespace.set(ns, []);
     byNamespace.get(ns)!.push(node);
   }

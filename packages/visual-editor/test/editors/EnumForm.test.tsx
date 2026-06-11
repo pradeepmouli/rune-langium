@@ -18,6 +18,7 @@ import { EnumForm } from '../../src/components/editors/EnumForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
 import type { TypeRefPayload } from '../../src/types/structure-view.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -334,13 +335,15 @@ describe('EnumForm – merged inherited enum value list', () => {
         position: { x: 0, y: 0 },
         hasExternalRefs: false,
         errors: []
-      }
+      },
+      meta: testMeta('test')
     } as TypeGraphNode;
     const childNode = {
       id: 'node-1',
       type: 'enum',
       position: { x: 0, y: 0 },
-      data: childData
+      data: childData,
+      meta: testMeta('test')
     } as TypeGraphNode;
     return [childNode, parentNode];
   }

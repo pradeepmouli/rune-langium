@@ -19,6 +19,7 @@ import {
   validateGraph
 } from '../../src/validation/edit-validator.js';
 import type { TypeGraphNode, TypeGraphEdge } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 function makeNode(
   id: string,
@@ -37,7 +38,8 @@ function makeNode(
       members: [],
       errors: [],
       hasExternalRefs: false
-    }
+    },
+    meta: testMeta(namespace)
   };
 }
 

@@ -20,6 +20,7 @@ import {
   validateGraph
 } from '../../src/validation/edit-validator.js';
 import type { TypeGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,7 +41,8 @@ function makeEnumNode(id: string, name: string, values: string[]): TypeGraphNode
       })),
       hasExternalRefs: false,
       errors: []
-    } as any
+    } as any,
+    meta: testMeta('test')
   };
 }
 
@@ -61,7 +63,8 @@ function makeDataNode(id: string, name: string, members: Array<{ name: string; t
       })),
       hasExternalRefs: false,
       errors: []
-    } as any
+    } as any,
+    meta: testMeta('test')
   };
 }
 

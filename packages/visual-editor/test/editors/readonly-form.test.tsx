@@ -26,6 +26,7 @@ import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
 import { TypeAliasForm } from '../../src/components/editors/TypeAliasForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -806,13 +807,15 @@ function makeParentNodes(childData: AnyGraphNode, parentAttrs: Record<string, un
       position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta('test')
   } as TypeGraphNode;
   const childNode: TypeGraphNode = {
     id: 'test.LockedChild',
     type: 'data',
     position: { x: 0, y: 0 },
-    data: childData
+    data: childData,
+    meta: testMeta('test')
   } as TypeGraphNode;
   return [childNode, parentNode];
 }
@@ -940,13 +943,15 @@ function makeParentEnumNodes(childData: AnyGraphNode, parentValues: Record<strin
       position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta('test.enums')
   } as TypeGraphNode;
   const childNode: TypeGraphNode = {
     id: 'test.enums.LockedChildEnum',
     type: 'enum',
     position: { x: 0, y: 0 },
-    data: childData
+    data: childData,
+    meta: testMeta('test.enums')
   } as TypeGraphNode;
   return [childNode, parentNode];
 }

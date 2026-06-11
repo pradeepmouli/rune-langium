@@ -17,6 +17,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, isTypeRefPayload, typeRefMimeForKind } from '../../src/types/structure-view.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
@@ -57,7 +58,8 @@ function makeNode(ns: string, name: string, astType: string = 'Data'): TypeGraph
       position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta(ns)
   };
 }
 

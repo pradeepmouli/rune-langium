@@ -23,6 +23,7 @@ import {
   type FlatTreeRow
 } from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode, TypeKind, TypeOption } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers (mirror the pattern from namespace-tree.test.ts)
@@ -46,7 +47,8 @@ function makeNode(ns: string, name: string, kind: string = 'data'): TypeGraphNod
       namespace: ns,
       hasExternalRefs: false,
       errors: []
-    } as any
+    } as any,
+    meta: testMeta(ns)
   };
 }
 

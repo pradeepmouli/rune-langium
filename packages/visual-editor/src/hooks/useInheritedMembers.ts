@@ -99,7 +99,7 @@ export function useInheritedMembers(
 
       const parentNode = allNodes.find((n) => {
         const pd = n.data as AnyGraphNode;
-        return pd.name === currentParentName || makeNodeId(pd.namespace as string, pd.name as string) === currentParentName;
+        return pd.name === currentParentName || makeNodeId(n.meta.namespace, pd.name as string) === currentParentName;
       });
 
       if (!parentNode) break;
@@ -109,7 +109,7 @@ export function useInheritedMembers(
       if (members.length > 0) {
         groups.push({
           ancestorName: pd.name as string,
-          namespace: pd.namespace as string,
+          namespace: parentNode.meta.namespace,
           kind: resolveNodeKind(parentNode),
           members
         });

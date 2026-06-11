@@ -86,7 +86,7 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
 
   for (const node of nodes) {
-    const ns = node.data.namespace;
+    const ns = node.meta.namespace;
     if (!nsMap.has(ns)) {
       nsMap.set(ns, []);
     }
@@ -272,7 +272,7 @@ export function buildSegmentedNamespaceTree(nodes: TypeGraphNode[]): SegmentNode
   // construction (nesting, totals, sorting) is identical, so it lives once.
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
   for (const node of nodes) {
-    const ns: string = node.data.namespace ?? '';
+    const ns: string = node.meta.namespace ?? '';
     if (!nsMap.has(ns)) nsMap.set(ns, []);
     nsMap.get(ns)!.push(extractTypeEntry(node));
   }
