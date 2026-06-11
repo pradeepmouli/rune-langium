@@ -157,13 +157,13 @@ describe('OtherForm parent name rendering (Deliverable C baseline)', () => {
     expect(screen.queryByText('Extends')).toBeNull();
   });
 
-  // Regression guard: curated `refOnly` nodes hydrated from /api/parse arrive
-  // WITHOUT a Langium `$type` (they carry `typeKind` instead — see
-  // resolveNodeKind's doc). OtherForm exists specifically to render these.
-  // Routing the parent-name through the generated `toDomain` (which throws
-  // `Unknown node type: …` on an unrecognized `$type`) would crash the form
-  // via FormErrorBoundary on exactly these nodes. The direct getRefText chain
-  // returns `undefined` gracefully — this test locks that in.
+  // Graceful-degradation guard: curated nodes now carry `$type` (Phase 2
+  // typeKind→$type unification), but OtherForm must still render WITHOUT
+  // throwing when handed an unexpected/legacy shape. Routing the parent-name
+  // through the generated `toDomain` (which throws `Unknown node type: …` on
+  // an unrecognized `$type`) would crash the form via FormErrorBoundary on
+  // exactly these nodes. The direct getRefText chain returns `undefined`
+  // gracefully — this test locks that in.
   it('curated $type-less node (typeKind only): renders without throwing, no Extends', () => {
     const curatedNode = {
       typeKind: 'enum',

@@ -220,44 +220,20 @@ export const NODE_TYPE_TO_AST_TYPE: Record<string, string> = {
 };
 
 /**
- * Lookup that accepts EITHER an AST `$type` (e.g. `'Data'`, `'RosettaEnumeration'`)
- * or a React-Flow node-type (e.g. `'data'`, `'enum'`) and returns the React-Flow
- * node-type. Combines AST_TYPE_TO_NODE_TYPE with identity entries so a single
- * keyed lookup handles both shapes.
- */
-const NODE_KIND_LOOKUP: Record<string, string> = {
-  ...AST_TYPE_TO_NODE_TYPE,
-  // Identity entries so node-type string values resolve without a second pass.
-  data: 'data',
-  choice: 'choice',
-  enum: 'enum',
-  func: 'func',
-  record: 'record',
-  typeAlias: 'typeAlias',
-  basicType: 'basicType',
-  annotation: 'annotation'
-};
-
-/**
  * Resolve the React-Flow node-kind (`'data' | 'choice' | 'enum' | ...`) for
  * a node or its data payload.
  *
- * Accepts either a React-Flow node (`{ data, type }`) or the inner `data`
- * payload directly. Fallback order:
- *   1. `data.$type`  (Langium AST form)
- *   2. `node.type`  (React-Flow projection form)
- *   3. `'data'`  (last-resort default)
+ * Accepts either a React-Flow node (`{ data }`) or the inner `data` payload
+ * directly, and resolves via `data.$type` alone. `$type` is guaranteed on
+ * every node since the typeKind→$type unification (Phase 2 curated-serializer
+ * fix), so the former `node.type` fallback arm is retired. Unrecognised or
+ * `$type`-less inputs degrade to the `'data'` last-resort default.
  *
  * Use this helper instead of indexing `AST_TYPE_TO_NODE_TYPE` directly.
- * The `rune/no-raw-node-kind-lookup` eslint rule enforces this.
  */
 export function resolveNodeKind(nodeOrData: unknown): string {
   if (nodeOrData == null) return 'data';
-  const obj = nodeOrData as { data?: unknown; type?: string };
+  const obj = nodeOrData as { data?: unknown };
   const d = (obj.data ?? obj) as { $type?: string } | undefined;
-  return (
-    NODE_KIND_LOOKUP[d?.$type ?? ''] ??
-    NODE_KIND_LOOKUP[obj?.type ?? ''] ??
-    'data'
-  );
+  return AST_TYPE_TO_NODE_TYPE[d?.$type ?? ''] ?? 'data';
 }

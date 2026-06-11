@@ -249,27 +249,11 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
     if (!d || typeof d.namespace !== 'string') continue;
     namespacesSet.add(d.namespace);
 
-    // Codex P1 review (e2e-batch fix #1 follow-up): some hydration paths
-    // (curated /api/parse round-trips, deferred exports) attach `typeKind`
-    // to data but leave `$type` undefined. The `selectedNodeType` selector
-    // in this file already handles that fallback chain; the adapter
-    // projection MUST mirror it, otherwise nodes recognized as Data/Choice/
-    // Enum by selectedNodeType get filtered out here and Structure View
-    // shows the stale-selection state for them. Effective $type is the
-    // first defined of: $type → typeKind-mapped → node.type-mapped.
-    const effectiveType = ((): string | undefined => {
-      if (d.$type) return d.$type;
-      const k = (d as { typeKind?: string }).typeKind ?? (rfNode as { type?: string }).type;
-      if (k === 'data' || k === 'Data') return 'Data';
-      if (k === 'choice' || k === 'Choice') return 'Choice';
-      if (k === 'enum' || k === 'Enum' || k === 'RosettaEnumeration') return 'RosettaEnumeration';
-      if (k === 'record' || k === 'RosettaRecordType') return 'RosettaRecordType';
-      if (k === 'typeAlias' || k === 'TypeAlias' || k === 'RosettaTypeAlias') return 'TypeAlias';
-      // Phase C — Function structure node. Mirror the selectedNodeType fallback
-      // chain so curated-hydration func nodes (no `$type`) still project.
-      if (k === 'func' || k === 'Function' || k === 'RosettaFunction') return 'RosettaFunction';
-      return undefined;
-    })();
+    // `$type` is guaranteed on every node since the typeKind→$type unification
+    // (Phase 2 curated-serializer fix): curated /api/parse round-trips and
+    // deferred-export placeholders now stamp `$type`, so the former
+    // typeKind/node.type fallback chain here is retired (Phase 3 prep).
+    const effectiveType: string | undefined = d.$type;
 
     // Copilot review (e2e-batch confirmation pass): the previous
     // `Extract<AnyGraphNode, { $type: 'Data' }>` casts asserted nodes
@@ -654,60 +638,15 @@ export function ExplorePerspective() {
   // to StructureView as focusedTypeId. Using a separate selector avoids breaking
   // zustand's referential-equality optimisation that would fire on every nodes mutation.
   //
-  // Defensive derivation (e2e-batch fix): the curated/deferred-export path
-  // attaches $type to data.$type, but earlier hydration variants stored kind
-  // info on data.typeKind or only on the React Flow node.type. Fall through to
-  // every known source so curated-loaded nodes also derive a valid type and
-  // route through to Structure View (issue #1 — curated bundles showed empty
-  // structure pane because selectedNodeType was null even though Inspector
-  // populated from the same node).
+  // `$type` is guaranteed on every node since the typeKind→$type unification
+  // (Phase 2 curated-serializer fix), so the former typeKind/node.type fallback
+  // switch here is retired (Phase 3 prep) — `data.$type` is the single source.
   const selectedNodeType = useEditorStore((s) => {
     if (!s.selectedNodeId) return null;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
     if (!node) return null;
-    const d = node.data as { $type?: string; typeKind?: string } | undefined;
-    if (d?.$type) return d.$type;
-    // Map React Flow node.type (lowercase: 'data', 'choice', 'enum', 'func',
-    // 'record', 'typeAlias', 'basicType', 'annotation') or data.typeKind back
-    // to the Langium AST $type the StructureView gate + the unsupported-kind
-    // empty state both expect. Copilot review (e2e-batch adversarial) flagged
-    // the earlier 3-kind fallback as incomplete — it returned null for non-
-    // Data RF node types, so the contextual "X is a Function" empty state
-    // never fired for curated-loaded functions/records/etc.
-    const kind = d?.typeKind ?? (node as { type?: string }).type;
-    switch (kind) {
-      case 'data':
-      case 'Data':
-        return 'Data';
-      case 'choice':
-      case 'Choice':
-        return 'Choice';
-      case 'enum':
-      case 'Enum':
-      case 'RosettaEnumeration':
-        return 'RosettaEnumeration';
-      case 'func':
-      case 'Function':
-      case 'RosettaFunction':
-        return 'RosettaFunction';
-      case 'record':
-      case 'Record':
-      case 'RosettaRecordType':
-        return 'RosettaRecordType';
-      case 'typeAlias':
-      case 'TypeAlias':
-      case 'RosettaTypeAlias':
-        return 'RosettaTypeAlias';
-      case 'basicType':
-      case 'BasicType':
-      case 'RosettaBasicType':
-        return 'RosettaBasicType';
-      case 'annotation':
-      case 'Annotation':
-        return 'Annotation';
-      default:
-        return null;
-    }
+    const d = node.data as { $type?: string } | undefined;
+    return d?.$type ?? null;
   });
   const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
   const layoutEngineRef = useRef(storeLayoutEngine);

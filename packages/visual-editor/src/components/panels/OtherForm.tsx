@@ -85,10 +85,9 @@ export function OtherForm({ nodeData, nodeId, onNavigateToNode, allNodeIds, refO
   const kind = resolveNodeKind(d);
   // Parent-name: read the inheritance ref directly off the AST node. The
   // generated `toDomain(d).extends` normalization is intentionally NOT used
-  // here. OtherForm renders curated `refOnly` entries, which (per
-  // resolveNodeKind's doc) arrive `$type`-less / `typeKind`-only from
-  // `/api/parse` hydration. `toDomain` throws `Unknown node type: …` on an
-  // unrecognized `$type`, which the FormErrorBoundary would surface as
+  // here. OtherForm renders curated `refOnly` entries whose `$type` values
+  // fall outside the editable union; `toDomain` throws `Unknown node type: …`
+  // on an unrecognized `$type`, which the FormErrorBoundary would surface as
   // "Failed to render editor form" — exactly on the nodes this form exists
   // to render. The direct chain returns `undefined` gracefully and is O(1)
   // (no deep projection of the whole node for a single optional scalar). The

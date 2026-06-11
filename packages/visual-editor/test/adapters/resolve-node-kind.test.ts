@@ -21,9 +21,12 @@ describe('resolveNodeKind', () => {
     expect(resolveNodeKind(node)).toBe('choice');
   });
 
-  it('falls back to React-Flow node.type when $type is missing', () => {
+  it("degrades to the 'data' default when $type is missing (node.type fallback retired)", () => {
+    // Phase 3 prep: $type is guaranteed on every node since the typeKind→$type
+    // unification, so the React-Flow node.type fallback arm was dead code and
+    // is retired. $type-less inputs hit the last-resort default.
     const node = { id: 'ns.F', type: 'func', data: { name: 'F' } };
-    expect(resolveNodeKind(node)).toBe('func');
+    expect(resolveNodeKind(node)).toBe('data');
   });
 
   it('accepts a raw data payload (without an enclosing React-Flow node wrapper)', () => {
@@ -38,10 +41,10 @@ describe('resolveNodeKind', () => {
     expect(resolveNodeKind({ data: { $type: 'NotARealType' } })).toBe('data');
   });
 
-  it('prefers data.$type over node.type (priority order)', () => {
-    // $type wins over node.type
+  it('resolves from data.$type only — node.type is never consulted', () => {
+    // $type wins regardless of node.type
     expect(resolveNodeKind({ type: 'enum', data: { $type: 'Data' } })).toBe('data');
-    // node.type used when $type missing
-    expect(resolveNodeKind({ type: 'enum', data: {} })).toBe('enum');
+    // node.type fallback retired: $type-less data hits the default
+    expect(resolveNodeKind({ type: 'enum', data: {} })).toBe('data');
   });
 });
