@@ -4,12 +4,11 @@
 /**
  * AST → Model adapter.
  *
- * Converts Rune DSL AST nodes into GraphNode<T> objects for ReactFlow.
- *
- * The visual editor intentionally uses the AST shape directly, but the
- * runtime objects still carry Langium internals and resolved reference
- * targets that should not reach the client/editor model. We therefore
- * strip those additional fields without introducing a bespoke projection.
+ * Converts Rune DSL AST nodes into TypeGraphNode objects for ReactFlow:
+ * `node.data` is the pure `Dehydrated<T>` domain payload (lossless, strict
+ * `{ $refText }` refs), produced via `parsedAdapter.dehydrate` for live AST
+ * elements and `curatedAdapter.parse` for pre-dehydrated JSON; `node.meta`
+ * carries the UI/editor metadata sibling.
  */
 
 import {
@@ -24,17 +23,8 @@ import {
   parsedAdapter,
   curatedAdapter
 } from '@rune-langium/core';
-import type {
-  RosettaModel,
-  RosettaRootElement,
-  Data,
-  Choice,
-  RosettaEnumeration,
-  RosettaFunction,
-  RosettaRecordType,
-  RosettaTypeAlias
-} from '@rune-langium/core';
-import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
+import type { RosettaModel, RosettaRootElement } from '@rune-langium/core';
+import type { TypeGraphNode, TypeGraphEdge, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
 
@@ -227,8 +217,8 @@ export function astToModel(
 
     // Inheritance edges
     if ($type === 'Data') {
-      const data = d as GraphNode<Data>;
-      const parentName = getRefText(data.superType as { $refText?: string } | undefined);
+      // `$type` is the union discriminant — `d` narrows to Dehydrated<Data>.
+      const parentName = getRefText(d.superType);
       if (parentName) {
         const parentNodeId = nameToNodeId.get(parentName);
         if (parentNodeId) {
@@ -242,11 +232,10 @@ export function astToModel(
         }
       }
       // Attribute reference edges
-      edges.push(...getAttributeEdges(node.id, (data.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     } else if ($type === 'Choice') {
-      const choice = d as GraphNode<Choice>;
       // Choice option edges
-      for (const opt of (choice.attributes ?? []) as unknown as MemberLikeRef[]) {
+      for (const opt of (d.attributes ?? []) as unknown as MemberLikeRef[]) {
         const typeName = getTypeRefText(opt.typeCall);
         if (typeName) {
           const targetNodeId = nameToNodeId.get(typeName);
@@ -262,8 +251,7 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaEnumeration') {
-      const enumData = d as GraphNode<RosettaEnumeration>;
-      const parentName = getRefText(enumData.parent as { $refText?: string } | undefined);
+      const parentName = getRefText(d.parent);
       if (parentName) {
         const parentNodeId = nameToNodeId.get(parentName);
         if (parentNodeId) {
@@ -277,11 +265,10 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaFunction') {
-      const func = d as GraphNode<RosettaFunction>;
       // Input parameter type references
-      edges.push(...getAttributeEdges(node.id, (func.inputs ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.inputs ?? []) as unknown as MemberLikeRef[], nameToNodeId));
       // Output type reference
-      const outputTypeName = getTypeRefText((func.output as unknown as MemberLikeRef | undefined)?.typeCall);
+      const outputTypeName = getTypeRefText((d.output as unknown as MemberLikeRef | undefined)?.typeCall);
       if (outputTypeName) {
         const targetNodeId = nameToNodeId.get(outputTypeName);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -295,7 +282,7 @@ export function astToModel(
         }
       }
       // Super-function inheritance
-      const superName = getRefText(func.superFunction as { $refText?: string } | undefined);
+      const superName = getRefText(d.superFunction);
       if (superName) {
         const parentNodeId = nameToNodeId.get(superName);
         if (parentNodeId) {
@@ -309,11 +296,9 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaRecordType') {
-      const record = d as GraphNode<RosettaRecordType>;
-      edges.push(...getAttributeEdges(node.id, (record.features ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.features ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     } else if ($type === 'RosettaTypeAlias') {
-      const alias = d as GraphNode<RosettaTypeAlias>;
-      const targetType = getTypeRefText((alias as unknown as { typeCall?: { type?: { $refText?: string } } }).typeCall);
+      const targetType = getTypeRefText(d.typeCall as { type?: { $refText?: string } } | undefined);
       if (targetType) {
         const targetNodeId = nameToNodeId.get(targetType);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -335,11 +320,11 @@ export function astToModel(
     const $type = d.$type;
     let members: MemberLikeRef[] | null = null;
     if ($type === 'Data' || $type === 'Annotation') {
-      members = ((d as GraphNode<Data>).attributes ?? []) as unknown as MemberLikeRef[];
+      members = (d.attributes ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaFunction') {
-      members = ((d as GraphNode<RosettaFunction>).inputs ?? []) as unknown as MemberLikeRef[];
+      members = (d.inputs ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaRecordType') {
-      members = ((d as GraphNode<RosettaRecordType>).features ?? []) as unknown as MemberLikeRef[];
+      members = (d.features ?? []) as unknown as MemberLikeRef[];
     }
     if (members) {
       node.meta.hasExternalRefs = members.some((m) => {

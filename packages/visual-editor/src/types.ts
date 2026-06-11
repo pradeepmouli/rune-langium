@@ -28,7 +28,8 @@ import type {
   RosettaRecordType,
   RosettaTypeAlias,
   RosettaBasicType,
-  Annotation
+  Annotation,
+  Dehydrated
 } from '@rune-langium/core';
 
 // ---------------------------------------------------------------------------
@@ -159,16 +160,31 @@ export type RootAstElement =
   | RosettaBasicType
   | Annotation;
 
-/** Union of all GraphNode variants for top-level elements. */
-export type AnyGraphNode =
-  | GraphNode<Data>
-  | GraphNode<Choice>
-  | GraphNode<RosettaEnumeration>
-  | GraphNode<RosettaFunction>
-  | GraphNode<RosettaRecordType>
-  | GraphNode<RosettaTypeAlias>
-  | GraphNode<RosettaBasicType>
-  | GraphNode<Annotation>;
+/**
+ * Domain payload of an editor graph node — the discriminated union (on
+ * `$type`) of `Dehydrated<T>` over every top-level element kind the editor
+ * renders. This is the PURE domain object: lossless, strict `{ $refText }`
+ * refs, `$type` required, and NO UI metadata (which lives on `node.meta`).
+ */
+export type DomainNodeData =
+  | Dehydrated<Data>
+  | Dehydrated<Choice>
+  | Dehydrated<RosettaEnumeration>
+  | Dehydrated<RosettaFunction>
+  | Dehydrated<RosettaRecordType>
+  | Dehydrated<RosettaTypeAlias>
+  | Dehydrated<RosettaBasicType>
+  | Dehydrated<Annotation>;
+
+/**
+ * Union of all node-data variants for top-level elements.
+ *
+ * @deprecated Phase 3 step 3 flipped the substrate: `node.data` is the pure
+ * `Dehydrated<T>` domain object. This name is retained as an alias of
+ * {@link DomainNodeData} for the existing consumer surface; new code should
+ * use `DomainNodeData` directly.
+ */
+export type AnyGraphNode = DomainNodeData;
 
 // ---------------------------------------------------------------------------
 // Type kind (short alias strings for UI/form dispatch)
@@ -606,9 +622,14 @@ export interface VisibilityState {
 // ---------------------------------------------------------------------------
 
 /**
- * Editor graph node. `data` carries the (AST-projection) payload — still with
- * flat metadata merged in during the Phase 3 step-2 dual-presence window —
- * and `meta` carries the UI/editor metadata sibling that consumers migrate to.
+ * Editor graph node. `data` is the PURE `Dehydrated<T>` domain payload
+ * ({@link DomainNodeData}); `meta` is the UI/editor metadata sibling
+ * ({@link GraphNodeMeta}); `position` stays ReactFlow-native.
+ *
+ * ReactFlow's `Node<T>` constrains `T extends Record<string, unknown>`.
+ * `DomainNodeData` satisfies it structurally: every union arm is a mapped
+ * (anonymous) object type, which TypeScript gives an implicit index
+ * signature — no explicit index signature is added to the domain object.
  */
-export type TypeGraphNode = Node<AnyGraphNode> & { meta: GraphNodeMeta };
+export type TypeGraphNode = Node<DomainNodeData> & { meta: GraphNodeMeta };
 export type TypeGraphEdge = Edge<EdgeData>;
