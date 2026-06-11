@@ -885,7 +885,7 @@ export function ExplorePerspective() {
     prevSelectedRef.current = selectedNodeId;
     if (!selectedNodeId || !selectedNodeData) return;
 
-    const filePath = resolveNodeFile(selectedNodeData);
+    const filePath = resolveNodeFile(selectedNodeData, selectedNodeMeta);
     if (filePath) openFileInSource(filePath);
 
     const nodeData = selectedNodeData as unknown as Record<string, unknown>;
@@ -1082,7 +1082,7 @@ export function ExplorePerspective() {
   }, [resolvedModelFiles, deferredExports]);
 
   const resolveNodeFile = useCallback(
-    (nodeData: AnyGraphNode): string | undefined => {
+    (nodeData: AnyGraphNode, meta: GraphNodeMeta | undefined): string | undefined => {
       const d = nodeData as any;
       const docPath = d.$container?.$document?.uri?.path as string | undefined;
       if (docPath) {
@@ -1094,7 +1094,8 @@ export function ExplorePerspective() {
           if (byName) return byName.path;
         }
       }
-      const nodeId = qualifiedExportPath(d.namespace, d.name);
+      if (!meta?.namespace) return undefined;
+      const nodeId = qualifiedExportPath(meta.namespace, d.name);
       return nodeIdToFilePath.get(nodeId);
     },
     [files, nodeIdToFilePath]
