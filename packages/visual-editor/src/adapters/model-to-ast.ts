@@ -84,12 +84,15 @@ export function modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): Mod
       const parentNodeId = inheritanceMap.get(node.id);
       if (parentNodeId) {
         const parentName = nameFromNodeId(parentNodeId);
+        // Strict `{ $refText }` ref shape (Phase 3 prep): the serializer reads
+        // `$refText` when `ref` is absent, and hydration re-resolves the real
+        // Reference from `$refText` — the synthesized `ref: { name }` was dead weight.
         if (d.$type === 'Data') {
-          model.superType = { ref: { name: parentName }, $refText: parentName };
+          model.superType = { $refText: parentName };
         } else if (d.$type === 'RosettaEnumeration') {
-          model.parent = { ref: { name: parentName }, $refText: parentName };
+          model.parent = { $refText: parentName };
         } else if (d.$type === 'RosettaFunction') {
-          model.superFunction = { ref: { name: parentName }, $refText: parentName };
+          model.superFunction = { $refText: parentName };
         }
       }
 

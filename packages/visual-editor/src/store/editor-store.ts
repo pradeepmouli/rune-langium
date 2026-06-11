@@ -1549,9 +1549,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               parentName && parentNamespace && parentNode
                 ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
                 : parentName;
-            const superRef = superRefText
-              ? ({ ref: { name: parentName }, $refText: superRefText } as any)
-              : undefined;
+            // Strict `{ $refText }` ref shape (Phase 3 prep): hydration re-resolves
+            // the real Reference from $refText via the Langium linker, so a
+            // synthesized `ref: { name }` was never load-bearing for round-trip.
+            const superRef = superRefText ? { $refText: superRefText } : undefined;
 
             mutateGraph(set, get, (draft) => {
               // Remove existing extends edge from this child
@@ -1720,7 +1721,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             const parentNode = parentId ? state.nodesById.get(parentId) : null;
             if (parentId && !parentNode) return; // stale parentId — no-op, leave state untouched (mirrors setInheritance)
             const parentName = (parentNode?.data as AnyGraphNode | undefined)?.name as string | undefined;
-            const parentRef = parentName ? ({ ref: { name: parentName }, $refText: parentName } as any) : undefined;
+            // Strict `{ $refText }` ref shape (Phase 3 prep) — mirrors setInheritance.
+            const parentRef = parentName ? { $refText: parentName } : undefined;
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
