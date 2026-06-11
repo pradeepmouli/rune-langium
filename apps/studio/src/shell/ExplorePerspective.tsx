@@ -46,6 +46,7 @@ import {
 import type {
   RuneTypeGraphRef,
   AnyGraphNode,
+  GraphNodeMeta,
   TypeOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
@@ -240,14 +241,17 @@ function projectStructureMeta(d: {
   return { definition, annotations, conditions };
 }
 
-function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGraphNode }[]): AdapterDocument {
+function graphNodesToAdapterDocument(
+  nodes: readonly { id: string; data: AnyGraphNode; meta: GraphNodeMeta }[]
+): AdapterDocument {
   const adapterNodes: AdapterNode[] = [];
   const namespacesSet = new Set<string>();
 
   for (const rfNode of nodes) {
     const d = rfNode.data;
-    if (!d || typeof d.namespace !== 'string') continue;
-    namespacesSet.add(d.namespace);
+    const namespace = rfNode.meta?.namespace;
+    if (!d || typeof namespace !== 'string') continue;
+    namespacesSet.add(namespace);
 
     // `$type` is guaranteed on every node since the typeKind→$type unification
     // (Phase 2 curated-serializer fix): curated /api/parse round-trips and
@@ -267,7 +271,6 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
     if (effectiveType === 'Data') {
       const dd = d as {
         name: string;
-        namespace: string;
         superType?: { $refText?: string };
         attributes?: readonly unknown[];
         definition?: string;
@@ -278,7 +281,7 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         id: rfNode.id,
         $type: 'Data',
         name: dd.name,
-        namespace: dd.namespace,
+        namespace,
         extends: dd.superType?.$refText,
         // `attributes` on AstNodeModel<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
@@ -293,7 +296,6 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
       // The adapter's buildChoiceArm consumes the real shape via typeCall only.
       const dc = d as {
         name: string;
-        namespace: string;
         attributes?: readonly unknown[];
         definition?: string;
         annotations?: readonly unknown[];
@@ -303,7 +305,7 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         id: rfNode.id,
         $type: 'Choice',
         name: dc.name,
-        namespace: dc.namespace,
+        namespace,
         choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>,
         // Phase A — type metadata. Choice declarations carry doc + annotations
         // (and may carry conditions in the grammar); project all via the shared
@@ -311,20 +313,20 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         ...projectStructureMeta(dc)
       });
     } else if (effectiveType === 'RosettaEnumeration') {
-      const de = d as { name: string; namespace: string; enumValues?: readonly unknown[] };
+      const de = d as { name: string; enumValues?: readonly unknown[] };
       adapterNodes.push({
         id: rfNode.id,
         $type: 'Enum',
         name: de.name,
-        namespace: de.namespace,
+        namespace,
         values: (de.enumValues ?? []) as Array<{ name: string }>
       });
     } else if (effectiveType === 'RosettaRecordType') {
-      const dr = d as { name: string; namespace: string };
-      adapterNodes.push({ id: rfNode.id, $type: 'Record', name: dr.name, namespace: dr.namespace });
+      const dr = d as { name: string };
+      adapterNodes.push({ id: rfNode.id, $type: 'Record', name: dr.name, namespace });
     } else if (effectiveType === 'TypeAlias' || effectiveType === 'RosettaTypeAlias') {
-      const ta = d as { name: string; namespace: string };
-      adapterNodes.push({ id: rfNode.id, $type: 'TypeAlias', name: ta.name, namespace: ta.namespace });
+      const ta = d as { name: string };
+      adapterNodes.push({ id: rfNode.id, $type: 'TypeAlias', name: ta.name, namespace });
     } else if (effectiveType === 'RosettaFunction') {
       // Phase C — Function structure node. `inputs` and `output` are
       // Attribute-shaped (name + typeCall + card), identical to Data
@@ -333,7 +335,6 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
       // partial-parse / hydration func nodes may omit inputs or output.
       const df = d as {
         name: string;
-        namespace: string;
         inputs?: readonly unknown[];
         output?: unknown;
         definition?: string;
@@ -345,7 +346,7 @@ function graphNodesToAdapterDocument(nodes: readonly { id: string; data: AnyGrap
         id: rfNode.id,
         $type: 'Function',
         name: df.name,
-        namespace: df.namespace,
+        namespace,
         inputs: (df.inputs ?? []) as AdapterNode['inputs'],
         output: (df.output ?? null) as AdapterNode['output'],
         // Phase A — type metadata (doc / annotations / conditions). Functions
@@ -765,6 +766,10 @@ export function ExplorePerspective() {
     const node = storeNodes.find((n) => n.id === selectedNodeId);
     return (node?.data as unknown as AnyGraphNode) ?? null;
   }, [selectedNodeId, storeNodes]);
+  const selectedNodeMeta: GraphNodeMeta | undefined = useMemo(() => {
+    if (!selectedNodeId) return undefined;
+    return storeNodes.find((n) => n.id === selectedNodeId)?.meta;
+  }, [selectedNodeId, storeNodes]);
   const selectedNodeDataRef = useRef<AnyGraphNode | null>(selectedNodeData);
   selectedNodeDataRef.current = selectedNodeData;
 
@@ -820,17 +825,17 @@ export function ExplorePerspective() {
     return storeNodes
       .map((node) => {
         const data = node.data as unknown as {
-          namespace?: string;
           name?: string;
           $type?: string;
         };
-        if (!data.namespace || !data.name) return undefined;
+        const namespace = node.meta?.namespace;
+        if (!namespace || !data.name) return undefined;
         return {
-          id: `${data.namespace}.${data.name}`,
-          namespace: data.namespace,
+          id: `${namespace}.${data.name}`,
+          namespace,
           name: data.name,
           kind: data.$type ?? 'unknown',
-          ...sourceByTargetId.get(`${data.namespace}.${data.name}`)
+          ...sourceByTargetId.get(`${namespace}.${data.name}`)
         };
       })
       .filter((target): target is FormPreviewTarget => target !== undefined);
@@ -855,12 +860,13 @@ export function ExplorePerspective() {
     if (!selectedNodeId) {
       return;
     }
-    const data = selectedNodeData as unknown as { namespace?: string; name?: string } | null;
-    if (!data?.namespace || !data.name) {
+    const name = (selectedNodeData as unknown as { name?: string } | null)?.name;
+    const namespace = selectedNodeMeta?.namespace;
+    if (!namespace || !name) {
       return;
     }
-    selectPreviewTarget(`${data.namespace}.${data.name}`);
-  }, [selectedNodeData, selectedNodeId, selectPreviewTarget]);
+    selectPreviewTarget(`${namespace}.${name}`);
+  }, [selectedNodeData, selectedNodeMeta, selectedNodeId, selectPreviewTarget]);
 
   useEffect(() => {
     if (!selectedNodeId) {
@@ -1135,9 +1141,9 @@ export function ExplorePerspective() {
       // curated) nodes need a server round-trip; user types and already-
       // hydrated curated types resolve locally.
       const selectedNode = useEditorStore.getState().nodes.find((n) => n.id === nodeId);
-      const data = selectedNode?.data as { namespace?: string; deferred?: boolean } | undefined;
-      if (data?.deferred && data.namespace) {
-        useEditorStore.getState().requestNamespaceHydration(data.namespace);
+      const meta = selectedNode?.meta;
+      if (meta?.deferred && meta.namespace) {
+        useEditorStore.getState().requestNamespaceHydration(meta.namespace);
       }
     },
     [storeSelectNode]
@@ -1148,10 +1154,9 @@ export function ExplorePerspective() {
   // queue the namespace for on-demand hydration before toggling visibility.
   const handleToggleNamespace = useCallback(
     (namespace: string) => {
-      const needsHydration = useEditorStore.getState().nodes.some((n) => {
-        const d = n.data as { namespace?: string; deferred?: boolean };
-        return d.namespace === namespace && d.deferred === true;
-      });
+      const needsHydration = useEditorStore.getState().nodes.some(
+        (n) => n.meta.namespace === namespace && n.meta.deferred === true
+      );
       if (needsHydration) useEditorStore.getState().requestNamespaceHydration(namespace);
       storeToggleNamespace(namespace);
     },
@@ -1187,9 +1192,9 @@ export function ExplorePerspective() {
         if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
       }
       storeSelectNode(nodeId, { reapplyFocusMode: true });
-      const targetData = targetNode?.data as { namespace?: string; deferred?: boolean } | undefined;
-      if (targetData?.deferred && targetData.namespace) {
-        useEditorStore.getState().requestNamespaceHydration(targetData.namespace);
+      const targetMeta = targetNode?.meta;
+      if (targetMeta?.deferred && targetMeta.namespace) {
+        useEditorStore.getState().requestNamespaceHydration(targetMeta.namespace);
       }
       if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
         graphRef.current?.focusNode(nodeId);
@@ -1385,7 +1390,7 @@ export function ExplorePerspective() {
       value: n.id,
       label: n.data.name,
       kind: resolveNodeKind(n) as TypeOption['kind'],
-      namespace: n.data.namespace
+      namespace: n.meta.namespace
     }));
     return [...builtinOptions, ...graphOptions];
   }, [storeNodes]);
@@ -1685,15 +1690,16 @@ export function ExplorePerspective() {
   }, [files, deferredExports]);
 
   const selectedNodeIsRefOnly = useMemo(() => {
-    const data = selectedNodeData as unknown as { namespace?: string } | null;
-    return !!(data?.namespace && refOnlyNamespaces.has(data.namespace));
-  }, [selectedNodeData, refOnlyNamespaces]);
+    const namespace = selectedNodeMeta?.namespace;
+    return !!(namespace && refOnlyNamespaces.has(namespace));
+  }, [selectedNodeMeta, refOnlyNamespaces]);
 
   const renderInspectorPane = useCallback(
     () => (
       <div className="studio-scroll flex flex-col min-h-0 h-full overflow-auto">
         <EditorFormPanel
           nodeData={selectedNodeData}
+          meta={selectedNodeMeta}
           nodeId={selectedNodeId}
           refOnly={selectedNodeIsRefOnly}
           availableTypes={availableTypes}
@@ -1709,6 +1715,7 @@ export function ExplorePerspective() {
     ),
     [
       selectedNodeData,
+      selectedNodeMeta,
       selectedNodeId,
       selectedNodeIsRefOnly,
       availableTypes,
