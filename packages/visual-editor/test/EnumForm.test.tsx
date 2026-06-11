@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { EnumForm } from '../src/components/editors/EnumForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../src/types.js';
+import { testMeta } from './helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,7 +77,7 @@ describe('EnumForm — debounce and dirty-field preservation (T029)', () => {
   it('does NOT call renameType immediately on name change (debounce active)', () => {
     const actions = makeActions();
     render(
-      <EnumForm
+      <EnumForm meta={testMeta('test')}
         nodeId="node-1"
         data={makeEnumData()}
         availableTypes={AVAILABLE_TYPES}
@@ -93,7 +94,7 @@ describe('EnumForm — debounce and dirty-field preservation (T029)', () => {
   it('calls renameType with the trimmed name after 500 ms (FR-016)', () => {
     const actions = makeActions();
     render(
-      <EnumForm
+      <EnumForm meta={testMeta('test')}
         nodeId="node-1"
         data={makeEnumData()}
         availableTypes={AVAILABLE_TYPES}
@@ -118,7 +119,7 @@ describe('EnumForm — debounce and dirty-field preservation (T029)', () => {
     const initialData = makeEnumData({ name: 'OriginalName' });
 
     const { rerender } = render(
-      <EnumForm
+      <EnumForm meta={testMeta('test')}
         nodeId="node-1"
         data={initialData}
         availableTypes={AVAILABLE_TYPES}
@@ -133,7 +134,7 @@ describe('EnumForm — debounce and dirty-field preservation (T029)', () => {
     // Simulate an external data update (e.g. undo/redo from the graph store)
     const externalUpdate = makeEnumData({ name: 'ExternalUpdate' });
     rerender(
-      <EnumForm
+      <EnumForm meta={testMeta('test')}
         nodeId="node-1"
         data={externalUpdate}
         availableTypes={AVAILABLE_TYPES}

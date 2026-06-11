@@ -35,7 +35,7 @@ import type {
 import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata } from '../store/node-projection.js';
+import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -80,21 +80,16 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   isReadOnly: boolean
 ): TypeGraphNode {
   const nodeType = resolveNodeKind(element);
-  const astData = stripAdditionalAstFields(element);
-  // UI/editor metadata. Phase 3 step 2 (dual-presence): written BOTH flat into
-  // `data` (legacy reads, retired in step 3) AND onto the `meta` sibling.
+  // Phase 3 step 3: `data` is the PURE domain payload (no UI metadata merged
+  // in); all UI/editor metadata lives on the `meta` sibling exclusively.
   // Note: `comments` is intentionally absent here (not set at read time).
+  const data = stripAdditionalAstFields(element) as unknown as TypeGraphNode['data'];
   const meta: GraphNodeMeta = {
     namespace,
     errors: [],
     isReadOnly,
     hasExternalRefs: false
   };
-  // Merge AST fields + GraphMetadata via the canonical helper.
-  const data = withGraphMetadata(astData as Record<string, unknown>, {
-    ...meta,
-    position: { x: 0, y: 0 }
-  });
 
   return {
     id: nodeId,
@@ -150,8 +145,8 @@ function getAttributeEdges(
 /**
  * Convert RosettaModel AST roots into ReactFlow nodes and edges.
  *
- * Each graph node's `data` IS the AstNodeModel (AST fields spread)
- * plus GraphMetadata (namespace, position, errors, etc.).
+ * Each graph node's `data` IS the pure domain payload (AST fields only);
+ * UI/editor metadata (namespace, errors, isReadOnly, …) lives on `node.meta`.
  */
 export function astToModel(
   models: RosettaModel | RosettaModel[] | unknown | unknown[],
@@ -312,7 +307,7 @@ export function astToModel(
     }
   }
 
-  // Update hasExternalRefs (dual-write: flat `data` copy + `node.meta` sibling)
+  // Update hasExternalRefs on the `node.meta` sibling (data stays pure domain)
   for (const node of nodes) {
     const d = node.data;
     const $type = d.$type;
@@ -325,12 +320,10 @@ export function astToModel(
       members = ((d as GraphNode<RosettaRecordType>).features ?? []) as unknown as MemberLikeRef[];
     }
     if (members) {
-      const hasExternalRefs = members.some((m) => {
+      node.meta.hasExternalRefs = members.some((m) => {
         const t = getTypeRefText(m.typeCall);
-        return t && !nameToNodeId.has(t);
+        return Boolean(t && !nameToNodeId.has(t));
       });
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = hasExternalRefs;
-      node.meta.hasExternalRefs = hasExternalRefs;
     }
   }
 

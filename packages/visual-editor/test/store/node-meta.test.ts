@@ -2,13 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Phase 3 step 2 — `node.meta` (GraphNodeMeta sibling) presence + survival.
+ * Phase 3 — `node.meta` (GraphNodeMeta sibling) presence + survival.
  *
- * The metadata split introduces `node.meta` alongside `node.data` (which still
- * carries the flat metadata copies during the dual-presence window). These
- * tests pin the contract that every producer populates `meta` and that it
- * SURVIVES the store's projections (loadModels → reconcileParse → Map↔array
- * derivation, mutateGraph recipes, updateGraphView re-derives).
+ * Step 3 (substrate flip): `node.data` is the PURE domain payload and
+ * `node.meta` is the ONLY location of UI/editor metadata. These tests pin the
+ * contract that every producer populates `meta` (and does NOT leak metadata
+ * into `data`), and that meta SURVIVES the store's projections (loadModels →
+ * reconcileParse → Map↔array derivation, mutateGraph recipes, updateGraphView
+ * re-derives).
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -38,13 +39,15 @@ describe('node.meta — population and survival through store projections', () =
     }
   });
 
-  it('keeps meta in sync with the flat data copies (dual-presence window)', () => {
+  it('keeps data PURE — no flat metadata copies on node.data (step-3 flip)', () => {
     for (const node of store.getState().nodes) {
       const d = node.data as unknown as Record<string, unknown>;
-      expect(node.meta.namespace).toBe(d.namespace);
-      expect(node.meta.errors).toEqual(d.errors);
-      expect(node.meta.hasExternalRefs).toBe(d.hasExternalRefs);
-      expect(node.meta.isReadOnly).toBe(d.isReadOnly);
+      expect(d).not.toHaveProperty('namespace');
+      expect(d).not.toHaveProperty('errors');
+      expect(d).not.toHaveProperty('hasExternalRefs');
+      expect(d).not.toHaveProperty('isReadOnly');
+      expect(d).not.toHaveProperty('position');
+      expect(d).not.toHaveProperty('comments');
     }
   });
 
@@ -76,7 +79,8 @@ describe('node.meta — population and survival through store projections', () =
 
     for (const node of store.getState().nodes) {
       expect(node.meta).toBeDefined();
-      expect(node.meta.namespace).toBe((node.data as unknown as Record<string, unknown>).namespace);
+      expect(typeof node.meta.namespace).toBe('string');
+      expect(node.meta.namespace.length).toBeGreaterThan(0);
     }
   });
 
@@ -109,14 +113,14 @@ describe('node.meta — population and survival through store projections', () =
     expect(node?.meta.namespace).toBe('deferred.ns');
   });
 
-  it('updateComments dual-writes meta.comments and data.comments', () => {
+  it('updateComments writes meta.comments only (data stays pure)', () => {
     const target = store.getState().nodes.find((n) => n.data.name === 'Trade');
     store.getState().updateComments(target!.id, 'a comment');
 
     const updated = store.getState().nodesById.get(target!.id);
     expect(updated).toBeDefined();
     expect(updated!.meta.comments).toBe('a comment');
-    expect((updated!.data as unknown as Record<string, unknown>).comments).toBe('a comment');
+    expect(updated!.data as unknown as Record<string, unknown>).not.toHaveProperty('comments');
   });
 
   it('meta survives view-only updates (relayout → updateGraphView)', () => {

@@ -48,6 +48,7 @@ import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -230,7 +231,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
 
     it('renders one AttributeRow per attribute in DataTypeForm (3 attributes → 3 rows)', () => {
       render(
-        <DataTypeForm
+        <DataTypeForm meta={testMeta('test')}
           nodeId="test.Trade"
           data={makeDataNodeWithAttrs(3)}
           availableTypes={AVAILABLE_TYPES}
@@ -246,7 +247,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
   describe('RR2 — row reads sibling value via useFormContext', () => {
     it('updates the visible name when the user edits the attribute name input', () => {
       render(
-        <DataTypeForm
+        <DataTypeForm meta={testMeta('test')}
           nodeId="test.Trade"
           data={makeDataNodeWithAttrs(2)}
           availableTypes={AVAILABLE_TYPES}
@@ -273,7 +274,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
     it('calls actions.removeAttribute when the row remove button is clicked', () => {
       const actions = makeDataActions();
       render(
-        <DataTypeForm
+        <DataTypeForm meta={testMeta('test')}
           nodeId="test.Trade"
           data={makeDataNodeWithAttrs(2)}
           availableTypes={AVAILABLE_TYPES}
@@ -303,7 +304,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       expect(meta?.render).toBe(ChoiceOptionRowRender);
 
       render(
-        <ChoiceForm
+        <ChoiceForm meta={testMeta('test')}
           nodeId="test.PaymentType"
           data={makeChoiceNode()}
           availableTypes={AVAILABLE_TYPES}
@@ -322,7 +323,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       expect(meta?.render).toBe(EnumValueRowRender);
 
       render(
-        <EnumForm
+        <EnumForm meta={testMeta('test')}
           nodeId="test.CurrencyEnum"
           data={makeEnumNode()}
           availableTypes={AVAILABLE_TYPES}
@@ -346,7 +347,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       expect(typeof FunctionInputRowRender).toBe('function');
 
       render(
-        <FunctionForm
+        <FunctionForm meta={testMeta('test')}
           nodeId="test.CalculateNotional"
           data={makeFunctionNode()}
           availableTypes={AVAILABLE_TYPES}

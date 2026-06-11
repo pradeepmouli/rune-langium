@@ -44,10 +44,9 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import type { AnyGraphNode, GraphNodeMeta, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -72,12 +71,11 @@ export interface ChoiceFormProps {
    */
   readOnly?: boolean;
   /**
-   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
-   * Optional during Phase 3 step 2: when absent it is derived from the flat
-   * metadata copies still merged into `data` (dual-presence window).
-   * Becomes required in step 3.
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
    */
-  meta?: GraphNodeMeta;
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,10 +90,9 @@ function ChoiceForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
-  meta: metaProp
+  meta: nodeMeta
 }: ChoiceFormProps) {
   const d = data as any;
-  const nodeMeta = metaProp ?? metaFromFlatData(d);
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -104,7 +101,7 @@ function ChoiceForm({
   // <ChoiceOptionRow> as a custom row renderer via formRegistry.
 
   const { form } = useZodForm(ChoiceSchema, {
-    defaultValues: identityProjection<typeof ChoiceSchema>(data),
+    defaultValues: formValuesProjection<typeof ChoiceSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry
   });
@@ -112,7 +109,7 @@ function ChoiceForm({
   // Re-bind pristine field state when the caller swaps to a different node.
   // `keepDirty: true` preserves the prior local-component semantics so
   // in-flight user edits are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof ChoiceSchema>, { keepDirty: true });
+  useExternalSync(form, data, (n) => formValuesProjection<typeof ChoiceSchema>(n, nodeMeta), { keepDirty: true });
 
   // Track committed data for diffing
   const committedRef = useRef(data);

@@ -39,7 +39,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
 import { EditorActionsProvider } from '../forms/sections/index.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
   GraphNodeMeta,
@@ -48,7 +48,6 @@ import type {
   NavigateToNodeCallback,
   TypeOption
 } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 import type { ReactNode } from 'react';
 
 const EMPTY_TYPES: TypeOption[] = [];
@@ -78,12 +77,11 @@ export interface TypeAliasFormProps {
    */
   readOnly?: boolean;
   /**
-   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
-   * Optional during Phase 3 step 2: when absent it is derived from the flat
-   * metadata copies still merged into `data` (dual-presence window).
-   * Becomes required in step 3.
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
    */
-  meta?: GraphNodeMeta;
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -98,7 +96,7 @@ function TypeAliasForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
-  meta: metaProp
+  meta: nodeMeta
 }: TypeAliasFormProps) {
   // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -110,7 +108,7 @@ function TypeAliasForm({
     // are accepted as extras. `identityProjection` covers the typed gap
     // between the AnyGraphNode runtime shape and z2f's parameterised
     // `Partial<output<Schema>>` constraint.
-    defaultValues: identityProjection<typeof RosettaTypeAliasSchema>(data),
+    defaultValues: formValuesProjection<typeof RosettaTypeAliasSchema>(data, nodeMeta),
     mode: 'onChange'
   });
 
@@ -118,7 +116,7 @@ function TypeAliasForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics so in-flight user
   // edits are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof RosettaTypeAliasSchema>, {
+  useExternalSync(form, data, (n) => formValuesProjection<typeof RosettaTypeAliasSchema>(n, nodeMeta), {
     keepDirty: true
   });
 
@@ -176,7 +174,6 @@ function TypeAliasForm({
 
   // ---- Render --------------------------------------------------------------
 
-  const nodeMeta = metaProp ?? metaFromFlatData(data as unknown as Record<string, unknown>);
   const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (

@@ -38,7 +38,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
@@ -49,7 +49,6 @@ import type {
   ExpressionEditorSlotProps,
   NavigateToNodeCallback
 } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 import type { ReactNode } from 'react';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
@@ -83,12 +82,11 @@ export interface DataTypeFormProps {
    */
   readOnly?: boolean;
   /**
-   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
-   * Optional during Phase 3 step 2: when absent it is derived from the flat
-   * metadata copies still merged into `data` (dual-presence window).
-   * Becomes required in step 3.
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
    */
-  meta?: GraphNodeMeta;
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +103,7 @@ function DataTypeForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
-  meta: metaProp
+  meta: nodeMeta
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema. Per R11 the editor
@@ -114,7 +112,7 @@ function DataTypeForm({
   // there is no projection layer and no reshape bridge.
 
   const { form } = useZodForm(DataSchema, {
-    defaultValues: identityProjection<typeof DataSchema>(data),
+    defaultValues: formValuesProjection<typeof DataSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry
   });
@@ -123,7 +121,7 @@ function DataTypeForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics so in-flight user edits
   // are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof DataSchema>, { keepDirty: true });
+  useExternalSync(form, data, (d) => formValuesProjection<typeof DataSchema>(d, nodeMeta), { keepDirty: true });
 
   // `DataSchema` is a `z.looseObject`; the inferred `output<>` does not
   // expose `attributes` as a structured array path RHF's overloaded
@@ -338,7 +336,6 @@ function DataTypeForm({
   }, [effectiveAttributes]);
 
   const d = data as any;
-  const nodeMeta = metaProp ?? metaFromFlatData(d);
   const parentName = getRefText(d.superType);
 
   const parentOptions = availableTypes.filter(

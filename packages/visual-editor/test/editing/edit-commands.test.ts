@@ -41,7 +41,7 @@ describe('Edit Commands', () => {
       const newNode = updated.nodes.find((n) => n.data.name === 'NewType');
       expect(newNode).toBeDefined();
       expect((newNode!.data as any).$type).toBe('Data');
-      expect(newNode!.data.namespace).toBe('test.edit');
+      expect(newNode!.meta.namespace).toBe('test.edit');
     });
 
     it('should add a new choice type node', () => {

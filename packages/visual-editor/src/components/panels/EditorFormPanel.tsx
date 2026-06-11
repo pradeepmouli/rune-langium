@@ -41,8 +41,19 @@ import type {
   TypeGraphNode,
   ExpressionEditorSlotProps
 } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 import { resolveNodeKind } from '../../adapters/model-helpers.js';
+
+/**
+ * Fallback metadata for callers that render a node without supplying `meta`
+ * (e.g. legacy tests). `node.data` no longer carries any flat metadata
+ * (Phase 3 step 3), so there is nothing to derive it from — an empty,
+ * editable meta is the neutral default.
+ */
+const FALLBACK_META: GraphNodeMeta = Object.freeze({
+  namespace: '',
+  errors: [],
+  hasExternalRefs: false
+});
 
 // ---------------------------------------------------------------------------
 // Error Boundary
@@ -96,9 +107,10 @@ export interface EditorFormPanelProps {
   nodeData: AnyGraphNode | null;
   /**
    * UI/editor metadata for the selected node (namespace, isReadOnly,
-   * errors, ...). Optional during Phase 3 step 2: when absent it is derived
-   * from the flat metadata copies still merged into `nodeData`
-   * (dual-presence window). Required in step 3.
+   * errors, ...). Optional only because `nodeData` may be null (no
+   * selection); whenever `nodeData` is non-null callers MUST supply the
+   * node's `meta` sibling — `nodeData` carries no UI metadata anymore
+   * (Phase 3 step 3). Absent meta falls back to an empty editable meta.
    */
   meta?: GraphNodeMeta;
   /** Node ID of the selected node. */
@@ -152,9 +164,9 @@ const EditorFormPanel = memo(function EditorFormPanel({
   const effectivelyReadOnly = isReadOnly || refOnly;
   const panelRef = useRef<HTMLElement>(null);
 
-  // Effective node metadata: the meta prop when supplied, else the step-2
-  // dual-presence shim over the flat copies still merged into nodeData.
-  const nodeMeta = metaProp ?? (nodeData ? metaFromFlatData(nodeData as unknown as Record<string, unknown>) : undefined);
+  // Effective node metadata: the meta prop when supplied, else the neutral
+  // fallback (callers must pass the node.meta sibling for real nodes).
+  const nodeMeta = metaProp ?? FALLBACK_META;
 
   const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes);
 

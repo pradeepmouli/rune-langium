@@ -21,16 +21,15 @@ import { TypeHeader } from '../TypeHeader.js';
 import { DefinitionField } from '../DefinitionField.js';
 import { ExtendsField } from '../ExtendsField.js';
 import type { AnyGraphNode, GraphNodeMeta, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 
 export interface OtherFormProps {
   nodeData: AnyGraphNode | null;
   /**
-   * UI/editor metadata for the node (namespace, errors, ...). Optional during
-   * Phase 3 step 2: when absent it is derived from the flat metadata copies
-   * still merged into `nodeData` (dual-presence window). Required in step 3.
+   * UI/editor metadata for the node (namespace, errors, ...). Required —
+   * `nodeData` is the pure domain payload and no longer carries any UI
+   * metadata (Phase 3 step 3).
    */
-  meta?: GraphNodeMeta;
+  meta: GraphNodeMeta;
   /** Graph node id of the displayed type — enables the header "Reveal in graph" action. */
   nodeId?: string | null;
   /** Callback to navigate to a type's graph node. */
@@ -85,11 +84,10 @@ function extractMembers(d: any): Array<{ name: string; typeName?: string; cardin
   }
 }
 
-export function OtherForm({ nodeData, meta: metaProp, nodeId, onNavigateToNode, allNodeIds, refOnly }: OtherFormProps) {
+export function OtherForm({ nodeData, meta: nodeMeta, nodeId, onNavigateToNode, allNodeIds, refOnly }: OtherFormProps) {
   if (!nodeData) return null;
 
   const d = nodeData as any;
-  const nodeMeta = metaProp ?? metaFromFlatData(d);
   const kind = resolveNodeKind(d);
   // Parent-name: read the inheritance ref directly off the AST node. The
   // generated `toDomain(d).extends` normalization is intentionally NOT used

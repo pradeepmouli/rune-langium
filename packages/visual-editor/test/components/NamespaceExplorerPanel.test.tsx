@@ -72,7 +72,7 @@ const defaultNodes = [
 ];
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExplorerPanel>> = {}) {
-  const allNamespaces = new Set(defaultNodes.map((n) => n.data.namespace));
+  const allNamespaces = new Set(defaultNodes.map((n) => n.meta.namespace));
   const props = {
     nodes: defaultNodes,
     expandedNamespaces: allNamespaces,
@@ -242,7 +242,7 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   it('shows reduced visible count when individual nodes hidden', () => {
-    const allNamespaces = new Set(defaultNodes.map((n) => n.data.namespace));
+    const allNamespaces = new Set(defaultNodes.map((n) => n.meta.namespace));
     const hidden = new Set(['com.model.Trade']);
     renderPanel({ expandedNamespaces: allNamespaces, hiddenNodeIds: hidden });
     // 4 visible / 5 total (com.model.Trade is hidden; cdm.trade.Trade is still visible)

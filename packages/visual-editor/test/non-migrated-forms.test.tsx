@@ -17,6 +17,7 @@ import { ChoiceForm } from '../src/components/editors/ChoiceForm.js';
 import { DataTypeForm } from '../src/components/editors/DataTypeForm.js';
 import { FunctionForm } from '../src/components/editors/FunctionForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../src/types.js';
+import { testMeta } from './helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -136,7 +137,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   it('ChoiceForm renders without throwing with minimal props', () => {
     expect(() =>
       render(
-        <ChoiceForm
+        <ChoiceForm meta={testMeta('test')}
           nodeId="node-choice"
           data={makeChoiceNode('PaymentMethod')}
           availableTypes={AVAILABLE_TYPES}
@@ -149,7 +150,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   it('DataTypeForm renders without throwing with minimal props', () => {
     expect(() =>
       render(
-        <DataTypeForm
+        <DataTypeForm meta={testMeta('test')}
           nodeId="node-data"
           data={makeDataNode('Party')}
           availableTypes={AVAILABLE_TYPES}
@@ -162,7 +163,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   it('FunctionForm renders without throwing with minimal props', () => {
     expect(() =>
       render(
-        <FunctionForm
+        <FunctionForm meta={testMeta('test')}
           nodeId="node-func"
           data={makeFuncNode('Calculate')}
           availableTypes={AVAILABLE_TYPES}
@@ -178,7 +179,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
     const actions = makeChoiceActions();
     // render -> no TS error here means the prop types are intact
     expect(() =>
-      render(<ChoiceForm nodeId="n1" data={data} availableTypes={[]} actions={actions} />)
+      render(<ChoiceForm meta={testMeta('test')} nodeId="n1" data={data} availableTypes={[]} actions={actions} />)
     ).not.toThrow();
   });
 
@@ -186,7 +187,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
     const data = makeDataNode('Counterparty');
     const actions = makeDataActions();
     expect(() =>
-      render(<DataTypeForm nodeId="n2" data={data} availableTypes={[]} actions={actions} />)
+      render(<DataTypeForm meta={testMeta('test')} nodeId="n2" data={data} availableTypes={[]} actions={actions} />)
     ).not.toThrow();
   });
 
@@ -194,7 +195,7 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
     const data = makeFuncNode('Evaluate');
     const actions = makeFuncActions();
     expect(() =>
-      render(<FunctionForm nodeId="n3" data={data} availableTypes={[]} actions={actions} />)
+      render(<FunctionForm meta={testMeta('test')} nodeId="n3" data={data} availableTypes={[]} actions={actions} />)
     ).not.toThrow();
   });
 });

@@ -68,7 +68,6 @@ import {
   makeNodeId,
   makeEdgeId,
   parseEdgeId,
-  withGraphMetadata,
   toNodesById,
   toEdgesById,
   nodesFromMap,
@@ -443,8 +442,8 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
       const nodeId = makeNodeId(entry.namespace, exp.name);
       if (existingIds.has(nodeId)) continue;
       existingIds.add(nodeId);
-      // UI/editor metadata. Phase 3 step 2 (dual-presence): written BOTH flat
-      // into `data` (legacy reads, retired in step 3) AND onto `meta`.
+      // Placeholder `data` is a minimal domain stub ($type + name only);
+      // ALL UI/editor metadata (incl. `deferred: true`) lives on `meta`.
       const meta: GraphNodeMeta = {
         namespace: entry.namespace,
         errors: [],
@@ -456,8 +455,7 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
         id: nodeId,
         type: nodeType,
         position: { x: 0, y: 0 },
-        // `deferred: true` is passed as extra metadata (withGraphMetadata merges whatever is given).
-        data: withGraphMetadata({ $type: exp.type, name: exp.name }, { ...meta, position: { x: 0, y: 0 } }),
+        data: { $type: exp.type, name: exp.name } as unknown as TypeGraphNode['data'],
         meta
       });
     }
@@ -684,8 +682,7 @@ function updateTypeRefsInNode(
  */
 function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, counter: number): TypeGraphNode {
   const $type = NODE_TYPE_TO_AST_TYPE[kind] ?? 'Data';
-  // UI/editor metadata. Phase 3 step 2 (dual-presence): written BOTH flat
-  // into `data` (legacy reads, retired in step 3) AND onto `meta`.
+  // `data` is the pure domain payload; UI/editor metadata lives on `meta` only.
   const meta: GraphNodeMeta = {
     namespace,
     errors: [],
@@ -694,10 +691,6 @@ function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, count
   const baseData: Record<string, unknown> = {
     $type,
     name,
-    namespace,
-    position: { x: counter * 50, y: counter * 50 },
-    hasExternalRefs: false,
-    errors: [],
     definition: undefined,
     annotations: [],
     synonyms: []
@@ -2119,10 +2112,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           updateComments(nodeId: string, comments: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
-              const d = n?.data as AnyGraphNode | undefined;
-              if (!n || !d) return;
-              // Dual-write (Phase 3 step 2): flat data copy + meta sibling.
-              (d as { comments?: string }).comments = comments;
+              if (!n) return;
+              // `comments` is UI-only metadata — it lives on `meta`, not `data`.
               n.meta.comments = comments;
             });
           },

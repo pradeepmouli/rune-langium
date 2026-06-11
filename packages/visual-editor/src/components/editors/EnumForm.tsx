@@ -42,7 +42,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import { getRefText } from '../../adapters/model-helpers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -55,7 +55,6 @@ import type {
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
 
@@ -84,12 +83,11 @@ export interface EnumFormProps {
    */
   readOnly?: boolean;
   /**
-   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
-   * Optional during Phase 3 step 2: when absent it is derived from the flat
-   * metadata copies still merged into `data` (dual-presence window).
-   * Becomes required in step 3.
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
    */
-  meta?: GraphNodeMeta;
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,10 +103,9 @@ function EnumForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
-  meta: metaProp
+  meta: nodeMeta
 }: EnumFormProps) {
   const d = data as any;
-  const nodeMeta = metaProp ?? metaFromFlatData(d);
   // ---- Form setup (R11: AST schema + identity projection) -----------------
   // RosettaEnumerationSchema is `z.looseObject`, so the graph node passes
   // through `defaultValues` without a projection layer. The bespoke
@@ -119,7 +116,7 @@ function EnumForm({
     // The graph node is a union (`AnyGraphNode`); the host narrows by
     // `$type` upstream. `identityProjection` covers the typed gap between
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
-    defaultValues: identityProjection<typeof RosettaEnumerationSchema>(data),
+    defaultValues: formValuesProjection<typeof RosettaEnumerationSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry
   });
@@ -128,7 +125,7 @@ function EnumForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics. Identity projection
   // per R11 — the graph node IS already AST-shaped.
-  useExternalSync(form, data, identityProjection<typeof RosettaEnumerationSchema>, {
+  useExternalSync(form, data, (n) => formValuesProjection<typeof RosettaEnumerationSchema>(n, nodeMeta), {
     keepDirty: true
   });
 

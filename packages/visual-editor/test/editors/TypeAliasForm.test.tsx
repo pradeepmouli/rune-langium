@@ -63,6 +63,7 @@ vi.mock('../../src/components/editors/TypeReferenceField.js', () => ({
 }));
 
 import { TypeAliasForm } from '../../src/components/editors/TypeAliasForm.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -147,7 +148,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
   it('TAT1: renders the name + wrapped-type leaf fields in the documented tab order', () => {
     const actions = makeActions();
     const { container } = render(
-      <TypeAliasForm
+      <TypeAliasForm meta={testMeta('test.aliases')}
         nodeId="test.aliases.ShortText"
         data={makeTypeAliasNode()}
         actions={actions}
@@ -182,7 +183,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     const actions = makeActions({ renameType });
 
     render(
-      <TypeAliasForm
+      <TypeAliasForm meta={testMeta('test.aliases')}
         nodeId="test.aliases.ShortText"
         data={makeTypeAliasNode()}
         actions={actions}
@@ -220,7 +221,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     });
 
     const { container, rerender } = render(
-      <TypeAliasForm nodeId="test.aliases.ShortText" data={nodeA} actions={actions} availableTypes={AVAILABLE_TYPES} />
+      <TypeAliasForm meta={testMeta('test.aliases')} nodeId="test.aliases.ShortText" data={nodeA} actions={actions} availableTypes={AVAILABLE_TYPES} />
     );
 
     // Initial state pulled from nodeA
@@ -229,7 +230,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
 
     // Swap to nodeB (different reference identity)
     rerender(
-      <TypeAliasForm nodeId="test.aliases.TinyInt" data={nodeB} actions={actions} availableTypes={AVAILABLE_TYPES} />
+      <TypeAliasForm meta={testMeta('test.aliases')} nodeId="test.aliases.TinyInt" data={nodeB} actions={actions} availableTypes={AVAILABLE_TYPES} />
     );
 
     act(() => {
@@ -253,7 +254,7 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
   it('TAT4: selecting a wrapped type via TypeSelector updates the form `typeCall.type`', () => {
     const actions = makeActions();
     const { container } = render(
-      <TypeAliasForm
+      <TypeAliasForm meta={testMeta('test.aliases')}
         nodeId="test.aliases.ShortText"
         data={makeTypeAliasNode()}
         actions={actions}

@@ -18,6 +18,7 @@ import { parse } from '@rune-langium/core';
 import { EditorFormPanel } from '../../src/components/panels/EditorFormPanel.js';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 const { typeAliasFormSpy } = vi.hoisted(() => ({
   typeAliasFormSpy: vi.fn()
@@ -249,6 +250,7 @@ describe('EditorFormPanel', () => {
     render(
       <EditorFormPanel
         nodeData={makeNodeData({ $type: 'Annotation' })}
+        meta={testMeta('test.model')}
         nodeId="node-1"
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
@@ -379,6 +381,7 @@ describe('EditorFormPanel', () => {
     render(
       <EditorFormPanel
         nodeData={makeNodeData({ $type: 'Data' })}
+        meta={testMeta('test.model')}
         nodeId="node-1"
         refOnly={true}
         availableTypes={AVAILABLE_TYPES}

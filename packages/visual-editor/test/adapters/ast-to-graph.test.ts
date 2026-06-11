@@ -35,7 +35,7 @@ describe('astToModel', () => {
       const tradeNode = dataNodes.find((n) => n.data.name === 'Trade');
       expect(tradeNode).toBeDefined();
       expect(tradeNode!.type).toBe('data');
-      expect(tradeNode!.data.namespace).toBe('test.model');
+      expect(tradeNode!.meta.namespace).toBe('test.model');
     });
 
     it('maps attributes with type and cardinality', async () => {
@@ -282,7 +282,7 @@ describe('astToModel', () => {
       const { nodes } = astToModel(result.value);
 
       expect(nodes.length).toBeGreaterThan(0);
-      expect(nodes.every((n) => n.data.isReadOnly === true)).toBe(true);
+      expect(nodes.every((n) => n.meta.isReadOnly === true)).toBe(true);
     });
 
     it('marks nodes as NOT isReadOnly when model has a regular URI', async () => {
@@ -291,7 +291,7 @@ describe('astToModel', () => {
 
       const dataNodes = nodes.filter((n) => n.data.$type === 'Data');
       expect(dataNodes.length).toBeGreaterThan(0);
-      expect(dataNodes.every((n) => n.data.isReadOnly === false)).toBe(true);
+      expect(dataNodes.every((n) => n.meta.isReadOnly === false)).toBe(true);
     });
   });
 });

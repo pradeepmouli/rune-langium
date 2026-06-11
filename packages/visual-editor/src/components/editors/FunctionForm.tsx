@@ -57,7 +57,7 @@ import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
   GraphNodeMeta,
@@ -66,7 +66,6 @@ import type {
   ExpressionEditorSlotProps,
   NavigateToNodeCallback
 } from '../../types.js';
-import { metaFromFlatData } from '../../store/node-projection.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 const EMPTY_GROUPS: InheritedGroup[] = [];
@@ -123,12 +122,11 @@ export interface FunctionFormProps {
    */
   readOnly?: boolean;
   /**
-   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
-   * Optional during Phase 3 step 2: when absent it is derived from the flat
-   * metadata copies still merged into `data` (dual-presence window).
-   * Becomes required in step 3.
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
    */
-  meta?: GraphNodeMeta;
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,10 +143,9 @@ function FunctionForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
-  meta: metaProp
+  meta: nodeMeta
 }: FunctionFormProps) {
   const d = data as any;
-  const nodeMeta = metaProp ?? metaFromFlatData(d);
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -156,7 +153,7 @@ function FunctionForm({
   // so the graph node passes through unchanged — no projection layer).
 
   const { form } = useZodForm(RosettaFunctionSchema, {
-    defaultValues: identityProjection<typeof RosettaFunctionSchema>(data),
+    defaultValues: formValuesProjection<typeof RosettaFunctionSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry: functionFormRegistry
   });
@@ -165,7 +162,7 @@ function FunctionForm({
   // node (object identity is the contract). `keepDirty: true` preserves
   // the pre-migration `keepDirtyValues: true` semantics so in-flight
   // user edits are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof RosettaFunctionSchema>, {
+  useExternalSync(form, data, (n) => formValuesProjection<typeof RosettaFunctionSchema>(n, nodeMeta), {
     keepDirty: true
   });
 
