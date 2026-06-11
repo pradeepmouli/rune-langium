@@ -89,8 +89,8 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   // (strict `{ $refText }` refs, `$namespace` stamped, `$cstText` preserved);
   // curated/pre-dehydrated JSON goes through `curatedAdapter.parse`.
   // Note: `comments` is intentionally absent here (not set at read time).
-  // langium is not a direct visual-editor dependency (see AstNodeShape in
-  // types.ts) — thread the adapters' AstNode constraint structurally.
+  // langium is not a direct visual-editor dependency — thread the
+  // adapters' AstNode constraint structurally.
   const data = (
     isLiveAstElement(element)
       ? parsedAdapter.dehydrate(element as unknown as Parameters<typeof parsedAdapter.dehydrate>[0])

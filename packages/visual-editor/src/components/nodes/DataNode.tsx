@@ -97,8 +97,8 @@ interface StructureNodeData extends StructureDataNode {
    *
    * **NOTE — astRange-threading gap:** in studio-created rows today,
    * `StructureRow.astRange` is `undefined` because `graphNodesToAdapterDocument`
-   * forwards attributes from `stripAdditionalAstFields`, which strips
-   * `$cstNode` and never derives an offset range. The hook returns
+   * forwards attributes from the dehydrated node data (which carries no
+   * `$cstNode`) and never derives an offset range. The hook returns
    * `undefined` in production so the severity class never applies. Tests
    * inject synthetic astRange values to verify the end-to-end wiring,
    * which is real and ready to fire once the upstream threads astRange.

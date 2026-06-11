@@ -165,7 +165,7 @@ function typeRefText(attr: AdapterAttribute): string {
  * Pill-label form of cardinality: `"0..1"`, `"0..*"`, `"1..*"`.
  *
  * Deliberately parens-less; the canonical `formatCardinality` in
- * `model-helpers.ts` returns parens form (`"(0..1)"`) for AstNodeModel
+ * `model-helpers.ts` returns parens form (`"(0..1)"`) for domain-node
  * display. The structure-view spec calls for the bare form on
  * `StructureRow.cardinality`.
  */

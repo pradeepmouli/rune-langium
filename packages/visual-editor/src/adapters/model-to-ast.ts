@@ -4,16 +4,16 @@
 /**
  * Model → AST adapter.
  *
- * Converts GraphNode<T> data back into serializer-compatible model objects.
- * Since GraphNode<T> = AstNodeModel<T> + GraphMetadata, and AstNodeModel<T>
- * IS the AST shape (minus Langium internals), we just strip graph metadata
- * to recover the AST-compatible objects.
+ * Converts graph-node data back into serializer-compatible model objects.
+ * `node.data` IS the pure `Dehydrated<T>` domain payload (Phase 3 step 3 —
+ * no UI metadata to strip), so each element is just a shallow clone of the
+ * data with edge-derived inheritance reflected onto it.
  *
  * Groups nodes by namespace and produces one RosettaModel per namespace.
  */
 
-import type { TypeGraphNode, TypeGraphEdge, AnyGraphNode } from '../types.js';
-import { nameFromNodeId, stripGraphMetadata } from '../store/node-projection.js';
+import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
+import { nameFromNodeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,7 +21,7 @@ import { nameFromNodeId, stripGraphMetadata } from '../store/node-projection.js'
 
 /**
  * A serializer-compatible model object.
- * Same shape as the legacy SyntheticModel but typed against AstNodeModel.
+ * Same shape as the legacy SyntheticModel; elements are Dehydrated<T> clones.
  */
 export interface ModelOutput {
   $type: 'RosettaModel';
@@ -77,8 +77,10 @@ export function modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): Mod
     const elements: unknown[] = [];
 
     for (const node of nsNodes) {
-      const d = node.data as AnyGraphNode;
-      const model = stripGraphMetadata(d);
+      const d = node.data;
+      // `data` is the pure domain payload — clone shallowly so the
+      // inheritance write below cannot mutate the store's node.
+      const model: Record<string, unknown> = { ...d };
 
       // Ensure inheritance is reflected in the model
       const parentNodeId = inheritanceMap.get(node.id);

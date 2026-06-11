@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Display formatting helpers for AstNodeModel fields.
+ * Display formatting helpers for dehydrated domain-node fields.
  *
  * These convert structured AST model objects (cardinalities, references,
  * annotations, conditions) into display strings for the UI layer.
@@ -76,7 +76,7 @@ export interface AnnotationDisplayInfo {
   attribute?: string;
 }
 
-/** Convert AstNodeModel<AnnotationRef>[] to display-friendly objects. */
+/** Convert Dehydrated<AnnotationRef>[] to display-friendly objects. */
 export function annotationsToDisplay(annotations: AnnotationRefShape[] | undefined): AnnotationDisplayInfo[] {
   if (!annotations || annotations.length === 0) return [];
   return annotations.map((ref) => ({

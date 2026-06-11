@@ -283,7 +283,7 @@ function graphNodesToAdapterDocument(
         name: dd.name,
         namespace,
         extends: dd.superType?.$refText,
-        // `attributes` on AstNodeModel<Data> has the same structural shape as
+        // `attributes` on Dehydrated<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
         attributes: (dd.attributes ?? []) as AdapterNode['attributes'],
         // Phase A — type metadata (doc / annotations / conditions). Reuses the
@@ -1839,8 +1839,8 @@ export function ExplorePerspective() {
   //
   // **astRange-threading gap (deferred PR #207 follow-up):** in studio-created
   // rows today, `StructureRow.astRange` is `undefined` because
-  // `graphNodesToAdapterDocument` forwards attributes from
-  // `stripAdditionalAstFields` (which strips `$cstNode`) and never derives an
+  // `graphNodesToAdapterDocument` forwards attributes from the dehydrated
+  // node data (which carries no `$cstNode`) and never derives an
   // offset range. The wiring on this side (RangeDiagnostic[] → StructureView →
   // useDiagnosticsForRange) is correct and exercised by synthetic tests; the
   // severity marker just won't fire in production until upstream threading

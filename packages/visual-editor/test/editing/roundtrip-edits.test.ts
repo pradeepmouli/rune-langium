@@ -191,7 +191,7 @@ describe('Phase 3D-2 generated-accessor conformance (T060-3D2)', () => {
   it('addInputParam (via addRosettaFunctionInputs) writes to graph node data correctly', async () => {
     // Note: serializeModel silently drops RosettaFunction elements (documented limitation).
     // We verify the accessor wrote correctly at the graph-data level via modelsToAst,
-    // which strips GraphMetadata and exposes the raw AST model on the node.
+    // which exposes the pure domain model carried on node.data.
     const result = await parse(FUNCTION_SOURCE);
     expect(result.value).toBeDefined();
 

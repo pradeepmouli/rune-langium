@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { AST_TYPE_TO_NODE_TYPE } from '../../src/adapters/model-helpers.js';
-import type { GraphNode } from '../../src/types.js';
+import type { Dehydrated } from '../../src/types.js';
 import type { Data, RosettaEnumeration } from '@rune-langium/core';
 import {
   SIMPLE_INHERITANCE_SOURCE,
@@ -45,7 +45,7 @@ describe('astToModel', () => {
       const tradeNode = nodes.find((n) => n.data.name === 'Trade');
       expect(tradeNode).toBeDefined();
 
-      const data = tradeNode!.data as GraphNode<Data>;
+      const data = tradeNode!.data as Dehydrated<Data>;
       const tradeDateAttr = data.attributes.find((m) => m.name === 'tradeDate');
       expect(tradeDateAttr).toBeDefined();
       expect(tradeDateAttr!.typeCall?.type?.$refText).toBe('date');
@@ -132,7 +132,7 @@ describe('astToModel', () => {
       const currencyEnum = nodes.find((n) => n.data.name === 'CurrencyEnum');
       expect(currencyEnum).toBeDefined();
 
-      const data = currencyEnum!.data as GraphNode<RosettaEnumeration>;
+      const data = currencyEnum!.data as Dehydrated<RosettaEnumeration>;
       expect(data.enumValues).toHaveLength(3);
 
       const valueNames = data.enumValues.map((v) => v.name);
