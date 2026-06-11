@@ -104,6 +104,20 @@ describe('modelsToAst — cross-namespace inheritance qualification', () => {
     expect((childOut.superFunction as { $refText?: string }).$refText).toBe('ns.a.BaseFunc');
   });
 
+  it('excludes deferred placeholder nodes from serialization (never user-authored source)', () => {
+    // Curated deferred-export placeholders (`meta.deferred === true`) are
+    // `{ $type, name }` stubs for namespaces the user did NOT author. They
+    // must never produce serialized elements — through ANY caller of
+    // modelsToAst (useModelSourceSync, exportRosetta, future call sites).
+    const authored = makeNode('ns.a', 'Real', { $type: 'Data', attributes: [] });
+    const stub = makeNode('other.curated', 'Stub', { $type: 'Data' }, { deferred: true });
+
+    const models = modelsToAst([authored, stub], []);
+
+    expect(models.map((m) => m.name)).toEqual(['ns.a']);
+    expect(models.find((m) => m.name === 'other.curated')).toBeUndefined();
+  });
+
   it('falls back to the edge-derived bare name when node.data lacks the ref', () => {
     // e.g. an inheritance edge created without the data-side ref (legacy path):
     // serialization must still reflect the edge so the relationship isn't lost.

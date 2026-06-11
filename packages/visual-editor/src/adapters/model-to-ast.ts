@@ -63,9 +63,15 @@ function buildInheritanceMap(edges: TypeGraphEdge[]): Map<string, string> {
 export function modelsToAst(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): ModelOutput[] {
   const inheritanceMap = buildInheritanceMap(edges);
 
+  // Deferred-export placeholders (`meta.deferred`) are `{ $type, name }` stubs
+  // for curated namespaces the user did NOT author — never serializable source.
+  // Filtering here (the serialization boundary) covers every caller
+  // (useModelSourceSync, exportRosetta, …), so no call site can forget the guard.
+  const editableNodes = nodes.filter((n) => !n.meta.deferred);
+
   // Group nodes by namespace
   const byNamespace = new Map<string, TypeGraphNode[]>();
-  for (const node of nodes) {
+  for (const node of editableNodes) {
     const ns = node.meta.namespace;
     if (!byNamespace.has(ns)) byNamespace.set(ns, []);
     byNamespace.get(ns)!.push(node);

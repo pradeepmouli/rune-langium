@@ -247,8 +247,9 @@ describe('useModelSourceSync', () => {
   it('does NOT serialize deferred placeholder nodes (curated stubs the user did not author)', async () => {
     // Deferred-export placeholders (`meta.deferred === true`) are `{ $type, name }`
     // stubs for namespaces the user did NOT author. Serializing them emits stub
-    // elements into source files the user never wrote — they must be filtered
-    // out before modelsToAst.
+    // elements into source files the user never wrote — modelsToAst filters them
+    // at the serialization boundary; this pins that end-to-end through the
+    // hook's emission path.
     const onModelChanged = vi.fn();
     const deferredStub = {
       id: 'other.curated.Stub',
