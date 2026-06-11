@@ -41,7 +41,8 @@ import type {
   LayoutEngine,
   VisibilityState,
   AnyGraphNode,
-  GraphNode
+  GraphNode,
+  GraphNodeMeta
 } from '../types.js';
 // Merged type + ops namespaces: `Data` is both the interface type (GraphNode<Data>)
 // and the generated ops namespace (Data.addAttribute / Data.removeAttribute …),
@@ -442,22 +443,22 @@ function buildDeferredPlaceholderNodes(entries: DeferredExportEntry[], existingI
       const nodeId = makeNodeId(entry.namespace, exp.name);
       if (existingIds.has(nodeId)) continue;
       existingIds.add(nodeId);
+      // UI/editor metadata. Phase 3 step 2 (dual-presence): written BOTH flat
+      // into `data` (legacy reads, retired in step 3) AND onto `meta`.
+      const meta: GraphNodeMeta = {
+        namespace: entry.namespace,
+        errors: [],
+        isReadOnly: true,
+        hasExternalRefs: false,
+        deferred: true
+      };
       out.push({
         id: nodeId,
         type: nodeType,
         position: { x: 0, y: 0 },
         // `deferred: true` is passed as extra metadata (withGraphMetadata merges whatever is given).
-        data: withGraphMetadata(
-          { $type: exp.type, name: exp.name },
-          {
-            namespace: entry.namespace,
-            position: { x: 0, y: 0 },
-            errors: [],
-            isReadOnly: true,
-            hasExternalRefs: false,
-            deferred: true
-          }
-        )
+        data: withGraphMetadata({ $type: exp.type, name: exp.name }, { ...meta, position: { x: 0, y: 0 } }),
+        meta
       });
     }
   }
@@ -683,6 +684,13 @@ function updateTypeRefsInNode(
  */
 function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, counter: number): TypeGraphNode {
   const $type = NODE_TYPE_TO_AST_TYPE[kind] ?? 'Data';
+  // UI/editor metadata. Phase 3 step 2 (dual-presence): written BOTH flat
+  // into `data` (legacy reads, retired in step 3) AND onto `meta`.
+  const meta: GraphNodeMeta = {
+    namespace,
+    errors: [],
+    hasExternalRefs: false
+  };
   const baseData: Record<string, unknown> = {
     $type,
     name,
@@ -723,7 +731,8 @@ function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, count
     id: makeNodeId(namespace, name),
     type: kind,
     position: { x: counter * 50, y: counter * 50 },
-    data: baseData as unknown as AnyGraphNode
+    data: baseData as unknown as AnyGraphNode,
+    meta
   };
 }
 
@@ -2112,8 +2121,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
-              if (!d) return;
+              if (!n || !d) return;
+              // Dual-write (Phase 3 step 2): flat data copy + meta sibling.
               (d as { comments?: string }).comments = comments;
+              n.meta.comments = comments;
             });
           },
 

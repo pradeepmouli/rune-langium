@@ -81,6 +81,7 @@ export type {
   GraphNode,
   AnyGraphNode,
   GraphMetadata,
+  GraphNodeMeta,
   RootAstElement,
   TypeKind,
   EdgeKind,

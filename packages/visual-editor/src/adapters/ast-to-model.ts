@@ -32,7 +32,7 @@ import type {
   RosettaRecordType,
   RosettaTypeAlias
 } from '@rune-langium/core';
-import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphFilters, TypeKind } from '../types.js';
+import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
 import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
 import { makeNodeId, makeEdgeId, withGraphMetadata } from '../store/node-projection.js';
@@ -81,21 +81,27 @@ function buildGraphNode<T extends { $type: string; name: string }>(
 ): TypeGraphNode {
   const nodeType = resolveNodeKind(element);
   const astData = stripAdditionalAstFields(element);
-  // Merge AST fields + GraphMetadata via the canonical helper.
+  // UI/editor metadata. Phase 3 step 2 (dual-presence): written BOTH flat into
+  // `data` (legacy reads, retired in step 3) AND onto the `meta` sibling.
   // Note: `comments` is intentionally absent here (not set at read time).
-  const data = withGraphMetadata(astData as Record<string, unknown>, {
+  const meta: GraphNodeMeta = {
     namespace,
-    position: { x: 0, y: 0 },
     errors: [],
     isReadOnly,
     hasExternalRefs: false
+  };
+  // Merge AST fields + GraphMetadata via the canonical helper.
+  const data = withGraphMetadata(astData as Record<string, unknown>, {
+    ...meta,
+    position: { x: 0, y: 0 }
   });
 
   return {
     id: nodeId,
     type: nodeType,
     position: { x: 0, y: 0 },
-    data
+    data,
+    meta
   };
 }
 
@@ -306,28 +312,25 @@ export function astToModel(
     }
   }
 
-  // Update hasExternalRefs
+  // Update hasExternalRefs (dual-write: flat `data` copy + `node.meta` sibling)
   for (const node of nodes) {
     const d = node.data;
     const $type = d.$type;
+    let members: MemberLikeRef[] | null = null;
     if ($type === 'Data' || $type === 'Annotation') {
-      const members = ((d as GraphNode<Data>).attributes ?? []) as unknown as MemberLikeRef[];
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
-        const t = getTypeRefText(m.typeCall);
-        return t && !nameToNodeId.has(t);
-      });
+      members = ((d as GraphNode<Data>).attributes ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaFunction') {
-      const members = ((d as GraphNode<RosettaFunction>).inputs ?? []) as unknown as MemberLikeRef[];
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
-        const t = getTypeRefText(m.typeCall);
-        return t && !nameToNodeId.has(t);
-      });
+      members = ((d as GraphNode<RosettaFunction>).inputs ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaRecordType') {
-      const members = ((d as GraphNode<RosettaRecordType>).features ?? []) as unknown as MemberLikeRef[];
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
+      members = ((d as GraphNode<RosettaRecordType>).features ?? []) as unknown as MemberLikeRef[];
+    }
+    if (members) {
+      const hasExternalRefs = members.some((m) => {
         const t = getTypeRefText(m.typeCall);
         return t && !nameToNodeId.has(t);
       });
+      (d as { hasExternalRefs: boolean }).hasExternalRefs = hasExternalRefs;
+      node.meta.hasExternalRefs = hasExternalRefs;
     }
   }
 

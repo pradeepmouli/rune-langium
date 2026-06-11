@@ -112,9 +112,16 @@ export type { Dehydrated } from '@rune-langium/core';
 // GraphNode — AstNodeModel + graph/editor metadata
 // ---------------------------------------------------------------------------
 
-export interface GraphMetadata {
+/**
+ * UI/editor metadata for a graph node, held on `node.meta` (a sibling of
+ * `node.data`). Phase 3 step 2: during the transitional dual-presence window
+ * these same fields are ALSO flat-merged into `node.data` (see
+ * {@link GraphMetadata}); step 3 removes the flat copies and `node.meta`
+ * becomes the only location. `position` is NOT here — it already lives on the
+ * ReactFlow node itself.
+ */
+export interface GraphNodeMeta {
   namespace: string;
-  position: { x: number; y: number };
   errors: ValidationError[];
   isReadOnly?: boolean;
   hasExternalRefs: boolean;
@@ -123,6 +130,10 @@ export interface GraphMetadata {
   /** True only on deferred-export placeholder nodes (list-only curated types
    *  not yet hydrated). Drives on-demand hydration gating in the explorer. */
   deferred?: boolean;
+}
+
+export interface GraphMetadata extends GraphNodeMeta {
+  position: { x: number; y: number };
   /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
   [key: string]: unknown;
 }
@@ -594,5 +605,10 @@ export interface VisibilityState {
 // Typed ReactFlow aliases
 // ---------------------------------------------------------------------------
 
-export type TypeGraphNode = Node<AnyGraphNode>;
+/**
+ * Editor graph node. `data` carries the (AST-projection) payload — still with
+ * flat metadata merged in during the Phase 3 step-2 dual-presence window —
+ * and `meta` carries the UI/editor metadata sibling that consumers migrate to.
+ */
+export type TypeGraphNode = Node<AnyGraphNode> & { meta: GraphNodeMeta };
 export type TypeGraphEdge = Edge<EdgeData>;
