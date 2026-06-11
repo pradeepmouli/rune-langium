@@ -114,8 +114,9 @@ describe('node.meta — population and survival through store projections', () =
     store.getState().updateComments(target!.id, 'a comment');
 
     const updated = store.getState().nodesById.get(target!.id);
-    expect(updated?.meta.comments).toBe('a comment');
-    expect((updated?.data as unknown as Record<string, unknown>).comments).toBe('a comment');
+    expect(updated).toBeDefined();
+    expect(updated!.meta.comments).toBe('a comment');
+    expect((updated!.data as unknown as Record<string, unknown>).comments).toBe('a comment');
   });
 
   it('meta survives view-only updates (relayout → updateGraphView)', () => {
