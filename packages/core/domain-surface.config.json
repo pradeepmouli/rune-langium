@@ -1,0 +1,7 @@
+{
+  "identity": {
+    "Attribute": "name",
+    "RosettaEnumValue": "name",
+    "ChoiceOption": "typeCall.type.$refText"
+  }
+}

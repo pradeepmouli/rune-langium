@@ -43,14 +43,17 @@ import type {
   AnyGraphNode,
   GraphNode
 } from '../types.js';
-import type {
+// Merged type + ops namespaces: `Data` is both the interface type (GraphNode<Data>)
+// and the generated ops namespace (Data.addAttribute / Data.removeAttribute …),
+// from the single core barrel. Imported as values so the namespace ops resolve.
+import {
   Data,
   Choice,
   RosettaEnumeration,
   RosettaFunction,
-  RosettaRecordType,
   Annotation
 } from '@rune-langium/core';
+import type { RosettaRecordType } from '@rune-langium/core';
 import { indexById } from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
@@ -69,8 +72,7 @@ import {
   toEdgesById,
   nodesFromMap,
   edgesFromMap,
-  ensureMemberArray,
-  getMemberArray
+  ensureMemberArray
 } from './node-projection.js';
 
 // ---------------------------------------------------------------------------
@@ -1348,7 +1350,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 if (d.$type === 'Data' || d.$type === 'Annotation') {
                   const dd = d as { attributes?: unknown[] };
                   if (!Array.isArray(dd.attributes)) dd.attributes = [];
-                  dd.attributes.push(newAttr);
+                  if (d.$type === 'Data') {
+                    Data.addAttribute(d as never, newAttr as never);
+                  } else {
+                    Annotation.addAttribute(d as never, newAttr as never);
+                  }
                 }
               }
               if (newEdge) draft.edges.set(newEdge.id, newEdge);
@@ -1365,14 +1371,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const node = draft.nodes.get(nodeId);
               if (node) {
                 const d = node.data as AnyGraphNode;
-                if (d.$type === 'Data' || d.$type === 'Annotation') {
-                  const attrs = (d as { attributes?: Array<{ name: string }> }).attributes;
-                  // Remove every attribute sharing the name (mirrors the prior
-                  // `.filter`; a malformed model may hold duplicate names).
-                  if (attrs) {
-                    for (let i = attrs.length - 1; i >= 0; i--) {
-                      if (attrs[i]?.name === attrName) attrs.splice(i, 1);
-                    }
+                const key = { name: attrName } as unknown as Parameters<typeof Data.removeAttribute>[1];
+                if (d.$type === 'Data') {
+                  while (Data.removeAttribute(d as never, key)) {
+                    /* drain duplicates */
+                  }
+                } else if (d.$type === 'Annotation') {
+                  while (Annotation.removeAttribute(d as never, key)) {
+                    /* drain duplicates */
                   }
                 }
               }
@@ -1626,7 +1632,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: no generated reorder accessor
           reorderAttribute(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1634,6 +1639,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!d || (d.$type !== 'Data' && d.$type !== 'Annotation')) return;
               const attrs = (d as { attributes?: unknown[] }).attributes;
               if (!Array.isArray(attrs)) return;
+              // kept reorderInPlace: moveAttributeAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op; pinned by editor-store-actions.test.ts)
               reorderInPlace(attrs, fromIndex, toIndex);
             });
           },
@@ -1654,11 +1660,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaEnumeration') return;
-              ensureMemberArray(d).push(newValue);
+              ensureMemberArray(d); // init guard: enumValues may be absent on a fresh node
+              RosettaEnumeration.addEnumValue(d as never, newValue as never);
             });
           },
 
-          // no 1:1 generated accessor: name-based filter, not index splice
           removeEnumValue(nodeId: string, valueName: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1666,10 +1672,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: { name: string }[] }).enumValues;
               if (!Array.isArray(vals)) return;
-              // Remove ALL matches by name (master behavior) — robust against a
-              // malformed graph with duplicate enum-value names. find+splice would
-              // drop only the first, leaving stale duplicates behind.
-              (d as { enumValues?: unknown[] }).enumValues = vals.filter((v) => v.name !== valueName);
+              // Drain ALL matches by name (master behavior) — robust against a
+              // malformed graph with duplicate enum-value names. A single removeX
+              // call would drop only the first, leaving stale duplicates behind.
+              const key = { name: valueName } as unknown as Parameters<
+                typeof RosettaEnumeration.removeEnumValue
+              >[1];
+              while (RosettaEnumeration.removeEnumValue(d as never, key)) {
+                /* drain duplicates */
+              }
             });
           },
 
@@ -1690,7 +1701,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: no generated reorder accessor
           reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1698,6 +1708,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaEnumeration') return;
               const vals = (d as { enumValues?: unknown[] }).enumValues;
               if (!Array.isArray(vals)) return;
+              // kept reorderInPlace: moveEnumValueAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op)
               reorderInPlace(vals, fromIndex, toIndex);
             });
           },
@@ -1773,9 +1784,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'Choice') return;
-              const dd = d as { attributes?: { typeCall?: { type?: { $refText?: string } } }[] };
-              if (dd.attributes) {
-                dd.attributes = dd.attributes.filter((a) => a.typeCall?.type?.$refText !== typeName);
+              if (Array.isArray((d as { attributes?: unknown[] }).attributes)) {
+                const key = { typeCall: { type: { $refText: typeName } } } as unknown as Parameters<
+                  typeof Choice.removeAttribute
+                >[1];
+                while (Choice.removeAttribute(d as never, key)) {
+                  /* drain duplicates */
+                }
               }
               for (const [id, e] of draft.edges) {
                 if (e.source === nodeId && e.data?.kind === 'choice-option' && e.data?.label === typeName) {
@@ -1807,7 +1822,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data as AnyGraphNode | undefined;
               if (d?.$type !== 'RosettaFunction') return;
-              ensureMemberArray(d).push(newInput);
+              ensureMemberArray(d); // init guard: inputs may be absent on a fresh node
+              RosettaFunction.addInput(d as never, newInput as never);
             });
           },
 
@@ -1818,8 +1834,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: { name: string }[] }).inputs;
               if (!Array.isArray(inputs)) return;
-              const idx = inputs.findIndex((i) => i.name === paramName);
-              if (idx !== -1) getMemberArray(d)?.members.splice(idx, 1);
+              // Original semantics: remove only the FIRST input matching the name
+              // (findIndex + splice-one), NOT a drain. The generated removeInput
+              // removes the first match, so a single call preserves behavior exactly.
+              const key = { name: paramName } as unknown as Parameters<typeof RosettaFunction.removeInput>[1];
+              RosettaFunction.removeInput(d as never, key);
             });
           },
 
@@ -1900,7 +1919,6 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: no generated reorder accessor
           reorderInputParam(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1908,6 +1926,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d?.$type !== 'RosettaFunction') return;
               const inputs = (d as { inputs?: unknown[] }).inputs;
               if (!Array.isArray(inputs)) return;
+              // kept reorderInPlace: moveInputAt differs on negative fromIndex (splice(-1) moves the LAST element instead of no-op)
               reorderInPlace(inputs, fromIndex, toIndex);
             });
           },
@@ -1977,6 +1996,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           // Condition operations
           // -----------------------------------------------------------------------
 
+          // no 1:1 generated accessor: kind-agnostic (any node kind) + pre/post split;
+          // DomainOps addCondition exists only per-type (Data/RosettaFunction/RosettaTypeAlias)
           addCondition(
             nodeId: string,
             condition: {
@@ -2057,6 +2078,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // kept reorderInPlace: moveConditionAt differs on kind-agnostic dispatch (per-type only) and would splice the draft on out-of-range indices, emitting a spurious patch
           reorderCondition(nodeId: string, fromIndex: number, toIndex: number) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2091,7 +2113,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
-          // no 1:1 generated accessor: kind-agnostic / rich-ref construction
+          // item construction stays bespoke (rich-ref synonym shapes); append delegated to DomainOps
           addSynonym(nodeId: string, synonym: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -2101,18 +2123,16 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
               if (d.$type === 'Data' || d.$type === 'Choice') {
                 const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
-                if (Array.isArray(dd.synonyms)) {
-                  dd.synonyms.push(newSyn);
+                if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
+                if (d.$type === 'Data') {
+                  Data.addSynonym(d as never, newSyn as never);
                 } else {
-                  dd.synonyms = [newSyn];
+                  Choice.addSynonym(d as never, newSyn as never);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
                 const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
-                if (Array.isArray(dd.synonyms)) {
-                  dd.synonyms.push(newSyn);
-                } else {
-                  dd.synonyms = [newSyn];
-                }
+                if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
+                RosettaEnumeration.addSynonym(d as never, newSyn as never);
               }
               // other $types: no-op (no mutation → mutateGraph early-exits)
             });
