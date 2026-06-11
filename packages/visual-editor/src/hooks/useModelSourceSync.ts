@@ -122,6 +122,14 @@ export function useModelSourceSync(
     if (!handler) return;
     if (nodes.length === 0) return;
 
+    // Deferred-export placeholders (`meta.deferred`) are `{ $type, name }`
+    // stubs for curated namespaces the user did NOT author — serializing them
+    // would emit stub elements into source files the user never wrote. Filter
+    // them out of BOTH serialization paths (parse-baseline and user-edit); the
+    // fingerprint/parseEpoch gating below intentionally still sees all nodes
+    // so hydration of a deferred node is observed as a content change.
+    const editableNodes = nodes.filter((n) => !n.meta.deferred);
+
     // Did this render's nodes/edges change arrive together with a parse? If so
     // the graph was rebuilt FROM source — it must NOT be serialized back.
     const parseAdvanced = parseEpoch !== lastParseEpochRef.current;
@@ -139,7 +147,7 @@ export function useModelSourceSync(
     // genuine USER edits (parseEpoch unchanged) fall through to serialize.
     if (parseAdvanced) {
       const baseline = new Map<string, string>();
-      for (const model of modelsToAst(nodes, edges)) {
+      for (const model of modelsToAst(editableNodes, edges)) {
         try {
           baseline.set(model.name, serializeModel(model));
         } catch {
@@ -151,7 +159,7 @@ export function useModelSourceSync(
       return;
     }
 
-    const outputModels = modelsToAst(nodes, edges);
+    const outputModels = modelsToAst(editableNodes, edges);
     const next = new Map<string, string>();
     for (const model of outputModels) {
       try {
