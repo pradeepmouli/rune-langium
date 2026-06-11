@@ -42,12 +42,14 @@ import { identityProjection } from './identity-projection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
+  GraphNodeMeta,
   TypeGraphNode,
   TypeOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback
 } from '../../types.js';
+import { metaFromFlatData } from '../../store/node-projection.js';
 import type { ReactNode } from 'react';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
@@ -76,9 +78,17 @@ export interface DataTypeFormProps {
   /**
    * Panel-level read-only override. When true the form renders in read-only
    * mode even if the node's own `isReadOnly` flag is false (e.g. panel prop
-   * lock from a curated refOnly file). ORed with `data.isReadOnly`.
+   * lock from a curated refOnly file). ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
+   * Optional during Phase 3 step 2: when absent it is derived from the flat
+   * metadata copies still merged into `data` (dual-presence window).
+   * Becomes required in step 3.
+   */
+  meta?: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +104,8 @@ function DataTypeForm({
   renderExpressionEditor,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: metaProp
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema. Per R11 the editor
@@ -327,6 +338,7 @@ function DataTypeForm({
   }, [effectiveAttributes]);
 
   const d = data as any;
+  const nodeMeta = metaProp ?? metaFromFlatData(d);
   const parentName = getRefText(d.superType);
 
   const parentOptions = availableTypes.filter(
@@ -337,7 +349,7 @@ function DataTypeForm({
 
   // ---- Compute isReadOnly before ghost rows so it is in scope for the memo --
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   // ---- Inherited rows as ghost-row primitives (US4 / R6) -------------------
   // Per upstream `arrayConfig.before` (zod-to-form/core: `GhostRow[]`), build
@@ -382,7 +394,7 @@ function DataTypeForm({
           {/* Header: Namespace + Name + Badge — always visible above tabs */}
           <TypeHeader
             kind="data"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Type name"

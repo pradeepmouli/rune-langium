@@ -60,11 +60,13 @@ import { validateExpression } from '../../validation/edit-validator.js';
 import { identityProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
+  GraphNodeMeta,
   TypeOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback
 } from '../../types.js';
+import { metaFromFlatData } from '../../store/node-projection.js';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 
 const EMPTY_GROUPS: InheritedGroup[] = [];
@@ -116,9 +118,17 @@ export interface FunctionFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
+   * Optional during Phase 3 step 2: when absent it is derived from the flat
+   * metadata copies still merged into `data` (dual-presence window).
+   * Becomes required in step 3.
+   */
+  meta?: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,9 +144,11 @@ function FunctionForm({
   renderExpressionEditor,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: metaProp
 }: FunctionFormProps) {
   const d = data as any;
+  const nodeMeta = metaProp ?? metaFromFlatData(d);
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -198,7 +210,7 @@ function FunctionForm({
   const handleExpressionBlur = useCallback(() => {
     // Guard: a readOnly textarea cannot produce new content, so blur should
     // never trigger a mutation. Early-return to be explicit.
-    if (readOnlyProp || (data as any).isReadOnly) return;
+    if (readOnlyProp || nodeMeta.isReadOnly) return;
     const currentExpression = form.getValues('expressionText' as never) as unknown as string;
     const result = validateExpression(currentExpression);
     if (!result.valid) {
@@ -209,7 +221,7 @@ function FunctionForm({
         actions.updateExpression(nodeId, currentExpression);
       }
     }
-  }, [nodeId, actions, form, readOnlyProp, data]);
+  }, [nodeId, actions, form, readOnlyProp, nodeMeta.isReadOnly]);
 
   // ---- Output type ---------------------------------------------------------
 
@@ -314,7 +326,7 @@ function FunctionForm({
   // from <EditorActionsProvider> via `useEditorActionsContext()` per the
   // Phase 7 / US5 contract.
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
     <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={isReadOnly}>
@@ -323,7 +335,7 @@ function FunctionForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="func"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Function name"

@@ -15,7 +15,7 @@
  */
 
 import { qualifiedExportPath, indexById, fromIndex } from '@rune-langium/core';
-import type { EdgeKind, AnyGraphNode, TypeGraphNode, TypeGraphEdge } from '../types.js';
+import type { EdgeKind, AnyGraphNode, GraphNodeMeta, TypeGraphNode, TypeGraphEdge, ValidationError } from '../types.js';
 
 // Re-export so callers can import EdgeKind from a single surface.
 export type { EdgeKind };
@@ -125,6 +125,25 @@ export function astRelevantProjection(data: AnyGraphNode): Record<string, unknow
     if (!FINGERPRINT_EXCLUDED.has(key)) result[key] = value;
   }
   return result;
+}
+
+/**
+ * Phase 3 step 2 TRANSITIONAL shim — derive a `GraphNodeMeta` from the flat
+ * metadata copies still merged into `node.data` during the dual-presence
+ * window. Used ONLY by form-level components that receive a bare `data`
+ * payload (no node, hence no `node.meta`) until the step-3 substrate flip
+ * plumbs the real `meta` everywhere and removes the flat copies.
+ * DELETE in step 3 along with the flat metadata.
+ */
+export function metaFromFlatData(data: Record<string, unknown>): GraphNodeMeta {
+  return {
+    namespace: (data.namespace as string | undefined) ?? '',
+    errors: (data.errors as ValidationError[] | undefined) ?? [],
+    isReadOnly: data.isReadOnly as boolean | undefined,
+    hasExternalRefs: Boolean(data.hasExternalRefs),
+    comments: data.comments as string | undefined,
+    deferred: data.deferred as boolean | undefined
+  };
 }
 
 /**

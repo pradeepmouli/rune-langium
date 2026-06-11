@@ -46,7 +46,8 @@ import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { identityProjection } from './identity-projection.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
+import type { AnyGraphNode, GraphNodeMeta, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
+import { metaFromFlatData } from '../../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -66,9 +67,17 @@ export interface ChoiceFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
+   * Optional during Phase 3 step 2: when absent it is derived from the flat
+   * metadata copies still merged into `data` (dual-presence window).
+   * Becomes required in step 3.
+   */
+  meta?: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,9 +91,11 @@ function ChoiceForm({
   actions,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: metaProp
 }: ChoiceFormProps) {
   const d = data as any;
+  const nodeMeta = metaProp ?? metaFromFlatData(d);
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -187,7 +198,7 @@ function ChoiceForm({
 
   // ---- Render --------------------------------------------------------------
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
     <FormProvider {...form}>
@@ -196,7 +207,7 @@ function ChoiceForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="choice"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Choice name"

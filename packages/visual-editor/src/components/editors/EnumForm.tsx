@@ -49,11 +49,13 @@ import { MetadataSection } from './MetadataSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
+  GraphNodeMeta,
   TypeOption,
   TypeGraphNode,
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
+import { metaFromFlatData } from '../../store/node-projection.js';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
 
@@ -77,9 +79,17 @@ export interface EnumFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
+   * Optional during Phase 3 step 2: when absent it is derived from the flat
+   * metadata copies still merged into `data` (dual-presence window).
+   * Becomes required in step 3.
+   */
+  meta?: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,9 +104,11 @@ function EnumForm({
   allNodes = EMPTY_NODES,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: metaProp
 }: EnumFormProps) {
   const d = data as any;
+  const nodeMeta = metaProp ?? metaFromFlatData(d);
   // ---- Form setup (R11: AST schema + identity projection) -----------------
   // RosettaEnumerationSchema is `z.looseObject`, so the graph node passes
   // through `defaultValues` without a projection layer. The bespoke
@@ -227,7 +239,7 @@ function EnumForm({
   // host's `EditorFormActions` + `nodeId`. The intersection-typed context
   // accepts the enum-kind action set without narrowing.
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   const editorActionsValue = useMemo(
     () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: isReadOnly }),
@@ -243,7 +255,7 @@ function EnumForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="enum"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Enum name"

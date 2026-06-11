@@ -42,11 +42,13 @@ import { EditorActionsProvider } from '../forms/sections/index.js';
 import { identityProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
+  GraphNodeMeta,
   EditorFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback,
   TypeOption
 } from '../../types.js';
+import { metaFromFlatData } from '../../store/node-projection.js';
 import type { ReactNode } from 'react';
 
 const EMPTY_TYPES: TypeOption[] = [];
@@ -71,9 +73,17 @@ export interface TypeAliasFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors, ...).
+   * Optional during Phase 3 step 2: when absent it is derived from the flat
+   * metadata copies still merged into `data` (dual-presence window).
+   * Becomes required in step 3.
+   */
+  meta?: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +97,8 @@ function TypeAliasForm({
   availableTypes = EMPTY_TYPES,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: metaProp
 }: TypeAliasFormProps) {
   // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -165,7 +176,8 @@ function TypeAliasForm({
 
   // ---- Render --------------------------------------------------------------
 
-  const isReadOnly = Boolean(readOnlyProp || (data as any).isReadOnly);
+  const nodeMeta = metaProp ?? metaFromFlatData(data as unknown as Record<string, unknown>);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
     <EditorActionsProvider
@@ -185,7 +197,7 @@ function TypeAliasForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="typeAlias"
-            namespace={(data as any).namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Type alias name"

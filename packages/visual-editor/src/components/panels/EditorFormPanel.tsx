@@ -34,12 +34,14 @@ import { TypeAliasForm } from '../editors/TypeAliasForm.js';
 import { OtherForm } from './OtherForm.js';
 import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
 import type {
+  GraphNodeMeta,
   AnyGraphNode,
   TypeOption,
   EditorFormActions,
   TypeGraphNode,
   ExpressionEditorSlotProps
 } from '../../types.js';
+import { metaFromFlatData } from '../../store/node-projection.js';
 import { resolveNodeKind } from '../../adapters/model-helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,13 @@ class FormErrorBoundary extends Component<{ children: ReactNode; nodeId: string 
 export interface EditorFormPanelProps {
   /** The selected node's data, or null if nothing is selected. */
   nodeData: AnyGraphNode | null;
+  /**
+   * UI/editor metadata for the selected node (namespace, isReadOnly,
+   * errors, ...). Optional during Phase 3 step 2: when absent it is derived
+   * from the flat metadata copies still merged into `nodeData`
+   * (dual-presence window). Required in step 3.
+   */
+  meta?: GraphNodeMeta;
   /** Node ID of the selected node. */
   nodeId: string | null;
   /** Whether the node is read-only (from external/locked source). */
@@ -126,6 +135,7 @@ export interface EditorFormPanelProps {
 
 const EditorFormPanel = memo(function EditorFormPanel({
   nodeData,
+  meta: metaProp,
   nodeId,
   isReadOnly = false,
   refOnly = false,
@@ -141,6 +151,10 @@ const EditorFormPanel = memo(function EditorFormPanel({
   // a full editor (DataTypeForm, FunctionForm, etc.).
   const effectivelyReadOnly = isReadOnly || refOnly;
   const panelRef = useRef<HTMLElement>(null);
+
+  // Effective node metadata: the meta prop when supplied, else the step-2
+  // dual-presence shim over the flat copies still merged into nodeData.
+  const nodeMeta = metaProp ?? (nodeData ? metaFromFlatData(nodeData as unknown as Record<string, unknown>) : undefined);
 
   const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes);
 
@@ -197,6 +211,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
       >
         <OtherForm
           nodeData={nodeData}
+          meta={nodeMeta}
           nodeId={nodeId}
           onNavigateToNode={onNavigateToNode}
           allNodeIds={allNodeIds}
@@ -212,7 +227,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
 
   const kind = resolveNodeKind(nodeData);
   // Combined lock: panel-prop lock OR node-data flag.
-  const readOnly = effectivelyReadOnly || Boolean((nodeData as any).isReadOnly);
+  const readOnly = effectivelyReadOnly || Boolean(nodeMeta?.isReadOnly);
 
   function renderForm() {
     switch (kind) {
@@ -222,6 +237,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             key={nodeId!}
             nodeId={nodeId!}
             data={nodeData!}
+            meta={nodeMeta}
             availableTypes={availableTypes}
             actions={actions}
             allNodes={allNodes}
@@ -238,6 +254,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             key={nodeId!}
             nodeId={nodeId!}
             data={nodeData!}
+            meta={nodeMeta}
             availableTypes={availableTypes}
             actions={actions}
             allNodes={allNodes}
@@ -253,6 +270,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             key={nodeId!}
             nodeId={nodeId!}
             data={nodeData!}
+            meta={nodeMeta}
             availableTypes={availableTypes}
             actions={actions}
             onNavigateToNode={onNavigateToNode}
@@ -267,6 +285,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             key={nodeId!}
             nodeId={nodeId!}
             data={nodeData!}
+            meta={nodeMeta}
             availableTypes={availableTypes}
             actions={actions}
             inheritedGroups={inheritedGroups}
@@ -283,6 +302,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             key={nodeId!}
             nodeId={nodeId!}
             data={nodeData!}
+            meta={nodeMeta}
             availableTypes={availableTypes}
             actions={actions}
             renderExpressionEditor={renderExpressionEditor}
@@ -298,12 +318,12 @@ const EditorFormPanel = memo(function EditorFormPanel({
       case 'basicType':
       case 'annotation':
         return (
-          <OtherForm nodeData={nodeData!} nodeId={nodeId} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
+          <OtherForm nodeData={nodeData!} meta={nodeMeta} nodeId={nodeId} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
         );
 
       default:
         return (
-          <OtherForm nodeData={nodeData!} nodeId={nodeId} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
+          <OtherForm nodeData={nodeData!} meta={nodeMeta} nodeId={nodeId} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
         );
     }
   }
