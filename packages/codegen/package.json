@@ -33,7 +33,7 @@
     "langium": "^4.2.4"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "node-sql-parser": "^5.4.0",
