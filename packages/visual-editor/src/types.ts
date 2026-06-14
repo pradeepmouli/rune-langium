@@ -4,19 +4,16 @@
 /**
  * @rune-langium/visual-editor — Shared types
  *
- * `AstNodeModel<T>` is the central mapped type: it takes any Langium AST
- * node type (Data, RosettaFunction, Attribute, Condition, …) and produces
- * a serialized model that:
- *   - strips Langium internals ($container, $cstNode, $document, …)
- *   - strips unused domain fields (references, labels, ruleReferences, …)
- *   - recursively maps child AST nodes to their AstNodeModel equivalents
- *   - passes through primitives, References, and other non-AST values
+ * `Dehydrated<T>` (from `@rune-langium/core`) is the central node payload
+ * type: the LOSSLESS editable wire model of any Langium AST node — Langium
+ * runtime internals stripped, every `Reference` as strict `{ $refText }`,
+ * `$type` required. {@link DomainNodeData} is the discriminated union of
+ * `Dehydrated<T>` over every top-level element kind the editor renders, and
+ * is the `data` payload of every {@link TypeGraphNode}. UI/editor metadata
+ * lives on the sibling {@link GraphNodeMeta} (`node.meta`), never on `data`.
  *
- * `GraphNode<T>` adds graph/editor metadata (namespace, position, errors)
- * on top of AstNodeModel for top-level elements rendered by ReactFlow.
- *
- * The generated Zod schemas from langium-zod validate AstNodeModel shapes
- * directly — no transform layer is needed.
+ * The generated Zod schemas from langium-zod validate these shapes directly
+ * — no transform layer is needed.
  */
 
 import type { Node, Edge } from '@xyflow/react';
@@ -28,93 +25,24 @@ import type {
   RosettaRecordType,
   RosettaTypeAlias,
   RosettaBasicType,
-  Annotation
+  Annotation,
+  Dehydrated
 } from '@rune-langium/core';
-
-// ---------------------------------------------------------------------------
-// AstNodeModel — Recursive mapped type
-// ---------------------------------------------------------------------------
-
-/**
- * Structural constraint matching Langium's AstNode interface.
- * Used instead of importing langium directly (it's not a visual-editor dependency).
- */
-export interface AstNodeShape {
-  readonly $type: string;
-  readonly $container?: AstNodeShape;
-  readonly $containerProperty?: string;
-  readonly $containerIndex?: number;
-  readonly $cstNode?: unknown;
-  readonly $document?: unknown;
-}
-
-/**
- * Fields excluded from AstNodeModel.
- *
- * Langium internals: AST tree metadata not meaningful in the serialized model.
- * Domain fields: metadata arrays unused by the visual editor (doc-references,
- * label annotations, rule references, inline type-call args, enum synonym metadata).
- */
-type ExcludedFields =
-  | '$container'
-  | '$containerProperty'
-  | '$containerIndex'
-  | '$cstNode'
-  | '$document'
-  | 'references'
-  | 'labels'
-  | 'ruleReferences'
-  | 'typeCallArgs'
-  | 'enumSynonyms';
-
-/**
- * Recursively transforms AST field types to their model equivalents.
- *
- * - `Array<AstNode>` → `Array<AstNodeModel<AstNode>>` (recurse)
- * - `AstNode` → `AstNodeModel<AstNode>` (recurse)
- * - Everything else (primitives, `Reference<T>`, unions) → passthrough
- */
-export type SerializeField<F> =
-  F extends Array<infer E extends AstNodeShape> ? Array<AstNodeModel<E>> : F extends AstNodeShape ? AstNodeModel<F> : F;
-
-/**
- * Mapped type that plucks and recursively serializes fields from any
- * Langium AST node type.
- *
- * `$type` is preserved as a readonly literal (derived from the generic parameter)
- * for runtime discrimination. All other fields are made mutable for editing.
- *
- * @example
- * ```ts
- * // AstNodeModel<Data> yields:
- * // {
- * //   readonly $type: 'Data';
- * //   name: string;
- * //   definition?: string;
- * //   superType?: Reference<DataOrChoice>;
- * //   attributes: AstNodeModel<Attribute>[];
- * //   conditions: AstNodeModel<Condition>[];
- * //   annotations: AstNodeModel<AnnotationRef>[];
- * //   synonyms: AstNodeModel<RosettaClassSynonym>[];
- * // }
- * ```
- */
-export type AstNodeModel<T extends AstNodeShape> = {
-  readonly $type: T['$type'];
-} & {
-  -readonly [K in Exclude<keyof T, ExcludedFields | '$type'>]: SerializeField<T[K]>;
-};
 
 // Dehydrated<T> — canonical editable wire model (defined in @rune-langium/core)
 export type { Dehydrated } from '@rune-langium/core';
 
 // ---------------------------------------------------------------------------
-// GraphNode — AstNodeModel + graph/editor metadata
+// GraphNodeMeta — UI/editor metadata sibling
 // ---------------------------------------------------------------------------
 
-export interface GraphMetadata {
+/**
+ * UI/editor metadata for a graph node, held on `node.meta` — a sibling of the
+ * pure-domain `node.data` payload. `position` is NOT here — it already lives
+ * on the ReactFlow node itself.
+ */
+export interface GraphNodeMeta {
   namespace: string;
-  position: { x: number; y: number };
   errors: ValidationError[];
   isReadOnly?: boolean;
   hasExternalRefs: boolean;
@@ -123,15 +51,7 @@ export interface GraphMetadata {
   /** True only on deferred-export placeholder nodes (list-only curated types
    *  not yet hydrated). Drives on-demand hydration gating in the explorer. */
   deferred?: boolean;
-  /** Required for ReactFlow compatibility: Node<T> requires T extends Record<string, unknown> */
-  [key: string]: unknown;
 }
-
-/**
- * Top-level graph node data: AstNodeModel with graph/editor metadata.
- * Used for elements rendered by ReactFlow (Data, Choice, Enum, Function, etc.).
- */
-export type GraphNode<T extends AstNodeShape> = AstNodeModel<T> & GraphMetadata;
 
 // ---------------------------------------------------------------------------
 // Supported top-level AST types (for union/discrimination)
@@ -148,16 +68,31 @@ export type RootAstElement =
   | RosettaBasicType
   | Annotation;
 
-/** Union of all GraphNode variants for top-level elements. */
-export type AnyGraphNode =
-  | GraphNode<Data>
-  | GraphNode<Choice>
-  | GraphNode<RosettaEnumeration>
-  | GraphNode<RosettaFunction>
-  | GraphNode<RosettaRecordType>
-  | GraphNode<RosettaTypeAlias>
-  | GraphNode<RosettaBasicType>
-  | GraphNode<Annotation>;
+/**
+ * Domain payload of an editor graph node — the discriminated union (on
+ * `$type`) of `Dehydrated<T>` over every top-level element kind the editor
+ * renders. This is the PURE domain object: lossless, strict `{ $refText }`
+ * refs, `$type` required, and NO UI metadata (which lives on `node.meta`).
+ */
+export type DomainNodeData =
+  | Dehydrated<Data>
+  | Dehydrated<Choice>
+  | Dehydrated<RosettaEnumeration>
+  | Dehydrated<RosettaFunction>
+  | Dehydrated<RosettaRecordType>
+  | Dehydrated<RosettaTypeAlias>
+  | Dehydrated<RosettaBasicType>
+  | Dehydrated<Annotation>;
+
+/**
+ * Union of all node-data variants for top-level elements.
+ *
+ * @deprecated Phase 3 step 3 flipped the substrate: `node.data` is the pure
+ * `Dehydrated<T>` domain object. This name is retained as an alias of
+ * {@link DomainNodeData} for the existing consumer surface; new code should
+ * use `DomainNodeData` directly.
+ */
+export type AnyGraphNode = DomainNodeData;
 
 // ---------------------------------------------------------------------------
 // Type kind (short alias strings for UI/form dispatch)
@@ -594,5 +529,15 @@ export interface VisibilityState {
 // Typed ReactFlow aliases
 // ---------------------------------------------------------------------------
 
-export type TypeGraphNode = Node<AnyGraphNode>;
+/**
+ * Editor graph node. `data` is the PURE `Dehydrated<T>` domain payload
+ * ({@link DomainNodeData}); `meta` is the UI/editor metadata sibling
+ * ({@link GraphNodeMeta}); `position` stays ReactFlow-native.
+ *
+ * ReactFlow's `Node<T>` constrains `T extends Record<string, unknown>`.
+ * `DomainNodeData` satisfies it structurally: every union arm is a mapped
+ * (anonymous) object type, which TypeScript gives an implicit index
+ * signature — no explicit index signature is added to the domain object.
+ */
+export type TypeGraphNode = Node<DomainNodeData> & { meta: GraphNodeMeta };
 export type TypeGraphEdge = Edge<EdgeData>;

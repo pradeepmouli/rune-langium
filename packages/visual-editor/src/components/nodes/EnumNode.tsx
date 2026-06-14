@@ -17,7 +17,7 @@ import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
 import type { StructureEnumNode } from '../../types/structure-view.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
-import { getHandlePositions, useNavigation } from './NavigationContext.js';
+import { getHandlePositions, useNavigation, useNodeMetaErrors } from './NavigationContext.js';
 
 // ---------------------------------------------------------------------------
 // Structure-variant helpers (Phase 14e/A)
@@ -31,10 +31,12 @@ function isStructureEnum(d: unknown): d is StructureEnumNodeData {
   return typeof d === 'object' && d !== null && (d as { variant?: unknown }).variant === 'structure';
 }
 
-export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
+export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
   const { layoutDirection } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
+  // Validation errors live on the node.meta sibling (not on data).
+  const nodeErrors = useNodeMetaErrors(id);
 
   // -------------------------------------------------------------------------
   // Structure variant — reads data.values (ReadonlyArray<string>) emitted by
@@ -86,9 +88,9 @@ export const EnumNode = memo(function EnumNode({ data, selected }: NodeProps) {
             ))}
           </div>
         )}
-        {(d as any).errors?.length > 0 && (
+        {nodeErrors.length > 0 && (
           <div className="rune-node-errors">
-            {((d as any).errors as any[]).map((err: any, i: number) => (
+            {nodeErrors.map((err, i) => (
               <div key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}>{err.message}</div>
             ))}
           </div>

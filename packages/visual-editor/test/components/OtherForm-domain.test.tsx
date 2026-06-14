@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { OtherForm } from '../../src/components/panels/OtherForm.js';
 import type { AnyGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Node fixtures
@@ -134,36 +135,36 @@ const ANNOTATION_NODE: AnyGraphNode = {
 
 describe('OtherForm parent name rendering (Deliverable C baseline)', () => {
   it('Data: renders parent name from superType.$refText', () => {
-    render(<OtherForm nodeData={DATA_NODE} />);
+    render(<OtherForm nodeData={DATA_NODE} meta={testMeta('test.model')} />);
     // ExtendsField renders the parentName as a TypeLink inside the "Extends" section
     expect(screen.getByText('Event')).toBeTruthy();
     expect(screen.getByText('Extends')).toBeTruthy();
   });
 
   it('RosettaEnumeration: renders parent name from parent.$refText', () => {
-    render(<OtherForm nodeData={ENUM_NODE} />);
+    render(<OtherForm nodeData={ENUM_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('BaseEnum')).toBeTruthy();
     expect(screen.getByText('Extends')).toBeTruthy();
   });
 
   it('RosettaFunction: renders parent name from superFunction.$refText', () => {
-    render(<OtherForm nodeData={FUNC_NODE} />);
+    render(<OtherForm nodeData={FUNC_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('BaseCalc')).toBeTruthy();
     expect(screen.getByText('Extends')).toBeTruthy();
   });
 
   it('Choice: renders no Extends section (no inheritance)', () => {
-    render(<OtherForm nodeData={CHOICE_NODE} />);
+    render(<OtherForm nodeData={CHOICE_NODE} meta={testMeta('test.model')} />);
     expect(screen.queryByText('Extends')).toBeNull();
   });
 
-  // Regression guard: curated `refOnly` nodes hydrated from /api/parse arrive
-  // WITHOUT a Langium `$type` (they carry `typeKind` instead — see
-  // resolveNodeKind's doc). OtherForm exists specifically to render these.
-  // Routing the parent-name through the generated `toDomain` (which throws
-  // `Unknown node type: …` on an unrecognized `$type`) would crash the form
-  // via FormErrorBoundary on exactly these nodes. The direct getRefText chain
-  // returns `undefined` gracefully — this test locks that in.
+  // Graceful-degradation guard: curated nodes now carry `$type` (Phase 2
+  // typeKind→$type unification), but OtherForm must still render WITHOUT
+  // throwing when handed an unexpected/legacy shape. Routing the parent-name
+  // through the generated `toDomain` (which throws `Unknown node type: …` on
+  // an unrecognized `$type`) would crash the form via FormErrorBoundary on
+  // exactly these nodes. The direct getRefText chain returns `undefined`
+  // gracefully — this test locks that in.
   it('curated $type-less node (typeKind only): renders without throwing, no Extends', () => {
     const curatedNode = {
       typeKind: 'enum',
@@ -175,7 +176,7 @@ describe('OtherForm parent name rendering (Deliverable C baseline)', () => {
       errors: []
     } as unknown as AnyGraphNode;
 
-    expect(() => render(<OtherForm nodeData={curatedNode} refOnly />)).not.toThrow();
+    expect(() => render(<OtherForm nodeData={curatedNode} meta={testMeta('test.model')} refOnly />)).not.toThrow();
     // The node still renders (name visible), and no error-boundary fallback text.
     expect(screen.getByText('CuratedEnum')).toBeTruthy();
     expect(screen.queryByText(/Failed to render/i)).toBeNull();
@@ -190,7 +191,7 @@ describe('OtherForm parent name rendering (Deliverable C baseline)', () => {
 
 describe('OtherForm member list rendering (Deliverable C baseline)', () => {
   it('Data: renders attribute names and type refs', () => {
-    render(<OtherForm nodeData={DATA_NODE} />);
+    render(<OtherForm nodeData={DATA_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('tradeDate')).toBeTruthy();
     expect(screen.getByText('product')).toBeTruthy();
     // type names visible as TypeLink text
@@ -199,34 +200,34 @@ describe('OtherForm member list rendering (Deliverable C baseline)', () => {
   });
 
   it('RosettaEnumeration: renders enum value names (no type links)', () => {
-    render(<OtherForm nodeData={ENUM_NODE} />);
+    render(<OtherForm nodeData={ENUM_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('USD')).toBeTruthy();
     expect(screen.getByText('EUR')).toBeTruthy();
     expect(screen.getByText('GBP')).toBeTruthy();
   });
 
   it('RosettaFunction: renders input names and type refs', () => {
-    render(<OtherForm nodeData={FUNC_NODE} />);
+    render(<OtherForm nodeData={FUNC_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('principal')).toBeTruthy();
     expect(screen.getByText('rate')).toBeTruthy();
     expect(screen.getAllByText('number').length).toBeGreaterThan(0);
   });
 
   it('Choice: uses TYPE name as member display name', () => {
-    render(<OtherForm nodeData={CHOICE_NODE} />);
+    render(<OtherForm nodeData={CHOICE_NODE} meta={testMeta('test.model')} />);
     // Choice options display typeRef as the name (may appear multiple times in DOM)
     expect(screen.getAllByText('CashPayment').length).toBeGreaterThan(0);
     expect(screen.getAllByText('PhysicalSettlement').length).toBeGreaterThan(0);
   });
 
   it('RosettaRecordType: renders feature names and type refs', () => {
-    render(<OtherForm nodeData={RECORD_NODE} />);
+    render(<OtherForm nodeData={RECORD_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('recordDate')).toBeTruthy();
     expect(screen.getByText('date')).toBeTruthy();
   });
 
   it('Annotation: renders attribute names and type refs', () => {
-    render(<OtherForm nodeData={ANNOTATION_NODE} />);
+    render(<OtherForm nodeData={ANNOTATION_NODE} meta={testMeta('test.model')} />);
     expect(screen.getByText('label')).toBeTruthy();
     expect(screen.getByText('string')).toBeTruthy();
   });

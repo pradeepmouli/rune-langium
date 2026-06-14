@@ -22,6 +22,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { TypeSelectorProps } from '../../src/components/editors/TypeSelector.js';
 import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Spy on the upstream useExternalSync hook so CT3 can assert the migration
@@ -142,7 +143,7 @@ describe('ChoiceForm', () => {
   it('triggers removeChoiceOption when remove button is clicked', () => {
     const actions = makeActions();
 
-    render(<ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(<ChoiceForm meta={testMeta('test.model')} nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const removeBtns = screen.getAllByLabelText(/remove option/i);
     fireEvent.click(removeBtns[0]!);
@@ -153,7 +154,7 @@ describe('ChoiceForm', () => {
   it('triggers renameType after debounce on name change', () => {
     const actions = makeActions();
 
-    render(<ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(<ChoiceForm meta={testMeta('test.model')} nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/type name/i);
     fireEvent.change(nameInput, { target: { value: 'SettlementType' } });
@@ -169,7 +170,7 @@ describe('ChoiceForm', () => {
 
   it('renders empty state when no options', () => {
     render(
-      <ChoiceForm
+      <ChoiceForm meta={testMeta('test.model')}
         nodeId="node-1"
         data={makeChoiceData({ attributes: [] })}
         availableTypes={AVAILABLE_TYPES}
@@ -198,11 +199,18 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
   // CT1 — leaf field set + tab order matches the baseline
   it('renders leaf fields (name, definition, comments) in the documented tab order', () => {
     const data = makeChoiceData({
-      definition: 'A payment classification',
-      comments: 'Initial comments'
+      definition: 'A payment classification'
     });
+    // `comments` is UI metadata (node.meta sibling) — seeded into form state
+    // from `meta`, not from the domain payload.
     const { container } = render(
-      <ChoiceForm nodeId="node-1" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
+      <ChoiceForm
+        meta={testMeta('test.model', { comments: 'Initial comments' })}
+        nodeId="node-1"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
     );
 
     // Name input is the first text input, in the form-header slot.
@@ -234,7 +242,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     const renameType = vi.fn();
     const actions = { ...makeActions(), renameType };
 
-    render(<ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(<ChoiceForm meta={testMeta('test.model')} nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     const nameInput = screen.getByLabelText(/type name/i);
 
@@ -271,7 +279,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     });
 
     const { container, rerender } = render(
-      <ChoiceForm nodeId="node-1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <ChoiceForm meta={testMeta('test.model')} nodeId="node-1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
@@ -280,7 +288,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     // Dirty the name field on nodeA, then swap to nodeB.
     fireEvent.change(initialName, { target: { value: 'Dirty' } });
 
-    rerender(<ChoiceForm nodeId="node-2" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(<ChoiceForm meta={testMeta('test.model')} nodeId="node-2" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -308,7 +316,7 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     const actions = { ...makeActions(), addChoiceOption };
 
     const { container } = render(
-      <ChoiceForm nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <ChoiceForm meta={testMeta('test.model')} nodeId="node-1" data={makeChoiceData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // The "Add option" TypeSelector is the second selector in the form

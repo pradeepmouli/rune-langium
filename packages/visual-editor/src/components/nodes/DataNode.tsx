@@ -18,7 +18,7 @@ import type { AnyGraphNode } from '../../types.js';
 import type { StructureDataNode, StructureExpansionKey, StructureRow } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
-import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
+import { getHandlePositions, useNavigation, resolveTypeNodeId, useNodeMetaErrors } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
@@ -97,8 +97,8 @@ interface StructureNodeData extends StructureDataNode {
    *
    * **NOTE — astRange-threading gap:** in studio-created rows today,
    * `StructureRow.astRange` is `undefined` because `graphNodesToAdapterDocument`
-   * forwards attributes from `stripAdditionalAstFields`, which strips
-   * `$cstNode` and never derives an offset range. The hook returns
+   * forwards attributes from the dehydrated node data (which carries no
+   * `$cstNode`) and never derives an offset range. The hook returns
    * `undefined` in production so the severity class never applies. Tests
    * inject synthetic astRange values to verify the end-to-end wiring,
    * which is real and ready to fire once the upstream threads astRange.
@@ -349,6 +349,9 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
   const members = ((d as any).attributes ?? []) as any[];
   const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
+  // Validation errors live on the node.meta sibling (not on data) — read
+  // them out of the ReactFlow store by node id.
+  const nodeErrors = useNodeMetaErrors(id);
   const summary =
     members.length === 0 ? 'No attributes' : `${members.length} attribute${members.length === 1 ? '' : 's'}`;
 
@@ -529,9 +532,9 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
             })}
           </div>
         )}
-        {(d as any).errors?.length > 0 && (
+        {nodeErrors.length > 0 && (
           <div className="rune-node-errors">
-            {((d as any).errors as any[]).map((err: any, i: number) => (
+            {nodeErrors.map((err, i) => (
               <div key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}>{err.message}</div>
             ))}
           </div>

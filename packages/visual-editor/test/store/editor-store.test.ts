@@ -58,7 +58,7 @@ describe('EditorStore', () => {
       // known-bad id and verify the next loadModels drops it.
       const result = await parse(COMBINED_MODEL_SOURCE);
       store.getState().loadModels(result.value);
-      const namespace = store.getState().nodes[0]!.data.namespace;
+      const namespace = store.getState().nodes[0]!.meta.namespace;
       store.getState().selectNode(`${namespace}.__definitely_not_a_real_type__`);
 
       store.getState().loadModels(result.value);
@@ -468,7 +468,7 @@ describe('editor-store on-demand curated hydration', () => {
     expect(store.getState().pendingHydrationNamespaces).toContain('cdm.base.math');
   });
 
-  it('placeholder nodes built from deferred entries have data.deferred === true', async () => {
+  it('placeholder nodes built from deferred entries have meta.deferred === true', async () => {
     // loadDeferredExports stashes entries; buildDeferredPlaceholderNodes runs
     // inside loadModels, so we need a loadModels call to materialise the nodes.
     const store = createEditorStore();
@@ -484,17 +484,17 @@ describe('editor-store on-demand curated hydration', () => {
     store.getState().loadModels(result.value);
     const node = store.getState().nodes.find((n) => n.id === 'cdm.base.math.QuantitySchedule');
     expect(node).toBeDefined();
-    expect((node!.data as { deferred?: boolean }).deferred).toBe(true);
+    expect(node!.meta.deferred).toBe(true);
   });
 
-  it('materialized nodes from loadModels do NOT have data.deferred set', async () => {
+  it('materialized nodes from loadModels do NOT have meta.deferred set', async () => {
     const store = createEditorStore();
     const result = await parse(COMBINED_MODEL_SOURCE);
     store.getState().loadModels(result.value);
     const materializedNodes = store.getState().nodes;
     expect(materializedNodes.length).toBeGreaterThan(0);
     for (const node of materializedNodes) {
-      expect((node.data as { deferred?: boolean }).deferred).toBeFalsy();
+      expect(node.meta.deferred).toBeFalsy();
     }
   });
 
@@ -515,13 +515,13 @@ describe('editor-store on-demand curated hydration', () => {
     // The placeholder for the un-hydrated namespace survives the merge
     const placeholder = store.getState().nodes.find((n) => n.id === 'cdm.other.ns.SomeType');
     expect(placeholder).toBeDefined();
-    expect((placeholder!.data as { deferred?: boolean }).deferred).toBe(true);
+    expect(placeholder!.meta.deferred).toBe(true);
 
     // Materialized nodes from the real model must not carry the flag
     const materialized = store.getState().nodes.filter((n) => n.id !== 'cdm.other.ns.SomeType');
     expect(materialized.length).toBeGreaterThan(0);
     for (const node of materialized) {
-      expect((node.data as { deferred?: boolean }).deferred).toBeFalsy();
+      expect(node.meta.deferred).toBeFalsy();
     }
   });
 });

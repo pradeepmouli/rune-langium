@@ -63,7 +63,8 @@ describe('CDM Corpus Graph Conformance (T002)', () => {
     for (const node of nodes) {
       expect(node.data).toHaveProperty('$type');
       expect(node.data).toHaveProperty('name');
-      expect(node.data).toHaveProperty('namespace');
+      // Namespace is UI/editor metadata — it lives on the meta sibling.
+      expect(typeof node.meta.namespace).toBe('string');
       const nodeType = AST_TYPE_TO_NODE_TYPE[node.data.$type];
       expect(['data', 'choice', 'enum']).toContain(nodeType);
     }

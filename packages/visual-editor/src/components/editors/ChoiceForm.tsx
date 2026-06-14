@@ -44,9 +44,9 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
-import type { AnyGraphNode, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
+import type { AnyGraphNode, GraphNodeMeta, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -66,9 +66,16 @@ export interface ChoiceFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
+   */
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +89,8 @@ function ChoiceForm({
   actions,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: nodeMeta
 }: ChoiceFormProps) {
   const d = data as any;
 
@@ -93,7 +101,7 @@ function ChoiceForm({
   // <ChoiceOptionRow> as a custom row renderer via formRegistry.
 
   const { form } = useZodForm(ChoiceSchema, {
-    defaultValues: identityProjection<typeof ChoiceSchema>(data),
+    defaultValues: formValuesProjection<typeof ChoiceSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry
   });
@@ -101,7 +109,7 @@ function ChoiceForm({
   // Re-bind pristine field state when the caller swaps to a different node.
   // `keepDirty: true` preserves the prior local-component semantics so
   // in-flight user edits are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof ChoiceSchema>, { keepDirty: true });
+  useExternalSync(form, data, (n) => formValuesProjection<typeof ChoiceSchema>(n, nodeMeta), { keepDirty: true });
 
   // Track committed data for diffing
   const committedRef = useRef(data);
@@ -187,7 +195,7 @@ function ChoiceForm({
 
   // ---- Render --------------------------------------------------------------
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
     <FormProvider {...form}>
@@ -196,7 +204,7 @@ function ChoiceForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="choice"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Choice name"

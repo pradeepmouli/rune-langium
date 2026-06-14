@@ -139,6 +139,8 @@ export function useModelSourceSync(
     // genuine USER edits (parseEpoch unchanged) fall through to serialize.
     if (parseAdvanced) {
       const baseline = new Map<string, string>();
+      // Deferred placeholder nodes are excluded inside modelsToAst itself —
+      // the serialization-boundary filter covers every caller.
       for (const model of modelsToAst(nodes, edges)) {
         try {
           baseline.set(model.name, serializeModel(model));

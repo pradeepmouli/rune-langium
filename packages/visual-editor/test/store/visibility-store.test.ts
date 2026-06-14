@@ -10,6 +10,7 @@ import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { COMBINED_MODEL_SOURCE } from '../helpers/fixture-loader.js';
 import type { AnyGraphNode, EdgeData, TypeGraphEdge, TypeGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 function makeNode(namespace: string, name: string): TypeGraphNode {
   return {
@@ -27,7 +28,8 @@ function makeNode(namespace: string, name: string): TypeGraphNode {
       conditions: [],
       annotations: [],
       synonyms: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta(namespace)
   };
 }
 

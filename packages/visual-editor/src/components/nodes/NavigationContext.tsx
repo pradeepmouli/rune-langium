@@ -10,8 +10,8 @@
  */
 
 import { createContext, useContext } from 'react';
-import { Position } from '@xyflow/react';
-import type { NavigateToNodeCallback } from '../../types.js';
+import { Position, useStore } from '@xyflow/react';
+import type { NavigateToNodeCallback, TypeGraphNode, ValidationError } from '../../types.js';
 import type { LayoutOptions } from '../../types.js';
 import { nameFromNodeId } from '../../store/node-projection.js';
 
@@ -30,6 +30,23 @@ const defaultValue: NavigationContextValue = { allNodeIds: new Set(), layoutDire
 export const NavigationContext = createContext<NavigationContextValue>(defaultValue);
 
 export const useNavigation = () => useContext(NavigationContext);
+
+const EMPTY_ERRORS: ValidationError[] = [];
+
+/**
+ * Per-node validation errors from the node's `meta` sibling (Phase 3 step 3:
+ * `node.data` is the pure domain payload — UI metadata like `errors` lives on
+ * `node.meta`, which ReactFlow does NOT pass through `NodeProps`). Bridges the
+ * gap by reading the user node out of the ReactFlow store. Returns a stable
+ * empty array when the node (or a ReactFlow instance) is absent — e.g. when a
+ * node component is rendered standalone under a bare `<ReactFlowProvider>`.
+ */
+export function useNodeMetaErrors(id: string): ValidationError[] {
+  return useStore((s) => {
+    const userNode = s.nodeLookup.get(id)?.internals.userNode as TypeGraphNode | undefined;
+    return userNode?.meta?.errors ?? EMPTY_ERRORS;
+  });
+}
 
 export function getHandlePositions(direction: GraphLayoutDirection): {
   target: Position;

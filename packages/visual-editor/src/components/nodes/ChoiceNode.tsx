@@ -33,7 +33,7 @@ import type {
 } from '../../types/structure-view.js';
 import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
-import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
+import { getHandlePositions, useNavigation, resolveTypeNodeId, useNodeMetaErrors } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
@@ -312,6 +312,8 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   const d = data as unknown as AnyGraphNode;
   const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
+  // Validation errors live on the node.meta sibling (not on data).
+  const nodeErrors = useNodeMetaErrors(id);
 
   // -------------------------------------------------------------------------
   // Structure variant — reads data.options (StructureChoiceArm[]) from the
@@ -475,9 +477,9 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
             })}
           </div>
         )}
-        {(d as any).errors?.length > 0 && (
+        {nodeErrors.length > 0 && (
           <div className="rune-node-errors">
-            {((d as any).errors as any[]).map((err: any, i: number) => (
+            {nodeErrors.map((err, i) => (
               <div key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}>{err.message}</div>
             ))}
           </div>

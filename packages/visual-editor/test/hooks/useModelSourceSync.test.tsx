@@ -244,6 +244,55 @@ describe('useModelSourceSync', () => {
     });
   });
 
+  it('does NOT serialize deferred placeholder nodes (curated stubs the user did not author)', async () => {
+    // Deferred-export placeholders (`meta.deferred === true`) are `{ $type, name }`
+    // stubs for namespaces the user did NOT author. Serializing them emits stub
+    // elements into source files the user never wrote — modelsToAst filters them
+    // at the serialization boundary; this pins that end-to-end through the
+    // hook's emission path.
+    const onModelChanged = vi.fn();
+    const deferredStub = {
+      id: 'other.curated.Stub',
+      type: 'data',
+      position: { x: 0, y: 0 },
+      data: { $type: 'Data', name: 'Stub' },
+      meta: { namespace: 'other.curated', errors: [], hasExternalRefs: false, deferred: true }
+    } as unknown as ReturnType<typeof useEditorStore.getState>['nodes'][number];
+
+    const baselineNodes = [...useEditorStore.getState().nodes, deferredStub];
+    const edges = useEditorStore.getState().edges;
+
+    const { rerender } = renderHook(
+      ({ nodes }: { nodes: typeof baselineNodes }) => useModelSourceSync(nodes, edges, onModelChanged),
+      { initialProps: { nodes: baselineNodes } }
+    );
+
+    // Allow initial-skip to settle.
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // User edit (same path as inspector/structure edits).
+    const tradeNode = useEditorStore.getState().nodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = useEditorStore.getState().nodes.find((n) => n.data.name === 'Product')!;
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+    });
+
+    rerender({ nodes: [...useEditorStore.getState().nodes, deferredStub] });
+
+    await waitFor(() => {
+      expect(onModelChanged).toHaveBeenCalled();
+    });
+
+    const serialized = onModelChanged.mock.calls.at(-1)![0] as Map<string, string>;
+    // The user-authored namespace serializes; the deferred stub's namespace must NOT.
+    expect(serialized.has('test.combined')).toBe(true);
+    expect(serialized.has('other.curated')).toBe(false);
+  });
+
   it('does NOT call onModelChanged when onModelChanged is undefined', async () => {
     // Should not throw, should be a no-op.
     const nodes = useEditorStore.getState().nodes;

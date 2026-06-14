@@ -17,6 +17,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExplorerPanel.js';
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, isTypeRefPayload, typeRefMimeForKind } from '../../src/types/structure-view.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
@@ -57,7 +58,8 @@ function makeNode(ns: string, name: string, astType: string = 'Data'): TypeGraph
       position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta(ns)
   };
 }
 
@@ -70,7 +72,7 @@ const defaultNodes = [
 ];
 
 function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExplorerPanel>> = {}) {
-  const allNamespaces = new Set(defaultNodes.map((n) => n.data.namespace));
+  const allNamespaces = new Set(defaultNodes.map((n) => n.meta.namespace));
   const props = {
     nodes: defaultNodes,
     expandedNamespaces: allNamespaces,
@@ -240,7 +242,7 @@ describe('NamespaceExplorerPanel', () => {
   });
 
   it('shows reduced visible count when individual nodes hidden', () => {
-    const allNamespaces = new Set(defaultNodes.map((n) => n.data.namespace));
+    const allNamespaces = new Set(defaultNodes.map((n) => n.meta.namespace));
     const hidden = new Set(['com.model.Trade']);
     renderPanel({ expandedNamespaces: allNamespaces, hiddenNodeIds: hidden });
     // 4 visible / 5 total (com.model.Trade is hidden; cdm.trade.Trade is still visible)

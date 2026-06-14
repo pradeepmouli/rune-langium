@@ -42,13 +42,14 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import { getRefText } from '../../adapters/model-helpers.js';
 import { AnnotationSection } from './AnnotationSection.js';
 import { MetadataSection } from './MetadataSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import type {
   AnyGraphNode,
+  GraphNodeMeta,
   TypeOption,
   TypeGraphNode,
   EditorFormActions,
@@ -77,9 +78,16 @@ export interface EnumFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
+   */
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +102,8 @@ function EnumForm({
   allNodes = EMPTY_NODES,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: nodeMeta
 }: EnumFormProps) {
   const d = data as any;
   // ---- Form setup (R11: AST schema + identity projection) -----------------
@@ -107,7 +116,7 @@ function EnumForm({
     // The graph node is a union (`AnyGraphNode`); the host narrows by
     // `$type` upstream. `identityProjection` covers the typed gap between
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
-    defaultValues: identityProjection<typeof RosettaEnumerationSchema>(data),
+    defaultValues: formValuesProjection<typeof RosettaEnumerationSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry
   });
@@ -116,7 +125,7 @@ function EnumForm({
   // (object identity is the contract). `keepDirty: true` preserves the
   // pre-migration `keepDirtyValues: true` semantics. Identity projection
   // per R11 — the graph node IS already AST-shaped.
-  useExternalSync(form, data, identityProjection<typeof RosettaEnumerationSchema>, {
+  useExternalSync(form, data, (n) => formValuesProjection<typeof RosettaEnumerationSchema>(n, nodeMeta), {
     keepDirty: true
   });
 
@@ -227,7 +236,7 @@ function EnumForm({
   // host's `EditorFormActions` + `nodeId`. The intersection-typed context
   // accepts the enum-kind action set without narrowing.
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   const editorActionsValue = useMemo(
     () => ({ nodeId, actions: actions as unknown as EditorFormActions, readOnly: isReadOnly }),
@@ -243,7 +252,7 @@ function EnumForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="enum"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Enum name"

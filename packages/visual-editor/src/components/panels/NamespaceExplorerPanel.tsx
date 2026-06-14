@@ -282,7 +282,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   );
 
   const totalTypes = nodes.length;
-  const visibleCount = nodes.filter((n) => expandedNamespaces.has(n.data.namespace) && !hiddenNodeIds.has(n.id)).length;
+  const visibleCount = nodes.filter((n) => expandedNamespaces.has(n.meta.namespace) && !hiddenNodeIds.has(n.id)).length;
 
   return (
     <TooltipProvider>

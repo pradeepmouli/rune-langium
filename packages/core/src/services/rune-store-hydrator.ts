@@ -17,7 +17,13 @@ import type { Dehydrated } from '../serializer/dehydrated.js';
  * Hydrator variant for the Rune store substrate.
  *
  * Differences from DefaultHydrator:
- *  - CST nodes are dropped (stored as `{}`) — the store has no use for parse-tree data.
+ *  - CST nodes are dropped entirely — the store has no use for parse-tree data.
+ *    (`$cstNode`, `$containerIndex`, and `$containerProperty` are deleted from
+ *    the output so the runtime object matches the `Dehydrated<T>` type, which
+ *    excludes all Langium runtime fields.)
+ *  - `$cstText` (a custom field stamped by `preserveCstText` BEFORE dehydration)
+ *    is preserved — the visual editor's expression cells read it after the
+ *    round-trip, and DefaultHydrator would otherwise drop it as a `$`-field.
  *  - References are stored as `{ $refText: string }` only — the editable `Dehydrated<T>` wire format.
  *  - Re-hydration rebuilds a proper `Reference` via `this.linker.buildReference`, passing
  *    `undefined` for the CST node (consistent with the drop above).
@@ -30,8 +36,31 @@ export class RuneStoreHydrator extends DefaultHydrator {
     return this.dehydrateAstNode(node, context) as Dehydrated<T>;
   }
 
+  /**
+   * CST nodes never survive dehydration here (see class doc), so skip the
+   * base class's full CST-tree walk when building the context — on large
+   * corpora that walk dominates dehydration cost for zero benefit.
+   */
+  protected override createDehyrationContext(node: AstNode): DehydrateContext {
+    const astNodes = new Map<AstNode, unknown>();
+    for (const astNode of AstUtils.streamAst(node)) {
+      astNodes.set(astNode, {});
+    }
+    return { astNodes, cstNodes: new Map() } as DehydrateContext;
+  }
+
   protected override dehydrateAstNode(node: AstNode, context: DehydrateContext): object {
     const result = super.dehydrateAstNode(node, context) as Record<string, unknown>;
+    // Runtime-only linkage fields — excluded from Dehydrated<T>.
+    delete result.$containerIndex;
+    delete result.$containerProperty;
+    delete result.$cstNode;
+    // Preserve the preserveCstText stamp (custom field, skipped by the base
+    // class's `$`-prefix filter).
+    const cstText = (node as AstNode & { $cstText?: unknown }).$cstText;
+    if (typeof cstText === 'string') {
+      result.$cstText = cstText;
+    }
     const model = AstUtils.getContainerOfType(node, isRosettaModel);
     if (model) {
       result.$namespace = model.name;

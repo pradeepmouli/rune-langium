@@ -21,7 +21,7 @@
 
 import type { z } from 'zod';
 import type { ZodType } from 'zod';
-import type { AnyGraphNode } from '../../types.js';
+import type { AnyGraphNode, GraphNodeMeta } from '../../types.js';
 
 /**
  * Cast an AST graph node to a schema's inferred output shape. Used as
@@ -30,4 +30,15 @@ import type { AnyGraphNode } from '../../types.js';
  */
 export function identityProjection<S extends ZodType>(node: AnyGraphNode): z.output<S> {
   return node as unknown as z.output<S>;
+}
+
+/**
+ * Meta-aware form-values projection (Phase 3 step 3). `node.data` is now the
+ * pure domain payload — the UI-only `comments` annotation lives on the
+ * `node.meta` sibling — but `MetadataSection` edits `comments` as a regular
+ * form field. Seed it into form state from `meta` so the field round-trips:
+ * meta → form default → user edit → `actions.updateComments` → meta.
+ */
+export function formValuesProjection<S extends ZodType>(node: AnyGraphNode, meta: GraphNodeMeta): z.output<S> {
+  return { ...(node as Record<string, unknown>), comments: meta.comments } as unknown as z.output<S>;
 }

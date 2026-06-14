@@ -277,7 +277,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     const { expandedNamespaces, hiddenNodeIds, visibleNodeKinds, visibleEdgeKinds } = visibility;
     const vNodes = storeNodes.filter(
       (n) =>
-        expandedNamespaces.has(n.data.namespace) &&
+        expandedNamespaces.has(n.meta.namespace) &&
         !hiddenNodeIds.has(n.id) &&
         visibleNodeKinds.has(n.type as import('../types.js').TypeKind)
     );

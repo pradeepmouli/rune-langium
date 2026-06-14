@@ -17,6 +17,7 @@ import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
 import type { TypeRefPayload } from '../../src/types/structure-view.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 function makeActions(overrides: Partial<EditorFormActions<'data'>> = {}): EditorFormActions<'data'> {
   return {
@@ -88,7 +89,7 @@ describe('DataTypeForm', () => {
     const actions = makeActions({ renameType });
 
     render(
-      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const nameInput = screen.getByLabelText(/data type name/i);
@@ -107,7 +108,7 @@ describe('DataTypeForm', () => {
     const addAttribute = vi.fn();
     const actions = makeActions({ addAttribute });
     const { container } = render(
-      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const addBtn = container.querySelector('[data-slot="add-attribute-btn"]');
@@ -122,7 +123,7 @@ describe('DataTypeForm', () => {
     const actions = makeActions({ removeAttribute });
 
     render(
-      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const removeBtns = screen.getAllByLabelText(/remove attribute/i);
@@ -136,7 +137,7 @@ describe('DataTypeForm', () => {
     const data = makeDataNode();
     (data as any).attributes = [];
 
-    render(<DataTypeForm nodeId="test.Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(<DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     expect(screen.getByText(/no attributes defined/i)).toBeDefined();
   });
@@ -160,13 +161,15 @@ describe('DataTypeForm – merged inherited attribute list', () => {
         position: { x: 0, y: 0 },
         hasExternalRefs: false,
         errors: []
-      }
+      },
+      meta: testMeta('test')
     } as TypeGraphNode;
     const childNode = {
       id: 'test.Trade',
       type: 'data',
       position: { x: 0, y: 0 },
-      data: childData
+      data: childData,
+      meta: testMeta('test')
     } as TypeGraphNode;
     return [childNode, parentNode];
   }
@@ -190,7 +193,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -206,7 +209,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -221,7 +224,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -237,7 +240,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -262,7 +265,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     });
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -281,7 +284,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -299,7 +302,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -318,7 +321,7 @@ describe('DataTypeForm – merged inherited attribute list', () => {
     const childData = makeChildData();
     const allNodes = makeInheritanceNodes(childData, [baseTypeAttr]);
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -363,9 +366,16 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
   // T010 — leaf field set + tab order
   it('renders leaf fields (name, definition, comments) in the documented tab order', () => {
     const data = makeDataNode();
-    (data as any).comments = 'Initial comments';
+    // `comments` is UI metadata (node.meta sibling) — seeded into form state
+    // from `meta`, not from the domain payload.
     const { container } = render(
-      <DataTypeForm nodeId="test.Trade" data={data} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
+      <DataTypeForm
+        meta={testMeta('test.model', { comments: 'Initial comments' })}
+        nodeId="test.Trade"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
     );
 
     // Name must be the first text input in the form-header slot.
@@ -408,7 +418,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     const actions = makeActions({ renameType });
 
     render(
-      <DataTypeForm nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={makeDataNode()} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     const nameInput = screen.getByLabelText(/data type name/i);
@@ -447,7 +457,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     })();
 
     const { container, rerender } = render(
-      <DataTypeForm nodeId="test.Trade" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // Confirm initial state pulls from nodeA
@@ -460,7 +470,7 @@ describe('DataTypeForm – US1 z2f migration contract (T010–T012)', () => {
     // Swap to nodeB (different reference identity, same nodeId for simplicity).
     // The form host flushes the pending debounce on unmount of the old binding
     // OR the next debounce tick — advance both to be deterministic.
-    rerender(<DataTypeForm nodeId="test.Position" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(<DataTypeForm meta={testMeta('test.model')} nodeId="test.Position" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -579,7 +589,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
     const actions = makeActions({ reorderAttribute });
 
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={makeThreeAttrDataNode()}
         availableTypes={AVAILABLE_TYPES}
@@ -638,7 +648,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
 
     const initial = makeThreeAttrDataNode();
     const { container, rerender } = render(
-      <DataTypeForm nodeId="test.Trade" data={initial} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={initial} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
 
     // ---- Step 1 — add a new attribute -------------------------------------
@@ -661,7 +671,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
         override: false
       }
     ];
-    rerender(<DataTypeForm nodeId="test.Trade" data={afterAdd} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(<DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={afterAdd} availableTypes={AVAILABLE_TYPES} actions={actions} />);
     let rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(4);
 
@@ -680,7 +690,7 @@ describe('DataTypeForm – US2 array reorder contract (T018–T019)', () => {
     reorderedAttrs.splice(1, 0, moved);
     (afterReorder as any).attributes = reorderedAttrs;
     rerender(
-      <DataTypeForm nodeId="test.Trade" data={afterReorder} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <DataTypeForm meta={testMeta('test.model')} nodeId="test.Trade" data={afterReorder} availableTypes={AVAILABLE_TYPES} actions={actions} />
     );
     rows = container.querySelectorAll('[data-slot="attribute-row"]');
     expect(rows.length).toBe(4);
@@ -760,13 +770,15 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
         position: { x: 0, y: 0 },
         hasExternalRefs: false,
         errors: []
-      }
+      },
+      meta: testMeta('test')
     } as TypeGraphNode;
     const childNode = {
       id: 'test.Trade',
       type: 'data',
       position: { x: 0, y: 0 },
-      data: childData
+      data: childData,
+      meta: testMeta('test')
     } as TypeGraphNode;
     return { childData, allNodes: [childNode, parentNode] };
   }
@@ -778,7 +790,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     const { childData, allNodes } = makeChildWithParent(parentAttrs, localAttrs);
 
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -811,7 +823,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     const { childData, allNodes } = makeChildWithParent(parentAttrs, localAttrs);
 
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -851,7 +863,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
     const addAttribute = vi.fn();
 
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -877,7 +889,7 @@ describe('DataTypeForm – US4 ghost-row primitive (T040–T041)', () => {
 
     const reorderAttribute = vi.fn();
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -981,7 +993,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
   it('rejects an Enum drop on the Extends TypeReferenceField (does not call setInheritance)', () => {
     const setInheritance = vi.fn();
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={makeSimpleDataNode()}
         availableTypes={EXTENDS_TYPES}
@@ -1013,7 +1025,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
   it('accepts a Data drop on the Extends TypeReferenceField (calls setInheritance)', () => {
     const setInheritance = vi.fn();
     const { container } = render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={makeSimpleDataNode()}
         availableTypes={EXTENDS_TYPES}
@@ -1043,7 +1055,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
   it('renders a "Reveal in graph" header action that navigates to this node', () => {
     const onNavigateToNode = vi.fn();
     render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={makeDataNode()}
         availableTypes={AVAILABLE_TYPES}
@@ -1059,7 +1071,7 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
 
   it('hides the "Reveal in graph" action when no navigate callback is provided', () => {
     render(
-      <DataTypeForm
+      <DataTypeForm meta={testMeta('test.model')}
         nodeId="test.Trade"
         data={makeDataNode()}
         availableTypes={AVAILABLE_TYPES}

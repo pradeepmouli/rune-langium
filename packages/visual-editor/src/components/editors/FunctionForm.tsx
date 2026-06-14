@@ -57,9 +57,10 @@ import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
 import { useExpressionAutocomplete } from '../../hooks/useExpressionAutocomplete.js';
 import { validateExpression } from '../../validation/edit-validator.js';
-import { identityProjection } from './identity-projection.js';
+import { formValuesProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
+  GraphNodeMeta,
   TypeOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
@@ -116,9 +117,16 @@ export interface FunctionFormProps {
   /** All loaded graph node IDs for resolving type name to node ID. */
   allNodeIds?: string[];
   /**
-   * Panel-level read-only override. ORed with `data.isReadOnly`.
+   * Panel-level read-only override. ORed with the node metadata's
+   * `isReadOnly` flag.
    */
   readOnly?: boolean;
+  /**
+   * UI/editor metadata for the node (namespace, isReadOnly, errors,
+   * comments, ...). Required — `data` is the pure domain payload and no
+   * longer carries any UI metadata (Phase 3 step 3).
+   */
+  meta: GraphNodeMeta;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +142,8 @@ function FunctionForm({
   renderExpressionEditor,
   onNavigateToNode,
   allNodeIds,
-  readOnly: readOnlyProp
+  readOnly: readOnlyProp,
+  meta: nodeMeta
 }: FunctionFormProps) {
   const d = data as any;
 
@@ -144,7 +153,7 @@ function FunctionForm({
   // so the graph node passes through unchanged — no projection layer).
 
   const { form } = useZodForm(RosettaFunctionSchema, {
-    defaultValues: identityProjection<typeof RosettaFunctionSchema>(data),
+    defaultValues: formValuesProjection<typeof RosettaFunctionSchema>(data, nodeMeta),
     mode: 'onChange',
     formRegistry: functionFormRegistry
   });
@@ -153,7 +162,7 @@ function FunctionForm({
   // node (object identity is the contract). `keepDirty: true` preserves
   // the pre-migration `keepDirtyValues: true` semantics so in-flight
   // user edits are not stomped by a graph push.
-  useExternalSync(form, data, identityProjection<typeof RosettaFunctionSchema>, {
+  useExternalSync(form, data, (n) => formValuesProjection<typeof RosettaFunctionSchema>(n, nodeMeta), {
     keepDirty: true
   });
 
@@ -198,7 +207,7 @@ function FunctionForm({
   const handleExpressionBlur = useCallback(() => {
     // Guard: a readOnly textarea cannot produce new content, so blur should
     // never trigger a mutation. Early-return to be explicit.
-    if (readOnlyProp || (data as any).isReadOnly) return;
+    if (readOnlyProp || nodeMeta.isReadOnly) return;
     const currentExpression = form.getValues('expressionText' as never) as unknown as string;
     const result = validateExpression(currentExpression);
     if (!result.valid) {
@@ -209,7 +218,7 @@ function FunctionForm({
         actions.updateExpression(nodeId, currentExpression);
       }
     }
-  }, [nodeId, actions, form, readOnlyProp, data]);
+  }, [nodeId, actions, form, readOnlyProp, nodeMeta.isReadOnly]);
 
   // ---- Output type ---------------------------------------------------------
 
@@ -314,7 +323,7 @@ function FunctionForm({
   // from <EditorActionsProvider> via `useEditorActionsContext()` per the
   // Phase 7 / US5 contract.
 
-  const isReadOnly = Boolean(readOnlyProp || d.isReadOnly);
+  const isReadOnly = Boolean(readOnlyProp || nodeMeta.isReadOnly);
 
   return (
     <EditorActionsProvider nodeId={nodeId} actions={actions as EditorFormActions} readOnly={isReadOnly}>
@@ -323,7 +332,7 @@ function FunctionForm({
           {/* Header: Namespace + Name + Badge */}
           <TypeHeader
             kind="func"
-            namespace={d.namespace}
+            namespace={nodeMeta.namespace}
             control={form.control}
             onNameChange={debouncedName}
             placeholder="Function name"

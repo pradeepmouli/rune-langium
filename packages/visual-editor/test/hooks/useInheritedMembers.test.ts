@@ -164,6 +164,7 @@ describe('buildMergedEnumValueList', () => {
 import { renderHook } from '@testing-library/react';
 import { useEffectiveMembers } from '../../src/hooks/useInheritedMembers.js';
 import type { AnyGraphNode, TypeGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 function makeDataNode(
   name: string,
@@ -185,7 +186,8 @@ function makeDataNode(
     id: `test.${name}`,
     type: 'data',
     position: { x: 0, y: 0 },
-    data
+    data,
+    meta: testMeta('test')
   } as unknown as TypeGraphNode;
 }
 
@@ -205,7 +207,8 @@ function makeEnumNode(name: string, parent: string | undefined, values: Record<s
     id: `test.${name}`,
     type: 'enum',
     position: { x: 0, y: 0 },
-    data
+    data,
+    meta: testMeta('test')
   } as unknown as TypeGraphNode;
 }
 

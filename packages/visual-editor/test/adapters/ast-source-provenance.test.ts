@@ -4,7 +4,7 @@
 /**
  * Tests for AST source provenance on graph nodes.
  *
- * Verifies that astToModel populates the AST fields on GraphNode<T>,
+ * Verifies that astToModel populates the AST fields on node.data (Dehydrated<T>),
  * preserving full Langium AST type information across
  * the AST → model → serialized-AST pipeline.
  */
@@ -14,7 +14,7 @@ import { parse } from '@rune-langium/core';
 import type { Attribute } from '@rune-langium/core';
 import { astToModel } from '../../src/adapters/ast-to-model.js';
 import { modelsToAst } from '../../src/adapters/model-to-ast.js';
-import type { GraphNode } from '../../src/types.js';
+import type { Dehydrated } from '../../src/types.js';
 import type { Data, Choice, RosettaEnumeration } from '@rune-langium/core';
 import {
   SIMPLE_INHERITANCE_SOURCE,
@@ -35,7 +35,7 @@ describe('AST source provenance on graph nodes', () => {
     const tradeNode = nodes.find((n) => n.data.name === 'Trade');
     expect(tradeNode).toBeDefined();
 
-    const data = tradeNode!.data as GraphNode<Data>;
+    const data = tradeNode!.data as Dehydrated<Data>;
     expect(data.$type).toBe('Data');
     expect(data.name).toBe('Trade');
     // Rich info preserved: superType reference is accessible
@@ -49,7 +49,7 @@ describe('AST source provenance on graph nodes', () => {
     const choiceNode = nodes.find((n) => n.data.name === 'PaymentType');
     expect(choiceNode).toBeDefined();
 
-    const data = choiceNode!.data as GraphNode<Choice>;
+    const data = choiceNode!.data as Dehydrated<Choice>;
     expect(data.$type).toBe('Choice');
     expect(data.name).toBe('PaymentType');
   });
@@ -61,7 +61,7 @@ describe('AST source provenance on graph nodes', () => {
     const enumNode = nodes.find((n) => n.data.name === 'CurrencyEnum');
     expect(enumNode).toBeDefined();
 
-    const data = enumNode!.data as GraphNode<RosettaEnumeration>;
+    const data = enumNode!.data as Dehydrated<RosettaEnumeration>;
     expect(data.$type).toBe('RosettaEnumeration');
     expect(data.name).toBe('CurrencyEnum');
     // Rich info: enumValues are accessible
@@ -79,7 +79,7 @@ describe('AST source provenance on graph members', () => {
     const { nodes } = astToModel(result.value);
 
     const tradeNode = nodes.find((n) => n.data.name === 'Trade');
-    const data = tradeNode!.data as GraphNode<Data>;
+    const data = tradeNode!.data as Dehydrated<Data>;
     const tradeDateAttr = data.attributes.find((a) => a.name === 'tradeDate');
 
     expect(tradeDateAttr).toBeDefined();
@@ -95,7 +95,7 @@ describe('AST source provenance on graph members', () => {
     const { nodes } = astToModel(result.value);
 
     const choiceNode = nodes.find((n) => n.data.name === 'PaymentType');
-    const data = choiceNode!.data as GraphNode<Choice>;
+    const data = choiceNode!.data as Dehydrated<Choice>;
     expect(data.attributes.length).toBe(2);
 
     const firstOption = data.attributes[0]!;
@@ -107,7 +107,7 @@ describe('AST source provenance on graph members', () => {
     const { nodes } = astToModel(result.value);
 
     const enumNode = nodes.find((n) => n.data.name === 'CurrencyEnum');
-    const data = enumNode!.data as GraphNode<RosettaEnumeration>;
+    const data = enumNode!.data as Dehydrated<RosettaEnumeration>;
     const usdValue = data.enumValues.find((v) => v.name === 'USD');
 
     expect(usdValue).toBeDefined();
@@ -125,7 +125,7 @@ describe('Rich metadata accessible through AST fields', () => {
     const { nodes } = astToModel(result.value);
 
     const eventNode = nodes.find((n) => n.data.name === 'Event');
-    const data = eventNode!.data as GraphNode<Data>;
+    const data = eventNode!.data as Dehydrated<Data>;
     // conditions array is accessible (even if empty for this fixture)
     expect(Array.isArray(data.conditions)).toBe(true);
   });
@@ -135,7 +135,7 @@ describe('Rich metadata accessible through AST fields', () => {
     const { nodes } = astToModel(result.value);
 
     const eventNode = nodes.find((n) => n.data.name === 'Event');
-    const data = eventNode!.data as GraphNode<Data>;
+    const data = eventNode!.data as Dehydrated<Data>;
     expect(Array.isArray(data.annotations)).toBe(true);
   });
 
@@ -144,7 +144,7 @@ describe('Rich metadata accessible through AST fields', () => {
     const { nodes } = astToModel(result.value);
 
     const tradeNode = nodes.find((n) => n.data.name === 'Trade');
-    const data = tradeNode!.data as GraphNode<Data>;
+    const data = tradeNode!.data as Dehydrated<Data>;
     const productAttr = data.attributes.find((a) => a.name === 'product');
 
     expect(productAttr!.typeCall).toBeDefined();

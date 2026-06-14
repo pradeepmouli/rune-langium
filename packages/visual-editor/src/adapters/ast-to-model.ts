@@ -4,12 +4,11 @@
 /**
  * AST → Model adapter.
  *
- * Converts Rune DSL AST nodes into GraphNode<T> objects for ReactFlow.
- *
- * The visual editor intentionally uses the AST shape directly, but the
- * runtime objects still carry Langium internals and resolved reference
- * targets that should not reach the client/editor model. We therefore
- * strip those additional fields without introducing a bespoke projection.
+ * Converts Rune DSL AST nodes into TypeGraphNode objects for ReactFlow:
+ * `node.data` is the pure `Dehydrated<T>` domain payload (lossless, strict
+ * `{ $refText }` refs), produced via `parsedAdapter.dehydrate` for live AST
+ * elements and `curatedAdapter.parse` for pre-dehydrated JSON; `node.meta`
+ * carries the UI/editor metadata sibling.
  */
 
 import {
@@ -20,22 +19,14 @@ import {
   isRosettaBasicType,
   isRosettaRecordType,
   isRosettaTypeAlias,
-  isAnnotation
+  isAnnotation,
+  parsedAdapter,
+  curatedAdapter
 } from '@rune-langium/core';
-import type {
-  RosettaModel,
-  RosettaRootElement,
-  Data,
-  Choice,
-  RosettaEnumeration,
-  RosettaFunction,
-  RosettaRecordType,
-  RosettaTypeAlias
-} from '@rune-langium/core';
-import type { TypeGraphNode, TypeGraphEdge, GraphNode, GraphFilters, TypeKind } from '../types.js';
+import type { RosettaModel, RosettaRootElement } from '@rune-langium/core';
+import type { TypeGraphNode, TypeGraphEdge, GraphNodeMeta, GraphFilters, TypeKind } from '../types.js';
 import { getTypeRefText, getRefText, formatCardinality, resolveNodeKind } from './model-helpers.js';
-import { stripAdditionalAstFields } from './strip-additional-ast-fields.js';
-import { makeNodeId, makeEdgeId, withGraphMetadata } from '../store/node-projection.js';
+import { makeNodeId, makeEdgeId } from '../store/node-projection.js';
 
 // ---------------------------------------------------------------------------
 // Options / Result
@@ -73,6 +64,18 @@ function passesFilter(kind: TypeKind, namespace: string, name: string, filters?:
 // Per-kind node builders
 // ---------------------------------------------------------------------------
 
+/**
+ * True when the element is a live (or structurally-cloned) Langium AST node —
+ * it carries runtime linkage (`$container`/`$cstNode`/`$document`) that must be
+ * stripped via `parsedAdapter.dehydrate`. Plain already-dehydrated objects
+ * (curated JSON, synthetic fixtures) carry none of these and pass through the
+ * `curatedAdapter.parse` boundary (an identity cast).
+ */
+function isLiveAstElement(element: object): boolean {
+  const e = element as { $container?: unknown; $cstNode?: unknown; $document?: unknown };
+  return e.$container !== undefined || e.$cstNode !== undefined || e.$document !== undefined;
+}
+
 function buildGraphNode<T extends { $type: string; name: string }>(
   element: T,
   namespace: string,
@@ -80,22 +83,32 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   isReadOnly: boolean
 ): TypeGraphNode {
   const nodeType = resolveNodeKind(element);
-  const astData = stripAdditionalAstFields(element);
-  // Merge AST fields + GraphMetadata via the canonical helper.
+  // Phase 3 step 3: `data` is the PURE domain payload (no UI metadata merged
+  // in); all UI/editor metadata lives on the `meta` sibling exclusively.
+  // Parsed elements go through the LOSSLESS `parsedAdapter.dehydrate`
+  // (strict `{ $refText }` refs, `$namespace` stamped, `$cstText` preserved);
+  // curated/pre-dehydrated JSON goes through `curatedAdapter.parse`.
   // Note: `comments` is intentionally absent here (not set at read time).
-  const data = withGraphMetadata(astData as Record<string, unknown>, {
+  // langium is not a direct visual-editor dependency — thread the
+  // adapters' AstNode constraint structurally.
+  const data = (
+    isLiveAstElement(element)
+      ? parsedAdapter.dehydrate(element as unknown as Parameters<typeof parsedAdapter.dehydrate>[0])
+      : curatedAdapter.parse(element)
+  ) as unknown as TypeGraphNode['data'];
+  const meta: GraphNodeMeta = {
     namespace,
-    position: { x: 0, y: 0 },
     errors: [],
     isReadOnly,
     hasExternalRefs: false
-  });
+  };
 
   return {
     id: nodeId,
     type: nodeType,
     position: { x: 0, y: 0 },
-    data
+    data,
+    meta
   };
 }
 
@@ -144,8 +157,8 @@ function getAttributeEdges(
 /**
  * Convert RosettaModel AST roots into ReactFlow nodes and edges.
  *
- * Each graph node's `data` IS the AstNodeModel (AST fields spread)
- * plus GraphMetadata (namespace, position, errors, etc.).
+ * Each graph node's `data` IS the pure domain payload (AST fields only);
+ * UI/editor metadata (namespace, errors, isReadOnly, …) lives on `node.meta`.
  */
 export function astToModel(
   models: RosettaModel | RosettaModel[] | unknown | unknown[],
@@ -204,8 +217,8 @@ export function astToModel(
 
     // Inheritance edges
     if ($type === 'Data') {
-      const data = d as GraphNode<Data>;
-      const parentName = getRefText(data.superType as { $refText?: string } | undefined);
+      // `$type` is the union discriminant — `d` narrows to Dehydrated<Data>.
+      const parentName = getRefText(d.superType);
       if (parentName) {
         const parentNodeId = nameToNodeId.get(parentName);
         if (parentNodeId) {
@@ -219,11 +232,10 @@ export function astToModel(
         }
       }
       // Attribute reference edges
-      edges.push(...getAttributeEdges(node.id, (data.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     } else if ($type === 'Choice') {
-      const choice = d as GraphNode<Choice>;
       // Choice option edges
-      for (const opt of (choice.attributes ?? []) as unknown as MemberLikeRef[]) {
+      for (const opt of (d.attributes ?? []) as unknown as MemberLikeRef[]) {
         const typeName = getTypeRefText(opt.typeCall);
         if (typeName) {
           const targetNodeId = nameToNodeId.get(typeName);
@@ -239,8 +251,7 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaEnumeration') {
-      const enumData = d as GraphNode<RosettaEnumeration>;
-      const parentName = getRefText(enumData.parent as { $refText?: string } | undefined);
+      const parentName = getRefText(d.parent);
       if (parentName) {
         const parentNodeId = nameToNodeId.get(parentName);
         if (parentNodeId) {
@@ -254,11 +265,10 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaFunction') {
-      const func = d as GraphNode<RosettaFunction>;
       // Input parameter type references
-      edges.push(...getAttributeEdges(node.id, (func.inputs ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.inputs ?? []) as unknown as MemberLikeRef[], nameToNodeId));
       // Output type reference
-      const outputTypeName = getTypeRefText((func.output as unknown as MemberLikeRef | undefined)?.typeCall);
+      const outputTypeName = getTypeRefText((d.output as unknown as MemberLikeRef | undefined)?.typeCall);
       if (outputTypeName) {
         const targetNodeId = nameToNodeId.get(outputTypeName);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -272,7 +282,7 @@ export function astToModel(
         }
       }
       // Super-function inheritance
-      const superName = getRefText(func.superFunction as { $refText?: string } | undefined);
+      const superName = getRefText(d.superFunction);
       if (superName) {
         const parentNodeId = nameToNodeId.get(superName);
         if (parentNodeId) {
@@ -286,11 +296,9 @@ export function astToModel(
         }
       }
     } else if ($type === 'RosettaRecordType') {
-      const record = d as GraphNode<RosettaRecordType>;
-      edges.push(...getAttributeEdges(node.id, (record.features ?? []) as unknown as MemberLikeRef[], nameToNodeId));
+      edges.push(...getAttributeEdges(node.id, (d.features ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     } else if ($type === 'RosettaTypeAlias') {
-      const alias = d as GraphNode<RosettaTypeAlias>;
-      const targetType = getTypeRefText((alias as unknown as { typeCall?: { type?: { $refText?: string } } }).typeCall);
+      const targetType = getTypeRefText(d.typeCall as { type?: { $refText?: string } } | undefined);
       if (targetType) {
         const targetNodeId = nameToNodeId.get(targetType);
         if (targetNodeId && targetNodeId !== node.id) {
@@ -306,27 +314,22 @@ export function astToModel(
     }
   }
 
-  // Update hasExternalRefs
+  // Update hasExternalRefs on the `node.meta` sibling (data stays pure domain)
   for (const node of nodes) {
     const d = node.data;
     const $type = d.$type;
+    let members: MemberLikeRef[] | null = null;
     if ($type === 'Data' || $type === 'Annotation') {
-      const members = ((d as GraphNode<Data>).attributes ?? []) as unknown as MemberLikeRef[];
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
-        const t = getTypeRefText(m.typeCall);
-        return t && !nameToNodeId.has(t);
-      });
+      members = (d.attributes ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaFunction') {
-      const members = ((d as GraphNode<RosettaFunction>).inputs ?? []) as unknown as MemberLikeRef[];
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
-        const t = getTypeRefText(m.typeCall);
-        return t && !nameToNodeId.has(t);
-      });
+      members = (d.inputs ?? []) as unknown as MemberLikeRef[];
     } else if ($type === 'RosettaRecordType') {
-      const members = ((d as GraphNode<RosettaRecordType>).features ?? []) as unknown as MemberLikeRef[];
-      (d as { hasExternalRefs: boolean }).hasExternalRefs = members.some((m) => {
+      members = (d.features ?? []) as unknown as MemberLikeRef[];
+    }
+    if (members) {
+      node.meta.hasExternalRefs = members.some((m) => {
         const t = getTypeRefText(m.typeCall);
-        return t && !nameToNodeId.has(t);
+        return Boolean(t && !nameToNodeId.has(t));
       });
     }
   }

@@ -26,6 +26,7 @@ import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
 import { TypeAliasForm } from '../../src/components/editors/TypeAliasForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions, TypeGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,6 +112,7 @@ describe('DataTypeForm – read-only mode contract', () => {
       <DataTypeForm
         nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
@@ -149,6 +151,7 @@ describe('DataTypeForm – read-only mode contract', () => {
       <DataTypeForm
         nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
@@ -170,6 +173,7 @@ describe('DataTypeForm – read-only mode contract', () => {
       <DataTypeForm
         nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
@@ -184,6 +188,7 @@ describe('DataTypeForm – read-only mode contract', () => {
       <DataTypeForm
         nodeId="test.LockedTrade"
         data={makeReadOnlyNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
@@ -209,6 +214,7 @@ describe('DataTypeForm – read-only mode contract', () => {
       <DataTypeForm
         nodeId="test.LockedTrade"
         data={editableNode}
+        meta={testMeta('test.model')}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
       />
@@ -288,6 +294,7 @@ describe('EnumForm – read-only mode contract', () => {
       <EnumForm
         nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
       />
@@ -305,6 +312,7 @@ describe('EnumForm – read-only mode contract', () => {
       <EnumForm
         nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
       />
@@ -317,6 +325,7 @@ describe('EnumForm – read-only mode contract', () => {
       <EnumForm
         nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
       />
@@ -335,6 +344,7 @@ describe('EnumForm – read-only mode contract', () => {
       <EnumForm
         nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
       />
@@ -350,6 +360,7 @@ describe('EnumForm – read-only mode contract', () => {
       <EnumForm
         nodeId="test.enums.LockedCurrencyEnum"
         data={makeReadOnlyEnumNode()}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
       />
@@ -417,6 +428,7 @@ describe('ChoiceForm – read-only mode contract', () => {
       <ChoiceForm
         nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
       />
@@ -434,6 +446,7 @@ describe('ChoiceForm – read-only mode contract', () => {
       <ChoiceForm
         nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
       />
@@ -446,6 +459,7 @@ describe('ChoiceForm – read-only mode contract', () => {
       <ChoiceForm
         nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
       />
@@ -470,6 +484,7 @@ describe('ChoiceForm – read-only mode contract', () => {
       <ChoiceForm
         nodeId="test.model.LockedPaymentType"
         data={makeReadOnlyChoiceNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={CHOICE_AVAILABLE_TYPES}
         actions={makeChoiceActions()}
       />
@@ -559,6 +574,7 @@ describe('FunctionForm – read-only mode contract', () => {
       <FunctionForm
         nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
       />
@@ -576,6 +592,7 @@ describe('FunctionForm – read-only mode contract', () => {
       <FunctionForm
         nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
       />
@@ -590,6 +607,7 @@ describe('FunctionForm – read-only mode contract', () => {
       <FunctionForm
         nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
       />
@@ -611,6 +629,7 @@ describe('FunctionForm – read-only mode contract', () => {
       <FunctionForm
         nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
       />
@@ -626,6 +645,7 @@ describe('FunctionForm – read-only mode contract', () => {
       <FunctionForm
         nodeId="test.model.LockedCalculateNotional"
         data={makeReadOnlyFuncNode()}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={FUNC_AVAILABLE_TYPES}
         actions={makeFuncActions()}
       />
@@ -704,6 +724,7 @@ describe('TypeAliasForm – read-only mode contract', () => {
       <TypeAliasForm
         nodeId="test.aliases.LockedShortText"
         data={makeReadOnlyTypeAliasNode()}
+        meta={testMeta('test.aliases', { isReadOnly: true })}
         availableTypes={TYPE_ALIAS_AVAILABLE_TYPES}
         actions={makeTypeAliasActions()}
       />
@@ -721,6 +742,7 @@ describe('TypeAliasForm – read-only mode contract', () => {
       <TypeAliasForm
         nodeId="test.aliases.LockedShortText"
         data={makeReadOnlyTypeAliasNode()}
+        meta={testMeta('test.aliases', { isReadOnly: true })}
         availableTypes={TYPE_ALIAS_AVAILABLE_TYPES}
         actions={makeTypeAliasActions()}
       />
@@ -736,6 +758,7 @@ describe('TypeAliasForm – read-only mode contract', () => {
       <TypeAliasForm
         nodeId="test.aliases.LockedShortText"
         data={makeReadOnlyTypeAliasNode()}
+        meta={testMeta('test.aliases', { isReadOnly: true })}
         availableTypes={TYPE_ALIAS_AVAILABLE_TYPES}
         actions={makeTypeAliasActions()}
       />
@@ -806,13 +829,15 @@ function makeParentNodes(childData: AnyGraphNode, parentAttrs: Record<string, un
       position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta('test')
   } as TypeGraphNode;
   const childNode: TypeGraphNode = {
     id: 'test.LockedChild',
     type: 'data',
     position: { x: 0, y: 0 },
-    data: childData
+    data: childData,
+    meta: testMeta('test')
   } as TypeGraphNode;
   return [childNode, parentNode];
 }
@@ -836,6 +861,7 @@ describe('DataTypeForm – read-only mode with inherited attributes', () => {
       <DataTypeForm
         nodeId="test.LockedChild"
         data={childData}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
         allNodes={allNodes}
@@ -863,6 +889,7 @@ describe('DataTypeForm – read-only mode with inherited attributes', () => {
       <DataTypeForm
         nodeId="test.LockedChild"
         data={childData}
+        meta={testMeta('test.model', { isReadOnly: true })}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
         allNodes={allNodes}
@@ -890,6 +917,7 @@ describe('DataTypeForm – read-only mode with inherited attributes', () => {
       <DataTypeForm
         nodeId="test.LockedChild"
         data={editableChild}
+        meta={testMeta('test.model')}
         availableTypes={AVAILABLE_TYPES}
         actions={makeActions()}
         allNodes={allNodes}
@@ -940,13 +968,15 @@ function makeParentEnumNodes(childData: AnyGraphNode, parentValues: Record<strin
       position: { x: 0, y: 0 },
       hasExternalRefs: false,
       errors: []
-    } as AnyGraphNode
+    } as AnyGraphNode,
+    meta: testMeta('test.enums')
   } as TypeGraphNode;
   const childNode: TypeGraphNode = {
     id: 'test.enums.LockedChildEnum',
     type: 'enum',
     position: { x: 0, y: 0 },
-    data: childData
+    data: childData,
+    meta: testMeta('test.enums')
   } as TypeGraphNode;
   return [childNode, parentNode];
 }
@@ -970,6 +1000,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
       <EnumForm
         nodeId="test.enums.LockedChildEnum"
         data={childData}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
         allNodes={allNodes}
@@ -998,6 +1029,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
       <EnumForm
         nodeId="test.enums.LockedChildEnum"
         data={childData}
+        meta={testMeta('test.enums', { isReadOnly: true })}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
         allNodes={allNodes}
@@ -1027,6 +1059,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
       <EnumForm
         nodeId="test.enums.LockedChildEnum"
         data={editableChild}
+        meta={testMeta('test.enums')}
         availableTypes={ENUM_AVAILABLE_TYPES}
         actions={makeEnumActions()}
         allNodes={allNodes}

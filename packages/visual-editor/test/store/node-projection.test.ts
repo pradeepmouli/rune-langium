@@ -1,15 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect } from 'vitest';
-import type { GraphMetadata } from '../../src/types.js';
 import { makeNodeId, nameFromNodeId, splitNodeId } from '../../src/store/node-projection.js';
 import { makeEdgeId, parseEdgeId } from '../../src/store/node-projection.js';
-import {
-  GRAPH_METADATA_KEYS,
-  stripGraphMetadata,
-  astRelevantProjection,
-  withGraphMetadata
-} from '../../src/store/node-projection.js';
+import { astRelevantProjection } from '../../src/store/node-projection.js';
 import { getMemberArray, ensureMemberArray, forEachMember } from '../../src/store/node-projection.js';
 import { toNodesById, nodesFromMap, toEdgesById, edgesFromMap } from '../../src/store/node-projection.js';
 
@@ -59,36 +53,24 @@ describe('node-projection edge-id builders (V3)', () => {
   });
 });
 
-describe('node-projection metadata projection (V2)', () => {
-  const data = {
-    $type: 'Data', name: 'Foo', attributes: [],
-    namespace: 'ns', position: { x: 1, y: 2 }, errors: [], isReadOnly: false, hasExternalRefs: false, comments: 'c'
-  } as Record<string, unknown>;
-
-  it('GRAPH_METADATA_KEYS is the strip set (no `deferred`)', () => {
-    expect([...GRAPH_METADATA_KEYS].sort()).toEqual(
-      ['comments', 'errors', 'hasExternalRefs', 'isReadOnly', 'namespace', 'position'].sort()
-    );
-    expect(GRAPH_METADATA_KEYS.has('deferred')).toBe(false);
+describe('node-projection content-fingerprint projection (V2)', () => {
+  it('astRelevantProjection passes pure domain data through unchanged', () => {
+    const data = { $type: 'Data', name: 'Foo', attributes: [], definition: 'd' } as Record<string, unknown>;
+    expect(astRelevantProjection(data as never)).toEqual(data);
   });
-  it('stripGraphMetadata removes only metadata keys, keeps AST fields', () => {
-    const out = stripGraphMetadata(data as never);
-    expect(out).toEqual({ $type: 'Data', name: 'Foo', attributes: [] });
-  });
-  it('astRelevantProjection excludes position/errors/hasExternalRefs but keeps namespace/comments', () => {
-    const out = astRelevantProjection(data as never) as Record<string, unknown>;
+  it('astRelevantProjection tolerates stale legacy view-state keys (position/errors/hasExternalRefs)', () => {
+    // Phase 3 step 3: data is the pure domain payload, so these keys can no
+    // longer occur — the exclusion set is a tolerance guard against a stale
+    // producer re-introducing view-state churn into the fingerprint.
+    const stale = {
+      $type: 'Data', name: 'Foo', attributes: [],
+      position: { x: 1, y: 2 }, errors: [], hasExternalRefs: false
+    } as Record<string, unknown>;
+    const out = astRelevantProjection(stale as never) as Record<string, unknown>;
     expect('position' in out).toBe(false);
     expect('errors' in out).toBe(false);
     expect('hasExternalRefs' in out).toBe(false);
-    expect(out.namespace).toBe('ns');
-    expect(out.comments).toBe('c');
-  });
-  it('withGraphMetadata merges AST data + metadata', () => {
-    const node = withGraphMetadata({ $type: 'Data', name: 'Foo' } as never, {
-      namespace: 'ns', position: { x: 0, y: 0 }, errors: [], hasExternalRefs: false
-    });
-    expect((node as Record<string, unknown>).name).toBe('Foo');
-    expect((node as Record<string, unknown>).namespace).toBe('ns');
+    expect(out.name).toBe('Foo');
   });
 });
 
@@ -129,18 +111,5 @@ describe('node-projection array↔Map derivation (V5/V6)', () => {
     const map = toEdgesById(edges);
     expect(map.get('e1')).toBe(edges[0]);
     expect(edgesFromMap(map)).toEqual(edges);
-  });
-});
-
-describe('node-projection parity guards', () => {
-  it('GRAPH_METADATA_KEYS matches the strip-relevant keys of GraphMetadata', () => {
-    // GraphMetadata also has `deferred` (not stripped) + an index signature; the
-    // strip set is the explicit non-deferred metadata fields. This test fails if a
-    // new GraphMetadata field is added without deciding its strip behavior.
-    const known: Array<keyof GraphMetadata> = [
-      'namespace', 'position', 'errors', 'isReadOnly', 'hasExternalRefs', 'comments', 'deferred'
-    ];
-    const stripExpected = known.filter((k) => k !== 'deferred');
-    expect([...GRAPH_METADATA_KEYS].sort()).toEqual([...stripExpected].sort());
   });
 });

@@ -140,14 +140,15 @@ describe('EditorStore — new actions', () => {
   // -----------------------------------------------------------------------
 
   describe('updateComments', () => {
-    it('sets comments on a node', () => {
+    it('sets comments on a node (meta sibling — data stays pure)', () => {
       const nodes = store.getState().nodes;
       const tradeNode = nodes.find((n) => n.data.name === 'Trade');
 
       store.getState().updateComments(tradeNode!.id, 'TODO: add more attributes');
 
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      expect(updated!.data['comments']).toBe('TODO: add more attributes');
+      expect(updated!.meta.comments).toBe('TODO: add more attributes');
+      expect(updated!.data as unknown as Record<string, unknown>).not.toHaveProperty('comments');
     });
   });
 
@@ -789,7 +790,7 @@ describe('EditorStore — updateAttributeType on Choice nodes — cross-namespac
     expect(choiceNode).toBeDefined();
 
     // Find the "fast" Wire — it should get the namespace qualifier because "slow" Wire also exists.
-    const fastWire = nodes.find((n) => n.data.name === 'Wire' && (n.data as any).namespace === 'payment.fast');
+    const fastWire = nodes.find((n) => n.data.name === 'Wire' && n.meta.namespace === 'payment.fast');
     expect(fastWire).toBeDefined();
 
     // Drop fast Wire onto the TransferMethod's existing Wire arm.
@@ -1460,6 +1461,37 @@ describe('EditorStore — setInheritance (Finding 3: cross-namespace qualificati
 });
 
 // ---------------------------------------------------------------------------
+// setEnumParent — cross-namespace qualification (mirrors setInheritance)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — setEnumParent (cross-namespace qualification)', () => {
+  it('writes a QUALIFIED parent $refText when the parent name collides across namespaces', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('enum', 'SideEnum', 'cdm.trade');
+    store.getState().createType('enum', 'BaseEnum', 'ns.a');
+    const bBaseId = store.getState().createType('enum', 'BaseEnum', 'ns.b');
+
+    store.getState().setEnumParent(childId, bBaseId);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const parent = (node.data as { parent?: { $refText?: string } }).parent;
+    expect(parent?.$refText).toBe('ns.b.BaseEnum');
+  });
+
+  it('writes the BARE parent $refText when the parent name is unambiguous', () => {
+    const store = createEditorStore();
+    const childId = store.getState().createType('enum', 'SideEnum', 'cdm.trade');
+    const baseId = store.getState().createType('enum', 'BaseEnum', 'cdm.trade');
+
+    store.getState().setEnumParent(childId, baseId);
+
+    const node = store.getState().nodes.find((n) => n.id === childId)!;
+    const parent = (node.data as { parent?: { $refText?: string } }).parent;
+    expect(parent?.$refText).toBe('BaseEnum');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Function input param operations (R-func-input)
 // ---------------------------------------------------------------------------
 
@@ -1926,11 +1958,11 @@ describe('EditorStore — metadata actions — id-rooted patches (Wave F)', () =
   });
 
   // -----------------------------------------------------------------------
-  // updateComments — nodes-rooted patch at ['nodes', id, 'data', 'comments']
+  // updateComments — nodes-rooted patch at ['nodes', id, 'meta', 'comments']
   // -----------------------------------------------------------------------
 
   describe('updateComments — id-rooted patch (Wave F)', () => {
-    it('captures a patch rooted at nodes → nodeId → data.comments', () => {
+    it('captures a patch rooted at nodes → nodeId → meta.comments', () => {
       const nodes = store.getState().nodes;
       const tradeNode = nodes.find((n) => n.data.name === 'Trade');
       expect(tradeNode).toBeDefined();

@@ -14,7 +14,7 @@ import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode, TypeKind } from '../../types.js';
 import { resolveNodeKind, getTypeRefText, formatCardinality, getRefText } from '../../adapters/model-helpers.js';
-import { getHandlePositions, useNavigation, resolveTypeNodeId } from './NavigationContext.js';
+import { getHandlePositions, useNavigation, resolveTypeNodeId, useNodeMetaErrors } from './NavigationContext.js';
 import { NodeKindBadge } from './NodeKindBadge.js';
 
 const KIND_CSS: Record<string, string> = {
@@ -25,13 +25,15 @@ const KIND_CSS: Record<string, string> = {
   annotation: 'rune-node-annotation'
 };
 
-export const GenericNode = memo(function GenericNode({ data, selected }: NodeProps) {
+export const GenericNode = memo(function GenericNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
   const kind = resolveNodeKind(d) as TypeKind;
   const kindCss = KIND_CSS[kind] ?? '';
   const parentName = getRefText((d as any).superType);
   const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
+  // Validation errors live on the node.meta sibling (not on data).
+  const nodeErrors = useNodeMetaErrors(id);
   // For functions, show inputs as members; otherwise show attributes/features
   const members = (
     kind === 'func' ? ((d as any).inputs ?? []) : ((d as any).attributes ?? (d as any).features ?? [])
@@ -133,9 +135,9 @@ export const GenericNode = memo(function GenericNode({ data, selected }: NodePro
             </div>
           </div>
         )}
-        {(d as any).errors?.length > 0 && (
+        {nodeErrors.length > 0 && (
           <div className="rune-node-errors">
-            {((d as any).errors as any[]).map((err: any, i: number) => (
+            {nodeErrors.map((err, i) => (
               <div key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}>{err.message}</div>
             ))}
           </div>

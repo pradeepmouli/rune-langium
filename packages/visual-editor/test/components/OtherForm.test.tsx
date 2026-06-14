@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { OtherForm } from '../../src/components/panels/OtherForm.js';
 import type { AnyGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 describe('OtherForm', () => {
   const mockNodeData: AnyGraphNode = {
@@ -42,16 +43,16 @@ describe('OtherForm', () => {
   } as AnyGraphNode;
 
   it('renders nothing when nodeData is null', () => {
-    const { container } = render(<OtherForm nodeData={null} />);
+    const { container } = render(<OtherForm nodeData={null} meta={testMeta('test.model')} />);
     expect(container.textContent).toBe('');
   });
 
   it('renders validation errors when present', () => {
-    const dataWithErrors: AnyGraphNode = {
-      ...mockNodeData,
+    // Validation errors are UI metadata — they live on the node.meta sibling.
+    const meta = testMeta('test.model', {
       errors: [{ nodeId: 'test', severity: 'error', message: 'Circular inheritance detected' }]
-    } as AnyGraphNode;
-    render(<OtherForm nodeData={dataWithErrors} />);
+    });
+    render(<OtherForm nodeData={mockNodeData} meta={meta} />);
     expect(screen.getByText('Circular inheritance detected')).toBeTruthy();
   });
 });

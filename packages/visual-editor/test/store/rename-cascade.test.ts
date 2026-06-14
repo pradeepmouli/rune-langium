@@ -172,7 +172,7 @@ describe('renameType — cascade', () => {
 
     const alphaTradeId = s
       .getState()
-      .nodes.find((n) => n.data.name === 'Trade' && n.data.namespace === 'alpha')!.id;
+      .nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
     const holderId = s.getState().nodes.find((n) => n.data.name === 'Holder')!.id;
 
     // updateAttributeType disambiguates the $refText to the qualified `alpha.Trade`.
@@ -199,7 +199,7 @@ describe('renameType — cascade', () => {
 
     const alphaTradeId = s
       .getState()
-      .nodes.find((n) => n.data.name === 'Trade' && n.data.namespace === 'alpha')!.id;
+      .nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
     const pickId = s.getState().nodes.find((n) => n.data.name === 'Pick')!.id;
 
     // Add the option, then disambiguate it to alpha.Trade — updateAttributeType
@@ -216,7 +216,7 @@ describe('renameType — cascade', () => {
 
     const newAlphaId = s
       .getState()
-      .nodes.find((n) => n.data.name === 'Execution' && n.data.namespace === 'alpha')!.id;
+      .nodes.find((n) => n.data.name === 'Execution' && n.meta.namespace === 'alpha')!.id;
     const optEdge = s
       .getState()
       .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option');

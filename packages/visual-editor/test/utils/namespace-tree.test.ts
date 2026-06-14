@@ -12,6 +12,7 @@ import {
   flattenNamespaceTree
 } from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode } from '../../src/types.js';
+import { testMeta } from '../helpers/node-meta.js';
 
 const KIND_TO_AST_TYPE: Record<string, string> = {
   data: 'Data',
@@ -31,7 +32,8 @@ function makeNode(ns: string, name: string, kind: string = 'data'): TypeGraphNod
       namespace: ns,
       hasExternalRefs: false,
       errors: []
-    } as any
+    } as any,
+    meta: testMeta(ns)
   };
 }
 

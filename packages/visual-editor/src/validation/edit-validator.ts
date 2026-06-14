@@ -86,7 +86,7 @@ export function detectDuplicateName(
   }
 
   // Check for duplicate type name in the namespace
-  return nodes.some((n) => n.data.name === name && n.data.namespace === namespace);
+  return nodes.some((n) => n.data.name === name && n.meta.namespace === namespace);
 }
 
 // ---------------------------------------------------------------------------
@@ -248,7 +248,7 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
   // Check for duplicate type names within each namespace
   const namespaceNames = new Map<string, Map<string, string[]>>();
   for (const node of nodes) {
-    const ns = node.data.namespace;
+    const ns = node.meta.namespace;
     if (!namespaceNames.has(ns)) {
       namespaceNames.set(ns, new Map());
     }

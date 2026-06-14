@@ -121,6 +121,37 @@ describe('Round-trip edits', () => {
 
     expect(text).toContain('type Foo extends SuperBase:');
   });
+
+  it('round-trips CROSS-NAMESPACE inheritance with a QUALIFIED superType ref (serialize → re-parse)', async () => {
+    // X/X⁻¹ seam: setInheritance (X) writes a namespace-qualified $refText when
+    // the parent's bare name collides across namespaces; modelsToAst+serialize
+    // (X⁻¹) must emit that qualified ref — a bare "Base" would mislink on reparse.
+    const store = createEditorStore();
+    store.getState().createType('data', 'Base', 'ns.a');
+    const bBaseId = store.getState().createType('data', 'Base', 'ns.b');
+    const childId = store.getState().createType('data', 'Child', 'cdm.x');
+    store.getState().addAttribute(childId, 'field', 'string', '1..1');
+
+    store.getState().setInheritance(childId, bBaseId);
+    // Sanity: the store half already qualified the ref (pinned elsewhere).
+    const childNode = store.getState().nodes.find((n) => n.id === childId)!;
+    expect((childNode.data as { superType?: { $refText?: string } }).superType?.$refText).toBe('ns.b.Base');
+
+    const models = modelsToAst(store.getState().nodes, store.getState().edges);
+    const childModel = models.find((m) => m.name === 'cdm.x')!;
+    const text = serializeModel(childModel);
+
+    // Serialized text must carry the QUALIFIED ref, not the bare name.
+    expect(text).toContain('type Child extends ns.b.Base:');
+
+    // Re-parse: the qualified $refText survives the full round trip.
+    const reparsed = await parse(text);
+    const elements = (reparsed.value as { elements?: unknown[] }).elements ?? [];
+    const child = elements.find((e) => (e as { name?: string }).name === 'Child') as {
+      superType?: { $refText?: string };
+    };
+    expect(child.superType?.$refText).toBe('ns.b.Base');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -191,7 +222,7 @@ describe('Phase 3D-2 generated-accessor conformance (T060-3D2)', () => {
   it('addInputParam (via addRosettaFunctionInputs) writes to graph node data correctly', async () => {
     // Note: serializeModel silently drops RosettaFunction elements (documented limitation).
     // We verify the accessor wrote correctly at the graph-data level via modelsToAst,
-    // which strips GraphMetadata and exposes the raw AST model on the node.
+    // which exposes the pure domain model carried on node.data.
     const result = await parse(FUNCTION_SOURCE);
     expect(result.value).toBeDefined();
 
