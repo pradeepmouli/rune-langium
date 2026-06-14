@@ -30,7 +30,7 @@
     "@types/node": "^25.9.1",
     "isomorphic-git": "^1.38.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   },
   "publishConfig": {
     "access": "public"
