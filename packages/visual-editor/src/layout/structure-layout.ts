@@ -286,19 +286,28 @@ function rowIsExpandable(typeKind: string): boolean {
  * for the node's content width.
  *
  * Calibrated against the rendered header (`.rune-node-header`): tightened
- * --space-2 L/R padding (16), kind badge ≈ 46, badge/name/meta gap --space-1
- * (4), name ≈ 9px/char, and — when the node carries doc/conditions/annotations —
+ * --space-2 L/R padding (16), badge width per label text (8px/char + 8px
+ * chrome — "Data"→40, "Function"→72), badge/name/meta gap --space-1 (4),
+ * name ≈ 9px/char, and — when the node carries doc/conditions/annotations —
  * the `StructureMetaIndicators` cluster (gap 4 + ≈ 20 for up to three compact
  * indicators). Must stay in sync with the `.rune-node-*--structure
  * .rune-node-header` padding/gap in styles.css so the node hugs the header.
+ *
+ * `badgeLabel` is the text rendered inside the badge (e.g. "Data", "Function").
+ * Different kinds render different badge widths; passing the label lets the
+ * estimate account for the actual rendered text rather than a flat constant.
  */
-function estimateHeaderWidth(name: string, hasMeta: boolean): number {
+function estimateHeaderWidth(name: string, hasMeta: boolean, badgeLabel: string = 'Data'): number {
   const HEADER_PADDING = 16; // --space-2 left + right
-  const KIND_BADGE = 46;
+  // Measured at 1×: "FUNCTION" (8 chars) → 77px offsetWidth.
+  // 8 chars × 8px + 0.5px letter-spacing × 8 + 4px×2 padding + 1px×2 border = 77px.
+  const BADGE_CHAR_W = 8.5; // base char width + letter-spacing share
+  const BADGE_CHROME = 10; // 4px×2 padding + 1px×2 border
+  const kindBadgeWidth = badgeLabel.length * BADGE_CHAR_W + BADGE_CHROME;
   const BADGE_GAP = 4; // --space-1
   const NAME_CHAR_W = 9;
   const META_CLUSTER = hasMeta ? 4 + 20 : 0; // gap + indicator cluster (≈ measured 20px)
-  return HEADER_PADDING + KIND_BADGE + BADGE_GAP + name.length * NAME_CHAR_W + META_CLUSTER;
+  return HEADER_PADDING + kindBadgeWidth + BADGE_GAP + name.length * NAME_CHAR_W + META_CLUSTER;
 }
 
 /**
@@ -441,7 +450,7 @@ function sizeData(
       expandable: rowIsExpandable(r.typeKind)
     }))
   );
-  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node));
+  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node), 'Data');
   // Wrapper dimensions = inner content + NODE_PADDING on the sides (×2) and
   // bottom only for the expansion column (the rows stack carries its own
   // DATA_ROWS_PADDING bottom). rightColumnAbsBottom is measured from the
@@ -502,7 +511,7 @@ function sizeChoice(
   const rowsColWidth = Math.max(
     // Choice arms always expand into their referenced type, so reserve chevron room.
     estimateRowsColWidth(node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '', expandable: true }))),
-    estimateHeaderWidth(node.name, nodeHasMeta(node))
+    estimateHeaderWidth(node.name, nodeHasMeta(node), 'Choice')
   );
   const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom);
@@ -530,7 +539,7 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
   // cluster (StructureEnumNode has no doc/annotation/condition fields).
   const rowsColWidth = Math.max(
     estimateRowsColWidth(node.values.map((v) => ({ name: v, typeName: '', card: '' }))),
-    estimateHeaderWidth(node.name, false)
+    estimateHeaderWidth(node.name, false, 'Enum')
   );
   return {
     width: rowsColWidth,
@@ -583,9 +592,11 @@ function sizeFunction(node: StructureFunctionNode): SizedNode {
 
   let contentBottom = inputStackBottom;
   if (node.outputRow) {
-    // The separator sits between the last input row and the output row, so the
-    // output center is offset by the input stack bottom + the separator footprint.
-    const outputTop = inputStackBottom + FUNCTION_OUTPUT_SEP_HEIGHT;
+    // The separator is a flex item inside .rune-node-rows (row-gap: DATA_ROW_GAP).
+    // It gets a row-gap BEFORE it (between last input row and sep) and AFTER it
+    // (between sep and output row) — 2 × DATA_ROW_GAP on top of the separator's
+    // own margin/height (FUNCTION_OUTPUT_SEP_HEIGHT = 9px).
+    const outputTop = inputStackBottom + FUNCTION_OUTPUT_SEP_HEIGHT + 2 * DATA_ROW_GAP;
     rowOffsets.set(FUNCTION_OUTPUT_ROW_KEY, outputTop + DATA_ROW_HEIGHT / 2);
     contentBottom = outputTop + DATA_ROW_HEIGHT;
   }
@@ -600,7 +611,7 @@ function sizeFunction(node: StructureFunctionNode): SizedNode {
   }
   // Split width — framed rows shrink-wrap (rows-only), node respects the header.
   const rowsColWidth = estimateRowsColWidth(rowTexts);
-  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node));
+  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node), 'Function');
 
   // Reserve the rows-stack bottom DATA_ROWS_PADDING (mirrors the func rows CSS).
   const height = contentBottom + DATA_ROWS_PADDING;
@@ -693,7 +704,7 @@ function sizeBase(
         expandable: rowIsExpandable(r.typeKind)
       }))
     ),
-    estimateHeaderWidth(node.baseTypeName, false)
+    estimateHeaderWidth(node.baseTypeName, false, 'base')
   );
   const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
 

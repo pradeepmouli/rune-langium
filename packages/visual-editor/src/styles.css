@@ -270,21 +270,9 @@
   order: 2;
 }
 
-/* Base-container rows stay SINGLE-LINE (name | type | cardinality), so the
- * type chip is auto-margined to the right edge — same name-left / metadata-
- * right rhythm as the headers (kind pill on right). GroupContainerNode renders
- * the chip directly inside `.rune-graph-group__base-row` (no wrap), so the
- * auto-margin lands on `.rune-cell-type-chip`.
- *
- * NOTE: Only Data attribute rows (and Function input/output rows) are XMLSpy-
- * style STACKED at DATA_ROW_HEIGHT — the type chip lives on its own
- * `.rune-node-row__type-line` beneath the name and is left-aligned there, so it
- * deliberately does NOT get the right-edge auto-margin (which previously pushed
- * it to the row's right edge in the old single-line layout). Choice arms and
- * Enum values stay single-line at ROW_HEIGHT (no stacked `__type-line`). */
-.rune-graph-group--base .rune-graph-group__base-row .rune-cell-type-chip {
-  margin-left: auto;
-}
+/* Base-container inherited rows now use the same XMLSpy-style two-line
+ * stacked layout as Data attribute rows (.rune-node-row + __main / __name-line /
+ * __type-line). Choice arms and Enum values stay single-line at ROW_HEIGHT. */
 
 /* Visual reference for the studio-wide `.studio-scroll` rule (defined in
  * apps/studio/src/styles.css). The tokens below intentionally duplicate
@@ -999,6 +987,12 @@ button[data-navigable]:focus-visible {
    * stacks the header, then a two-column body below it. */
   display: flex;
   flex-direction: column;
+  /* Structure layout is the sole width authority — override the .rune-node
+   * min-width: 200px floor so the RF node wrapper (set by the layout
+   * algorithm) is never smaller than its content. Without this, a narrow
+   * layout estimate causes .rune-node to inflate past the RF wrapper width
+   * and the overflow is clipped, cutting off the right edge of the header. */
+  min-width: 0;
   /* e2e-batch fix #13: reduce structure-variant text by one notch (sm → xs)
    * so dense schemas show more rows per visible viewport without scrolling.
    * Cascades down to row text, type chips, and cardinality pills. The graph
@@ -1157,6 +1151,12 @@ button[data-navigable]:focus-visible {
 .rune-node-func--structure .rune-node-header {
   box-sizing: border-box;
   height: var(--rune-header-height);
+  /* flex-shrink: 0 prevents the header from compressing below HEADER_HEIGHT
+   * when the body content (rows stack) is taller than the remaining space.
+   * Without this, flex distributes any overflow deficit to the header since
+   * the rows have fixed heights and cannot shrink — so all slack came out of
+   * the header, producing a 22px header instead of the intended 28px. */
+  flex-shrink: 0;
   /* Tightened header insets (visual-only, not layout-coupled): L/R padding
    * --space-3 -> --space-2 and the badge/name/meta gap --space-2 -> --space-1
    * so the header (which drives the node width) hugs its tokens. Mirrored in
@@ -1230,16 +1230,11 @@ button[data-navigable]:focus-visible {
   transition: background-color var(--motion-fast);
 }
 
-/* Framed-rows stack — Data attribute rows, base-container inherited rows, and
-   Function input/output rows render as XMLSpy-style stacked, hairline-bordered
-   CARDS that shrink-wrap to their widest member. The stack is a flex column
-   with DATA_ROW_GAP between cards and DATA_ROWS_PADDING top + bottom; the
-   `padding-inline-start` gives the cards' left border room so it isn't flush
-   against the body edge. (Choice arms + Enum values stay single-line + unframed
-   on .rune-node-rows above.) The inline `width` the renderer sets from the
-   layout's rows-only `rowsColWidth` makes the stack tight to its content. */
+/* Framed-rows stack — Data attribute rows and Function input/output rows.
+   Applies to `.rune-node-rows` containers inside data/func structure nodes.
+   Base-container rows use `.rune-graph-group__base-rows` (separate container)
+   which carries identical spacing rules directly on that selector below. */
 .rune-node-data--structure .rune-node-rows,
-.rune-graph-group--base .rune-node-rows,
 .rune-node-func--structure .rune-node-rows {
   box-sizing: border-box;
   row-gap: var(--rune-data-row-gap);
@@ -1499,14 +1494,11 @@ button[data-navigable]:focus-visible {
  * The 10px uppercase reading was correct for a faint cluster label, but
  * here the container holds a real type — its name should read like one. */
 .rune-graph-group--base .rune-graph-group__header {
-  /* Drop the inherited 0 14px padding so the title aligns flush with
-   * the inherited rows below (which sit at the container's outer
-   * --rune-base-padding edge, no extra X padding). Without this the
-   * title was offset ~14px further inward than the rows. Keeps the
-   * parent's `justify-content: space-between` so the "base" pill flows
-   * to the right edge — same pattern as the inner DataNode header (kind
-   * badge gets margin-left: auto). */
-  padding: 1px;
+  /* Match structure node headers: same horizontal inset and gap so the
+   * title/badge spacing is visually consistent. box-sizing + height are
+   * already correct from the base .rune-graph-group__header rule. */
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
   border-bottom: var(--hairline) solid color-mix(in oklch, var(--border) 78%, transparent);
 }
 
@@ -1537,27 +1529,16 @@ button[data-navigable]:focus-visible {
 .rune-graph-group__base-rows {
   display: flex;
   flex-direction: column;
-  /* No `gap` between rows — layout math (structure-layout.ts) packs rows at
-   * exactly DATA_ROW_HEIGHT without inter-row spacing (base inherited rows are
-   * Data attribute rows). */
+  /* DATA_ROW_GAP between framed rows — mirrors .rune-node-data--structure .rune-node-rows
+   * and the framedRowsStackHeight() layout math that accounts for inter-row gaps. */
+  row-gap: var(--rune-data-row-gap);
+  padding-block: var(--rune-data-rows-padding);
+  padding-inline-start: var(--rune-data-row-padding-x);
   /* Gap before the nested child data node MUST equal BASE_PADDING in
    * structure-layout.ts (sizeBase: leftColumnHeight = baseRowsHeight +
    * childSize.height + BASE_PADDING; placeBaseChildren: y = HEADER_HEIGHT +
-   * baseRows.length*DATA_ROW_HEIGHT + BASE_PADDING). Using --rune-row-gap (8px)
-   * here made the rendered child sit 4px below the container's reserved
-   * bottom, so the inner DataNode overflowed the dashed base border. */
+   * baseRows.length*DATA_ROW_PITCH + DATA_ROWS_PADDING + BASE_PADDING). */
   margin-bottom: var(--rune-base-padding);
-}
-
-.rune-graph-group__base-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  /* Base inherited rows ARE Data attribute rows — sizeBase reserves
-     DATA_ROW_HEIGHT per row, so the rendered height must mirror it (these
-     render single-line but centered in the taller row). */
-  height: var(--rune-data-row-height);
-  gap: var(--rune-row-gap);
 }
 
 /* ── Phase 10.2 — Cell-level type chip, cardinality pill, row modifiers ──

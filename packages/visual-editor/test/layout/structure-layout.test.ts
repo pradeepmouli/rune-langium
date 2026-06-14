@@ -1465,7 +1465,7 @@ describe('layoutStructureGraph — Function node (Phase C)', () => {
     HEADER_HEIGHT +
     DATA_ROWS_PADDING +
     inputStack(nInputs) +
-    (hasOutput ? FUNCTION_OUTPUT_SEP_HEIGHT + DATA_ROW_HEIGHT : 0) +
+    (hasOutput ? FUNCTION_OUTPUT_SEP_HEIGHT + 2 * DATA_ROW_GAP + DATA_ROW_HEIGHT : 0) +
     DATA_ROWS_PADDING;
 
   function fnInput(inputCount: number, hasOutput: boolean): StructureGraphInput {

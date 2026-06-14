@@ -241,17 +241,18 @@ export function GroupContainerNode({ data, id }: NodeProps<GroupContainerNodeTyp
           return (
             <div
               key={row.attrName}
-              className={`rune-graph-group__base-row${expandable ? ' has-expansion' : ''}`}
+              className={`rune-node-row${expandable ? ' has-expansion' : ''}`}
               data-attr={row.attrName}
             >
-              <span className="rune-cell-name">{row.attrName}</span>
-              <TypeChip as="span" typeName={row.typeName} typeKind="BasicType" />
-              <span className="rune-cell-card">{row.cardinality}</span>
-              {/* Codex P2 (PR #191): row-level expand/collapse for inherited rows.
-                  Moved to right edge with +/− icons per the post-polish iteration —
-                  matches DataNode/ChoiceNode and the form-preview Add/Remove
-                  treatment. nodrag/nopan keep React Flow from treating the click
-                  as a canvas gesture. */}
+              <div className="rune-node-row__main">
+                <div className="rune-node-row__name-line">
+                  <span className="rune-cell-name">{row.attrName}</span>
+                </div>
+                <div className="rune-node-row__type-line">
+                  <TypeChip as="span" typeName={row.typeName} typeKind={row.typeKind} />
+                  <span className="rune-cell-card">{row.cardinality}</span>
+                </div>
+              </div>
               {expandable ? (
                 <button
                   type="button"
