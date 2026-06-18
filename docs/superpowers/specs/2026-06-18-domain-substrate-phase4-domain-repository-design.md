@@ -63,7 +63,7 @@ export function createRepository<T>(
 
 The runtime is grammar-invariant (two `Map`s); it is emitted into `domain.ts` for one-home consistency with the existing generated ops (per Approach A), not hand-authored.
 
-### §2.2 Editable-type union + type map (generated, grammar-synced)
+### §2.2 Editable-type union (generated, grammar-synced)
 
 ```ts
 export type AnyDomain =
@@ -71,22 +71,18 @@ export type AnyDomain =
   | Dehydrated<ast.RosettaFunction> | Dehydrated<ast.RosettaRecordType>
   | Dehydrated<ast.RosettaTypeAlias> | Dehydrated<ast.RosettaBasicType>
   | Dehydrated<ast.Annotation>;     // = the editor's current AnyGraphNode arms
-
-export interface DomainTypeMap {
-  Data: Dehydrated<ast.Data>;
-  Choice: Dehydrated<ast.Choice>;
-  /* …one entry per editable object type… */
-}
 ```
 
 Members come from a **config-driven `repository.elementTypes` list** in `domain-surface.config.json` (the top-level element types: Data, Choice, RosettaEnumeration, RosettaFunction, RosettaRecordType, RosettaTypeAlias, RosettaBasicType, Annotation), mirroring the existing `identity` map. This is deliberate: the emitter's `objectTypeNames` set includes *member* types (Attribute, TypeCall, …) that must **not** appear in `AnyDomain` — only node-level elements belong in the domain repository. The list is config, not hand-maintained TypeScript, so it stays a single source of truth driving generation.
+
+**No `DomainTypeMap`.** `byType`'s return type is derived directly from the union via `Extract<AnyDomain, { $type: K }>` (pattern adopted from the pre-Phase-1 `emitRepository` prior art on `feat/domain-discriminant-repository`). This is DRYer than a parallel `$type → type` interface — there is no second artifact that could drift from `AnyDomain`.
 
 ### §2.3 Domain-typed specialization (typed `byType`)
 
 ```ts
 export interface DomainRepository {
   byId(qn: string): AnyDomain | undefined;
-  byType<K extends keyof DomainTypeMap>(type: K): readonly DomainTypeMap[K][];  // type-safe
+  byType<K extends AnyDomain['$type']>(type: K): readonly Extract<AnyDomain, { $type: K }>[];  // type-safe via Extract
   all(): readonly AnyDomain[];
 }
 
@@ -121,7 +117,7 @@ const repo = createRepository(nodesById.values(), {
 
 Notes:
 - **`byId` === `byQualifiedName`** in the editor (node.id *is* the qualified name), so the editor's surface is just `byId` + `byType`. There is no bare-name lookup (per the §collision decision); name scans qualify the bare `typeName` with the source node's namespace first.
-- **Node-typed `byType`.** `repo.byType('Data')` over nodes returns `TypeGraphNode[]` whose `.data` is `Dehydrated<Data>`. The narrowing map `NodeOf<K> = Node<DomainTypeMap[K]> & { meta: GraphNodeMeta }` is supplied editor-side (it composes the generated `DomainTypeMap` with the editor's `TypeGraphNode` shape); the generic `byType<K extends string>` accepts it without a generated node-map in core.
+- **Node-typed `byType`.** `repo.byType('Data')` over nodes returns `TypeGraphNode[]` whose `.data` is `Dehydrated<Data>`. The narrowing alias `NodeOf<K extends AnyDomain['$type']> = Node<Extract<AnyDomain, { $type: K }>> & { meta: GraphNodeMeta }` is supplied editor-side (it composes the generated `AnyDomain` union with the editor's `TypeGraphNode` shape via `Extract`); the generic `byType<K extends string>` accepts the narrower override without a generated node-map in core.
 - **`nodesById` remains the SoT.** The repository is a derived snapshot; raw `nodesById` is not read by action code but is still the authoritative Map that mutations write. No new invariant to sync.
 
 ### Cross-namespace bare refs (explicit scope boundary)
@@ -150,7 +146,7 @@ Name-scan cutover qualifies a bare `typeName` with the **source node's namespace
 ## §6 Testing & verification gates (non-negotiable)
 
 **langium-zod (Stream A):**
-- Emitter unit tests against a fixture grammar: assert the emitted `AnyDomain` union members, `DomainTypeMap` entries, the generic `createRepository`/`Repository<T>` source, and `createDomainRepository`.
+- Emitter unit tests against a fixture grammar: assert the emitted `AnyDomain` union members, the `Extract`-typed `byType` signature, the generic `createRepository`/`Repository<T>` source, and `createDomainRepository`.
 - Type-level assertion that `byType('Data')` is `readonly Dehydrated<Data>[]` (e.g. `tsd`/expect-type).
 - Determinism: regenerating the fixture output is byte-stable.
 
@@ -171,7 +167,7 @@ Name-scan cutover qualifies a bare `typeName` with the **source node's namespace
 ## §7 Sequencing
 
 1. **Stream A** — langium-zod: emitter + tests → PR → publish (`0.8.4`/`0.9.0`) → rune override + `minimumReleaseAgeExclude` bump.
-2. **Stream B.1** — regenerate `domain.ts`; land `AnyDomain` + `DomainTypeMap` + `Repository`/`createRepository` + `DomainRepository`/`createDomainRepository` in core with tests; re-export via `core/index.ts` (already `export * from './generated/domain.js'`).
+2. **Stream B.1** — regenerate `domain.ts`; land `AnyDomain` + `Repository`/`createRepository` + `DomainRepository`/`createDomainRepository` in core with tests; re-export via `core/index.ts` (already `export * from './generated/domain.js'`).
 3. **Stream B.2** — editor cutover: add the memoized node-repository selector; migrate node-id scans → `repo.byId`, name scans → `repo.byId(makeNodeId(ns, typeName))`, type filters → `repo.byType`; swap `AnyGraphNode → AnyDomain` (keep the editor's `NodeOf<K>` narrowing map). Enforce the §4 build-ordering requirement.
 
 Each step keeps every package compiling and the full visual-editor suite green (no long red branches).
@@ -184,7 +180,7 @@ Each step keeps every package compiling and the full visual-editor suite green (
 - Runtime Zod validation inside the repository (the cast/index is sufficient; additive later).
 - Any change to `node.meta`, the edge model, or `edgesById` (refs remain inline `{$refText}`; promoting `edgesById` to a ref registry stays deferred — see the edgesById spike).
 - Studio panels (already domain-direct) and `/api/parse` producers — no consumer change needed.
-- A node-typed `byType` map *generated in core* — the editor supplies `NodeOf<K>` locally over the generated `DomainTypeMap`.
+- A node-typed `byType` map *generated in core* — the editor supplies `NodeOf<K>` locally via `Extract<AnyDomain, { $type: K }>`.
 
 ---
 
@@ -192,7 +188,7 @@ Each step keeps every package compiling and the full visual-editor suite green (
 
 - **Build the missing typed index, not a migration.** Verified: consumers already read domain-direct; `toDomain`/`AnyDomain`/repository do not exist. (Survey, 2026-06-18.)
 - **Generated in `domain.ts` via langium-zod** (Approach A), matching the generated-domain-surface north star and the prior 3D "generated repository w/ byType" decision. Cross-repo, two-stream like Phase 2.
-- **Generic `Repository<T>` primitive + generated domain specialization.** Lets "one repository surface" hold for both the *domain* repo (over `Dehydrated`) and the editor's *node* repo (over `TypeGraphNode`) — same shape, different `key`/`type` selectors; typed `byType` via the generated `DomainTypeMap` / editor `NodeOf<K>`.
+- **Generic `Repository<T>` primitive + generated domain specialization.** Lets "one repository surface" hold for both the *domain* repo (over `Dehydrated`) and the editor's *node* repo (over `TypeGraphNode`) — same shape, different `key`/`type` selectors; typed `byType` via `Extract<AnyDomain, { $type: K }>` (domain) / editor `NodeOf<K>`.
 - **Identity = qualified name = `node.id`** (`makeNodeId` = `qualifiedExportPath`); `byId` is the only key. Injectable `key` selector; editor passes `n => n.id`.
 - **Qualified-only; no bare-name lookup** — bare callers thread a namespace (qualify-then-`byId`).
 - **Throw on duplicate qualified key** — fail-fast at build; §4 ordering guarantees no transient duplicates reach it.

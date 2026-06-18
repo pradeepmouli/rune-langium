@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Generate a typed domain repository (`Repository<T>` + `createRepository` + `DomainRepository`/`createDomainRepository` + `AnyDomain` union + `DomainTypeMap`) from the grammar via langium-zod into `@rune-langium/core`'s `domain.ts`, then route the editor's ad-hoc node lookups through it.
+**Goal:** Generate a typed domain repository (`Repository<T>` + `createRepository` + `DomainRepository`/`createDomainRepository` + `AnyDomain` union, with `byType` typed via `Extract<AnyDomain, { $type: K }>` — no `DomainTypeMap`) from the grammar via langium-zod into `@rune-langium/core`'s `domain.ts`, then route the editor's ad-hoc node lookups through it.
 
 **Architecture:** Two streams, mirroring Phase 2. **Stream A (cross-repo, langium-zod):** extend the `namespace-ops` emitter to emit the repository, driven by a new `repository.elementTypes` list in `domain-surface.config.json`; publish a new version. **Stream B (rune):** bump the override, regenerate `domain.ts`, add core runtime tests, re-source the editor's `AnyDomain`, and cut the editor's `nodes.find(...)` scans over to a single repository surface. The repository is a **pure derived snapshot** over the editor's `nodesById` Map-as-SoT — never a second source of truth.
 
@@ -31,7 +31,7 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `langium-zod/.../src/emitters/namespace-ops.ts` | Modify | Emit `Repository<T>`/`createRepository` + `AnyDomain`/`DomainTypeMap`/`DomainRepository`/`createDomainRepository` |
+| `langium-zod/.../src/emitters/namespace-ops.ts` | Modify | Emit `Repository<T>`/`createRepository` + `AnyDomain`/`DomainRepository`/`createDomainRepository` (Extract-typed `byType`) |
 | `langium-zod/.../test/unit/namespace-ops.test.ts` | Modify | Assert emitted repository source |
 | `langium-zod/.../src/config.ts` | Modify | Add `namespaceOpsRepository?: { elementTypes?: string[] }` |
 | `langium-zod/.../src/cli.ts` | Modify | Parse `repository` from `--domain-surface-config` JSON |
@@ -69,7 +69,7 @@ In `config.ts`, immediately after the `namespaceOpsIdentity?` field (line 185), 
 ```ts
   /**
    * Top-level element types included in the generated domain repository
-   * (`AnyDomain` union + `DomainTypeMap`). e.g. `{ elementTypes: ['Data', 'Choice'] }`.
+   * (`AnyDomain` union). e.g. `{ elementTypes: ['Data', 'Choice'] }`.
    */
   namespaceOpsRepository?: { elementTypes?: string[] };
 ```
@@ -253,31 +253,32 @@ SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "feat(namespace-ops): emit generic Reposit
 
 ---
 
-### Task A3: Emit `AnyDomain` + `DomainTypeMap` + `DomainRepository` + `createDomainRepository`
+### Task A3: Emit `AnyDomain` + `DomainRepository` + `createDomainRepository` (Extract typing, NO `DomainTypeMap`)
 
 **Files:**
 - Modify: `packages/langium-zod/test/unit/namespace-ops.test.ts`
 - Modify: `packages/langium-zod/src/emitters/namespace-ops.ts`
+
+> **Typing decision (from prior-art reconciliation):** `byType`'s return is derived from the union via `Extract<AnyDomain, { $type: K }>` — there is **no** `DomainTypeMap` artifact. This is the DRYer pattern lifted from the superseded `feat/domain-discriminant-repository` `emitRepository`.
 
 - [ ] **Step 1: Write the failing test**
 
 Append inside the `describe('repository emission', …)` block:
 
 ```ts
-  it('emits AnyDomain union, DomainTypeMap, and createDomainRepository from elementTypes', () => {
+  it('emits AnyDomain union + DomainRepository (Extract typing) + createDomainRepository', () => {
     const source = generateNamespaceOps([dataType, attributeType], {
       repository: { elementTypes: ['Data', 'RosettaFunction'] },
     });
     expect(source).toContain('export type AnyDomain =');
     expect(source).toContain('| Dehydrated<ast.Data>');
     expect(source).toContain('| Dehydrated<ast.RosettaFunction>');
-    expect(source).toContain('export interface DomainTypeMap {');
-    expect(source).toContain('Data: Dehydrated<ast.Data>;');
-    expect(source).toContain('RosettaFunction: Dehydrated<ast.RosettaFunction>;');
     expect(source).toContain('export interface DomainRepository {');
-    expect(source).toContain('byType<K extends keyof DomainTypeMap>(type: K): readonly DomainTypeMap[K][];');
+    expect(source).toContain("byType<K extends AnyDomain['$type']>(type: K): readonly Extract<AnyDomain, { $type: K }>[];");
     expect(source).toContain('export function createDomainRepository(');
     expect(source).toContain('type: (e) => e.$type');
+    // No parallel type-map artifact:
+    expect(source).not.toContain('DomainTypeMap');
   });
 ```
 
@@ -294,18 +295,13 @@ In `namespace-ops.ts`, below `emitRepositoryPrimitive`, add:
 /** Emits the domain-typed repository surface from the configured element types. */
 function emitDomainRepository(elementTypes: string[]): string {
   const union = elementTypes.map((t) => `  | Dehydrated<ast.${t}>`).join('\n');
-  const mapEntries = elementTypes.map((t) => `  ${t}: Dehydrated<ast.${t}>;`).join('\n');
   return [
     'export type AnyDomain =',
     `${union};`,
     '',
-    'export interface DomainTypeMap {',
-    mapEntries,
-    '}',
-    '',
     'export interface DomainRepository {',
     '  byId(qn: string): AnyDomain | undefined;',
-    '  byType<K extends keyof DomainTypeMap>(type: K): readonly DomainTypeMap[K][];',
+    "  byType<K extends AnyDomain['$type']>(type: K): readonly Extract<AnyDomain, { $type: K }>[];",
     '  all(): readonly AnyDomain[];',
     '}',
     '',
@@ -342,7 +338,7 @@ Expected: PASS.
 
 ```bash
 git add packages/langium-zod/src/emitters/namespace-ops.ts packages/langium-zod/test/unit/namespace-ops.test.ts
-SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "feat(namespace-ops): emit AnyDomain + DomainTypeMap + createDomainRepository"
+SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "feat(namespace-ops): emit AnyDomain + DomainRepository (Extract typing) + createDomainRepository"
 ```
 
 ---
@@ -366,7 +362,7 @@ Create `.changeset/phase4-domain-repository.md` at the langium-zod repo root:
 'langium-zod': minor
 ---
 
-namespace-ops: emit a generated typed domain repository — generic `Repository<T>` + `createRepository` (throws `DuplicateKeyError` on duplicate key), plus `AnyDomain` union, `DomainTypeMap`, `DomainRepository`, and `createDomainRepository`, driven by a new `repository.elementTypes` list in the domain-surface config.
+namespace-ops: emit a generated typed domain repository — generic `Repository<T>` + `createRepository` (throws `DuplicateKeyError` on duplicate key), plus `AnyDomain` union, `DomainRepository` (`byType` typed via `Extract<AnyDomain, { $type: K }>`), and `createDomainRepository`, driven by a new `repository.elementTypes` list in the domain-surface config.
 ```
 
 - [ ] **Step 3: Commit + open PR**
@@ -433,7 +429,7 @@ Expected: lockfile updates to `<NEW_VERSION>`; no `ERR_PNPM_LOCKFILE_CONFIG_MISM
 - [ ] **Step 3: Regenerate**
 
 Run: `pnpm --filter @rune-langium/core run generate:domain`
-Expected: `packages/core/src/generated/domain.ts` regenerates and now ends with the `Repository<T>`/`createRepository`/`AnyDomain`/`DomainTypeMap`/`DomainRepository`/`createDomainRepository` block (oxfmt-normalized).
+Expected: `packages/core/src/generated/domain.ts` regenerates and now ends with the `Repository<T>`/`createRepository`/`AnyDomain`/`DomainRepository`/`createDomainRepository` block (oxfmt-normalized).
 
 - [ ] **Step 4: Verify generation is deterministic + type-checks**
 
@@ -546,9 +542,10 @@ Append to the test file:
 import { expectTypeOf } from 'vitest';
 import type { Dehydrated, Data as DataT } from '@rune-langium/core';
 
-it('byType is type-safe via DomainTypeMap', () => {
+it('byType is type-safe via Extract<AnyDomain, { $type: K }>', () => {
   const repo = createDomainRepository([]);
-  expectTypeOf(repo.byType('Data')).toEqualTypeOf<readonly Dehydrated<DataT>[]>();
+  // Extract narrows AnyDomain to the Data arm; assignability is the practical check.
+  expectTypeOf(repo.byType('Data')[0]).toMatchTypeOf<Dehydrated<DataT> | undefined>();
 });
 ```
 
@@ -683,11 +680,13 @@ Create `packages/visual-editor/src/store/node-repository.ts`:
 
 import { createRepository, type Repository } from '@rune-langium/core';
 import type { Node } from '@xyflow/react';
-import type { DomainTypeMap } from '@rune-langium/core';
+import type { AnyDomain } from '@rune-langium/core';
 import type { GraphNodeMeta, TypeGraphNode } from '../types.js';
 
 /** A graph node whose domain payload is narrowed to the `$type` named by `K`. */
-export type NodeOf<K extends keyof DomainTypeMap> = Node<DomainTypeMap[K]> & { meta: GraphNodeMeta };
+export type NodeOf<K extends AnyDomain['$type']> = Node<Extract<AnyDomain, { $type: K }>> & {
+  meta: GraphNodeMeta;
+};
 
 /**
  * Typed, read-only lookup surface over the editor's nodes. Built as a PURE
@@ -695,7 +694,7 @@ export type NodeOf<K extends keyof DomainTypeMap> = Node<DomainTypeMap[K]> & { m
  * truth. `byId` keys on `node.id` (= `makeNodeId(ns, name)` = qualified name).
  */
 export interface NodeRepository extends Repository<TypeGraphNode> {
-  byType<K extends keyof DomainTypeMap>(type: K): readonly NodeOf<K>[];
+  byType<K extends AnyDomain['$type']>(type: K): readonly NodeOf<K>[];
 }
 
 let cacheKey: ReadonlyMap<string, TypeGraphNode> | null = null;
@@ -850,7 +849,7 @@ gh pr create --fill
 **1. Spec coverage:**
 - §1 two-stream architecture → Stream A (A1–A4) + Stream B (B1–B6). ✅
 - §2.1 generic `Repository<T>` + `createRepository` (throw-on-dup) → A2 + B2. ✅
-- §2.2 `AnyDomain` + `DomainTypeMap` from **config-driven `repository.elementTypes`** → A1 (config), A3 (emit), B1 (config value). ✅
+- §2.2 `AnyDomain` from **config-driven `repository.elementTypes`** (no `DomainTypeMap`; `byType` via `Extract`) → A1 (config), A3 (emit), B1 (config value). ✅
 - §2.3 `DomainRepository` + `createDomainRepository` (default qualified key, `$namespace` fallback) → A3 + B2. ✅
 - §3 one editor lookup surface; node-id→`nodesById.get`, name→qualified `nodesById`/repo, `AnyGraphNode`→`AnyDomain`, `NodeOf<K>` editor-side → B3, B4, B5. ✅
 - §4 pure-snapshot, memoized, built post-reconciliation → B4 (memoization) + B5 Step 1 (build-ordering gate). ✅
@@ -860,4 +859,4 @@ gh pr create --fill
 
 **2. Placeholder scan:** `<NEW_VERSION>` is an intentional handoff token (the published version from A4), defined at first use and referenced consistently — not a TODO. No other placeholders.
 
-**3. Type consistency:** `Repository<T>`, `createRepository(items, {key, type})`, `DuplicateKeyError`, `AnyDomain`, `DomainTypeMap`, `DomainRepository`, `createDomainRepository(elements, key?)`, `NodeRepository`, `NodeOf<K>`, `selectNodeRepository(nodesById)` are named identically across every task that references them. `byId`/`byType`/`all` signatures match between the generic interface (A2) and the domain specialization (A3) and the tests (B2/B4).
+**3. Type consistency:** `Repository<T>`, `createRepository(items, {key, type})`, `DuplicateKeyError`, `AnyDomain`, `DomainRepository`, `createDomainRepository(elements, key?)`, `NodeRepository`, `NodeOf<K>`, `selectNodeRepository(nodesById)` are named identically across every task that references them. `byType` is typed via `Extract<AnyDomain, { $type: K }>` everywhere (no `DomainTypeMap`). `byId`/`byType`/`all` signatures match between the generic interface (A2) and the domain specialization (A3) and the tests (B2/B4).
