@@ -79,7 +79,7 @@ export interface DomainTypeMap {
 }
 ```
 
-Members come from the same editable object-type set the emitter already walks for ops (`objectTypeNames`, filtered to named types). No hand-maintained list.
+Members come from a **config-driven `repository.elementTypes` list** in `domain-surface.config.json` (the top-level element types: Data, Choice, RosettaEnumeration, RosettaFunction, RosettaRecordType, RosettaTypeAlias, RosettaBasicType, Annotation), mirroring the existing `identity` map. This is deliberate: the emitter's `objectTypeNames` set includes *member* types (Attribute, TypeCall, …) that must **not** appear in `AnyDomain` — only node-level elements belong in the domain repository. The list is config, not hand-maintained TypeScript, so it stays a single source of truth driving generation.
 
 ### §2.3 Domain-typed specialization (typed `byType`)
 
