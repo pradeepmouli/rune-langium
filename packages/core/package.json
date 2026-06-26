@@ -34,12 +34,12 @@
     "type-check": "tsgo --noEmit"
   },
   "dependencies": {
-    "langium": "^4.2.4",
+    "langium": "^4.3.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "langium-cli": "^4.2.1",
-    "langium-zod": "^0.7.0",
+    "langium-cli": "^4.3.0",
+    "langium-zod": "0.9.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   },

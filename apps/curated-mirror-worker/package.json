@@ -16,15 +16,15 @@
   "dependencies": {
     "@rune-langium/core": "workspace:*",
     "@rune-langium/curated-schema": "workspace:*",
-    "langium": "^4.2.4",
-    "pako": "^2.1.0",
+    "langium": "^4.3.0",
+    "pako": "^2.2.0",
     "pino": "^10.3.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260525.1",
-    "miniflare": "^4.20260520.0",
-    "vitest": "^4.1.7",
-    "wrangler": "^4.98.0"
+    "@cloudflare/workers-types": "^4.20260625.1",
+    "miniflare": "^4.20260625.0",
+    "vitest": "^4.1.9",
+    "wrangler": "^4.105.0"
   },
   "engines": {
     "node": ">=22.13.0"

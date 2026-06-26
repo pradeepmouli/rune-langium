@@ -66,7 +66,9 @@ export async function runValidate(paths: string[], options: ValidateCommandOptio
     const filePath = relative(process.cwd(), doc.uri.fsPath);
     const diagnostics = (doc.diagnostics ?? []).map((d) => ({
       severity: d.severity === 1 ? 'error' : d.severity === 2 ? 'warning' : 'info',
-      message: d.message,
+      // `Diagnostic.message` widened to `string | MarkupContent` in newer LSP
+      // types; the CLI emits plain strings, so normalize to the text value.
+      message: typeof d.message === 'string' ? d.message : d.message.value,
       line: (d.range.start.line ?? 0) + 1
     }));
 
