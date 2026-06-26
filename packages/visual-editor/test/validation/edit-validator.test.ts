@@ -21,7 +21,6 @@ import {
 } from '../../src/validation/edit-validator.js';
 import type { TypeGraphNode } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
-import { selectNodeRepository } from '../../src/store/node-repository.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -122,22 +121,19 @@ describe('detectDuplicateEnumValue', () => {
   it('returns true when value already exists in enum node', () => {
     const node = makeEnumNode('e1', 'Currency', ['USD', 'EUR', 'GBP']);
     const nodes = [node];
-    const repo = selectNodeRepository(new Map(nodes.map((n) => [n.id, n])));
-    expect(detectDuplicateEnumValue('USD', 'e1', nodes, repo)).toBe(true);
+    expect(detectDuplicateEnumValue('USD', 'e1', nodes)).toBe(true);
   });
 
   it('returns false when value is unique', () => {
     const node = makeEnumNode('e1', 'Currency', ['USD', 'EUR', 'GBP']);
     const nodes = [node];
-    const repo = selectNodeRepository(new Map(nodes.map((n) => [n.id, n])));
-    expect(detectDuplicateEnumValue('JPY', 'e1', nodes, repo)).toBe(false);
+    expect(detectDuplicateEnumValue('JPY', 'e1', nodes)).toBe(false);
   });
 
   it('is case-sensitive', () => {
     const node = makeEnumNode('e1', 'Currency', ['USD']);
     const nodes = [node];
-    const repo = selectNodeRepository(new Map(nodes.map((n) => [n.id, n])));
-    expect(detectDuplicateEnumValue('usd', 'e1', nodes, repo)).toBe(false);
+    expect(detectDuplicateEnumValue('usd', 'e1', nodes)).toBe(false);
   });
 });
 

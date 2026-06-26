@@ -17,7 +17,6 @@
  */
 
 import type { TypeGraphNode, TypeGraphEdge, ValidationError, AnyGraphNode } from '../types.js';
-import type { NodeRepository } from '../store/node-repository.js';
 
 // ---------------------------------------------------------------------------
 // Circular inheritance detection (S-02)
@@ -67,12 +66,11 @@ export function detectDuplicateName(
   name: string,
   namespace: string,
   nodes: TypeGraphNode[],
-  nodeId?: string,
-  nodeRepository?: NodeRepository
+  nodeId?: string
 ): boolean {
   if (nodeId) {
     // Check for duplicate attribute within a node
-    const node = nodeRepository?.byId(nodeId) ?? nodes.find((n) => n.id === nodeId);
+    const node = nodes.find((n) => n.id === nodeId);
     if (!node) return false;
     const d = node.data as AnyGraphNode;
     const members = ((d as any).attributes ??
@@ -137,10 +135,9 @@ export function validateCardinality(input: string): string | null {
 export function detectDuplicateEnumValue(
   valueName: string,
   nodeId: string,
-  nodes: TypeGraphNode[],
-  nodeRepository?: NodeRepository
+  nodes: TypeGraphNode[]
 ): boolean {
-  const node = nodeRepository?.byId(nodeId) ?? nodes.find((n) => n.id === nodeId);
+  const node = nodes.find((n) => n.id === nodeId);
   if (!node) return false;
   const d = node.data as AnyGraphNode;
   if (d.$type !== 'RosettaEnumeration') return false;
