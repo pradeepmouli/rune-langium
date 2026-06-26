@@ -27,7 +27,7 @@
     "isomorphic-git": "^1.37.6"
   },
   "devDependencies": {
-    "@types/node": "^25.9.4",
+    "@types/node": "^26.0.1",
     "isomorphic-git": "^1.38.5",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
