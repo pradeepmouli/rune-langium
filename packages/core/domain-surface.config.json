@@ -3,5 +3,17 @@
     "Attribute": "name",
     "RosettaEnumValue": "name",
     "ChoiceOption": "typeCall.type.$refText"
+  },
+  "repository": {
+    "elementTypes": [
+      "Data",
+      "Choice",
+      "RosettaEnumeration",
+      "RosettaFunction",
+      "RosettaRecordType",
+      "RosettaTypeAlias",
+      "RosettaBasicType",
+      "Annotation"
+    ]
   }
 }

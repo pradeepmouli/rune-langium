@@ -2781,3 +2781,66 @@ export namespace WithMetaOperation {
     node.entries.splice(to, 0, item);
   }
 }
+
+export class DuplicateKeyError extends Error {
+  constructor(public readonly key: string) {
+    super(`Duplicate repository key: ${key}`);
+    this.name = 'DuplicateKeyError';
+  }
+}
+
+export interface Repository<T> {
+  byId(id: string): T | undefined;
+  byType<K extends string>(type: K): readonly T[];
+  all(): readonly T[];
+}
+
+export function createRepository<T>(
+  items: Iterable<T>,
+  opts: { key: (t: T) => string; type: (t: T) => string }
+): Repository<T> {
+  const byIdMap = new Map<string, T>();
+  const byTypeMap = new Map<string, T[]>();
+  const allItems: T[] = [];
+  for (const item of items) {
+    const k = opts.key(item);
+    if (byIdMap.has(k)) throw new DuplicateKeyError(k);
+    byIdMap.set(k, item);
+    const t = opts.type(item);
+    let bucket = byTypeMap.get(t);
+    if (bucket === undefined) {
+      bucket = [];
+      byTypeMap.set(t, bucket);
+    }
+    bucket.push(item);
+    allItems.push(item);
+  }
+  return {
+    byId: (id) => byIdMap.get(id),
+    byType: <K extends string>(type: K) => (byTypeMap.get(type) ?? []) as readonly T[],
+    all: () => allItems
+  };
+}
+
+export type AnyDomain =
+  | Dehydrated<ast.Data>
+  | Dehydrated<ast.Choice>
+  | Dehydrated<ast.RosettaEnumeration>
+  | Dehydrated<ast.RosettaFunction>
+  | Dehydrated<ast.RosettaRecordType>
+  | Dehydrated<ast.RosettaTypeAlias>
+  | Dehydrated<ast.RosettaBasicType>
+  | Dehydrated<ast.Annotation>;
+
+export interface DomainRepository {
+  byId(qn: string): AnyDomain | undefined;
+  byType<K extends AnyDomain['$type']>(type: K): readonly Extract<AnyDomain, { $type: K }>[];
+  all(): readonly AnyDomain[];
+}
+
+export function createDomainRepository(
+  elements: Iterable<AnyDomain>,
+  key: (e: AnyDomain) => string = (e) => (e.$namespace ? `${e.$namespace}.${e.name}` : e.name)
+): DomainRepository {
+  return createRepository(elements, { key, type: (e) => e.$type }) as DomainRepository;
+}
