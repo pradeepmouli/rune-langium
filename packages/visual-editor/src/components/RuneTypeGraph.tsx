@@ -78,6 +78,7 @@ import { modelsToAst } from '../adapters/model-to-ast.js';
 import { serializeModel, indexById } from '@rune-langium/core';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
+import { selectNodeRepository } from '../store/node-repository.js';
 import type {
   RuneTypeGraphProps,
   RuneTypeGraphRef,
@@ -266,6 +267,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
 
   // Subscribe to store state
   const storeNodes = useEditorStore((s) => s.nodes);
+  const storeNodesById = useEditorStore((s) => s.nodesById);
   const storeEdges = useEditorStore((s) => s.edges);
   const visibility = useEditorStore((s) => s.visibility);
   const selectNode = useEditorStore((s) => s.selectNode);
@@ -843,7 +845,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       },
 
       getNodeData(nodeId: string): AnyGraphNode | null {
-        const node = storeNodes.find((n) => n.id === nodeId);
+        const node = selectNodeRepository(storeNodesById).byId(nodeId);
         return node?.data ?? null;
       },
 
@@ -855,7 +857,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         return validateGraph(storeNodes, storeEdges);
       }
     }),
-    [activeLayout, graphNodes, storeNodes, storeEdges, mergedConfig, runViewportAction, setNodes, callbacks]
+    [activeLayout, graphNodes, storeNodes, storeNodesById, storeEdges, mergedConfig, runViewportAction, setNodes, callbacks]
   );
 
   // Context menu state

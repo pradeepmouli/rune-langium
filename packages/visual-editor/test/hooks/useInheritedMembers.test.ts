@@ -154,9 +154,10 @@ describe('buildMergedEnumValueList', () => {
 // ---------------------------------------------------------------------------
 
 import { renderHook } from '@testing-library/react';
-import { useEffectiveMembers } from '../../src/hooks/useInheritedMembers.js';
+import { useEffectiveMembers, useInheritedMembers } from '../../src/hooks/useInheritedMembers.js';
 import type { AnyGraphNode, TypeGraphNode } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
+import { selectNodeRepository } from '../../src/store/node-repository.js';
 
 function makeDataNode(name: string, superType: string | undefined, attrs: Record<string, unknown>[]) {
   const data = {
@@ -268,5 +269,72 @@ describe('useEffectiveMembers', () => {
     expect(r2.effective).toHaveLength(1);
     expect(r2.effective[0]!.source).toBe('inherited');
     expect(r2.effective[0]!.name).toBe('x');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useInheritedMembers — qualified-name byId resolution
+// ---------------------------------------------------------------------------
+
+describe('useInheritedMembers — qualified-name byId resolution', () => {
+  it('resolves parent via repository.byId when $refText is a fully-qualified name', () => {
+    // parent has qualified id "test.Parent"; child $refText is "test.Parent"
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('a', 'string')]);
+    const child = makeDataNode('Child', 'test.Parent', [makeAttrMember('b', 'number')]);
+    const allNodes = [child, parent];
+    const repo = selectNodeRepository(new Map(allNodes.map((n) => [n.id, n])));
+
+    const { result } = renderHook(() =>
+      useInheritedMembers(child.data as AnyGraphNode, allNodes, 20, repo)
+    );
+    const groups = result.current;
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.ancestorName).toBe('Parent');
+    expect(groups[0]!.members).toHaveLength(1);
+  });
+
+  it('falls back to bare-name scan when $refText has no namespace prefix', () => {
+    // child $refText is bare "Parent" — byId misses, array scan catches it
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('c', 'boolean')]);
+    const child = makeDataNode('Child2', 'Parent', []);
+    const allNodes = [child, parent];
+    const repo = selectNodeRepository(new Map(allNodes.map((n) => [n.id, n])));
+
+    const { result } = renderHook(() =>
+      useInheritedMembers(child.data as AnyGraphNode, allNodes, 20, repo)
+    );
+    const groups = result.current;
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.ancestorName).toBe('Parent');
+  });
+
+  it('resolves parent via qualified makeNodeId match when called WITHOUT a repository', () => {
+    // Regression: Task 4 byId cutover dropped the makeNodeId arm from the
+    // array fallback, causing cross-namespace supertypes to silently vanish
+    // when useInheritedMembers is called without a repository (e.g. from
+    // useEffectiveMembers, DataTypeForm, EnumForm).
+    // Parent lives in namespace "a" with bare name "Parent" → id "a.Parent".
+    // Child's $refText is the fully-qualified "a.Parent".
+    // With no repository the fix must resolve via makeNodeId.
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('inherited', 'string')]);
+    // Override the id/meta so the parent lives in namespace "a"
+    const parentInNsA = {
+      ...parent,
+      id: 'a.Parent',
+      meta: { ...parent.meta, namespace: 'a' }
+    } as unknown as TypeGraphNode;
+
+    const child = makeDataNode('Child', 'a.Parent', []);
+    const allNodes = [child, parentInNsA];
+
+    // Called WITHOUT a repository — exercises the array-scan makeNodeId arm
+    const { result } = renderHook(() =>
+      useInheritedMembers(child.data as AnyGraphNode, allNodes)
+    );
+    const groups = result.current;
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.ancestorName).toBe('Parent');
+    expect(groups[0]!.namespace).toBe('a');
+    expect(groups[0]!.members).toHaveLength(1);
   });
 });

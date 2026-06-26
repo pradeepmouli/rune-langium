@@ -41,7 +41,8 @@ import {
   useEditorStore,
   useModelSourceSync,
   nameFromNodeId,
-  splitNodeId
+  splitNodeId,
+  selectNodeRepository
 } from '@rune-langium/visual-editor';
 import type {
   RuneTypeGraphRef,
@@ -614,6 +615,8 @@ export function ExplorePerspective() {
   }, [workspaceId, workspaceKind]);
 
   const storeNodes = useEditorStore((s) => s.nodes);
+  const storeNodesById = useEditorStore((s) => s.nodesById);
+  const nodeRepository = selectNodeRepository(storeNodesById);
   const storeEdges = useEditorStore((s) => s.edges);
   // parseEpoch gates source serialization: only USER edits (not parse-driven
   // graph rebuilds) get written back to source — see useModelSourceSync.
@@ -644,7 +647,7 @@ export function ExplorePerspective() {
   // switch here is retired (Phase 3 prep) — `data.$type` is the single source.
   const selectedNodeType = useEditorStore((s) => {
     if (!s.selectedNodeId) return null;
-    const node = s.nodes.find((n) => n.id === s.selectedNodeId);
+    const node = s.nodesById.get(s.selectedNodeId);
     if (!node) return null;
     const d = node.data as { $type?: string } | undefined;
     return d?.$type ?? null;
@@ -763,13 +766,13 @@ export function ExplorePerspective() {
 
   const selectedNodeData: AnyGraphNode | null = useMemo(() => {
     if (!selectedNodeId) return null;
-    const node = storeNodes.find((n) => n.id === selectedNodeId);
+    const node = nodeRepository.byId(selectedNodeId);
     return (node?.data as unknown as AnyGraphNode) ?? null;
-  }, [selectedNodeId, storeNodes]);
+  }, [selectedNodeId, nodeRepository]);
   const selectedNodeMeta: GraphNodeMeta | undefined = useMemo(() => {
     if (!selectedNodeId) return undefined;
-    return storeNodes.find((n) => n.id === selectedNodeId)?.meta;
-  }, [selectedNodeId, storeNodes]);
+    return nodeRepository.byId(selectedNodeId)?.meta;
+  }, [selectedNodeId, nodeRepository]);
   const selectedNodeDataRef = useRef<AnyGraphNode | null>(selectedNodeData);
   selectedNodeDataRef.current = selectedNodeData;
 
@@ -1141,7 +1144,7 @@ export function ExplorePerspective() {
       // On-demand curated hydration: only deferred (list-only, un-hydrated
       // curated) nodes need a server round-trip; user types and already-
       // hydrated curated types resolve locally.
-      const selectedNode = useEditorStore.getState().nodes.find((n) => n.id === nodeId);
+      const selectedNode = selectNodeRepository(useEditorStore.getState().nodesById).byId(nodeId);
       const meta = selectedNode?.meta;
       if (meta?.deferred && meta.namespace) {
         useEditorStore.getState().requestNamespaceHydration(meta.namespace);
@@ -1176,7 +1179,7 @@ export function ExplorePerspective() {
 
   const navigateToNode = useCallback(
     (nodeId: string) => {
-      const targetNode = storeNodes.find((n) => n.id === nodeId);
+      const targetNode = nodeRepository.byId(nodeId);
       const exists = Boolean(targetNode);
       if (!exists) {
         const shortName = nameFromNodeId(nodeId);
@@ -1201,7 +1204,7 @@ export function ExplorePerspective() {
         graphRef.current?.focusNode(nodeId);
       }
     },
-    [focusMode, showToast, shouldCenterNavigationTarget, storeNodes, storeSelectNode]
+    [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]
   );
 
   const navigateBack = useCallback(() => {
@@ -1484,7 +1487,7 @@ export function ExplorePerspective() {
     () => (
       <div className="h-full">
         <NamespaceExplorerPanel
-          nodes={storeNodes}
+          nodeRepository={nodeRepository}
           expandedNamespaces={expandedNamespaces}
           hiddenNodeIds={hiddenNodeIds}
           selectedNodeId={selectedNodeId}
@@ -1499,7 +1502,7 @@ export function ExplorePerspective() {
       </div>
     ),
     [
-      storeNodes,
+      nodeRepository,
       expandedNamespaces,
       hiddenNodeIds,
       selectedNodeId,
@@ -1706,6 +1709,7 @@ export function ExplorePerspective() {
           availableTypes={availableTypes}
           actions={editorActions}
           allNodes={storeNodes}
+          nodeRepository={nodeRepository}
           renderExpressionEditor={renderExpressionEditor}
           onClose={() => {
             /* pane visibility handled by paneswitch */
@@ -1722,6 +1726,7 @@ export function ExplorePerspective() {
       availableTypes,
       editorActions,
       storeNodes,
+      nodeRepository,
       renderExpressionEditor,
       navigateToNode
     ]
@@ -1752,7 +1757,7 @@ export function ExplorePerspective() {
   const structureUnsupportedSelectedType = useMemo<{ name: string; kind: string } | undefined>(() => {
     if (!selectedNodeId || structureFocusedTypeId) return undefined;
     if (!selectedNodeType) return undefined;
-    const node = storeNodes.find((n) => n.id === selectedNodeId);
+    const node = nodeRepository.byId(selectedNodeId);
     const name = (node?.data as { name?: string } | undefined)?.name ?? nameFromNodeId(selectedNodeId);
     // Map AST $type → user-friendly kind label. Codex review (e2e-batch
     // adversarial) flagged the previous map as non-exhaustive — it omitted
@@ -1784,7 +1789,7 @@ export function ExplorePerspective() {
       RosettaRule: 'Rule'
     };
     return { name, kind: KIND_LABEL[selectedNodeType] ?? formatUnknownKind(selectedNodeType) };
-  }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, storeNodes]);
+  }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, nodeRepository]);
 
   const adapterDocument = useMemo(
     () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),

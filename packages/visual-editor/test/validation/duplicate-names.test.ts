@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { detectDuplicateName } from '../../src/validation/edit-validator.js';
+import { selectNodeRepository } from '../../src/store/node-repository.js';
 
 const SOURCE = `
 namespace test.dup
@@ -56,8 +57,9 @@ describe('Duplicate name prevention', () => {
     const fooNode = state.nodes.find((n) => n.data.name === 'Foo');
     expect(fooNode).toBeDefined();
 
-    // 'bar' already exists
-    const result = detectDuplicateName('bar', 'test.dup', state.nodes, fooNode!.id);
+    // 'bar' already exists — pass repository for O(1) node lookup
+    const repo = selectNodeRepository(state.nodesById);
+    const result = detectDuplicateName('bar', 'test.dup', state.nodes, fooNode!.id, repo);
     expect(result).toBe(true);
   });
 });

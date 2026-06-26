@@ -18,6 +18,7 @@ import { NamespaceExplorerPanel } from '../../src/components/panels/NamespaceExp
 import type { TypeGraphNode, AnyGraphNode } from '../../src/types.js';
 import { TYPE_REF_PAYLOAD_MIME, isTypeRefPayload, typeRefMimeForKind } from '../../src/types/structure-view.js';
 import { testMeta } from '../helpers/node-meta.js';
+import { selectNodeRepository } from '../../src/store/node-repository.js';
 
 // Mock @tanstack/react-virtual to render all items in jsdom (no real scroll container)
 vi.mock('@tanstack/react-virtual', () => ({
@@ -71,10 +72,17 @@ const defaultNodes = [
   makeNode('cdm.trade', 'Trade')
 ];
 
+/** Build a NodeRepository from an arbitrary set of TypeGraphNodes. */
+function repoFrom(nodes: TypeGraphNode[]) {
+  return selectNodeRepository(new Map(nodes.map((n) => [n.id, n])));
+}
+
+const defaultRepo = repoFrom(defaultNodes);
+
 function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExplorerPanel>> = {}) {
   const allNamespaces = new Set(defaultNodes.map((n) => n.meta.namespace));
   const props = {
-    nodes: defaultNodes,
+    nodeRepository: defaultRepo,
     expandedNamespaces: allNamespaces,
     hiddenNodeIds: new Set<string>(),
     onToggleNamespace: vi.fn(),
@@ -88,7 +96,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof NamespaceExp
 
 describe('NamespaceExplorerPanel', () => {
   it('shows empty state when no nodes', () => {
-    renderPanel({ nodes: [] });
+    renderPanel({ nodeRepository: repoFrom([]) });
     expect(screen.getByText('No types loaded')).toBeTruthy();
   });
 
@@ -249,6 +257,14 @@ describe('NamespaceExplorerPanel', () => {
     expect(screen.getByText('4/5')).toBeTruthy();
   });
 
+  it('kind filter pill shows byType count badge (data pill shows 4 for defaultNodes)', () => {
+    // defaultNodes has 4 Data nodes (Trade×2, Event, Date) and 1 Choice node.
+    // The pill badge reflects nodeRepository.byType('Data').length directly.
+    renderPanel();
+    const dataPill = screen.getByTestId('kind-filter-data');
+    expect(dataPill.textContent).toContain('4');
+  });
+
   // -------------------------------------------------------------------------
   // Phase 8 — drag-source palette behaviour
   // -------------------------------------------------------------------------
@@ -343,7 +359,7 @@ describe('NamespaceExplorerPanel', () => {
     const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
     render(
       <NamespaceExplorerPanel
-        nodes={[funcNode]}
+        nodeRepository={repoFrom([funcNode])}
         expandedNamespaces={new Set(['cdm.func'])}
         hiddenNodeIds={new Set()}
         onToggleNamespace={vi.fn()}
@@ -360,7 +376,7 @@ describe('NamespaceExplorerPanel', () => {
     const funcNode = makeNode('cdm.func', 'MyFunc', 'RosettaFunction');
     render(
       <NamespaceExplorerPanel
-        nodes={[funcNode]}
+        nodeRepository={repoFrom([funcNode])}
         expandedNamespaces={new Set(['cdm.func'])}
         hiddenNodeIds={new Set()}
         onToggleNamespace={vi.fn()}
@@ -398,7 +414,7 @@ describe('NamespaceExplorerPanel — kind filter pills', () => {
   function renderMixed() {
     return render(
       <NamespaceExplorerPanel
-        nodes={mixedNodes}
+        nodeRepository={repoFrom(mixedNodes)}
         expandedNamespaces={new Set(['pkg'])}
         hiddenNodeIds={new Set()}
         onToggleNamespace={vi.fn()}
@@ -439,9 +455,10 @@ describe('NamespaceExplorerPanel — kind filter pills', () => {
   });
 
   it('prunes a now-empty namespace from the tree when its only kind is filtered off', () => {
+    const singleNode = makeNode('only.choice', 'C', 'Choice');
     render(
       <NamespaceExplorerPanel
-        nodes={[makeNode('only.choice', 'C', 'Choice')]}
+        nodeRepository={repoFrom([singleNode])}
         expandedNamespaces={new Set(['only.choice'])}
         hiddenNodeIds={new Set()}
         onToggleNamespace={vi.fn()}

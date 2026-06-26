@@ -145,6 +145,8 @@ export { makeNodeId, nameFromNodeId, splitNodeId } from './store/node-projection
 // Store (for advanced consumers)
 export { createEditorStore, useEditorStore } from './store/editor-store.js';
 export type { EditorStore, EditorState, EditorActions, DeferredExportEntry } from './store/editor-store.js';
+export { selectNodeRepository } from './store/node-repository.js';
+export type { NodeRepository, NodeOf } from './store/node-repository.js';
 
 // History / undo-redo
 export { useTemporalStore, useCanUndo, useCanRedo, useUndo, useRedo } from './store/history.js';

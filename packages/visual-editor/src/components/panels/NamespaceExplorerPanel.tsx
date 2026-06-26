@@ -27,7 +27,10 @@ import {
   NAMESPACE_TREE_INDENT_BASE as TREE_INDENT_BASE,
   NAMESPACE_TREE_TYPE_INDENT as TREE_TYPE_INDENT
 } from '../NamespaceSegmentHeaderRow.js';
-import type { TypeGraphNode, TypeKind } from '../../types.js';
+import type { TypeKind } from '../../types.js';
+import type { NodeRepository } from '../../store/node-repository.js';
+import { NODE_TYPE_TO_AST_TYPE } from '../../adapters/model-helpers.js';
+import type { AnyDomain } from '@rune-langium/core';
 import {
   buildSegmentedNamespaceTree,
   flattenSegmentedTree,
@@ -50,8 +53,8 @@ import type { TypeRefPayload, TypeRefKind } from '../../types/structure-view.js'
 // ---------------------------------------------------------------------------
 
 export interface NamespaceExplorerPanelProps {
-  /** All graph nodes (full set, including hidden ones). */
-  nodes: TypeGraphNode[];
+  /** Repository over all graph nodes (full set, including hidden ones). */
+  nodeRepository: NodeRepository;
   /** Set of currently expanded (visible) namespaces. */
   expandedNamespaces: Set<string>;
   /** Set of individually hidden node IDs. */
@@ -167,7 +170,7 @@ const KIND_DOT_CLASS: Record<FilterKind, string> = {
 // ---------------------------------------------------------------------------
 
 export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
-  nodes,
+  nodeRepository,
   expandedNamespaces,
   hiddenNodeIds,
   selectedNodeId,
@@ -202,7 +205,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   }, []);
 
   // Build the segmented namespace tree.
-  const segmentedRootsRaw = useMemo(() => buildSegmentedNamespaceTree(nodes), [nodes]);
+  const segmentedRootsRaw = useMemo(() => buildSegmentedNamespaceTree(nodeRepository), [nodeRepository]);
 
   // Apply the local kind filter FIRST so search + ancestor-expansion operate on
   // the kind-pruned tree. Only the pill-controlled kinds (data/choice/enum/func)
@@ -222,7 +225,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   // Default expansion: expand all depth-0 and depth-1 segments so the tree is
   // usable on first render without collapsing all the way to bare root segments.
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => {
-    const roots = buildSegmentedNamespaceTree(nodes);
+    const roots = buildSegmentedNamespaceTree(nodeRepository);
     const initial = new Set<string>();
     for (const root of roots) {
       initial.add(root.fullPath);
@@ -281,8 +284,20 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
     [segmentedRoots]
   );
 
-  const totalTypes = nodes.length;
-  const visibleCount = nodes.filter((n) => expandedNamespaces.has(n.meta.namespace) && !hiddenNodeIds.has(n.id)).length;
+  const allNodes = nodeRepository.all();
+  const totalTypes = allNodes.length;
+  const visibleCount = allNodes.filter((n) => expandedNamespaces.has(n.meta.namespace) && !hiddenNodeIds.has(n.id)).length;
+
+  // Per-kind counts for the filter-pill badges — derived directly from the
+  // repository's byType index so they reflect the full node set regardless of
+  // the current tree filter state.
+  const kindCounts = useMemo(() => {
+    const counts = {} as Record<TypeKind, number>;
+    for (const kind of EXPLORER_FILTER_KINDS) {
+      counts[kind] = nodeRepository.byType(NODE_TYPE_TO_AST_TYPE[kind] as AnyDomain['$type']).length;
+    }
+    return counts;
+  }, [nodeRepository]);
 
   return (
     <TooltipProvider>
@@ -378,6 +393,7 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
                   aria-hidden="true"
                 />
                 {KIND_LABEL[kind]}
+                <span className="text-muted-foreground/70 tabular-nums">{kindCounts[kind]}</span>
               </button>
             );
           })}
