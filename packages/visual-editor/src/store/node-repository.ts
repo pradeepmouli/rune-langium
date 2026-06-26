@@ -20,6 +20,13 @@ export type NodeOf<K extends AnyDomain['$type']> = Node<Extract<AnyDomain, { $ty
  * narrows its `K` constraint to `AnyDomain['$type']`, which is a contravariant
  * narrowing the generic `byType<K extends string>` cannot be widened to — the
  * generated `DomainRepository` is standalone for the same reason.
+ *
+ * STATUS — forward-looking keystone, NOT yet wired into editor reads. The
+ * editor's `byId`-style lookups read `nodesById.get(...)` directly (the Map IS
+ * the id index; wrapping it would be a parallel source of truth). This surface
+ * exists for the typed `byType` projection, which has no consumer today; when
+ * one arrives it calls `selectNodeRepository(get().nodesById)` (no rewiring of
+ * the store needed). Built eyes-open as a complete generated substrate.
  */
 export interface NodeRepository {
   byId(id: string): TypeGraphNode | undefined;
