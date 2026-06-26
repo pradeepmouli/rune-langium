@@ -81,8 +81,7 @@ const lspSessionUrl = env.VITE_LSP_SESSION_URL ?? defaultLspSessionUrl();
 // production HTML/network calls. Use the wrangler-dev origin so SSR/Node
 // fallbacks behave the same as `pnpm dev:pages`; in the browser we always
 // resolve to `window.location.origin` and never reach this branch.
-const origin =
-  typeof window === 'undefined' ? 'http://localhost:8788' : window.location.origin;
+const origin = typeof window === 'undefined' ? 'http://localhost:8788' : window.location.origin;
 const telemetryEndpoint = env.VITE_TELEMETRY_ENDPOINT ?? `${origin}/api/telemetry/v1/event`;
 const lspEnabled = boolFromEnv(env.VITE_ENABLE_LSP, true);
 const telemetryEnabled = boolFromEnv(env.VITE_ENABLE_TELEMETRY, false);

@@ -6,7 +6,9 @@ import { phaseToSyncState } from '../../src/services/git-sync.js';
 
 describe('phaseToSyncState', () => {
   it('maps blocked+conflicts → conflict', () => {
-    expect(phaseToSyncState({ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] })).toBe('conflict');
+    expect(phaseToSyncState({ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] })).toBe(
+      'conflict'
+    );
   });
   it('maps blocked without conflictPaths → diverged', () => {
     expect(phaseToSyncState({ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null })).toBe('diverged');

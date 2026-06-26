@@ -64,7 +64,10 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
     while (current && !visited.has(current)) {
       visited.add(current);
       for (const v of current.enumValues ?? []) {
-        if (v?.name && !seen.has(v.name)) { seen.add(v.name); names.push(v.name); }
+        if (v?.name && !seen.has(v.name)) {
+          seen.add(v.name);
+          names.push(v.name);
+        }
       }
       current = (current as { parent?: { ref?: RosettaEnumeration } }).parent?.ref;
     }

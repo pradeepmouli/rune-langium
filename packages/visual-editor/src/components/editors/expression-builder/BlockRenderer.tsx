@@ -177,9 +177,7 @@ function BlockRendererInner({
   } else if ($type === 'ChoiceOperation') {
     content = <UnaryBlock node={node} renderChild={renderChild} />;
   } else if ($type === 'Placeholder') {
-    content = (
-      <PlaceholderBlock node={node} onActivate={onActivatePlaceholder} onDragNode={onDragNode} />
-    );
+    content = <PlaceholderBlock node={node} onActivate={onActivatePlaceholder} onDragNode={onDragNode} />;
   } else if ($type === 'Unsupported') {
     content = <UnsupportedBlock node={node} />;
   } else {
@@ -229,9 +227,7 @@ function BlockRendererInner({
           aria-label="Expand sub-expression"
         >
           <span>{'▸'}</span>
-          <span className="font-mono">
-            {$type.replace(/^Rosetta/, '').replace(/Operation$/, '')}
-          </span>
+          <span className="font-mono">{$type.replace(/^Rosetta/, '').replace(/Operation$/, '')}</span>
           <span>{'…'}</span>
         </button>
       ) : (

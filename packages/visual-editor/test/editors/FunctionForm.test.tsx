@@ -99,7 +99,8 @@ describe('FunctionForm', () => {
   it('calls addInputParam when add-input button is clicked with name filled', () => {
     const actions = makeActions();
     render(
-      <FunctionForm meta={testMeta('test.model')}
+      <FunctionForm
+        meta={testMeta('test.model')}
         nodeId="fn1"
         data={makeFuncData({ inputs: [] } as any)}
         availableTypes={AVAILABLE_TYPES}
@@ -120,7 +121,15 @@ describe('FunctionForm', () => {
 
   it('calls removeInputParam when remove button is clicked', () => {
     const actions = makeActions();
-    render(<FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     // AttributeRow uses aria-label "Remove attribute {name}" (the generic
     // remove affordance shared with DataTypeForm rows).
@@ -133,7 +142,8 @@ describe('FunctionForm', () => {
   it('shows expression error on blur when parentheses are unbalanced', () => {
     const actions = makeActions();
     render(
-      <FunctionForm meta={testMeta('test.model')}
+      <FunctionForm
+        meta={testMeta('test.model')}
         nodeId="fn1"
         data={makeFuncData({ expressionText: '' } as any)}
         availableTypes={AVAILABLE_TYPES}
@@ -152,7 +162,8 @@ describe('FunctionForm', () => {
   it('clears expression error on typing after a validation error', () => {
     const actions = makeActions();
     render(
-      <FunctionForm meta={testMeta('test.model')}
+      <FunctionForm
+        meta={testMeta('test.model')}
         nodeId="fn1"
         data={makeFuncData({ expressionText: '' } as any)}
         availableTypes={AVAILABLE_TYPES}
@@ -175,7 +186,8 @@ describe('FunctionForm', () => {
   it('commits valid expression on blur', () => {
     const actions = makeActions();
     render(
-      <FunctionForm meta={testMeta('test.model')}
+      <FunctionForm
+        meta={testMeta('test.model')}
         nodeId="fn1"
         data={makeFuncData({ expressionText: '' } as any)}
         availableTypes={AVAILABLE_TYPES}
@@ -192,7 +204,15 @@ describe('FunctionForm', () => {
 
   it('renames function after debounced name change', () => {
     const actions = makeActions();
-    render(<FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     const nameInput = screen.getByLabelText('Function type name');
     fireEvent.change(nameInput, { target: { value: 'ComputePrice' } });
@@ -207,7 +227,8 @@ describe('FunctionForm', () => {
   it('shows empty state when no input parameters exist', () => {
     const actions = makeActions();
     render(
-      <FunctionForm meta={testMeta('test.model')}
+      <FunctionForm
+        meta={testMeta('test.model')}
         nodeId="fn1"
         data={makeFuncData({ inputs: [] } as any)}
         availableTypes={AVAILABLE_TYPES}
@@ -221,7 +242,13 @@ describe('FunctionForm', () => {
   it('input rows render an editable name input and type-picker trigger', () => {
     const actions = makeActions();
     const { container } = render(
-      <FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     // Each input renders as an AttributeRow (data-slot="attribute-row").
@@ -242,7 +269,13 @@ describe('FunctionForm', () => {
   it('calls updateInputParam when an input row name changes (after debounce)', () => {
     const actions = makeActions();
     const { container } = render(
-      <FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     const rows = container.querySelectorAll('[data-slot="attribute-row"]');
@@ -263,7 +296,13 @@ describe('FunctionForm', () => {
   it('calls reorderInputParam when handleReorderInput is invoked via drag', () => {
     const actions = makeActions();
     const { container } = render(
-      <FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     // Simulate drag-drop: drag first row onto the second.
@@ -276,7 +315,9 @@ describe('FunctionForm', () => {
     const dt = { data: {} as Record<string, string> };
     fireEvent.dragStart(sourceRow, {
       dataTransfer: {
-        setData: (k: string, v: string) => { dt.data[k] = v; },
+        setData: (k: string, v: string) => {
+          dt.data[k] = v;
+        },
         effectAllowed: 'move'
       }
     });
@@ -372,7 +413,15 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     const renameType = vi.fn();
     const actions = { ...makeActions(), renameType };
 
-    render(<FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     const nameInput = screen.getByLabelText(/function type name/i);
 
@@ -402,14 +451,28 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     } as any);
 
     const { container, rerender } = render(
-      <FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={nodeA}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('CalculateNotional');
 
     // Swap to nodeB (new reference identity)
-    rerender(<FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={nodeB}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     // Pristine name field reflects nodeB after the swap.
     const swappedName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
@@ -433,7 +496,13 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     const actions = makeActions();
 
     const { rerender } = render(
-      <FunctionForm meta={testMeta('test.model')} nodeId="fn1" data={makeFuncData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     // ---- Edit an input row: add a parameter ------------------------------
@@ -471,7 +540,8 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     const removeInputCallsBeforeOutput = (actions.removeInputParam as ReturnType<typeof vi.fn>).mock.calls.length;
 
     rerender(
-      <FunctionForm meta={testMeta('test.model')}
+      <FunctionForm
+        meta={testMeta('test.model')}
         nodeId="fn1"
         data={makeFuncData({
           output: {

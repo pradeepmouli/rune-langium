@@ -6,7 +6,7 @@ export default {
   plugins: [
     './stylelint-plugins/no-literal-layout-px.mjs',
     './stylelint-plugins/no-raw-color.mjs',
-    './stylelint-plugins/no-raw-geometry.mjs',
+    './stylelint-plugins/no-raw-geometry.mjs'
   ],
   rules: {
     'rune/no-literal-layout-px': true,
@@ -16,12 +16,15 @@ export default {
     // Require design tokens for color values.
     // box-shadow excluded: depth-cue alpha layers (glass shadows) use raw
     // oklch(0 0 0 / alpha) with no 1-to-1 token mapping.
-    'rune/no-raw-color': [true, {
-      ignoreProperties: ['box-shadow', 'text-shadow'],
-    }],
+    'rune/no-raw-color': [
+      true,
+      {
+        ignoreProperties: ['box-shadow', 'text-shadow']
+      }
+    ],
     // Relax rules that don't fit the existing repo style:
-    'selector-class-pattern': null,          // allow BEM-style with double-dash modifiers
-    'no-descending-specificity': null,       // existing repo has these
+    'selector-class-pattern': null, // allow BEM-style with double-dash modifiers
+    'no-descending-specificity': null, // existing repo has these
     'declaration-block-no-redundant-longhand-properties': null,
     // Existing CSS uses oklch(L C H / A) shorthand notation with bare numbers
     // (no "deg"/"%" suffixes) and rgba() — disable the pedantic notation rules
@@ -42,7 +45,7 @@ export default {
     // Existing CSS comment / rule blank-line placement doesn't match standard.
     'comment-empty-line-before': null,
     'rule-empty-line-before': null,
-    'declaration-empty-line-before': null,
+    'declaration-empty-line-before': null
   },
-  ignoreFiles: ['dist/**', 'node_modules/**'],
+  ignoreFiles: ['dist/**', 'node_modules/**']
 };

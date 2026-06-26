@@ -55,7 +55,14 @@ describe('git-sync resolve wiring', () => {
     // capturedPolicy is the real InteractiveConflictPolicy; call onConflict to
     // get the pending promise, then resolve it via resolveConflict.
     const policy = capturedPolicy as { onConflict: (ctx: object) => Promise<{ action: string }> };
-    const pending = policy.onConflict({ conflictPaths: ['a'], localSha: 'l', remoteSha: 'r', fs: {}, dir: '/', gitdir: '/.git' });
+    const pending = policy.onConflict({
+      conflictPaths: ['a'],
+      localSha: 'l',
+      remoteSha: 'r',
+      fs: {},
+      dir: '/',
+      gitdir: '/.git'
+    });
     resolveConflict(wsId, 'keepMine');
     await expect(pending).resolves.toEqual({ action: 'keepMine' });
   });

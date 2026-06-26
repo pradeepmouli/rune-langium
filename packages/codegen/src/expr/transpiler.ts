@@ -174,9 +174,7 @@ export function emitOneOf(attrNames: string[], ctx: ExpressionTranspilerContext)
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [`if (!runeCheckOneOf([${attrList}])) {`, `  errors.push('${message}');`, `}`].join(
-      '\n'
-    );
+    return [`if (!runeCheckOneOf([${attrList}])) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
@@ -207,9 +205,7 @@ export function emitChoice(attrNames: string[], ctx: ExpressionTranspilerContext
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [`if (!runeCheckOneOf([${attrList}])) {`, `  errors.push('${message}');`, `}`].join(
-      '\n'
-    );
+    return [`if (!runeCheckOneOf([${attrList}])) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
@@ -241,11 +237,7 @@ export function emitExists(attrName: string, ctx: ExpressionTranspilerContext): 
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [
-      `if (!runeAttrExists(${dataRef}.${attrName})) {`,
-      `  errors.push('${message}');`,
-      `}`
-    ].join('\n');
+    return [`if (!runeAttrExists(${dataRef}.${attrName})) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
@@ -277,11 +269,7 @@ export function emitIsAbsent(attrName: string, ctx: ExpressionTranspilerContext)
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [
-      `if (runeAttrExists(${dataRef}.${attrName})) {`,
-      `  errors.push('${message}');`,
-      `}`
-    ].join('\n');
+    return [`if (runeAttrExists(${dataRef}.${attrName})) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
@@ -301,19 +289,14 @@ export function emitIsAbsent(attrName: string, ctx: ExpressionTranspilerContext)
  * Semantics: all attributes NOT in attrNames must be absent.
  * T054.
  */
-export function emitOnlyExists(
-  allowedAttrNames: string[],
-  ctx: ExpressionTranspilerContext
-): string {
+export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTranspilerContext): string {
   // Validate all allowed attrs exist on the type
   for (const name of allowedAttrNames) {
     validateAttr(name, ctx);
   }
 
   // Find all attributes on the type that are NOT in the allowed list
-  const forbiddenAttrs = Array.from(ctx.attributeTypes.keys()).filter(
-    (name) => !allowedAttrNames.includes(name)
-  );
+  const forbiddenAttrs = Array.from(ctx.attributeTypes.keys()).filter((name) => !allowedAttrNames.includes(name));
 
   const dataRef = ctx.selfName;
   const message = `${ctx.conditionName}: only [${allowedAttrNames.join(', ')}] may exist in ${ctx.typeName}`;
@@ -375,9 +358,7 @@ export function buildConditionMessage(cond: Condition, ctx: ExpressionTranspiler
         elements?: Array<RosettaExpression>;
       };
       if (listLiteral.$type === 'ListLiteral' && Array.isArray(listLiteral.elements)) {
-        names = listLiteral.elements
-          .map((e) => extractAttrName(e))
-          .filter((n): n is string => n !== undefined);
+        names = listLiteral.elements.map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
       } else {
         const name = extractAttrName(arg);
         names = name ? [name] : [];
@@ -418,9 +399,7 @@ export function buildConditionMessage(cond: Condition, ctx: ExpressionTranspiler
       | undefined;
     let names: string[] = [];
     if (arg && arg.$type === 'ListLiteral' && Array.isArray(arg.elements)) {
-      names = arg.elements
-        .map((e) => extractAttrName(e))
-        .filter((n): n is string => n !== undefined);
+      names = arg.elements.map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
     }
     return `${ctx.conditionName}: only [${names.join(', ')}] may exist in ${ctx.typeName}`;
   }
@@ -460,9 +439,7 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
       elements?: Array<RosettaExpression>;
     };
     if (listLiteral.$type === 'ListLiteral' && Array.isArray(listLiteral.elements)) {
-      const names = listLiteral.elements
-        .map((e) => extractAttrName(e))
-        .filter((n): n is string => n !== undefined);
+      const names = listLiteral.elements.map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
       // Validate each attr name
       for (const name of names) {
         validateAttr(name, ctx);
@@ -551,9 +528,7 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
       elements?: Array<RosettaExpression>;
     };
     if (listLiteral.$type === 'ListLiteral' && Array.isArray(listLiteral.elements)) {
-      const names = listLiteral.elements
-        .map((e) => extractAttrName(e))
-        .filter((n): n is string => n !== undefined);
+      const names = listLiteral.elements.map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
       return emitOnlyExists(names, ctx);
     }
     // Single attr
@@ -652,10 +627,7 @@ function wrapBoolExprForMode(boolExpr: string, ctx: ExpressionTranspilerContext)
  * RosettaNumberLiteral  → <number>
  * RosettaStringLiteral  → '<escaped-string>'
  */
-export function transpileLiteral(
-  expr: RosettaExpression,
-  _ctx: ExpressionTranspilerContext
-): string {
+export function transpileLiteral(expr: RosettaExpression, _ctx: ExpressionTranspilerContext): string {
   if (isRosettaBooleanLiteral(expr)) {
     return expr.value ? 'true' : 'false';
   }
@@ -688,10 +660,7 @@ export function transpileLiteral(
  * Uses ctx.selfName as the root binding (default 'data').
  * FR-013: optional chaining for path navigation.
  */
-export function transpileNavigation(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileNavigation(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (isRosettaFeatureCall(expr)) {
     const receiver = transpileExpression(expr.receiver, ctx);
     // RosettaFeature includes ChoiceOption which may not have a name field;
@@ -714,10 +683,7 @@ export function transpileNavigation(
  *
  * Operator mapping: + → +, - → -, * → *, / → /
  */
-export function transpileArithmetic(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileArithmetic(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isArithmeticOperation(expr)) {
     return 'undefined /* not ArithmeticOperation */';
   }
@@ -732,22 +698,15 @@ export function transpileArithmetic(
  *
  * Operator mapping: = → ===, <> → !==, <, <=, >, >= → direct.
  */
-export function transpileComparison(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (isEqualityOperation(expr)) {
     const jsOp = expr.operator === '=' ? '===' : '!==';
-    const left = expr.left
-      ? transpileWithPrecedence(expr.left, expr.operator, ctx, 'left')
-      : ctx.selfName;
+    const left = expr.left ? transpileWithPrecedence(expr.left, expr.operator, ctx, 'left') : ctx.selfName;
     const right = transpileWithPrecedence(expr.right, expr.operator, ctx, 'right');
     return `${left} ${jsOp} ${right}`;
   }
   if (isComparisonOperation(expr)) {
-    const left = expr.left
-      ? transpileWithPrecedence(expr.left, expr.operator, ctx, 'left')
-      : ctx.selfName;
+    const left = expr.left ? transpileWithPrecedence(expr.left, expr.operator, ctx, 'left') : ctx.selfName;
     const right = transpileWithPrecedence(expr.right, expr.operator, ctx, 'right');
     return `${left} ${expr.operator} ${right}`;
   }
@@ -758,10 +717,7 @@ export function transpileComparison(
  * T070: Transpile boolean logical operations (and → &&, or → ||).
  * Parenthesizes children when child precedence is lower than parent.
  */
-export function transpileBoolean(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileBoolean(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isLogicalOperation(expr)) {
     return 'undefined /* not LogicalOperation */';
   }
@@ -806,13 +762,9 @@ export function transpileSetOps(expr: RosettaExpression, ctx: ExpressionTranspil
  * flatten  → (arr ?? []).flat()
  * reverse  → [...(arr ?? [])].reverse()
  */
-export function transpileAggregation(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileAggregation(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   // Helper: get the argument expression (or ctx.selfName if no argument)
-  const getArg = (arg: RosettaExpression | undefined): string =>
-    arg ? transpileExpression(arg, ctx) : ctx.selfName;
+  const getArg = (arg: RosettaExpression | undefined): string => (arg ? transpileExpression(arg, ctx) : ctx.selfName);
 
   if (isRosettaCountOperation(expr)) {
     return `runeCount(${getArg(expr.argument)})`;
@@ -865,10 +817,7 @@ export function transpileAggregation(
  *
  * The lambda body is transpiled with a child context where selfName = lambda param name.
  */
-export function transpileHigherOrder(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileHigherOrder(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (isFilterOperation(expr)) {
     const arr = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
     const fn = expr.function;
@@ -902,10 +851,7 @@ export function transpileHigherOrder(
  *   No function → identity (return argument unchanged).
  *   With function → `((param) => body)(arg)`
  */
-export function transpileThenOperation(
-  expr: ThenOperation,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileThenOperation(expr: ThenOperation, ctx: ExpressionTranspilerContext): string {
   const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
   if (!expr.function) {
     return arg;
@@ -930,10 +876,7 @@ export function transpileThenOperation(
  *
  * The antecedent and consequent are transpiled recursively.
  */
-export function transpileConditional(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileConditional(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isRosettaConditionalExpression(expr)) {
     return 'undefined /* not RosettaConditionalExpression */';
   }
@@ -994,10 +937,7 @@ export function transpileConditional(
  * In TypeScript we emit plain objects because the generated Zod types
  * accept plain-object inputs rather than builder instances.
  */
-export function transpileConstructor(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileConstructor(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isRosettaConstructorExpression(expr)) {
     return 'undefined /* not RosettaConstructorExpression */';
   }
@@ -1019,10 +959,7 @@ export function transpileConstructor(
  *
  * ListLiteral { elements } → [ elem1, elem2, ... ]
  */
-export function transpileListLiteral(
-  expr: RosettaExpression,
-  ctx: ExpressionTranspilerContext
-): string {
+export function transpileListLiteral(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isListLiteral(expr)) {
     return 'undefined /* not ListLiteral */';
   }

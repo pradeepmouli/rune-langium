@@ -11,14 +11,12 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('handleGitProxy', () => {
   it('forwards to the reconstructed github URL with injected auth', async () => {
-    const spy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response('refs', {
-          status: 200,
-          headers: { 'Content-Type': 'application/x-git-upload-pack-advertisement' }
-        })
-      );
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('refs', {
+        status: 200,
+        headers: { 'Content-Type': 'application/x-git-upload-pack-advertisement' }
+      })
+    );
     const req = new Request(
       'https://www.daikonic.dev/rune-studio/api/github-auth/git/github.com/owner/repo.git/info/refs?service=git-upload-pack',
       { method: 'GET', headers: { Origin: env.ALLOWED_ORIGIN, Authorization: 'Basic dXNlcjp0b2tlbg==' } }

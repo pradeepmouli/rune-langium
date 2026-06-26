@@ -11,7 +11,9 @@ describe('PERSPECTIVES registry', () => {
     expect(PERSPECTIVES.filter((p) => p.showsFileTabs).map((p) => p.id)).toEqual(['explore']);
   });
   it('explore/git/export require a workspace; workspaces/settings do not', () => {
-    const req = PERSPECTIVES.filter((p) => p.requiresWorkspace).map((p) => p.id).sort();
+    const req = PERSPECTIVES.filter((p) => p.requiresWorkspace)
+      .map((p) => p.id)
+      .sort();
     expect(req).toEqual(['explore', 'export', 'git']);
   });
   it('settings is in the bottom group', () => {

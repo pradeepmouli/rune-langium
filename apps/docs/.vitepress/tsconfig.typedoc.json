@@ -13,11 +13,6 @@
     "../../../packages/codegen/src/index.ts",
     "../../../packages/visual-editor/src/index.ts"
   ],
-  "exclude": [
-    "../../../apps/studio/**",
-    "../../../packages/design-system/**",
-    "**/*.test.ts",
-    "**/*.spec.ts"
-  ],
+  "exclude": ["../../../apps/studio/**", "../../../packages/design-system/**", "**/*.test.ts", "**/*.spec.ts"],
   "references": []
 }

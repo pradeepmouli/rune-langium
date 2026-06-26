@@ -27,17 +27,14 @@ describe('CuratedLoadErrorPanel (T037)', () => {
     ['storage_quota', /storage|quota|space/i],
     ['permission_denied', /permission/i],
     ['cancelled', /cancel/i]
-  ] as Array<[ErrorCategory, RegExp]>)(
-    'renders a category-specific message for %s',
-    (category, pattern) => {
-      renderPanel(category);
-      // The error text should be category-specific, not the literal "unknown".
-      const body = document.body.textContent ?? '';
-      expect(body).toMatch(pattern);
-      expect(body).not.toMatch(/unknown error/i);
-      expect(body).not.toMatch(/something went wrong/i);
-    }
-  );
+  ] as Array<[ErrorCategory, RegExp]>)('renders a category-specific message for %s', (category, pattern) => {
+    renderPanel(category);
+    // The error text should be category-specific, not the literal "unknown".
+    const body = document.body.textContent ?? '';
+    expect(body).toMatch(pattern);
+    expect(body).not.toMatch(/unknown error/i);
+    expect(body).not.toMatch(/something went wrong/i);
+  });
 
   it('always exposes a retry button', () => {
     const { onRetry } = renderPanel('network');
@@ -75,9 +72,7 @@ describe('CuratedLoadErrorPanel (T037)', () => {
     const titles = new Set<string>();
     const bodies = new Set<string>();
     for (const cat of allCategories) {
-      const { unmount } = render(
-        <CuratedLoadErrorPanel category={cat} modelName="CDM" onRetry={vi.fn()} />
-      );
+      const { unmount } = render(<CuratedLoadErrorPanel category={cat} modelName="CDM" onRetry={vi.fn()} />);
       const heading = screen.getByRole('heading', { level: 3 });
       const body = heading.parentElement?.querySelector('p');
       expect(heading.textContent).toBeTruthy();

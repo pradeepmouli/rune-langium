@@ -36,9 +36,9 @@ describe('updateGraphView — I2: position/layout updates produce no patches, no
   it('position change: appends NO patch to pendingEditPatches (I2)', () => {
     const before = store.getState();
 
-    store.getState().applyReactFlowNodeChanges([
-      { type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }
-    ]);
+    store
+      .getState()
+      .applyReactFlowNodeChanges([{ type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }]);
 
     const after = store.getState();
     // I2: same reference — no patch was appended
@@ -48,26 +48,26 @@ describe('updateGraphView — I2: position/layout updates produce no patches, no
   it('position change: does NOT bump parseEpoch (I2)', () => {
     const before = store.getState();
 
-    store.getState().applyReactFlowNodeChanges([
-      { type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }
-    ]);
+    store
+      .getState()
+      .applyReactFlowNodeChanges([{ type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }]);
 
     expect(store.getState().parseEpoch).toBe(before.parseEpoch);
   });
 
   it('position change: I1 still holds (nodesById values === nodes array)', () => {
-    store.getState().applyReactFlowNodeChanges([
-      { type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }
-    ]);
+    store
+      .getState()
+      .applyReactFlowNodeChanges([{ type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }]);
 
     const after = store.getState();
     expect([...after.nodesById.values()]).toEqual(after.nodes);
   });
 
   it('position change: position actually moves', () => {
-    store.getState().applyReactFlowNodeChanges([
-      { type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }
-    ]);
+    store
+      .getState()
+      .applyReactFlowNodeChanges([{ type: 'position', id: nodeId, position: { x: 999, y: 999 }, dragging: false }]);
 
     const after = store.getState();
     expect(after.nodesById.get(nodeId)?.position).toEqual({ x: 999, y: 999 });
@@ -76,9 +76,9 @@ describe('updateGraphView — I2: position/layout updates produce no patches, no
   it('intermediate drag (dragging=true) is filtered — no state change at all', () => {
     const before = store.getState();
 
-    store.getState().applyReactFlowNodeChanges([
-      { type: 'position', id: nodeId, position: { x: 500, y: 500 }, dragging: true }
-    ]);
+    store
+      .getState()
+      .applyReactFlowNodeChanges([{ type: 'position', id: nodeId, position: { x: 500, y: 500 }, dragging: true }]);
 
     const after = store.getState();
     // Nothing changed — the action returns early

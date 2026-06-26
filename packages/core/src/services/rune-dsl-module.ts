@@ -9,12 +9,7 @@ import type {
   PartialLangiumSharedCoreServices,
   DefaultSharedCoreModuleContext
 } from 'langium';
-import {
-  inject,
-  createDefaultCoreModule,
-  createDefaultSharedCoreModule,
-  EmptyFileSystem
-} from 'langium';
+import { inject, createDefaultCoreModule, createDefaultSharedCoreModule, EmptyFileSystem } from 'langium';
 import { RuneDslGeneratedModule, RuneDslGeneratedSharedModule } from '../generated/module.js';
 import { RuneDslScopeProvider } from './rune-dsl-scope-provider.js';
 import { RuneDslScopeComputation } from './rune-dsl-scope-computation.js';
@@ -31,10 +26,7 @@ export type { DeferredModelProvider } from './rune-dsl-linker.js';
  *
  * @category Core
  */
-export const RuneDslSharedModule: Module<
-  LangiumSharedCoreServices,
-  PartialLangiumSharedCoreServices
-> = {
+export const RuneDslSharedModule: Module<LangiumSharedCoreServices, PartialLangiumSharedCoreServices> = {
   workspace: {
     IndexManager: (services) => new RuneDslIndexManager(services)
   }
@@ -149,21 +141,12 @@ export function createRuneDslServices(
   shared: LangiumSharedCoreServices;
   RuneDsl: LangiumCoreServices;
 } {
-  const shared = inject(
-    createDefaultSharedCoreModule(context),
-    RuneDslGeneratedSharedModule,
-    RuneDslSharedModule
-  );
-  const RuneDsl = inject(
-    createDefaultCoreModule({ shared }),
-    RuneDslGeneratedModule,
-    RuneDslModule,
-    {
-      references: {
-        Linker: (services: LangiumCoreServices) => new RuneDslLinker(services, deferredProvider)
-      }
+  const shared = inject(createDefaultSharedCoreModule(context), RuneDslGeneratedSharedModule, RuneDslSharedModule);
+  const RuneDsl = inject(createDefaultCoreModule({ shared }), RuneDslGeneratedModule, RuneDslModule, {
+    references: {
+      Linker: (services: LangiumCoreServices) => new RuneDslLinker(services, deferredProvider)
     }
-  );
+  });
   shared.ServiceRegistry.register(RuneDsl);
 
   // Register validation checks

@@ -35,10 +35,7 @@ export interface ExcelOptionsFormAdapterProps {
  * `onSubmit` (called on every field change in auto-save mode) forwards the
  * data to `onChange` as a plain Record.
  */
-export function ExcelOptionsFormAdapter({
-  value,
-  onChange
-}: ExcelOptionsFormAdapterProps): React.ReactElement {
+export function ExcelOptionsFormAdapter({ value, onChange }: ExcelOptionsFormAdapterProps): React.ReactElement {
   return (
     <GeneratedExcelOptionsForm
       // defaultValues seeds RHF on mount with the parent's current value.

@@ -51,11 +51,13 @@ class FakeApi {
   private layoutChangeListener: (() => void) | null = null;
   onDidLayoutChange = (listener: () => void) => {
     this.layoutChangeListener = listener;
-    return { dispose: () => {
-      if (this.layoutChangeListener === listener) {
-        this.layoutChangeListener = null;
+    return {
+      dispose: () => {
+        if (this.layoutChangeListener === listener) {
+          this.layoutChangeListener = null;
+        }
       }
-    } };
+    };
   };
   addPanel = (opts: { id: string; component: string }) => {
     this.panels.push(opts);

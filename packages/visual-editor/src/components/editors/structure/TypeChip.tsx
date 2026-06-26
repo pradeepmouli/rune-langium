@@ -38,12 +38,12 @@ const kindVars: Record<TypeChipKind, React.CSSProperties> = {
   Enum: { '--type-chip-bg': 'var(--color-enum-bg)', '--type-chip-fg': 'var(--color-enum-text)' },
   BasicType: {
     '--type-chip-bg': 'color-mix(in oklch, var(--muted-foreground) 14%, transparent)',
-    '--type-chip-fg': 'var(--muted-foreground)',
+    '--type-chip-fg': 'var(--muted-foreground)'
   },
   Unresolved: {
     '--type-chip-bg': 'color-mix(in oklch, var(--destructive) 14%, transparent)',
-    '--type-chip-fg': 'var(--destructive)',
-  },
+    '--type-chip-fg': 'var(--destructive)'
+  }
 } as Record<TypeChipKind, React.CSSProperties>;
 
 export interface TypeChipProps extends React.ComponentProps<'button'> {

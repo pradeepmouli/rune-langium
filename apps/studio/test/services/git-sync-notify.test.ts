@@ -4,7 +4,13 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@rune-langium/git-sync-engine', () => ({
-  createGitSyncEngine: () => ({ notifyDirty: vi.fn(), syncNow: vi.fn(), getState: () => ({ phase: 'idle' }), subscribe: () => () => {}, dispose: vi.fn() })
+  createGitSyncEngine: () => ({
+    notifyDirty: vi.fn(),
+    syncNow: vi.fn(),
+    getState: () => ({ phase: 'idle' }),
+    subscribe: () => () => {},
+    dispose: vi.fn()
+  })
 }));
 
 import { getOrCreateSyncEngine, notifySyncOnSave, getSyncEngine } from '../../src/services/git-sync.js';
@@ -12,8 +18,16 @@ import { getOrCreateSyncEngine, notifySyncOnSave, getSyncEngine } from '../../sr
 describe('notifySyncOnSave', () => {
   it('calls notifyDirty on the registered engine', () => {
     getOrCreateSyncEngine({
-      fs: {} as never, workspaceId: 'wsNotify',
-      gitBacking: { repoUrl: 'https://github.com/o/r.git', branch: 'main', user: 'u', tokenPath: '/wsNotify/.studio/token', syncState: 'clean', lastSyncedSha: null },
+      fs: {} as never,
+      workspaceId: 'wsNotify',
+      gitBacking: {
+        repoUrl: 'https://github.com/o/r.git',
+        branch: 'main',
+        user: 'u',
+        tokenPath: '/wsNotify/.studio/token',
+        syncState: 'clean',
+        lastSyncedSha: null
+      },
       token: 't'
     });
     const engine = getSyncEngine('wsNotify')!;

@@ -153,10 +153,9 @@ export class WorkspaceOwnership {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[multi-tab-broadcast] postMessage failed:', err);
-      useOutputStore.getState().addLine(
-        fmtLine('sync', 'postMessage failed', err instanceof Error ? err.message : String(err)),
-        'warn'
-      );
+      useOutputStore
+        .getState()
+        .addLine(fmtLine('sync', 'postMessage failed', err instanceof Error ? err.message : String(err)), 'warn');
     }
   }
 
@@ -215,10 +214,12 @@ export class WorkspaceOwnership {
             } catch (err) {
               // eslint-disable-next-line no-console
               console.error('[multi-tab-broadcast] ownership-lost callback threw:', err);
-              useOutputStore.getState().addLine(
-                fmtLine('sync', 'ownership-lost callback threw', err instanceof Error ? err.message : String(err)),
-                'error'
-              );
+              useOutputStore
+                .getState()
+                .addLine(
+                  fmtLine('sync', 'ownership-lost callback threw', err instanceof Error ? err.message : String(err)),
+                  'error'
+                );
             }
           }
         }

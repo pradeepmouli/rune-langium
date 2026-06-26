@@ -205,10 +205,7 @@ export class WorkspaceManager {
       if (err instanceof Error && err.name !== 'NotFoundError') {
         // eslint-disable-next-line no-console
         console.error(`[workspace-manager] delete: OPFS removeEntry(${id}) failed:`, err);
-        useOutputStore.getState().addLine(
-          fmtLine('workspace', `OPFS removeEntry(${id}) failed`, err.message),
-          'error'
-        );
+        useOutputStore.getState().addLine(fmtLine('workspace', `OPFS removeEntry(${id}) failed`, err.message), 'error');
       }
     }
   }

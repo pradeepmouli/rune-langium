@@ -8,7 +8,7 @@ import {
   type CstNode,
   type DehydrateContext,
   type HydrateContext,
-  type Reference,
+  type Reference
 } from 'langium';
 import { isRosettaModel } from '../generated/ast.js';
 import type { Dehydrated } from '../serializer/dehydrated.js';
@@ -80,7 +80,7 @@ export class RuneStoreHydrator extends DefaultHydrator {
     reference: { $refText: string },
     node: AstNode,
     name: string,
-    _context: HydrateContext,
+    _context: HydrateContext
   ): Reference {
     return this.linker.buildReference(node, name, undefined, reference.$refText);
   }

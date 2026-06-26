@@ -457,9 +457,7 @@ function FileHeaderRow({ uri, count }: { uri: string; count: number }) {
       <span className="truncate uppercase" title={uri}>
         {extractFileName(uri)}
       </span>
-      <NumberChiclet title={`${count} problem${count === 1 ? '' : 's'}`}>
-        {count}
-      </NumberChiclet>
+      <NumberChiclet title={`${count} problem${count === 1 ? '' : 's'}`}>{count}</NumberChiclet>
     </div>
   );
 }

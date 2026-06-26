@@ -18,11 +18,7 @@ interface StoredObject {
 
 export interface MockR2Bucket {
   get(key: string): Promise<R2ObjectLike | null>;
-  put(
-    key: string,
-    body: Uint8Array | string,
-    options?: { httpMetadata?: { contentType?: string } }
-  ): Promise<void>;
+  put(key: string, body: Uint8Array | string, options?: { httpMetadata?: { contentType?: string } }): Promise<void>;
   delete(key: string | string[]): Promise<void>;
   head(key: string): Promise<R2ObjectLike | null>;
   /** Real-R2-shape async list. */
@@ -58,8 +54,7 @@ export function createMockR2Bucket(): MockR2Bucket {
       get body() {
         return new Blob([data]).stream();
       },
-      arrayBuffer: async () =>
-        data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
+      arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
       text: async () => new TextDecoder().decode(data),
       json: async () => JSON.parse(new TextDecoder().decode(data)),
       writeHttpMetadata(headers: Headers) {

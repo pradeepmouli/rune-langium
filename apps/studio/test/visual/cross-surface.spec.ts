@@ -27,9 +27,7 @@ const VIEWPORTS = [
 
 test.describe('Cross-surface UX consistency (T063 / US7)', () => {
   for (const viewport of VIEWPORTS) {
-    test(`start page primitives at ${viewport.name} (${viewport.width}×${viewport.height})`, async ({
-      page
-    }) => {
+    test(`start page primitives at ${viewport.name} (${viewport.width}×${viewport.height})`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto('./');
       await page.waitForLoadState('domcontentloaded');
@@ -50,21 +48,15 @@ test.describe('Cross-surface UX consistency (T063 / US7)', () => {
       //    from the 12px surface/card corner).
       const primaryButton = page.getByTestId('file-loader').getByRole('button', { name: /^New/i });
       await expect(primaryButton).toBeVisible();
-      const primaryRadius = await primaryButton.evaluate(
-        (el) => getComputedStyle(el as Element).borderRadius
-      );
+      const primaryRadius = await primaryButton.evaluate((el) => getComputedStyle(el as Element).borderRadius);
       // Some browsers report `6px 6px 6px 6px` (per-corner); accept either.
       expect(primaryRadius).toMatch(/^(6px|6px 6px 6px 6px)$/);
 
       // 3. Secondary buttons (Select Files / Select Folder) render
       //    transparent — NOT solid amber. (FR-023, T054.)
-      const secondaryButton = page
-        .getByTestId('file-loader')
-        .getByRole('button', { name: 'Select Files' });
+      const secondaryButton = page.getByTestId('file-loader').getByRole('button', { name: 'Select Files' });
       await expect(secondaryButton).toBeVisible();
-      const secondaryBg = await secondaryButton.evaluate(
-        (el) => getComputedStyle(el as Element).backgroundColor
-      );
+      const secondaryBg = await secondaryButton.evaluate((el) => getComputedStyle(el as Element).backgroundColor);
       // `bg-transparent` produces `rgba(0, 0, 0, 0)` in most engines;
       // `transparent` is also acceptable. Reject any opaque colour
       // (anything with non-zero alpha that isn't 0/0/0).

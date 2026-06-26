@@ -10,12 +10,8 @@ import { semanticDiff, type TypeDeclaration } from '../../src/services/semantic-
 
 describe('semanticDiff', () => {
   it('detects no changes for identical declarations', () => {
-    const before: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }
-    ];
-    const after: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }
-    ];
+    const before: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }];
+    const after: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }];
 
     const diff = semanticDiff(before, after);
     expect(diff.hasStructuralChanges).toBe(false);
@@ -26,9 +22,7 @@ describe('semanticDiff', () => {
 
   it('detects added types', () => {
     const before: TypeDeclaration[] = [];
-    const after: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }
-    ];
+    const after: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }];
 
     const diff = semanticDiff(before, after);
     expect(diff.hasStructuralChanges).toBe(true);
@@ -36,9 +30,7 @@ describe('semanticDiff', () => {
   });
 
   it('detects removed types', () => {
-    const before: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }
-    ];
+    const before: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }];
     const after: TypeDeclaration[] = [];
 
     const diff = semanticDiff(before, after);
@@ -47,12 +39,8 @@ describe('semanticDiff', () => {
   });
 
   it('detects modified types (attribute change)', () => {
-    const before: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }
-    ];
-    const after: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }
-    ];
+    const before: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }];
+    const after: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }];
 
     const diff = semanticDiff(before, after);
     expect(diff.hasStructuralChanges).toBe(true);
@@ -60,12 +48,8 @@ describe('semanticDiff', () => {
   });
 
   it('detects modified types (parent change)', () => {
-    const before: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }
-    ];
-    const after: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar'], parent: 'Base' }
-    ];
+    const before: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar'], parent: undefined }];
+    const after: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar'], parent: 'Base' }];
 
     const diff = semanticDiff(before, after);
     expect(diff.hasStructuralChanges).toBe(true);
@@ -73,12 +57,8 @@ describe('semanticDiff', () => {
   });
 
   it('ignores order differences in attributes', () => {
-    const before: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }
-    ];
-    const after: TypeDeclaration[] = [
-      { name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }
-    ];
+    const before: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }];
+    const after: TypeDeclaration[] = [{ name: 'Foo', kind: 'data', attributes: ['bar', 'baz'], parent: undefined }];
 
     const diff = semanticDiff(before, after);
     expect(diff.hasStructuralChanges).toBe(false);

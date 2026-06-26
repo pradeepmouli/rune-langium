@@ -63,10 +63,7 @@ export interface EditorActionsProviderProps extends EditorActionsContextValue {
  * section components) with the `nodeId` + `actions` the sections need
  * to commit edits.
  */
-export function EditorActionsProvider({
-  children,
-  ...value
-}: EditorActionsProviderProps): ReactNode {
+export function EditorActionsProvider({ children, ...value }: EditorActionsProviderProps): ReactNode {
   return <EditorActionsContext.Provider value={value}>{children}</EditorActionsContext.Provider>;
 }
 

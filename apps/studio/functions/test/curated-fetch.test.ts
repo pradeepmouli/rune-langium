@@ -39,9 +39,9 @@ const VALID_MANIFEST = {
 
 describe('fetchCuratedManifest', () => {
   it('happy path: fetches and returns valid manifest', async () => {
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(VALID_MANIFEST), { status: 200 })
-    );
+    const stub: CuratedFetcher = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(VALID_MANIFEST), { status: 200 }));
 
     const manifest = await fetchCuratedManifest('cdm', '2026-05-22', stub);
 
@@ -49,19 +49,13 @@ describe('fetchCuratedManifest', () => {
     expect(stub).toHaveBeenCalledWith(`${MIRROR}/cdm/manifest.json`, undefined);
     expect(manifest.schemaVersion).toBe(2);
     expect(manifest.modelId).toBe('cdm');
-    expect(manifest.namespaces?.['cdm.base']?.artifact).toBe(
-      'artifacts/2026-05-22/ns/cdm.base.json.gz'
-    );
+    expect(manifest.namespaces?.['cdm.base']?.artifact).toBe('artifacts/2026-05-22/ns/cdm.base.json.gz');
   });
 
   it('non-200 status: rejects with CuratedBundleUnavailableError (status 404)', async () => {
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response('', { status: 404 })
-    );
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
 
-    await expect(fetchCuratedManifest('cdm', '2026-05-22', stub)).rejects.toThrow(
-      CuratedBundleUnavailableError
-    );
+    await expect(fetchCuratedManifest('cdm', '2026-05-22', stub)).rejects.toThrow(CuratedBundleUnavailableError);
 
     const err = await fetchCuratedManifest('cdm', '2026-05-22', stub).catch((e) => e);
     expect(err).toBeInstanceOf(CuratedBundleUnavailableError);
@@ -71,13 +65,9 @@ describe('fetchCuratedManifest', () => {
 
   it('schema mismatch: rejects with CuratedBundleUnavailableError when schema invalid', async () => {
     const badManifest = { schemaVersion: 99, modelId: 'cdm' }; // invalid
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(badManifest), { status: 200 })
-    );
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(badManifest), { status: 200 }));
 
-    await expect(fetchCuratedManifest('cdm', '2026-05-22', stub)).rejects.toThrow(
-      CuratedBundleUnavailableError
-    );
+    await expect(fetchCuratedManifest('cdm', '2026-05-22', stub)).rejects.toThrow(CuratedBundleUnavailableError);
   });
 
   it('network error: fetch throw wrapped as CuratedBundleUnavailableError', async () => {
@@ -89,9 +79,7 @@ describe('fetchCuratedManifest', () => {
   });
 
   it('malformed JSON body: rejects with CuratedBundleUnavailableError', async () => {
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response('not json{', { status: 200 })
-    );
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response('not json{', { status: 200 }));
 
     const err = await fetchCuratedManifest('cdm', '2026-05-22', stub).catch((e) => e);
     expect(err).toBeInstanceOf(CuratedBundleUnavailableError);
@@ -104,7 +92,9 @@ describe('fetchCuratedManifest', () => {
 // ---------------------------------------------------------------------------
 
 /** Build a per-ns artifact payload and gzip it. */
-function makeNsArtifact(docs: Array<{ path: string; modelJson: string; exports?: Array<{ type: string; name: string; path: string }> }>) {
+function makeNsArtifact(
+  docs: Array<{ path: string; modelJson: string; exports?: Array<{ type: string; name: string; path: string }> }>
+) {
   const payload = { documents: docs };
   return gzip(JSON.stringify(payload));
 }
@@ -112,14 +102,10 @@ function makeNsArtifact(docs: Array<{ path: string; modelJson: string; exports?:
 describe('fetchCuratedNamespace', () => {
   it('happy path: inflates and maps documents to CuratedDocument[]', async () => {
     const modelJson = '{"$type":"RosettaModel","name":"cdm.base"}';
-    const gzBytes = makeNsArtifact([
-      { path: 'a/b.rosetta', modelJson, exports: [] }
-    ]);
+    const gzBytes = makeNsArtifact([{ path: 'a/b.rosetta', modelJson, exports: [] }]);
 
     const artifactKey = 'artifacts/2026-05-22/ns/cdm.base.json.gz';
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response(gzBytes, { status: 200 })
-    );
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response(gzBytes, { status: 200 }));
 
     const docs = await fetchCuratedNamespace('cdm', '2026-05-22', artifactKey, stub);
 
@@ -167,13 +153,9 @@ describe('fetchCuratedNamespace', () => {
   it('non-200 status: rejects with CuratedBundleUnavailableError', async () => {
     // Use a distinct key so the namespace cache from the happy path test doesn't interfere.
     const artifactKey = 'artifacts/2026-05-22/ns/cdm.error-case.json.gz';
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response('', { status: 503 })
-    );
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response('', { status: 503 }));
 
-    const err = await fetchCuratedNamespace('cdm', '2026-05-22', artifactKey, stub).catch(
-      (e) => e
-    );
+    const err = await fetchCuratedNamespace('cdm', '2026-05-22', artifactKey, stub).catch((e) => e);
     expect(err).toBeInstanceOf(CuratedBundleUnavailableError);
     expect(err.status).toBe(503);
   });
@@ -206,9 +188,7 @@ describe('fetchCuratedNamespace', () => {
     const gzBytes = makeNsArtifact([{ path: 'no-exports.rosetta', modelJson }]);
 
     const artifactKey = 'artifacts/2026-05-22/ns/cdm.no-exports.json.gz';
-    const stub: CuratedFetcher = vi.fn().mockResolvedValue(
-      new Response(gzBytes, { status: 200 })
-    );
+    const stub: CuratedFetcher = vi.fn().mockResolvedValue(new Response(gzBytes, { status: 200 }));
 
     const docs = await fetchCuratedNamespace('cdm', '2026-05-22', artifactKey, stub);
     expect(docs[0].exports).toEqual([]);

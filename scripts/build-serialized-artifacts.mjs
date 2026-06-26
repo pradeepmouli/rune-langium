@@ -25,7 +25,7 @@ const { URI } = await import(langiumIndex);
 const SOURCES = [
   { id: 'cdm', owner: 'REGnosys', repo: 'rosetta-cdm', ref: 'master' },
   { id: 'fpml', owner: 'rosetta-models', repo: 'rune-fpml', ref: 'master' },
-  { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' },
+  { id: 'rune-dsl', owner: 'finos', repo: 'rune-dsl', ref: 'main' }
 ];
 
 const LANGIUM_VERSION = '4.2.2';
@@ -97,7 +97,11 @@ function extractRosettaFiles(tarGzBytes) {
 
 function stampNamespacesIntoModelJson(modelJson, namespace, bigIntReplacer) {
   let parsed;
-  try { parsed = JSON.parse(modelJson); } catch { return modelJson; }
+  try {
+    parsed = JSON.parse(modelJson);
+  } catch {
+    return modelJson;
+  }
   if (!parsed || !Array.isArray(parsed.elements)) return modelJson;
   for (const el of parsed.elements) {
     if (el && typeof el === 'object') el.$namespace = namespace;
@@ -106,7 +110,8 @@ function stampNamespacesIntoModelJson(modelJson, namespace, bigIntReplacer) {
 }
 
 async function buildArtifact(source, archiveBytes) {
-  const { createRuneDslServices, serializeRuneModel, runeBigIntReplacer, namespaceFromModelName } = await import('../packages/core/dist/index.js');
+  const { createRuneDslServices, serializeRuneModel, runeBigIntReplacer, namespaceFromModelName } =
+    await import('../packages/core/dist/index.js');
 
   const rosettaFiles = extractRosettaFiles(archiveBytes);
   console.log(`  Found ${rosettaFiles.length} .rosetta files`);
@@ -140,7 +145,7 @@ async function buildArtifact(source, archiveBytes) {
           exports.push({
             type: elem.$type,
             name: elem.name,
-            path: `/elements@${j}`,
+            path: `/elements@${j}`
           });
           // Include enum values for cross-file resolution
           if (elem.enumValues) {
@@ -150,7 +155,7 @@ async function buildArtifact(source, archiveBytes) {
                 exports.push({
                   type: val.$type ?? 'RosettaEnumValue',
                   name: val.name,
-                  path: `/elements@${j}/enumValues@${k}`,
+                  path: `/elements@${j}/enumValues@${k}`
                 });
               }
             }
@@ -162,9 +167,9 @@ async function buildArtifact(source, archiveBytes) {
       return {
         path: rosettaFiles[i].path,
         modelJson: ns ? stampNamespacesIntoModelJson(rawModelJson, ns, runeBigIntReplacer) : rawModelJson,
-        exports,
+        exports
       };
-    }),
+    })
   };
 
   const json = JSON.stringify(artifact, runeBigIntReplacer);
@@ -175,7 +180,7 @@ async function buildArtifact(source, archiveBytes) {
     sizeBytes: gzipped.byteLength,
     documentCount: rosettaFiles.length,
     documents: artifact.documents,
-    version,
+    version
   };
 }
 
@@ -264,7 +269,7 @@ async function main() {
           exports: entry.exports,
           // Absolute URL (consistent with archiveUrl + serializedWorkspace.url) so
           // any consumer fetches it directly; relative paths 404 against a page URL.
-          artifact: `${MIRROR_BASE}/${source.id}/artifacts/${version}/ns/${nsToSlug.get(ns)}.json.gz`,
+          artifact: `${MIRROR_BASE}/${source.id}/artifacts/${version}/ns/${nsToSlug.get(ns)}.json.gz`
         };
       }
 
@@ -279,7 +284,7 @@ async function main() {
             documentCount: result.documentCount,
             archiveSha256: archiveSha,
             archiveSizeBytes: archiveBytes.byteLength,
-            namespaces: namespacesMap,
+            namespaces: namespacesMap
           },
           null,
           2

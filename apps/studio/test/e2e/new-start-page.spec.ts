@@ -50,9 +50,6 @@ test.describe('Studio — New start-page option', () => {
     // This test asserts the service-level contract only: two sequential
     // blank-file creations land distinct paths. Implementation will expose
     // the second-create path; if it doesn't in this phase, mark skipped.
-    test.skip(
-      true,
-      'Editor-side "New file" affordance is a follow-up; service contract is covered by unit tests.'
-    );
+    test.skip(true, 'Editor-side "New file" affordance is a follow-up; service contract is covered by unit tests.');
   });
 });

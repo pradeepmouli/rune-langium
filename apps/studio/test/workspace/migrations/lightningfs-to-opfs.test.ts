@@ -14,10 +14,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { createOpfsRoot, type OpfsRoot } from '../../setup/opfs-mock.js';
-import {
-  migrateLightningFsToOpfs,
-  LEGACY_DB_NAMES
-} from '../../../src/workspace/migrations/lightningfs-to-opfs.js';
+import { migrateLightningFsToOpfs, LEGACY_DB_NAMES } from '../../../src/workspace/migrations/lightningfs-to-opfs.js';
 import { _resetForTests } from '../../../src/workspace/persistence.js';
 
 /**

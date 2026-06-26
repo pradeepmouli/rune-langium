@@ -111,9 +111,9 @@ describe('EditorStore — new actions', () => {
       store.getState().reorderAttribute(tradeNode!.id, -1, 0); // would splice the last attribute
       store.getState().reorderAttribute(tradeNode!.id, 99, 0); // out of range
 
-      const namesAfter = (
-        store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any
-      ).attributes.map((a: any) => a.name);
+      const namesAfter = (store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any).attributes.map(
+        (a: any) => a.name
+      );
       expect(namesAfter).toEqual(namesBefore); // order intact
       expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });
@@ -365,8 +365,7 @@ describe('EditorStore — enum operations', () => {
 
       store.getState().setEnumParent(childEnum!.id, parentEnum!.id);
 
-      const refBefore = (store.getState().nodes.find((n) => n.id === childEnum!.id)!.data as any)
-        .parent?.$refText;
+      const refBefore = (store.getState().nodes.find((n) => n.id === childEnum!.id)!.data as any).parent?.$refText;
 
       // Stale id — not present in the store (mirrors setInheritance's guard).
       store.getState().setEnumParent(childEnum!.id, 'test.enums.Deleted');
@@ -923,8 +922,7 @@ describe('EditorStore — condition and expression operations', () => {
       store.getState().removeCondition(dataNode!.id, -1); // would splice(-1,1) → delete last
       store.getState().removeCondition(dataNode!.id, 99); // out of range
 
-      const conditions = (store.getState().nodes.find((n) => n.id === dataNode!.id)!.data as any)
-        .conditions ?? [];
+      const conditions = (store.getState().nodes.find((n) => n.id === dataNode!.id)!.data as any).conditions ?? [];
       expect(conditions.map((c: any) => c.name)).toEqual(['C1', 'C2']); // both intact
       expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });
@@ -982,8 +980,7 @@ describe('EditorStore — condition and expression operations', () => {
       store.getState().reorderCondition(dataNode!.id, -1, 0); // would splice the last element
       store.getState().reorderCondition(dataNode!.id, 5, 0); // out of range
 
-      const conditions = (store.getState().nodes.find((n) => n.id === dataNode!.id)!.data as any)
-        .conditions ?? [];
+      const conditions = (store.getState().nodes.find((n) => n.id === dataNode!.id)!.data as any).conditions ?? [];
       expect(conditions.map((c: any) => c.name)).toEqual(['First', 'Second']); // order intact
       expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });

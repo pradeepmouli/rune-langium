@@ -42,10 +42,7 @@ describe('folder-backed workspace (T049)', () => {
     const id = 'ws-fb-2';
     await bindFolderToWorkspace(id, folder as unknown as FileSystemDirectoryHandle);
     await writeFolderFile(folder as unknown as FileSystemDirectoryHandle, 'a/b.rosetta', 'hello');
-    const back = await readFolderFile(
-      folder as unknown as FileSystemDirectoryHandle,
-      'a/b.rosetta'
-    );
+    const back = await readFolderFile(folder as unknown as FileSystemDirectoryHandle, 'a/b.rosetta');
     expect(back).toBe('hello');
   });
 

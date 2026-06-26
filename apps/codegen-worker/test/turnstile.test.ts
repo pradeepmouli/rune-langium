@@ -138,11 +138,7 @@ describe('verifyTurnstile', () => {
       remoteIp: '1.2.3.4'
     });
 
-    const allLogs = [
-      ...stdoutSpy.mock.calls.flat(),
-      ...stderrSpy.mock.calls.flat(),
-      ...warnSpy.mock.calls.flat()
-    ]
+    const allLogs = [...stdoutSpy.mock.calls.flat(), ...stderrSpy.mock.calls.flat(), ...warnSpy.mock.calls.flat()]
       .map(String)
       .join('\n');
 

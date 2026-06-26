@@ -32,11 +32,7 @@ export interface DockLayoutProps extends IDockviewReactProps {
  * in the consuming application — this component is purely a rendering primitive.
  */
 export function DockLayout({ className, ...props }: DockLayoutProps): React.ReactElement {
-  const mergedClassName = [
-    'dockview-theme-abyss',
-    'rune-dock-theme',
-    ...(className ? [className] : []),
-  ].join(' ');
+  const mergedClassName = ['dockview-theme-abyss', 'rune-dock-theme', ...(className ? [className] : [])].join(' ');
 
   return <DockviewReact {...props} className={mergedClassName} />;
 }

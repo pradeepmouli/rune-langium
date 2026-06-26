@@ -112,9 +112,7 @@ describe('sanitizeLayout (T063)', () => {
     expect(out.dockview.columns[1].active).toBe('workspace.editor');
     expect(out.dockview.columns[2].active).toBe('workspace.formPreview');
     expect(out.dockview.bottomGroup.active).toBe('workspace.problems');
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[layout-migrations] normalized invalid active tabs in saved layout'
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[layout-migrations] normalized invalid active tabs in saved layout');
   });
 
   it('migrates old NavigationColumn (top/bottom) layout to v3 ExplorerColumn', () => {
@@ -187,9 +185,7 @@ describe('sanitizeLayout (T063)', () => {
 
     expect(out.writtenBy).toBe('0.2.0');
     expect(out.dockview.columns).toHaveLength(3);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[layout-migrations] reset invalid saved layout to defaults'
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[layout-migrations] reset invalid saved layout to defaults');
   });
 
   it('rebuilds when dropping obsolete tabs leaves a required factory group empty', () => {
@@ -228,9 +224,7 @@ describe('sanitizeLayout (T063)', () => {
 
     expect(out.dockview.columns).toHaveLength(3);
     expect(out.dockview.columns[2].active).toBe('workspace.formPreview');
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[layout-migrations] reset invalid saved layout to defaults'
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[layout-migrations] reset invalid saved layout to defaults');
   });
 
   it('rebuilds empty native layouts instead of passing a blank shell through to dockview', () => {
@@ -258,9 +252,7 @@ describe('sanitizeLayout (T063)', () => {
     }
 
     expect(out.dockview.columns).toHaveLength(3);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[layout-migrations] reset invalid saved layout to defaults'
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[layout-migrations] reset invalid saved layout to defaults');
   });
 
   it('resets a valid pre-Activity v6 native layout so returning users gain the Activity tab', () => {
@@ -402,8 +394,6 @@ describe('sanitizeLayout (T063)', () => {
     }
 
     expect(out.dockview.columns).toHaveLength(3);
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[layout-migrations] reset invalid saved layout to defaults'
-    );
+    expect(warnSpy).toHaveBeenCalledWith('[layout-migrations] reset invalid saved layout to defaults');
   });
 });

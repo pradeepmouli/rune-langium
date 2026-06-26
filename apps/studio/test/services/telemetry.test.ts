@@ -56,9 +56,7 @@ describe('telemetry client (T020)', () => {
       uaClass: 'Chromium 130'
     });
     // @ts-expect-error — intentional extra field
-    await expect(
-      t.emit({ event: 'curated_load_attempt', modelId: 'cdm', userId: 'x' })
-    ).rejects.toThrow(/schema/i);
+    await expect(t.emit({ event: 'curated_load_attempt', modelId: 'cdm', userId: 'x' })).rejects.toThrow(/schema/i);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -103,9 +101,7 @@ describe('telemetry client (T020)', () => {
       studioVersion: '0.1.0',
       uaClass: 'Chromium 130'
     });
-    await expect(
-      t.emit({ event: 'workspace_restore_failure' } satisfies TelemetryEvent)
-    ).resolves.toBeUndefined();
+    await expect(t.emit({ event: 'workspace_restore_failure' } satisfies TelemetryEvent)).resolves.toBeUndefined();
   });
 });
 

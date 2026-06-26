@@ -17,10 +17,10 @@ type DehydratedField<F> =
   NonNullable<F> extends ReferenceShape
     ? { $refText: string } | Extract<F, undefined | null>
     : F extends Array<infer E extends AstNode>
-    ? Dehydrated<E>[]
-    : NonNullable<F> extends AstNode
-    ? Dehydrated<NonNullable<F>> | Extract<F, undefined | null>
-    : F;
+      ? Dehydrated<E>[]
+      : NonNullable<F> extends AstNode
+        ? Dehydrated<NonNullable<F>> | Extract<F, undefined | null>
+        : F;
 
 /**
  * Lossless editable wire model for a Langium AST node.

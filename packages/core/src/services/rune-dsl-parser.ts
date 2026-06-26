@@ -49,10 +49,7 @@ export class RuneDslParser extends LangiumParser {
     super(services);
   }
 
-  override parse<T extends AstNode = AstNode>(
-    input: string,
-    options?: ParserOptions
-  ): ParseResult<T> {
+  override parse<T extends AstNode = AstNode>(input: string, options?: ParserOptions): ParseResult<T> {
     const transformed = insertImplicitBrackets(input);
     return super.parse<T>(transformed, options);
   }
@@ -661,10 +658,7 @@ function findNextNonWhitespaceOnLine(text: string, start: number): number {
  */
 function skipWhitespaceAndNewlines(text: string, start: number): number {
   let i = start;
-  while (
-    i < text.length &&
-    (text[i] === ' ' || text[i] === '\t' || text[i] === '\r' || text[i] === '\n')
-  ) {
+  while (i < text.length && (text[i] === ' ' || text[i] === '\t' || text[i] === '\r' || text[i] === '\n')) {
     i++;
   }
   return i;

@@ -112,8 +112,7 @@ export function createTelemetryClient(options: TelemetryClientOptions): Telemetr
  * `apps/telemetry-worker/wrangler.toml` to the same-origin path under
  * www.daikonic.dev, so a same-origin POST does not require a preflight.
  */
-export const TELEMETRY_ENDPOINT_PROD =
-  'https://www.daikonic.dev/rune-studio/api/telemetry/v1/event';
+export const TELEMETRY_ENDPOINT_PROD = 'https://www.daikonic.dev/rune-studio/api/telemetry/v1/event';
 
 /**
  * Resolve the right endpoint for the current host. In development (vite

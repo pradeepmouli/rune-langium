@@ -22,12 +22,28 @@ import { useLsp } from '../../../src/shell/providers/lsp-context.js';
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 
 function wsState(files: WorkspaceState['files']): WorkspaceState {
-  return { workspaceId: 'w', workspaceKind: 'browser-only', workspaceName: 'w', fileCount: files.length,
-    files, models: [], parsedModels: [], deferredExports: [], parseErrors: new Map() };
+  return {
+    workspaceId: 'w',
+    workspaceKind: 'browser-only',
+    workspaceName: 'w',
+    fileCount: files.length,
+    files,
+    models: [],
+    parsedModels: [],
+    deferredExports: [],
+    parseErrors: new Map()
+  };
 }
-function LspProbe() { const { lspClient } = useLsp(); return <span data-testid="c">{lspClient ? 'client' : 'none'}</span>; }
+function LspProbe() {
+  const { lspClient } = useLsp();
+  return <span data-testid="c">{lspClient ? 'client' : 'none'}</span>;
+}
 
-beforeEach(() => { connect.mockClear(); reconnect.mockClear(); syncWorkspaceFiles.mockClear(); });
+beforeEach(() => {
+  connect.mockClear();
+  reconnect.mockClear();
+  syncWorkspaceFiles.mockClear();
+});
 
 describe('LspProvider', () => {
   it('creates one client, connects once, exposes it, and re-syncs docs on file change (no reconnect)', () => {
@@ -35,20 +51,29 @@ describe('LspProvider', () => {
       const [files, setFiles] = useState<WorkspaceState['files']>([]);
       return (
         <WorkspaceStateContext.Provider value={wsState(files)}>
-          <button onClick={() => setFiles([{ name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false }])}>add</button>
-          <LspProvider><LspProbe /></LspProvider>
+          <button
+            onClick={() => setFiles([{ name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false }])}
+          >
+            add
+          </button>
+          <LspProvider>
+            <LspProbe />
+          </LspProvider>
         </WorkspaceStateContext.Provider>
       );
     }
     render(<Host />);
     expect(connect).toHaveBeenCalledTimes(1);
     act(() => screen.getByText('add').click());
-    expect(syncWorkspaceFiles).toHaveBeenCalled();   // doc-set re-sync on file change
-    expect(reconnect).not.toHaveBeenCalled();        // switch is NOT a reconnect
+    expect(syncWorkspaceFiles).toHaveBeenCalled(); // doc-set re-sync on file change
+    expect(reconnect).not.toHaveBeenCalled(); // switch is NOT a reconnect
   });
 
   it('throws when useLsp is used outside the provider', () => {
-    function Bare() { useLsp(); return null; }
+    function Bare() {
+      useLsp();
+      return null;
+    }
     expect(() => render(<Bare />)).toThrow(/within an LspProvider/);
   });
 });

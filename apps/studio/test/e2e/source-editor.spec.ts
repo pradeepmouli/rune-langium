@@ -79,9 +79,7 @@ test.describe('Source Editor', () => {
     await expect(sourceEditor).toBeVisible({ timeout: 5000 });
   });
 
-  test('should open source editor with CodeMirror when double-clicking a node', async ({
-    page
-  }) => {
+  test('should open source editor with CodeMirror when double-clicking a node', async ({ page }) => {
     await loadFiles(page, [{ name: 'widget.rosetta', content: MODEL_A }]);
     await openSourceViaDoubleClick(page, 'rf__node-source.test.Widget');
 

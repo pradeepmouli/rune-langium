@@ -109,9 +109,7 @@ describe('WorkspaceManager — lifecycle (T018)', () => {
     const m = makeManager();
     const ws = await m.create('Deep');
     // Write a deeply nested file under the workspace's files/ tree.
-    const fs = new (await import('../../src/opfs/opfs-fs.js')).OpfsFs(
-      opfsRoot as unknown as FileSystemDirectoryHandle
-    );
+    const fs = new (await import('../../src/opfs/opfs-fs.js')).OpfsFs(opfsRoot as unknown as FileSystemDirectoryHandle);
     await fs.writeFile(`/${ws.id}/files/a/b/c.txt`, 'deep');
     await m.delete(ws.id);
     const root = opfsRoot as unknown as { entries(): AsyncIterableIterator<[string, unknown]> };

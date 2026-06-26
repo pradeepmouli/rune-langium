@@ -157,10 +157,7 @@ export function createRuneLspServer(): RuneLspServer {
   // 3. Create Langium *LSP* services (not core-only).
   //    createDefaultSharedModule from langium/lsp adds TextDocuments,
   //    DocumentUpdateHandler, LanguageServer, etc.
-  const shared = inject(
-    createDefaultSharedModule({ ...EmptyFileSystem, connection }),
-    RuneDslGeneratedSharedModule
-  );
+  const shared = inject(createDefaultSharedModule({ ...EmptyFileSystem, connection }), RuneDslGeneratedSharedModule);
 
   const RuneDsl = inject(createDefaultModule({ shared }), RuneDslGeneratedModule, RuneDslModule);
 

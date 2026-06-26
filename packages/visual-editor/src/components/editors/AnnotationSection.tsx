@@ -159,9 +159,7 @@ export function AnnotationSection({
             )}
           </Badge>
         ))}
-        {annotations.length === 0 && (
-          <span className="text-3xs text-muted-foreground/60 italic">No annotations</span>
-        )}
+        {annotations.length === 0 && <span className="text-3xs text-muted-foreground/60 italic">No annotations</span>}
       </div>
 
       {/* Picker */}

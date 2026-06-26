@@ -20,11 +20,7 @@
  */
 
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import {
-  buildDefaultLayout,
-  LAYOUT_SCHEMA_VERSION,
-  type BuildLayoutInput
-} from './layout-factory.js';
+import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, type BuildLayoutInput } from './layout-factory.js';
 import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
 
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
@@ -72,10 +68,7 @@ export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayo
   return sanitizeLayoutWithDiagnostics(input, ctx).layout;
 }
 
-export function sanitizeLayoutWithDiagnostics(
-  input: unknown,
-  ctx: BuildLayoutInput
-): LayoutSanitizationResult {
+export function sanitizeLayoutWithDiagnostics(input: unknown, ctx: BuildLayoutInput): LayoutSanitizationResult {
   if (!isPlausibleLayout(input)) {
     return { layout: buildDefaultLayout(ctx) };
   }
@@ -194,9 +187,7 @@ function isPlausibleLayout(input: unknown): input is PanelLayoutRecord {
   );
 }
 
-function hasKnownDockviewShape(
-  payload: unknown
-): payload is NonNullable<PanelLayoutRecord['dockview']> {
+function hasKnownDockviewShape(payload: unknown): payload is NonNullable<PanelLayoutRecord['dockview']> {
   if (!payload || typeof payload !== 'object') {
     return false;
   }

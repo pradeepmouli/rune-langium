@@ -73,11 +73,7 @@ export function expressionNodeToDslPreview(tree: ExpressionNode): string {
   return serialize(tree, true, undefined);
 }
 
-function serialize(
-  node: ExpressionNode,
-  allowPlaceholders: boolean,
-  parentPrecedence: number | undefined
-): string {
+function serialize(node: ExpressionNode, allowPlaceholders: boolean, parentPrecedence: number | undefined): string {
   const s = (n: ExpressionNode | undefined, parentPrec?: number) => {
     if (n == null) return '';
     return serialize(n, allowPlaceholders, parentPrec);
@@ -97,8 +93,7 @@ function serialize(
   switch (node.$type) {
     // UI-only
     case 'Placeholder':
-      if (!allowPlaceholders)
-        throw new Error('Cannot serialize expression containing placeholders');
+      if (!allowPlaceholders) throw new Error('Cannot serialize expression containing placeholders');
       return PLACEHOLDER_MARKER;
 
     case 'Unsupported':
@@ -251,11 +246,7 @@ function serialize(
           if (c.guard?.literalGuard !== undefined) {
             const literalGuard = c.guard.literalGuard;
             // If the guard is an ExpressionNode (has $type), serialize recursively
-            if (
-              literalGuard &&
-              typeof literalGuard === 'object' &&
-              '$type' in (literalGuard as object)
-            ) {
+            if (literalGuard && typeof literalGuard === 'object' && '$type' in (literalGuard as object)) {
               return `${serialize(literalGuard as ExpressionNode, allowPlaceholders, undefined)} then ${expr}`;
             }
             // Otherwise treat as a literal/primitive value
@@ -276,9 +267,7 @@ function serialize(
         value: ExpressionNode;
       }>;
       if (values.length === 0) return `${typeName} {}`;
-      const pairs = values
-        .map((v) => `${v.key}: ${serialize(v.value, allowPlaceholders, undefined)}`)
-        .join(', ');
+      const pairs = values.map((v) => `${v.key}: ${serialize(v.value, allowPlaceholders, undefined)}`).join(', ');
       return `${typeName} { ${pairs} }`;
     }
 

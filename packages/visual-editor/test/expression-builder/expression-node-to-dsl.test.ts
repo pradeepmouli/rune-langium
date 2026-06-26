@@ -11,10 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  expressionNodeToDsl,
-  expressionNodeToDslPreview
-} from '../../src/adapters/expression-node-to-dsl.js';
+import { expressionNodeToDsl, expressionNodeToDslPreview } from '../../src/adapters/expression-node-to-dsl.js';
 import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js';
 
 // Helper to create nodes with IDs
@@ -51,9 +48,7 @@ describe('expressionNodeToDsl', () => {
 
   describe('references', () => {
     it('serializes symbol reference', () => {
-      expect(expressionNodeToDsl(node('RosettaSymbolReference', { symbol: 'price' }))).toBe(
-        'price'
-      );
+      expect(expressionNodeToDsl(node('RosettaSymbolReference', { symbol: 'price' }))).toBe('price');
     });
 
     it('serializes implicit variable', () => {
@@ -239,10 +234,7 @@ describe('expressionNodeToDsl', () => {
   describe('collection', () => {
     it('serializes list literal', () => {
       const n = node('ListLiteral', {
-        elements: [
-          node('RosettaIntLiteral', { value: 1n }, 'e1'),
-          node('RosettaIntLiteral', { value: 2n }, 'e2')
-        ]
+        elements: [node('RosettaIntLiteral', { value: 1n }, 'e1'), node('RosettaIntLiteral', { value: 2n }, 'e2')]
       });
       expect(expressionNodeToDsl(n)).toBe('[1, 2]');
     });
@@ -250,17 +242,15 @@ describe('expressionNodeToDsl', () => {
 
   describe('unsupported', () => {
     it('serializes unsupported via rawText', () => {
-      expect(
-        expressionNodeToDsl(node('Unsupported', { rawText: 'some -> complex -> thing' }))
-      ).toBe('some -> complex -> thing');
+      expect(expressionNodeToDsl(node('Unsupported', { rawText: 'some -> complex -> thing' }))).toBe(
+        'some -> complex -> thing'
+      );
     });
   });
 
   describe('placeholder handling', () => {
     it('throws on placeholder node', () => {
-      expect(() =>
-        expressionNodeToDsl(node('Placeholder', { expectedType: 'any' } as any))
-      ).toThrow();
+      expect(() => expressionNodeToDsl(node('Placeholder', { expectedType: 'any' } as any))).toThrow();
     });
 
     it('throws on nested placeholder', () => {

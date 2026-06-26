@@ -17,8 +17,7 @@ export function runeBigIntReplacer(_key: string, value: unknown): unknown {
 export const RUNE_SERIALIZE_OPTIONS: JsonSerializeOptions = {
   refText: true,
   textRegions: true,
-  replacer: (key, value, defaultReplacer) =>
-    typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value)
+  replacer: (key, value, defaultReplacer) => (typeof value === 'bigint' ? Number(value) : defaultReplacer(key, value))
 };
 
 /** Serialize a Rune AST model to its canonical wire JSON string. */

@@ -30,19 +30,13 @@ export class CodegenServiceProxy {
   private readonly cliPath: string;
 
   constructor(cliPath?: string) {
-    this.cliPath =
-      cliPath ??
-      process.env['RUNE_CODEGEN_CLI'] ??
-      resolve(__dirname, '../server/target/codegen-cli.sh');
+    this.cliPath = cliPath ?? process.env['RUNE_CODEGEN_CLI'] ?? resolve(__dirname, '../server/target/codegen-cli.sh');
   }
 
   /**
    * Generate code from .rosetta model files.
    */
-  async generate(
-    request: CodeGenerationRequest,
-    signal?: AbortSignal
-  ): Promise<CodeGenerationResult> {
+  async generate(request: CodeGenerationRequest, signal?: AbortSignal): Promise<CodeGenerationResult> {
     const result = await this.runCli(['--json'], JSON.stringify(request), signal);
     return {
       language: request.language,
@@ -129,11 +123,7 @@ export class CodegenServiceProxy {
     return server;
   }
 
-  private runCli(
-    args: string[],
-    stdin?: string,
-    signal?: AbortSignal
-  ): Promise<Record<string, unknown>> {
+  private runCli(args: string[], stdin?: string, signal?: AbortSignal): Promise<Record<string, unknown>> {
     return new Promise((resolvePromise, reject) => {
       const child = spawn(this.cliPath, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -156,9 +146,7 @@ export class CodegenServiceProxy {
           const parsed = JSON.parse(stdout) as Record<string, unknown>;
           resolvePromise(parsed);
         } catch {
-          reject(
-            new Error(`Codegen CLI failed (exit ${code}): ${stderr || stdout || 'no output'}`)
-          );
+          reject(new Error(`Codegen CLI failed (exit ${code}): ${stderr || stdout || 'no output'}`));
         }
       });
 

@@ -15,10 +15,7 @@ import {
   type TypeContext
 } from '../../src/hooks/useContextFilter.js';
 import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js';
-import {
-  ALL_OPERATORS,
-  OPERATOR_CATALOG
-} from '../../src/components/editors/expression-builder/operator-catalog.js';
+import { ALL_OPERATORS, OPERATOR_CATALOG } from '../../src/components/editors/expression-builder/operator-catalog.js';
 
 // ---------------------------------------------------------------------------
 // Helper: create a node
@@ -318,9 +315,7 @@ describe('context filtering integration', () => {
       expect(operatorMatchesContext(op, ctx)).toBe(true);
     }
     // Equality/comparison produce boolean
-    const eqOps = compCat.operators.filter(
-      (o) => o.$type === 'EqualityOperation' || o.$type === 'ComparisonOperation'
-    );
+    const eqOps = compCat.operators.filter((o) => o.$type === 'EqualityOperation' || o.$type === 'ComparisonOperation');
     for (const op of eqOps) {
       expect(operatorMatchesContext(op, ctx)).toBe(true);
     }

@@ -168,7 +168,9 @@ function AppContent() {
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
     console.warn(`[App] ${message}:`, error);
     setWorkspaceError(message);
-    useOutputStore.getState().addLine(fmtLine('workspace', message, error instanceof Error ? error.message : undefined), 'error');
+    useOutputStore
+      .getState()
+      .addLine(fmtLine('workspace', message, error instanceof Error ? error.message : undefined), 'error');
     useActivityStore.getState().addActivity('workspace', false, message);
   }, []);
 
@@ -800,7 +802,9 @@ function AppContent() {
       } catch (err) {
         if (!cancelled) {
           console.warn('[git-sync] Failed to instantiate sync engine:', err);
-          useOutputStore.getState().addLine(fmtLine('git', 'sync engine failed', err instanceof Error ? err.message : String(err)), 'warn');
+          useOutputStore
+            .getState()
+            .addLine(fmtLine('git', 'sync engine failed', err instanceof Error ? err.message : String(err)), 'warn');
         }
       }
     })();

@@ -196,30 +196,33 @@ export function FileLoader({
           </div>
         )}
 
-        {config.githubAuthEnabled && createGitBackedWorkspace && (
-          // T031 visible affordance + T032e end-to-end clone wiring.
-          // The CTA only renders when `createGitBackedWorkspace` is wired,
-          // so reaching here means the full flow is available. App.tsx
-          // hasn't threaded the prop in yet → the CTA stays hidden and
-          // the legacy "auth-only" stub no longer ships in production.
-          <Dialog open={isGitHubOpen} onOpenChange={setIsGitHubOpen}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Open from GitHub</DialogTitle>
-                <DialogDescription>Sign in with GitHub and clone a repository into a new workspace.</DialogDescription>
-              </DialogHeader>
-              <GitHubWorkspaceFlow
-                authBase={authBase}
-                createWorkspace={createGitBackedWorkspace}
-                onCreated={(id) => {
-                  setIsGitHubOpen(false);
-                  onGitHubWorkspaceCreated?.(id);
-                }}
-                onCancel={() => setIsGitHubOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
-        )}
+        {config.githubAuthEnabled &&
+          createGitBackedWorkspace && (
+            // T031 visible affordance + T032e end-to-end clone wiring.
+            // The CTA only renders when `createGitBackedWorkspace` is wired,
+            // so reaching here means the full flow is available. App.tsx
+            // hasn't threaded the prop in yet → the CTA stays hidden and
+            // the legacy "auth-only" stub no longer ships in production.
+            <Dialog open={isGitHubOpen} onOpenChange={setIsGitHubOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Open from GitHub</DialogTitle>
+                  <DialogDescription>
+                    Sign in with GitHub and clone a repository into a new workspace.
+                  </DialogDescription>
+                </DialogHeader>
+                <GitHubWorkspaceFlow
+                  authBase={authBase}
+                  createWorkspace={createGitBackedWorkspace}
+                  onCreated={(id) => {
+                    setIsGitHubOpen(false);
+                    onGitHubWorkspaceCreated?.(id);
+                  }}
+                  onCancel={() => setIsGitHubOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          )}
 
         {/* Visually hidden — NOT display:none, Chrome blocks .click() on those.
             aria-label is required even on hidden inputs: axe-core flags an

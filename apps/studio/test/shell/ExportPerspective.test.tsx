@@ -92,9 +92,7 @@ vi.mock('../../src/components/CodePreviewPanel.js', () => ({
 // ---------------------------------------------------------------------------
 
 function makeFiles(): import('../../src/services/workspace.js').WorkspaceFile[] {
-  return [
-    { name: 'model.rune', path: '/ws/model.rune', content: 'namespace Foo {}', dirty: false }
-  ];
+  return [{ name: 'model.rune', path: '/ws/model.rune', content: 'namespace Foo {}', dirty: false }];
 }
 
 function seedReadySnapshot(target: Target = 'zod') {

@@ -140,10 +140,8 @@ describe('FormPreviewSchema generation', () => {
     ]);
   });
 
-  skipIfNodeLt22(
-    'marks recursive expansion as unsupported instead of expanding forever',
-    async () => {
-      const doc = await parseModel(`
+  skipIfNodeLt22('marks recursive expansion as unsupported instead of expanding forever', async () => {
+    const doc = await parseModel(`
       namespace "test.preview"
       version "1"
 
@@ -152,23 +150,22 @@ describe('FormPreviewSchema generation', () => {
         child Node (0..1)
     `);
 
-      const [node] = generatePreviewSchemas([doc], { maxDepth: 1 });
+    const [node] = generatePreviewSchemas([doc], { maxDepth: 1 });
 
-      expect(node?.targetId).toBe('test.preview.Node');
-      expect(node?.unsupportedFeatures).toContain('recursive-reference:Node');
-      expect(node?.fields).toEqual([
-        { path: 'value', label: 'Value', kind: 'string', required: true },
-        {
-          path: 'child',
-          label: 'Child',
-          kind: 'unknown',
-          required: false,
-          cardinality: { min: 0, max: 1 },
-          description: 'Recursive reference to Node is not expanded in form preview.'
-        }
-      ]);
-    }
-  );
+    expect(node?.targetId).toBe('test.preview.Node');
+    expect(node?.unsupportedFeatures).toContain('recursive-reference:Node');
+    expect(node?.fields).toEqual([
+      { path: 'value', label: 'Value', kind: 'string', required: true },
+      {
+        path: 'child',
+        label: 'Child',
+        kind: 'unknown',
+        required: false,
+        cardinality: { min: 0, max: 1 },
+        description: 'Recursive reference to Node is not expanded in form preview.'
+      }
+    ]);
+  });
 
   skipIfNodeLt22('can return one fully-qualified target schema by id', async () => {
     const doc = await parseModel(`
@@ -218,29 +215,19 @@ describe('FormPreviewSchema generation', () => {
       }
     }
 
-    expect(Array.from(kinds).sort()).toEqual([
-      'array',
-      'boolean',
-      'enum',
-      'number',
-      'object',
-      'string',
-      'unknown'
-    ]);
+    expect(Array.from(kinds).sort()).toEqual(['array', 'boolean', 'enum', 'number', 'object', 'string', 'unknown']);
     expect(trade?.unsupportedFeatures).toContain('unresolved-reference:MissingType');
   });
 
-  skipIfNodeLt22(
-    'marks duplicate target ids as unsupported instead of silently overwriting',
-    async () => {
-      const first = await parseModel(`
+  skipIfNodeLt22('marks duplicate target ids as unsupported instead of silently overwriting', async () => {
+    const first = await parseModel(`
       namespace "test.preview"
       version "1"
 
       type Trade:
         tradeId string (1..1)
     `);
-      const second = await parseModel(`
+    const second = await parseModel(`
       namespace "test.preview"
       version "1"
 
@@ -248,16 +235,15 @@ describe('FormPreviewSchema generation', () => {
         settlementDate string (0..1)
     `);
 
-      const [trade] = generatePreviewSchemas([first, second], { targetId: 'test.preview.Trade' });
+    const [trade] = generatePreviewSchemas([first, second], { targetId: 'test.preview.Trade' });
 
-      expect(trade).toMatchObject({
-        targetId: 'test.preview.Trade',
-        status: 'unsupported',
-        fields: [],
-        unsupportedFeatures: ['duplicate-target:test.preview.Trade']
-      });
-    }
-  );
+    expect(trade).toMatchObject({
+      targetId: 'test.preview.Trade',
+      status: 'unsupported',
+      fields: [],
+      unsupportedFeatures: ['duplicate-target:test.preview.Trade']
+    });
+  });
 
   skipIfAdjustableDateFixturesUnavailable(
     'generates a stable preview schema for the real CDM AdjustableDate type',
@@ -279,9 +265,7 @@ describe('FormPreviewSchema generation', () => {
         'dateAdjustmentsReference',
         'adjustedDate'
       ]);
-      expect(
-        adjustableDate?.fields.find((field) => field.path === 'dateAdjustments')
-      ).toMatchObject({
+      expect(adjustableDate?.fields.find((field) => field.path === 'dateAdjustments')).toMatchObject({
         kind: 'object'
       });
     }
@@ -308,15 +292,11 @@ describe('FormPreviewSchema generation', () => {
       title: 'ProductCode',
       status: 'ready'
     });
-    expect(alias?.fields).toEqual([
-      { path: 'value', label: 'Product Code', kind: 'string', required: true }
-    ]);
+    expect(alias?.fields).toEqual([{ path: 'value', label: 'Product Code', kind: 'string', required: true }]);
   });
 
-  skipIfNodeLt22(
-    'generates object fields for a data-type alias (typeAlias referencing a type)',
-    async () => {
-      const doc = await parseModel(`
+  skipIfNodeLt22('generates object fields for a data-type alias (typeAlias referencing a type)', async () => {
+    const doc = await parseModel(`
         namespace "test.preview"
         version "1"
 
@@ -328,20 +308,19 @@ describe('FormPreviewSchema generation', () => {
           Address
       `);
 
-      const schemas = generatePreviewSchemas([doc]);
-      const alias = schemas.find((s) => s.targetId === 'test.preview.BillingAddress');
+    const schemas = generatePreviewSchemas([doc]);
+    const alias = schemas.find((s) => s.targetId === 'test.preview.BillingAddress');
 
-      expect(alias).toMatchObject({
-        schemaVersion: 1,
-        kind: 'typeAlias',
-        targetId: 'test.preview.BillingAddress',
-        title: 'BillingAddress',
-        status: 'ready'
-      });
-      expect(alias?.fields.map((f) => f.path)).toEqual(['street', 'city']);
-      expect(alias?.fields[0]).toMatchObject({ kind: 'string', required: true });
-    }
-  );
+    expect(alias).toMatchObject({
+      schemaVersion: 1,
+      kind: 'typeAlias',
+      targetId: 'test.preview.BillingAddress',
+      title: 'BillingAddress',
+      status: 'ready'
+    });
+    expect(alias?.fields.map((f) => f.path)).toEqual(['street', 'city']);
+    expect(alias?.fields[0]).toMatchObject({ kind: 'string', required: true });
+  });
 
   // ── T038: Choice Preview ─────────────────────────────────────────────────
 

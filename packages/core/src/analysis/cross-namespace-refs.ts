@@ -170,7 +170,10 @@ export function collectNamespaceDependencies(documents: readonly LangiumDocument
         //    a full expression-body walk). A rule whose input is a type in
         //    another namespace creates a cross-namespace dependency.
         const ruleInputRef = element.input?.type?.ref;
-        if (ruleInputRef && (isData(ruleInputRef) || isRosettaEnumeration(ruleInputRef) || isRosettaTypeAlias(ruleInputRef))) {
+        if (
+          ruleInputRef &&
+          (isData(ruleInputRef) || isRosettaEnumeration(ruleInputRef) || isRosettaTypeAlias(ruleInputRef))
+        ) {
           trackRef(ruleInputRef, sourceNs);
         }
       }

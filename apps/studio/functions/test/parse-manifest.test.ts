@@ -87,7 +87,15 @@ const MANIFEST = {
 // Per-namespace document fixture — mirrors CURATED_DOCS from parse-lazy-link
 // ---------------------------------------------------------------------------
 
-const NS_DOCS: Record<string, Array<{ uri: string; content: string; serializedModel: string; exports: Array<{ type: string; name: string; path: string }> }>> = {
+const NS_DOCS: Record<
+  string,
+  Array<{
+    uri: string;
+    content: string;
+    serializedModel: string;
+    exports: Array<{ type: string; name: string; path: string }>;
+  }>
+> = {
   'cdm.trade': [
     {
       uri: 'cdm/trade/trade.rosetta',
@@ -162,12 +170,10 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
 
-    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(
-      async (_id, _v, artifactKey) => {
-        const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
-        return ns ? NS_DOCS[ns] : [];
-      }
-    );
+    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _v, artifactKey) => {
+      const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
+      return ns ? NS_DOCS[ns] : [];
+    });
 
     // DO NOT give bundleSpy a mock impl — we assert it is never called
     const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
@@ -225,12 +231,10 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
 
-    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(
-      async (_id, _v, artifactKey) => {
-        const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
-        return ns ? NS_DOCS[ns] : [];
-      }
-    );
+    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _v, artifactKey) => {
+      const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
+      return ns ? NS_DOCS[ns] : [];
+    });
     vi.spyOn(mod, 'fetchCuratedBundle');
 
     const userContent = 'namespace app\nimport cdm.trade\n';
@@ -384,12 +388,10 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
 
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(MANIFEST as never);
 
-    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(
-      async (_id, _v, artifactKey) => {
-        const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
-        return ns ? NS_DOCS[ns] : [];
-      }
-    );
+    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _v, artifactKey) => {
+      const ns = Object.keys(NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
+      return ns ? NS_DOCS[ns] : [];
+    });
 
     // fetchCuratedBundle must never be called (v2 manifest fast-path)
     vi.spyOn(mod, 'fetchCuratedBundle');

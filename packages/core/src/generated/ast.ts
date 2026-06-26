@@ -262,9 +262,7 @@ export const AnnotationPathAttributeReference = {
   attribute: 'attribute'
 } as const;
 
-export function isAnnotationPathAttributeReference(
-  item: unknown
-): item is AnnotationPathAttributeReference {
+export function isAnnotationPathAttributeReference(item: unknown): item is AnnotationPathAttributeReference {
   return reflection.isInstance(item, AnnotationPathAttributeReference.$type);
 }
 
@@ -2464,9 +2462,7 @@ export const RosettaConditionalExpression = {
   ifthen: 'ifthen'
 } as const;
 
-export function isRosettaConditionalExpression(
-  item: unknown
-): item is RosettaConditionalExpression {
+export function isRosettaConditionalExpression(item: unknown): item is RosettaConditionalExpression {
   return reflection.isInstance(item, RosettaConditionalExpression.$type);
 }
 
@@ -2541,9 +2537,7 @@ export const RosettaConstructorExpression = {
   values: 'values'
 } as const;
 
-export function isRosettaConstructorExpression(
-  item: unknown
-): item is RosettaConstructorExpression {
+export function isRosettaConstructorExpression(item: unknown): item is RosettaConstructorExpression {
   return reflection.isInstance(item, RosettaConstructorExpression.$type);
 }
 
@@ -3249,9 +3243,7 @@ export const RosettaExternalRegularAttribute = {
   operator: 'operator'
 } as const;
 
-export function isRosettaExternalRegularAttribute(
-  item: unknown
-): item is RosettaExternalRegularAttribute {
+export function isRosettaExternalRegularAttribute(item: unknown): item is RosettaExternalRegularAttribute {
   return reflection.isInstance(item, RosettaExternalRegularAttribute.$type);
 }
 
@@ -3291,12 +3283,7 @@ export function isRosettaExternalSynonym(item: unknown): item is RosettaExternal
   return reflection.isInstance(item, RosettaExternalSynonym.$type);
 }
 
-export type RosettaFeature =
-  | Attribute
-  | ChoiceOption
-  | RosettaEnumValue
-  | RosettaMetaType
-  | RosettaRecordFeature;
+export type RosettaFeature = Attribute | ChoiceOption | RosettaEnumValue | RosettaMetaType | RosettaRecordFeature;
 
 export const RosettaFeature = {
   $type: 'RosettaFeature'
@@ -3563,11 +3550,7 @@ export function isRosettaIntLiteral(item: unknown): item is RosettaIntLiteral {
   return reflection.isInstance(item, RosettaIntLiteral.$type);
 }
 
-export type RosettaLiteral =
-  | RosettaBooleanLiteral
-  | RosettaIntLiteral
-  | RosettaNumberLiteral
-  | RosettaStringLiteral;
+export type RosettaLiteral = RosettaBooleanLiteral | RosettaIntLiteral | RosettaNumberLiteral | RosettaStringLiteral;
 
 export const RosettaLiteral = {
   $type: 'RosettaLiteral'
@@ -3678,11 +3661,7 @@ export function isRosettaMapRosettaPath(item: unknown): item is RosettaMapRosett
   return reflection.isInstance(item, RosettaMapRosettaPath.$type);
 }
 
-export type RosettaMapTest =
-  | RosettaMapPath
-  | RosettaMapRosettaPath
-  | RosettaMapTestExpression
-  | RosettaMapTestFunc;
+export type RosettaMapTest = RosettaMapPath | RosettaMapRosettaPath | RosettaMapTestExpression | RosettaMapTestFunc;
 
 export const RosettaMapTest = {
   $type: 'RosettaMapTest'
@@ -3693,10 +3672,7 @@ export function isRosettaMapTest(item: unknown): item is RosettaMapTest {
 }
 
 export interface RosettaMapTestAbsentExpression extends langium.AstNode {
-  readonly $container:
-    | RosettaMapTestEqualityOperation
-    | RosettaMappingInstance
-    | RosettaMappingPathTests;
+  readonly $container: RosettaMapTestEqualityOperation | RosettaMappingInstance | RosettaMappingPathTests;
   readonly $type: 'RosettaMapTestAbsentExpression';
   argument: RosettaMapPathValue;
 }
@@ -3706,17 +3682,12 @@ export const RosettaMapTestAbsentExpression = {
   argument: 'argument'
 } as const;
 
-export function isRosettaMapTestAbsentExpression(
-  item: unknown
-): item is RosettaMapTestAbsentExpression {
+export function isRosettaMapTestAbsentExpression(item: unknown): item is RosettaMapTestAbsentExpression {
   return reflection.isInstance(item, RosettaMapTestAbsentExpression.$type);
 }
 
 export interface RosettaMapTestEqualityOperation extends langium.AstNode {
-  readonly $container:
-    | RosettaMapTestEqualityOperation
-    | RosettaMappingInstance
-    | RosettaMappingPathTests;
+  readonly $container: RosettaMapTestEqualityOperation | RosettaMappingInstance | RosettaMappingPathTests;
   readonly $type: 'RosettaMapTestEqualityOperation';
   left: RosettaMapPathValue;
   operator: '<>' | '=';
@@ -3730,17 +3701,12 @@ export const RosettaMapTestEqualityOperation = {
   right: 'right'
 } as const;
 
-export function isRosettaMapTestEqualityOperation(
-  item: unknown
-): item is RosettaMapTestEqualityOperation {
+export function isRosettaMapTestEqualityOperation(item: unknown): item is RosettaMapTestEqualityOperation {
   return reflection.isInstance(item, RosettaMapTestEqualityOperation.$type);
 }
 
 export interface RosettaMapTestExistsExpression extends langium.AstNode {
-  readonly $container:
-    | RosettaMapTestEqualityOperation
-    | RosettaMappingInstance
-    | RosettaMappingPathTests;
+  readonly $container: RosettaMapTestEqualityOperation | RosettaMappingInstance | RosettaMappingPathTests;
   readonly $type: 'RosettaMapTestExistsExpression';
   argument: RosettaMapPathValue;
 }
@@ -3750,9 +3716,7 @@ export const RosettaMapTestExistsExpression = {
   argument: 'argument'
 } as const;
 
-export function isRosettaMapTestExistsExpression(
-  item: unknown
-): item is RosettaMapTestExistsExpression {
+export function isRosettaMapTestExistsExpression(item: unknown): item is RosettaMapTestExistsExpression {
   return reflection.isInstance(item, RosettaMapTestExistsExpression.$type);
 }
 
@@ -4100,9 +4064,7 @@ export const RosettaQualifiableConfiguration = {
   rosettaClass: 'rosettaClass'
 } as const;
 
-export function isRosettaQualifiableConfiguration(
-  item: unknown
-): item is RosettaQualifiableConfiguration {
+export function isRosettaQualifiableConfiguration(item: unknown): item is RosettaQualifiableConfiguration {
   return reflection.isInstance(item, RosettaQualifiableConfiguration.$type);
 }
 
@@ -4620,13 +4582,7 @@ export function isRosettaSynonymValueBase(item: unknown): item is RosettaSynonym
   return reflection.isInstance(item, RosettaSynonymValueBase.$type);
 }
 
-export type RosettaType =
-  | Choice
-  | Data
-  | RosettaBasicType
-  | RosettaEnumeration
-  | RosettaRecordType
-  | RosettaTypeAlias;
+export type RosettaType = Choice | Data | RosettaBasicType | RosettaEnumeration | RosettaRecordType | RosettaTypeAlias;
 
 export const RosettaType = {
   $type: 'RosettaType'
@@ -7017,12 +6973,7 @@ export class RuneDslAstReflection extends langium.AbstractAstReflection {
           defaultValue: []
         }
       },
-      superTypes: [
-        RosettaRootElement.$type,
-        RosettaSymbol.$type,
-        RosettaType.$type,
-        SwitchCaseTarget.$type
-      ]
+      superTypes: [RosettaRootElement.$type, RosettaSymbol.$type, RosettaType.$type, SwitchCaseTarget.$type]
     },
     RosettaExistsExpression: {
       name: RosettaExistsExpression.$type,

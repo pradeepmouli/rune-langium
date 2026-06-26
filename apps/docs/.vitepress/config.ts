@@ -2,20 +2,16 @@ import { defineConfig } from 'vitepress';
 import typedocSidebar from '../api/typedoc-sidebar.json' with { type: 'json' };
 
 const isCloudflarePages = process.env.CF_PAGES === '1';
-const docsBase =
-  process.env.DOCS_BASE || (isCloudflarePages ? '/rune-studio/docs/' : '/rune-langium/');
+const docsBase = process.env.DOCS_BASE || (isCloudflarePages ? '/rune-studio/docs/' : '/rune-langium/');
 const siteUrl =
   process.env.DOCS_SITE_URL ||
-  (isCloudflarePages
-    ? 'https://www.daikonic.dev/rune-studio/docs/'
-    : 'https://pradeepmouli.github.io/rune-langium/');
+  (isCloudflarePages ? 'https://www.daikonic.dev/rune-studio/docs/' : 'https://pradeepmouli.github.io/rune-langium/');
 const githubUrl = process.env.DOCS_GITHUB_URL || 'https://github.com/pradeepmouli/rune-langium';
 // VitePress prepends `base` to any nav/href starting with `/`, which would
 // double-prefix the studio link (/rune-studio/docs/rune-studio/studio/). Use
 // the full URL on CF so it's treated as external and rendered verbatim.
 const studioUrl =
-  process.env.DOCS_STUDIO_URL ||
-  (isCloudflarePages ? 'https://www.daikonic.dev/rune-studio/studio/' : '/studio/');
+  process.env.DOCS_STUDIO_URL || (isCloudflarePages ? 'https://www.daikonic.dev/rune-studio/studio/' : '/studio/');
 
 // Escape angle-bracket patterns in typedoc-generated markdown that Vue's
 // SFC parser would otherwise choke on (e.g. generic types like `Node<T>`

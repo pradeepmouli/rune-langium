@@ -9,10 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  ExpressionNodeSchema,
-  type ExpressionNode
-} from '../../src/schemas/expression-node-schema.js';
+import { ExpressionNodeSchema, type ExpressionNode } from '../../src/schemas/expression-node-schema.js';
 
 describe('ExpressionNodeSchema', () => {
   describe('discriminated union', () => {

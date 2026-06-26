@@ -250,14 +250,7 @@ export function TypeSelector({
     if (disabled) return [];
     // Valid attribute type-refs. Func/Annotation are intentionally absent —
     // they're draggable from the explorer but never a valid attribute type.
-    const all: ReadonlyArray<TypeRefPayload['kind']> = [
-      'Data',
-      'Choice',
-      'Enum',
-      'BasicType',
-      'Record',
-      'TypeAlias'
-    ];
+    const all: ReadonlyArray<TypeRefPayload['kind']> = ['Data', 'Choice', 'Enum', 'BasicType', 'Record', 'TypeAlias'];
     // "No filter specified" (undefined or empty array) means the selector
     // accepts every draggable kind — that's the caller's signal of "I have
     // no opinion about kinds; let any type-ref drop through".

@@ -55,11 +55,7 @@ interface DialogState {
   errorCategory?: GitHubAuthErrorCategory;
 }
 
-export function GitHubConnectDialog({
-  authBase,
-  onConnected,
-  onCancel
-}: Props): React.ReactElement {
+export function GitHubConnectDialog({ authBase, onConnected, onCancel }: Props): React.ReactElement {
   const [state, setState] = useState<DialogState>({ phase: 'init' });
   const cancelledRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

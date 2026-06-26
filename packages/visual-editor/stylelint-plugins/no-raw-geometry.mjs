@@ -25,24 +25,42 @@ const messages = stylelint.utils.ruleMessages(ruleName, {
   space: (prop, value) =>
     `"${prop}: ${value}" must use a spacing token — var(--space-N), not a raw px value (literals ≤3px are allowed for hairline insets).`,
   font: (prop, value) =>
-    `"${prop}: ${value}" must use a type token — var(--text-3xs|2xs|xs|sm|md|base|lg|xl|2xl|3xl), not a raw px/rem value.`,
+    `"${prop}: ${value}" must use a type token — var(--text-3xs|2xs|xs|sm|md|base|lg|xl|2xl|3xl), not a raw px/rem value.`
 });
 
 const meta = {
-  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-raw-geometry.mjs',
+  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-raw-geometry.mjs'
 };
 
 const RADIUS_PROP = /^border(?:-[a-z]+)*-radius$/;
 const SPACE_PROPS = new Set([
-  'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'padding',
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
   // logical longhands/shorthands — the repo styles in `padding-inline` etc.,
   // so the rule must cover them or raw px could re-enter through that door.
-  'padding-inline', 'padding-block',
-  'padding-inline-start', 'padding-inline-end', 'padding-block-start', 'padding-block-end',
-  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-  'margin-inline', 'margin-block',
-  'margin-inline-start', 'margin-inline-end', 'margin-block-start', 'margin-block-end',
-  'gap', 'row-gap', 'column-gap',
+  'padding-inline',
+  'padding-block',
+  'padding-inline-start',
+  'padding-inline-end',
+  'padding-block-start',
+  'padding-block-end',
+  'margin',
+  'margin-top',
+  'margin-right',
+  'margin-bottom',
+  'margin-left',
+  'margin-inline',
+  'margin-block',
+  'margin-inline-start',
+  'margin-inline-end',
+  'margin-block-start',
+  'margin-block-end',
+  'gap',
+  'row-gap',
+  'column-gap'
 ]);
 
 // Strip only var() token references (innermost-out for nested var()). The math
@@ -66,7 +84,7 @@ function pxValues(text) {
 const rule = (primary) => (root, result) => {
   const validOptions = stylelint.utils.validateOptions(result, ruleName, {
     actual: primary,
-    possible: [true],
+    possible: [true]
   });
   if (!validOptions) return;
 

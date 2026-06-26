@@ -21,9 +21,7 @@ const MAX_ENTRIES = 200;
 
 function nowHHMMSS(): string {
   const d = new Date();
-  return [d.getHours(), d.getMinutes(), d.getSeconds()]
-    .map((n) => String(n).padStart(2, '0'))
-    .join(':');
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
 export const useActivityStore = create<ActivityState>((set) => ({
@@ -33,5 +31,5 @@ export const useActivityStore = create<ActivityState>((set) => ({
       const next = [...s.entries, { id: ++_id, time: nowHHMMSS(), tag, ok, msg }];
       return { entries: next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next };
     }),
-  clearEntries: () => set({ entries: [] }),
+  clearEntries: () => set({ entries: [] })
 }));

@@ -37,11 +37,7 @@ const EXPECTED_RECORD_TYPES = new Set(['date', 'dateTime', 'zonedDateTime']);
 const EXPECTED_TYPE_ALIASES = new Set(['int', 'productType', 'eventType', 'calculation']);
 
 /** Full builtin type surface — union of all three categories. */
-const EXPECTED_ALL_BUILTINS = new Set([
-  ...EXPECTED_BASIC_TYPES,
-  ...EXPECTED_RECORD_TYPES,
-  ...EXPECTED_TYPE_ALIASES
-]);
+const EXPECTED_ALL_BUILTINS = new Set([...EXPECTED_BASIC_TYPES, ...EXPECTED_RECORD_TYPES, ...EXPECTED_TYPE_ALIASES]);
 
 // ---------------------------------------------------------------------------
 // Helper: assert a profile covers all expected names
@@ -55,34 +51,28 @@ function assertProfileCoversBuiltins(profile: LanguageProfile, profileName: stri
   ]);
 
   for (const name of EXPECTED_ALL_BUILTINS) {
-    expect(merged.has(name), `${profileName}: missing builtin '${name}' from basicTypeMap ∪ recordTypeMap ∪ typeAliasMap`).toBe(true);
+    expect(
+      merged.has(name),
+      `${profileName}: missing builtin '${name}' from basicTypeMap ∪ recordTypeMap ∪ typeAliasMap`
+    ).toBe(true);
   }
 }
 
 function assertProfileBasicTypes(profile: LanguageProfile, profileName: string): void {
   for (const name of EXPECTED_BASIC_TYPES) {
-    expect(
-      name in profile.basicTypeMap,
-      `${profileName}: basicTypeMap missing '${name}'`
-    ).toBe(true);
+    expect(name in profile.basicTypeMap, `${profileName}: basicTypeMap missing '${name}'`).toBe(true);
   }
 }
 
 function assertProfileRecordTypes(profile: LanguageProfile, profileName: string): void {
   for (const name of EXPECTED_RECORD_TYPES) {
-    expect(
-      name in profile.recordTypeMap,
-      `${profileName}: recordTypeMap missing '${name}'`
-    ).toBe(true);
+    expect(name in profile.recordTypeMap, `${profileName}: recordTypeMap missing '${name}'`).toBe(true);
   }
 }
 
 function assertProfileTypeAliases(profile: LanguageProfile, profileName: string): void {
   for (const name of EXPECTED_TYPE_ALIASES) {
-    expect(
-      name in profile.typeAliasMap,
-      `${profileName}: typeAliasMap missing '${name}'`
-    ).toBe(true);
+    expect(name in profile.typeAliasMap, `${profileName}: typeAliasMap missing '${name}'`).toBe(true);
   }
 }
 

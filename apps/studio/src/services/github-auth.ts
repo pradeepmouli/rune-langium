@@ -121,11 +121,7 @@ export async function pollDeviceFlow(authBase: string, deviceCode: string): Prom
 
 const TOKEN_PATH = '.studio/token';
 
-export async function storeWorkspaceToken(
-  fs: OpfsFs,
-  workspaceId: string,
-  token: string
-): Promise<void> {
+export async function storeWorkspaceToken(fs: OpfsFs, workspaceId: string, token: string): Promise<void> {
   await fs.writeFile(`/${workspaceId}/${TOKEN_PATH}`, token);
 }
 

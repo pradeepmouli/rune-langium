@@ -63,12 +63,7 @@ function joinPath(parts: string[]): string {
 }
 
 function isDomError(err: unknown, name: string): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'name' in err &&
-    (err as { name: string }).name === name
-  );
+  return typeof err === 'object' && err !== null && 'name' in err && (err as { name: string }).name === name;
 }
 
 export class OpfsFs {

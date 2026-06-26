@@ -29,8 +29,7 @@ class MemFile {
       size: data.byteLength,
       type: '',
       lastModified: this.lastModified,
-      arrayBuffer: async () =>
-        data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+      arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
       text: async () => new TextDecoder().decode(data),
       stream: () => new Blob([data]).stream()
     };

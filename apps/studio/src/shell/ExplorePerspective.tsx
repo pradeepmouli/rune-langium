@@ -1155,9 +1155,9 @@ export function ExplorePerspective() {
   // queue the namespace for on-demand hydration before toggling visibility.
   const handleToggleNamespace = useCallback(
     (namespace: string) => {
-      const needsHydration = useEditorStore.getState().nodes.some(
-        (n) => n.meta.namespace === namespace && n.meta.deferred === true
-      );
+      const needsHydration = useEditorStore
+        .getState()
+        .nodes.some((n) => n.meta.namespace === namespace && n.meta.deferred === true);
       if (needsHydration) useEditorStore.getState().requestNamespaceHydration(namespace);
       storeToggleNamespace(namespace);
     },
@@ -1753,8 +1753,7 @@ export function ExplorePerspective() {
     if (!selectedNodeId || structureFocusedTypeId) return undefined;
     if (!selectedNodeType) return undefined;
     const node = storeNodes.find((n) => n.id === selectedNodeId);
-    const name =
-      (node?.data as { name?: string } | undefined)?.name ?? nameFromNodeId(selectedNodeId);
+    const name = (node?.data as { name?: string } | undefined)?.name ?? nameFromNodeId(selectedNodeId);
     // Map AST $type → user-friendly kind label. Codex review (e2e-batch
     // adversarial) flagged the previous map as non-exhaustive — it omitted
     // RosettaTypeAlias, RosettaBasicType, RosettaSynonymSource,

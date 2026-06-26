@@ -41,8 +41,7 @@ const REDACT_PATHS = [
 ];
 
 export function createLogger(options: LoggerOptions = {}): Logger {
-  const level: LevelWithSilent =
-    options.level ?? (process.env['LOG_LEVEL'] as LevelWithSilent | undefined) ?? 'info';
+  const level: LevelWithSilent = options.level ?? (process.env['LOG_LEVEL'] as LevelWithSilent | undefined) ?? 'info';
 
   const pinoOptions: pino.LoggerOptions = {
     level,

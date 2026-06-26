@@ -245,10 +245,12 @@ export function createTransportProvider(opts?: TransportProviderOptions): Transp
       : 'Editor running offline — language services unavailable';
     if (config.devMode) {
       console.warn('[TransportProvider] Pages Function LSP step failed:', cause);
-      useOutputStore.getState().addLine(
-        fmtLine('lsp', 'Pages Function step failed', cause instanceof Error ? cause.message : String(cause)),
-        'warn'
-      );
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('lsp', 'Pages Function step failed', cause instanceof Error ? cause.message : String(cause)),
+          'warn'
+        );
     }
     const error = new Error(errorMessage);
     setState({

@@ -99,19 +99,20 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
       const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
       const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
       const layoutOption = config.layout ? { layout: config.layout } : {};
-      const options =
-        config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};
+      const options = config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};
       setDownloadingTarget(newTarget);
       try {
         await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
-          const detail = err.diagnostics.length > 0
-            ? err.diagnostics.map((d) => d.message).join('; ')
-            : err.message;
+          const detail = err.diagnostics.length > 0 ? err.diagnostics.map((d) => d.message).join('; ') : err.message;
           showToast({ title: 'Code generation failed', description: detail, variant: 'destructive' });
           useOutputStore.getState().addLine(fmtLine('codegen', err.message), 'error');
-          err.diagnostics.forEach(d => useOutputStore.getState().addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn'));
+          err.diagnostics.forEach((d) =>
+            useOutputStore
+              .getState()
+              .addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn')
+          );
           console.error(
             `[ExportPerspective] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
             err.diagnostics
@@ -132,8 +133,7 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
   // Derive read-only preview content from the store snapshot.
   const activeContent = useMemo(() => {
     if (snapshot.status !== 'ready' && snapshot.status !== 'stale') return undefined;
-    const file =
-      snapshot.files.find((f) => f.relativePath === snapshot.activeRelativePath) ?? snapshot.files[0];
+    const file = snapshot.files.find((f) => f.relativePath === snapshot.activeRelativePath) ?? snapshot.files[0];
     return file?.content;
   }, [snapshot]);
 
@@ -226,9 +226,7 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
             data-testid="export-preview-empty"
             className="flex-1 flex items-center justify-center px-6 py-8 text-center"
           >
-            <p className="text-xs text-muted-foreground max-w-[22rem]">
-              Select a target above to generate a preview.
-            </p>
+            <p className="text-xs text-muted-foreground max-w-[22rem]">Select a target above to generate a preview.</p>
           </div>
         )}
       </div>

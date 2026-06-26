@@ -162,11 +162,7 @@ describe('section resolution (T-C): missing component emits warning', () => {
     };
 
     render(
-      <ZodForm
-        schema={SchemaOnlyDefinition}
-        componentConfig={componentConfig}
-        defaultValues={{ definition: '' }}
-      />
+      <ZodForm schema={SchemaOnlyDefinition} componentConfig={componentConfig} defaultValues={{ definition: '' }} />
     );
 
     // Warning fired once with the section name and the unresolved-component reason

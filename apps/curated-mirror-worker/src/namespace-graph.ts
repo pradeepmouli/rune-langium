@@ -187,7 +187,7 @@ export function computeNamespaceGraph(
   //   URI.parse(`[${modelId}]/${file.path}`) and what refUriToCuratedKey emits.
   const uriToNamespace = new Map<string, string>();
   const nsMeta = new Map<string, { imports: string[] }>();
-  const nsDocs = new Map<string, Array<typeof docs[0]>>();
+  const nsDocs = new Map<string, Array<(typeof docs)[0]>>();
 
   for (const doc of docs) {
     const meta = readModelMeta(doc.modelJson);

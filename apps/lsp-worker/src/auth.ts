@@ -73,13 +73,10 @@ function bytesEqualConstantTime(a: Uint8Array, b: Uint8Array): boolean {
 // ────────────────────────────────────────────────────────────────────────────
 
 async function importKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify']
-  );
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+    'verify'
+  ]);
 }
 
 async function hmacSign(secret: string, data: Uint8Array): Promise<Uint8Array> {
@@ -95,21 +92,14 @@ async function hmacSign(secret: string, data: Uint8Array): Promise<Uint8Array> {
 // Sign / verify session tokens
 // ────────────────────────────────────────────────────────────────────────────
 
-export async function signSessionToken(
-  secret: string,
-  payload: SessionTokenPayload
-): Promise<string> {
+export async function signSessionToken(secret: string, payload: SessionTokenPayload): Promise<string> {
   const json = JSON.stringify(payload);
   const payloadBytes = new TextEncoder().encode(json);
   const sig = await hmacSign(secret, payloadBytes);
   return `${bufToBase64Url(payloadBytes)}.${bufToBase64Url(sig)}`;
 }
 
-export async function verifySessionToken(
-  secret: string,
-  token: string,
-  now = Date.now()
-): Promise<VerifyResult> {
+export async function verifySessionToken(secret: string, token: string, now = Date.now()): Promise<VerifyResult> {
   const parts = token.split('.');
   if (parts.length !== 2) return { ok: false, reason: 'malformed' };
   const [payloadB64, sigB64] = parts as [string, string];
@@ -242,10 +232,7 @@ interface RateWindow {
 
 const sessionRateWindows = new Map<string, RateWindow>();
 
-export function checkSessionRateLimit(
-  ip: string,
-  now = Date.now()
-): { allowed: boolean; retryAfterS: number } {
+export function checkSessionRateLimit(ip: string, now = Date.now()): { allowed: boolean; retryAfterS: number } {
   evictExpiredRateWindows(now);
   const w = sessionRateWindows.get(ip);
   if (!w || now - w.windowStart >= SESSION_WINDOW_MS) {

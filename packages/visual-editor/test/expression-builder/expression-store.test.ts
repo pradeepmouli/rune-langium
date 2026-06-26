@@ -11,10 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  createExpressionStore,
-  type ExpressionBuilderState
-} from '../../src/store/expression-store.js';
+import { createExpressionStore, type ExpressionBuilderState } from '../../src/store/expression-store.js';
 import type { StoreApi } from 'zustand';
 import type { ExpressionNode } from '../../src/schemas/expression-node-schema.js';
 

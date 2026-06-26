@@ -321,8 +321,7 @@ function isLocalLanguagesEnvelope(value: unknown): value is { languages: Array<{
  * This default exists so a standalone studio build (no combined-docs step)
  * still produces a working bundle.
  */
-const DEFAULT_CODEGEN_URL =
-  typeof window === 'undefined' ? 'http://localhost:8377' : '/rune-studio';
+const DEFAULT_CODEGEN_URL = typeof window === 'undefined' ? 'http://localhost:8377' : '/rune-studio';
 
 export interface GenerateOptions {
   /**

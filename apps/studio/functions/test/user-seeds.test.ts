@@ -7,9 +7,15 @@ import { collectUserSeedNamespaces } from '../api/parse.js';
 describe('collectUserSeedNamespaces', () => {
   it('collects importedNamespace from parsed user models', () => {
     const userDocs = [
-      { parseResult: { value: { $type: 'RosettaModel', name: 'app', imports: [
-        { importedNamespace: 'cdm.trade' }, { importedNamespace: 'cdm.base.*' }
-      ] } } }
+      {
+        parseResult: {
+          value: {
+            $type: 'RosettaModel',
+            name: 'app',
+            imports: [{ importedNamespace: 'cdm.trade' }, { importedNamespace: 'cdm.base.*' }]
+          }
+        }
+      }
     ] as never;
     expect([...collectUserSeedNamespaces(userDocs)].sort()).toEqual(['cdm.base.*', 'cdm.trade']);
   });

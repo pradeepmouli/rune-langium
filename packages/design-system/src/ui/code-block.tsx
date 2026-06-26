@@ -8,12 +8,7 @@ export interface CodeBlockProps extends React.HTMLAttributes<HTMLPreElement> {
   language?: string;
 }
 
-export function CodeBlock({
-  language,
-  className,
-  children,
-  ...rest
-}: CodeBlockProps): React.ReactElement {
+export function CodeBlock({ language, className, children, ...rest }: CodeBlockProps): React.ReactElement {
   return (
     <pre
       className={cn('overflow-x-auto rounded-md border bg-muted p-3 font-mono text-sm', className)}

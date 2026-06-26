@@ -69,9 +69,7 @@ export const ReferenceEdge = memo(function ReferenceEdge({
             className={`rune-edge-label rune-edge-label--${edgeData.kind} nodrag nopan`}
           >
             {edgeData.label}
-            {edgeData.cardinality && (
-              <span className="rune-edge-label__cardinality">{edgeData.cardinality}</span>
-            )}
+            {edgeData.cardinality && <span className="rune-edge-label__cardinality">{edgeData.cardinality}</span>}
           </div>
         </EdgeLabelRenderer>
       )}

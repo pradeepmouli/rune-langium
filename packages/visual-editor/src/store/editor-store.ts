@@ -46,13 +46,7 @@ import type {
 // Merged type + ops namespaces: `Data` is both the interface type and the
 // generated ops namespace (Data.addAttribute / Data.removeAttribute …),
 // from the single core barrel. Imported as values so the namespace ops resolve.
-import {
-  Data,
-  Choice,
-  RosettaEnumeration,
-  RosettaFunction,
-  Annotation
-} from '@rune-langium/core';
+import { Data, Choice, RosettaEnumeration, RosettaFunction, Annotation } from '@rune-langium/core';
 import { indexById } from '@rune-langium/core';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
@@ -576,12 +570,7 @@ function formatCardinalityString(card: string): string {
  * pre-existing same-scope semantics (a bare name that collides across
  * namespaces is a separate, pre-existing resolution concern, untouched here).
  */
-function renameRefText(
-  value: string | undefined,
-  oldName: string,
-  newName: string,
-  namespace: string
-): string | null {
+function renameRefText(value: string | undefined, oldName: string, newName: string, namespace: string): string | null {
   if (value === oldName) return newName;
   if (value === `${namespace}.${oldName}`) return `${namespace}.${newName}`;
   return null;
@@ -609,12 +598,7 @@ function reorderInPlace<T>(arr: T[], fromIndex: number, toIndex: number): boolea
  * `namespace` is the renamed type's namespace, used to also match qualified
  * (`<namespace>.<oldName>`) references — not just the bare name.
  */
-function updateTypeRefsInNode(
-  d: AnyGraphNode,
-  oldName: string,
-  newName: string,
-  namespace: string
-): AnyGraphNode {
+function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string, namespace: string): AnyGraphNode {
   let changed = false;
 
   function updateMemberRefs<T extends { typeCall?: { type?: { $refText?: string } } }>(members: T[]): T[] {
@@ -1301,9 +1285,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   // literal) — never rewrite those, or an attribute that happens
                   // to share the renamed type's name would corrupt its edge.
                   const relabeled =
-                    e.data?.kind === 'choice-option'
-                      ? renameRefText(e.data?.label, oldName, newName, namespace)
-                      : null;
+                    e.data?.kind === 'choice-option' ? renameRefText(e.data?.label, oldName, newName, namespace) : null;
                   const labelChanged = relabeled !== null;
                   if (!sourceChanged && !targetChanged && !labelChanged) continue;
 
@@ -1683,7 +1665,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data;
               if (d?.$type !== 'RosettaEnumeration') return;
               ensureMemberArray(d); // init guard: enumValues may be absent on a fresh node
-              RosettaEnumeration.addEnumValue(d, newValue as unknown as Parameters<typeof RosettaEnumeration.addEnumValue>[1]);
+              RosettaEnumeration.addEnumValue(
+                d,
+                newValue as unknown as Parameters<typeof RosettaEnumeration.addEnumValue>[1]
+              );
             });
           },
 
@@ -1697,9 +1682,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // Drain ALL matches by name (master behavior) — robust against a
               // malformed graph with duplicate enum-value names. A single removeX
               // call would drop only the first, leaving stale duplicates behind.
-              const key = { name: valueName } as unknown as Parameters<
-                typeof RosettaEnumeration.removeEnumValue
-              >[1];
+              const key = { name: valueName } as unknown as Parameters<typeof RosettaEnumeration.removeEnumValue>[1];
               while (RosettaEnumeration.removeEnumValue(d, key)) {
                 /* drain duplicates */
               }
@@ -1890,9 +1873,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // state — `nodes` is the derived I1 array (=== nodesById.values()).
             const { nodes, nodesById } = get();
             const targetNode = targetTypeId ? nodesById.get(targetTypeId) : undefined;
-            const targetNamespace = targetNode
-              ? targetNode.meta.namespace
-              : undefined;
+            const targetNamespace = targetNode ? targetNode.meta.namespace : undefined;
             const refText =
               targetNode && targetNamespace
                 ? disambiguateTypeRef(targetTypeId!, typeName, targetNamespace, nodes)
@@ -1902,8 +1883,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // Prefer id-based lookup (avoids resolving to the wrong same-named
             // node in a different namespace); fall back to name-based lookup for
             // built-in / string types that have no graph node.
-            const targetNodeId =
-              targetNode?.id ?? resolveTargetId(nodesById, nodes, nodeId, typeName);
+            const targetNodeId = targetNode?.id ?? resolveTargetId(nodesById, nodes, nodeId, typeName);
             const newEdge: TypeGraphEdge | null =
               targetNodeId && targetNodeId !== nodeId
                 ? {

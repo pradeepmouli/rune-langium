@@ -47,9 +47,7 @@ export async function listFixtures(subdir: string): Promise<string[]> {
  * @param subdir - Subdirectory name (e.g., 'cdm')
  * @returns Array of `{ name, content }` objects.
  */
-export async function loadAllFixtures(
-  subdir: string
-): Promise<Array<{ name: string; content: string }>> {
+export async function loadAllFixtures(subdir: string): Promise<Array<{ name: string; content: string }>> {
   const filenames = await listFixtures(subdir);
   return Promise.all(
     filenames.map(async (name) => ({
@@ -93,9 +91,7 @@ export interface SharedFormPreviewFixture {
  * Load a shared codegen fixture that Studio tests can reuse for form-preview
  * integration and parity checks.
  */
-export async function loadFormPreviewFixture(
-  fixtureName = 'form-preview'
-): Promise<SharedFormPreviewFixture> {
+export async function loadFormPreviewFixture(fixtureName = 'form-preview'): Promise<SharedFormPreviewFixture> {
   const fixtureDir = join(CODEGEN_FIXTURES_DIR, fixtureName);
   const [input, expectedZod] = await Promise.all([
     readFile(join(fixtureDir, 'input.rune'), 'utf-8'),

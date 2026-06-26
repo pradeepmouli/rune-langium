@@ -9,7 +9,7 @@ const node = (id: string, $type: string, name: string): TypeGraphNode =>
     type: 'data',
     position: { x: 0, y: 0 },
     data: { $type, name, attributes: [] } as unknown as TypeGraphNode['data'],
-    meta: { namespace: 'a', errors: [], hasExternalRefs: false },
+    meta: { namespace: 'a', errors: [], hasExternalRefs: false }
   }) as TypeGraphNode;
 
 describe('selectNodeRepository', () => {
@@ -23,7 +23,7 @@ describe('selectNodeRepository', () => {
   it('byType buckets nodes by data.$type', () => {
     const map = new Map([
       ['a.Foo', node('a.Foo', 'Data', 'Foo')],
-      ['a.E', node('a.E', 'RosettaEnumeration', 'E')],
+      ['a.E', node('a.E', 'RosettaEnumeration', 'E')]
     ]);
     const repo = selectNodeRepository(map);
     expect(repo.byType('Data').map((n) => n.id)).toEqual(['a.Foo']);

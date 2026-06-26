@@ -5,10 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { FormPreviewSchema } from '@rune-langium/codegen';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 
-function schema(
-  targetId: string,
-  title = targetId.split('.').at(-1) ?? targetId
-): FormPreviewSchema {
+function schema(targetId: string, title = targetId.split('.').at(-1) ?? targetId): FormPreviewSchema {
   return {
     schemaVersion: 1,
     targetId,
@@ -38,9 +35,7 @@ describe('usePreviewStore', () => {
   it('stores preview snapshots per target id and keeps last good snapshot when stale', () => {
     usePreviewStore
       .getState()
-      .setAvailableTargets([
-        { id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }
-      ]);
+      .setAvailableTargets([{ id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }]);
     usePreviewStore.getState().selectTarget('alpha.Trade');
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
     usePreviewStore.getState().receivePreviewStale({
@@ -61,16 +56,12 @@ describe('usePreviewStore', () => {
   it('re-resolves rename and clears deleted selected targets by id', () => {
     usePreviewStore
       .getState()
-      .setAvailableTargets([
-        { id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }
-      ]);
+      .setAvailableTargets([{ id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }]);
     usePreviewStore.getState().selectTarget('alpha.Trade');
 
     usePreviewStore
       .getState()
-      .setAvailableTargets([
-        { id: 'alpha.RenamedTrade', namespace: 'alpha', name: 'RenamedTrade', kind: 'data' }
-      ]);
+      .setAvailableTargets([{ id: 'alpha.RenamedTrade', namespace: 'alpha', name: 'RenamedTrade', kind: 'data' }]);
 
     expect(usePreviewStore.getState().selectedTargetId).toBeUndefined();
     expect(usePreviewStore.getState().selectedTarget).toBeUndefined();
@@ -268,9 +259,7 @@ describe('usePreviewStore', () => {
   it('drops selected target samples and cached schema when the target disappears from the available set', () => {
     usePreviewStore
       .getState()
-      .setAvailableTargets([
-        { id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }
-      ]);
+      .setAvailableTargets([{ id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }]);
     usePreviewStore.getState().selectTarget('alpha.Trade');
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
     usePreviewStore.getState().setSampleValues('alpha.Trade', { tradeId: 'T-1' });
@@ -287,9 +276,7 @@ describe('usePreviewStore', () => {
   it('ignores stale worker messages for targets that are no longer selected after deletion', () => {
     usePreviewStore
       .getState()
-      .setAvailableTargets([
-        { id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }
-      ]);
+      .setAvailableTargets([{ id: 'alpha.Trade', namespace: 'alpha', name: 'Trade', kind: 'data' }]);
     usePreviewStore.getState().selectTarget('alpha.Trade');
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
 
@@ -330,9 +317,7 @@ describe('usePreviewStore', () => {
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
     usePreviewStore.getState().ensureSample('alpha.Trade', { value: '' });
 
-    usePreviewStore
-      .getState()
-      .updateSample('alpha.Trade', { value: '' }, { value: 'Value is required' }, false, true);
+    usePreviewStore.getState().updateSample('alpha.Trade', { value: '' }, { value: 'Value is required' }, false, true);
 
     expect(usePreviewStore.getState().status).toEqual({
       state: 'invalid',
@@ -371,9 +356,7 @@ describe('usePreviewStore', () => {
     ]);
     usePreviewStore.getState().selectTarget('alpha.Trade');
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
-    usePreviewStore
-      .getState()
-      .updateSample('alpha.Trade', { value: '' }, { value: 'Value is required' }, false, true);
+    usePreviewStore.getState().updateSample('alpha.Trade', { value: '' }, { value: 'Value is required' }, false, true);
 
     usePreviewStore.getState().setAvailableTargets([
       {

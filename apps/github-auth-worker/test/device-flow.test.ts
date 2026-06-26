@@ -107,10 +107,7 @@ describe('POST /rune-studio/api/github-auth/device-poll (T051)', () => {
 
   it('returns 200 with the access token on success', async () => {
     fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ access_token: 'gho_test', token_type: 'bearer', scope: 'repo' }),
-        { status: 200 }
-      )
+      new Response(JSON.stringify({ access_token: 'gho_test', token_type: 'bearer', scope: 'repo' }), { status: 200 })
     );
     const res = await worker.fetch(pollReq('devcode'), env);
     expect(res.status).toBe(200);
@@ -119,9 +116,7 @@ describe('POST /rune-studio/api/github-auth/device-poll (T051)', () => {
   });
 
   it('returns 202 when GitHub says authorization_pending', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'authorization_pending' }), { status: 200 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'authorization_pending' }), { status: 200 }));
     const res = await worker.fetch(pollReq('devcode'), env);
     expect(res.status).toBe(202);
     const body = (await res.json()) as { status: string };
@@ -129,9 +124,7 @@ describe('POST /rune-studio/api/github-auth/device-poll (T051)', () => {
   });
 
   it('returns 410 when the device code expired', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'expired_token' }), { status: 200 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'expired_token' }), { status: 200 }));
     const res = await worker.fetch(pollReq('devcode'), env);
     expect(res.status).toBe(410);
   });
@@ -150,18 +143,14 @@ describe('POST /rune-studio/api/github-auth/device-poll (T051)', () => {
   });
 
   it('returns 403 access_denied (terminal) when the user clicked Cancel', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'access_denied' }), { status: 200 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'access_denied' }), { status: 200 }));
     const res = await worker.fetch(pollReq('devcode-cancel'), env);
     expect(res.status).toBe(403);
     expect(((await res.json()) as { error: string }).error).toBe('access_denied');
   });
 
   it('returns 400 invalid_device_code for the catch-all oauth error', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'unsupported_grant_type' }), { status: 200 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unsupported_grant_type' }), { status: 200 }));
     const res = await worker.fetch(pollReq('devcode-bogus'), env);
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe('invalid_device_code');
@@ -188,9 +177,7 @@ describe('POST /rune-studio/api/github-auth/device-poll (T051)', () => {
   });
 
   it('returns 429 slow_down when polled faster than 5s for the same device_code', async () => {
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({ error: 'authorization_pending' }), { status: 200 })
-    );
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ error: 'authorization_pending' }), { status: 200 }));
     const first = await worker.fetch(pollReq('devcode-fast'), env);
     expect(first.status).toBe(202);
     const second = await worker.fetch(pollReq('devcode-fast'), env);

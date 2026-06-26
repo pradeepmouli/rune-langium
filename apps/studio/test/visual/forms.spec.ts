@@ -17,13 +17,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import {
-  INSPECTOR_FORM_ROOT,
-  NODES_BY_KIND,
-  loadFormsBaseline,
-  selectNode,
-  type FormKind
-} from './fixtures.js';
+import { INSPECTOR_FORM_ROOT, NODES_BY_KIND, loadFormsBaseline, selectNode, type FormKind } from './fixtures.js';
 
 const KINDS: ReadonlyArray<FormKind> = Object.keys(NODES_BY_KIND) as FormKind[];
 

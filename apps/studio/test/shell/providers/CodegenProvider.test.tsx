@@ -9,11 +9,21 @@ class FakeWorker {
   posted: any[] = [];
   listeners: Record<string, Function[]> = {};
   terminated = false;
-  constructor() { FakeWorker.instances.push(this); }
-  postMessage(m: any) { this.posted.push(m); }
-  addEventListener(t: string, cb: Function) { (this.listeners[t] ||= []).push(cb); }
-  removeEventListener(t: string, cb: Function) { this.listeners[t] = (this.listeners[t] || []).filter((f) => f !== cb); }
-  terminate() { this.terminated = true; }
+  constructor() {
+    FakeWorker.instances.push(this);
+  }
+  postMessage(m: any) {
+    this.posted.push(m);
+  }
+  addEventListener(t: string, cb: Function) {
+    (this.listeners[t] ||= []).push(cb);
+  }
+  removeEventListener(t: string, cb: Function) {
+    this.listeners[t] = (this.listeners[t] || []).filter((f) => f !== cb);
+  }
+  terminate() {
+    this.terminated = true;
+  }
 }
 
 beforeEach(() => {
@@ -25,9 +35,17 @@ import { CodegenProvider } from '../../../src/shell/providers/CodegenProvider.js
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 
 function wsState(id: string): WorkspaceState {
-  return { workspaceId: id, workspaceKind: 'browser-only', workspaceName: id, fileCount: 1,
+  return {
+    workspaceId: id,
+    workspaceKind: 'browser-only',
+    workspaceName: id,
+    fileCount: 1,
     files: [{ name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false }],
-    models: [], parsedModels: [], deferredExports: [], parseErrors: new Map() };
+    models: [],
+    parsedModels: [],
+    deferredExports: [],
+    parseErrors: new Map()
+  };
 }
 
 describe('CodegenProvider', () => {
@@ -37,7 +55,9 @@ describe('CodegenProvider', () => {
       return (
         <WorkspaceStateContext.Provider value={wsState(id)}>
           <button onClick={() => setId('ws-B')}>switch</button>
-          <CodegenProvider><div /></CodegenProvider>
+          <CodegenProvider>
+            <div />
+          </CodegenProvider>
         </WorkspaceStateContext.Provider>
       );
     }
@@ -45,8 +65,8 @@ describe('CodegenProvider', () => {
     expect(FakeWorker.instances.length).toBe(1);
     const before = FakeWorker.instances[0].posted.filter((m) => m.type === 'codegen:setFiles').length;
     act(() => document.querySelector('button')!.click());
-    expect(FakeWorker.instances.length).toBe(1);   // NOT re-created on switch
+    expect(FakeWorker.instances.length).toBe(1); // NOT re-created on switch
     const after = FakeWorker.instances[0].posted.filter((m) => m.type === 'codegen:setFiles').length;
-    expect(after).toBeGreaterThan(before);          // re-posted on model change
+    expect(after).toBeGreaterThan(before); // re-posted on model change
   });
 });

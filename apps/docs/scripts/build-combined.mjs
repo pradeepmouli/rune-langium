@@ -95,9 +95,7 @@ const env = {
   // deploys MUST set TURNSTILE_SITE_KEY in the CF Pages build env.
   VITE_CODEGEN_URL: process.env.VITE_CODEGEN_URL ?? '/rune-studio',
   VITE_TURNSTILE_SITE_KEY:
-    process.env.VITE_TURNSTILE_SITE_KEY ??
-    process.env.TURNSTILE_SITE_KEY ??
-    '1x00000000000000000000AA'
+    process.env.VITE_TURNSTILE_SITE_KEY ?? process.env.TURNSTILE_SITE_KEY ?? '1x00000000000000000000AA'
 };
 
 function run(label, command, cwd) {
@@ -148,11 +146,7 @@ run(
   docsRoot
 );
 
-run(
-  'Building Rune Studio (base=/rune-studio/studio/)',
-  'pnpm --filter @rune-langium/studio build',
-  repoRoot
-);
+run('Building Rune Studio (base=/rune-studio/studio/)', 'pnpm --filter @rune-langium/studio build', repoRoot);
 
 // `copyDir` creates `subpathDist` itself (so its contents are not nested).
 copyDir(siteRoot, subpathDist, 'site → /rune-studio/');
@@ -244,7 +238,9 @@ service = "rune-curated-mirror-worker"
 ALLOWED_ORIGIN = "https://www.daikonic.dev,https://*.daikonic-dev.pages.dev"
 `;
 writeFileSync(repoWranglerToml, wranglerToml);
-console.log('[build-combined] Wrote <repo>/wrangler.toml (019: compat + pages_build_output_dir + LSP DO binding + vars)');
+console.log(
+  '[build-combined] Wrote <repo>/wrangler.toml (019: compat + pages_build_output_dir + LSP DO binding + vars)'
+);
 
 rmSync(docsRawDist, { recursive: true, force: true });
 

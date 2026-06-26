@@ -61,10 +61,7 @@ interface FieldContext {
   seenTypes: Set<string>;
 }
 
-const BUILTIN_KIND_MAP: Record<
-  string,
-  Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>
-> = {
+const BUILTIN_KIND_MAP: Record<string, Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>> = {
   string: 'string',
   int: 'number',
   number: 'number',
@@ -97,13 +94,7 @@ export function generatePreviewSchemas(
         continue;
       }
       schemas.push(
-        buildDataSchema(
-          data.node,
-          data.sourceUri,
-          namespace,
-          targetId,
-          options.maxDepth ?? DEFAULT_MAX_DEPTH
-        )
+        buildDataSchema(data.node, data.sourceUri, namespace, targetId, options.maxDepth ?? DEFAULT_MAX_DEPTH)
       );
     }
 
@@ -229,9 +220,7 @@ function buildDataSchema(
     status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
     fields,
     ...(sourceMap.length > 0 ? { sourceMap } : {}),
-    ...(unsupportedFeatures.size > 0
-      ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
-      : {})
+    ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
   };
 }
 
@@ -277,9 +266,7 @@ function buildTypeAliasSchema(
       targetId,
       title: alias.name,
       status: 'ready',
-      fields: [
-        { path: 'value', label: humanizeLabel(alias.name), kind: builtinKind, required: true }
-      ]
+      fields: [{ path: 'value', label: humanizeLabel(alias.name), kind: builtinKind, required: true }]
     };
   }
 
@@ -311,9 +298,7 @@ function buildTypeAliasSchema(
       status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
       fields,
       ...(sourceMap.length > 0 ? { sourceMap } : {}),
-      ...(unsupportedFeatures.size > 0
-        ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
-        : {})
+      ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
     };
   }
 
@@ -363,9 +348,7 @@ function buildChoiceSchema(
     title: choice.name,
     status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
     fields,
-    ...(unsupportedFeatures.size > 0
-      ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
-      : {})
+    ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
   };
 }
 
@@ -497,9 +480,7 @@ function buildFunctionSchema(
     status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
     fields: inputFields,
     ...(sourceMap.length > 0 ? { sourceMap } : {}),
-    ...(unsupportedFeatures.size > 0
-      ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() }
-      : {})
+    ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
   };
 }
 
@@ -555,11 +536,7 @@ function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
   }
 
   if (typeRef && isData(typeRef)) {
-    return objectField(
-      ctx,
-      typeRef,
-      typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri
-    );
+    return objectField(ctx, typeRef, typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri);
   }
 
   if (!typeRef && refText && ctx.namespace.dataByName.has(refText)) {

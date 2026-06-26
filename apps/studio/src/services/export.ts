@@ -8,11 +8,7 @@
 /**
  * Download a text blob as a file.
  */
-export function downloadFile(
-  content: string,
-  filename: string,
-  mimeType: string = 'text/plain'
-): void {
+export function downloadFile(content: string, filename: string, mimeType: string = 'text/plain'): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -36,10 +32,7 @@ export function downloadRosettaFiles(files: Map<string, string>): void {
  * Export the graph viewport as a PNG image.
  * Uses the html-to-image library if available, otherwise a placeholder.
  */
-export async function exportImage(
-  _element: HTMLElement,
-  format: 'svg' | 'png' = 'png'
-): Promise<Blob> {
+export async function exportImage(_element: HTMLElement, format: 'svg' | 'png' = 'png'): Promise<Blob> {
   // Placeholder — html-to-image integration would go here
   return new Blob([''], {
     type: format === 'svg' ? 'image/svg+xml' : 'image/png'

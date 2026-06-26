@@ -47,9 +47,7 @@ func TestFunc:
   const expr = operations[0]!['expression'];
   expect(expr).toBeDefined();
 
-  const cstNode = (expr as Record<string, unknown>)['$cstNode'] as
-    | Record<string, unknown>
-    | undefined;
+  const cstNode = (expr as Record<string, unknown>)['$cstNode'] as Record<string, unknown> | undefined;
   const sourceText = cstNode ? String(cstNode['text'] ?? '') : '';
   return astToExpressionNode(expr, sourceText);
 }

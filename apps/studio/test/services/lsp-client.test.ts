@@ -14,21 +14,16 @@ vi.mock('../../src/services/transport-provider.js', () => ({
 }));
 
 // Mock @codemirror/lsp-client to capture didOpen/didClose/notification calls
-const {
-  mockDidOpen,
-  mockDidClose,
-  mockNotification,
-  mockLspDisconnect,
-  mockLspConnect,
-  mockPlugin
-} = vi.hoisted(() => ({
-  mockDidOpen: vi.fn(),
-  mockDidClose: vi.fn(),
-  mockNotification: vi.fn(),
-  mockLspDisconnect: vi.fn(),
-  mockLspConnect: vi.fn(),
-  mockPlugin: vi.fn().mockReturnValue([])
-}));
+const { mockDidOpen, mockDidClose, mockNotification, mockLspDisconnect, mockLspConnect, mockPlugin } = vi.hoisted(
+  () => ({
+    mockDidOpen: vi.fn(),
+    mockDidClose: vi.fn(),
+    mockNotification: vi.fn(),
+    mockLspDisconnect: vi.fn(),
+    mockLspConnect: vi.fn(),
+    mockPlugin: vi.fn().mockReturnValue([])
+  })
+);
 
 vi.mock('@codemirror/lsp-client', () => {
   class MockWorkspace {
@@ -320,13 +315,9 @@ describe('syncWorkspaceFiles', () => {
     vi.runAllTimers();
 
     // v1→v2 is version 1, v2→v3 is version 2
-    const changeCalls = mockNotification.mock.calls.filter(
-      (c) => c[0] === 'textDocument/didChange'
-    );
+    const changeCalls = mockNotification.mock.calls.filter((c) => c[0] === 'textDocument/didChange');
     // Filter to only the target URI changes (exclude refresh notifications)
-    const targetChanges = changeCalls.filter(
-      (c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta'
-    );
+    const targetChanges = changeCalls.filter((c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta');
     expect(targetChanges[0][1].textDocument.version).toBe(1);
     expect(targetChanges[1][1].textDocument.version).toBe(2);
   });
@@ -377,12 +368,8 @@ describe('syncWorkspaceFiles', () => {
     expect(mockDidOpen).toHaveBeenCalledOnce();
 
     // a.rosetta should get a refresh notification (unchanged content, bumped version)
-    const changeCalls = mockNotification.mock.calls.filter(
-      (c) => c[0] === 'textDocument/didChange'
-    );
-    const refreshForA = changeCalls.find(
-      (c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta'
-    );
+    const changeCalls = mockNotification.mock.calls.filter((c) => c[0] === 'textDocument/didChange');
+    const refreshForA = changeCalls.find((c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta');
     expect(refreshForA).toBeTruthy();
   });
 
@@ -413,24 +400,16 @@ describe('syncWorkspaceFiles', () => {
     // d.rosetta should be opened
     expect(mockDidOpen).toHaveBeenCalledOnce();
 
-    const changeCalls = mockNotification.mock.calls.filter(
-      (c) => c[0] === 'textDocument/didChange'
-    );
+    const changeCalls = mockNotification.mock.calls.filter((c) => c[0] === 'textDocument/didChange');
 
     // b.rosetta should get exactly ONE change (content modification), not a second refresh
-    const changesForB = changeCalls.filter(
-      (c) => c[1].textDocument.uri === 'file:///workspace/b.rosetta'
-    );
+    const changesForB = changeCalls.filter((c) => c[1].textDocument.uri === 'file:///workspace/b.rosetta');
     expect(changesForB).toHaveLength(1);
     expect(changesForB[0][1].contentChanges[0].text).toBe('namespace b_modified');
 
     // a.rosetta and c.rosetta should BOTH get refresh notifications (unchanged files)
-    const refreshForA = changeCalls.filter(
-      (c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta'
-    );
-    const refreshForC = changeCalls.filter(
-      (c) => c[1].textDocument.uri === 'file:///workspace/c.rosetta'
-    );
+    const refreshForA = changeCalls.filter((c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta');
+    const refreshForC = changeCalls.filter((c) => c[1].textDocument.uri === 'file:///workspace/c.rosetta');
     expect(refreshForA).toHaveLength(1);
     expect(refreshForC).toHaveLength(1);
 

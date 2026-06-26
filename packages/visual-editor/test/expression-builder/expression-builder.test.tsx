@@ -20,26 +20,20 @@ const testScope: FunctionScope = {
 
 describe('ExpressionBuilder', () => {
   it('renders with builder mode by default', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     expect(container.querySelector('[data-testid="expression-builder"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="tab-builder"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="tab-text"]')).toBeTruthy();
   });
 
   it('shows BlockRenderer in builder mode', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     // Should show placeholder block in builder mode
     expect(container.querySelector('[data-block="placeholder"]')).toBeTruthy();
   });
 
   it('switches to text mode on tab click', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     const textTab = container.querySelector('[data-testid="tab-text"]')!;
     fireEvent.click(textTab);
     expect(container.querySelector('[data-testid="text-editor"]')).toBeTruthy();
@@ -47,9 +41,7 @@ describe('ExpressionBuilder', () => {
   });
 
   it('switches back to builder mode', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     // Switch to text
     fireEvent.click(container.querySelector('[data-testid="tab-text"]')!);
     expect(container.querySelector('[data-testid="text-editor"]')).toBeTruthy();
@@ -67,17 +59,13 @@ describe('ExpressionBuilder', () => {
   });
 
   it('shows scope inputs', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     expect(container.textContent).toContain('trade');
     expect(container.textContent).toContain('Trade');
   });
 
   it('shows scope output', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     expect(container.textContent).toContain('result');
     expect(container.textContent).toContain('number');
   });
@@ -90,9 +78,7 @@ describe('ExpressionBuilder', () => {
   });
 
   it('shows DSL preview in builder mode', () => {
-    const { container } = render(
-      <ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />
-    );
+    const { container } = render(<ExpressionBuilder value="" onChange={vi.fn()} scope={testScope} />);
     expect(container.querySelector('[data-testid="dsl-preview"]')).toBeTruthy();
   });
 

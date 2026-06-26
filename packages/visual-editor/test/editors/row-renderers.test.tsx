@@ -38,11 +38,7 @@ import {
   EnumValueRowRender,
   FunctionInputRowRender
 } from '../../src/components/forms/rows/index.js';
-import {
-  AttributeSchema,
-  ChoiceOptionSchema,
-  RosettaEnumValueSchema
-} from '../../src/generated/zod-schemas.js';
+import { AttributeSchema, ChoiceOptionSchema, RosettaEnumValueSchema } from '../../src/generated/zod-schemas.js';
 import { DataTypeForm } from '../../src/components/editors/DataTypeForm.js';
 import { ChoiceForm } from '../../src/components/editors/ChoiceForm.js';
 import { EnumForm } from '../../src/components/editors/EnumForm.js';
@@ -62,9 +58,7 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'test.Price', label: 'Price', kind: 'data', namespace: 'test' }
 ];
 
-function makeDataActions(
-  overrides: Partial<EditorFormActions<'data'>> = {}
-): EditorFormActions<'data'> {
+function makeDataActions(overrides: Partial<EditorFormActions<'data'>> = {}): EditorFormActions<'data'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -156,9 +150,7 @@ function makeChoiceNode(): AnyGraphNode {
     $type: 'Choice',
     name: 'PaymentType',
     namespace: 'test',
-    attributes: [
-      { $type: 'ChoiceOption', typeCall: { $type: 'TypeCall', type: { $refText: 'Trade' } } }
-    ],
+    attributes: [{ $type: 'ChoiceOption', typeCall: { $type: 'TypeCall', type: { $refText: 'Trade' } } }],
     conditions: [],
     annotations: [],
     synonyms: [],
@@ -231,7 +223,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
 
     it('renders one AttributeRow per attribute in DataTypeForm (3 attributes → 3 rows)', () => {
       render(
-        <DataTypeForm meta={testMeta('test')}
+        <DataTypeForm
+          meta={testMeta('test')}
           nodeId="test.Trade"
           data={makeDataNodeWithAttrs(3)}
           availableTypes={AVAILABLE_TYPES}
@@ -247,7 +240,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
   describe('RR2 — row reads sibling value via useFormContext', () => {
     it('updates the visible name when the user edits the attribute name input', () => {
       render(
-        <DataTypeForm meta={testMeta('test')}
+        <DataTypeForm
+          meta={testMeta('test')}
           nodeId="test.Trade"
           data={makeDataNodeWithAttrs(2)}
           availableTypes={AVAILABLE_TYPES}
@@ -258,9 +252,7 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       const rows = Array.from(document.querySelectorAll('[data-slot="attribute-row"]'));
       const firstRow = rows[0] as HTMLElement;
       expect(firstRow).toBeDefined();
-      const nameInput = firstRow.querySelector(
-        'input[data-slot="attribute-name"]'
-      ) as HTMLInputElement;
+      const nameInput = firstRow.querySelector('input[data-slot="attribute-name"]') as HTMLInputElement;
       expect(nameInput).toBeTruthy();
       expect(nameInput.value).toBe('tradeDate');
 
@@ -274,7 +266,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
     it('calls actions.removeAttribute when the row remove button is clicked', () => {
       const actions = makeDataActions();
       render(
-        <DataTypeForm meta={testMeta('test')}
+        <DataTypeForm
+          meta={testMeta('test')}
           nodeId="test.Trade"
           data={makeDataNodeWithAttrs(2)}
           availableTypes={AVAILABLE_TYPES}
@@ -282,12 +275,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
         />
       );
 
-      const rows = Array.from(
-        document.querySelectorAll('[data-slot="attribute-row"]')
-      ) as HTMLElement[];
-      const removeBtn = rows[1].querySelector(
-        '[data-slot="attribute-remove"]'
-      ) as HTMLButtonElement;
+      const rows = Array.from(document.querySelectorAll('[data-slot="attribute-row"]')) as HTMLElement[];
+      const removeBtn = rows[1].querySelector('[data-slot="attribute-remove"]') as HTMLButtonElement;
       expect(removeBtn).toBeTruthy();
       fireEvent.click(removeBtn);
 
@@ -304,7 +293,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       expect(meta?.render).toBe(ChoiceOptionRowRender);
 
       render(
-        <ChoiceForm meta={testMeta('test')}
+        <ChoiceForm
+          meta={testMeta('test')}
           nodeId="test.PaymentType"
           data={makeChoiceNode()}
           availableTypes={AVAILABLE_TYPES}
@@ -323,7 +313,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       expect(meta?.render).toBe(EnumValueRowRender);
 
       render(
-        <EnumForm meta={testMeta('test')}
+        <EnumForm
+          meta={testMeta('test')}
           nodeId="test.CurrencyEnum"
           data={makeEnumNode()}
           availableTypes={AVAILABLE_TYPES}
@@ -347,7 +338,8 @@ describe('row renderer registry (Phase 8 / US6)', () => {
       expect(typeof FunctionInputRowRender).toBe('function');
 
       render(
-        <FunctionForm meta={testMeta('test')}
+        <FunctionForm
+          meta={testMeta('test')}
           nodeId="test.CalculateNotional"
           data={makeFunctionNode()}
           availableTypes={AVAILABLE_TYPES}

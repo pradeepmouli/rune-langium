@@ -86,8 +86,13 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     // Push-subscription now lives in useModelSourceSync (lifted out of
     // RuneTypeGraph so the sync works regardless of which pane is mounted).
     const { rerender } = renderHook(
-      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
-        useModelSourceSync(nodes, edges, onModelChanged),
+      ({
+        nodes,
+        edges
+      }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        edges: ReturnType<typeof useEditorStore.getState>['edges'];
+      }) => useModelSourceSync(nodes, edges, onModelChanged),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,
@@ -110,9 +115,7 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     const productNode = useEditorStore.getState().nodes.find((n) => n.data.name === 'Product')!;
 
     act(() => {
-      useEditorStore
-        .getState()
-        .updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
 
     rerender({ nodes: useEditorStore.getState().nodes, edges: useEditorStore.getState().edges });
@@ -139,8 +142,13 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     // Push-subscription now lives in useModelSourceSync (lifted out of
     // RuneTypeGraph so the sync works regardless of which pane is mounted).
     const { rerender } = renderHook(
-      ({ nodes, edges }: { nodes: ReturnType<typeof useEditorStore.getState>['nodes']; edges: ReturnType<typeof useEditorStore.getState>['edges'] }) =>
-        useModelSourceSync(nodes, edges, onModelChanged),
+      ({
+        nodes,
+        edges
+      }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        edges: ReturnType<typeof useEditorStore.getState>['edges'];
+      }) => useModelSourceSync(nodes, edges, onModelChanged),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,

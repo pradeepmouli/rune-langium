@@ -206,9 +206,7 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
   // error and the doc would be filtered out, leaving form preview
   // unable to find curated types. Hydrate them via the serializer
   // instead.
-  const userEntries = currentPreviewFiles.filter(
-    (e) => !e.serializedModelJson && isPreviewUserEntryParseable(e)
-  );
+  const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson && isPreviewUserEntryParseable(e));
   const curatedEntries = currentPreviewFiles.filter((e) => Boolean(e.serializedModelJson));
 
   const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>

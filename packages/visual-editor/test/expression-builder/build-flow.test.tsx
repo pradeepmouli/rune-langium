@@ -8,10 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  OPERATOR_CATALOG,
-  ALL_OPERATORS
-} from '../../src/components/editors/expression-builder/operator-catalog.js';
+import { OPERATOR_CATALOG, ALL_OPERATORS } from '../../src/components/editors/expression-builder/operator-catalog.js';
 
 describe('operator catalog', () => {
   it('has all expected categories', () => {

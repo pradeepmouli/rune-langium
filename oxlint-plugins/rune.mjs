@@ -19,7 +19,7 @@ function checkPalette(context, node, str) {
   if (m) {
     context.report({
       message: `Hardcoded Tailwind palette utility "${m[0]}" bypasses the token layer — use a design-system primitive or a var(--color-*) token.`,
-      node,
+      node
     });
   }
 }
@@ -32,9 +32,9 @@ const noPaletteUtility = {
       },
       TemplateElement(node) {
         checkPalette(context, node, node.value?.cooked ?? node.value?.raw);
-      },
+      }
     };
-  },
+  }
 };
 
 // ── rune/no-raw-arbitrary-value ─────────────────────────────────────
@@ -73,7 +73,7 @@ function checkArbitrary(context, node, str) {
     if (HEX_COLOR.test(inner)) {
       context.report({
         message: `Raw hex color "${whole}" bypasses the token layer — use a var(--color-*) token (or a semantic utility) instead of a hardcoded color.`,
-        node,
+        node
       });
       continue;
     }
@@ -84,7 +84,7 @@ function checkArbitrary(context, node, str) {
     if (prefix === 'text' && RAW_LENGTH.test(inner.replace(TYPE_HINT, ''))) {
       context.report({
         message: `Raw font-size "${whole}" bypasses the type scale — use a --text-* utility (text-3xs/2xs/xs/sm/md/base/lg/xl) instead of an arbitrary length.`,
-        node,
+        node
       });
     }
   }
@@ -98,9 +98,9 @@ const noRawArbitraryValue = {
       },
       TemplateElement(node) {
         checkArbitrary(context, node, node.value?.cooked ?? node.value?.raw);
-      },
+      }
     };
-  },
+  }
 };
 
 // ── rune/no-raw-node-id ─────────────────────────────────────────────
@@ -140,14 +140,14 @@ const noRawNodeId = {
             context.report({
               message:
                 'Raw node-id construction `${a}::${b}` is retired (Phase 3A′ `::`→`.`) — build node ids via `makeNodeId`/`qualifiedExportPath` (dot form `namespace.Name`).',
-              node,
+              node
             });
             return;
           }
         }
-      },
+      }
     };
-  },
+  }
 };
 
 // ── rune/no-raw-edge-id ─────────────────────────────────────────────
@@ -182,14 +182,14 @@ const noRawEdgeId = {
             context.report({
               message:
                 'Raw edge-id construction via template literal is retired — build edge ids via `makeEdgeId` (node-projection.ts chokepoint).',
-              node,
+              node
             });
             return;
           }
         }
-      },
+      }
     };
-  },
+  }
 };
 
 export default {
@@ -198,6 +198,6 @@ export default {
     'no-palette-utility': noPaletteUtility,
     'no-raw-arbitrary-value': noRawArbitraryValue,
     'no-raw-node-id': noRawNodeId,
-    'no-raw-edge-id': noRawEdgeId,
-  },
+    'no-raw-edge-id': noRawEdgeId
+  }
 };

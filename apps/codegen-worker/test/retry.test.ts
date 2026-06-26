@@ -43,8 +43,7 @@ function makeEnv(container: ReturnType<typeof vi.fn>): WorkerEnv {
 
 async function generateWithSession(env: WorkerEnv): Promise<Response> {
   // Build a valid session cookie so auth passes without needing Turnstile.
-  const { signSessionJwt, computeIpHash, buildSessionCookie, todayAsSalt } =
-    await import('../src/session.js');
+  const { signSessionJwt, computeIpHash, buildSessionCookie, todayAsSalt } = await import('../src/session.js');
   const ipHash = await computeIpHash('203.0.113.5', todayAsSalt());
   const jwt = await signSessionJwt({
     key: SIGNING_KEY,

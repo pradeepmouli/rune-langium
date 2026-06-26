@@ -36,11 +36,16 @@ vi.mock('@rune-langium/git-sync-engine', () => ({
         subscribeCbs.push(cb);
         return () => subs.delete(cb);
       },
-      unsubscribe: (cb: (s: object) => void) => { subs.delete(cb); },
+      unsubscribe: (cb: (s: object) => void) => {
+        subs.delete(cb);
+      },
       dispose: vi.fn(),
       // Test seams: emit a new state to all subscribers; query current sub count.
-      __emit: (s: object) => { engineState = s; subs.forEach(cb => cb(s)); },
-      __subCount: () => subs.size,
+      __emit: (s: object) => {
+        engineState = s;
+        subs.forEach((cb) => cb(s));
+      },
+      __subCount: () => subs.size
     };
   }
 }));
@@ -165,7 +170,7 @@ describe('subscribeToEngine', () => {
     expect(engine.__subCount()).toBe(
       // The engine has: the internal persist subscriber + the drained cb.
       // We only care that __subCount doesn't double-count our cb.
-      engine.__subCount()  // capture for emit test below
+      engine.__subCount() // capture for emit test below
     );
     const beforeEmit = calls.length;
     engine.__emit({ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: 'abc' });

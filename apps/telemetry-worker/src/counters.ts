@@ -47,11 +47,7 @@ export class TelemetryAggregator {
         return jsonError(400, 'invalid_body');
       }
       const errorCategory = (raw as { errorCategory?: unknown }).errorCategory;
-      if (
-        errorCategory !== null &&
-        typeof errorCategory !== 'undefined' &&
-        typeof errorCategory !== 'string'
-      ) {
+      if (errorCategory !== null && typeof errorCategory !== 'undefined' && typeof errorCategory !== 'string') {
         return jsonError(400, 'invalid_errorCategory');
       }
       await this.increment(errorCategory ?? null);

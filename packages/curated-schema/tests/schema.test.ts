@@ -2,7 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { CuratedModelIdSchema, CURATED_MODEL_IDS, ErrorCategorySchema, CuratedManifestSchema, parseManifest } from '../src/index.js';
+import {
+  CuratedModelIdSchema,
+  CURATED_MODEL_IDS,
+  ErrorCategorySchema,
+  CuratedManifestSchema,
+  parseManifest
+} from '../src/index.js';
 
 const VALID_MANIFEST = {
   schemaVersion: 1,

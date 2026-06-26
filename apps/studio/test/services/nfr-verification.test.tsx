@@ -68,12 +68,7 @@ describe('form preview NFR verification', () => {
     );
     Storage.prototype.setItem = storageSpy;
 
-    render(
-      <FormPreviewPanel
-        schema={previewSchema}
-        status={{ state: 'ready', targetId: previewSchema.targetId }}
-      />
-    );
+    render(<FormPreviewPanel schema={previewSchema} status={{ state: 'ready', targetId: previewSchema.targetId }} />);
 
     fireEvent.blur(screen.getByLabelText('Trade id'));
     fireEvent.change(screen.getByLabelText('Trade id'), { target: { value: 'TRD-1' } });
@@ -99,12 +94,7 @@ describe('form preview NFR verification', () => {
   it('keeps summary status visible and updates within the preview latency budget', () => {
     const startedAt = performance.now();
 
-    render(
-      <FormPreviewPanel
-        schema={previewSchema}
-        status={{ state: 'ready', targetId: previewSchema.targetId }}
-      />
-    );
+    render(<FormPreviewPanel schema={previewSchema} status={{ state: 'ready', targetId: previewSchema.targetId }} />);
 
     expect(screen.getByText(/ready to validate sample/i)).toBeInTheDocument();
 

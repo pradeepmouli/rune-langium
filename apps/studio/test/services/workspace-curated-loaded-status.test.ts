@@ -27,7 +27,11 @@ describe('curated loaded-status from deferredExports', () => {
           errors: {},
           hydrationState: { documents: [] },
           deferredExports: [
-            { filePath: 'cdm/cdm.base.datetime', namespace: 'cdm.base.datetime', exports: [{ type: 'Data', name: 'A' }] },
+            {
+              filePath: 'cdm/cdm.base.datetime',
+              namespace: 'cdm.base.datetime',
+              exports: [{ type: 'Data', name: 'A' }]
+            },
             { filePath: 'cdm/cdm.base.math', namespace: 'cdm.base.math', exports: [{ type: 'Data', name: 'B' }] }
           ]
         }),

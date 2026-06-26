@@ -190,11 +190,7 @@ function serializeDataType(data: {
   return lines.join('\n');
 }
 
-function serializeChoiceType(choice: {
-  name: string;
-  definition?: string;
-  attributes?: ChoiceOptionLike[];
-}): string {
+function serializeChoiceType(choice: { name: string; definition?: string; attributes?: ChoiceOptionLike[] }): string {
   const lines: string[] = [];
 
   lines.push(`choice ${choice.name}:`);

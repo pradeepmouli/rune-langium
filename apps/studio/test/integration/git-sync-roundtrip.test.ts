@@ -13,7 +13,13 @@ describe('git-sync round trip (fs-only)', () => {
     await git.init({ fs, dir: '/ws/files', gitdir: '/ws/.git', defaultBranch: 'main' });
     await (fs as InMemoryFs).promises.writeFile('/ws/files/a.rosetta', 'namespace a');
     await git.add({ fs, dir: '/ws/files', gitdir: '/ws/.git', filepath: 'a.rosetta' });
-    await git.commit({ fs, dir: '/ws/files', gitdir: '/ws/.git', message: 'init', author: { name: 'A', email: 'a@x' } });
+    await git.commit({
+      fs,
+      dir: '/ws/files',
+      gitdir: '/ws/.git',
+      message: 'init',
+      author: { name: 'A', email: 'a@x' }
+    });
 
     // Simulate a studio edit landing in the working tree
     await (fs as InMemoryFs).promises.writeFile('/ws/files/a.rosetta', 'namespace a\ntype X:');
@@ -25,14 +31,18 @@ describe('git-sync round trip (fs-only)', () => {
       // object (which varies across versions). The durability assertion (commit
       // precedes any network step) is unaffected: stageAll + commit run before
       // the first fetch call.
-      http: { request: async () => { throw new Error('no network'); } },
+      http: {
+        request: async () => {
+          throw new Error('no network');
+        }
+      },
       dir: '/ws/files',
       gitdir: '/ws/.git',
       remoteUrl: 'memory://noop',
       ref: 'main',
       onAuth: () => ({ username: 'u', password: 't' }),
       author: { name: 'A', email: 'a@x' },
-      debounceMs: 0,
+      debounceMs: 0
     });
 
     // No remote tracking ref / unreachable remoteUrl → the fetch step fails and

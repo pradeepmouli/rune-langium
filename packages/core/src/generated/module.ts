@@ -28,10 +28,7 @@ export const parserConfig: IParserConfig = {
   maxLookahead: 4
 };
 
-export const RuneDslGeneratedSharedModule: Module<
-  LangiumSharedCoreServices,
-  LangiumGeneratedSharedCoreServices
-> = {
+export const RuneDslGeneratedSharedModule: Module<LangiumSharedCoreServices, LangiumGeneratedSharedCoreServices> = {
   AstReflection: () => new RuneDslAstReflection()
 };
 

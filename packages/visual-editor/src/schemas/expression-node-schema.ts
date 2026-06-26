@@ -86,9 +86,7 @@ const uiFields = { id: z.string().min(1) };
 const exprChild: z.ZodLazy<z.ZodTypeAny> = z.lazy(() => ExpressionNodeSchema);
 
 /** Optional child expression. */
-const optExprChild: z.ZodOptional<z.ZodLazy<z.ZodTypeAny>> = z
-  .lazy(() => ExpressionNodeSchema)
-  .optional();
+const optExprChild: z.ZodOptional<z.ZodLazy<z.ZodTypeAny>> = z.lazy(() => ExpressionNodeSchema).optional();
 
 /** Resolved Reference → plain string (e.g., symbol.$refText). */
 const resolvedRef = z.string();
@@ -104,9 +102,7 @@ function deriveUnary(schema: Parameters<typeof deriveUiSchema>[0]) {
   });
 }
 
-function deriveBinary(
-  schema: Parameters<typeof deriveUiSchema>[0]
-): z.ZodObject<z.ZodRawShape, any> {
+function deriveBinary(schema: Parameters<typeof deriveUiSchema>[0]): z.ZodObject<z.ZodRawShape, any> {
   return deriveUiSchema(schema, {
     extend: uiFields,
     overrides: { left: optExprChild, right: exprChild }

@@ -216,11 +216,7 @@ async function handleInit(env: Env, allowed: string): Promise<Response> {
   const read = await readUpstream(upstream);
   if (!read.ok) {
     logUpstreamFailure('init', read);
-    return json(
-      read.reason === 'github_misconfigured' ? 502 : 503,
-      { error: read.reason },
-      allowed
-    );
+    return json(read.reason === 'github_misconfigured' ? 502 : 503, { error: read.reason }, allowed);
   }
   const body = read.data;
   return json(
@@ -283,11 +279,7 @@ async function handlePoll(req: Request, env: Env, allowed: string): Promise<Resp
   const read = await readUpstream(upstream);
   if (!read.ok) {
     logUpstreamFailure('poll', read);
-    return json(
-      read.reason === 'github_misconfigured' ? 502 : 503,
-      { error: read.reason },
-      allowed
-    );
+    return json(read.reason === 'github_misconfigured' ? 502 : 503, { error: read.reason }, allowed);
   }
   const data = read.data;
   if (typeof data['access_token'] === 'string') {

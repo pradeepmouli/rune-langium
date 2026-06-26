@@ -102,19 +102,13 @@ describe('apps/lsp-worker session-token mint contract (T038)', () => {
 
   it('400 schema_violation on bad body — strict-schema rejects extra fields', async () => {
     const env = makeEnv();
-    const res = await worker.fetch(
-      makeSessionReq({ workspaceId: VALID_ULID, extra: 'ignored' }),
-      env
-    );
+    const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID, extra: 'ignored' }), env);
     expect(res.status).toBe(400);
   });
 
   it('403 origin_not_allowed for cross-origin', async () => {
     const env = makeEnv();
-    const res = await worker.fetch(
-      makeSessionReq({ workspaceId: VALID_ULID }, 'https://evil.example.com'),
-      env
-    );
+    const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID }, 'https://evil.example.com'), env);
     expect(res.status).toBe(403);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe('origin_not_allowed');

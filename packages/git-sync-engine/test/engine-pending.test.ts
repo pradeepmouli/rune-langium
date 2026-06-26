@@ -19,9 +19,15 @@ function deferredPushOps(): { ops: GitOps; resolvePush: () => void } {
     computeAheadBehind: vi.fn().mockResolvedValue({ ahead: 1, behind: 0 }),
     fastForward: vi.fn().mockResolvedValue(undefined),
     merge: vi.fn(),
-    push: vi.fn().mockImplementationOnce(
-      () => new Promise<void>((res) => { resolvePush = res; })
-    ).mockResolvedValue(undefined),
+    push: vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((res) => {
+            resolvePush = res;
+          })
+      )
+      .mockResolvedValue(undefined),
     resetTo: vi.fn(),
     restoreLocal: vi.fn(),
     currentSha: vi.fn().mockResolvedValue('localsha'),
@@ -31,13 +37,20 @@ function deferredPushOps(): { ops: GitOps; resolvePush: () => void } {
 }
 
 const baseOpts = {
-  fs: {} as never, http: {}, dir: '/w/files', gitdir: '/w/.git',
-  remoteUrl: 'https://x', ref: 'main',
+  fs: {} as never,
+  http: {},
+  dir: '/w/files',
+  gitdir: '/w/.git',
+  remoteUrl: 'https://x',
+  ref: 'main',
   onAuth: () => ({ username: 'x', password: 't' }),
   author: { name: 'A', email: 'a@x' },
   debounceMs: 0,
   // Synchronous timer so the debounced follow-up fires immediately.
-  setTimeoutFn: (cb: () => void) => { cb(); return 0; },
+  setTimeoutFn: (cb: () => void) => {
+    cb();
+    return 0;
+  },
   clearTimeoutFn: () => {}
 };
 
@@ -49,12 +62,12 @@ describe('GitSyncEngine pending sync', () => {
     // Start a sync but do NOT await — it blocks inside the deferred push.
     const first = engine.syncNow();
     // Let the engine work through the await chain up to the (pending) push.
-    await vi.waitFor(() => expect((ops.push as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(ops.push as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1));
 
     // An edit arrives mid-flight; with synchronous timers this calls syncNow()
     // again, which should set pendingSync rather than start a parallel run.
     engine.notifyDirty();
-    expect((ops.stageAll as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect(ops.stageAll as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
 
     // Release the in-flight push and let the first run settle.
     resolvePush();
@@ -62,8 +75,8 @@ describe('GitSyncEngine pending sync', () => {
 
     // The queued follow-up sync should run a full second cycle.
     await vi.waitFor(() => {
-      expect((ops.stageAll as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
-      expect((ops.push as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+      expect(ops.stageAll as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(2);
+      expect(ops.push as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(2);
     });
     expect(engine.getState().phase).toBe('idle');
   });

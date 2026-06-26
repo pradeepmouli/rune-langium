@@ -47,7 +47,7 @@ export function selectNodeRepository(nodesById: ReadonlyMap<string, TypeGraphNod
   if (nodesById === cacheKey && cacheValue !== null) return cacheValue;
   const repo = createRepository(nodesById.values(), {
     key: (n) => n.id,
-    type: (n) => n.data.$type,
+    type: (n) => n.data.$type
   }) as NodeRepository;
   cacheKey = nodesById;
   cacheValue = repo;

@@ -9,18 +9,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { WorkspaceSwitcher } from '../../src/components/WorkspaceSwitcher.js';
-import {
-  saveWorkspace,
-  _resetForTests,
-  type WorkspaceRecord
-} from '../../src/workspace/persistence.js';
+import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 
-function ws(
-  id: string,
-  name: string,
-  kind: WorkspaceRecord['kind'],
-  lastOpenedAt: string
-): WorkspaceRecord {
+function ws(id: string, name: string, kind: WorkspaceRecord['kind'], lastOpenedAt: string): WorkspaceRecord {
   const base = {
     id,
     name,

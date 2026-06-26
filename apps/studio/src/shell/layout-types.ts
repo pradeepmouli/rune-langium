@@ -55,10 +55,7 @@ export type NavigationColumn = LayoutStack<'workspace.fileTree', 'workspace.visu
 export type ExplorerColumn = LayoutNode<'workspace.fileTree'>;
 
 // Center workspace stack — graph, source, inspector as switchable panes
-export type CenterStackTabName =
-  | 'workspace.visualPreview'
-  | 'workspace.editor'
-  | 'workspace.inspector';
+export type CenterStackTabName = 'workspace.visualPreview' | 'workspace.editor' | 'workspace.inspector';
 export type CenterGroup = LayoutGroup<CenterStackTabName>;
 
 export type LayoutColumn = ExplorerColumn | CenterGroup | PreviewGroup;

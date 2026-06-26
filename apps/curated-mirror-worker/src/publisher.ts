@@ -29,14 +29,8 @@ export interface CuratedSource {
 }
 
 export interface MinimalR2Bucket {
-  get(
-    key: string
-  ): Promise<{ arrayBuffer: () => Promise<ArrayBuffer>; text: () => Promise<string> } | null>;
-  put(
-    key: string,
-    body: Uint8Array | string,
-    options?: { httpMetadata?: { contentType?: string } }
-  ): Promise<unknown>;
+  get(key: string): Promise<{ arrayBuffer: () => Promise<ArrayBuffer>; text: () => Promise<string> } | null>;
+  put(key: string, body: Uint8Array | string, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
   delete(key: string | string[]): Promise<unknown>;
   list(opts?: { prefix?: string }): Promise<{ objects: Array<{ key: string }> }>;
 }
@@ -209,8 +203,7 @@ export async function publishCuratedMirrors(options: PublishOptions): Promise<Pu
       logger.error(
         {
           model_id: source.id,
-          err:
-            err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+          err: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
         },
         'curated-mirror.publish.failed'
       );

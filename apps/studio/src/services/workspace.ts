@@ -440,7 +440,10 @@ export async function parseWorkspaceFiles(
   const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
   try {
-    const response = await parseWorkspaceViaRouter(userFiles, { curatedBundles, hydrateNamespaces: options.hydrateNamespaces });
+    const response = await parseWorkspaceViaRouter(userFiles, {
+      curatedBundles,
+      hydrateNamespaces: options.hydrateNamespaces
+    });
     const errMap = new Map<string, string[]>();
     for (const [k, v] of Object.entries(response.errors)) {
       errMap.set(k, v);
@@ -457,7 +460,16 @@ export async function parseWorkspaceFiles(
     // Router failed (network error, Pages Function unavailable, etc.) — fall back
     // to synchronous main-thread parsing so the editor stays functional.
     console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
-    useOutputStore.getState().addLine(fmtLine('parse', 'router unavailable, falling back to browser parse', error instanceof Error ? error.message : String(error)), 'warn');
+    useOutputStore
+      .getState()
+      .addLine(
+        fmtLine(
+          'parse',
+          'router unavailable, falling back to browser parse',
+          error instanceof Error ? error.message : String(error)
+        ),
+        'warn'
+      );
     // Layer 1 filter: only hand user-authored .rosetta files to the in-browser
     // Langium parser.  Two conditions are checked:
     //   1. `!f.serializedModelJson` — excludes curated entries (which may have a
@@ -468,9 +480,7 @@ export async function parseWorkspaceFiles(
     //      Langium's getServices() to throw "no services for the extension ''".
     // Together these mirror the router path's `userFiles` filter so the fallback
     // never dead-ends on mixed workspaces.
-    const parseableFiles = files.filter(
-      (f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta')
-    );
+    const parseableFiles = files.filter((f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta'));
     return parseWorkspaceFilesOnMainThread(parseableFiles, {
       parseMode: 'main-thread-fallback',
       fallbackMessage: formatRouterFallbackMessage(error)
@@ -706,7 +716,9 @@ export async function linkDocument(
     return { linked: false, errors: ['Unexpected response'], newModels: [] };
   } catch (error) {
     console.warn('[workspace] linkDocument failed:', error);
-    useOutputStore.getState().addLine(fmtLine('parse', 'link failed', error instanceof Error ? error.message : String(error)), 'error');
+    useOutputStore
+      .getState()
+      .addLine(fmtLine('parse', 'link failed', error instanceof Error ? error.message : String(error)), 'error');
     return { linked: false, errors: [(error as Error).message], newModels: [] };
   }
 }

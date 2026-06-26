@@ -32,12 +32,7 @@ function buildScaleGraph(store: ReturnType<typeof createEditorStore>, nodeCount:
     store.getState().createType('data', name, rootNs);
     store
       .getState()
-      .addAttribute(
-        store.getState().nodes.find((n) => n.data.name === name)!.id,
-        `ref_${i}`,
-        rootName,
-        '(1..1)'
-      );
+      .addAttribute(store.getState().nodes.find((n) => n.data.name === name)!.id, `ref_${i}`, rootName, '(1..1)');
   }
 }
 
@@ -125,15 +120,11 @@ describe('renameType — cascade', () => {
     const newId = newNode!.id;
 
     // No edges should reference old ID
-    const staleEdges = store
-      .getState()
-      .edges.filter((e) => e.source === oldId || e.target === oldId);
+    const staleEdges = store.getState().edges.filter((e) => e.source === oldId || e.target === oldId);
     expect(staleEdges.length).toBe(0);
 
     // Edges should now reference new ID
-    const freshEdges = store
-      .getState()
-      .edges.filter((e) => e.source === newId || e.target === newId);
+    const freshEdges = store.getState().edges.filter((e) => e.source === newId || e.target === newId);
     expect(freshEdges.length).toBeGreaterThan(0);
   });
 
@@ -170,23 +161,21 @@ describe('renameType — cascade', () => {
     s.getState().createType('data', 'Trade', 'beta');
     s.getState().createType('data', 'Holder', 'beta');
 
-    const alphaTradeId = s
-      .getState()
-      .nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
+    const alphaTradeId = s.getState().nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
     const holderId = s.getState().nodes.find((n) => n.data.name === 'Holder')!.id;
 
     // updateAttributeType disambiguates the $refText to the qualified `alpha.Trade`.
     s.getState().addAttribute(holderId, 'ref', 'Trade', '(1..1)');
     s.getState().updateAttributeType(holderId, 'ref', 'Trade', alphaTradeId);
 
-    const qualifiedBefore = (s.getState().nodes.find((n) => n.id === holderId)!.data as any)
-      .attributes[0].typeCall.type.$refText;
+    const qualifiedBefore = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes[0].typeCall.type
+      .$refText;
     expect(qualifiedBefore).toBe('alpha.Trade'); // setup sanity — the ref really is qualified
 
     s.getState().renameType(alphaTradeId, 'Execution');
 
-    const refAfter = (s.getState().nodes.find((n) => n.data.name === 'Holder')!.data as any)
-      .attributes[0].typeCall.type.$refText;
+    const refAfter = (s.getState().nodes.find((n) => n.data.name === 'Holder')!.data as any).attributes[0].typeCall.type
+      .$refText;
     // The bug: qualified ref was missed and left as `alpha.Trade` (stale).
     expect(refAfter).toBe('alpha.Execution');
   });
@@ -197,9 +186,7 @@ describe('renameType — cascade', () => {
     s.getState().createType('data', 'Trade', 'beta');
     s.getState().createType('choice', 'Pick', 'beta');
 
-    const alphaTradeId = s
-      .getState()
-      .nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
+    const alphaTradeId = s.getState().nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
     const pickId = s.getState().nodes.find((n) => n.data.name === 'Pick')!.id;
 
     // Add the option, then disambiguate it to alpha.Trade — updateAttributeType
@@ -207,27 +194,22 @@ describe('renameType — cascade', () => {
     s.getState().addChoiceOption(pickId, 'Trade');
     s.getState().updateAttributeType(pickId, 'Trade', 'Trade', alphaTradeId);
 
-    const labelBefore = s
-      .getState()
-      .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option')!.data!.label;
+    const labelBefore = s.getState().edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option')!
+      .data!.label;
     expect(labelBefore).toBe('alpha.Trade'); // setup sanity — qualified label
 
     s.getState().renameType(alphaTradeId, 'Execution');
 
-    const newAlphaId = s
-      .getState()
-      .nodes.find((n) => n.data.name === 'Execution' && n.meta.namespace === 'alpha')!.id;
-    const optEdge = s
-      .getState()
-      .edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option');
+    const newAlphaId = s.getState().nodes.find((n) => n.data.name === 'Execution' && n.meta.namespace === 'alpha')!.id;
+    const optEdge = s.getState().edges.find((e) => e.source === pickId && e.data?.kind === 'choice-option');
     expect(optEdge).toBeDefined();
     expect(optEdge!.data!.label).toBe('alpha.Execution'); // label cascaded (was stale `alpha.Trade`)
     expect(optEdge!.target).toBe(newAlphaId); // target re-keyed
     expect(optEdge!.id).toContain('alpha.Execution'); // id rebuilt from the new qualified label
 
     // The choice ARM's $refText cascades too (not just the edge label).
-    const armRef = (s.getState().nodes.find((n) => n.data.name === 'Pick')!.data as any)
-      .attributes[0].typeCall.type.$refText;
+    const armRef = (s.getState().nodes.find((n) => n.data.name === 'Pick')!.data as any).attributes[0].typeCall.type
+      .$refText;
     expect(armRef).toBe('alpha.Execution');
   });
 
@@ -242,18 +224,14 @@ describe('renameType — cascade', () => {
     // Attribute literally named `Trade`, referencing the unrelated `Other` type.
     s.getState().addAttribute(holderId, 'Trade', 'Other', '(1..1)');
 
-    const edgeBefore = s
-      .getState()
-      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
+    const edgeBefore = s.getState().edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
     expect(edgeBefore?.data?.label).toBe('Trade');
     expect(edgeBefore?.target).toBe(otherId);
 
     // Rename the TYPE Trade → Execution. The attribute-ref edge must be untouched.
     s.getState().renameType(tradeId, 'Execution');
 
-    const edgeAfter = s
-      .getState()
-      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
+    const edgeAfter = s.getState().edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref');
     expect(edgeAfter?.data?.label).toBe('Trade'); // NOT relabeled to 'Execution'
     expect(edgeAfter?.target).toBe(otherId); // still points at Other, id intact
     const attr = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes[0];
@@ -297,18 +275,14 @@ describe('renameType — cascade', () => {
     const staleRefs = freshStore
       .getState()
       .nodes.flatMap((n) =>
-        ((n.data as any).attributes ?? []).filter(
-          (m: any) => m.typeCall?.type?.$refText === 'RootType'
-        )
+        ((n.data as any).attributes ?? []).filter((m: any) => m.typeCall?.type?.$refText === 'RootType')
       );
     expect(staleRefs.length).toBe(0);
 
     const freshRefs = freshStore
       .getState()
       .nodes.flatMap((n) =>
-        ((n.data as any).attributes ?? []).filter(
-          (m: any) => m.typeCall?.type?.$refText === 'NewRootType'
-        )
+        ((n.data as any).attributes ?? []).filter((m: any) => m.typeCall?.type?.$refText === 'NewRootType')
       );
     expect(freshRefs.length).toBe(399);
   });

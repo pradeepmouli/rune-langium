@@ -73,13 +73,9 @@ const MOCK_TYPESCRIPT_RESULT = {
   files: [
     {
       path: 'codegen/test/Trade.ts',
-      content: [
-        'export interface Trade {',
-        '  tradeId: string;',
-        '  quantity: number;',
-        '  price?: number;',
-        '}'
-      ].join('\n')
+      content: ['export interface Trade {', '  tradeId: string;', '  quantity: number;', '  price?: number;', '}'].join(
+        '\n'
+      )
     },
     {
       path: 'codegen/test/TradeStatus.ts',
@@ -509,9 +505,7 @@ test.describe('Code Generation Flow', () => {
     // Should have sent .rosetta file(s) containing the model
     expect(capturedFiles.length).toBeGreaterThanOrEqual(1);
     // Files use namespace-based paths. The user model should be present.
-    const userFile = capturedFiles.find(
-      (f: { path: string; content: string }) => f.path === 'codegen.test'
-    );
+    const userFile = capturedFiles.find((f: { path: string; content: string }) => f.path === 'codegen.test');
     expect(userFile).toBeTruthy();
     expect(userFile!.content).toBeTruthy();
   });

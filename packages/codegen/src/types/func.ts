@@ -209,11 +209,7 @@ export interface FuncBodyContext extends ExpressionTranspilerContext {
  *
  * T119.
  */
-function collectCallees(
-  expr: unknown,
-  callees: Set<string>,
-  visited: WeakSet<object> = new WeakSet()
-): void {
+function collectCallees(expr: unknown, callees: Set<string>, visited: WeakSet<object> = new WeakSet()): void {
   if (!expr || typeof expr !== 'object') return;
   if (visited.has(expr as object)) return;
   visited.add(expr as object);
@@ -523,9 +519,7 @@ export function extractFuncs(
       }
 
       // Extract superFunc
-      const superFunctionRef = node['superFunction'] as
-        | { $refText?: string; ref?: { name?: string } }
-        | undefined;
+      const superFunctionRef = node['superFunction'] as { $refText?: string; ref?: { name?: string } } | undefined;
       const superFunc = superFunctionRef?.$refText ?? superFunctionRef?.ref?.name ?? undefined;
 
       // Extract shortcuts (aliases)

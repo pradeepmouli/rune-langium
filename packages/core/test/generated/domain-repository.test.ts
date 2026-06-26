@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import {
-  createRepository,
-  createDomainRepository,
-  DuplicateKeyError,
-  type AnyDomain,
-} from '@rune-langium/core';
+import { createRepository, createDomainRepository, DuplicateKeyError, type AnyDomain } from '@rune-langium/core';
 import type { Dehydrated, Data as DataT } from '@rune-langium/core';
 
 // Minimal AnyDomain-shaped fixtures ($type + name + $namespace are all that the repo reads).
@@ -16,7 +11,10 @@ const enumEl = (ns: string, name: string) =>
 
 describe('createRepository', () => {
   it('byId returns the element for an exact key, undefined otherwise', () => {
-    const repo = createRepository([data('a', 'Foo')], { key: (e) => `${e.$namespace}.${e.name}`, type: (e) => e.$type });
+    const repo = createRepository([data('a', 'Foo')], {
+      key: (e) => `${e.$namespace}.${e.name}`,
+      type: (e) => e.$type
+    });
     expect(repo.byId('a.Foo')?.name).toBe('Foo');
     expect(repo.byId('a.Bar')).toBeUndefined();
   });
@@ -24,7 +22,7 @@ describe('createRepository', () => {
   it('byType buckets by the type selector and preserves insertion order', () => {
     const repo = createRepository([data('a', 'Foo'), enumEl('a', 'E'), data('a', 'Bar')], {
       key: (e) => `${e.$namespace}.${e.name}`,
-      type: (e) => e.$type,
+      type: (e) => e.$type
     });
     expect(repo.byType('Data').map((e) => e.name)).toEqual(['Foo', 'Bar']);
     expect(repo.byType('RosettaEnumeration').map((e) => e.name)).toEqual(['E']);
@@ -38,7 +36,10 @@ describe('createRepository', () => {
 
   it('throws DuplicateKeyError on a duplicate key', () => {
     expect(() =>
-      createRepository([data('a', 'Foo'), data('a', 'Foo')], { key: (e) => `${e.$namespace}.${e.name}`, type: (e) => e.$type }),
+      createRepository([data('a', 'Foo'), data('a', 'Foo')], {
+        key: (e) => `${e.$namespace}.${e.name}`,
+        type: (e) => e.$type
+      })
     ).toThrow(DuplicateKeyError);
   });
 

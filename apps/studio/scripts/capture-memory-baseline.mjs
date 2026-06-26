@@ -40,9 +40,7 @@ try {
     return typeof m?.usedJSHeapSize === 'number' ? m.usedJSHeapSize : 0;
   });
   // eslint-disable-next-line no-console
-  console.log(
-    JSON.stringify({ heapBytes, url, capturedAt: new Date().toISOString() }, null, 2)
-  );
+  console.log(JSON.stringify({ heapBytes, url, capturedAt: new Date().toISOString() }, null, 2));
 } finally {
   await browser.close();
 }

@@ -31,9 +31,7 @@ export interface NamespaceRegistry {
   namespaces: Map<string, NamespaceManifest>;
 }
 
-export function buildNamespaceRegistry(
-  groupedDocs: Map<string, LangiumDocument[]>
-): NamespaceRegistry {
+export function buildNamespaceRegistry(groupedDocs: Map<string, LangiumDocument[]>): NamespaceRegistry {
   const namespaces = new Map<string, NamespaceManifest>();
 
   for (const [namespace, docs] of groupedDocs) {
@@ -80,20 +78,12 @@ export function buildNamespaceRegistry(
   return { namespaces };
 }
 
-export function resolveImportPath(
-  fromNamespace: string,
-  toNamespace: string,
-  _registry: NamespaceRegistry
-): string {
+export function resolveImportPath(fromNamespace: string, toNamespace: string, _registry: NamespaceRegistry): string {
   const fromParts = fromNamespace.split('.');
   const toParts = toNamespace.split('.');
 
   let commonLen = 0;
-  while (
-    commonLen < fromParts.length &&
-    commonLen < toParts.length &&
-    fromParts[commonLen] === toParts[commonLen]
-  ) {
+  while (commonLen < fromParts.length && commonLen < toParts.length && fromParts[commonLen] === toParts[commonLen]) {
     commonLen++;
   }
 

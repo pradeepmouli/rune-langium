@@ -30,11 +30,7 @@ import { render, waitFor, act, cleanup } from '@testing-library/react';
 import { App } from '../../src/App.js';
 import { saveWorkspace, listRecents, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
-import {
-  saveWorkspaceFiles,
-  loadWorkspaceFiles,
-  setWorkspaceFilesDeps
-} from '../../src/workspace/workspace-files.js';
+import { saveWorkspaceFiles, loadWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
 
 vi.mock('../../src/components/ModelLoader.js', () => ({ ModelLoader: () => null }));
 vi.mock('../../src/shell/ExplorePerspective.js', async () => {

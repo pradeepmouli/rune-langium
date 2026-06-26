@@ -111,8 +111,10 @@ function getServices() {
 export async function parse(input: string, uri?: string): Promise<ParseResult> {
   const { RuneDsl } = getServices();
   const documentUri = URI.parse(uri ?? 'inmemory:///model.rosetta');
-  const document: LangiumDocument<RosettaModel> =
-    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(input, documentUri);
+  const document: LangiumDocument<RosettaModel> = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+    input,
+    documentUri
+  );
 
   await RuneDsl.shared.workspace.DocumentBuilder.build([document]);
 
@@ -189,9 +191,7 @@ export async function parse(input: string, uri?: string): Promise<ParseResult> {
  *
  * @category Core
  */
-export async function parseWorkspace(
-  entries: Array<{ uri: string; content: string }>
-): Promise<ParseResult[]> {
+export async function parseWorkspace(entries: Array<{ uri: string; content: string }>): Promise<ParseResult[]> {
   const { RuneDsl } = getServices();
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
   const builder = RuneDsl.shared.workspace.DocumentBuilder;

@@ -34,8 +34,7 @@ import { describe, it, expect } from 'vitest';
 const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
   values.filter((v) => v !== undefined && v !== null).length === 1;
 
-const runeAttrExists = (v: unknown): boolean =>
-  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
+const runeAttrExists = (v: unknown): boolean => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
 
 // ---------------------------------------------------------------------------
 // Types

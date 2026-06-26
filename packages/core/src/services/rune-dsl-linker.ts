@@ -2,12 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { DefaultLinker } from 'langium';
-import type {
-  AstNode,
-  AstNodeDescription,
-  LangiumCoreServices,
-  LangiumDocumentFactory
-} from 'langium';
+import type { AstNode, AstNodeDescription, LangiumCoreServices, LangiumDocumentFactory } from 'langium';
 
 /**
  * Contract for on-demand corpus document materialization (ADR 007).

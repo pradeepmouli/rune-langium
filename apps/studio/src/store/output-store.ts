@@ -29,7 +29,7 @@ export const useOutputStore = create<OutputState>((set) => ({
       id: ++_idCounter,
       text,
       severity,
-      ts: performance.now() as number,
+      ts: performance.now() as number
     };
     set((state) => {
       const next = [...state.lines, line];
@@ -39,7 +39,7 @@ export const useOutputStore = create<OutputState>((set) => ({
 
   clearLines(): void {
     set({ lines: [] });
-  },
+  }
 }));
 
 export function fmtLine(source: string, message: string, detail?: string): string {
@@ -51,5 +51,5 @@ export const SEV: Record<OutputSeverity, string> = {
   success: '✓',
   info: '',
   warn: '△',
-  error: '✗',
+  error: '✗'
 };

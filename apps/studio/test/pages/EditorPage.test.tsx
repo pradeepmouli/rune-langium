@@ -547,8 +547,16 @@ describe('EditorPage preview target identity', () => {
 
   it('posts preview:generate using the selected node fully-qualified id when display names collide', async () => {
     editorStoreState.nodes = [
-      { id: 'alpha-trade', data: { namespace: 'alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'alpha', errors: [], hasExternalRefs: false } },
-      { id: 'beta-trade', data: { namespace: 'beta', name: 'Trade', $type: 'data' }, meta: { namespace: 'beta', errors: [], hasExternalRefs: false } }
+      {
+        id: 'alpha-trade',
+        data: { namespace: 'alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'alpha', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'beta-trade',
+        data: { namespace: 'beta', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'beta', errors: [], hasExternalRefs: false }
+      }
     ];
     editorStoreState.selectedNodeId = 'beta-trade';
 
@@ -575,7 +583,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.Trade',
-        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'preview.alpha.Trade';
@@ -619,7 +628,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.RenamedTrade',
-        data: { namespace: 'preview.alpha', name: 'RenamedTrade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'RenamedTrade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     rerenderEditorPage({
@@ -650,7 +660,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.Trade',
-        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'preview.alpha.Trade';
@@ -722,7 +733,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.Trade',
-        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'preview.alpha.Trade';
@@ -808,7 +820,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.Trade',
-        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'preview.alpha.Trade';
@@ -844,7 +857,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.Trade',
-        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'preview.alpha.Trade';
@@ -903,7 +917,8 @@ describe('EditorPage preview target identity', () => {
     editorStoreState.nodes = [
       {
         id: 'preview.alpha.Trade',
-        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' }, meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
+        data: { namespace: 'preview.alpha', name: 'Trade', $type: 'data' },
+        meta: { namespace: 'preview.alpha', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'preview.alpha.Trade';
@@ -1056,7 +1071,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.AdjustableDate',
-        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
@@ -1085,7 +1101,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.AdjustableDate',
-        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
 
@@ -1117,7 +1134,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.AdjustableDate',
-        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
 
@@ -1150,7 +1168,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.Standalone',
-        data: { namespace: 'cdm.base.datetime', name: 'Standalone', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'Standalone', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
 
@@ -1181,7 +1200,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.DeferredDate',
-        data: { namespace: 'cdm.base.datetime', name: 'DeferredDate', $type: 'data', deferred: true }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false, deferred: true }
+        data: { namespace: 'cdm.base.datetime', name: 'DeferredDate', $type: 'data', deferred: true },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false, deferred: true }
       }
     ];
 
@@ -1292,11 +1312,13 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.AdjustableDate',
-        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       },
       {
         id: 'cdm.base.datetime.BusinessCenter',
-        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.edges = [
@@ -1333,11 +1355,13 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.AdjustableDate',
-        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       },
       {
         id: 'cdm.base.datetime.BusinessCenter',
-        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
@@ -1361,7 +1385,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.BusinessCenter',
-        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
     view.rerenderEditorPage({
@@ -1507,7 +1532,8 @@ describe('EditorPage workspace chrome', () => {
     editorStoreState.nodes = [
       {
         id: 'cdm.base.datetime.BusinessCenter',
-        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' }, meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
       }
     ];
     editorStoreState.selectedNodeId = 'cdm.base.datetime.BusinessCenter';

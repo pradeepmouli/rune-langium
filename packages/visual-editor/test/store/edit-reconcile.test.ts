@@ -29,7 +29,11 @@ function dataNode(id: string, name: string, attrs: Array<{ name: string; type: s
   } as unknown as TypeGraphNode;
 }
 
-type AttrWithCard = { name: string; type: string; card: { $type: string; inf: number; sup: number; unbounded: boolean } };
+type AttrWithCard = {
+  name: string;
+  type: string;
+  card: { $type: string; inf: number; sup: number; unbounded: boolean };
+};
 
 function dataNodeWithCard(id: string, name: string, attrs: AttrWithCard[]): TypeGraphNode {
   return {
@@ -142,7 +146,7 @@ describe('edit-reconcile', () => {
     const cardOneOne: AttrWithCard['card'] = { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false };
     const live = [
       dataNodeWithCard('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string', card: cardOneOne }]),
-      dataNodeWithCard('ns.Beta', 'Beta',  [{ name: 'y', type: 'string', card: cardOneOne }])
+      dataNodeWithCard('ns.Beta', 'Beta', [{ name: 'y', type: 'string', card: cardOneOne }])
     ];
 
     // Edit: set Alpha.x cardinality to 0..1 (object-valued patch).
@@ -154,19 +158,19 @@ describe('edit-reconcile', () => {
     // Reparse comes back with REVERSED order (Beta first) and stale cardinality on Alpha (1..1).
     const cardOneOneParse: AttrWithCard['card'] = { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false };
     const reparse = [
-      dataNodeWithCard('ns.Beta',  'Beta',  [{ name: 'y', type: 'string', card: cardOneOneParse }]),
+      dataNodeWithCard('ns.Beta', 'Beta', [{ name: 'y', type: 'string', card: cardOneOneParse }]),
       dataNodeWithCard('ns.Alpha', 'Alpha', [{ name: 'x', type: 'string', card: cardOneOneParse }])
     ];
 
     const { nodesById, remainingPatches } = reconcileParse(reparse, NO_EDGES, patches);
 
     const alphaCard = (nodesById.get('ns.Alpha')!.data as { attributes: AttrWithCard[] }).attributes[0]!.card;
-    const betaCard  = (nodesById.get('ns.Beta')!.data  as { attributes: AttrWithCard[] }).attributes[0]!.card;
+    const betaCard = (nodesById.get('ns.Beta')!.data as { attributes: AttrWithCard[] }).attributes[0]!.card;
 
     // The edit (0..1) must have landed on Alpha, NOT Beta (which would be wrong under index replay).
-    expect(alphaCard.inf).toBe(0);  // edit applied to the right node
+    expect(alphaCard.inf).toBe(0); // edit applied to the right node
     expect(alphaCard.sup).toBe(1);
-    expect(betaCard.inf).toBe(1);   // Beta untouched (would be corrupted under index replay)
+    expect(betaCard.inf).toBe(1); // Beta untouched (would be corrupted under index replay)
 
     // The patch is still pending (object-valued patches are never `patchAlreadySatisfied`
     // against a stale reparse, so they remain in remainingPatches).

@@ -58,7 +58,15 @@ describe('studio editor theme uses design-system syntax tokens', () => {
   // exist — the compiled style hides colors at runtime).
   it('references a syntax.* token for each remapped highlight tag', () => {
     for (const key of [
-      'keyword', 'type', 'attribute', 'string', 'comment', 'number', 'function', 'operator', 'constant'
+      'keyword',
+      'type',
+      'attribute',
+      'string',
+      'comment',
+      'number',
+      'function',
+      'operator',
+      'constant'
     ] as const) {
       expect(THEME_SRC).toContain(`syntax.${key}`);
     }

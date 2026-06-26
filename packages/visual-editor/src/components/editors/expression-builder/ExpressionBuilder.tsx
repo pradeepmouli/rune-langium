@@ -49,9 +49,7 @@ export function ExpressionBuilder({
   expressionAst
 }: ExpressionBuilderProps) {
   // Convert AST directly if available, otherwise fall back to text parsing
-  const initialTree = expressionAst
-    ? astToExpressionNode(expressionAst, value ?? '')
-    : parseExpression(value ?? '');
+  const initialTree = expressionAst ? astToExpressionNode(expressionAst, value ?? '') : parseExpression(value ?? '');
 
   const {
     tree,
@@ -160,9 +158,7 @@ export function ExpressionBuilder({
       <div className="flex gap-1 border-b border-border pb-1">
         <button
           className={`rounded-t px-3 py-1 text-xs font-medium transition-colors ${
-            mode === 'builder'
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground'
+            mode === 'builder' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
           onClick={() => handleModeSwitch('builder')}
           data-testid="tab-builder"
@@ -171,9 +167,7 @@ export function ExpressionBuilder({
         </button>
         <button
           className={`rounded-t px-3 py-1 text-xs font-medium transition-colors ${
-            mode === 'text'
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground'
+            mode === 'text' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
           onClick={() => handleModeSwitch('text')}
           data-testid="tab-text"
@@ -251,9 +245,7 @@ export function ExpressionBuilder({
         </div>
       )}
 
-      {(error || parseError) && (
-        <span className="text-xs text-destructive">{error ?? parseError}</span>
-      )}
+      {(error || parseError) && <span className="text-xs text-destructive">{error ?? parseError}</span>}
 
       {!value && placeholder && mode === 'builder' && (
         <span className="text-xs text-muted-foreground">{placeholder}</span>

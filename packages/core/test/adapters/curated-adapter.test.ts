@@ -11,7 +11,7 @@ describe('curatedAdapter', () => {
       $type: 'Data',
       $namespace: 'rosetta.base.staticnode',
       name: { $type: 'ValidID', value: 'Foo' },
-      attributes: [],
+      attributes: []
     };
     const result = curatedAdapter.parse<Data>(json);
     expect(result.$type).toBe('Data');

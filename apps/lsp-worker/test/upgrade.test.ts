@@ -168,10 +168,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
   } as Env;
 }
 
-function makeWsUpgradeReq(
-  token: string,
-  origin: string | null = 'https://www.daikonic.dev'
-): Request {
+function makeWsUpgradeReq(token: string, origin: string | null = 'https://www.daikonic.dev'): Request {
   const headers: Record<string, string> = {
     Upgrade: 'websocket',
     Connection: 'Upgrade',

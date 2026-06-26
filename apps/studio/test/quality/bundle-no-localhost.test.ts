@@ -52,37 +52,32 @@ function listBundleFiles(): string[] {
 describe('prod bundle contains no dev-server URLs (D4 / workspace-state-pipeline)', () => {
   const bundleFiles = listBundleFiles();
 
-  it.skipIf(bundleFiles.length === 0)(
-    'no JS asset under dist/assets references localhost:5173',
-    () => {
-      const offenders: Array<{ file: string; pattern: string; context: string }> = [];
-      for (const file of bundleFiles) {
-        const content = readFileSync(file, 'utf8');
-        for (const pattern of FORBIDDEN_URL_PATTERNS) {
-          const idx = content.indexOf(pattern);
-          if (idx >= 0) {
-            const start = Math.max(0, idx - 80);
-            const end = Math.min(content.length, idx + pattern.length + 80);
-            offenders.push({
-              file: file.replace(DIST_DIR, '<dist>/assets'),
-              pattern,
-              context: content.slice(start, end)
-            });
-          }
+  it.skipIf(bundleFiles.length === 0)('no JS asset under dist/assets references localhost:5173', () => {
+    const offenders: Array<{ file: string; pattern: string; context: string }> = [];
+    for (const file of bundleFiles) {
+      const content = readFileSync(file, 'utf8');
+      for (const pattern of FORBIDDEN_URL_PATTERNS) {
+        const idx = content.indexOf(pattern);
+        if (idx >= 0) {
+          const start = Math.max(0, idx - 80);
+          const end = Math.min(content.length, idx + pattern.length + 80);
+          offenders.push({
+            file: file.replace(DIST_DIR, '<dist>/assets'),
+            pattern,
+            context: content.slice(start, end)
+          });
         }
       }
-      if (offenders.length > 0) {
-        const detail = offenders
-          .map((o) => `  ${o.file}: contains "${o.pattern}"\n    near: ${o.context}`)
-          .join('\n');
-        throw new Error(
-          `Forbidden dev-server URL(s) reached the production bundle:\n${detail}\n\n` +
-            'These ship to every prod user and can leak into URL bars, source-map link-throughs, ' +
-            'or HMR ping probes. Replace any `http://localhost:5173`-style literal with ' +
-            '`window.location.origin` (browser branch) or `http://localhost:8788` (wrangler-dev / SSR fallback).'
-        );
-      }
-      expect(offenders).toEqual([]);
     }
-  );
+    if (offenders.length > 0) {
+      const detail = offenders.map((o) => `  ${o.file}: contains "${o.pattern}"\n    near: ${o.context}`).join('\n');
+      throw new Error(
+        `Forbidden dev-server URL(s) reached the production bundle:\n${detail}\n\n` +
+          'These ship to every prod user and can leak into URL bars, source-map link-throughs, ' +
+          'or HMR ping probes. Replace any `http://localhost:5173`-style literal with ' +
+          '`window.location.origin` (browser branch) or `http://localhost:8788` (wrangler-dev / SSR fallback).'
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
 });
