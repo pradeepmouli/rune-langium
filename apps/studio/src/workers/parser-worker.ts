@@ -398,7 +398,8 @@ async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumen
 
     const errors: string[] = [];
     for (const diag of doc.diagnostics ?? []) {
-      errors.push(diag.message);
+      // `Diagnostic.message` widened to `string | MarkupContent` in newer LSP types.
+      errors.push(typeof diag.message === 'string' ? diag.message : diag.message.value);
     }
     return {
       type: 'linkDocumentResult',
