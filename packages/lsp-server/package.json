@@ -34,7 +34,7 @@
     "@lspeasy/server": "^4.1.2",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.3.0",
-    "vscode-languageserver": "~9.0.1",
+    "vscode-languageserver": "~10.0.1",
     "ws": "^8.21.0"
   },
   "devDependencies": {
