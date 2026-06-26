@@ -24,11 +24,7 @@ import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 // Minimal CM extensions for an inline expression editor
 // ---------------------------------------------------------------------------
 
-function buildExtensions(
-  onChange: (value: string) => void,
-  onBlur: () => void,
-  placeholderText?: string
-): Extension[] {
+function buildExtensions(onChange: (value: string) => void, onBlur: () => void, placeholderText?: string): Extension[] {
   return [
     keymap.of(defaultKeymap),
     syntaxHighlighting(defaultHighlightStyle),
@@ -83,13 +79,7 @@ function buildExtensions(
 // Component
 // ---------------------------------------------------------------------------
 
-export function ExpressionEditor({
-  value,
-  onChange,
-  onBlur,
-  error,
-  placeholder
-}: ExpressionEditorSlotProps) {
+export function ExpressionEditor({ value, onChange, onBlur, error, placeholder }: ExpressionEditorSlotProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const callbacksRef = useRef({ onChange, onBlur });

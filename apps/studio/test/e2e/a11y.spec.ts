@@ -42,9 +42,7 @@ test.describe('Studio a11y (T088)', () => {
     const builder = new AxeBuilder({ page });
     for (const sel of SELECTORS_TO_EXCLUDE) builder.exclude(sel);
     const results = await builder.analyze();
-    const blocking = results.violations.filter((v) =>
-      ['serious', 'critical'].includes(v.impact ?? '')
-    );
+    const blocking = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''));
     if (blocking.length > 0) {
       console.log(JSON.stringify(blocking, null, 2));
     }
@@ -56,9 +54,7 @@ test.describe('Studio a11y (T088)', () => {
     const builder = new AxeBuilder({ page });
     for (const sel of SELECTORS_TO_EXCLUDE) builder.exclude(sel);
     const results = await builder.analyze();
-    const blocking = results.violations.filter((v) =>
-      ['serious', 'critical'].includes(v.impact ?? '')
-    );
+    const blocking = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''));
     if (blocking.length > 0) {
       console.log(JSON.stringify(blocking, null, 2));
     }

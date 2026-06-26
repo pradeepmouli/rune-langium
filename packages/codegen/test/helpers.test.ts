@@ -2,12 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import {
-  runeCheckOneOf,
-  runeCount,
-  runeAttrExists,
-  RUNTIME_HELPER_SOURCE
-} from '../src/helpers.js';
+import { runeCheckOneOf, runeCount, runeAttrExists, RUNTIME_HELPER_SOURCE } from '../src/helpers.js';
 
 describe('runeCheckOneOf', () => {
   it('returns false for all-undefined values', () => {

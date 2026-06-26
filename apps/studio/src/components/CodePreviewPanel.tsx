@@ -187,20 +187,20 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
       // form can include a layout key, but the layout radio always wins here.
       const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
       const layoutOption = config.layout ? { layout: config.layout } : {};
-      const options = (config.layout || config.options)
-        ? { [newTarget]: { ...targetOptions, ...layoutOption } }
-        : {};
+      const options = config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};
       setDownloadingTarget(newTarget);
       try {
         await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
-          const detail = err.diagnostics.length > 0
-            ? err.diagnostics.map((d) => d.message).join('; ')
-            : err.message;
+          const detail = err.diagnostics.length > 0 ? err.diagnostics.map((d) => d.message).join('; ') : err.message;
           showToast({ title: 'Code generation failed', description: detail, variant: 'destructive' });
           useOutputStore.getState().addLine(fmtLine('codegen', err.message), 'error');
-          err.diagnostics.forEach(d => useOutputStore.getState().addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn'));
+          err.diagnostics.forEach((d) =>
+            useOutputStore
+              .getState()
+              .addLine(fmtLine('codegen', d.message, d.code), d.severity === 'error' ? 'error' : 'warn')
+          );
           console.error(
             `[CodePreviewPanel] /api/codegen ${err.status} for target ${newTarget}: ${err.message}`,
             err.diagnostics

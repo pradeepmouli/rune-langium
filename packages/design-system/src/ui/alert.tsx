@@ -23,8 +23,7 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: 'bg-card text-card-foreground border-border',
-        destructive:
-          'bg-destructive/10 border-destructive/30 text-destructive [&>svg]:text-destructive',
+        destructive: 'bg-destructive/10 border-destructive/30 text-destructive [&>svg]:text-destructive',
         warning: 'bg-warning/10 border-warning/30 text-warning [&>svg]:text-warning'
       }
     },
@@ -32,19 +31,8 @@ const alertVariants = cva(
   }
 );
 
-function Alert({
-  className,
-  variant,
-  ...props
-}: React.ComponentProps<'div'> & VariantProps<typeof alertVariants>) {
-  return (
-    <div
-      data-slot="alert"
-      role="alert"
-      className={cn(alertVariants({ variant }), className)}
-      {...props}
-    />
-  );
+function Alert({ className, variant, ...props }: React.ComponentProps<'div'> & VariantProps<typeof alertVariants>) {
+  return <div data-slot="alert" role="alert" className={cn(alertVariants({ variant }), className)} {...props} />;
 }
 
 function AlertTitle({
@@ -55,7 +43,7 @@ function AlertTitle({
   const alertTitleProps = {
     'data-slot': 'alert-title',
     className: cn('col-start-2 line-clamp-1 min-h-4 font-medium tracking-tight', className),
-    ...props,
+    ...props
   };
   if (render != null && React.isValidElement(render)) {
     return cloneElementWithMergedClassName(render, alertTitleProps);
@@ -67,10 +55,7 @@ function AlertDescription({ className, ...props }: React.ComponentProps<'div'>) 
   return (
     <div
       data-slot="alert-description"
-      className={cn(
-        'col-start-2 grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed opacity-90',
-        className
-      )}
+      className={cn('col-start-2 grid justify-items-start gap-1 text-sm [&_p]:leading-relaxed opacity-90', className)}
       {...props}
     />
   );

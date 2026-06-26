@@ -7,13 +7,7 @@
 
 import { useState, useCallback, memo } from 'react';
 import type { TypeKind } from '../../types.js';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@rune-langium/design-system/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Input } from '@rune-langium/design-system/ui/input';
 
 export interface TypeCreatorProps {
@@ -83,11 +77,7 @@ export const TypeCreator = memo(function TypeCreator({
           className="px-2 py-1 text-sm"
           aria-label="Namespace"
         />
-        <button
-          onClick={handleCreate}
-          disabled={!name.trim()}
-          className="rune-type-creator__submit"
-        >
+        <button onClick={handleCreate} disabled={!name.trim()} className="rune-type-creator__submit">
           Create
         </button>
         {onCancel && (

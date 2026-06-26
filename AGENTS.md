@@ -20,7 +20,7 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 1. Install deps: `pnpm install`
 2. Lint: `pnpm run lint`
 3. Test: `pnpm test`
-4. Format: `pnpm run format` (or `pnpm run format:check`)
+4. Format: `pnpm run format` (or `pnpm run format:check`). Staged `*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}` files are also auto-formatted with `oxfmt` on commit via the `lint-staged` pre-commit hook, so a normal `git commit` formats what you staged. (`SKIP_SIMPLE_GIT_HOOKS=1` bypasses the hook.)
 5. Type-check: `pnpm run type-check`
 6. For codegen-only changes, prefer `pnpm --filter @rune-langium/codegen test` and `pnpm --filter @rune-langium/codegen run type-check`
 

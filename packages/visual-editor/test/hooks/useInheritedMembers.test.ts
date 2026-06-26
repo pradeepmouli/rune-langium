@@ -6,10 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  buildMergedAttributeList,
-  buildMergedEnumValueList
-} from '../../src/hooks/useInheritedMembers.js';
+import { buildMergedAttributeList, buildMergedEnumValueList } from '../../src/hooks/useInheritedMembers.js';
 import { parseCardinality } from '../../src/adapters/model-helpers.js';
 import type { InheritedGroup } from '../../src/hooks/useInheritedMembers.js';
 
@@ -75,14 +72,9 @@ describe('buildMergedAttributeList', () => {
 
   it('assigns incrementing inheritanceDepth across ancestors', () => {
     const local: { id: string; name: string }[] = [];
-    const groups = [
-      makeGroup('Parent', [makeAttrMember('a')]),
-      makeGroup('Grandparent', [makeAttrMember('b')])
-    ];
+    const groups = [makeGroup('Parent', [makeAttrMember('a')]), makeGroup('Grandparent', [makeAttrMember('b')])];
     const result = buildMergedAttributeList(local, groups);
-    const depths = result
-      .filter((e) => !e.isLocal)
-      .map((e) => (!e.isLocal ? e.inheritedFrom.inheritanceDepth : -1));
+    const depths = result.filter((e) => !e.isLocal).map((e) => (!e.isLocal ? e.inheritedFrom.inheritanceDepth : -1));
     expect(depths).toEqual([1, 2]);
   });
 
@@ -166,11 +158,7 @@ import { useEffectiveMembers } from '../../src/hooks/useInheritedMembers.js';
 import type { AnyGraphNode, TypeGraphNode } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
 
-function makeDataNode(
-  name: string,
-  superType: string | undefined,
-  attrs: Record<string, unknown>[]
-) {
+function makeDataNode(name: string, superType: string | undefined, attrs: Record<string, unknown>[]) {
   const data = {
     $type: 'Data',
     name,
@@ -214,9 +202,7 @@ function makeEnumNode(name: string, parent: string | undefined, values: Record<s
 
 describe('useEffectiveMembers', () => {
   function renderEffective(nodeData: unknown, allNodes: unknown[]) {
-    const { result } = renderHook(() =>
-      useEffectiveMembers(nodeData as AnyGraphNode, allNodes as TypeGraphNode[])
-    );
+    const { result } = renderHook(() => useEffectiveMembers(nodeData as AnyGraphNode, allNodes as TypeGraphNode[]));
     return result.current;
   }
 
@@ -260,10 +246,7 @@ describe('useEffectiveMembers', () => {
   });
 
   it('works for enum types', () => {
-    const parent = makeEnumNode('ParentEnum', undefined, [
-      makeEnumMember('A'),
-      makeEnumMember('B')
-    ]);
+    const parent = makeEnumNode('ParentEnum', undefined, [makeEnumMember('A'), makeEnumMember('B')]);
     const child = makeEnumNode('ChildEnum', 'ParentEnum', [makeEnumMember('C')]);
     const { effective } = renderEffective(child.data, [child, parent]);
     expect(effective).toHaveLength(3);

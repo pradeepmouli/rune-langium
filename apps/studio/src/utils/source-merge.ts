@@ -132,10 +132,7 @@ function elementKey(name: string, kind: string): string {
  *   for the same namespace.
  * @returns Merged `.rosetta` source text.
  */
-export async function mergeSerializedIntoSource(
-  originalSource: string,
-  serializedSource: string
-): Promise<string> {
+export async function mergeSerializedIntoSource(originalSource: string, serializedSource: string): Promise<string> {
   const originalRanges = await extractElementRanges(originalSource);
   const serializedRanges = await extractElementRanges(serializedSource);
 

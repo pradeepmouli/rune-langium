@@ -11,5 +11,5 @@ const hydrator = new RuneStoreHydrator(minimalServices);
 export const parsedAdapter = {
   dehydrate<T extends AstNode>(node: T): Dehydrated<T> {
     return hydrator.dehydrateNode(node);
-  },
+  }
 };

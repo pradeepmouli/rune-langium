@@ -67,8 +67,6 @@ describe('CDM Error Detail', () => {
     }
 
     // SC-001: 100% parse rate — all CDM files must parse without errors
-    expect(failures, `${failures.length}/${files.length} CDM files had parse errors`).toHaveLength(
-      0
-    );
+    expect(failures, `${failures.length}/${files.length} CDM files had parse errors`).toHaveLength(0);
   }, 30_000);
 });

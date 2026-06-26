@@ -197,9 +197,9 @@ describe('Source round-trip via modelsToAst', () => {
     const models = modelsToAst(nodes, edges);
 
     const model = models[0]!;
-    const enumElement = model.elements.find(
-      (e) => (e as { $type?: string }).$type === 'RosettaEnumeration'
-    ) as Record<string, unknown> | undefined;
+    const enumElement = model.elements.find((e) => (e as { $type?: string }).$type === 'RosettaEnumeration') as
+      | Record<string, unknown>
+      | undefined;
     expect(enumElement).toBeDefined();
     expect(enumElement!.$type).toBe('RosettaEnumeration');
   });
@@ -210,9 +210,9 @@ describe('Source round-trip via modelsToAst', () => {
     const models = modelsToAst(nodes, edges);
 
     const model = models[0]!;
-    const enumElement = model.elements.find(
-      (e) => (e as { $type?: string }).$type === 'RosettaEnumeration'
-    ) as Record<string, unknown> | undefined;
+    const enumElement = model.elements.find((e) => (e as { $type?: string }).$type === 'RosettaEnumeration') as
+      | Record<string, unknown>
+      | undefined;
 
     if (enumElement!.$type === 'RosettaEnumeration') {
       const enumValues = enumElement!.enumValues as Array<{ name: string; $type?: string }>;

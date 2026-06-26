@@ -216,7 +216,10 @@ async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promi
   const fullPath = rel ? `${base}/${rel}` : base;
   // Resolve to the raw promise surface (supports both OpfsFs and InMemoryFs shapes).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const raw: { readdir(p: string): Promise<string[]>; stat(p: string): Promise<{ isFile(): boolean; isDirectory(): boolean }> } = (fs as any).promises ?? fs;
+  const raw: {
+    readdir(p: string): Promise<string[]>;
+    stat(p: string): Promise<{ isFile(): boolean; isDirectory(): boolean }>;
+  } = (fs as any).promises ?? fs;
   let names: string[];
   try {
     names = await raw.readdir(fullPath);

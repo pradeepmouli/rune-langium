@@ -15,11 +15,7 @@ import { dirname, resolve } from 'node:path';
 import { gzip } from 'pako';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
-import {
-  CuratedLoadError,
-  loadCuratedModel,
-  type ErrorCategory
-} from '../../src/services/curated-loader.js';
+import { CuratedLoadError, loadCuratedModel, type ErrorCategory } from '../../src/services/curated-loader.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = resolve(__dirname, '../fixtures/curated/tiny.tar.gz');
@@ -148,9 +144,7 @@ describe('loadCuratedModel — happy path (T030)', () => {
       writeRoot: '/cdm',
       telemetry: { emit: telemetryEmit }
     });
-    const events = telemetryEmit.mock.calls.map(
-      (c: unknown[]) => (c[0] as { event: string }).event
-    );
+    const events = telemetryEmit.mock.calls.map((c: unknown[]) => (c[0] as { event: string }).event);
     expect(events[0]).toBe('curated_load_attempt');
     expect(events.at(-1)).toBe('curated_load_success');
   });
@@ -247,9 +241,7 @@ describe('loadCuratedModel — failure mapping (FR-002)', () => {
         telemetry: { emit: telemetryEmit }
       })
     ).rejects.toMatchObject({ category: expected });
-    const lastEvent = telemetryEmit.mock.calls.at(-1)?.[0] as
-      | { event: string; errorCategory?: string }
-      | undefined;
+    const lastEvent = telemetryEmit.mock.calls.at(-1)?.[0] as { event: string; errorCategory?: string } | undefined;
     expect(lastEvent?.event).toBe('curated_load_failure');
     expect(lastEvent?.errorCategory).toBe(expected);
   }
@@ -322,9 +314,7 @@ describe('loadCuratedModel — security: ignores manifest archiveUrl (C1)', () =
     mockNetwork((url) => {
       fetched.push(url);
       if (url === MANIFEST_URL) {
-        return new Response(
-          makeManifest('2026-04-25', { archiveUrl: 'https://attacker.example/payload.tar.gz' })
-        );
+        return new Response(makeManifest('2026-04-25', { archiveUrl: 'https://attacker.example/payload.tar.gz' }));
       }
       if (url === ARCHIVE_URL) return new Response(fixtureBytes());
       return new Response('nope', { status: 404 });

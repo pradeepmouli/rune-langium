@@ -43,7 +43,7 @@ const variantVars: Record<RowGlyphVariant, React.CSSProperties> = {
     '--row-glyph-fg': 'var(--muted-foreground)',
     '--row-glyph-fg-hover': 'var(--foreground)',
     '--row-glyph-border': 'color-mix(in oklch, var(--border) 55%, transparent)',
-    '--row-glyph-border-hover': 'color-mix(in oklch, var(--border) 85%, transparent)',
+    '--row-glyph-border-hover': 'color-mix(in oklch, var(--border) 85%, transparent)'
   } as React.CSSProperties,
   // Enum-jump (↗) arrow — transparent box tinted with the enum palette.
   // Interactive.
@@ -53,7 +53,7 @@ const variantVars: Record<RowGlyphVariant, React.CSSProperties> = {
     '--row-glyph-fg': 'var(--color-enum-text)',
     '--row-glyph-fg-hover': 'var(--foreground)',
     '--row-glyph-border': 'transparent',
-    '--row-glyph-border-hover': 'transparent',
+    '--row-glyph-border-hover': 'transparent'
   } as React.CSSProperties,
   // Unresolved-type (?) indicator — destructive tint, no hover. Static marker.
   unresolved: {
@@ -62,8 +62,8 @@ const variantVars: Record<RowGlyphVariant, React.CSSProperties> = {
     '--row-glyph-fg': 'var(--destructive)',
     '--row-glyph-fg-hover': 'var(--destructive)',
     '--row-glyph-border': 'transparent',
-    '--row-glyph-border-hover': 'transparent',
-  } as React.CSSProperties,
+    '--row-glyph-border-hover': 'transparent'
+  } as React.CSSProperties
 };
 
 type RowGlyphOwnProps = {

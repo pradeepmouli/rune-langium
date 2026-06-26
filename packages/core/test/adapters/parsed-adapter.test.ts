@@ -11,12 +11,12 @@ function makeFakeData(): Data {
     attributes: [],
     $container: {
       $type: 'RosettaModel',
-      name: 'test.namespace',
+      name: 'test.namespace'
     } as any,
     $containerProperty: 'elements',
     $containerIndex: 0,
     $cstNode: undefined as any,
-    $document: undefined as any,
+    $document: undefined as any
   } as unknown as Data;
 }
 

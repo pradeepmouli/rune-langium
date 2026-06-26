@@ -50,7 +50,11 @@ const LABEL_BEARING: ReadonlySet<EdgeKind> = new Set(['attribute-ref', 'choice-o
  * Satisfies `ReadonlySet<EdgeKind>` so the compiler catches any drift.
  */
 const KNOWN_EDGE_KINDS: ReadonlySet<EdgeKind> = new Set([
-  'extends', 'attribute-ref', 'choice-option', 'enum-extends', 'type-alias-ref'
+  'extends',
+  'attribute-ref',
+  'choice-option',
+  'enum-extends',
+  'type-alias-ref'
 ] satisfies EdgeKind[]);
 
 /**
@@ -69,9 +73,7 @@ export function makeEdgeId(kind: EdgeKind, parts: { source: string; target: stri
 }
 
 /** Parse an edge id back to its parts, or `null` if it isn't a well-formed edge id. */
-export function parseEdgeId(
-  id: string
-): { kind: EdgeKind; source: string; target: string; label?: string } | null {
+export function parseEdgeId(id: string): { kind: EdgeKind; source: string; target: string; label?: string } | null {
   const segs = id.split(EDGE_SEPARATOR);
   if (segs.length < 3) return null;
   const kind = segs[1] as EdgeKind;
@@ -129,7 +131,9 @@ const MEMBER_FIELD_BY_KIND: Readonly<Record<string, string>> = {
 };
 
 /** The member array + its field name for a node, or null if the kind has none. */
-export function getMemberArray(node: { $type?: string } & Record<string, unknown>): { field: string; members: unknown[] } | null {
+export function getMemberArray(
+  node: { $type?: string } & Record<string, unknown>
+): { field: string; members: unknown[] } | null {
   const field = node.$type ? MEMBER_FIELD_BY_KIND[node.$type] : undefined;
   if (!field) return null;
   const members = node[field];
@@ -145,7 +149,10 @@ export function ensureMemberArray(node: { $type?: string } & Record<string, unkn
 }
 
 /** Iterate the members of a node (no-op when the kind has no member container). */
-export function forEachMember(node: { $type?: string } & Record<string, unknown>, fn: (member: unknown, index: number) => void): void {
+export function forEachMember(
+  node: { $type?: string } & Record<string, unknown>,
+  fn: (member: unknown, index: number) => void
+): void {
   const got = getMemberArray(node);
   if (got) got.members.forEach(fn);
 }

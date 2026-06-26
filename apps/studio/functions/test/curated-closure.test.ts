@@ -3,11 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
-import {
-  computeCuratedClosure,
-  refUriToCuratedKey,
-  closeNamespacesFromManifest
-} from '../lib/curated-closure.js';
+import { computeCuratedClosure, refUriToCuratedKey, closeNamespacesFromManifest } from '../lib/curated-closure.js';
 
 /**
  * Build a ClosureDoc fixture.
@@ -27,7 +23,7 @@ function doc(
 ): { uri: string; serializedModel: string } {
   // Build a minimal elements array that contains $ref objects for each
   // cross-doc ref so extractCrossDocRefNamespaces can find them.
-  const elements = (crossDocRefs ?? []).map((ref) => ({ $type: 'Attribute', typeCall: { '$ref': ref } }));
+  const elements = (crossDocRefs ?? []).map((ref) => ({ $type: 'Attribute', typeCall: { $ref: ref } }));
   return {
     uri: uri ?? `cdm/${namespace.replace(/\./g, '/')}.rosetta`,
     serializedModel: JSON.stringify({
@@ -66,7 +62,8 @@ describe('readSerializedModelMeta', () => {
 
 describe('refUriToCuratedKey', () => {
   it('decodes a percent-encoded $ref URI to bundleId/path', () => {
-    const ref = 'file:///%5Bcdm%5D/common-domain-model-master/rosetta-source/src/main/rosetta/base-datetime-daycount-enum.rosetta#/elements@0';
+    const ref =
+      'file:///%5Bcdm%5D/common-domain-model-master/rosetta-source/src/main/rosetta/base-datetime-daycount-enum.rosetta#/elements@0';
     expect(refUriToCuratedKey(ref)).toBe(
       'cdm/common-domain-model-master/rosetta-source/src/main/rosetta/base-datetime-daycount-enum.rosetta'
     );
@@ -217,9 +214,7 @@ describe('computeCuratedClosure — cross-doc $ref completeness (the new fix)', 
 });
 
 describe('closeNamespacesFromManifest', () => {
-  const G = (
-    m: Record<string, string[]>
-  ): Record<string, { deps: string[] }> =>
+  const G = (m: Record<string, string[]>): Record<string, { deps: string[] }> =>
     Object.fromEntries(Object.entries(m).map(([ns, deps]) => [ns, { deps }]));
 
   it('walks transitive deps from the seed (BFS over the manifest graph)', () => {

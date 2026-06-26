@@ -2,11 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import {
-  findCyclicTypes,
-  buildTypeReferenceGraph,
-  type TypeReferenceGraph
-} from '../src/cycle-detector.js';
+import { findCyclicTypes, buildTypeReferenceGraph, type TypeReferenceGraph } from '../src/cycle-detector.js';
 
 /**
  * Helpers for constructing TypeReferenceGraph objects for unit testing

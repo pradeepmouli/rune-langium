@@ -26,11 +26,11 @@ const messages = stylelint.utils.ruleMessages(ruleName, {
   rawColor: (value, prop) =>
     `Unexpected raw color "${value}" in "${prop}" — use a design token ` +
     `(var(--color-*) / semantic token). Define raw values only in token files ` +
-    `(custom properties) or as a var() fallback.`,
+    `(custom properties) or as a var() fallback.`
 });
 
 const meta = {
-  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-raw-color.mjs',
+  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-raw-color.mjs'
 };
 
 // ─── Regex helpers ────────────────────────────────────────────────────────────
@@ -48,8 +48,14 @@ const COLOR_FN_RE = /\b(rgb|rgba|hsl|hsla|oklch|oklab)\s*\(/i;
 
 // Keywords that are always safe
 const SAFE_KEYWORDS = new Set([
-  'transparent', 'currentcolor', 'inherit', 'initial', 'unset', 'none',
-  'revert', 'revert-layer',
+  'transparent',
+  'currentcolor',
+  'inherit',
+  'initial',
+  'unset',
+  'none',
+  'revert',
+  'revert-layer'
 ]);
 
 // ─── Value sanitisation ────────────────────────────────────────────────────────
@@ -103,10 +109,7 @@ function stripVarCalls(value) {
  */
 function stripRelativeColorFns(value) {
   // Match color-function(from VAR ...) patterns
-  return value.replace(
-    /\b(?:oklch|oklab|color|lch|lab|srgb|hsl|hwb)\s*\(\s*from\s+VAR[^)]*\)/gi,
-    'RELCOLOR',
-  );
+  return value.replace(/\b(?:oklch|oklab|color|lch|lab|srgb|hsl|hwb)\s*\(\s*from\s+VAR[^)]*\)/gi, 'RELCOLOR');
 }
 
 /**
@@ -137,22 +140,20 @@ const rule = (primary, secondaryOptions) => (root, result) => {
     ruleName,
     {
       actual: primary,
-      possible: [true],
+      possible: [true]
     },
     {
       actual: secondaryOptions,
       possible: {
-        ignoreProperties: [String],
+        ignoreProperties: [String]
       },
-      optional: true,
-    },
+      optional: true
+    }
   );
   if (!validOptions) return;
 
   const ignoreProps = new Set(
-    ((secondaryOptions && secondaryOptions.ignoreProperties) || []).map((p) =>
-      p.toLowerCase(),
-    ),
+    ((secondaryOptions && secondaryOptions.ignoreProperties) || []).map((p) => p.toLowerCase())
   );
 
   root.walkDecls((decl) => {
@@ -179,17 +180,14 @@ const rule = (primary, secondaryOptions) => (root, result) => {
 
     // Extract the offending literal for a human-readable message
     const hexMatch = sanitised.match(HEX_RE);
-    const fnMatch = sanitised.match(
-      /\b(?:rgb|rgba|hsl|hsla|oklch|oklab)\s*\([^)]*\d[^)]*\)/i,
-    );
-    const offendingLiteral =
-      hexMatch ? hexMatch[0] : fnMatch ? fnMatch[0] : rawValue;
+    const fnMatch = sanitised.match(/\b(?:rgb|rgba|hsl|hsla|oklch|oklab)\s*\([^)]*\d[^)]*\)/i);
+    const offendingLiteral = hexMatch ? hexMatch[0] : fnMatch ? fnMatch[0] : rawValue;
 
     stylelint.utils.report({
       message: messages.rawColor(offendingLiteral, prop),
       node: decl,
       result,
-      ruleName,
+      ruleName
     });
   });
 };

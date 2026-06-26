@@ -96,11 +96,7 @@ interface DomSnapshot {
 }
 
 /** Capture computed styles for a set of selectors on the page */
-async function captureDomSnapshot(
-  page: Page,
-  name: string,
-  selectors: string[]
-): Promise<DomSnapshot> {
+async function captureDomSnapshot(page: Page, name: string, selectors: string[]): Promise<DomSnapshot> {
   const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
   const styleProps = [...STYLE_PROPS];
 
@@ -289,9 +285,7 @@ test.describe('Visual Regression', () => {
         console.log('  Baseline saved: 01-file-loader');
         return;
       } else {
-        throw new Error(
-          'Missing baseline snapshot for 01-file-loader. Run with --update-snapshots to create it.'
-        );
+        throw new Error('Missing baseline snapshot for 01-file-loader. Run with --update-snapshots to create it.');
       }
     }
 
@@ -327,9 +321,7 @@ test.describe('Visual Regression', () => {
         console.log('  Baseline saved: 02-editor-page');
         return;
       } else {
-        throw new Error(
-          'Missing baseline snapshot for 02-editor-page. Run with --update-snapshots to create it.'
-        );
+        throw new Error('Missing baseline snapshot for 02-editor-page. Run with --update-snapshots to create it.');
       }
     }
 
@@ -362,11 +354,7 @@ test.describe('Visual Regression', () => {
     // Capture screenshot
     await saveScreenshot(page, '03-namespace-explorer');
 
-    const snapshot = await captureDomSnapshot(
-      page,
-      '03-namespace-explorer',
-      NAMESPACE_EXPLORER_SELECTORS
-    );
+    const snapshot = await captureDomSnapshot(page, '03-namespace-explorer', NAMESPACE_EXPLORER_SELECTORS);
     const baseline = loadSnapshot('03-namespace-explorer');
 
     if (!baseline) {
@@ -419,9 +407,7 @@ test.describe('Visual Regression', () => {
         console.log('  Baseline saved: 04-source-editor');
         return;
       } else {
-        throw new Error(
-          'Missing baseline snapshot for 04-source-editor. Run with --update-snapshots to create it.'
-        );
+        throw new Error('Missing baseline snapshot for 04-source-editor. Run with --update-snapshots to create it.');
       }
     }
 

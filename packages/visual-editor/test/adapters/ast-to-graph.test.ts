@@ -60,9 +60,7 @@ describe('astToModel', () => {
       expect(extendsEdges.length).toBeGreaterThanOrEqual(1);
 
       // Trade extends Event
-      const tradeExtendsEdge = extendsEdges.find(
-        (e) => e.id.includes('Trade') && e.id.includes('Event')
-      );
+      const tradeExtendsEdge = extendsEdges.find((e) => e.id.includes('Trade') && e.id.includes('Event'));
       expect(tradeExtendsEdge).toBeDefined();
     });
 
@@ -161,9 +159,7 @@ describe('astToModel', () => {
       const { edges } = astToModel(result.value);
 
       // Trade.currency -> CurrencyEnum should be an attribute-ref edge
-      const currencyEdge = edges.find(
-        (e) => e.data?.kind === 'attribute-ref' && e.data.label === 'currency'
-      );
+      const currencyEdge = edges.find((e) => e.data?.kind === 'attribute-ref' && e.data.label === 'currency');
       expect(currencyEdge).toBeDefined();
 
       // PaymentType -> Trade and PaymentType -> Product are choice-option edges

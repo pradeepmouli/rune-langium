@@ -6,11 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  buildNamespaceTree,
-  filterNamespaceTree,
-  flattenNamespaceTree
-} from '../../src/utils/namespace-tree.js';
+import { buildNamespaceTree, filterNamespaceTree, flattenNamespaceTree } from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
 
@@ -149,11 +145,7 @@ describe('filterNamespaceTree', () => {
 
   it('treats regex metacharacters as literal strings', () => {
     // Add nodes with special characters in their names
-    const specialNodes = [
-      makeNode('ns', 'Type[A]'),
-      makeNode('ns', 'Type(B)'),
-      makeNode('ns', 'Type.C')
-    ];
+    const specialNodes = [makeNode('ns', 'Type[A]'), makeNode('ns', 'Type(B)'), makeNode('ns', 'Type.C')];
     const specialTree = buildNamespaceTree(specialNodes);
 
     // Searching for literal brackets should match Type[A]
@@ -181,11 +173,7 @@ describe('flattenNamespaceTree', () => {
     const rows = flattenNamespaceTree(tree, new Set(), new Set());
     expect(rows).toHaveLength(3);
     expect(rows.every((r) => r.kind === 'namespace')).toBe(true);
-    expect(rows.map((r) => (r as { namespace: string }).namespace)).toEqual([
-      'ns.a',
-      'ns.b',
-      'ns.c'
-    ]);
+    expect(rows.map((r) => (r as { namespace: string }).namespace)).toEqual(['ns.a', 'ns.b', 'ns.c']);
     expect(rows.every((r) => r.kind === 'namespace' && !r.expanded)).toBe(true);
   });
 

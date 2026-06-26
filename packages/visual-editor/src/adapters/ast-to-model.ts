@@ -91,11 +91,9 @@ function buildGraphNode<T extends { $type: string; name: string }>(
   // Note: `comments` is intentionally absent here (not set at read time).
   // langium is not a direct visual-editor dependency — thread the
   // adapters' AstNode constraint structurally.
-  const data = (
-    isLiveAstElement(element)
-      ? parsedAdapter.dehydrate(element as unknown as Parameters<typeof parsedAdapter.dehydrate>[0])
-      : curatedAdapter.parse(element)
-  ) as unknown as TypeGraphNode['data'];
+  const data = (isLiveAstElement(element)
+    ? parsedAdapter.dehydrate(element as unknown as Parameters<typeof parsedAdapter.dehydrate>[0])
+    : curatedAdapter.parse(element)) as unknown as TypeGraphNode['data'];
   const meta: GraphNodeMeta = {
     namespace,
     errors: [],

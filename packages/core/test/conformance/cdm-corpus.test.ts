@@ -34,10 +34,7 @@ describe('CDM Corpus Conformance (SC-001)', () => {
 
     if (results.length > 0) {
       const summary = results
-        .map(
-          (r) =>
-            `  ${r.name}: ${r.errors.length} error(s)\n${r.errors.map((e) => `    ${e}`).join('\n')}`
-        )
+        .map((r) => `  ${r.name}: ${r.errors.length} error(s)\n${r.errors.map((e) => `    ${e}`).join('\n')}`)
         .join('\n');
       console.log(`CDM parse failures (${results.length}/${fixtures.length} files):\n${summary}`);
     }

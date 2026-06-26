@@ -103,9 +103,18 @@ function lastCodegenGenerate(worker: MockWorker): { type: string; target: string
 
 function lastPreviewSetFiles(
   worker: MockWorker
-): { type: string; files: Array<{ uri: string; content: string; serializedModelJson?: string }>; requestId?: string } | undefined {
+):
+  | { type: string; files: Array<{ uri: string; content: string; serializedModelJson?: string }>; requestId?: string }
+  | undefined {
   return worker.postMessage.mock.calls
-    .map(([m]) => m as { type?: string; files?: Array<{ uri: string; content: string; serializedModelJson?: string }>; requestId?: string })
+    .map(
+      ([m]) =>
+        m as {
+          type?: string;
+          files?: Array<{ uri: string; content: string; serializedModelJson?: string }>;
+          requestId?: string;
+        }
+    )
     .filter(
       (
         m

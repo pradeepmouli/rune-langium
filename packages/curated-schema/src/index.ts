@@ -89,9 +89,7 @@ export const CuratedSerializedWorkspaceArtifactSchema = z.object({
   langiumVersion: z.string().min(1),
   documents: z.array(CuratedSerializedDocumentSchema)
 });
-export type CuratedSerializedWorkspaceArtifact = z.infer<
-  typeof CuratedSerializedWorkspaceArtifactSchema
->;
+export type CuratedSerializedWorkspaceArtifact = z.infer<typeof CuratedSerializedWorkspaceArtifactSchema>;
 
 /**
  * Curated-mirror manifest. Written by the publisher Worker, fetched and
@@ -133,9 +131,7 @@ export const CuratedManifestSchema = z.object({
 export type CuratedManifest = z.infer<typeof CuratedManifestSchema>;
 
 /** Validate an unknown payload against the manifest schema. Returns Result-shaped. */
-export function parseManifest(
-  data: unknown
-): { ok: true; manifest: CuratedManifest } | { ok: false; reason: string } {
+export function parseManifest(data: unknown): { ok: true; manifest: CuratedManifest } | { ok: false; reason: string } {
   const r = CuratedManifestSchema.safeParse(data);
   if (r.success) return { ok: true, manifest: r.data };
   return { ok: false, reason: r.error.message };

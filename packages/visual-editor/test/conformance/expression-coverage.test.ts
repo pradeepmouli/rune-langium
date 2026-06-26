@@ -78,9 +78,7 @@ function extractExpressions(
     for (const op of operations) {
       const expr = op['expression'];
       if (expr) {
-        const cstNode = (expr as Record<string, unknown>)['$cstNode'] as
-          | Record<string, unknown>
-          | undefined;
+        const cstNode = (expr as Record<string, unknown>)['$cstNode'] as Record<string, unknown> | undefined;
         const sourceText = cstNode ? String(cstNode['text'] ?? '') : '';
         results.push({ name, expr, sourceText });
       }

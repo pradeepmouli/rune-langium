@@ -140,10 +140,7 @@ async function tryLoadSerializedWorkspaceArtifact(
   try {
     jsonText = new TextDecoder('utf-8').decode(inflate(bytes));
   } catch (err) {
-    throw new CuratedLoadError(
-      'archive_decode',
-      `serialized artifact gunzip failed: ${errMessage(err)}`
-    );
+    throw new CuratedLoadError('archive_decode', `serialized artifact gunzip failed: ${errMessage(err)}`);
   }
 
   let rawJson: unknown;
@@ -155,10 +152,7 @@ async function tryLoadSerializedWorkspaceArtifact(
 
   const parsed = parseSerializedWorkspaceArtifact(rawJson);
   if (!parsed.ok) {
-    throw new CuratedLoadError(
-      'archive_decode',
-      `serialized artifact schema violation: ${parsed.reason}`
-    );
+    throw new CuratedLoadError('archive_decode', `serialized artifact schema violation: ${parsed.reason}`);
   }
 
   return parsed.artifact;
@@ -260,21 +254,19 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
     let serializedWorkspace: CuratedSerializedWorkspaceArtifact | undefined;
     if (manifest.artifacts?.serializedWorkspace) {
       try {
-        serializedWorkspace = await tryLoadSerializedWorkspaceArtifact(
-          manifest,
-          mirrorBase,
-          modelId,
-          signal
-        );
+        serializedWorkspace = await tryLoadSerializedWorkspaceArtifact(manifest, mirrorBase, modelId, signal);
       } catch (err) {
-        console.warn(
-          '[curated-loader] serialized workspace artifact unavailable; falling back to source parse',
-          err
-        );
-        useOutputStore.getState().addLine(
-          fmtLine('curated', 'serialized workspace unavailable, falling back to source parse', err instanceof Error ? err.message : String(err)),
-          'warn'
-        );
+        console.warn('[curated-loader] serialized workspace artifact unavailable; falling back to source parse', err);
+        useOutputStore
+          .getState()
+          .addLine(
+            fmtLine(
+              'curated',
+              'serialized workspace unavailable, falling back to source parse',
+              err instanceof Error ? err.message : String(err)
+            ),
+            'warn'
+          );
       }
     }
 
@@ -313,10 +305,7 @@ export async function loadCuratedModel(input: LoadCuratedInput): Promise<LoadCur
  *                      an "update prompt failed" toast so the user knows
  *                      the cache may now be stale relative to upstream
  */
-export type ReadMirrorVersionResult =
-  | { kind: 'ok'; version: string }
-  | { kind: 'unreachable' }
-  | { kind: 'malformed' };
+export type ReadMirrorVersionResult = { kind: 'ok'; version: string } | { kind: 'unreachable' } | { kind: 'malformed' };
 
 export async function readMirrorVersion(
   mirrorBase: string,

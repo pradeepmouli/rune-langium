@@ -61,9 +61,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
 }
 
 function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Panel>) {
-  return (
-    <TabsPrimitive.Panel data-slot="tabs-content" className={cn('mt-2', className)} {...props} />
-  );
+  return <TabsPrimitive.Panel data-slot="tabs-content" className={cn('mt-2', className)} {...props} />;
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };

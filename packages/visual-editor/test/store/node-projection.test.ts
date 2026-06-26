@@ -63,8 +63,12 @@ describe('node-projection content-fingerprint projection (V2)', () => {
     // longer occur — the exclusion set is a tolerance guard against a stale
     // producer re-introducing view-state churn into the fingerprint.
     const stale = {
-      $type: 'Data', name: 'Foo', attributes: [],
-      position: { x: 1, y: 2 }, errors: [], hasExternalRefs: false
+      $type: 'Data',
+      name: 'Foo',
+      attributes: [],
+      position: { x: 1, y: 2 },
+      errors: [],
+      hasExternalRefs: false
     } as Record<string, unknown>;
     const out = astRelevantProjection(stale as never) as Record<string, unknown>;
     expect('position' in out).toBe(false);
@@ -77,11 +81,23 @@ describe('node-projection content-fingerprint projection (V2)', () => {
 describe('node-projection member accessors (V4)', () => {
   it('maps each kind to its member field', () => {
     expect(getMemberArray({ $type: 'Data', attributes: [1] } as never)).toEqual({ field: 'attributes', members: [1] });
-    expect(getMemberArray({ $type: 'Annotation', attributes: [5] } as never)).toEqual({ field: 'attributes', members: [5] });
+    expect(getMemberArray({ $type: 'Annotation', attributes: [5] } as never)).toEqual({
+      field: 'attributes',
+      members: [5]
+    });
     expect(getMemberArray({ $type: 'Choice', attributes: [] } as never)).toEqual({ field: 'attributes', members: [] });
-    expect(getMemberArray({ $type: 'RosettaEnumeration', enumValues: [2] } as never)).toEqual({ field: 'enumValues', members: [2] });
-    expect(getMemberArray({ $type: 'RosettaFunction', inputs: [3] } as never)).toEqual({ field: 'inputs', members: [3] });
-    expect(getMemberArray({ $type: 'RosettaRecordType', features: [4] } as never)).toEqual({ field: 'features', members: [4] });
+    expect(getMemberArray({ $type: 'RosettaEnumeration', enumValues: [2] } as never)).toEqual({
+      field: 'enumValues',
+      members: [2]
+    });
+    expect(getMemberArray({ $type: 'RosettaFunction', inputs: [3] } as never)).toEqual({
+      field: 'inputs',
+      members: [3]
+    });
+    expect(getMemberArray({ $type: 'RosettaRecordType', features: [4] } as never)).toEqual({
+      field: 'features',
+      members: [4]
+    });
   });
   it('returns null for a kind with no member container', () => {
     expect(getMemberArray({ $type: 'RosettaTypeAlias' } as never)).toBeNull();

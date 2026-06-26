@@ -137,7 +137,8 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   it('ChoiceForm renders without throwing with minimal props', () => {
     expect(() =>
       render(
-        <ChoiceForm meta={testMeta('test')}
+        <ChoiceForm
+          meta={testMeta('test')}
           nodeId="node-choice"
           data={makeChoiceNode('PaymentMethod')}
           availableTypes={AVAILABLE_TYPES}
@@ -150,7 +151,8 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   it('DataTypeForm renders without throwing with minimal props', () => {
     expect(() =>
       render(
-        <DataTypeForm meta={testMeta('test')}
+        <DataTypeForm
+          meta={testMeta('test')}
           nodeId="node-data"
           data={makeDataNode('Party')}
           availableTypes={AVAILABLE_TYPES}
@@ -163,7 +165,8 @@ describe('Non-migrated forms regression guard (T030, FR-017)', () => {
   it('FunctionForm renders without throwing with minimal props', () => {
     expect(() =>
       render(
-        <FunctionForm meta={testMeta('test')}
+        <FunctionForm
+          meta={testMeta('test')}
           nodeId="node-func"
           data={makeFuncNode('Calculate')}
           availableTypes={AVAILABLE_TYPES}

@@ -108,11 +108,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     // Letting them reach the preview worker regresses into Langium's
     // "no services for the extension ''" dead-end.
     const allFiles = files
-      .filter(
-        (f) =>
-          !f.path.endsWith(BUNDLE_MARKER_SUFFIX) &&
-          (!f.refOnly || Boolean(f.serializedModelJson))
-      )
+      .filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && (!f.refOnly || Boolean(f.serializedModelJson)))
       .map((f) => ({
         uri: pathToUri(f.path),
         content: f.content,
@@ -219,11 +215,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
 
     function handleCodegenMessage(e: MessageEvent<CodegenWorkerMessage>) {
       const msg = e.data;
-      if (
-        msg.type !== 'codegen:result' &&
-        msg.type !== 'codegen:outdated' &&
-        msg.type !== 'codegen:error'
-      ) {
+      if (msg.type !== 'codegen:result' && msg.type !== 'codegen:outdated' && msg.type !== 'codegen:error') {
         return; // not a codegen response — handled by preview listener above
       }
       if (msg.requestId !== codegenCurrentRequestIdRef.current) {
@@ -233,7 +225,9 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       switch (msg.type) {
         case 'codegen:result':
           store.receiveCodePreviewResult({ target: msg.target, files: msg.files });
-          useActivityStore.getState().addActivity('gen', true, `${msg.target} · ${msg.files.length} file${msg.files.length === 1 ? '' : 's'}`);
+          useActivityStore
+            .getState()
+            .addActivity('gen', true, `${msg.target} · ${msg.files.length} file${msg.files.length === 1 ? '' : 's'}`);
           break;
         case 'codegen:outdated':
           store.markCodePreviewStale({ target: msg.target, message: msg.message });
@@ -254,7 +248,11 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         message: 'Code preview worker crashed — reload Studio.'
       });
       useOutputStore.getState().addLine(fmtLine('codegen', 'worker crashed', event.message), 'error');
-      showToast({ title: 'Code preview worker crashed', description: 'Reload Studio to restore code preview.', variant: 'destructive' });
+      showToast({
+        title: 'Code preview worker crashed',
+        description: 'Reload Studio to restore code preview.',
+        variant: 'destructive'
+      });
     }
 
     codegenWorker.addEventListener('message', handleCodegenMessage as EventListener);
@@ -281,8 +279,17 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         target: codegenPreviewTarget,
         message: 'Code preview worker is unavailable.'
       });
-      useOutputStore.getState().addLine(fmtLine('codegen', 'generation request failed', err instanceof Error ? err.message : String(err)), 'error');
-      showToast({ title: 'Code preview unavailable', description: err instanceof Error ? err.message : 'Could not reach the code preview worker.', variant: 'destructive' });
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('codegen', 'generation request failed', err instanceof Error ? err.message : String(err)),
+          'error'
+        );
+      showToast({
+        title: 'Code preview unavailable',
+        description: err instanceof Error ? err.message : 'Could not reach the code preview worker.',
+        variant: 'destructive'
+      });
     }
   }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
 

@@ -12,26 +12,15 @@ import { StatusBar } from '../../src/shell/StatusBar.js';
 
 describe('StatusBar (T073)', () => {
   it('renders workspace name + LSP state', () => {
-    render(
-      <StatusBar
-        workspaceName="My Project"
-        lspState="connected"
-        telemetryEnabled
-        onToggleTelemetry={() => {}}
-      />
-    );
+    render(<StatusBar workspaceName="My Project" lspState="connected" telemetryEnabled onToggleTelemetry={() => {}} />);
     expect(screen.getByTestId('status-workspace').textContent).toBe('⟢ My Project');
     expect(screen.getByTestId('status-lsp').textContent).toContain('connected');
   });
 
   it('renders git sync state only when supplied', () => {
-    const { rerender } = render(
-      <StatusBar workspaceName="W" telemetryEnabled onToggleTelemetry={() => {}} />
-    );
+    const { rerender } = render(<StatusBar workspaceName="W" telemetryEnabled onToggleTelemetry={() => {}} />);
     expect(screen.queryByTestId('status-git')).not.toBeInTheDocument();
-    rerender(
-      <StatusBar workspaceName="W" gitState="ahead" telemetryEnabled onToggleTelemetry={() => {}} />
-    );
+    rerender(<StatusBar workspaceName="W" gitState="ahead" telemetryEnabled onToggleTelemetry={() => {}} />);
     expect(screen.getByTestId('status-git').textContent).toMatch(/unpushed/);
   });
 

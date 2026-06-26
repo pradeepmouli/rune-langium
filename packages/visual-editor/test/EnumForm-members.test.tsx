@@ -75,7 +75,15 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
 
   it('fires addEnumValue with correct args when add-value button is clicked', () => {
     const actions = makeActions();
-    render(<EnumForm meta={testMeta('test')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <EnumForm
+        meta={testMeta('test')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     // Post-icon-button migration: add-value is an icon-only <Button>
     // with aria-label="Add value".
@@ -87,7 +95,15 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
 
   it('fires removeEnumValue with the correct value name when a remove button is clicked', () => {
     const actions = makeActions();
-    render(<EnumForm meta={testMeta('test')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <EnumForm
+        meta={testMeta('test')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     const removeBtns = screen.getAllByLabelText(/remove value/i);
     fireEvent.click(removeBtns[0]!);
@@ -97,7 +113,8 @@ describe('EnumForm — list-style member editing (T031, FR-015)', () => {
 
   it('renders an empty-state message when members list is empty', () => {
     render(
-      <EnumForm meta={testMeta('test')}
+      <EnumForm
+        meta={testMeta('test')}
         nodeId="node-1"
         data={makeEnumData({ enumValues: [] })}
         availableTypes={AVAILABLE_TYPES}

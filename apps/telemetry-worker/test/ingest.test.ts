@@ -19,11 +19,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import worker, {
-  TelemetryAggregator,
-  _resetRateLimitForTesting,
-  _resetSaltCacheForTesting
-} from '../src/index.js';
+import worker, { TelemetryAggregator, _resetRateLimitForTesting, _resetSaltCacheForTesting } from '../src/index.js';
 import type { Env } from '../src/index.js';
 
 // ---------- DO fakes ----------
@@ -127,11 +123,7 @@ function makeEnv(overrides: Partial<Env> = {}): { env: Env; do: DONamespaceFake 
   return { env, do: doNs };
 }
 
-function makeReq(
-  body: unknown,
-  ip = '203.0.113.5',
-  origin: string | null = 'https://www.daikonic.dev'
-): Request {
+function makeReq(body: unknown, ip = '203.0.113.5', origin: string | null = 'https://www.daikonic.dev'): Request {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'cf-connecting-ip': ip
@@ -377,10 +369,7 @@ describe('telemetry ingest contract', () => {
     for (const event of cases) {
       it(`${event} reaches DO id ${event}:<UTC-day> with count:null`, async () => {
         const { env, do: doNs } = makeEnv();
-        const res = await worker.fetch(
-          makeReq({ event, studio_version: '0.1.0', ua_class: 'smoke' }),
-          env
-        );
+        const res = await worker.fetch(makeReq({ event, studio_version: '0.1.0', ua_class: 'smoke' }), env);
         expect(res.status).toBe(204);
         const entry = doNs.instances.get(`${event}:2026-04-25`);
         expect(entry).toBeDefined();

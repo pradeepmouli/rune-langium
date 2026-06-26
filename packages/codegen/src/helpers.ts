@@ -67,4 +67,3 @@ export const runeCount = (arr: unknown[] | undefined | null): number => arr?.len
  */
 export const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
-

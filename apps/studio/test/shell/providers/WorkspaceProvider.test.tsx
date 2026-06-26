@@ -8,16 +8,30 @@ import { useWorkspace } from '../../../src/shell/providers/workspace-context.js'
 import { useWorkspaceActions } from '../../../src/shell/perspectives/workspace-actions-context.js';
 
 const noopActions = {
-  files: [], onFilesLoaded: () => {}, createGitBackedWorkspace: () => {},
-  onGitHubWorkspaceCreated: () => {}, onOpenWorkspace: () => {},
-  onCreateWorkspace: () => {}, onDeleteWorkspace: () => {}
+  files: [],
+  onFilesLoaded: () => {},
+  createGitBackedWorkspace: () => {},
+  onGitHubWorkspaceCreated: () => {},
+  onOpenWorkspace: () => {},
+  onCreateWorkspace: () => {},
+  onDeleteWorkspace: () => {}
 };
 function stateFor(id: string) {
-  return { workspaceId: id, workspaceKind: 'browser-only' as const, workspaceName: id, fileCount: 0,
-    files: [], models: [], parsedModels: [], deferredExports: [] };
+  return {
+    workspaceId: id,
+    workspaceKind: 'browser-only' as const,
+    workspaceName: id,
+    fileCount: 0,
+    files: [],
+    models: [],
+    parsedModels: [],
+    deferredExports: []
+  };
 }
 
-function StateProbe() { return <span data-testid="id">{useWorkspace().workspaceId}</span>; }
+function StateProbe() {
+  return <span data-testid="id">{useWorkspace().workspaceId}</span>;
+}
 
 describe('WorkspaceProvider', () => {
   it('publishes state + actions to consumers', () => {
@@ -35,7 +49,9 @@ describe('WorkspaceProvider', () => {
       return (
         <>
           <button onClick={() => setId('ws-B')}>switch</button>
-          <WorkspaceProvider state={stateFor(id)} actions={noopActions}><StateProbe /></WorkspaceProvider>
+          <WorkspaceProvider state={stateFor(id)} actions={noopActions}>
+            <StateProbe />
+          </WorkspaceProvider>
         </>
       );
     }
@@ -48,8 +64,16 @@ describe('WorkspaceProvider', () => {
   it('split contexts isolate re-renders: memoized action-only consumers skip state-only changes', () => {
     let actionRenders = 0;
     let stateRenders = 0;
-    const ActionsOnly = memo(function ActionsOnly() { useWorkspaceActions(); actionRenders += 1; return null; });
-    const StateReader = memo(function StateReader() { useWorkspace(); stateRenders += 1; return null; });
+    const ActionsOnly = memo(function ActionsOnly() {
+      useWorkspaceActions();
+      actionRenders += 1;
+      return null;
+    });
+    const StateReader = memo(function StateReader() {
+      useWorkspace();
+      stateRenders += 1;
+      return null;
+    });
 
     function Host() {
       const [id, setId] = useState('ws-A');

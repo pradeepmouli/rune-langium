@@ -21,13 +21,9 @@ const REACT_DEVTOOLS_PATH =
   `${process.env.HOME}/Library/Application Support/Google/Chrome/Default/Extensions/` +
   `fmkadmapgofadopljbjfkapdkoienihi/7.0.1_0`;
 
-const url = process.argv.includes('--url')
-  ? process.argv[process.argv.indexOf('--url') + 1]
-  : 'http://localhost:5173';
+const url = process.argv.includes('--url') ? process.argv[process.argv.indexOf('--url') + 1] : 'http://localhost:5173';
 
-const outFile = process.argv.includes('--out')
-  ? process.argv[process.argv.indexOf('--out') + 1]
-  : 'profile.json';
+const outFile = process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : 'profile.json';
 
 const userDataDir = join(tmpdir(), 'playwright-profile-studio');
 
@@ -40,11 +36,11 @@ const context = await chromium.launchPersistentContext(userDataDir, {
   args: [
     `--disable-extensions-except=${REACT_DEVTOOLS_PATH}`,
     `--load-extension=${REACT_DEVTOOLS_PATH}`,
-    '--no-sandbox',
-  ],
+    '--no-sandbox'
+  ]
 });
 
-const page = context.pages()[0] ?? await context.newPage();
+const page = context.pages()[0] ?? (await context.newPage());
 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
 
 // Give React time to mount
@@ -61,7 +57,9 @@ try {
   await cdmBtn.waitFor({ timeout: 10000 });
   await cdmBtn.click();
   console.log('  Clicked CDM button');
-} catch { console.log('  (CDM button not found, may already be loaded)'); }
+} catch {
+  console.log('  (CDM button not found, may already be loaded)');
+}
 
 // CDM downloads ~10 MB from GitHub and extracts — can take 30–90s first time
 console.log('  Waiting for graph (CDM download + OPFS write can take up to 90s)...');
@@ -91,7 +89,9 @@ for (let i = 0; i < Math.min(8, nodes.length); i++) {
   try {
     await nodes[i].click({ timeout: 2000 });
     await page.waitForTimeout(400);
-  } catch { /* skip inaccessible nodes */ }
+  } catch {
+    /* skip inaccessible nodes */
+  }
 }
 
 // 2. Switch tabs (Code / Form / Code)
@@ -99,13 +99,17 @@ for (const label of ['Code', 'Form', 'Code', 'Form']) {
   try {
     await page.click(`[role="tab"]:has-text("${label}")`, { timeout: 2000 });
     await page.waitForTimeout(500);
-  } catch { /* tab may not exist */ }
+  } catch {
+    /* tab may not exist */
+  }
 }
 
 // 3. Search / filter in editor if available
 try {
   await page.keyboard.press('Escape');
-} catch { /* ignore */ }
+} catch {
+  /* ignore */
+}
 
 await page.waitForTimeout(800);
 

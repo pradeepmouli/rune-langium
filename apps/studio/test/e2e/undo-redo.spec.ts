@@ -65,10 +65,7 @@ test.describe('Undo / Redo', () => {
     // Drag the node
     await widgetNode.hover();
     await page.mouse.down();
-    await page.mouse.move(
-      initialBox!.x + initialBox!.width / 2 + 100,
-      initialBox!.y + initialBox!.height / 2 + 100
-    );
+    await page.mouse.move(initialBox!.x + initialBox!.width / 2 + 100, initialBox!.y + initialBox!.height / 2 + 100);
     await page.mouse.up();
     await page.waitForTimeout(500);
 
@@ -87,10 +84,7 @@ test.describe('Undo / Redo', () => {
     // Drag node
     await widgetNode.hover();
     await page.mouse.down();
-    await page.mouse.move(
-      initialBox!.x + initialBox!.width / 2 + 150,
-      initialBox!.y + initialBox!.height / 2 + 150
-    );
+    await page.mouse.move(initialBox!.x + initialBox!.width / 2 + 150, initialBox!.y + initialBox!.height / 2 + 150);
     await page.mouse.up();
     await page.waitForTimeout(500);
 

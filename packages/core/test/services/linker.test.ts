@@ -212,9 +212,7 @@ describe('RuneDslLinker — deferred corpus materialization (ADR 007)', () => {
     langiumDocs.addDocument(userDoc);
 
     // No corpus stub in index — cross-ref cannot resolve, but must not throw
-    await expect(
-      builder.build([userDoc], { validation: false, eagerLinking: true })
-    ).resolves.not.toThrow();
+    await expect(builder.build([userDoc], { validation: false, eagerLinking: true })).resolves.not.toThrow();
 
     const trade = (userDoc.parseResult.value as RosettaModel).elements[0] as Data;
     // Unresolvable cross-ref: ref is undefined

@@ -13,11 +13,7 @@
 
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger
-} from '@rune-langium/design-system/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@rune-langium/design-system/ui/collapsible';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import type { InheritedGroup } from '../../hooks/useInheritedMembers.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
@@ -48,9 +44,7 @@ function InheritedGroupCollapsible({ group }: { group: InheritedGroup }) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="flex items-center gap-1.5 w-full px-2 py-1 text-xs rounded hover:bg-muted/50 transition-colors">
-        <ChevronRight
-          className={`size-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
+        <ChevronRight className={`size-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
         <span className="font-medium text-muted-foreground">from {group.ancestorName}</span>
         <Badge variant="outline" className="ml-auto text-3xs h-4 px-1">
           {group.members.length}
@@ -64,10 +58,7 @@ function InheritedGroupCollapsible({ group }: { group: InheritedGroup }) {
             const typeName = getTypeRefText(member.typeCall as any);
             const cardinality = formatCardinality(member.card as any);
             return (
-              <div
-                key={name}
-                className="flex items-center gap-2 text-xs text-muted-foreground py-0.5 px-1"
-              >
+              <div key={name} className="flex items-center gap-2 text-xs text-muted-foreground py-0.5 px-1">
                 <span className="font-mono">{name}</span>
                 {typeName && <span className="text-muted-foreground/60">{typeName}</span>}
                 {cardinality && <span className="text-muted-foreground/40">{cardinality}</span>}

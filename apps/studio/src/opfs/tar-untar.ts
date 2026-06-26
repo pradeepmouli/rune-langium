@@ -53,11 +53,7 @@ interface UstarHeader {
   typeflag: string;
 }
 
-export async function extractTarGz(
-  gzBytes: Uint8Array,
-  fs: OpfsFs,
-  options: ExtractOptions = {}
-): Promise<void> {
+export async function extractTarGz(gzBytes: Uint8Array, fs: OpfsFs, options: ExtractOptions = {}): Promise<void> {
   // Step 1: gunzip. pako throws on bad headers; we let that propagate so
   // the caller can surface 'archive_decode' per FR-002.
   const tar = inflate(gzBytes);

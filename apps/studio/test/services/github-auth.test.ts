@@ -50,9 +50,7 @@ describe('initDeviceFlow (T053)', () => {
   });
 
   it('surfaces github_unavailable on a 503', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'github_unavailable' }), { status: 503 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'github_unavailable' }), { status: 503 }));
     const result = await initDeviceFlow(AUTH_BASE);
     expect(result.kind).toBe('error');
   });
@@ -71,9 +69,7 @@ describe('pollDeviceFlow (T053)', () => {
   });
 
   it('returns pending on 202', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: 'authorization_pending' }), { status: 202 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'authorization_pending' }), { status: 202 }));
     const result = await pollDeviceFlow(AUTH_BASE, 'devcode');
     expect(result.kind).toBe('pending');
   });

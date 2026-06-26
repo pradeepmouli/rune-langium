@@ -82,10 +82,7 @@ test.describe('Curated load cancel-mid-flight (T019b, EC-2)', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Wait for the curated card and click it.
-    const cdmButton = page
-      .getByTestId('model-loader')
-      .getByRole('button', { name: /CDM/i })
-      .first();
+    const cdmButton = page.getByTestId('model-loader').getByRole('button', { name: /CDM/i }).first();
     await expect(cdmButton).toBeVisible({ timeout: 10_000 });
     await cdmButton.click();
 
@@ -117,12 +114,12 @@ test.describe('Curated load cancel-mid-flight (T019b, EC-2)', () => {
     await expect(loadedBadge).not.toBeVisible({ timeout: 1_000 });
 
     // (c) The CDM card is back to its pre-load state (no "✓" prefix).
-    await expect(
-      page.getByTestId('model-loader').getByRole('button', { name: /✓ CDM/ })
-    ).not.toBeVisible({ timeout: 1_000 });
-    await expect(
-      page.getByTestId('model-loader').getByRole('button', { name: /^CDM/ })
-    ).toBeVisible({ timeout: 1_000 });
+    await expect(page.getByTestId('model-loader').getByRole('button', { name: /✓ CDM/ })).not.toBeVisible({
+      timeout: 1_000
+    });
+    await expect(page.getByTestId('model-loader').getByRole('button', { name: /^CDM/ })).toBeVisible({
+      timeout: 1_000
+    });
 
     // (d) Probe IndexedDB recents — cancelled curated loads must not leave
     // a workspace record behind. The store/persistence layer uses
@@ -160,9 +157,7 @@ test.describe('Curated load cancel-mid-flight (T019b, EC-2)', () => {
         return [];
       }
     });
-    const containsCdm = recents.some(
-      (entry) => entry.includes('"cdm"') || entry.toLowerCase().includes('cdm')
-    );
+    const containsCdm = recents.some((entry) => entry.includes('"cdm"') || entry.toLowerCase().includes('cdm'));
     expect(containsCdm, 'no recents entry referencing the cancelled CDM workspace').toBe(false);
   });
 });

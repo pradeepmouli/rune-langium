@@ -120,17 +120,13 @@ describe('BrowserCodegenProxy — hosted vs local endpoint branching', () => {
 
       const proxy = new BrowserCodegenProxy('/rune-studio');
 
-      await expect(proxy.listLanguages()).rejects.toThrow(
-        /language discovery failed \(http 503\)/i
-      );
+      await expect(proxy.listLanguages()).rejects.toThrow(/language discovery failed \(http 503\)/i);
     });
   });
 
   describe('isAvailable()', () => {
     it('uses /api/generate/health on hosted', async () => {
-      fetchSpy.mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: 'ok', languages: [] }), { status: 200 })
-      );
+      fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', languages: [] }), { status: 200 }));
 
       const proxy = new BrowserCodegenProxy('/rune-studio');
       const ok = await proxy.isAvailable();
@@ -194,9 +190,7 @@ describe('BrowserCodegenProxy — DEFAULT_CODEGEN_URL composition (P1 #220)', ()
   });
 
   it('default-browser fallback composes to /rune-studio/api/generate/health (availability probe)', async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: 'ok', languages: [] }), { status: 200 })
-    );
+    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'ok', languages: [] }), { status: 200 }));
     const proxy = new BrowserCodegenProxy();
     await proxy.isAvailable();
     expect(fetchSpy.mock.calls[0]![0]).toBe('/rune-studio/api/generate/health');
@@ -215,9 +209,7 @@ describe('BrowserCodegenProxy.isHostedService()', () => {
   });
 
   it('returns true for non-localhost absolute URLs', () => {
-    expect(new BrowserCodegenProxy('https://www.daikonic.dev/rune-studio').isHostedService()).toBe(
-      true
-    );
+    expect(new BrowserCodegenProxy('https://www.daikonic.dev/rune-studio').isHostedService()).toBe(true);
   });
 
   it('returns false for localhost (local dev)', () => {
@@ -241,9 +233,7 @@ describe('preview worker message helpers', () => {
   });
 
   it('serializes preview:generate with fully-qualified target identity', () => {
-    expect(
-      createPreviewGenerateMessage('test.preview.Trade', 'preview:test.preview.Trade:2')
-    ).toEqual({
+    expect(createPreviewGenerateMessage('test.preview.Trade', 'preview:test.preview.Trade:2')).toEqual({
       type: 'preview:generate',
       targetId: 'test.preview.Trade',
       requestId: 'preview:test.preview.Trade:2'

@@ -152,9 +152,7 @@ test.describe('Export Functionality', () => {
     await expect(dialog).not.toBeVisible();
   });
 
-  test('Export Code dialog should show service unavailable warning when no service', async ({
-    page
-  }) => {
+  test('Export Code dialog should show service unavailable warning when no service', async ({ page }) => {
     const exportCodeBtn = page.locator('button', { hasText: 'Export Code' });
     await exportCodeBtn.click();
     await page.waitForTimeout(2000);

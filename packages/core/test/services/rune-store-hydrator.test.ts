@@ -8,14 +8,14 @@ import { RuneStoreHydrator } from '../../src/services/rune-store-hydrator.js';
 const minimalServices = {
   Grammar: {},
   parser: { Lexer: {} },
-  references: { Linker: {} },
+  references: { Linker: {} }
 } as any;
 
 function makeDataInNamespace(namespace: string): Data {
   const model = {
     $type: 'RosettaModel',
     name: namespace,
-    $container: undefined,
+    $container: undefined
   } as unknown as RosettaModel;
 
   return {
@@ -26,7 +26,7 @@ function makeDataInNamespace(namespace: string): Data {
     $containerProperty: 'elements',
     $containerIndex: 0,
     $cstNode: undefined,
-    $document: undefined,
+    $document: undefined
   } as unknown as Data;
 }
 
@@ -57,7 +57,7 @@ describe('RuneStoreHydrator.dehydrateNode — Dehydrated<T> runtime shape', () =
     (data as unknown as Record<string, unknown>).superType = {
       $refText: 'Parent',
       ref: { $type: 'Data', name: 'Parent' },
-      $refNode: {},
+      $refNode: {}
     };
     const dehydrated = hydrator.dehydrateNode(data) as unknown as Record<string, unknown>;
     expect(dehydrated.superType).toEqual({ $refText: 'Parent' });
@@ -77,7 +77,7 @@ describe('RuneStoreHydrator.$namespace stamping', () => {
     const data = {
       $type: 'Data',
       attributes: [],
-      $container: undefined,
+      $container: undefined
     } as unknown as Data;
     const dehydrated = hydrator.dehydrateNode(data);
     expect(dehydrated.$namespace).toBeUndefined();

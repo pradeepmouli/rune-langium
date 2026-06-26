@@ -33,15 +33,9 @@ export function ActivityPanel(): React.ReactElement {
           Clear
         </button>
       </div>
-      <div
-        ref={scrollRef}
-        aria-live="polite"
-        className="studio-scroll flex-1 overflow-auto px-1 py-1"
-      >
+      <div ref={scrollRef} aria-live="polite" className="studio-scroll flex-1 overflow-auto px-1 py-1">
         {entries.length === 0 ? (
-          <p className="px-2 py-3 font-mono text-2xs text-muted-foreground/60">
-            No activity yet.
-          </p>
+          <p className="px-2 py-3 font-mono text-2xs text-muted-foreground/60">No activity yet.</p>
         ) : (
           <div className="flex flex-col gap-0.5 font-mono text-xs">
             {entries.map((entry) => (
@@ -54,16 +48,12 @@ export function ActivityPanel(): React.ReactElement {
                 <span
                   className={cn(
                     'rounded-full px-1.5 py-px text-center text-3xs font-semibold uppercase tracking-[0.04em]',
-                    entry.ok
-                      ? 'bg-teal-400/10 text-teal-400'
-                      : 'bg-destructive/15 text-destructive'
+                    entry.ok ? 'bg-teal-400/10 text-teal-400' : 'bg-destructive/15 text-destructive'
                   )}
                 >
                   {entry.tag}
                 </span>
-                <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                  {entry.msg}
-                </span>
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap">{entry.msg}</span>
               </div>
             ))}
           </div>

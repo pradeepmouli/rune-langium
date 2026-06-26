@@ -44,7 +44,9 @@ describe('deserializeRuneModel', () => {
 describe('hydrateModelDocument', () => {
   it("register:'none' returns model+document without adding", () => {
     const { services, added } = makeFakeServices();
-    const { model, document } = hydrateModelDocument(services as never, URI.parse('mem:///a'), '{}', { register: 'none' });
+    const { model, document } = hydrateModelDocument(services as never, URI.parse('mem:///a'), '{}', {
+      register: 'none'
+    });
     expect(model).toBeDefined();
     expect(document).toBeDefined();
     expect(added).toHaveLength(0);

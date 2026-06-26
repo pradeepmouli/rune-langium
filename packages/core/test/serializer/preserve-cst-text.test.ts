@@ -9,9 +9,7 @@ describe('preserveCstText', () => {
       elements: [
         {
           $type: 'RosettaFunction',
-          conditions: [
-            { $cstNode: { text: 'cond src' }, expression: { $cstNode: { text: 'expr src' } } }
-          ],
+          conditions: [{ $cstNode: { text: 'cond src' }, expression: { $cstNode: { text: 'expr src' } } }],
           shortcuts: [{ $cstNode: { text: 'sc' } }],
           operations: [],
           postConditions: []

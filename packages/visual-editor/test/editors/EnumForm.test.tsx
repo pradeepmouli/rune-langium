@@ -88,7 +88,15 @@ describe('EnumForm', () => {
   it('triggers addEnumValue when add-value button is clicked', () => {
     const actions = makeActions();
 
-    render(<EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     // Post-icon-button migration: add-value is an icon-only <Button>
     // with aria-label="Add value".
@@ -101,7 +109,15 @@ describe('EnumForm', () => {
   it('triggers removeEnumValue when remove button is clicked', () => {
     const actions = makeActions();
 
-    render(<EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     const removeBtns = screen.getAllByLabelText(/remove value/i);
     fireEvent.click(removeBtns[0]!);
@@ -112,7 +128,15 @@ describe('EnumForm', () => {
   it('triggers renameType after debounce on name change', () => {
     const actions = makeActions();
 
-    render(<EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     const nameInput = screen.getByLabelText(/type name/i);
     fireEvent.change(nameInput, { target: { value: 'StatusEnum' } });
@@ -166,7 +190,15 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
   it('uses the canonical RosettaEnumerationSchema (R11) for useZodForm', async () => {
     const { RosettaEnumerationSchema } = await import('../../src/generated/zod-schemas.js');
 
-    render(<EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />);
+    render(
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
 
     expect(useZodFormSpy).toHaveBeenCalled();
     const firstCall = useZodFormSpy.mock.calls[0];
@@ -176,7 +208,13 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
   // ET1 — leaf field labels + tab order
   it('renders leaf fields (name, value rows with name + display) in the documented tab order', () => {
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={makeActions()} />
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
     );
 
     // Name must be the first text input in the form-header slot.
@@ -206,7 +244,15 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
     const renameType = vi.fn();
     const actions = { ...makeActions(), renameType };
 
-    render(<EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    render(
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     const nameInput = screen.getByLabelText(/enum type name/i);
 
@@ -240,14 +286,28 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
     });
 
     const { container, rerender } = render(
-      <EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={nodeA} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={nodeA}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     const initialName = container.querySelector('[data-slot="type-name-input"]') as HTMLInputElement;
     expect(initialName.value).toBe('CurrencyEnum');
 
     // Swap to nodeB (different reference identity)
-    rerender(<EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={nodeB} availableTypes={AVAILABLE_TYPES} actions={actions} />);
+    rerender(
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={nodeB}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
+    );
 
     act(() => {
       vi.advanceTimersByTime(500);
@@ -277,7 +337,13 @@ describe('EnumForm – US3/Phase 5b z2f migration contract (ET1–ET4)', () => {
     const actions = { ...makeActions(), addEnumValue, updateEnumValue };
 
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')} nodeId="node-1" data={makeEnumData()} availableTypes={AVAILABLE_TYPES} actions={actions} />
+      <EnumForm
+        meta={testMeta('test.enums')}
+        nodeId="node-1"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+      />
     );
 
     // Click "Add Value" — the addEnumValue action fires immediately with the
@@ -357,7 +423,8 @@ describe('EnumForm – merged inherited enum value list', () => {
     const childData = makeChildEnum();
     const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]);
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="node-1"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -373,7 +440,8 @@ describe('EnumForm – merged inherited enum value list', () => {
     const childData = makeChildEnum();
     const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]);
     render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="node-1"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -391,7 +459,8 @@ describe('EnumForm – merged inherited enum value list', () => {
       { $type: 'RosettaEnumValue', name: 'CHF', display: '' }
     ]);
     render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="node-1"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -411,7 +480,8 @@ describe('EnumForm – merged inherited enum value list', () => {
       { $type: 'RosettaEnumValue', name: 'GBP', display: 'Pound' }
     ]);
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="node-1"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -430,7 +500,8 @@ describe('EnumForm – merged inherited enum value list', () => {
     const childData = makeChildEnum();
     const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: 'Yen' }]);
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="node-1"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -447,7 +518,8 @@ describe('EnumForm – merged inherited enum value list', () => {
     const childData = makeChildEnum();
     const allNodes = makeEnumInheritanceNodes(childData, [{ $type: 'RosettaEnumValue', name: 'JPY', display: '' }]);
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="node-1"
         data={childData}
         availableTypes={AVAILABLE_TYPES}
@@ -503,7 +575,8 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
   it('rejects a Data drop on the Extends TypeReferenceField (does not call setEnumParent)', () => {
     const setEnumParent = vi.fn();
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="test.PaymentEnum"
         data={makeSimpleEnumData()}
         availableTypes={EXTENDS_TYPES}
@@ -533,7 +606,8 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
   it('accepts an Enum drop on the Extends TypeReferenceField (calls setEnumParent)', () => {
     const setEnumParent = vi.fn();
     const { container } = render(
-      <EnumForm meta={testMeta('test.enums')}
+      <EnumForm
+        meta={testMeta('test.enums')}
         nodeId="test.PaymentEnum"
         data={makeSimpleEnumData()}
         availableTypes={EXTENDS_TYPES}

@@ -61,9 +61,7 @@ describe('GitHubConnectDialog (T057)', () => {
         })
       );
     const onConnected = vi.fn();
-    render(
-      <GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />
-    );
+    render(<GitHubConnectDialog authBase={AUTH_BASE} onConnected={onConnected} onCancel={() => {}} />);
     await waitFor(() => expect(screen.getByText(/CODE-OK/)).toBeInTheDocument());
     // Click the manual "I've authorised — check now" button to skip the timer.
     fireEvent.click(screen.getByRole('button', { name: /check now|i.ve authorised/i }));

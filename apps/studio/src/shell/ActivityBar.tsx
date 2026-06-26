@@ -22,8 +22,7 @@ export function ActivityBar({ hasWorkspace, hasExploreContent }: Props): React.R
 
   const renderButton = (p: Perspective) => {
     const Icon = p.icon;
-    const disabled =
-      p.id === 'explore' ? !hasExploreContent : p.requiresWorkspace && !hasWorkspace;
+    const disabled = p.id === 'explore' ? !hasExploreContent : p.requiresWorkspace && !hasWorkspace;
     const isActive = active === p.id;
     return (
       <button

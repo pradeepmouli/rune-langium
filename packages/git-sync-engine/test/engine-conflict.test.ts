@@ -155,7 +155,10 @@ describe('GitSyncEngine conflict + offline', () => {
   it('empty conflictPaths still routes through handleConflict (policy is awaited)', async () => {
     let policyInvoked = false;
     const policy: ConflictPolicy = {
-      onConflict: async () => { policyInvoked = true; return { action: 'block' }; }
+      onConflict: async () => {
+        policyInvoked = true;
+        return { action: 'block' };
+      }
     };
     const o = ops({ merge: vi.fn().mockResolvedValue({ ok: false, conflictPaths: [] }) });
     const e = createGitSyncEngine({ ...base, conflictPolicy: policy, __opsForTest: o } as never);
@@ -175,13 +178,15 @@ describe('GitSyncEngine conflict + offline', () => {
       code: 'PushRejectedError'
     });
     const o = ops({
-      computeAheadBehind: vi.fn()
+      computeAheadBehind: vi
+        .fn()
         .mockResolvedValueOnce({ ahead: 1, behind: 0 }) // after initial fetch
         .mockResolvedValueOnce({ ahead: 1, behind: 1 }) // after retry fetch
         .mockResolvedValue({ ahead: 1, behind: 0 }),
-      push: vi.fn()
-        .mockRejectedValueOnce(nonFfErr)   // first push → non-ff
-        .mockRejectedValueOnce(nonFfErr),  // retry push → non-ff again
+      push: vi
+        .fn()
+        .mockRejectedValueOnce(nonFfErr) // first push → non-ff
+        .mockRejectedValueOnce(nonFfErr), // retry push → non-ff again
       merge: vi.fn().mockResolvedValue({ ok: true })
     });
     const e = createGitSyncEngine({ ...base, __opsForTest: o } as never);

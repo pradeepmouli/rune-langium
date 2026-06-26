@@ -27,14 +27,7 @@ const SIZE_CLASS: Record<HeadingLevel, string> = {
   4: 'text-lg font-medium'
 };
 
-export function Heading({
-  level,
-  as,
-  size,
-  className,
-  children,
-  ...rest
-}: HeadingProps): React.ReactElement {
+export function Heading({ level, as, size, className, children, ...rest }: HeadingProps): React.ReactElement {
   const Tag = (as ?? (`h${level}` as const)) as React.ElementType;
   const cls = SIZE_CLASS[size ?? level];
   return (

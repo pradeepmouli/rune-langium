@@ -12,12 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  buildSessionCookie,
-  computeIpHash,
-  signSessionJwt,
-  verifySessionJwt
-} from '../src/session.js';
+import { buildSessionCookie, computeIpHash, signSessionJwt, verifySessionJwt } from '../src/session.js';
 
 const SIGNING_KEY = 'test-signing-key-0123456789abcdef0123456789abcdef';
 const IP = '203.0.113.5';

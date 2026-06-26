@@ -46,7 +46,13 @@ import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
 import { formValuesProjection } from './identity-projection.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
-import type { AnyGraphNode, GraphNodeMeta, TypeOption, EditorFormActions, NavigateToNodeCallback } from '../../types.js';
+import type {
+  AnyGraphNode,
+  GraphNodeMeta,
+  TypeOption,
+  EditorFormActions,
+  NavigateToNodeCallback
+} from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Props

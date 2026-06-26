@@ -91,8 +91,7 @@ export async function runGenerate(options: GenerateCommandOptions): Promise<numb
   const available = await proxy.isAvailable();
   if (!available) {
     console.error(
-      'Error: Codegen CLI not available. Build it first:\n' +
-        '  pnpm codegen:build-deps && pnpm codegen:build'
+      'Error: Codegen CLI not available. Build it first:\n' + '  pnpm codegen:build-deps && pnpm codegen:build'
     );
     return 2;
   }

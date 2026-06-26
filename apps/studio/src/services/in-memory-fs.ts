@@ -80,10 +80,7 @@ interface MemStatResult {
 }
 
 export interface InMemFsPromises {
-  readFile(
-    path: string,
-    opts?: { encoding?: 'utf8' | 'utf-8' | null } | string
-  ): Promise<Uint8Array | string>;
+  readFile(path: string, opts?: { encoding?: 'utf8' | 'utf-8' | null } | string): Promise<Uint8Array | string>;
   writeFile(path: string, data: Uint8Array | string): Promise<void>;
   mkdir(path: string, opts?: { recursive?: boolean }): Promise<void>;
   rmdir(path: string): Promise<void>;

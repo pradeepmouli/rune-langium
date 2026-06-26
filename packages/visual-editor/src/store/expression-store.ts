@@ -93,11 +93,7 @@ export interface ExpressionBuilderState {
  * Deep-clone an ExpressionNode tree, replacing any node matching
  * the target ID with the replacement node.
  */
-export function replaceInTree(
-  tree: ExpressionNode,
-  targetId: string,
-  replacement: ExpressionNode
-): ExpressionNode {
+export function replaceInTree(tree: ExpressionNode, targetId: string, replacement: ExpressionNode): ExpressionNode {
   if (tree.id === targetId) return replacement;
   return mapChildren(tree, (child) => replaceInTree(child, targetId, replacement));
 }
@@ -105,11 +101,7 @@ export function replaceInTree(
 /**
  * Deep-clone an ExpressionNode tree, updating a literal node's value.
  */
-function updateLiteralInTree(
-  tree: ExpressionNode,
-  targetId: string,
-  value: unknown
-): ExpressionNode {
+function updateLiteralInTree(tree: ExpressionNode, targetId: string, value: unknown): ExpressionNode {
   if (tree.id === targetId) {
     return { ...tree, value } as ExpressionNode;
   }
@@ -134,9 +126,7 @@ function findNode(tree: ExpressionNode, nodeId: string): ExpressionNode | null {
  */
 function deepCloneWithNewIds(tree: ExpressionNode): ExpressionNode {
   const newId = crypto.randomUUID();
-  const cloned = mapChildren({ ...tree, id: newId } as ExpressionNode, (child) =>
-    deepCloneWithNewIds(child)
-  );
+  const cloned = mapChildren({ ...tree, id: newId } as ExpressionNode, (child) => deepCloneWithNewIds(child));
   return cloned;
 }
 
@@ -210,10 +200,7 @@ function getChildren(node: ExpressionNode): ExpressionNode[] {
  * Map all child expression nodes, returning a new node only if at least
  * one child changed (preserves object identity otherwise).
  */
-function mapChildren(
-  node: ExpressionNode,
-  fn: (child: ExpressionNode) => ExpressionNode
-): ExpressionNode {
+function mapChildren(node: ExpressionNode, fn: (child: ExpressionNode) => ExpressionNode): ExpressionNode {
   let changed = false;
   const orig = node as Record<string, unknown>;
   const n = {} as Record<string, unknown>;

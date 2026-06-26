@@ -95,10 +95,7 @@ export type ShellHandler = (action: ShellAction, ev: KeyboardEvent) => void;
  * Install a global keydown listener that dispatches matched shortcuts to
  * `handler`. Returns a teardown function — call from a useEffect cleanup.
  */
-export function installShellShortcuts(
-  target: Window | HTMLElement,
-  handler: ShellHandler
-): () => void {
+export function installShellShortcuts(target: Window | HTMLElement, handler: ShellHandler): () => void {
   const listener = (ev: Event) => {
     const ke = ev as KeyboardEvent;
     const action = matchAction(ke);

@@ -108,10 +108,7 @@ const POLYMORPHIC_TYPES = new Set([
  * Given a parent node and the child slot name, determine what type context
  * the child is expected to produce.
  */
-export function resolveTypeContext(
-  parentNode: ExpressionNode | null,
-  childSlot: string | null
-): TypeContext {
+export function resolveTypeContext(parentNode: ExpressionNode | null, childSlot: string | null): TypeContext {
   if (!parentNode || !childSlot) return 'any';
 
   const p = parentNode as Record<string, unknown>;

@@ -69,14 +69,18 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     return data.conditions?.length ?? 0;
   }
 
-  private static superTypeName(data: { superType?: { ref?: { name?: unknown } | null; $refText?: string } | null }): string {
+  private static superTypeName(data: {
+    superType?: { ref?: { name?: unknown } | null; $refText?: string } | null;
+  }): string {
     const refName = data.superType?.ref?.name;
     if (typeof refName === 'string') return refName;
     return data.superType?.$refText ?? '';
   }
 
   private static enumMemberNames(enumNode: { enumValues?: ReadonlyArray<{ name?: unknown }> }): string[] {
-    return (enumNode.enumValues ?? []).map((v) => (typeof v.name === 'string' ? v.name : '')).filter((s) => s.length > 0);
+    return (enumNode.enumValues ?? [])
+      .map((v) => (typeof v.name === 'string' ? v.name : ''))
+      .filter((s) => s.length > 0);
   }
 
   private static typeAliasBaseName(alias: {
@@ -189,7 +193,9 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
           typesSheet?.addRow({
             namespace,
             name,
-            superType: ExcelWholeModelEmitter.superTypeName(data as { superType?: { ref?: { name?: unknown } | null } | null }),
+            superType: ExcelWholeModelEmitter.superTypeName(
+              data as { superType?: { ref?: { name?: unknown } | null } | null }
+            ),
             attrCount: ExcelWholeModelEmitter.attributeCount(data as { attributes?: { length?: number } }),
             condCount: ExcelWholeModelEmitter.conditionCount(data as { conditions?: { length?: number } })
           });
@@ -218,7 +224,9 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
 
       if (enumsSheet) {
         for (const [name, enumNode] of walk.enumByName) {
-          const members = ExcelWholeModelEmitter.enumMemberNames(enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> });
+          const members = ExcelWholeModelEmitter.enumMemberNames(
+            enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> }
+          );
           enumsSheet.addRow({
             namespace,
             name,

@@ -77,10 +77,7 @@ function makeEnv(
   } as WorkerEnv;
 }
 
-function makeGenRequest(
-  headers: HeadersInit = {},
-  body = { language: 'typescript', files: [] as unknown[] }
-): Request {
+function makeGenRequest(headers: HeadersInit = {}, body = { language: 'typescript', files: [] as unknown[] }): Request {
   return new Request('https://www.daikonic.dev/rune-studio/api/generate', {
     method: 'POST',
     headers: {
@@ -105,10 +102,10 @@ describe('POST /api/generate — orchestration', () => {
 
   function mockTurnstileOk() {
     fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ success: true, hostname: 'www.daikonic.dev', action: 'export-code' }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
+      new Response(JSON.stringify({ success: true, hostname: 'www.daikonic.dev', action: 'export-code' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
     );
   }
 
@@ -217,8 +214,7 @@ describe('POST /api/generate — orchestration', () => {
 
   it('skips Turnstile when a valid session cookie is present', async () => {
     // Build a cookie by minting a real JWT with our helpers.
-    const { signSessionJwt, computeIpHash, buildSessionCookie, todayAsSalt } =
-      await import('../src/session.js');
+    const { signSessionJwt, computeIpHash, buildSessionCookie, todayAsSalt } = await import('../src/session.js');
     const ipHash = await computeIpHash('203.0.113.5', todayAsSalt());
     const jwt = await signSessionJwt({
       key: SIGNING_KEY,
@@ -234,15 +230,11 @@ describe('POST /api/generate — orchestration', () => {
     // No new Set-Cookie on a re-use (cookie still valid).
     expect(res.headers.get('Set-Cookie')).toBeFalsy();
     // Turnstile siteverify MUST NOT have been called.
-    expect(fetchSpy).not.toHaveBeenCalledWith(
-      expect.stringContaining('challenges.cloudflare.com'),
-      expect.anything()
-    );
+    expect(fetchSpy).not.toHaveBeenCalledWith(expect.stringContaining('challenges.cloudflare.com'), expect.anything());
   });
 
   it('re-challenges when the session cookie is expired', async () => {
-    const { signSessionJwt, computeIpHash, buildSessionCookie, todayAsSalt } =
-      await import('../src/session.js');
+    const { signSessionJwt, computeIpHash, buildSessionCookie, todayAsSalt } = await import('../src/session.js');
     const ipHash = await computeIpHash('203.0.113.5', todayAsSalt());
     // Issue a JWT that expires before the request arrives.
     const jwt = await signSessionJwt({

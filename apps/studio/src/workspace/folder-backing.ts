@@ -31,10 +31,7 @@ export async function isFolderReadOnly(workspaceId: string): Promise<boolean> {
   return rec.lastPermission !== 'granted';
 }
 
-export async function readFolderFile(
-  root: FileSystemDirectoryHandle,
-  relPath: string
-): Promise<string> {
+export async function readFolderFile(root: FileSystemDirectoryHandle, relPath: string): Promise<string> {
   const fh = await navigateToFile(root, relPath, false);
   const file = await fh.getFile();
   return file.text();
@@ -51,10 +48,7 @@ export async function writeFolderFile(
   await w.close();
 }
 
-export async function listFolderFiles(
-  root: FileSystemDirectoryHandle,
-  prefix = ''
-): Promise<string[]> {
+export async function listFolderFiles(root: FileSystemDirectoryHandle, prefix = ''): Promise<string[]> {
   const out: string[] = [];
   // `FileSystemDirectoryHandle.entries()` is declared in
   // lib.dom.asynciterable.d.ts as `[string, FileSystemHandle]`; the union is

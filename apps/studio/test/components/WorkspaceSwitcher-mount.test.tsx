@@ -15,11 +15,7 @@ import 'fake-indexeddb/auto';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 import { App } from '../../src/App.js';
-import {
-  saveWorkspace,
-  _resetForTests,
-  type WorkspaceRecord
-} from '../../src/workspace/persistence.js';
+import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 
 function makeWorkspace(id: string, name: string, lastOpenedAt: string): WorkspaceRecord {
   return {
@@ -87,8 +83,6 @@ describe('WorkspaceSwitcher mounted on start page (T029/US2)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('workspace-switcher')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('workspace-switcher-empty')).toHaveTextContent(
-      /no recent workspaces/i
-    );
+    expect(screen.getByTestId('workspace-switcher-empty')).toHaveTextContent(/no recent workspaces/i);
   });
 });

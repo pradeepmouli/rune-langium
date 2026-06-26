@@ -27,9 +27,23 @@
 // — importing them statically pulls in just the AST type guards from
 // core's generated/ast.js, not any service runtime.
 import type { RosettaModel } from '@rune-langium/core';
-import { collectNamespaceDependencies, closeNamespaceDependencies, qualifiedExportPath, serializeRuneModel, runeBigIntReplacer, preserveCstText, hydrateModelDocument, namespaceFromModelName } from '@rune-langium/core';
+import {
+  collectNamespaceDependencies,
+  closeNamespaceDependencies,
+  qualifiedExportPath,
+  serializeRuneModel,
+  runeBigIntReplacer,
+  preserveCstText,
+  hydrateModelDocument,
+  namespaceFromModelName
+} from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
-import { fetchCuratedBundle, fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+import {
+  fetchCuratedBundle,
+  fetchCuratedManifest,
+  fetchCuratedNamespace,
+  CuratedBundleUnavailableError
+} from '../lib/curated-fetch.js';
 import type { CuratedManifest } from '@rune-langium/curated-schema';
 import { computeCuratedClosure, closeNamespacesFromManifest } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
@@ -266,8 +280,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
               if (closure.has(ns)) continue; // closure namespaces already have per-file entries
               deferredExportsList.push({
                 filePath: `${bundle.id}/${ns}`, // bundle-prefixed synthetic path: split('/')[0] === bundle.id;
-                                                 // not a hydrated doc (list-only) — expanding such a node is a
-                                                 // soft no-op until the namespace is imported (pulled into closure).
+                // not a hydrated doc (list-only) — expanding such a node is a
+                // soft no-op until the namespace is imported (pulled into closure).
                 namespace: ns,
                 entries: entry.exports.map((e) => ({ type: e.type, name: e.name }))
               });
@@ -526,7 +540,6 @@ function mergeCuratedDocIntoDeferredExports(
   });
 }
 
-
 /**
  * Envelope uses the canonical bigint policy (runeBigIntReplacer -> Number) so wire bytes
  * agree across all serialize paths (V8).
@@ -540,9 +553,7 @@ function stringifyWithBigInt(value: unknown): string {
  * import. Read from the already-parsed user models (no link needed).
  * Exported for unit testing.
  */
-export function collectUserSeedNamespaces(
-  userDocs: ReadonlyArray<{ parseResult?: { value?: unknown } }>
-): Set<string> {
+export function collectUserSeedNamespaces(userDocs: ReadonlyArray<{ parseResult?: { value?: unknown } }>): Set<string> {
   const seeds = new Set<string>();
   for (const doc of userDocs) {
     const model = doc.parseResult?.value as { imports?: Array<{ importedNamespace?: unknown }> } | undefined;

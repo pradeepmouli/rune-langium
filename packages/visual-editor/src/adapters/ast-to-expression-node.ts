@@ -129,9 +129,7 @@ function convertInlineFunction(ast: Record<string, unknown> | undefined, sourceT
   return {
     $type: 'InlineFunction' as const,
     body: convertChildRequired(g(ast, 'body'), sourceText),
-    parameters: g(ast, 'parameters') as
-      | Array<{ $type: 'ClosureParameter'; name: string }>
-      | undefined
+    parameters: g(ast, 'parameters') as Array<{ $type: 'ClosureParameter'; name: string }> | undefined
   };
 }
 
@@ -270,10 +268,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
-        function: convertInlineFunction(
-          g(ast, 'function') as Record<string, unknown> | undefined,
-          sourceText
-        )
+        function: convertInlineFunction(g(ast, 'function') as Record<string, unknown> | undefined, sourceText)
       } as unknown as ExpressionNode;
 
     case 'ThenOperation':
@@ -282,10 +277,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChildRequired(g(ast, 'argument'), sourceText),
-        function: convertInlineFunction(
-          g(ast, 'function') as Record<string, unknown> | undefined,
-          sourceText
-        )
+        function: convertInlineFunction(g(ast, 'function') as Record<string, unknown> | undefined, sourceText)
       } as unknown as ExpressionNode;
 
     // Control flow
@@ -305,9 +297,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
-        cases: ((g(ast, 'cases') as Record<string, unknown>[]) ?? []).map((c) =>
-          convertSwitchCase(c, sourceText)
-        )
+        cases: ((g(ast, 'cases') as Record<string, unknown>[]) ?? []).map((c) => convertSwitchCase(c, sourceText))
       } as unknown as ExpressionNode;
 
     // Constructor
@@ -323,16 +313,12 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
               name: g(typeRef, 'name'),
               explicitArguments: g(typeRef, 'explicitArguments'),
               rawArgs: g(typeRef, 'rawArgs')
-                ? (g(typeRef, 'rawArgs') as unknown[]).map((a) =>
-                    convertChildRequired(a, sourceText)
-                  )
+                ? (g(typeRef, 'rawArgs') as unknown[]).map((a) => convertChildRequired(a, sourceText))
                 : undefined
             }
           : undefined,
         implicitEmpty: g(ast, 'implicitEmpty'),
-        values: ((g(ast, 'values') as Record<string, unknown>[]) ?? []).map((v) =>
-          convertKVP(v, sourceText)
-        )
+        values: ((g(ast, 'values') as Record<string, unknown>[]) ?? []).map((v) => convertKVP(v, sourceText))
       } as unknown as ExpressionNode;
     }
 
@@ -363,9 +349,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       return {
         $type,
         id,
-        elements: ((g(ast, 'elements') as unknown[]) ?? []).map((e) =>
-          convertChildRequired(e, sourceText)
-        )
+        elements: ((g(ast, 'elements') as unknown[]) ?? []).map((e) => convertChildRequired(e, sourceText))
       } as unknown as ExpressionNode;
 
     // Other

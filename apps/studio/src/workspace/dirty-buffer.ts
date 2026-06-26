@@ -29,21 +29,12 @@ function decodePath(encoded: string): string {
   return encoded.replace(/__/g, '/').replace(/%5F/g, '_').replace(/%25/g, '%');
 }
 
-export async function saveDirtyBuffer(
-  fs: OpfsFs,
-  wsId: string,
-  path: string,
-  content: string
-): Promise<void> {
+export async function saveDirtyBuffer(fs: OpfsFs, wsId: string, path: string, content: string): Promise<void> {
   const encoded = encodePath(path);
   await fs.writeFile(`/${wsId}/${DIRTY_DIR}/${encoded}`, content);
 }
 
-export async function loadDirtyBuffer(
-  fs: OpfsFs,
-  wsId: string,
-  path: string
-): Promise<string | null> {
+export async function loadDirtyBuffer(fs: OpfsFs, wsId: string, path: string): Promise<string | null> {
   const encoded = encodePath(path);
   try {
     const v = await fs.readFile(`/${wsId}/${DIRTY_DIR}/${encoded}`, 'utf8');

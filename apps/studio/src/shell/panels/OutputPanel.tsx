@@ -9,7 +9,7 @@ const SEVERITY_CLASS: Record<string, string> = {
   error: 'text-destructive',
   warn: 'text-warning',
   success: 'text-teal-400',
-  info: 'text-muted-foreground/60',
+  info: 'text-muted-foreground/60'
 };
 
 export function OutputPanel(): React.ReactElement {

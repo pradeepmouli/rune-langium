@@ -294,12 +294,10 @@ describe('useModelStore — setCuratedFiles (refOnly post-/api/parse)', () => {
   // while CDM was demonstrably still loaded.
   it('refuses to wipe a non-empty bundle with an empty file list (Defect A)', () => {
     const json1 = '{"a":1}' as never;
-    useModelStore
-      .getState()
-      .setCuratedFiles('cdm', [
-        { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 },
-        { path: 'b.rosetta', content: '', namespace: 'b', refOnly: true, serializedModelJson: json1 }
-      ]);
+    useModelStore.getState().setCuratedFiles('cdm', [
+      { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 },
+      { path: 'b.rosetta', content: '', namespace: 'b', refOnly: true, serializedModelJson: json1 }
+    ]);
     const populated = useModelStore.getState().models;
     expect(populated.get('cdm')?.files).toHaveLength(2);
 

@@ -527,8 +527,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         return `export const ${schemaName} = ${chainedObjectExpr}\n${condIndented};`;
       } else {
         // z.object chain: build chain as `z\n  .object({...})\n  .refine(...)`
-        const attrLines =
-          data.attributes.length === 0 ? [] : data.attributes.map((attr) => this.emitAttribute(attr));
+        const attrLines = data.attributes.length === 0 ? [] : data.attributes.map((attr) => this.emitAttribute(attr));
         // Build object body with 4-space attribute indentation.
         // emitAttribute returns '  key: val' (2-space prefix), so add 2 more for 4 total.
         const objectBody =
@@ -713,10 +712,9 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         code: 'empty-enum',
         message: `Enum '${name}' has no values; emitting z.enum([]) which is not valid Zod — treating as z.never()`
       });
-      return [
-        `export const ${schemaName} = z.never();`,
-        `export type ${name} = z.infer<typeof ${schemaName}>;`
-      ].join('\n');
+      return [`export const ${schemaName} = z.never();`, `export type ${name} = z.infer<typeof ${schemaName}>;`].join(
+        '\n'
+      );
     }
 
     const memberLiterals = memberNames.map((m) => `'${m}'`).join(', ');

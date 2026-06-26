@@ -39,10 +39,7 @@ async function head(path: string): Promise<Response> {
 
 describe('handleCuratedRead — manifest.json (T027)', () => {
   it('returns 200 with the manifest body and Cache-Control', async () => {
-    await bucket.put(
-      'curated/cdm/manifest.json',
-      JSON.stringify({ schemaVersion: 1, modelId: 'cdm' })
-    );
+    await bucket.put('curated/cdm/manifest.json', JSON.stringify({ schemaVersion: 1, modelId: 'cdm' }));
     const res = await get('/curated/cdm/manifest.json');
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toMatch(/max-age=300/);
@@ -165,10 +162,7 @@ describe('CORS headers on every response', () => {
 
 describe('Conditional GET — If-None-Match → 304', () => {
   it('returns 304 with no body when the etag matches', async () => {
-    await bucket.put(
-      'curated/cdm/manifest.json',
-      JSON.stringify({ schemaVersion: 1, modelId: 'cdm' })
-    );
+    await bucket.put('curated/cdm/manifest.json', JSON.stringify({ schemaVersion: 1, modelId: 'cdm' }));
     const first = await get('/curated/cdm/manifest.json');
     const etag = first.headers.get('ETag');
     expect(etag).toBeTruthy();

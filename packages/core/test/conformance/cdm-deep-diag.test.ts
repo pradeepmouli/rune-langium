@@ -61,9 +61,7 @@ describe('CDM deep diagnostic', () => {
 
       for (const [refType, names] of Object.entries(unresolved)) {
         const top = [...names.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-        console.log(
-          `\n${refType} (${[...names.values()].reduce((a, b) => a + b, 0)} errors, ${names.size} distinct):`
-        );
+        console.log(`\n${refType} (${[...names.values()].reduce((a, b) => a + b, 0)} errors, ${names.size} distinct):`);
         top.forEach(([n, c]) => console.log(`  ${String(c).padStart(5)}  ${n}`));
       }
       console.log(`\nTotal linking errors: ${total}`);
@@ -82,8 +80,7 @@ describe('CDM deep diagnostic', () => {
       }
       console.log(`Total diagnostics (all severities): ${allDiags}`);
       for (const [sev, count] of Object.entries(bySeverity)) {
-        const label =
-          sev === '1' ? 'error' : sev === '2' ? 'warning' : sev === '3' ? 'info' : `sev${sev}`;
+        const label = sev === '1' ? 'error' : sev === '2' ? 'warning' : sev === '3' ? 'info' : `sev${sev}`;
         console.log(`  ${label}: ${count}`);
       }
 

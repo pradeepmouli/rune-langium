@@ -69,14 +69,13 @@ export function useDebouncedReparse({
           }
         } catch (error) {
           // Parse failure — skip re-layout, but surface the cause in devtools.
-          console.warn(
-            '[useDebouncedReparse] parseContent failed; skipping structural re-layout',
-            error
-          );
-          useOutputStore.getState().addLine(
-            fmtLine('parse', 'structural re-layout skipped', error instanceof Error ? error.message : String(error)),
-            'warn'
-          );
+          console.warn('[useDebouncedReparse] parseContent failed; skipping structural re-layout', error);
+          useOutputStore
+            .getState()
+            .addLine(
+              fmtLine('parse', 'structural re-layout skipped', error instanceof Error ? error.message : String(error)),
+              'warn'
+            );
         }
       }, delay);
     },

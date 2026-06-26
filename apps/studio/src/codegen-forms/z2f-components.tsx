@@ -28,7 +28,10 @@ import {
   SelectTrigger as DSSelectTrigger,
   SelectValue as DSSelectValue
 } from '@rune-langium/design-system/ui/select';
-import { RadioGroup as DSRadioGroup, RadioGroupItem as DSRadioGroupItem } from '@rune-langium/design-system/ui/radio-group';
+import {
+  RadioGroup as DSRadioGroup,
+  RadioGroupItem as DSRadioGroupItem
+} from '@rune-langium/design-system/ui/radio-group';
 import { Textarea as DSTextarea } from '@rune-langium/design-system/ui/textarea';
 
 // ── Checkbox ────────────────────────────────────────────────────────────────
@@ -99,9 +102,7 @@ export function FieldTemplate({
         {label}
         {required && <span className="ml-1 text-destructive">*</span>}
       </DSLabel>
-      {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      )}
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
       {children}
       {helpText && <p className="text-xs text-muted-foreground">{helpText}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}

@@ -14,11 +14,11 @@ const ruleName = 'rune/no-literal-layout-px';
 
 const messages = stylelint.utils.ruleMessages(ruleName, {
   literalPx: (selector, prop, value) =>
-    `Layout-coupled property "${prop}: ${value}" on geometry class "${selector}" must use var(--rune-*) custom property (see structure-layout.ts SSoT).`,
+    `Layout-coupled property "${prop}: ${value}" on geometry class "${selector}" must use var(--rune-*) custom property (see structure-layout.ts SSoT).`
 });
 
 const meta = {
-  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-literal-layout-px.mjs',
+  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-literal-layout-px.mjs'
 };
 
 // Only the structure-view geometry classes that are layout-coupled to
@@ -32,17 +32,32 @@ const GEOMETRY_CLASS_PATTERN =
 // only for box-dimension properties — their gap/padding are visual insets, not
 // y-coordinate coupling.  All other geometry classes use the full property set.
 const HEADER_CLASS_PATTERN = /\.rune-(node-header|graph-group__header)\b/;
-const HEADER_GEOMETRY_PROPS = new Set([
-  'height', 'min-height', 'max-height',
-]);
+const HEADER_GEOMETRY_PROPS = new Set(['height', 'min-height', 'max-height']);
 
 const GEOMETRY_PROPS = new Set([
-  'width', 'height',
-  'min-width', 'min-height', 'max-width', 'max-height',
-  'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-  'gap', 'row-gap', 'column-gap',
-  'top', 'left', 'right', 'bottom',
+  'width',
+  'height',
+  'min-width',
+  'min-height',
+  'max-width',
+  'max-height',
+  'padding',
+  'padding-top',
+  'padding-right',
+  'padding-bottom',
+  'padding-left',
+  'margin',
+  'margin-top',
+  'margin-right',
+  'margin-bottom',
+  'margin-left',
+  'gap',
+  'row-gap',
+  'column-gap',
+  'top',
+  'left',
+  'right',
+  'bottom'
 ]);
 
 /** Returns true if `value` is a layout-coupled literal-px expression. */
@@ -72,7 +87,7 @@ function isViolation(value) {
 const rule = (primary) => (root, result) => {
   const validOptions = stylelint.utils.validateOptions(result, ruleName, {
     actual: primary,
-    possible: [true],
+    possible: [true]
   });
   if (!validOptions) return;
 
@@ -81,9 +96,7 @@ const rule = (primary) => (root, result) => {
     // Header classes are layout-coupled only for box-dimension props (height/
     // min-height).  Their gap and padding are visual insets, not y-coord
     // coupling, so we use a narrower property set for those selectors.
-    const props = HEADER_CLASS_PATTERN.test(ruleNode.selector)
-      ? HEADER_GEOMETRY_PROPS
-      : GEOMETRY_PROPS;
+    const props = HEADER_CLASS_PATTERN.test(ruleNode.selector) ? HEADER_GEOMETRY_PROPS : GEOMETRY_PROPS;
     ruleNode.walkDecls((decl) => {
       if (!props.has(decl.prop.toLowerCase())) return;
       if (!isViolation(decl.value)) return;
@@ -91,7 +104,7 @@ const rule = (primary) => (root, result) => {
         message: messages.literalPx(ruleNode.selector, decl.prop, decl.value),
         node: decl,
         result,
-        ruleName,
+        ruleName
       });
     });
   });

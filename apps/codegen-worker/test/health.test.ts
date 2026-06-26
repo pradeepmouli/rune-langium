@@ -81,10 +81,10 @@ describe('GET /api/generate/health (T024)', () => {
       healthReq(),
       makeEnv({
         container: async () =>
-          new Response(
-            JSON.stringify({ status: 'ok', cold_start_likely: false, languages: ['java', 'ts'] }),
-            { status: 200, headers: { 'Content-Type': 'application/json' } }
-          ),
+          new Response(JSON.stringify({ status: 'ok', cold_start_likely: false, languages: ['java', 'ts'] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }),
         langCache: kv
       })
     );

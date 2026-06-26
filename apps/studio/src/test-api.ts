@@ -26,8 +26,7 @@ export interface RuneStudioTestApi {
   loadFiles?(files: WorkspaceFile[], targetWorkspaceId?: string): Promise<void> | void;
 }
 
-const IS_TEST_MODE =
-  (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.MODE === 'test';
+const IS_TEST_MODE = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.MODE === 'test';
 
 declare global {
   interface Window {
@@ -52,5 +51,3 @@ export function setRuneStudioTestApi(
   }
   window.__runeStudioTestApi = next;
 }
-
-

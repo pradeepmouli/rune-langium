@@ -137,9 +137,7 @@ export class RuneLspSession {
       });
     }
 
-    const pair = new (
-      globalThis as unknown as { WebSocketPair: new () => Record<0 | 1, WebSocket> }
-    ).WebSocketPair();
+    const pair = new (globalThis as unknown as { WebSocketPair: new () => Record<0 | 1, WebSocket> }).WebSocketPair();
     const client = pair[0];
     const server = pair[1];
 
@@ -199,12 +197,7 @@ export class RuneLspSession {
    * CF Worker hibernation API entry — fires when the client disconnects.
    * Clears in-memory state; storage survives until the DO is reaped.
    */
-  async webSocketClose(
-    _ws: WebSocket,
-    _code: number,
-    _reason: string,
-    _wasClean: boolean
-  ): Promise<void> {
+  async webSocketClose(_ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.ws = null;
     for (const handle of this.pendingChanges.values()) clearTimeout(handle);
     this.pendingChanges.clear();

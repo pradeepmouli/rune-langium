@@ -70,8 +70,7 @@ const FIXTURE = {
   files: [
     {
       path: 'demo.rosetta',
-      content:
-        'namespace demo\n\ntype Foo:\n  bar string (1..1)\n  baz number (0..1)\n\ntype Bar:\n  quux Foo (1..1)\n'
+      content: 'namespace demo\n\ntype Foo:\n  bar string (1..1)\n  baz number (0..1)\n\ntype Bar:\n  quux Foo (1..1)\n'
     }
   ]
 } as const;
@@ -80,11 +79,7 @@ const FIXTURE = {
 // because upstream generator output may include a timestamp or version
 // comment that drifts between runs. Instead assert the language is echoed,
 // the file set is identical by path, and no errors surfaced.
-function normalize(result: {
-  language: string;
-  files: Array<{ path: string; content: string }>;
-  errors: unknown[];
-}) {
+function normalize(result: { language: string; files: Array<{ path: string; content: string }>; errors: unknown[] }) {
   return {
     language: result.language,
     filePaths: result.files.map((f) => f.path).sort(),
@@ -102,15 +97,7 @@ describe('container ↔ local parity (T011)', () => {
     if (!shouldRun) return;
     containerProc = spawn(
       'docker',
-      [
-        'run',
-        '--rm',
-        '-p',
-        `${CONTAINER_PORT}:8080`,
-        '--name',
-        'rune-codegen-paritytest',
-        IMAGE_TAG
-      ],
+      ['run', '--rm', '-p', `${CONTAINER_PORT}:8080`, '--name', 'rune-codegen-paritytest', IMAGE_TAG],
       { stdio: 'ignore' }
     );
     const up = await waitForHealth(CONTAINER_URL, 60000);

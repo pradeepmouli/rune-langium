@@ -120,6 +120,14 @@ pnpm run format
 
 # Type check
 pnpm run type-check
+```
+
+> **Pre-commit auto-format:** staged `*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}` files are
+> automatically formatted with `oxfmt` on every `git commit` via the `lint-staged`
+> pre-commit hook (wired through `simple-git-hooks`). Set `SKIP_SIMPLE_GIT_HOOKS=1`
+> to bypass it for a commit.
+
+```bash
 
 # Run tests
 pnpm run test

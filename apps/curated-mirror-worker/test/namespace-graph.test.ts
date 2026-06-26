@@ -14,9 +14,7 @@ function makeModelJson(opts: {
   extra?: string; // raw JSON fragment merged into the top-level object
 }): string {
   const namePart = typeof opts.name === 'string' ? JSON.stringify(opts.name) : JSON.stringify(opts.name);
-  const importsPart = opts.imports
-    ? JSON.stringify(opts.imports.map((ns) => ({ importedNamespace: ns })))
-    : '[]';
+  const importsPart = opts.imports ? JSON.stringify(opts.imports.map((ns) => ({ importedNamespace: ns }))) : '[]';
   const extraPart = opts.extra ? `,${opts.extra}` : '';
   return `{"$type":"RosettaModel","name":${namePart},"imports":${importsPart}${extraPart}}`;
 }

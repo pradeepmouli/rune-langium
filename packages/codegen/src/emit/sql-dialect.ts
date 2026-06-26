@@ -27,20 +27,40 @@ export interface Dialect {
 
 // Rune builtin basic/record/typeAlias names → dialect column type.
 const POSTGRES_TYPES: Record<string, string> = {
-  string: 'TEXT', pattern: 'TEXT', boolean: 'BOOLEAN', number: 'NUMERIC', int: 'INTEGER',
-  date: 'DATE', dateTime: 'TIMESTAMP', zonedDateTime: 'TIMESTAMPTZ', time: 'TIME',
-  productType: 'TEXT', eventType: 'TEXT', calculation: 'TEXT'
+  string: 'TEXT',
+  pattern: 'TEXT',
+  boolean: 'BOOLEAN',
+  number: 'NUMERIC',
+  int: 'INTEGER',
+  date: 'DATE',
+  dateTime: 'TIMESTAMP',
+  zonedDateTime: 'TIMESTAMPTZ',
+  time: 'TIME',
+  productType: 'TEXT',
+  eventType: 'TEXT',
+  calculation: 'TEXT'
 };
 const SQLSERVER_TYPES: Record<string, string> = {
-  string: 'NVARCHAR(MAX)', pattern: 'NVARCHAR(MAX)', boolean: 'BIT', number: 'DECIMAL(38,10)', int: 'INT',
-  date: 'DATE', dateTime: 'DATETIME2', zonedDateTime: 'DATETIMEOFFSET', time: 'TIME',
-  productType: 'NVARCHAR(MAX)', eventType: 'NVARCHAR(MAX)', calculation: 'NVARCHAR(MAX)'
+  string: 'NVARCHAR(MAX)',
+  pattern: 'NVARCHAR(MAX)',
+  boolean: 'BIT',
+  number: 'DECIMAL(38,10)',
+  int: 'INT',
+  date: 'DATE',
+  dateTime: 'DATETIME2',
+  zonedDateTime: 'DATETIMEOFFSET',
+  time: 'TIME',
+  productType: 'NVARCHAR(MAX)',
+  eventType: 'NVARCHAR(MAX)',
+  calculation: 'NVARCHAR(MAX)'
 };
 
 export function dialectFor(name: SqlDialectName): Dialect {
   if (name === 'sqlserver') {
     return {
-      name, parserDatabase: 'transactsql', maxIdentifierLength: 128,
+      name,
+      parserDatabase: 'transactsql',
+      maxIdentifierLength: 128,
       quote: (id) => `[${id}]`,
       columnType: (b) => SQLSERVER_TYPES[b] ?? 'NVARCHAR(MAX)',
       isKnownBuiltin: (b) => b in SQLSERVER_TYPES,
@@ -49,7 +69,9 @@ export function dialectFor(name: SqlDialectName): Dialect {
     };
   }
   return {
-    name: 'postgres', parserDatabase: 'postgresql', maxIdentifierLength: 63,
+    name: 'postgres',
+    parserDatabase: 'postgresql',
+    maxIdentifierLength: 63,
     quote: (id) => `"${id}"`,
     columnType: (b) => POSTGRES_TYPES[b] ?? 'TEXT',
     isKnownBuiltin: (b) => b in POSTGRES_TYPES,

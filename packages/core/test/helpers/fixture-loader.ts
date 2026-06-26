@@ -43,9 +43,7 @@ export async function listFixtures(subdir: string): Promise<string[]> {
  * @param subdir - Subdirectory name (e.g., 'cdm' or 'rune-dsl')
  * @returns Array of `{ name, content }` objects.
  */
-export async function loadAllFixtures(
-  subdir: string
-): Promise<Array<{ name: string; content: string }>> {
+export async function loadAllFixtures(subdir: string): Promise<Array<{ name: string; content: string }>> {
   const filenames = await listFixtures(subdir);
   return Promise.all(
     filenames.map(async (name) => ({

@@ -146,9 +146,7 @@ describe('DownloadConfigModal', () => {
     expect(screen.getByTestId('download-config-modal__ns-row-cdm').getAttribute('data-state')).toBe('pulled');
     fireEvent.click(screen.getByTestId('download-config-modal__ns-app'));
     for (const ns of NS) {
-      expect(screen.getByTestId(`download-config-modal__ns-row-${ns}`).getAttribute('data-state')).toBe(
-        'unselected'
-      );
+      expect(screen.getByTestId(`download-config-modal__ns-row-${ns}`).getAttribute('data-state')).toBe('unselected');
     }
   });
 

@@ -39,7 +39,7 @@ type Alpha:
 
 function alphaAttrNames(store: ReturnType<typeof createEditorStore>): string[] {
   const alpha = store.getState().nodes.find((n) => n.data.name === 'Alpha');
-  return (((alpha!.data as { attributes?: Array<{ name: string }> }).attributes) ?? []).map((a) => a.name);
+  return ((alpha!.data as { attributes?: Array<{ name: string }> }).attributes ?? []).map((a) => a.name);
 }
 
 describe('edit-reconcile — store integration', () => {

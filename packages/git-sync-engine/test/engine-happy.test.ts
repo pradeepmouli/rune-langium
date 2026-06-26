@@ -21,8 +21,12 @@ function happyOps(): GitOps {
 }
 
 const baseOpts = {
-  fs: {} as never, http: {}, dir: '/w/files', gitdir: '/w/.git',
-  remoteUrl: 'https://x', ref: 'main',
+  fs: {} as never,
+  http: {},
+  dir: '/w/files',
+  gitdir: '/w/.git',
+  remoteUrl: 'https://x',
+  ref: 'main',
   onAuth: () => ({ username: 'x', password: 't' }),
   author: { name: 'A', email: 'a@x' },
   debounceMs: 0
@@ -36,8 +40,8 @@ describe('GitSyncEngine happy path', () => {
     engine.notifyDirty();
     engine.notifyDirty();
     await engine.syncNow();
-    expect((ops.commit as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
-    expect((ops.push as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect(ops.commit as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
+    expect(ops.push as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
     expect(engine.getState().phase).toBe('idle');
   });
 

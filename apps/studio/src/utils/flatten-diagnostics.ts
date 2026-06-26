@@ -11,9 +11,7 @@ export type FlatDiagnosticRow =
   | { kind: 'file-header'; uri: string; count: number }
   | { kind: 'diagnostic'; uri: string; diagnostic: LspDiagnostic; index: number };
 
-export function flattenDiagnostics(
-  diagnosticsByFile: Map<string, LspDiagnostic[]>
-): FlatDiagnosticRow[] {
+export function flattenDiagnostics(diagnosticsByFile: Map<string, LspDiagnostic[]>): FlatDiagnosticRow[] {
   const rows: FlatDiagnosticRow[] = [];
   for (const [uri, diags] of diagnosticsByFile.entries()) {
     rows.push({ kind: 'file-header', uri, count: diags.length });

@@ -9,21 +9,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['packages/**/test/**/*.test.ts', 'packages/**/src/**/*.test.ts'],
-    exclude: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      'packages/visual-editor/**',
-      'apps/**'
-    ],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/build/**', 'packages/visual-editor/**', 'apps/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
-      include: [
-        'packages/cli/src/**/*.ts',
-        'packages/core/src/**/*.ts',
-        'packages/lsp-server/src/**/*.ts'
-      ],
+      include: ['packages/cli/src/**/*.ts', 'packages/core/src/**/*.ts', 'packages/lsp-server/src/**/*.ts'],
       exclude: ['**/*.test.ts', '**/*.spec.ts', '**/test/**', '**/dist/**', '**/node_modules/**'],
       thresholds: {
         lines: 30,

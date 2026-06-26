@@ -17,10 +17,15 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
   const { files } = useWorkspace();
   const lspClientRef = useRef<LspClientService | null>(null);
   const providerRef = useRef<ReturnType<typeof createTransportProvider> | null>(null);
-  const [transportState, setTransportState] = useState<TransportState>({ mode: 'disconnected', status: 'disconnected' });
+  const [transportState, setTransportState] = useState<TransportState>({
+    mode: 'disconnected',
+    status: 'disconnected'
+  });
   const { showToast } = useStudioToast();
   const showToastRef = useRef(showToast);
-  useEffect(() => { showToastRef.current = showToast; }, [showToast]);
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
   const prevStatusRef = useRef<TransportState['status']>('disconnected');
 
   useEffect(() => {
@@ -50,27 +55,39 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
       console.error('[LspProvider] LSP connect failed:', err);
       useOutputStore.getState().addLine(fmtLine('lsp', 'connect failed', msg), 'error');
       useActivityStore.getState().addActivity('lsp', false, `connect failed · ${msg}`);
-      showToastRef.current({ title: 'Language server unavailable', description: err instanceof Error ? err.message : 'LSP connection failed. Diagnostics and completions will not work.', variant: 'destructive' });
+      showToastRef.current({
+        title: 'Language server unavailable',
+        description:
+          err instanceof Error ? err.message : 'LSP connection failed. Diagnostics and completions will not work.',
+        variant: 'destructive'
+      });
     });
-    return () => { unsub(); client.dispose(); provider.dispose(); };
+    return () => {
+      unsub();
+      client.dispose();
+      provider.dispose();
+    };
   }, []);
 
   // Doc-set re-sync when the model's files change — NOT a reconnect.
   useEffect(() => {
-    lspClientRef.current?.syncWorkspaceFiles(
-      files.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
-    );
+    lspClientRef.current?.syncWorkspaceFiles(files.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly));
   }, [files]);
 
   const reconnect = useCallback(() => {
     void (async () => {
-      try { await lspClientRef.current?.reconnect(); }
-      catch (err) {
+      try {
+        await lspClientRef.current?.reconnect();
+      } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[LspProvider] LSP reconnect failed:', err);
         useOutputStore.getState().addLine(fmtLine('lsp', 'reconnect failed', msg), 'error');
         useActivityStore.getState().addActivity('lsp', false, `reconnect failed · ${msg}`);
-        showToast({ title: 'LSP reconnect failed', description: err instanceof Error ? err.message : 'Could not reconnect to the language server.', variant: 'destructive' });
+        showToast({
+          title: 'LSP reconnect failed',
+          description: err instanceof Error ? err.message : 'Could not reconnect to the language server.',
+          variant: 'destructive'
+        });
       }
     })();
   }, [showToast]);

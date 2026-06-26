@@ -87,9 +87,7 @@ export class RateLimiter {
       const storage = this.state.storage;
       const [hourCount, dayCount] = await Promise.all([
         storage.get<number>(hourKey).then((v) => v ?? 0),
-        bucket.dayCap !== undefined
-          ? storage.get<number>(dayKey).then((v) => v ?? 0)
-          : Promise.resolve(0)
+        bucket.dayCap !== undefined ? storage.get<number>(dayKey).then((v) => v ?? 0) : Promise.resolve(0)
       ]);
 
       const hourExceeded = hourCount >= bucket.hourCap;
@@ -97,9 +95,7 @@ export class RateLimiter {
 
       if (hourExceeded || dayExceeded) {
         // Prefer the smaller retry — whichever window resets sooner.
-        const hourRetry = hourExceeded
-          ? secsUntilBoundary(nowMs, HOUR_MS)
-          : Number.POSITIVE_INFINITY;
+        const hourRetry = hourExceeded ? secsUntilBoundary(nowMs, HOUR_MS) : Number.POSITIVE_INFINITY;
         const dayRetry = dayExceeded ? secsUntilBoundary(nowMs, DAY_MS) : Number.POSITIVE_INFINITY;
         const retry_after_s = Math.min(hourRetry, dayRetry);
         const scope_tripped: ScopeTripped = hourRetry <= dayRetry ? 'hour' : 'day';

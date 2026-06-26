@@ -22,9 +22,7 @@ export class CodegenContainer {
     // before this handler runs. If we somehow receive a fetch here, forward
     // it to the container via the runtime-provided ctx.container API.
     // This path is unreachable in local dev (enable_containers = false).
-    const container = (
-      this.state as unknown as { container?: { fetch(r: Request): Promise<Response> } }
-    ).container;
+    const container = (this.state as unknown as { container?: { fetch(r: Request): Promise<Response> } }).container;
     if (container) {
       return container.fetch(request);
     }

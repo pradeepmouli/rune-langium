@@ -1021,9 +1021,7 @@ describe('EnumForm – read-only mode with inherited enum values', () => {
 
   it('does not render any enabled button inside inherited enum value rows when read-only', () => {
     const childData = makeReadOnlyEnumNodeWithParent();
-    const allNodes = makeParentEnumNodes(childData, [
-      { $type: 'RosettaEnumValue', name: 'ALPHA', display: 'Alpha' }
-    ]);
+    const allNodes = makeParentEnumNodes(childData, [{ $type: 'RosettaEnumValue', name: 'ALPHA', display: 'Alpha' }]);
 
     const { container } = render(
       <EnumForm

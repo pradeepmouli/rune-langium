@@ -6,11 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  mapDiagnosticsToTypes,
-  type LspDiagnostic,
-  type TypePosition
-} from '../../src/services/diagnostics-bridge.js';
+import { mapDiagnosticsToTypes, type LspDiagnostic, type TypePosition } from '../../src/services/diagnostics-bridge.js';
 
 const sampleDiagnostics: LspDiagnostic[] = [
   {
@@ -40,21 +36,13 @@ const typePositions: Map<string, TypePosition> = new Map([
 
 describe('mapDiagnosticsToTypes', () => {
   it('maps diagnostics to types by line range', () => {
-    const result = mapDiagnosticsToTypes(
-      'file:///workspace/model.rosetta',
-      sampleDiagnostics,
-      typePositions
-    );
+    const result = mapDiagnosticsToTypes('file:///workspace/model.rosetta', sampleDiagnostics, typePositions);
 
     expect(result).toHaveLength(2);
   });
 
   it('counts errors and warnings per type', () => {
-    const result = mapDiagnosticsToTypes(
-      'file:///workspace/model.rosetta',
-      sampleDiagnostics,
-      typePositions
-    );
+    const result = mapDiagnosticsToTypes('file:///workspace/model.rosetta', sampleDiagnostics, typePositions);
 
     const fooSummary = result.find((s) => s.typeName === 'Foo');
     expect(fooSummary).toBeDefined();
@@ -68,11 +56,7 @@ describe('mapDiagnosticsToTypes', () => {
   });
 
   it('includes file URI in summaries', () => {
-    const result = mapDiagnosticsToTypes(
-      'file:///workspace/model.rosetta',
-      sampleDiagnostics,
-      typePositions
-    );
+    const result = mapDiagnosticsToTypes('file:///workspace/model.rosetta', sampleDiagnostics, typePositions);
 
     for (const summary of result) {
       expect(summary.fileUri).toBe('file:///workspace/model.rosetta');
@@ -85,11 +69,7 @@ describe('mapDiagnosticsToTypes', () => {
   });
 
   it('returns empty array when no type positions', () => {
-    const result = mapDiagnosticsToTypes(
-      'file:///workspace/model.rosetta',
-      sampleDiagnostics,
-      new Map()
-    );
+    const result = mapDiagnosticsToTypes('file:///workspace/model.rosetta', sampleDiagnostics, new Map());
     expect(result).toEqual([]);
   });
 
@@ -101,11 +81,7 @@ describe('mapDiagnosticsToTypes', () => {
         message: 'orphan error'
       }
     ];
-    const result = mapDiagnosticsToTypes(
-      'file:///workspace/model.rosetta',
-      outsideDiags,
-      typePositions
-    );
+    const result = mapDiagnosticsToTypes('file:///workspace/model.rosetta', outsideDiags, typePositions);
     expect(result).toEqual([]);
   });
 });

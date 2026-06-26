@@ -212,7 +212,13 @@ async function fetchSerializedArtifact(
 
 function toDocuments(
   bundleId: string,
-  artifact: { documents: Array<{ path: string; modelJson: string; exports?: Array<{ type: string; name: string; path: string }> }> }
+  artifact: {
+    documents: Array<{
+      path: string;
+      modelJson: string;
+      exports?: Array<{ type: string; name: string; path: string }>;
+    }>;
+  }
 ): CuratedDocument[] {
   // The /api/parse response shape uses { uri, content, serializedModel,
   // exports } per document. The artifact carries `path`, `modelJson`,

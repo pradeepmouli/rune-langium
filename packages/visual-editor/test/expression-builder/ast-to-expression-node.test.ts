@@ -30,11 +30,7 @@ describe('astToExpressionNode', () => {
       expect((result.left as ExpressionNode).id).toBeTruthy();
       expect((result.right as ExpressionNode).id).toBeTruthy();
       // All ids unique
-      const ids = [
-        result.id,
-        (result.left as ExpressionNode).id,
-        (result.right as ExpressionNode).id
-      ];
+      const ids = [result.id, (result.left as ExpressionNode).id, (result.right as ExpressionNode).id];
       expect(new Set(ids).size).toBe(3);
     }
   });

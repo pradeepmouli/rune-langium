@@ -520,9 +520,7 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
         }
       }
 
-      const items = value.map(
-        (v) => innerSpaces + JsonSchemaNamespaceEmitter.serializeJson(v, indent + 1, printWidth)
-      );
+      const items = value.map((v) => innerSpaces + JsonSchemaNamespaceEmitter.serializeJson(v, indent + 1, printWidth));
       return '[\n' + items.join(',\n') + '\n' + spaces + ']';
     }
 
@@ -535,11 +533,7 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
           innerSpaces +
           JSON.stringify(k) +
           ': ' +
-          JsonSchemaNamespaceEmitter.serializeJson(
-            (value as Record<string, unknown>)[k],
-            indent + 1,
-            printWidth
-          )
+          JsonSchemaNamespaceEmitter.serializeJson((value as Record<string, unknown>)[k], indent + 1, printWidth)
       );
       return '{\n' + entries.join(',\n') + '\n' + spaces + '}';
     }

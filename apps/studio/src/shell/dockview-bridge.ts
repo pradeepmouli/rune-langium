@@ -26,13 +26,7 @@
 
 import type { DockviewApi, AddPanelOptions } from 'dockview-react';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
-import type {
-  DockviewPayload,
-  FactoryShape,
-  LayoutNode,
-  LayoutGroup,
-  PanelComponentName
-} from './layout-types.js';
+import type { DockviewPayload, FactoryShape, LayoutNode, LayoutGroup, PanelComponentName } from './layout-types.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_TITLES } from './layout-factory.js';
 
 const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
@@ -106,13 +100,8 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   const c2 = shape.columns[2];
   if (!c0 || !c1 || !c2) {
     // eslint-disable-next-line no-console
-    console.warn(
-      '[dockview-bridge] factory shape has fewer than 3 columns, falling back to default'
-    );
-    applyFactoryShape(
-      api,
-      defaultFactoryShape({ version: LAYOUT_SCHEMA_VERSION, writtenBy: '0.0.0', dockview: null })
-    );
+    console.warn('[dockview-bridge] factory shape has fewer than 3 columns, falling back to default');
+    applyFactoryShape(api, defaultFactoryShape({ version: LAYOUT_SCHEMA_VERSION, writtenBy: '0.0.0', dockview: null }));
     return;
   }
 

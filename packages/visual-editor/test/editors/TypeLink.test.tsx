@@ -43,9 +43,7 @@ describe('TypeLink', () => {
 
   it('renders clickable button when onNavigateToNode is provided and type resolves', () => {
     const onNavigate = vi.fn();
-    render(
-      <TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />
-    );
+    render(<TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />);
 
     const btn = screen.getByRole('button');
     expect(btn).toBeDefined();
@@ -55,13 +53,7 @@ describe('TypeLink', () => {
 
   it('renders disabled button when type does not resolve to any nodeId', () => {
     const onNavigate = vi.fn();
-    render(
-      <TypeLink
-        typeName="NonExistentType"
-        onNavigateToNode={onNavigate}
-        allNodeIds={ALL_NODE_IDS}
-      />
-    );
+    render(<TypeLink typeName="NonExistentType" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />);
 
     const btn = screen.getByRole('button');
     expect(btn).toHaveProperty('disabled', true);
@@ -70,9 +62,7 @@ describe('TypeLink', () => {
 
   it('calls onNavigateToNode with correct nodeId when clicked', () => {
     const onNavigate = vi.fn();
-    render(
-      <TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />
-    );
+    render(<TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />);
 
     const btn = screen.getByRole('button');
     fireEvent.click(btn);
@@ -94,9 +84,7 @@ describe('TypeLink', () => {
   describe('resolveNodeId', () => {
     it('matches exact IDs', () => {
       const onNavigate = vi.fn();
-      render(
-        <TypeLink typeName="CompareOp" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />
-      );
+      render(<TypeLink typeName="CompareOp" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />);
 
       fireEvent.click(screen.getByRole('button'));
       expect(onNavigate).toHaveBeenCalledWith('CompareOp');
@@ -104,9 +92,7 @@ describe('TypeLink', () => {
 
     it('matches dot-suffix pattern (e.g., "Quantity" matches "cdm.base.math.Quantity")', () => {
       const onNavigate = vi.fn();
-      render(
-        <TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />
-      );
+      render(<TypeLink typeName="Quantity" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />);
 
       fireEvent.click(screen.getByRole('button'));
       expect(onNavigate).toHaveBeenCalledWith('cdm.base.math.Quantity');
@@ -114,13 +100,7 @@ describe('TypeLink', () => {
 
     it('matches dot-suffix for AdjustableDate', () => {
       const onNavigate = vi.fn();
-      render(
-        <TypeLink
-          typeName="AdjustableDate"
-          onNavigateToNode={onNavigate}
-          allNodeIds={ALL_NODE_IDS}
-        />
-      );
+      render(<TypeLink typeName="AdjustableDate" onNavigateToNode={onNavigate} allNodeIds={ALL_NODE_IDS} />);
 
       fireEvent.click(screen.getByRole('button'));
       expect(onNavigate).toHaveBeenCalledWith('cdm.base.datetime.AdjustableDate');
@@ -131,9 +111,7 @@ describe('TypeLink', () => {
       // Naive endsWith('.Foo') would match "a.Foo.Bar" — exact nameFromNodeId must not.
       const onNavigate = vi.fn();
       const collisionIds = ['a.b.Foo', 'a.Foo.Bar'];
-      render(
-        <TypeLink typeName="Foo" onNavigateToNode={onNavigate} allNodeIds={collisionIds} />
-      );
+      render(<TypeLink typeName="Foo" onNavigateToNode={onNavigate} allNodeIds={collisionIds} />);
 
       fireEvent.click(screen.getByRole('button'));
       expect(onNavigate).toHaveBeenCalledWith('a.b.Foo');

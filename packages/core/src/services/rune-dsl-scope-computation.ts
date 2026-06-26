@@ -23,11 +23,7 @@ import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 export class RuneDslScopeComputation extends DefaultScopeComputation {
   // ── Global exports ───────────────────────────────────────────────
 
-  protected override addExportedSymbol(
-    node: AstNode,
-    exports: AstNodeDescription[],
-    document: LangiumDocument
-  ): void {
+  protected override addExportedSymbol(node: AstNode, exports: AstNodeDescription[], document: LangiumDocument): void {
     // Always add the simple-name entry (default behaviour).
     super.addExportedSymbol(node, exports, document);
 

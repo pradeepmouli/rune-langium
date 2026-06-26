@@ -24,13 +24,7 @@ export interface SearchPanelProps {
   resultCount: number;
 }
 
-export function SearchPanel({
-  searchQuery,
-  onSearchChange,
-  filters,
-  onFiltersChange,
-  resultCount
-}: SearchPanelProps) {
+export function SearchPanel({ searchQuery, onSearchChange, filters, onFiltersChange, resultCount }: SearchPanelProps) {
   const handleKindToggle = useCallback(
     (kind: TypeKind) => {
       const current = filters.kinds ?? [];

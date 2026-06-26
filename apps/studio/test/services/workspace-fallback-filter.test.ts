@@ -42,9 +42,7 @@ vi.mock('@rune-langium/core', async (importOriginal) => {
           const base = doc.uri.split('/').pop() ?? doc.uri;
           const dotIdx = base.lastIndexOf('.');
           const ext = dotIdx > 0 ? base.slice(dotIdx + 1) : '';
-          throw new Error(
-            `The service registry contains no services for the extension '${ext}'`
-          );
+          throw new Error(`The service registry contains no services for the extension '${ext}'`);
         }
         return {
           value: {

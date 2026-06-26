@@ -34,9 +34,7 @@ class FakeCodegenProxy {
     if (this.shouldThrow) throw this.shouldThrow;
     return {
       language: request.language,
-      files: [
-        { path: `Generated.${request.language === 'typescript' ? 'ts' : 'java'}`, content: '// ok' }
-      ],
+      files: [{ path: `Generated.${request.language === 'typescript' ? 'ts' : 'java'}`, content: '// ok' }],
       errors: []
     };
   }
@@ -177,8 +175,7 @@ describe('container HTTP wrapper', () => {
         files: [
           {
             path: 'secret.rosetta',
-            content:
-              'namespace secret; type Password: token string (1..1)  // MY_SECRET_VALUE_12345'
+            content: 'namespace secret; type Password: token string (1..1)  // MY_SECRET_VALUE_12345'
           }
         ]
       };

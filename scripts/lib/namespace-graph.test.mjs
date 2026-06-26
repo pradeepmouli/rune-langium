@@ -13,9 +13,7 @@ import { computeNamespaceGraph, nsArtifactSlug } from './namespace-graph.mjs';
  */
 function makeModelJson(opts) {
   const namePart = JSON.stringify(opts.name);
-  const importsPart = opts.imports
-    ? JSON.stringify(opts.imports.map((ns) => ({ importedNamespace: ns })))
-    : '[]';
+  const importsPart = opts.imports ? JSON.stringify(opts.imports.map((ns) => ({ importedNamespace: ns }))) : '[]';
   const extraPart = opts.extra ? `,${opts.extra}` : '';
   return `{"$type":"RosettaModel","name":${namePart},"imports":${importsPart}${extraPart}}`;
 }

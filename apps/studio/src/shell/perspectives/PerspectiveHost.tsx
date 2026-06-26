@@ -45,8 +45,7 @@ export function PerspectiveHost({
   // every such transition). Fall back to the always-available Workspaces
   // launcher rather than relying on every caller to reset the store.
   const requiresWorkspace = PERSPECTIVES.find((p) => p.id === active)?.requiresWorkspace ?? false;
-  const missingRequiredContext =
-    active === 'explore' ? !hasExploreContent : requiresWorkspace && !hasWorkspace;
+  const missingRequiredContext = active === 'explore' ? !hasExploreContent : requiresWorkspace && !hasWorkspace;
   const effective = missingRequiredContext ? 'workspaces' : active;
   return (
     <div className="flex-1 min-h-0">

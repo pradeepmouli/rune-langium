@@ -58,10 +58,7 @@ describe('createConnectionAdapter', () => {
     const handler = vi.fn();
     conn.onNotification('textDocument/didOpen', handler);
 
-    expect(server.onNotification).toHaveBeenCalledWith(
-      'textDocument/didOpen',
-      expect.any(Function)
-    );
+    expect(server.onNotification).toHaveBeenCalledWith('textDocument/didOpen', expect.any(Function));
   });
 
   it('should map typed convenience methods — onHover', () => {
@@ -101,10 +98,7 @@ describe('createConnectionAdapter', () => {
     const handler = vi.fn();
     conn.onDidOpenTextDocument(handler);
 
-    expect(server.onNotification).toHaveBeenCalledWith(
-      'textDocument/didOpen',
-      expect.any(Function)
-    );
+    expect(server.onNotification).toHaveBeenCalledWith('textDocument/didOpen', expect.any(Function));
   });
 
   it('should map sendDiagnostics to sendNotification', async () => {
@@ -238,10 +232,7 @@ describe('createConnectionAdapter', () => {
     const handler = vi.fn();
     conn.onFoldingRanges(handler);
 
-    expect(server.onRequest).toHaveBeenCalledWith(
-      'textDocument/foldingRange',
-      expect.any(Function)
-    );
+    expect(server.onRequest).toHaveBeenCalledWith('textDocument/foldingRange', expect.any(Function));
   });
 
   it('should map onDocumentSymbol to textDocument/documentSymbol', () => {
@@ -251,10 +242,7 @@ describe('createConnectionAdapter', () => {
     const handler = vi.fn();
     conn.onDocumentSymbol(handler);
 
-    expect(server.onRequest).toHaveBeenCalledWith(
-      'textDocument/documentSymbol',
-      expect.any(Function)
-    );
+    expect(server.onRequest).toHaveBeenCalledWith('textDocument/documentSymbol', expect.any(Function));
   });
 
   it('should map workspace file operation handlers via languages proxy', () => {
@@ -262,9 +250,6 @@ describe('createConnectionAdapter', () => {
     const conn = createConnectionAdapter(server as any);
 
     conn.languages.semanticTokens.on(() => {});
-    expect(server.onRequest).toHaveBeenCalledWith(
-      'textDocument/semanticTokens/full',
-      expect.any(Function)
-    );
+    expect(server.onRequest).toHaveBeenCalledWith('textDocument/semanticTokens/full', expect.any(Function));
   });
 });

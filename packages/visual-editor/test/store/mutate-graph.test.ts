@@ -46,9 +46,9 @@ describe('mutateGraph chokepoint — id-rooted patches + I1', () => {
     expect(patches.length).toBeGreaterThan(0);
 
     // Patch shape: id-rooted at the `nodes` Map key, then the nodeId
-    expect(patches[0]!.path[0]).toBe('nodes');   // root key is the draft Map name
-    expect(patches[0]!.path[1]).toBe(nodeId);    // keyed by id, NOT an array index
-    expect(patches[0]!.path).toContain('data');  // reaches into node data
+    expect(patches[0]!.path[0]).toBe('nodes'); // root key is the draft Map name
+    expect(patches[0]!.path[1]).toBe(nodeId); // keyed by id, NOT an array index
+    expect(patches[0]!.path).toContain('data'); // reaches into node data
   });
 
   it('I1 holds after mutateGraph-routed updateCardinality', () => {

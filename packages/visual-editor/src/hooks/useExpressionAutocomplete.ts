@@ -127,11 +127,7 @@ function useExpressionAutocomplete(
     (query: string): CompletionItem[] => {
       if (!query || query.trim().length === 0) {
         // Return all (capped at 50)
-        return [
-          ...featureCompletions,
-          ...functionCompletions.slice(0, 20),
-          ...typeCompletions.slice(0, 20)
-        ];
+        return [...featureCompletions, ...functionCompletions.slice(0, 20), ...typeCompletions.slice(0, 20)];
       }
 
       const lower = query.toLowerCase();

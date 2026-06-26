@@ -33,10 +33,7 @@ function toStoredWorkspaceFiles(files: readonly WorkspaceFile[]): WorkspaceFile[
   return files.filter((file) => !file.readOnly);
 }
 
-export async function saveWorkspaceFiles(
-  workspaceId: string,
-  files: readonly WorkspaceFile[]
-): Promise<void> {
+export async function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
   const root = await deps.getOpfsRoot();
 
   // Determine the workspace kind before touching OPFS.

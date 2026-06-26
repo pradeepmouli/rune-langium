@@ -65,10 +65,9 @@ describe('logRequest (T034)', () => {
     logRequest({ ip: '203.0.113.5', language: 'ts', bytesOut: 0, durationMs: 1, status: 200 });
     // Either nothing logged to stdout, or the error went to stderr; the raw IP
     // MUST NOT appear anywhere.
-    const combined = [
-      ...spy.mock.calls.map((c) => String(c[0])),
-      ...errSpy.mock.calls.map((c) => String(c[0]))
-    ].join('\n');
+    const combined = [...spy.mock.calls.map((c) => String(c[0])), ...errSpy.mock.calls.map((c) => String(c[0]))].join(
+      '\n'
+    );
     expect(combined).not.toContain('203.0.113.5');
   });
 

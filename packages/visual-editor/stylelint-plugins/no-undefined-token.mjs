@@ -27,11 +27,11 @@ const ruleName = 'rune/no-undefined-token';
 const messages = stylelint.utils.ruleMessages(ruleName, {
   undefined: (name) =>
     `\`var(--${name})\` is not defined in the token layer, this file, or the runtime allow-list. ` +
-    `Define it in the design-system tokens.css/theme.css, or add it to this rule's \`ignore\`/\`ignorePrefixes\`.`,
+    `Define it in the design-system tokens.css/theme.css, or add it to this rule's \`ignore\`/\`ignorePrefixes\`.`
 });
 
 const meta = {
-  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-undefined-token.mjs',
+  url: 'https://github.com/pradeepmouli/rune-langium/blob/master/packages/visual-editor/stylelint-plugins/no-undefined-token.mjs'
 };
 
 const VAR_DEF = /(?:^|[\s;{])--([a-zA-Z0-9_-]+)\s*:/g;
@@ -54,7 +54,7 @@ function defsFromFile(abs) {
 const rule = (primary, secondary) => (root, result) => {
   const validOptions = stylelint.utils.validateOptions(result, ruleName, {
     actual: primary,
-    possible: [true],
+    possible: [true]
   });
   if (!validOptions) return;
 

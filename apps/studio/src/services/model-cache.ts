@@ -43,10 +43,7 @@ export async function setCachedModel(model: CachedModel): Promise<void> {
  * Check if the cached model is still fresh (same ref).
  * Returns the cached model if it matches, null otherwise.
  */
-export async function getCachedModelIfFresh(
-  sourceId: string,
-  requestedRef: string
-): Promise<CachedModel | null> {
+export async function getCachedModelIfFresh(sourceId: string, requestedRef: string): Promise<CachedModel | null> {
   const cached = await getCachedModel(sourceId);
   if (cached && cached.ref === requestedRef) {
     return cached;

@@ -42,13 +42,7 @@ describe('saveWorkspaceFiles — git-backed: preserve untracked tree', () => {
     // Pre-create the workspace/files tree with an untracked README and a
     // .rosetta file, simulating what a git clone would leave on disk.
     await writeBytes(opfsRoot, new TextEncoder().encode('# readme'), id, 'files', 'README.md');
-    await writeBytes(
-      opfsRoot,
-      new TextEncoder().encode('namespace a'),
-      id,
-      'files',
-      'a.rosetta'
-    );
+    await writeBytes(opfsRoot, new TextEncoder().encode('namespace a'), id, 'files', 'a.rosetta');
 
     setWorkspaceFilesDeps({
       getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
@@ -62,9 +56,7 @@ describe('saveWorkspaceFiles — git-backed: preserve untracked tree', () => {
     expect(await fileExists(opfsRoot, id, 'files', 'README.md')).toBe(true);
 
     // The editor-tracked file should have been written (updated content).
-    const content = new TextDecoder().decode(
-      await readBytes(opfsRoot, id, 'files', 'a.rosetta')
-    );
+    const content = new TextDecoder().decode(await readBytes(opfsRoot, id, 'files', 'a.rosetta'));
     expect(content).toBe('namespace a\ntype X:');
   });
 });

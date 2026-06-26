@@ -7,27 +7,52 @@ import { SyncStatusBadge } from '../../src/components/SyncStatusBadge.js';
 
 describe('SyncStatusBadge', () => {
   it('renders idle phase', () => {
-    render(<SyncStatusBadge status={{ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: 's' }} onResolve={() => {}} />);
+    render(
+      <SyncStatusBadge status={{ phase: 'idle', ahead: 0, behind: 0, lastSyncedSha: 's' }} onResolve={() => {}} />
+    );
     expect(screen.getByTestId('sync-status').getAttribute('data-phase')).toBe('idle');
   });
   it('reflects a syncing phase', () => {
-    render(<SyncStatusBadge status={{ phase: 'pushing', ahead: 1, behind: 0, lastSyncedSha: null }} onResolve={() => {}} />);
+    render(
+      <SyncStatusBadge status={{ phase: 'pushing', ahead: 1, behind: 0, lastSyncedSha: null }} onResolve={() => {}} />
+    );
     expect(screen.getByTestId('sync-status').getAttribute('data-phase')).toBe('pushing');
   });
   it('shows resolve actions when blocked with non-empty conflictPaths', () => {
-    render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] }} onResolve={() => {}} />);
+    render(
+      <SyncStatusBadge
+        status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] }}
+        onResolve={() => {}}
+      />
+    );
     expect(screen.getByTestId('sync-resolve-keep-mine')).toBeTruthy();
     expect(screen.getByTestId('sync-resolve-take-remote')).toBeTruthy();
     expect(screen.getByText(/Merge conflict/i)).toBeTruthy();
   });
   it('shows resolve actions when blocked with empty conflictPaths (unsupported-merge path)', () => {
-    render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: [] }} onResolve={() => {}} />);
+    render(
+      <SyncStatusBadge
+        status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: [] }}
+        onResolve={() => {}}
+      />
+    );
     expect(screen.getByTestId('sync-resolve-keep-mine')).toBeTruthy();
     expect(screen.getByTestId('sync-resolve-take-remote')).toBeTruthy();
     expect(screen.getByText(/auto-merge/i)).toBeTruthy();
   });
   it('shows an error message (no resolve buttons) when blocked without conflictPaths + auth error', () => {
-    render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 0, lastSyncedSha: null, lastError: { code: 'auth', message: 'HTTP 401' } }} onResolve={() => {}} />);
+    render(
+      <SyncStatusBadge
+        status={{
+          phase: 'blocked',
+          ahead: 1,
+          behind: 0,
+          lastSyncedSha: null,
+          lastError: { code: 'auth', message: 'HTTP 401' }
+        }}
+        onResolve={() => {}}
+      />
+    );
     expect(screen.getByTestId('sync-status').getAttribute('data-phase')).toBe('blocked');
     expect(screen.queryByTestId('sync-resolve-keep-mine')).toBeNull();
     expect(screen.queryByTestId('sync-resolve-take-remote')).toBeNull();
@@ -35,7 +60,12 @@ describe('SyncStatusBadge', () => {
   });
   it('invokes onResolve with the chosen action', async () => {
     const calls: string[] = [];
-    render(<SyncStatusBadge status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] }} onResolve={(c) => calls.push(c)} />);
+    render(
+      <SyncStatusBadge
+        status={{ phase: 'blocked', ahead: 1, behind: 1, lastSyncedSha: null, conflictPaths: ['a'] }}
+        onResolve={(c) => calls.push(c)}
+      />
+    );
     const { fireEvent } = await import('@testing-library/react');
     fireEvent.click(screen.getByTestId('sync-resolve-keep-mine'));
     fireEvent.click(screen.getByTestId('sync-resolve-take-remote'));

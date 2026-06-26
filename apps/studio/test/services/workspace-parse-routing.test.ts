@@ -212,16 +212,23 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
     // The old `!serializedModelJson` filter let them through, POSTing bogus
     // files named `[cdm]/cdm.base.math` → /api/parse 500 ("no services for the
     // extension '.'"). They must be treated as bundle metadata, not user files.
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: true, models: [], deferredExports: [], errors: {}, hydrationState: { documents: [] } }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: true, models: [], deferredExports: [], errors: {}, hydrationState: { documents: [] } }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
     global.fetch = fetchMock;
 
     const files: WorkspaceFile[] = [
-      { name: 'user.rosetta', path: 'user.rosetta', content: 'namespace demo\ntype Foo:\n  bar string (1..1)', dirty: false },
+      {
+        name: 'user.rosetta',
+        path: 'user.rosetta',
+        content: 'namespace demo\ntype Foo:\n  bar string (1..1)',
+        dirty: false
+      },
       {
         name: '[cdm]/cdm.base.math',
         path: '[cdm]/cdm.base.math',
@@ -278,14 +285,23 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
   });
 
   it('forwards hydrateNamespaces to /api/parse', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: true, models: [], errors: {}, hydrationState: { documents: [] }, deferredExports: [] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      ) as Response
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: true, models: [], errors: {}, hydrationState: { documents: [] }, deferredExports: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        ) as Response
+      );
     await parseWorkspaceFiles(
-      [{ name: 'app.rosetta', path: 'app.rosetta', content: 'namespace demo\ntype Foo:\n  bar string (1..1)', dirty: false }] as Parameters<typeof parseWorkspaceFiles>[0],
+      [
+        {
+          name: 'app.rosetta',
+          path: 'app.rosetta',
+          content: 'namespace demo\ntype Foo:\n  bar string (1..1)',
+          dirty: false
+        }
+      ] as Parameters<typeof parseWorkspaceFiles>[0],
       { hydrateNamespaces: ['cdm.base.math'] }
     );
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string) as {
@@ -313,4 +329,3 @@ describe('parseWorkspaceFiles — curated bundle collection', () => {
     expect(result.fallbackMessage).toContain('fetch failed');
   });
 });
-

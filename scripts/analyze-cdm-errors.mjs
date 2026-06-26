@@ -13,10 +13,7 @@ const files = fs.readdirSync(cdmDir).filter((f) => f.endsWith('.rosetta'));
 
 for (const f of files) {
   const text = fs.readFileSync(path.join(cdmDir, f), 'utf-8');
-  const doc = services.shared.workspace.LangiumDocumentFactory.fromString(
-    text,
-    URI.file(path.join(cdmDir, f))
-  );
+  const doc = services.shared.workspace.LangiumDocumentFactory.fromString(text, URI.file(path.join(cdmDir, f)));
   services.shared.workspace.LangiumDocuments.addDocument(doc);
 }
 
