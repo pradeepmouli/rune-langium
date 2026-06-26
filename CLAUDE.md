@@ -12,7 +12,7 @@ This keeps skills discoverable from both locations without duplication.
 
 - TypeScript 5.9+ (strict mode, ESM) in a pnpm workspace monorepo
 - Studio/UI: React 19, `@xyflow/react` 12, `dockview-react`, zustand 5, zundo 2, Tailwind CSS 4, Radix UI, CodeMirror 6
-- Language/tooling: Langium 4.2.x, Zod v4, `@rune-langium/core`, `@rune-langium/codegen`, `@rune-langium/visual-editor`
+- Language/tooling: Langium 4.3.x, Zod v4, `@rune-langium/core`, `@rune-langium/codegen`, `@rune-langium/visual-editor`
 - Browser persistence: OPFS for workspace files, IndexedDB for workspace metadata, caches, settings, and layouts
 - Codegen server/container paths still depend on Java 21 + `rosetta-code-generators`
 
