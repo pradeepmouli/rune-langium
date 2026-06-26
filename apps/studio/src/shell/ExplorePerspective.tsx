@@ -41,7 +41,8 @@ import {
   useEditorStore,
   useModelSourceSync,
   nameFromNodeId,
-  splitNodeId
+  splitNodeId,
+  selectNodeRepository
 } from '@rune-langium/visual-editor';
 import type {
   RuneTypeGraphRef,
@@ -614,6 +615,8 @@ export function ExplorePerspective() {
   }, [workspaceId, workspaceKind]);
 
   const storeNodes = useEditorStore((s) => s.nodes);
+  const storeNodesById = useEditorStore((s) => s.nodesById);
+  const nodeRepository = selectNodeRepository(storeNodesById);
   const storeEdges = useEditorStore((s) => s.edges);
   // parseEpoch gates source serialization: only USER edits (not parse-driven
   // graph rebuilds) get written back to source — see useModelSourceSync.
@@ -1484,7 +1487,7 @@ export function ExplorePerspective() {
     () => (
       <div className="h-full">
         <NamespaceExplorerPanel
-          nodes={storeNodes}
+          nodeRepository={nodeRepository}
           expandedNamespaces={expandedNamespaces}
           hiddenNodeIds={hiddenNodeIds}
           selectedNodeId={selectedNodeId}
@@ -1499,7 +1502,7 @@ export function ExplorePerspective() {
       </div>
     ),
     [
-      storeNodes,
+      nodeRepository,
       expandedNamespaces,
       hiddenNodeIds,
       selectedNodeId,
