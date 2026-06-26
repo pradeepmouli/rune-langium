@@ -21,16 +21,17 @@ export type NodeOf<K extends AnyDomain['$type']> = Node<Extract<AnyDomain, { $ty
  * narrowing the generic `byType<K extends string>` cannot be widened to — the
  * generated `DomainRepository` is standalone for the same reason.
  *
- * STATUS — forward-looking keystone, NOT yet wired into editor reads. The
- * editor's `byId`-style lookups read `nodesById.get(...)` directly (the Map IS
- * the id index; wrapping it would be a parallel source of truth). This surface
- * exists for the typed `byType` projection, which has no consumer today; when
- * one arrives it calls `selectNodeRepository(get().nodesById)` (no rewiring of
- * the store needed). Built eyes-open as a complete generated substrate.
+ * STATUS — byNamespace drives the NamespaceExplorer tree; byType drives the
+ * kind-pill counts; byId backs the read-path lookups (see Phase 4 consumer
+ * cutover).
  */
 export interface NodeRepository {
   byId(id: string): TypeGraphNode | undefined;
   byType<K extends AnyDomain['$type']>(type: K): readonly NodeOf<K>[];
+  /** Nodes grouped by `meta.namespace` (the editor's namespace axis). Empty for an unknown ns. */
+  byNamespace(ns: string): readonly TypeGraphNode[];
+  /** Each distinct namespace once, in first-seen order. */
+  namespaces(): readonly string[];
   all(): readonly TypeGraphNode[];
 }
 
@@ -45,10 +46,29 @@ let cacheValue: NodeRepository | null = null;
  */
 export function selectNodeRepository(nodesById: ReadonlyMap<string, TypeGraphNode>): NodeRepository {
   if (nodesById === cacheKey && cacheValue !== null) return cacheValue;
-  const repo = createRepository(nodesById.values(), {
+  const base = createRepository(nodesById.values(), {
     key: (n) => n.id,
     type: (n) => n.data.$type
-  }) as NodeRepository;
+  });
+  // Namespace index — a second pass over the same values; createRepository
+  // encapsulates its own loop, so byNamespace is composed here rather than
+  // generated. Keyed on meta.namespace (the panel's grouping axis).
+  const byNs = new Map<string, TypeGraphNode[]>();
+  for (const n of nodesById.values()) {
+    let bucket = byNs.get(n.meta.namespace);
+    if (bucket === undefined) {
+      bucket = [];
+      byNs.set(n.meta.namespace, bucket);
+    }
+    bucket.push(n);
+  }
+  const repo: NodeRepository = {
+    byId: (id) => base.byId(id),
+    byType: ((type: string) => base.byType(type)) as NodeRepository['byType'],
+    byNamespace: (ns) => byNs.get(ns) ?? [],
+    namespaces: () => [...byNs.keys()],
+    all: () => base.all()
+  };
   cacheKey = nodesById;
   cacheValue = repo;
   return repo;
