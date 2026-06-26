@@ -21,6 +21,7 @@ import type {
   TypeOption
 } from '../types.js';
 import { resolveNodeKind } from '../adapters/model-helpers.js';
+import type { NodeRepository } from '../store/node-repository.js';
 
 /**
  * Flattened row for virtualized rendering of the namespace tree.
@@ -77,32 +78,16 @@ export function countEntriesByKind(entries: readonly NamespaceTypeEntry[]): Part
 }
 
 /**
- * Build a sorted list of namespace tree entries from graph nodes.
+ * Build a sorted list of namespace tree entries from the node repository.
  *
  * Groups nodes by `namespace`, counts per kind, and sorts
  * both namespaces and their child types alphabetically.
  */
-export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] {
-  const nsMap = new Map<string, NamespaceTypeEntry[]>();
-
-  for (const node of nodes) {
-    const ns = node.meta.namespace;
-    if (!nsMap.has(ns)) {
-      nsMap.set(ns, []);
-    }
-    const d = node.data as AnyGraphNode;
-    nsMap.get(ns)!.push({
-      nodeId: node.id,
-      name: d.name as string,
-      kind: resolveNodeKind(node) as TypeKind
-    });
-  }
-
+export function buildNamespaceTree(repo: NodeRepository): NamespaceTreeNode[] {
   const tree: NamespaceTreeNode[] = [];
-
-  for (const [namespace, types] of nsMap) {
+  for (const namespace of repo.namespaces()) {
+    const types = repo.byNamespace(namespace).map(extractTypeEntry);
     types.sort((a, b) => a.name.localeCompare(b.name));
-
     tree.push({
       namespace,
       types,
@@ -113,9 +98,7 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
       funcCount: types.filter((t) => t.kind === 'func').length
     });
   }
-
   tree.sort((a, b) => a.namespace.localeCompare(b.namespace));
-
   return tree;
 }
 
@@ -249,32 +232,28 @@ function extractTypeEntry(node: TypeGraphNode): NamespaceTypeEntry {
 }
 
 /**
- * Build a sub-namespace-segmented tree from graph nodes.
+ * Build a sub-namespace-segmented tree from the node repository.
  *
  * Nests namespaces by splitting on `'.'`, so `"com.rosetta.model"` produces
  * a three-level chain `com → rosetta → model`. A namespace with both direct
  * types and deeper children has BOTH `types` and `children` populated.
  *
  * Edge cases:
- *  - Empty input → returns `[]`.
- *  - Types with an empty or undefined namespace string are placed under a
- *    root segment with `segment = ""` and `fullPath = ""`.
+ *  - Empty repository → returns `[]`.
+ *  - Types with an empty namespace string are placed under a root segment
+ *    with `segment = ""` and `fullPath = ""`.
  *
  * Root segments and each node's `children` are sorted locale-insensitively
  * by segment name. Each node's `types` are sorted by name.
  */
-export function buildSegmentedNamespaceTree(nodes: TypeGraphNode[]): SegmentNode[] {
-  if (nodes.length === 0) return [];
-
+export function buildSegmentedNamespaceTree(repo: NodeRepository): SegmentNode[] {
   // Group TypeGraphNodes by their full namespace string, then defer to the
   // shared core. The graph-node and TypeOption builders differ ONLY in how
   // they normalize their input into this `namespace → entries` map; the tree
   // construction (nesting, totals, sorting) is identical, so it lives once.
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
-  for (const node of nodes) {
-    const ns: string = node.meta.namespace ?? '';
-    if (!nsMap.has(ns)) nsMap.set(ns, []);
-    nsMap.get(ns)!.push(extractTypeEntry(node));
+  for (const namespace of repo.namespaces()) {
+    nsMap.set(namespace, repo.byNamespace(namespace).map(extractTypeEntry));
   }
   return buildSegmentsFromEntries(nsMap);
 }
