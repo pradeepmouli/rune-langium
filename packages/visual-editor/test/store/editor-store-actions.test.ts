@@ -805,6 +805,57 @@ describe('EditorStore — updateAttributeType on Choice nodes — cross-namespac
   });
 });
 
+// Guards the ONE behavior change in the Phase 4 lookup cutover (`resolveTargetId`):
+// a bare type name now resolves within the SOURCE node's namespace, not by
+// first-in-array bare-name scan. Without this, the change rode on zero coverage.
+const ADD_ATTR_AMBIGUOUS_FAST = `
+namespace payment.fast
+version "1.0.0"
+
+type Wire:
+  iban string (1..1)
+
+type Trade:
+  tradeId string (1..1)
+`;
+
+const ADD_ATTR_AMBIGUOUS_SLOW = `
+namespace payment.slow
+version "1.0.0"
+
+type Wire:
+  swiftCode string (1..1)
+`;
+
+describe('EditorStore — addAttribute — cross-namespace bare-name disambiguation', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    const fast = await parse(ADD_ATTR_AMBIGUOUS_FAST, 'inmemory:///fast.rosetta');
+    const slow = await parse(ADD_ATTR_AMBIGUOUS_SLOW, 'inmemory:///slow.rosetta');
+    store = createEditorStore();
+    // Load SLOW first so a first-in-array bare-name scan would (wrongly) prefer
+    // payment.slow.Wire — the source-namespace lookup must override array order.
+    store.getState().loadModels([slow.value, fast.value]);
+  });
+
+  it('resolves a bare attribute type to the SOURCE namespace, not first-in-array', () => {
+    const trade = store.getState().nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'payment.fast');
+    const fastWire = store.getState().nodes.find((n) => n.data.name === 'Wire' && n.meta.namespace === 'payment.fast');
+    expect(trade).toBeDefined();
+    expect(fastWire).toBeDefined();
+
+    store.getState().addAttribute(trade!.id, 'method', 'Wire', '0..1');
+
+    const refEdge = store
+      .getState()
+      .edges.find((e) => e.source === trade!.id && e.data?.kind === 'attribute-ref' && e.data?.label === 'method');
+    expect(refEdge).toBeDefined();
+    // Must target payment.fast.Wire (source namespace), NOT payment.slow.Wire (loaded first).
+    expect(refEdge!.target).toBe(fastWire!.id);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Condition operations + updateExpression
 // ---------------------------------------------------------------------------

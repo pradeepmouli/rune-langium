@@ -109,6 +109,30 @@ export function disambiguateTypeRef(
   return targetTypeName;
 }
 
+/**
+ * Resolve a target node id from a bare type name, preferring the SOURCE node's
+ * namespace: a `makeNodeId(ns, typeName)` keyed lookup on `nodesById` (the byId
+ * surface), falling back to a bare-name scan for built-in/string types or
+ * cross-namespace refs that have no node in the source namespace.
+ *
+ * The fallback preserves the pre-repository linear-scan behavior exactly; the
+ * namespace-qualified hit only changes resolution in the ambiguous
+ * same-name-in-two-namespaces case (a correctness win, not a regression).
+ */
+function resolveTargetId(
+  nodesById: ReadonlyMap<string, TypeGraphNode>,
+  allNodes: ReadonlyArray<TypeGraphNode>,
+  sourceNodeId: string,
+  typeName: string
+): string | undefined {
+  const ns = nodesById.get(sourceNodeId)?.meta.namespace;
+  if (ns) {
+    const qualifiedId = makeNodeId(ns, typeName);
+    if (nodesById.has(qualifiedId)) return qualifiedId;
+  }
+  return allNodes.find((n) => n.data.name === typeName)?.id;
+}
+
 // ---------------------------------------------------------------------------
 // State shape
 // ---------------------------------------------------------------------------
@@ -1321,7 +1345,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               synonyms: []
             };
 
-            const targetNodeId = get().nodes.find((n) => n.data.name === typeName)?.id;
+            const { nodes, nodesById } = get();
+            const targetNodeId = resolveTargetId(nodesById, nodes, nodeId, typeName);
             const newEdge: TypeGraphEdge | null =
               targetNodeId && targetNodeId !== nodeId
                 ? {
@@ -1383,7 +1408,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
 
           updateAttributeType(nodeId: string, attrName: string, newTypeName: string, targetTypeId: string) {
             const current = get();
-            const node = current.nodes.find((n) => n.id === nodeId);
+            const node = current.nodesById.get(nodeId);
             if (!node) return;
             const d0 = node.data;
             // Allow Data, Annotation, AND Choice through — Choice arms are stored in
@@ -1408,7 +1433,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // in the current store and pick a $refText that disambiguates against
             // same-named types in other namespaces. Reject (no-op) stale or unknown
             // ids — a drag payload pointing at a deleted node must NOT corrupt the AST.
-            const target = current.nodes.find((n) => n.id === targetTypeId);
+            const target = current.nodesById.get(targetTypeId);
             if (!target) return; // stale payload — abort
             const targetNamespace = target.meta.namespace;
             if (!targetNamespace) return; // malformed target
@@ -1474,7 +1499,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
 
           renameAttribute(nodeId: string, oldName: string, newName: string) {
             const current = get();
-            const node = current.nodes.find((n) => n.id === nodeId);
+            const node = current.nodesById.get(nodeId);
             if (!node) return;
             const d0 = node.data;
             if (d0.$type !== 'Data' && d0.$type !== 'Annotation') return;
@@ -1587,11 +1612,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // edit made just before its own reparse lands is captured as a pending
             // patch and replayed, not dropped. See `edit-reconcile.ts`.
             const card = parseCardinalityString(cardinality);
-            const { nodes, edges } = get();
+            const { nodes, nodesById, edges } = get();
             const oldEdgeIds = edges
               .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
               .map((e) => e.id);
-            const targetNodeId = nodes.find((n) => n.data.name === typeName)?.id;
+            const targetNodeId = resolveTargetId(nodesById, nodes, nodeId, typeName);
             const newEdge: TypeGraphEdge | null =
               targetNodeId && targetNodeId !== nodeId
                 ? {
@@ -1764,7 +1789,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             };
             // Resolve the target node id BEFORE the recipe (read-only against the
             // derived `nodes` array — I1 keeps it equal to nodesById.values()).
-            const targetId = get().nodes.find((n) => n.data.name === typeName)?.id;
+            const { nodes, nodesById } = get();
+            const targetId = resolveTargetId(nodesById, nodes, nodeId, typeName);
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data;
@@ -1877,7 +1903,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // node in a different namespace); fall back to name-based lookup for
             // built-in / string types that have no graph node.
             const targetNodeId =
-              targetNode?.id ?? nodes.find((n) => n.data.name === typeName)?.id;
+              targetNode?.id ?? resolveTargetId(nodesById, nodes, nodeId, typeName);
             const newEdge: TypeGraphEdge | null =
               targetNodeId && targetNodeId !== nodeId
                 ? {

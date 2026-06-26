@@ -26,7 +26,7 @@ import type {
   RosettaTypeAlias,
   RosettaBasicType,
   Annotation,
-  Dehydrated
+  AnyDomain
 } from '@rune-langium/core';
 
 // Dehydrated<T> — canonical editable wire model (defined in @rune-langium/core)
@@ -73,16 +73,12 @@ export type RootAstElement =
  * `$type`) of `Dehydrated<T>` over every top-level element kind the editor
  * renders. This is the PURE domain object: lossless, strict `{ $refText }`
  * refs, `$type` required, and NO UI metadata (which lives on `node.meta`).
+ *
+ * Sourced from the generated core `AnyDomain` union (single source of truth;
+ * the editor no longer hand-maintains the arm list — the langium-zod
+ * `repository.elementTypes` config drives it).
  */
-export type DomainNodeData =
-  | Dehydrated<Data>
-  | Dehydrated<Choice>
-  | Dehydrated<RosettaEnumeration>
-  | Dehydrated<RosettaFunction>
-  | Dehydrated<RosettaRecordType>
-  | Dehydrated<RosettaTypeAlias>
-  | Dehydrated<RosettaBasicType>
-  | Dehydrated<Annotation>;
+export type DomainNodeData = AnyDomain;
 
 /**
  * Union of all node-data variants for top-level elements.
