@@ -100,11 +100,18 @@ export function useInheritedMembers(
       visited.add(currentParentName);
 
       // Qualified-name branch: byId is O(1) under invariant I1
-      // (node.id === makeNodeId(ns, name)); bare-name fallback covers
-      // unqualified $refText values that don't carry a namespace prefix.
+      // (node.id === makeNodeId(ns, name)); on the repo-less path the array
+      // scan must also check the composed id so cross-namespace supertypes
+      // referenced by fully-qualified $refText (e.g. "cdm.base.Foo") resolve.
       const parentNode =
         nodeRepository?.byId(currentParentName) ??
-        allNodes.find((n) => (n.data as AnyGraphNode).name === currentParentName);
+        allNodes.find((n) => {
+          const pd = n.data as AnyGraphNode;
+          return (
+            pd.name === currentParentName ||
+            makeNodeId(n.meta.namespace, pd.name as string) === currentParentName
+          );
+        });
 
       if (!parentNode) break;
 

@@ -307,4 +307,34 @@ describe('useInheritedMembers — qualified-name byId resolution', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]!.ancestorName).toBe('Parent');
   });
+
+  it('resolves parent via qualified makeNodeId match when called WITHOUT a repository', () => {
+    // Regression: Task 4 byId cutover dropped the makeNodeId arm from the
+    // array fallback, causing cross-namespace supertypes to silently vanish
+    // when useInheritedMembers is called without a repository (e.g. from
+    // useEffectiveMembers, DataTypeForm, EnumForm).
+    // Parent lives in namespace "a" with bare name "Parent" → id "a.Parent".
+    // Child's $refText is the fully-qualified "a.Parent".
+    // With no repository the fix must resolve via makeNodeId.
+    const parent = makeDataNode('Parent', undefined, [makeAttrMember('inherited', 'string')]);
+    // Override the id/meta so the parent lives in namespace "a"
+    const parentInNsA = {
+      ...parent,
+      id: 'a.Parent',
+      meta: { ...parent.meta, namespace: 'a' }
+    } as unknown as TypeGraphNode;
+
+    const child = makeDataNode('Child', 'a.Parent', []);
+    const allNodes = [child, parentInNsA];
+
+    // Called WITHOUT a repository — exercises the array-scan makeNodeId arm
+    const { result } = renderHook(() =>
+      useInheritedMembers(child.data as AnyGraphNode, allNodes)
+    );
+    const groups = result.current;
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.ancestorName).toBe('Parent');
+    expect(groups[0]!.namespace).toBe('a');
+    expect(groups[0]!.members).toHaveLength(1);
+  });
 });
