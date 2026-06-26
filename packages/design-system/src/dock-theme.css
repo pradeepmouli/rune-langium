@@ -72,17 +72,10 @@
     background: var(--background);
   }
 
-  .studio-app .rune-dock-theme .dv-group-panel {
-    border-radius: 12px;
-    border: 0.5px solid color-mix(in oklch, var(--border) 60%, transparent);
-    overflow: hidden;
-    background: var(--background);
-  }
-
-  .studio-app .rune-dock-theme .dv-group-panel .dv-tabs-container {
-    border-radius: 12px 12px 0 0;
-    background: var(--card);
-  }
+  /* dockview v7 removed `.dv-group-panel`, consolidating the group container
+     onto `.dv-groupview`. The card chrome (radius / overflow / surface / ring)
+     and tab-header styling now live solely on the `.dv-groupview` and
+     `.dv-tabs-and-actions-container` rules in the unlayered section below. */
 
   /* ── Sash (resize handle) — layered portion ─────────────────────── */
   .studio-app .rune-dock-theme .dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {
