@@ -15,6 +15,7 @@ import { useMemo } from 'react';
 import type { AnyGraphNode, TypeGraphNode } from '../types.js';
 import { getRefText, resolveNodeKind, getTypeRefText, formatCardinality } from '../adapters/model-helpers.js';
 import { makeNodeId } from '../store/node-projection.js';
+import type { NodeRepository } from '../store/node-repository.js';
 
 // Narrow shapes for type-safe access to union members
 interface RefShape {
@@ -82,7 +83,8 @@ function getMembers(d: AnyGraphNode): unknown[] {
 export function useInheritedMembers(
   nodeData: AnyGraphNode | null,
   allNodes: TypeGraphNode[],
-  maxDepth = 20
+  maxDepth = 20,
+  nodeRepository?: NodeRepository
 ): InheritedGroup[] {
   const parentName = nodeData ? getParentName(nodeData) : undefined;
   return useMemo(() => {
@@ -97,10 +99,12 @@ export function useInheritedMembers(
       if (visited.has(currentParentName)) break; // cycle guard
       visited.add(currentParentName);
 
-      const parentNode = allNodes.find((n) => {
-        const pd = n.data as AnyGraphNode;
-        return pd.name === currentParentName || makeNodeId(n.meta.namespace, pd.name as string) === currentParentName;
-      });
+      // Qualified-name branch: byId is O(1) under invariant I1
+      // (node.id === makeNodeId(ns, name)); bare-name fallback covers
+      // unqualified $refText values that don't carry a namespace prefix.
+      const parentNode =
+        nodeRepository?.byId(currentParentName) ??
+        allNodes.find((n) => (n.data as AnyGraphNode).name === currentParentName);
 
       if (!parentNode) break;
 
@@ -120,7 +124,7 @@ export function useInheritedMembers(
     }
 
     return groups;
-  }, [parentName, allNodes, maxDepth]);
+  }, [parentName, allNodes, maxDepth, nodeRepository]);
 }
 
 // ---------------------------------------------------------------------------

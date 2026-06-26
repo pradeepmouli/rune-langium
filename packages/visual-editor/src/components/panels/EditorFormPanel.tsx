@@ -33,6 +33,7 @@ import { FunctionForm } from '../editors/FunctionForm.js';
 import { TypeAliasForm } from '../editors/TypeAliasForm.js';
 import { OtherForm } from './OtherForm.js';
 import { useInheritedMembers } from '../../hooks/useInheritedMembers.js';
+import type { NodeRepository } from '../../store/node-repository.js';
 import type {
   GraphNodeMeta,
   AnyGraphNode,
@@ -130,6 +131,8 @@ export interface EditorFormPanelProps {
   actions: EditorFormActions;
   /** All graph nodes (for inherited member resolution). */
   allNodes?: TypeGraphNode[];
+  /** Repository for O(1) node-by-id lookup during inheritance chain resolution. */
+  nodeRepository?: NodeRepository;
   /**
    * Optional render-prop for a rich expression editor in FunctionForm.
    * When omitted, FunctionForm renders a plain `<Textarea>` fallback.
@@ -154,6 +157,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   availableTypes,
   actions,
   allNodes = [],
+  nodeRepository,
   renderExpressionEditor,
   onClose,
   onNavigateToNode
@@ -168,7 +172,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   // fallback (callers must pass the node.meta sibling for real nodes).
   const nodeMeta = metaProp ?? FALLBACK_META;
 
-  const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes);
+  const inheritedGroups = useInheritedMembers(nodeData as AnyGraphNode | null, allNodes, 20, nodeRepository);
 
   // Derive allNodeIds for TypeLink resolution
   const allNodeIds = useMemo(() => allNodes.map((n) => n.id), [allNodes]);

@@ -23,6 +23,9 @@ import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 const { editorStoreState, useEditorStore } = vi.hoisted(() => {
   const editorStoreState = {
     nodes: [] as Array<{ id: string; data: { namespace?: string; name?: string; $type?: string } }>,
+    get nodesById() {
+      return new Map(this.nodes.map((n) => [n.id, n]));
+    },
     edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,
@@ -83,7 +86,14 @@ vi.mock('@rune-langium/visual-editor', () => ({
   AST_TYPE_TO_NODE_TYPE: {},
   resolveNodeKind: () => 'data',
   useEditorStore,
-  useModelSourceSync: () => {}
+  useModelSourceSync: () => {},
+  selectNodeRepository: (nodesById: Map<string, unknown>) => ({
+    byId: (id: string) => nodesById?.get(id),
+    byType: () => [],
+    byNamespace: () => [],
+    namespaces: () => [],
+    all: () => []
+  })
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({

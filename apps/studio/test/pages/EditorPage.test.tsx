@@ -25,6 +25,9 @@ const {
       data: { namespace?: string; name?: string; $type?: string; deferred?: boolean };
       meta: { namespace: string; errors: unknown[]; hasExternalRefs: boolean; deferred?: boolean };
     }>,
+    get nodesById() {
+      return new Map(this.nodes.map((n) => [n.id, n]));
+    },
     edges: [] as Array<{ source: string; target: string }>,
     selectedNodeId: undefined as string | undefined,
     detailPanelOpen: false,
@@ -279,7 +282,16 @@ vi.mock('@rune-langium/visual-editor', () => ({
   },
   // Exact mirror of qualifiedExportPath/makeNodeId: bare name when namespace is
   // empty (global), dotted otherwise — so empty-namespace ids stay valid (not `.Foo`).
-  makeNodeId: (namespace: string, name: string) => (namespace ? `${namespace}.${name}` : name)
+  makeNodeId: (namespace: string, name: string) => (namespace ? `${namespace}.${name}` : name),
+  // Minimal stub — tests exercise ExplorePerspective's render path, not the
+  // repository implementation. byId delegates to the Map directly.
+  selectNodeRepository: (nodesById: Map<string, unknown>) => ({
+    byId: (id: string) => nodesById?.get(id),
+    byType: () => [],
+    byNamespace: () => [],
+    namespaces: () => [],
+    all: () => []
+  })
 }));
 
 vi.mock('../../src/components/SourceEditor.js', () => ({
