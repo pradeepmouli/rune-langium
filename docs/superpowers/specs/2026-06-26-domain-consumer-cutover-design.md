@@ -11,7 +11,7 @@ Give the forward-looking generated domain repository its first real consumers. T
 This effort wires three real consumers, scaled to where each projection genuinely fits:
 
 - **`byNamespace`** → the `NamespaceExplorerPanel` browse surface (its true need; the panel groups by namespace).
-- **`byType`** → the panel's global kind-filter (a smaller but genuine `$type` consumer, via the 1:1 `TypeKind ↔ $type` mapping).
+- **`byType`** → global per-kind **count badges** on the kind-filter pills (a smaller but genuine `$type` consumer, via the existing `NODE_TYPE_TO_AST_TYPE` `kind → $type` map). The existing `filterSegmentedTreeByKind` tree-pruning is kept as-is (it already filters cleanly; replacing it with `byType` would be strictly more complex for the same result). `byType`'s clean, additive fit is the pill counts, not the filter logic.
 - **`byId`** → the ~5 read-path sites still doing O(n) `nodes.find(n => n.id === x)` scans.
 
 **Out of scope:** any langium-zod / generated-core change. `byNamespace` is added editor-side only (Approach A). The `TypeOption`-based pickers and the `…FromOptions` namespace-tree builder are not touched — they operate on a builtin-inclusive projection, not domain nodes. No taxonomy migration of `TypeKind`/`TypeOption` onto `$type`.
@@ -54,9 +54,8 @@ export interface NodeRepository {
 ### 3.3 `NamespaceExplorerPanel` wiring + `byType` kind-filter
 **File:** `packages/visual-editor/src/components/panels/NamespaceExplorerPanel.tsx`
 
-- The panel derives `selectNodeRepository(nodesById)` (memoized) and passes it to the builders instead of `nodes`.
-- The global kind-filter (`filterSegmentedTreeByKind` / kind pills) routes through `byType` via a `TypeKind → $type` map: a selected kind resolves to its `$type`, and `byType($type)` yields the node-id set to retain. This is `byType`'s genuine consumer.
-- The plan's first task verifies the panel can reach `nodesById` from the store (it already reads `nodes` from a store selector; `nodesById` is the same source).
+- The panel derives `selectNodeRepository(nodesById)` (memoized) and passes it to the builders instead of `nodes`. `nodes` is currently a prop; the repository (or `nodesById`) is threaded from the parent (`ExplorePerspective`, which owns the store) — the plan's first wiring task confirms and routes this.
+- **`byType` count badges:** the kind-filter pills (currently dot + label) gain a global per-kind count via `repo.byType(NODE_TYPE_TO_AST_TYPE[kind]).length`. This is additive — `filterSegmentedTreeByKind` is unchanged.
 
 ### 3.4 `byId` read-path cutover
 The ~5 surviving O(n) `nodes.find(n => n.id === x)` read sites:
