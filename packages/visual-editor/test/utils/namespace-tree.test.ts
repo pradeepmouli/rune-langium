@@ -9,10 +9,6 @@ import { describe, it, expect } from 'vitest';
 import { buildNamespaceTree, filterNamespaceTree, flattenNamespaceTree } from '../../src/utils/namespace-tree.js';
 import type { TypeGraphNode } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
-import { selectNodeRepository } from '../../src/store/node-repository.js';
-
-// Build a repo from an array of TypeGraphNode for the builder tests.
-const repoOf = (nodes: TypeGraphNode[]) => selectNodeRepository(new Map(nodes.map((n) => [n.id, n])));
 
 const KIND_TO_AST_TYPE: Record<string, string> = {
   data: 'Data',
@@ -39,12 +35,12 @@ function makeNode(ns: string, name: string, kind: string = 'data'): TypeGraphNod
 
 describe('buildNamespaceTree', () => {
   it('returns empty array for no nodes', () => {
-    expect(buildNamespaceTree(repoOf([]))).toEqual([]);
+    expect(buildNamespaceTree([])).toEqual([]);
   });
 
   it('groups nodes by namespace', () => {
     const nodes = [makeNode('ns.a', 'TypeA'), makeNode('ns.a', 'TypeB'), makeNode('ns.b', 'TypeC')];
-    const tree = buildNamespaceTree(repoOf(nodes));
+    const tree = buildNamespaceTree(nodes);
     expect(tree).toHaveLength(2);
     expect(tree[0]!.namespace).toBe('ns.a');
     expect(tree[0]!.types).toHaveLength(2);
@@ -54,13 +50,13 @@ describe('buildNamespaceTree', () => {
 
   it('sorts namespaces alphabetically', () => {
     const nodes = [makeNode('z.ns', 'TypeZ'), makeNode('a.ns', 'TypeA'), makeNode('m.ns', 'TypeM')];
-    const tree = buildNamespaceTree(repoOf(nodes));
+    const tree = buildNamespaceTree(nodes);
     expect(tree.map((e) => e.namespace)).toEqual(['a.ns', 'm.ns', 'z.ns']);
   });
 
   it('sorts types within a namespace alphabetically', () => {
     const nodes = [makeNode('ns', 'Zebra'), makeNode('ns', 'Apple'), makeNode('ns', 'Mango')];
-    const tree = buildNamespaceTree(repoOf(nodes));
+    const tree = buildNamespaceTree(nodes);
     expect(tree[0]!.types.map((t) => t.name)).toEqual(['Apple', 'Mango', 'Zebra']);
   });
 
@@ -71,7 +67,7 @@ describe('buildNamespaceTree', () => {
       makeNode('ns', 'C1', 'choice'),
       makeNode('ns', 'E1', 'enum')
     ];
-    const tree = buildNamespaceTree(repoOf(nodes));
+    const tree = buildNamespaceTree(nodes);
     expect(tree[0]!.totalCount).toBe(4);
     expect(tree[0]!.dataCount).toBe(2);
     expect(tree[0]!.choiceCount).toBe(1);
@@ -80,7 +76,7 @@ describe('buildNamespaceTree', () => {
 
   it('preserves node IDs in type entries', () => {
     const nodes = [makeNode('com.example', 'MyType')];
-    const tree = buildNamespaceTree(repoOf(nodes));
+    const tree = buildNamespaceTree(nodes);
     expect(tree[0]!.types[0]!.nodeId).toBe('com.example.MyType');
   });
 });
@@ -92,7 +88,7 @@ describe('filterNamespaceTree', () => {
     makeNode('com.rosetta.lib', 'Date'),
     makeNode('cdm.product', 'Asset')
   ];
-  const tree = buildNamespaceTree(repoOf(nodes));
+  const tree = buildNamespaceTree(nodes);
 
   it('returns full tree for empty query', () => {
     expect(filterNamespaceTree(tree, '')).toEqual(tree);
@@ -150,7 +146,7 @@ describe('filterNamespaceTree', () => {
   it('treats regex metacharacters as literal strings', () => {
     // Add nodes with special characters in their names
     const specialNodes = [makeNode('ns', 'Type[A]'), makeNode('ns', 'Type(B)'), makeNode('ns', 'Type.C')];
-    const specialTree = buildNamespaceTree(repoOf(specialNodes));
+    const specialTree = buildNamespaceTree(specialNodes);
 
     // Searching for literal brackets should match Type[A]
     const result1 = filterNamespaceTree(specialTree, '[');
@@ -171,7 +167,7 @@ describe('flattenNamespaceTree', () => {
     makeNode('ns.b', 'TypeC', 'enum'),
     makeNode('ns.c', 'TypeD', 'func')
   ];
-  const tree = buildNamespaceTree(repoOf(nodes));
+  const tree = buildNamespaceTree(nodes);
 
   it('returns only namespace headers when all collapsed', () => {
     const rows = flattenNamespaceTree(tree, new Set(), new Set());

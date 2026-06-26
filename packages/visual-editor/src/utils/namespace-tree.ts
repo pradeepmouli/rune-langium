@@ -78,15 +78,28 @@ export function countEntriesByKind(entries: readonly NamespaceTypeEntry[]): Part
 }
 
 /**
- * Build a sorted list of namespace tree entries from the node repository.
+ * Build a sorted list of namespace tree entries from graph nodes.
  *
  * Groups nodes by `namespace`, counts per kind, and sorts
  * both namespaces and their child types alphabetically.
+ *
+ * Takes a `TypeGraphNode[]` (not a `NodeRepository`): this is a public,
+ * exported utility with no in-repo callers, so its node-array signature is
+ * kept stable. The internal, panel-facing `buildSegmentedNamespaceTree` is the
+ * one sourced from the repository.
  */
-export function buildNamespaceTree(repo: NodeRepository): NamespaceTreeNode[] {
+export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] {
+  const nsMap = new Map<string, NamespaceTypeEntry[]>();
+  for (const node of nodes) {
+    let bucket = nsMap.get(node.meta.namespace);
+    if (bucket === undefined) {
+      bucket = [];
+      nsMap.set(node.meta.namespace, bucket);
+    }
+    bucket.push(extractTypeEntry(node));
+  }
   const tree: NamespaceTreeNode[] = [];
-  for (const namespace of repo.namespaces()) {
-    const types = repo.byNamespace(namespace).map(extractTypeEntry);
+  for (const [namespace, types] of nsMap) {
     types.sort((a, b) => a.name.localeCompare(b.name));
     tree.push({
       namespace,
