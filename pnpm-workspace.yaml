@@ -26,6 +26,14 @@ minimumReleaseAgeExclude:
 # `pnpm` field, which they ignore). Migrated from package.json so the
 # lockfile's overrides match the running config under pnpm@11.x.
 overrides:
+  # Pin react + react-dom to the SAME exact version. design-system and
+  # visual-editor declare react-dom as a floating peer (`react-dom: ">=18.0.0"`),
+  # which let react-dom drift to a newer patch (19.2.7) than react (19.2.6).
+  # react-dom's dev build hard-asserts exact-same-version, which aborts every
+  # React test suite at load (CI: "Failed Suites 51"). The override forces both
+  # to one version regardless of the peer ranges.
+  react: 19.2.6
+  react-dom: 19.2.6
   langium-zod: 0.9.0
   x-to-zod: ^0.8.0
   '@zod-to-form/core': ^0.9.1
