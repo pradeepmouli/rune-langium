@@ -428,6 +428,33 @@ type Quantity:
     expect(bundleSpy).not.toHaveBeenCalled();
   });
 
+  it('path C: empty seeds (no namespaces, no user imports) load ALL bundle namespaces (emit-everything contract)', async () => {
+    // Codex P1: `namespaces` absent → "no filter / emit everything". With no
+    // seeds the closure must be the whole bundle, not empty (which would 400
+    // with "No output generated"). Contrast the scoped path-C test above, which
+    // seeds via an import and excludes cdm.other.
+    const mod = await import('../lib/curated-fetch.js');
+    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(CG_MANIFEST as never);
+    vi.spyOn(mod, 'fetchCuratedNamespace').mockImplementation(async (_id, _v, artifactKey) => {
+      const ns = Object.keys(CG_NS_DOCS).find((n) => artifactKey.includes(`/ns/${n}.json.gz`));
+      return ns ? CG_NS_DOCS[ns] : [];
+    });
+
+    await onRequestPost({
+      request: new Request('http://x/api/codegen', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: [], target: 'typescript', curatedBundles: [{ id: 'cdm', version: 'latest' }] })
+      }), env: {}
+    } as never);
+
+    const arts: string[] = (mod.fetchCuratedNamespace as ReturnType<typeof vi.spyOn>).mock.calls.map(
+      (c: unknown[]) => c[2] as string
+    );
+    // No filter → EVERY bundle namespace is loaded (both math AND other).
+    expect(arts.some((a) => a.includes('/ns/cdm.base.math.json.gz'))).toBe(true);
+    expect(arts.some((a) => a.includes('/ns/cdm.other.json.gz'))).toBe(true);
+  });
+
   // ── Path A: accept pre-loaded serialized curatedDocs (Task 2) ───────────
   // When the client sends pre-loaded docs, the server must deserialize them
   // directly and perform NO manifest/namespace fetch at all.

@@ -10,7 +10,7 @@
  * structured diagnostics on failure.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { downloadTargetViaRouter, CodegenDownloadError } from '../../src/services/workspace.js';
 
 const FILES = [{ path: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n' }];
@@ -202,7 +202,7 @@ describe('downloadTargetViaRouter', () => {
   it('sends curatedBundles (path C) and omits curatedDocs when curatedDocs is empty', async () => {
     const fetchMock = mockFetch(
       () =>
-        new Response(new Blob(['x']), {
+        new Response('x', {
           status: 200,
           headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
         })
@@ -232,7 +232,7 @@ describe('downloadTargetViaRouter', () => {
   it('sends curatedDocs (path A) when curated serialized models are loaded', async () => {
     const fetchMock = mockFetch(
       () =>
-        new Response(new Blob(['x']), {
+        new Response('x', {
           status: 200,
           headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
         })

@@ -275,7 +275,11 @@ async function loadAllDocuments(
           };
         }
         const nsGraph = manifest.namespaces;
-        const closure = closeNamespacesFromManifest(seeds, nsGraph);
+        // Empty seeds (no request `namespaces` and no user imports) preserves the
+        // "no filter → emit everything" contract: load every namespace in the
+        // bundle. A scoped request (the studio's normal flow always sends the
+        // dependency-closed `namespaces`) loads only its transitive closure.
+        const closure = seeds.size > 0 ? closeNamespacesFromManifest(seeds, nsGraph) : new Set(Object.keys(nsGraph));
         const closureNs = [...closure].filter((ns) => nsGraph[ns]);
         const FETCH_CONCURRENCY = 8;
         for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
