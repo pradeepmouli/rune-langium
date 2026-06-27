@@ -15,37 +15,25 @@
  * then expose the original file name in the response.
  */
 
-// Langium services are imported LAZILY inside hydrateUserWorkspace /
-// populateDependencyGraph below so an empty-workspace request
-// (files: [], curatedBundles: []) avoids the ~1.8 MB langium runtime import
-// + createRuneDslServices initialization entirely. Any request that produces
-// at least one hydration document (user-parsed or curated-deserialized) pays
-// the langium init cost once.
-//
-// Cross-namespace dep-graph helpers (collectNamespaceDependencies +
-// closeNamespaceDependencies) are pure functions over LangiumDocument[]
-// — importing them statically pulls in just the AST type guards from
-// core's generated/ast.js, not any service runtime.
+// Langium services are imported LAZILY inside hydrateUserWorkspace so an
+// empty-workspace request (files: [], curatedBundles: []) avoids the ~1.8 MB
+// langium runtime import + createRuneDslServices initialization entirely.
+// Any request with user files pays the langium init cost once.
 import type { RosettaModel } from '@rune-langium/core';
 import {
-  collectNamespaceDependencies,
-  closeNamespaceDependencies,
   qualifiedExportPath,
   serializeRuneModel,
   runeBigIntReplacer,
   preserveCstText,
-  hydrateModelDocument,
   namespaceFromModelName
 } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import {
-  fetchCuratedBundle,
   fetchCuratedManifest,
   fetchCuratedNamespace,
   CuratedBundleUnavailableError
 } from '../lib/curated-fetch.js';
-import type { CuratedManifest } from '@rune-langium/curated-schema';
-import { computeCuratedClosure, closeNamespacesFromManifest } from '../lib/curated-closure.js';
+import { closeNamespacesFromManifest, buildDependencyGraph, expandWildcard } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
 
 /**
@@ -215,98 +203,62 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // flags that at least one bundle took the whole-bundle path, in which case
     // the closure must be derived from the loaded docs.
     const manifestClosureNamespaces = new Set<string>();
-    let anyV1Fallback = false;
+    // Direct curated→curated edges per closure namespace, read from the
+    // precomputed manifest graph (NO deserialize/link). Feeds buildDependencyGraph.
+    const curatedDirectDeps = new Map<string, Set<string>>();
     if (Array.isArray(body.curatedBundles) && body.curatedBundles.length > 0) {
       for (const bundle of body.curatedBundles) {
         try {
-          // The manifest fetch is the entry point for the fast-path, but it must
-          // NOT become a new single point of failure: if manifest.json is
-          // transiently unavailable/malformed while latest.serialized.json.gz is
-          // still healthy, fall back to the whole-bundle path rather than 502ing
-          // every curated request (Codex P1). Only a manifest-fetch failure is
-          // swallowed here; a per-namespace artifact failure inside the fast-path
-          // still surfaces as 502 (the manifest referenced an artifact that
-          // doesn't exist — a genuinely broken publish).
-          let manifest: CuratedManifest | null = null;
-          try {
-            manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
-          } catch (manifestErr) {
-            if (manifestErr instanceof CuratedBundleUnavailableError) {
-              console.error('curated-fetch manifest_unavailable_falling_back', {
+          const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
+          if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
+            return new Response(
+              JSON.stringify({
+                ok: false,
+                error: 'curated_manifest_missing',
                 bundleId: bundle.id,
-                version: bundle.version,
-                status: manifestErr.status
-              });
-              manifest = null; // → whole-bundle fallback below
-            } else {
-              throw manifestErr;
-            }
+                version: bundle.version
+              }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+            );
           }
-          if (manifest && manifest.namespaces && Object.keys(manifest.namespaces).length > 0) {
-            // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
-            const nsGraph = manifest.namespaces;
-            const closure = closeNamespacesFromManifest(seeds, nsGraph);
-            for (const ns of closure) manifestClosureNamespaces.add(ns);
-            // Fetch the closure's per-namespace artifacts with BOUNDED concurrency.
-            // Serial was ~12s for a ~40-namespace closure (fpml.consolidated.*);
-            // fetching all at once (unbounded Promise.all) would materialize every
-            // namespace's inflate buffer + parsed payload simultaneously, risking the
-            // 128 MiB Pages-Function OOM this whole fast-path exists to avoid (Codex
-            // P1). A small fixed window keeps most of the parallel speedup while
-            // capping peak transient memory + simultaneous subrequests. Results are
-            // consumed in stable order so deferredExports/hydration are deterministic.
-            const closureNs = [...closure].filter((ns) => nsGraph[ns]);
-            const FETCH_CONCURRENCY = 8;
-            for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
-              const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
-              const fetchedPerNs = await Promise.all(
-                window.map((ns) =>
-                  fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher)
-                )
-              );
-              for (const nsDocs of fetchedPerNs) {
-                for (const doc of nsDocs) {
-                  documentsForHydration.push({ ...doc, bundleId: bundle.id });
-                  // Per-FILE entry so node-id → filePath → hydrationState linking stays correct.
-                  mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
-                }
+          // Manifest fast-path: fetch ONLY the user's closure, never the whole bundle.
+          const nsGraph = manifest.namespaces;
+          const closure = closeNamespacesFromManifest(seeds, nsGraph);
+          for (const ns of closure) manifestClosureNamespaces.add(ns);
+          // Record precomputed curated→curated edges for the dep graph (no link).
+          for (const ns of closure) {
+            const entry = nsGraph[ns];
+            if (!entry) continue;
+            const targets = new Set<string>();
+            for (const raw of entry.deps) {
+              for (const t of expandWildcard(raw, closure)) targets.add(t);
+            }
+            curatedDirectDeps.set(ns, targets);
+          }
+          const closureNs = [...closure].filter((ns) => nsGraph[ns]);
+          const FETCH_CONCURRENCY = 8;
+          for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
+            const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
+            const fetchedPerNs = await Promise.all(
+              window.map((ns) =>
+                fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher)
+              )
+            );
+            for (const nsDocs of fetchedPerNs) {
+              for (const doc of nsDocs) {
+                documentsForHydration.push({ ...doc, bundleId: bundle.id });
+                mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
               }
             }
-            // List every OTHER curated namespace so the explorer shows the full corpus.
-            // These are list-only (not hydrated): filePath uses the bundle-prefixed synthetic
-            // path so split('/')[0] === bundle.id, consistent with closure entries.
-            // Expanding one would re-parse with that namespace pulled into closure.
-            for (const [ns, entry] of Object.entries(nsGraph)) {
-              if (closure.has(ns)) continue; // closure namespaces already have per-file entries
-              deferredExportsList.push({
-                filePath: `${bundle.id}/${ns}`, // bundle-prefixed synthetic path: split('/')[0] === bundle.id;
-                // not a hydrated doc (list-only) — expanding such a node is a
-                // soft no-op until the namespace is imported (pulled into closure).
-                namespace: ns,
-                entries: entry.exports.map((e) => ({ type: e.type, name: e.name }))
-              });
-            }
-          } else {
-            // v1 fallback: no per-namespace graph — fetch the whole bundle (existing path).
-            anyV1Fallback = true;
-            const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
-            for (const doc of curatedDocs) {
-              // Stamp the bundle id onto the hydration document explicitly so
-              // the studio doesn't have to infer bundle membership from the
-              // URI prefix (Copilot review: that inference was silently
-              // coupled to curated-fetch's URI convention and false-positive'd
-              // for user files saved under `${bundleId}/...` paths). The
-              // field is optional on the hydration shape so user-file
-              // entries omit it.
-              documentsForHydration.push({ ...doc, bundleId: bundle.id });
-              // Surface curated namespaces in the deferredExports response so
-              // the studio's namespace explorer / graph view (which reads from
-              // deferredExports) lists CDM/FpML/rune-dsl entries alongside
-              // user-file namespaces (Codex P2 review). Without this the corpus
-              // hydrates correctly but its read-only nodes are invisible until
-              // an editor link triggers linkDocument and pulls them on-demand.
-              mergeCuratedDocIntoDeferredExports(doc, deferredExportsList);
-            }
+          }
+          // List every OTHER curated namespace so the explorer shows the full corpus.
+          for (const [ns, entry] of Object.entries(nsGraph)) {
+            if (closure.has(ns)) continue;
+            deferredExportsList.push({
+              filePath: `${bundle.id}/${ns}`,
+              namespace: ns,
+              entries: entry.exports.map((e) => ({ type: e.type, name: e.name }))
+            });
           }
         } catch (err) {
           if (err instanceof CuratedBundleUnavailableError) {
@@ -326,28 +278,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
     }
 
-    // Cross-namespace dep-graph (spec 2026-05-14 §5.2). Runs over the full
-    // workspace — user-parsed docs (kept live in workspaceContext) plus
-    // curated docs (deserialized here from their serializedModel strings)
-    // — so the modal's auto-select cascade resolves cross-bundle refs
-    // (cdm.trade → cdm.base.datetime, etc.) without re-fetching anything.
-    // For empty-workspace requests (no user files, no curated bundles),
-    // nothing was loaded and the dep graph stays empty (early-returned above).
+    // Build the cross-namespace dep graph from precomputed manifest edges +
+    // user import declarations. No curated deserialize/link — see design
+    // 2026-06-26-curated-dep-graph-no-link.
     if (documentsForHydration.length > 0) {
-      // Manifest fast-path already produced the authoritative curated closure from
-      // the precomputed graph (no doc parsing). Only fall back to the serialized-
-      // import walk when a v1 (whole-bundle) bundle was loaded — then we must derive
-      // the closure from the docs. computeCuratedClosure over closure-only docs would
-      // otherwise just re-parse what we already know.
-      const closure = anyV1Fallback
-        ? computeCuratedClosure(
-            seeds,
-            documentsForHydration
-              .filter((d) => d.bundleId !== undefined)
-              .map((d) => ({ uri: d.uri, serializedModel: d.serializedModel }))
-          )
-        : manifestClosureNamespaces;
-      await populateDependencyGraph(documentsForHydration, workspaceContext, dependencyGraph, closure);
+      const userModels: Array<{ namespace: string; imports: string[] }> = [];
+      for (const entry of documentsForHydration) {
+        if (entry.bundleId !== undefined) continue; // curated entries carry bundleId; user docs don't
+        const meta = readSerializedModelMeta(entry.serializedModel);
+        if (meta) userModels.push(meta);
+      }
+      const allNamespaces = new Set<string>(manifestClosureNamespaces);
+      for (const m of userModels) allNamespaces.add(m.namespace);
+      Object.assign(dependencyGraph, buildDependencyGraph(userModels, curatedDirectDeps, allNamespaces));
     }
 
     // Raw Langium AST nodes have circular $container refs and cannot be
@@ -567,89 +510,3 @@ export function collectUserSeedNamespaces(userDocs: ReadonlyArray<{ parseResult?
   return seeds;
 }
 
-/**
- * Compute the cross-namespace dep graph (spec 2026-05-14 §5.2) over the
- * full hydration set — user-parsed docs (already live in workspaceContext)
- * plus curated docs (deserialized here from `serializedModel` strings via
- * the same pattern apps/studio/src/workers/codegen-worker.ts uses).
- *
- * The combined set is re-linked through DocumentBuilder.build so cross-
- * bundle `$ref` targets resolve before the walker reads them. Each
- * namespace gets its transitive closure (via closeNamespaceDependencies)
- * sorted into a stable string[] in `dependencyGraph[ns]`.
- *
- * If `workspaceContext` is undefined (curated-only request), we lazy-import
- * langium services here so empty-workspace requests still skip the cost.
- */
-async function populateDependencyGraph(
-  documentsForHydration: ReadonlyArray<{
-    uri: string;
-    serializedModel: string;
-    bundleId?: string;
-  }>,
-  workspaceContext: WorkspaceContext | undefined,
-  dependencyGraph: Record<string, string[]>,
-  closureNamespaces: ReadonlySet<string>
-): Promise<void> {
-  // Fail-soft: a missing/partial dep graph degrades the modal's auto-cascade
-  // hints but never breaks /api/parse's primary hydration contract. Any
-  // exception here (malformed serializedModel, deserializer schema drift,
-  // builder.build chokepoint) leaves dependencyGraph empty and continues.
-  try {
-    let context = workspaceContext;
-    if (!context) {
-      const [{ createRuneDslServices }, { EmptyFileSystem }] = await Promise.all([
-        import('@rune-langium/core'),
-        import('langium')
-      ]);
-      const { RuneDsl, shared } = createRuneDslServices(EmptyFileSystem);
-      context = { shared, RuneDsl, userDocs: [] };
-    }
-    const builder = context.shared.workspace.DocumentBuilder;
-
-    // Hydrate curated docs into LangiumDocuments. User docs are already in
-    // the workspace from hydrateUserWorkspace; we identify curated entries by
-    // `bundleId` presence (set in the curated loop, omitted on user files).
-    //
-    // Lazy-link: only deserialize+link curated docs whose namespace is in the
-    // user's reference closure. Reading the namespace from serialized JSON is
-    // cheap (no Langium deserialize) — skipping out-of-closure docs before
-    // paying the deserialize+link cost is what brings curated-bundle requests
-    // back under CF's CPU limit (error 1102).
-    const curatedDocs: LangiumDocument[] = [];
-    for (const entry of documentsForHydration) {
-      if (entry.bundleId === undefined) continue;
-      const meta = readSerializedModelMeta(entry.serializedModel);
-      if (!meta || !closureNamespaces.has(meta.namespace)) continue;
-      try {
-        const { document: doc } = hydrateModelDocument(
-          { RuneDsl: context.RuneDsl, shared: context.shared },
-          URI.parse(entry.uri),
-          entry.serializedModel,
-          { register: 'none' }
-        );
-        curatedDocs.push(doc);
-      } catch {
-        // Skip individual malformed entries — the rest of the workspace
-        // still produces a useful (partial) dep graph.
-      }
-    }
-
-    if (curatedDocs.length > 0) {
-      // Re-link combined workspace so cross-bundle $refs resolve. Validation
-      // off: same flag hydrateUserWorkspace passed when it built user docs.
-      await builder.build([...context.userDocs, ...curatedDocs], { validation: false });
-    }
-
-    const allDocs: LangiumDocument[] = [...context.userDocs, ...curatedDocs];
-    if (allDocs.length === 0) return;
-
-    const directDeps = collectNamespaceDependencies(allDocs);
-    for (const namespace of directDeps.keys()) {
-      const closure = closeNamespaceDependencies(namespace, directDeps);
-      dependencyGraph[namespace] = Array.from(closure).sort();
-    }
-  } catch (err) {
-    console.warn('[api/parse] dep-graph computation failed; response will omit dependencyGraph entries.', err);
-  }
-}

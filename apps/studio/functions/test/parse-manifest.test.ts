@@ -130,14 +130,6 @@ const NS_DOCS: Record<
   ]
 };
 
-// Full bundle docs for v1 fallback — same as CURATED_DOCS in parse-lazy-link.test.ts
-const CURATED_DOCS = [
-  ...NS_DOCS['cdm.trade'],
-  ...NS_DOCS['cdm.base.datetime'],
-  ...NS_DOCS['cdm.base.math'],
-  ...NS_DOCS['cdm.other']
-];
-
 // ---------------------------------------------------------------------------
 // Response type helpers
 // ---------------------------------------------------------------------------
@@ -218,11 +210,18 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     expect(deferredNs).toContain('cdm.base.math');
     expect(deferredNs).toContain('cdm.other'); // list-only entry still present
 
-    // ── dependencyGraph: closure namespaces + user; cdm.other absent ─────
-    expect(body.dependencyGraph).toHaveProperty('cdm.trade');
-    expect(body.dependencyGraph).toHaveProperty('cdm.base.datetime');
-    expect(body.dependencyGraph).toHaveProperty('cdm.base.math');
-    expect(body.dependencyGraph).toHaveProperty('app');
+    // ── dependencyGraph: transitive closures, manifest-derived (no link) ──
+    expect(body.dependencyGraph['cdm.base.math']).toEqual(['cdm.base.math']);
+    expect(body.dependencyGraph['cdm.base.datetime']).toEqual(
+      ['cdm.base.datetime', 'cdm.base.math'].sort()
+    );
+    expect(body.dependencyGraph['cdm.trade']).toEqual(
+      ['cdm.base.datetime', 'cdm.base.math', 'cdm.trade'].sort()
+    );
+    // app imports cdm.trade → its closure pulls the whole chain (import-based).
+    expect(body.dependencyGraph['app']).toEqual(
+      ['app', 'cdm.base.datetime', 'cdm.base.math', 'cdm.trade'].sort()
+    );
     expect(body.dependencyGraph).not.toHaveProperty('cdm.other');
   });
 
@@ -257,103 +256,40 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     expect(otherEntry!.filePath.startsWith('artifacts/')).toBe(false);
   });
 
-  it('Test 3 — empty namespaces map falls through to v1 whole-bundle path', async () => {
+  it('Test 3 — empty namespaces map returns 502 (manifest required, no v1 fallback)', async () => {
     const mod = await import('../lib/curated-fetch.js');
-
-    // Manifest with an empty namespaces map — should NOT take the fast-path
-    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
-      ...MANIFEST,
-      namespaces: {}
-    } as never);
-
-    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
+    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({ ...MANIFEST, namespaces: {} } as never);
     const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
 
-    const userContent = 'namespace app\nimport cdm.trade\n';
     const res = await onRequestPost({
       request: makeRequest({
-        files: [{ name: 'app.rune', content: userContent }],
+        files: [{ name: 'app.rune', content: 'namespace app\nimport cdm.trade\n' }],
         curatedBundles: [{ id: 'cdm', version: 'latest' }]
       })
     } as never);
 
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as ParseResponse;
-    expect(body.ok).toBe(true);
-
-    // Must fall back to whole-bundle path
-    expect(bundleSpy).toHaveBeenCalledTimes(1);
-    // Namespace fetch path must never be called
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
     expect(nsSpy).not.toHaveBeenCalled();
   });
 
-  it('Test 3b — manifest fetch failure falls back to whole-bundle (not a 502)', async () => {
+  it('Test 3b — manifest fetch failure returns 502 (no whole-bundle fallback)', async () => {
     const mod = await import('../lib/curated-fetch.js');
-
-    // manifest.json transiently unavailable, but latest.serialized.json.gz is healthy.
     vi.spyOn(mod, 'fetchCuratedManifest').mockRejectedValue(
       new mod.CuratedBundleUnavailableError('cdm', 'latest', 503)
     );
-    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
-    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
 
-    const userContent = 'namespace app\nimport cdm.trade\n';
     const res = await onRequestPost({
       request: makeRequest({
-        files: [{ name: 'app.rune', content: userContent }],
+        files: [{ name: 'app.rune', content: 'namespace app\nimport cdm.trade\n' }],
         curatedBundles: [{ id: 'cdm', version: 'latest' }]
       })
     } as never);
 
-    // A manifest outage must NOT 502 the whole request when the bundle is healthy.
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as ParseResponse;
-    expect(body.ok).toBe(true);
-    expect(bundleSpy).toHaveBeenCalledTimes(1);
-    expect(nsSpy).not.toHaveBeenCalled();
-  });
-
-  it('Test 2 — v1 fallback: whole-bundle fetched; fetchCuratedNamespace never called', async () => {
-    const mod = await import('../lib/curated-fetch.js');
-
-    // v1 manifest: delete namespaces
-    const v1Manifest = { ...MANIFEST, schemaVersion: 1, namespaces: undefined };
-    vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue(v1Manifest as never);
-
-    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle').mockResolvedValue(CURATED_DOCS);
-    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
-
-    const userContent = 'namespace app\nimport cdm.trade\n';
-    const res = await onRequestPost({
-      request: makeRequest({
-        files: [{ name: 'app.rune', content: userContent }],
-        curatedBundles: [{ id: 'cdm', version: 'latest' }]
-      })
-    } as never);
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as ParseResponse;
-    expect(body.ok).toBe(true);
-
-    // ── Whole-bundle path: fetchCuratedBundle called once ─────────────────
-    expect(bundleSpy).toHaveBeenCalledTimes(1);
-
-    // ── Namespace fetch path: never called ───────────────────────────────
-    expect(nsSpy).not.toHaveBeenCalled();
-
-    // ── hydrationState: all four docs present (whole-bundle passthrough) ─
-    const hydratedUris = body.hydrationState.documents.map((d) => d.uri);
-    expect(hydratedUris).toContain('cdm/trade/trade.rosetta');
-    expect(hydratedUris).toContain('cdm/base/datetime.rosetta');
-    expect(hydratedUris).toContain('cdm/base/math.rosetta');
-    expect(hydratedUris).toContain('cdm/other/other.rosetta');
-
-    // ── deferredExports: all four namespaces present ──────────────────────
-    const deferredNs = body.deferredExports.map((d) => d.namespace);
-    expect(deferredNs).toContain('cdm.trade');
-    expect(deferredNs).toContain('cdm.base.datetime');
-    expect(deferredNs).toContain('cdm.base.math');
-    expect(deferredNs).toContain('cdm.other');
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { ok: boolean };
+    expect(body.ok).toBe(false);
   });
 
   it('Test 4a — non-array hydrateNamespaces (e.g. a string) does NOT 500 and is ignored', async () => {
