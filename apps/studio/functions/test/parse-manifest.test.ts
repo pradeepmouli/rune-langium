@@ -271,6 +271,7 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
+    expect(body.error).toBe('curated_manifest_missing');
     expect(nsSpy).not.toHaveBeenCalled();
   });
 
@@ -288,8 +289,9 @@ describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
     } as never);
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { ok: boolean };
+    const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
+    expect(body.error).toBe('curated_bundle_unavailable');
   });
 
   it('Test 4a — non-array hydrateNamespaces (e.g. a string) does NOT 500 and is ignored', async () => {

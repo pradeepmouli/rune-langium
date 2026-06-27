@@ -198,10 +198,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       : undefined;
     // Accumulators bridging the bundle loop and the dep-graph block below.
     // manifestClosureNamespaces collects the closure the manifest fast-path
-    // already computed (from the precomputed graph, no doc parsing) so the
-    // dep-graph block can reuse it instead of re-deriving it. anyV1Fallback
-    // flags that at least one bundle took the whole-bundle path, in which case
-    // the closure must be derived from the loaded docs.
+    // computed (from the precomputed graph, no doc parsing) so the dep-graph
+    // block can reuse it instead of re-deriving it. The manifest is required —
+    // a missing/empty manifest returns 502; there is no whole-bundle fallback.
     const manifestClosureNamespaces = new Set<string>();
     // Direct curated→curated edges per closure namespace, read from the
     // precomputed manifest graph (NO deserialize/link). Feeds buildDependencyGraph.
