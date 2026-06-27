@@ -53,19 +53,29 @@ export function closeNamespacesFromManifest(
 
 /**
  * Build the /api/parse cross-namespace dependency graph WITHOUT deserializing or
- * linking any curated document. Curated→curated edges come from the precomputed
- * manifest `deps` (`curatedDeps`); user→* edges come from each user model's
- * import declarations. Returns every namespace in `allNamespaces` mapped to its
- * transitive dependency closure (including itself), sorted for stable bytes.
+ * linking any curated document. Returns every namespace in `allNamespaces`
+ * mapped to its transitive dependency closure (including itself), sorted for
+ * stable bytes. Edges come from three no-link sources:
+ *   - curated→curated: the precomputed manifest `deps` (`curatedDeps`)
+ *   - user→curated:    user models' import declarations (`userModels`)
+ *   - user→user:       resolved cross-references from the already-built user
+ *     docs (`userResolvedDeps`) — captures qualified references (e.g.
+ *     `cdm.Quantity`) that the DSL resolves via global scope WITHOUT an import,
+ *     which import declarations alone would miss (would under-pull → broken
+ *     codegen filter). User docs are linked among themselves cheaply; the
+ *     curated corpus is never linked, so the 128 MB OOM stays fixed.
  *
- * @param userModels   user docs' {namespace, imports} (from readSerializedModelMeta)
- * @param curatedDeps  direct curated edges: ns → its direct dep namespaces
- * @param allNamespaces every namespace that must be a key (user ∪ curated closure)
+ * @param userModels       user docs' {namespace, imports} (from readSerializedModelMeta)
+ * @param curatedDeps      direct curated edges: ns → its direct dep namespaces
+ * @param allNamespaces    every namespace that must be a key (user ∪ curated closure)
+ * @param userResolvedDeps resolved user→* edges from collectNamespaceDependencies
+ *                         over the user docs (optional; omitted → curated-only request)
  */
 export function buildDependencyGraph(
   userModels: ReadonlyArray<{ namespace: string; imports: readonly string[] }>,
   curatedDeps: ReadonlyMap<string, ReadonlySet<string>>,
-  allNamespaces: ReadonlySet<string>
+  allNamespaces: ReadonlySet<string>,
+  userResolvedDeps?: ReadonlyMap<string, ReadonlySet<string>>
 ): Record<string, string[]> {
   const directDeps = new Map<string, Set<string>>();
   const ensure = (ns: string): Set<string> => {
@@ -87,13 +97,22 @@ export function buildDependencyGraph(
     for (const t of targets) if (allNamespaces.has(t)) bucket.add(t);
   }
 
-  // User → (user | curated) from import declarations, wildcard-expanded.
+  // User → curated from import declarations, wildcard-expanded.
   for (const { namespace, imports } of userModels) {
     const bucket = ensure(namespace);
     for (const raw of imports) {
       for (const t of expandWildcard(raw, allNamespaces)) {
         if (t !== namespace) bucket.add(t);
       }
+    }
+  }
+
+  // User → user resolved edges (qualified refs the DSL resolves via global
+  // scope without an import). Filter to known namespaces; drop self-edges.
+  if (userResolvedDeps) {
+    for (const [ns, targets] of userResolvedDeps) {
+      const bucket = ensure(ns);
+      for (const t of targets) if (t !== ns && allNamespaces.has(t)) bucket.add(t);
     }
   }
 

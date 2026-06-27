@@ -25,7 +25,8 @@ import {
   serializeRuneModel,
   runeBigIntReplacer,
   preserveCstText,
-  namespaceFromModelName
+  namespaceFromModelName,
+  collectNamespaceDependencies
 } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
 import {
@@ -289,7 +290,15 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
       const allNamespaces = new Set<string>(manifestClosureNamespaces);
       for (const m of userModels) allNamespaces.add(m.namespace);
-      Object.assign(dependencyGraph, buildDependencyGraph(userModels, curatedDirectDeps, allNamespaces));
+      // Resolved user→user edges from the already-built user docs (cheap — user
+      // files only, NOT the curated corpus, so the 128 MB OOM stays fixed).
+      // Captures qualified cross-namespace refs the DSL resolves via global
+      // scope without an import, which userModels.imports alone would miss.
+      const userResolvedDeps = collectNamespaceDependencies(workspaceContext?.userDocs ?? []);
+      Object.assign(
+        dependencyGraph,
+        buildDependencyGraph(userModels, curatedDirectDeps, allNamespaces, userResolvedDeps)
+      );
     }
 
     // Raw Langium AST nodes have circular $container refs and cannot be

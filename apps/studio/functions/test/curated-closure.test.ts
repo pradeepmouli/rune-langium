@@ -132,4 +132,30 @@ describe('buildDependencyGraph', () => {
     // cdm.unknown dropped (absent); 'app' self-edge dropped; cdm.base.* expands.
     expect(g['app']).toEqual(['app', 'cdm.base.datetime', 'cdm.base.math']);
   });
+
+  it('merges resolved user→user edges (qualified refs with no import declaration)', () => {
+    // Two user namespaces: `app` references a type in `lib` via a fully-qualified
+    // name (resolved by global scope) but declares NO import for it. Import-only
+    // edges would miss app→lib; the resolved-deps map restores it.
+    const all = new Set(['app', 'lib']);
+    const userResolved = new Map<string, Set<string>>([['app', new Set(['lib'])]]);
+    const g = buildDependencyGraph(
+      [
+        { namespace: 'app', imports: [] }, // no import declaration
+        { namespace: 'lib', imports: [] }
+      ],
+      new Map(),
+      all,
+      userResolved
+    );
+    expect(g['app']).toEqual(['app', 'lib']);
+    expect(g['lib']).toEqual(['lib']);
+  });
+
+  it('drops resolved edges to unknown namespaces and self-edges', () => {
+    const all = new Set(['app']);
+    const userResolved = new Map<string, Set<string>>([['app', new Set(['app', 'gone'])]]);
+    const g = buildDependencyGraph([{ namespace: 'app', imports: [] }], new Map(), all, userResolved);
+    expect(g['app']).toEqual(['app']); // self-edge + unknown 'gone' both dropped
+  });
 });

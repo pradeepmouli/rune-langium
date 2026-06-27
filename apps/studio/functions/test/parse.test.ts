@@ -442,4 +442,26 @@ describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
     // User namespace still surfaces; no curated closure → only 'x' in graph.
     expect(body.dependencyGraph.x).toEqual(['x']);
   });
+
+  it('captures a user→user edge from a qualified ref with NO import declaration (Codex P2)', async () => {
+    // `app` extends `lib.Base` by fully-qualified name and declares NO import.
+    // The DSL resolves the ref via global scope, so the dep is real — but
+    // import declarations alone would miss it. The dep graph must still pull
+    // `lib` into `app`'s closure (else the Download modal would let codegen
+    // emit `app` while excluding the required `lib` namespace → broken emit).
+    const lib = 'namespace lib\ntype Base:\n  a string (1..1)\n';
+    const app = 'namespace app\ntype Derived extends lib.Base:\n  b string (1..1)\n';
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [
+          { name: 'lib.rune', content: lib },
+          { name: 'app.rune', content: app }
+        ]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+    expect(body.dependencyGraph.app).toEqual(['app', 'lib']);
+    expect(body.dependencyGraph.lib).toEqual(['lib']);
+  });
 });
