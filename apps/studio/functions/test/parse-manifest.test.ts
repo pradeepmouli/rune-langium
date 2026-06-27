@@ -2,18 +2,19 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Integration test: manifest fast-path (v2) + v1 fallback.
+ * Integration test: manifest fast-path (v2) — manifest required, no v1 fallback.
  *
- * Regression lock for the prod CF CPU-error 1102 fix: when a manifest has
- * `namespaces`, /api/parse must fetch ONLY the user's closure (never the whole
- * bundle). When the manifest has no `namespaces` (v1), it falls back to the
- * whole-bundle path.
+ * Regression lock for the prod CF CPU-error 1102 fix AND the 128 MB-OOM 503
+ * fix: /api/parse fetches ONLY the user's closure (never the whole bundle) and
+ * derives the dependency graph from the precomputed manifest `deps` without
+ * deserializing/linking any curated document. The v1 whole-bundle fallback is
+ * removed: a missing or empty manifest returns 502 (no fall-through to a link).
  *
  * What this file proves:
- *   1. Manifest fast-path: fetchCuratedBundle is NEVER called when a v2
- *      manifest is present; only closure namespace artifacts are fetched.
- *   2. V1 fallback: fetchCuratedBundle IS called exactly once when the manifest
- *      has no `namespaces`; fetchCuratedNamespace is never called.
+ *   1. Manifest fast-path: fetchCuratedBundle is NEVER called; only closure
+ *      namespace artifacts are fetched.
+ *   2. Manifest required: an empty `namespaces` map or a manifest-fetch failure
+ *      returns 502 (curated_manifest_missing / curated_bundle_unavailable).
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
@@ -152,7 +153,7 @@ type ParseResponse = {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('POST /api/parse — manifest fast-path (v2) + v1 fallback', () => {
+describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 fallback)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
