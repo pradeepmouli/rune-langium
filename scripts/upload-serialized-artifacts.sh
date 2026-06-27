@@ -73,13 +73,17 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
   ns_count=$(jq -r '(.namespaces // {}) | length' "$meta_file")
 
   if [[ "$ns_count" -gt 0 ]]; then
-    namespaces=$(jq -c '.namespaces' "$meta_file")
+    # Read the namespaces graph from the meta FILE via --slurpfile rather than
+    # passing it as a `--argjson` command-line arg: the CDM graph (90 namespaces,
+    # hundreds of exports each) exceeds Linux's MAX_ARG_STRLEN (128 KB per single
+    # arg) → "jq: Argument list too long" / exit 126 in CI. (macOS has no such
+    # per-arg cap, which is why this only failed on the Linux GH runner.)
     patched_manifest=$(echo "$current_manifest" | jq \
       --arg sha "$sha256" \
       --arg url "$MIRROR_BASE/$model_id/latest.serialized.json.gz" \
       --argjson size "$size_bytes" \
       --argjson docs "$doc_count" \
-      --argjson ns "$namespaces" \
+      --slurpfile meta "$meta_file" \
       '.schemaVersion = 2 |
       .artifacts.serializedWorkspace = {
         schemaVersion: 1,
@@ -90,7 +94,7 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
         documentCount: $docs,
         langiumVersion: "4.2.2"
       } |
-      .namespaces = $ns')
+      .namespaces = $meta[0].namespaces')
   else
     patched_manifest=$(echo "$current_manifest" | jq \
       --arg sha "$sha256" \
