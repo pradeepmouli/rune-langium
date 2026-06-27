@@ -1035,10 +1035,15 @@ export async function downloadTargetViaRouter(
   target: string,
   options: Record<string, unknown> = {},
   curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
-  namespaces: ReadonlyArray<string> = []
+  namespaces: ReadonlyArray<string> = [],
+  curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
 ): Promise<void> {
   const body: Record<string, unknown> = { files, target, options };
-  if (curatedBundles.length > 0) {
+  if (curatedDocs.length > 0) {
+    // Path A — server deserializes these, no fetch
+    body.curatedDocs = curatedDocs;
+  } else if (curatedBundles.length > 0) {
+    // Path C fallback — server fetches corpus server-to-server
     body.curatedBundles = curatedBundles;
   }
   // §5.3 — forward the modal's dependency-closed namespace subset. Empty =

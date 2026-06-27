@@ -198,4 +198,35 @@ describe('downloadTargetViaRouter', () => {
       diagnostics: []
     });
   });
+
+  it('sends curatedDocs (path A) when curated serialized models are loaded', async () => {
+    const fetchMock = mockFetch(
+      () =>
+        new Response(new Blob(['x']), {
+          status: 200,
+          headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
+        })
+    );
+    // Stub DOM side-effects from triggerBlobDownload
+    const fakeAnchor = makeFakeAnchor();
+    vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'appendChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'removeChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+
+    await downloadTargetViaRouter(
+      [{ path: 'app.rune', content: 'namespace app' }],
+      'typescript',
+      {},
+      [{ id: 'cdm', version: 'latest' }],
+      ['cdm.base.math'],
+      [{ uri: 'cdm/base/math.rosetta', serializedModel: '{"$type":"RosettaModel","name":"cdm.base.math"}' }]
+    );
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.curatedDocs).toHaveLength(1);
+    expect(body.curatedDocs[0].uri).toBe('cdm/base/math.rosetta');
+    // path A: curatedBundles omitted when curatedDocs present
+    expect(body.curatedBundles).toBeUndefined();
+  });
 });

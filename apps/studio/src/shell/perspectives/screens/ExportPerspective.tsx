@@ -97,12 +97,15 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
       const fileList = files ?? [];
       const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
       const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
+      const curatedDocs = fileList
+        .filter((f) => typeof f.serializedModelJson === 'string' && f.serializedModelJson.length > 0)
+        .map((f) => ({ uri: f.path, serializedModel: f.serializedModelJson as string }));
       const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
       const layoutOption = config.layout ? { layout: config.layout } : {};
       const options = config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};
       setDownloadingTarget(newTarget);
       try {
-        await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces);
+        await downloadTargetViaRouter(requestFiles, newTarget, options, curatedBundles, config.namespaces, curatedDocs);
       } catch (err) {
         if (err instanceof CodegenDownloadError) {
           const detail = err.diagnostics.length > 0 ? err.diagnostics.map((d) => d.message).join('; ') : err.message;
