@@ -48,7 +48,12 @@ export function PerspectiveHost({
   const missingRequiredContext = active === 'explore' ? !hasExploreContent : requiresWorkspace && !hasWorkspace;
   const effective = missingRequiredContext ? 'workspaces' : active;
   return (
-    <div className="flex-1 min-h-0">
+    // `min-w-0` is load-bearing: this is a flex item of the App content row.
+    // Without it the item's `min-width: auto` refuses to shrink below its
+    // content's min-content width, so a wide child (e.g. the open-file tab
+    // strip with many files) forces this host — and the whole layout — past
+    // the viewport. `min-w-0` lets it honor the row width and clip/scroll inside.
+    <div className="flex-1 min-h-0 min-w-0">
       {/* Explore: kept alive — hidden via display:none, NEVER unmounted. */}
       <div
         data-perspective-slot="explore"
