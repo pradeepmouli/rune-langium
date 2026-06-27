@@ -152,16 +152,11 @@ describe('POST /api/parse — curatedBundles', () => {
   });
 
   it('merges curated bundle documents into hydrationState on success', async () => {
-    // Spy on fetchCuratedBundle to return a synthetic doc set. The mock
-    // returns bare-path URIs (matching the real curated-fetch contract); the
-    // browser worker keys deferredModelJson off these via URI.parse().
+    // User file imports cdm.base.math → closure = {cdm.base.math}. Only that
+    // namespace's artifact is fetched (manifest fast-path). No whole-bundle fetch.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
-    // Pin a v1 manifest (no namespaces) so these whole-bundle (fetchCuratedBundle)
-    // tests are hermetic: otherwise the unmocked fetchCuratedManifest hits the live
-    // mirror, which now serves v2 manifests, routing the request onto the
-    // per-namespace fast-path instead.
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       modelId: 'cdm',
       version: '2026-05-01',
       sha256: 'a'.repeat(64),
@@ -170,12 +165,19 @@ describe('POST /api/parse — curatedBundles', () => {
       upstreamCommit: '',
       upstreamRef: 'master',
       archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
-      history: []
+      history: [],
+      namespaces: {
+        'cdm.base.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: 'artifacts/ns/cdm.base.math.json.gz'
+        }
+      }
     } as never);
-    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+    vi.spyOn(curatedFetchModule, 'fetchCuratedNamespace').mockResolvedValue([
       {
         uri: 'cdm/base/math.rosetta',
-        content: '', // archive may not include source; ok to be empty
+        content: '',
         serializedModel: JSON.stringify({
           $type: 'RosettaModel',
           name: 'cdm.base.math',
@@ -184,36 +186,32 @@ describe('POST /api/parse — curatedBundles', () => {
         exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
       }
     ]);
-    try {
-      const res = await onRequestPost({
-        request: makeRequest({
-          files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
-          curatedBundles: [{ id: 'cdm', version: 'latest' }]
-        })
-      } as never);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as {
-        deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ name: string }> }>;
-        hydrationState: { documents: Array<{ uri: string; exports: Array<{ name: string }> }> };
-      };
-      // hydrationState carries the documents themselves.
-      const uris = body.hydrationState.documents.map((d) => d.uri);
-      expect(uris).toContain('x.rune');
-      expect(uris).toContain('cdm/base/math.rosetta');
-      const corpusDoc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
-      expect(corpusDoc?.exports.some((e) => e.name === 'Quantity')).toBe(true);
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'x.rune', content: 'namespace x\nimport cdm.base.math\ntype T:\n  a string (1..1)\n' }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ name: string }> }>;
+      hydrationState: { documents: Array<{ uri: string; exports: Array<{ name: string }> }> };
+    };
+    // hydrationState carries the documents themselves.
+    const uris = body.hydrationState.documents.map((d) => d.uri);
+    expect(uris).toContain('x.rune');
+    expect(uris).toContain('cdm/base/math.rosetta');
+    const corpusDoc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
+    expect(corpusDoc?.exports.some((e) => e.name === 'Quantity')).toBe(true);
 
-      // deferredExports must include the curated namespace too (Codex P2):
-      // the namespace explorer / graph view reads from this response and
-      // would otherwise miss curated entries.
-      const namespaces = body.deferredExports.map((d) => d.namespace);
-      expect(namespaces).toContain('cdm.base.math');
-      const cdmEntry = body.deferredExports.find((d) => d.namespace === 'cdm.base.math');
-      expect(cdmEntry?.filePath).toBe('cdm/base/math.rosetta');
-      expect(cdmEntry?.exports.some((e) => e.name === 'Quantity')).toBe(true);
-    } finally {
-      spy.mockRestore();
-    }
+    // deferredExports must include the curated namespace too (Codex P2):
+    // the namespace explorer / graph view reads from this response and
+    // would otherwise miss curated entries.
+    const namespaces = body.deferredExports.map((d) => d.namespace);
+    expect(namespaces).toContain('cdm.base.math');
+    const cdmEntry = body.deferredExports.find((d) => d.namespace === 'cdm.base.math');
+    expect(cdmEntry?.filePath).toBe('cdm/base/math.rosetta');
+    expect(cdmEntry?.exports.some((e) => e.name === 'Quantity')).toBe(true);
   });
 
   it('passes through $namespace baked into curated artifact elements', async () => {
@@ -221,7 +219,7 @@ describe('POST /api/parse — curatedBundles', () => {
     // not at runtime — the worker passes it through unchanged from the artifact.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       modelId: 'cdm',
       version: '2026-05-01',
       sha256: 'a'.repeat(64),
@@ -230,9 +228,16 @@ describe('POST /api/parse — curatedBundles', () => {
       upstreamCommit: '',
       upstreamRef: 'master',
       archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
-      history: []
+      history: [],
+      namespaces: {
+        'cdm.base.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: 'artifacts/ns/cdm.base.math.json.gz'
+        }
+      }
     } as never);
-    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+    vi.spyOn(curatedFetchModule, 'fetchCuratedNamespace').mockResolvedValue([
       {
         uri: 'cdm/base/math.rosetta',
         content: '',
@@ -244,25 +249,21 @@ describe('POST /api/parse — curatedBundles', () => {
         exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
       }
     ]);
-    try {
-      const res = await onRequestPost({
-        request: makeRequest({
-          files: [{ name: 'x.rune', content: SIMPLE_RUNE }],
-          curatedBundles: [{ id: 'cdm', version: 'latest' }]
-        })
-      } as never);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as {
-        hydrationState: { documents: Array<{ uri: string; serializedModel: string }> };
-      };
-      const doc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
-      expect(doc).toBeDefined();
-      const model = JSON.parse(doc!.serializedModel) as { elements?: Array<{ $namespace?: string }> };
-      expect(Array.isArray(model.elements)).toBe(true);
-      expect(model.elements!.every((el) => el.$namespace === 'cdm.base.math')).toBe(true);
-    } finally {
-      spy.mockRestore();
-    }
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'x.rune', content: 'namespace x\nimport cdm.base.math\ntype T:\n  a string (1..1)\n' }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      hydrationState: { documents: Array<{ uri: string; serializedModel: string }> };
+    };
+    const doc = body.hydrationState.documents.find((d) => d.uri === 'cdm/base/math.rosetta');
+    expect(doc).toBeDefined();
+    const model = JSON.parse(doc!.serializedModel) as { elements?: Array<{ $namespace?: string }> };
+    expect(Array.isArray(model.elements)).toBe(true);
+    expect(model.elements!.every((el) => el.$namespace === 'cdm.base.math')).toBe(true);
   });
 
   it('emits one deferredExports entry per file when a namespace spans multiple files', async () => {
@@ -278,12 +279,8 @@ describe('POST /api/parse — curatedBundles', () => {
     // Contract: ONE deferredExports entry per FILE (matches the in-browser
     // parser-worker.handleParseWorkspace contract).
     const curatedFetchModule = await import('../lib/curated-fetch.js');
-    // Pin a v1 manifest (no namespaces) so these whole-bundle (fetchCuratedBundle)
-    // tests are hermetic: otherwise the unmocked fetchCuratedManifest hits the live
-    // mirror, which now serves v2 manifests, routing the request onto the
-    // per-namespace fast-path instead.
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       modelId: 'cdm',
       version: '2026-05-01',
       sha256: 'a'.repeat(64),
@@ -292,9 +289,21 @@ describe('POST /api/parse — curatedBundles', () => {
       upstreamCommit: '',
       upstreamRef: 'master',
       archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
-      history: []
+      history: [],
+      namespaces: {
+        'cdm.base.datetime': {
+          deps: [],
+          exports: [
+            { type: 'Data', name: 'AdjustableDate' },
+            { type: 'RosettaEnumeration', name: 'PeriodEnum' },
+            { type: 'RosettaFunction', name: 'AddDays' }
+          ],
+          artifact: 'artifacts/ns/cdm.base.datetime.json.gz'
+        }
+      }
     } as never);
-    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
+    // fetchCuratedNamespace returns the three files for the namespace artifact.
+    vi.spyOn(curatedFetchModule, 'fetchCuratedNamespace').mockResolvedValue([
       {
         uri: 'cdm/base/datetime-type.rosetta',
         content: '',
@@ -326,34 +335,32 @@ describe('POST /api/parse — curatedBundles', () => {
         exports: [{ type: 'RosettaFunction', name: 'AddDays', path: 'cdm.base.datetime.AddDays' }]
       }
     ]);
-    try {
-      const res = await onRequestPost({
-        request: makeRequest({
-          files: [],
-          curatedBundles: [{ id: 'cdm', version: 'latest' }]
-        })
-      } as never);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as {
-        deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ name: string }> }>;
-      };
+    // hydrateNamespaces forces cdm.base.datetime into the closure (no user imports).
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }],
+        hydrateNamespaces: ['cdm.base.datetime']
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      deferredExports: Array<{ filePath: string; namespace: string; exports: Array<{ name: string }> }>;
+    };
 
-      // All three files must surface — namespace collapse would only yield 1.
-      const datetimeEntries = body.deferredExports.filter((d) => d.namespace === 'cdm.base.datetime');
-      expect(datetimeEntries).toHaveLength(3);
+    // All three files must surface — namespace collapse would only yield 1.
+    const datetimeEntries = body.deferredExports.filter((d) => d.namespace === 'cdm.base.datetime');
+    expect(datetimeEntries).toHaveLength(3);
 
-      // Each name must map to the file that DECLARES it. Critical: the
-      // studio's nodeIdToFilePath uses these to drive linkDocument.
-      const byName = new Map<string, string>();
-      for (const entry of datetimeEntries) {
-        for (const exp of entry.exports) byName.set(exp.name, entry.filePath);
-      }
-      expect(byName.get('AdjustableDate')).toBe('cdm/base/datetime-type.rosetta');
-      expect(byName.get('PeriodEnum')).toBe('cdm/base/datetime-enum.rosetta');
-      expect(byName.get('AddDays')).toBe('cdm/base/datetime-func.rosetta');
-    } finally {
-      spy.mockRestore();
+    // Each name must map to the file that DECLARES it. Critical: the
+    // studio's nodeIdToFilePath uses these to drive linkDocument.
+    const byName = new Map<string, string>();
+    for (const entry of datetimeEntries) {
+      for (const exp of entry.exports) byName.set(exp.name, entry.filePath);
     }
+    expect(byName.get('AdjustableDate')).toBe('cdm/base/datetime-type.rosetta');
+    expect(byName.get('PeriodEnum')).toBe('cdm/base/datetime-enum.rosetta');
+    expect(byName.get('AddDays')).toBe('cdm/base/datetime-func.rosetta');
   });
 });
 
@@ -403,19 +410,13 @@ describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
     expect(body.dependencyGraph.cdm).toEqual(['cdm']);
   });
 
-  it('omits dependencyGraph entries gracefully when curated docs are unparseable stubs', async () => {
-    // Mocked curated artifacts with skeletal model JSON (no Langium metadata).
-    // populateDependencyGraph's per-doc try/catch skips them; the user-file
-    // closure is still emitted. Verifies fail-soft contract: a bad curated
-    // bundle never blocks the parse response or starves the modal of user
-    // namespaces.
+  it('user namespace surfaces in dep graph even when no curated seeds match', async () => {
+    // User file with no imports → seeds set is empty → curated closure is
+    // empty → fetchCuratedNamespace is never called. The manifest fast-path
+    // still returns 200 and the user namespace appears in dependencyGraph.
     const curatedFetchModule = await import('../lib/curated-fetch.js');
-    // Pin a v1 manifest (no namespaces) so these whole-bundle (fetchCuratedBundle)
-    // tests are hermetic: otherwise the unmocked fetchCuratedManifest hits the live
-    // mirror, which now serves v2 manifests, routing the request onto the
-    // per-namespace fast-path instead.
     vi.spyOn(curatedFetchModule, 'fetchCuratedManifest').mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       modelId: 'cdm',
       version: '2026-05-01',
       sha256: 'a'.repeat(64),
@@ -424,33 +425,43 @@ describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
       upstreamCommit: '',
       upstreamRef: 'master',
       archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
-      history: []
-    } as never);
-    const spy = vi.spyOn(curatedFetchModule, 'fetchCuratedBundle').mockResolvedValue([
-      {
-        uri: 'cdm/math.rosetta',
-        content: '',
-        serializedModel: JSON.stringify({
-          $type: 'RosettaModel',
-          name: 'cdm.math',
-          elements: [{ $type: 'Data', name: 'Quantity' }]
-        }),
-        exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.math.Quantity' }]
+      history: [],
+      namespaces: {
+        'cdm.math': { deps: [], exports: [{ type: 'Data', name: 'Quantity' }], artifact: 'artifacts/ns/cdm.math.json.gz' }
       }
-    ]);
-    try {
-      const res = await onRequestPost({
-        request: makeRequest({
-          files: [{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n' }],
-          curatedBundles: [{ id: 'cdm', version: 'latest' }]
-        })
-      } as never);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
-      // User namespace still surfaces; bad curated entry is silently skipped.
-      expect(body.dependencyGraph.x).toEqual(['x']);
-    } finally {
-      spy.mockRestore();
-    }
+    } as never);
+    vi.spyOn(curatedFetchModule, 'fetchCuratedNamespace').mockResolvedValue([]);
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [{ name: 'x.rune', content: 'namespace x\ntype T:\n  a string (1..1)\n' }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+    // User namespace still surfaces; no curated closure → only 'x' in graph.
+    expect(body.dependencyGraph.x).toEqual(['x']);
+  });
+
+  it('captures a user→user edge from a qualified ref with NO import declaration (Codex P2)', async () => {
+    // `app` extends `lib.Base` by fully-qualified name and declares NO import.
+    // The DSL resolves the ref via global scope, so the dep is real — but
+    // import declarations alone would miss it. The dep graph must still pull
+    // `lib` into `app`'s closure (else the Download modal would let codegen
+    // emit `app` while excluding the required `lib` namespace → broken emit).
+    const lib = 'namespace lib\ntype Base:\n  a string (1..1)\n';
+    const app = 'namespace app\ntype Derived extends lib.Base:\n  b string (1..1)\n';
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [
+          { name: 'lib.rune', content: lib },
+          { name: 'app.rune', content: app }
+        ]
+      })
+    } as never);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { dependencyGraph: Record<string, string[]> };
+    expect(body.dependencyGraph.app).toEqual(['app', 'lib']);
+    expect(body.dependencyGraph.lib).toEqual(['lib']);
   });
 });
