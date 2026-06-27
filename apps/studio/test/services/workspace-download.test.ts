@@ -199,6 +199,36 @@ describe('downloadTargetViaRouter', () => {
     });
   });
 
+  it('sends curatedBundles (path C) and omits curatedDocs when curatedDocs is empty', async () => {
+    const fetchMock = mockFetch(
+      () =>
+        new Response(new Blob(['x']), {
+          status: 200,
+          headers: { 'Content-Disposition': 'attachment; filename="out.zip"' }
+        })
+    );
+    const fakeAnchor = makeFakeAnchor();
+    vi.spyOn(document, 'createElement').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'appendChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(document.body, 'removeChild').mockReturnValue(fakeAnchor);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+
+    await downloadTargetViaRouter(
+      [{ path: 'app.rune', content: 'namespace app' }],
+      'typescript',
+      {},
+      [{ id: 'cdm', version: 'latest' }],
+      [],
+      [] // curatedDocs empty → path C
+    );
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    // path C: curatedBundles present, curatedDocs absent
+    expect(body.curatedBundles).toHaveLength(1);
+    expect(body.curatedBundles[0]).toEqual({ id: 'cdm', version: 'latest' });
+    expect(body.curatedDocs).toBeUndefined();
+  });
+
   it('sends curatedDocs (path A) when curated serialized models are loaded', async () => {
     const fetchMock = mockFetch(
       () =>

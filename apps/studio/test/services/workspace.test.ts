@@ -14,7 +14,9 @@ import {
   createWorkspaceFile,
   createBlankWorkspaceFile,
   readFileList,
-  mergeModelFiles
+  mergeModelFiles,
+  collectCuratedDocsFromWorkspace,
+  BUNDLE_MARKER_SUFFIX
 } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
 import type { LoadedModel } from '../../src/types/model-types.js';
@@ -283,6 +285,96 @@ describe('mergeModelFiles', () => {
       readOnly: true,
       serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collectCuratedDocsFromWorkspace (C-1 fix — bundle marker exclusion)
+// ---------------------------------------------------------------------------
+describe('collectCuratedDocsFromWorkspace', () => {
+  it('includes a curated file with serializedModelJson as { uri, serializedModel }', () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: 'Trade.rosetta',
+        path: '[cdm]/types/Trade.rosetta',
+        content: '',
+        dirty: false,
+        readOnly: true,
+        serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+        bundleId: 'cdm',
+        bundleVersion: '2026-04-25'
+      }
+    ];
+    const docs = collectCuratedDocsFromWorkspace(files);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]).toEqual({
+      uri: '[cdm]/types/Trade.rosetta',
+      serializedModel: '{"$type":"RosettaModel","elements":[]}'
+    });
+  });
+
+  it('excludes the synthetic bundle marker even though it has serializedModelJson', () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: '.bundle-marker',
+        path: `[cdm]${BUNDLE_MARKER_SUFFIX}`,
+        content: '',
+        dirty: false,
+        readOnly: true,
+        serializedModelJson: '{}',
+        bundleId: 'cdm',
+        bundleVersion: '2026-04-25'
+      }
+    ];
+    const docs = collectCuratedDocsFromWorkspace(files);
+    expect(docs).toHaveLength(0);
+  });
+
+  it('excludes a user file with no serializedModelJson', () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: 'my.rosetta',
+        path: 'my.rosetta',
+        content: 'namespace my',
+        dirty: false
+      }
+    ];
+    const docs = collectCuratedDocsFromWorkspace(files);
+    expect(docs).toHaveLength(0);
+  });
+
+  it('returns only real curated docs when mixed with a marker and a user file', () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: 'Trade.rosetta',
+        path: '[cdm]/types/Trade.rosetta',
+        content: '',
+        dirty: false,
+        readOnly: true,
+        serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+        bundleId: 'cdm',
+        bundleVersion: '2026-04-25'
+      },
+      {
+        name: '.bundle-marker',
+        path: `[fpml]${BUNDLE_MARKER_SUFFIX}`,
+        content: '',
+        dirty: false,
+        readOnly: true,
+        serializedModelJson: '{}',
+        bundleId: 'fpml',
+        bundleVersion: '2026-04-01'
+      },
+      {
+        name: 'user.rosetta',
+        path: 'user.rosetta',
+        content: 'namespace user',
+        dirty: false
+      }
+    ];
+    const docs = collectCuratedDocsFromWorkspace(files);
+    expect(docs).toHaveLength(1);
+    expect(docs[0]!.uri).toBe('[cdm]/types/Trade.rosetta');
   });
 });
 
