@@ -32,7 +32,8 @@ import {
   type GeneratorOutput,
   type Target
 } from '@rune-langium/codegen';
-import { fetchCuratedBundle, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+import { fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
+import { closeNamespacesFromManifest } from '../lib/curated-closure.js';
 
 interface CodegenRequestBody {
   files: Array<{ path: string; content: string }>;
@@ -68,6 +69,13 @@ interface CodegenRequestBody {
    * 019 Task #88.
    */
   curatedBundles?: Array<{ id: string; version: string }>;
+  /**
+   * Pre-loaded serialized curated docs (path A). When present, the server
+   * deserializes these directly and performs NO manifest/namespace fetch —
+   * the studio passes the closure it already loaded via /api/parse. Mutually
+   * exclusive with curatedBundles; if both are sent, curatedDocs wins.
+   */
+  curatedDocs?: Array<{ uri: string; serializedModel: string }>;
   /**
    * Optional namespace allowlist (019 spec §5.1/§5.3). The Download config
    * modal sends the dependency-closed subset (selected ∪ transitively
@@ -111,7 +119,7 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
 
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
-  const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown };
+  const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown; curatedDocs?: unknown };
   if (
     !Array.isArray(b.files) ||
     !b.files.every(
@@ -127,9 +135,8 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
   }
   // Copilot review on PR #168 — when `curatedBundles` is supplied, it
   // must be an array of `{ id: string, version: string }`. A malformed
-  // value used to fall through to `fetchCuratedBundle(undefined, undefined)`
-  // and surface as an opaque 500; now it's a 400 with the validator's
-  // documented shape message.
+  // value used to produce an opaque 500 at the fetch site;
+  // now it's a 400 with the validator's documented shape message.
   if (b.curatedBundles !== undefined) {
     if (
       !Array.isArray(b.curatedBundles) ||
@@ -139,6 +146,23 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
           typeof entry === 'object' &&
           typeof (entry as { id?: unknown }).id === 'string' &&
           typeof (entry as { version?: unknown }).version === 'string'
+      )
+    ) {
+      return false;
+    }
+  }
+  // Path A — when `curatedDocs` is supplied, each entry must be
+  // `{ uri: string, serializedModel: string }`. A non-array or
+  // structurally invalid entry is rejected with a 400.
+  if (b.curatedDocs !== undefined) {
+    if (
+      !Array.isArray(b.curatedDocs) ||
+      !b.curatedDocs.every(
+        (d) =>
+          d &&
+          typeof d === 'object' &&
+          typeof (d as { uri?: unknown }).uri === 'string' &&
+          typeof (d as { serializedModel?: unknown }).serializedModel === 'string'
       )
     ) {
       return false;
@@ -187,7 +211,9 @@ function toRosettaUri(name: string, URI: typeof import('langium').URI): import('
 async function loadAllDocuments(
   files: ReadonlyArray<{ path: string; content: string }>,
   curatedBundles: ReadonlyArray<{ id: string; version: string }>,
-  curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined
+  curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined,
+  requestedNamespaces: readonly string[],
+  curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }>
 ): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response }> {
   const [{ createRuneDslServices, hydrateModelDocument }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
@@ -205,46 +231,92 @@ async function loadAllDocuments(
     docs.push(...parsed);
   }
 
-  // Curated bundles — fetch pre-parsed serialized models from the
-  // mirror and deserialize each one into a synthetic LangiumDocument.
-  // Fetch errors that surface as `CuratedBundleUnavailableError`
-  // bubble up to onRequestPost as a structured 502.
-  for (const bundle of curatedBundles) {
-    try {
-      const curatedDocs = await fetchCuratedBundle(bundle.id, bundle.version, curatedFetcher);
-      for (const cd of curatedDocs) {
-        // `cd.uri` already includes the bundle-id prefix (curated-fetch's
-        // toDocuments builds `${bundleId}/${doc.path}`). Copilot review
-        // on PR #168 caught a previous double-prefix bug where we wrote
-        // `curated:///${bundle.id}/${cd.uri}`. Use cd.uri as-is.
-        // Codex review on PR #169: register with the document store via
-        // `factory.fromModel` so `RuneDslLinker.loadAstNode` can resolve
-        // cross-references through `.ref`.
-        const { document } = hydrateModelDocument(
-          { RuneDsl, shared: RuneDsl.shared },
-          URI.parse(`curated:///${cd.uri}`),
-          cd.serializedModel,
-          { register: 'idempotent' }
-        );
-        docs.push(document);
+  // Closure seeds: namespaces the user files import, plus the request's
+  // dependency-closed namespace subset (the modal cascade output). Imports are
+  // syntactic — readable from the parsed AST without a link.
+  const seeds = new Set<string>(requestedNamespaces);
+  for (const doc of docs) {
+    const model = doc.parseResult?.value as { imports?: Array<{ importedNamespace?: unknown }> } | undefined;
+    for (const imp of model?.imports ?? []) {
+      if (typeof imp.importedNamespace === 'string' && imp.importedNamespace.length > 0) {
+        seeds.add(imp.importedNamespace);
       }
-    } catch (err) {
-      if (err instanceof CuratedBundleUnavailableError) {
-        return {
-          docs: [],
-          curatedError: new Response(
-            JSON.stringify({
-              ok: false,
-              error: 'curated_bundle_unavailable',
-              bundleId: err.bundleId,
-              version: err.version,
-              upstreamStatus: err.status
-            }),
-            { status: 502, headers: { 'Content-Type': 'application/json' } }
-          )
-        };
+    }
+  }
+
+  // Path A — client pre-loaded the curated docs via /api/parse and sends them
+  // in the request. Deserialize each entry directly; skip all manifest/
+  // namespace fetching entirely. curatedDocs wins when both are present.
+  if (curatedDocs.length > 0) {
+    for (const cd of curatedDocs) {
+      const { document } = hydrateModelDocument(
+        { RuneDsl, shared: RuneDsl.shared },
+        URI.parse(`curated:///${cd.uri}`),
+        cd.serializedModel,
+        { register: 'idempotent' }
+      );
+      docs.push(document);
+    }
+  } else {
+    // Path C — fetch only the import closure via the manifest. This avoids
+    // loading the whole serialized workspace artifact (which OOMs on CDM at
+    // 128 MiB). The manifest records the dependency graph so we walk it here
+    // without fetching+parsing any documents upfront.
+    for (const bundle of curatedBundles) {
+      try {
+        const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
+        if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
+          return {
+            docs: [],
+            curatedError: new Response(
+              JSON.stringify({ ok: false, error: 'curated_manifest_missing', bundleId: bundle.id, version: bundle.version }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+            )
+          };
+        }
+        const nsGraph = manifest.namespaces;
+        // Empty seeds (no request `namespaces` and no user imports) preserves the
+        // "no filter → emit everything" contract: load every namespace in the
+        // bundle. A scoped request (the studio's normal flow always sends the
+        // dependency-closed `namespaces`) loads only its transitive closure.
+        const closure = seeds.size > 0 ? closeNamespacesFromManifest(seeds, nsGraph) : new Set(Object.keys(nsGraph));
+        const closureNs = [...closure].filter((ns) => nsGraph[ns]);
+        const FETCH_CONCURRENCY = 8;
+        for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
+          const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
+          const fetched = await Promise.all(
+            window.map((ns) => fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher))
+          );
+          for (const nsDocs of fetched) {
+            for (const cd of nsDocs) {
+              const { document } = hydrateModelDocument(
+                { RuneDsl, shared: RuneDsl.shared },
+                URI.parse(`curated:///${cd.uri}`),
+                cd.serializedModel,
+                { register: 'idempotent' }
+              );
+              docs.push(document);
+            }
+          }
+        }
+      } catch (err) {
+        if (err instanceof CuratedBundleUnavailableError) {
+          return {
+            docs: [],
+            curatedError: new Response(
+              JSON.stringify({
+                ok: false,
+                error: 'curated_bundle_unavailable',
+                bundleId: err.bundleId,
+                version: err.version,
+                upstreamStatus: err.status
+              }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+            )
+          };
+        }
+        throw err;
       }
-      throw err;
     }
   }
 
@@ -392,18 +464,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const curatedBundles = body.curatedBundles ?? [];
-  // 019 Task #88 — a pure curated workspace ships zero user files but
-  // a non-empty curatedBundles list. Both being empty is the genuine
-  // bad-input case.
-  if (body.files.length === 0 && curatedBundles.length === 0) {
-    return jsonError(400, 'files / curatedBundles: at least one must be non-empty');
+  const curatedDocs = body.curatedDocs ?? [];
+  // 019 Task #88 — a pure curated workspace ships zero user files but a
+  // non-empty curated source: either curatedBundles (path C) OR pre-loaded
+  // curatedDocs (path A). All three empty is the genuine bad-input case.
+  if (body.files.length === 0 && curatedBundles.length === 0 && curatedDocs.length === 0) {
+    return jsonError(400, 'files / curatedBundles / curatedDocs: at least one must be non-empty');
   }
 
   try {
     const curatedFetcher = env?.CURATED_MIRROR
       ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
       : undefined;
-    const { docs: documents, curatedError } = await loadAllDocuments(body.files, curatedBundles, curatedFetcher);
+    const { docs: documents, curatedError } = await loadAllDocuments(
+      body.files,
+      curatedBundles,
+      curatedFetcher,
+      body.namespaces ?? [],
+      curatedDocs
+    );
     if (curatedError) return curatedError;
 
     const parseErrors = hasParserErrors(documents);

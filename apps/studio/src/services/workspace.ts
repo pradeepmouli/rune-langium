@@ -400,6 +400,27 @@ export function collectCuratedBundlesFromWorkspace(
 }
 
 /**
+ * Collect pre-loaded serialized curated docs for the /api/codegen path-A
+ * request: workspace files carrying a real serialized model. Excludes the
+ * synthetic bundle marker (serializedModelJson '{}', path .../.bundle-marker) —
+ * shipping it injects a $type-less doc the server can't deserialize and, when a
+ * bundle is marker-only, suppresses the curatedBundles path-C fallback. Mirrors
+ * CodegenProvider's marker exclusion.
+ */
+export function collectCuratedDocsFromWorkspace(
+  files: ReadonlyArray<WorkspaceFile>
+): Array<{ uri: string; serializedModel: string }> {
+  const docs: Array<{ uri: string; serializedModel: string }> = [];
+  for (const f of files) {
+    if (f.path.endsWith(BUNDLE_MARKER_SUFFIX)) continue;
+    if (typeof f.serializedModelJson === 'string' && f.serializedModelJson.length > 0) {
+      docs.push({ uri: f.path, serializedModel: f.serializedModelJson });
+    }
+  }
+  return docs;
+}
+
+/**
  * Parse all files in the workspace and return models.
  *
  * Primary path (019 Phase 0): delegates to the /api/parse Pages Function via
@@ -1035,10 +1056,15 @@ export async function downloadTargetViaRouter(
   target: string,
   options: Record<string, unknown> = {},
   curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
-  namespaces: ReadonlyArray<string> = []
+  namespaces: ReadonlyArray<string> = [],
+  curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
 ): Promise<void> {
   const body: Record<string, unknown> = { files, target, options };
-  if (curatedBundles.length > 0) {
+  if (curatedDocs.length > 0) {
+    // Path A — server deserializes these, no fetch
+    body.curatedDocs = curatedDocs;
+  } else if (curatedBundles.length > 0) {
+    // Path C fallback — server fetches corpus server-to-server
     body.curatedBundles = curatedBundles;
   }
   // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
