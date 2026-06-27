@@ -158,4 +158,30 @@ describe('buildDependencyGraph', () => {
     const g = buildDependencyGraph([{ namespace: 'app', imports: [] }], new Map(), all, userResolved);
     expect(g['app']).toEqual(['app']); // self-edge + unknown 'gone' both dropped
   });
+
+  it('does NOT over-pull a user namespace imported-but-unreferenced (Codex P2)', () => {
+    // `app` imports user namespace `lib` but references nothing in it (empty
+    // userResolvedDeps). Import edges target curated namespaces only, so app→lib
+    // is NOT added — `lib` must not be forced into app's read-only cascade.
+    const all = new Set(['app', 'lib']);
+    const g = buildDependencyGraph(
+      [
+        { namespace: 'app', imports: ['lib'] },
+        { namespace: 'lib', imports: [] }
+      ],
+      new Map(),
+      all,
+      new Map() // app references nothing in lib
+    );
+    expect(g['app']).toEqual(['app']); // lib NOT pulled (unused import)
+    // But a curated import IS still pulled:
+    const all2 = new Set(['app', 'cdm.base.math']);
+    const g2 = buildDependencyGraph(
+      [{ namespace: 'app', imports: ['cdm.base.math'] }],
+      new Map([['cdm.base.math', new Set<string>()]]),
+      all2,
+      new Map()
+    );
+    expect(g2['app']).toEqual(['app', 'cdm.base.math']);
+  });
 });

@@ -57,7 +57,9 @@ export function closeNamespacesFromManifest(
  * mapped to its transitive dependency closure (including itself), sorted for
  * stable bytes. Edges come from three no-link sources:
  *   - curated→curated: the precomputed manifest `deps` (`curatedDeps`)
- *   - user→curated:    user models' import declarations (`userModels`)
+ *   - user→curated:    user models' import declarations (`userModels`), expanded
+ *     to curated namespaces ONLY (user→user import edges are skipped — they are
+ *     covered precisely by `userResolvedDeps`, so import edges would over-pull)
  *   - user→user:       resolved cross-references from the already-built user
  *     docs (`userResolvedDeps`) — captures qualified references (e.g.
  *     `cdm.Quantity`) that the DSL resolves via global scope WITHOUT an import,
@@ -97,12 +99,17 @@ export function buildDependencyGraph(
     for (const t of targets) if (allNamespaces.has(t)) bucket.add(t);
   }
 
-  // User → curated from import declarations, wildcard-expanded.
+  // User → curated from import declarations, wildcard-expanded. Import edges
+  // target ONLY curated namespaces: user→user deps are captured precisely by
+  // userResolvedDeps below (resolved refs), so adding import-based user→user
+  // edges here would over-pull an imported-but-unused user namespace into the
+  // read-only Download-modal cascade (Codex P2).
+  const userNamespaces = new Set(userModels.map((m) => m.namespace));
   for (const { namespace, imports } of userModels) {
     const bucket = ensure(namespace);
     for (const raw of imports) {
       for (const t of expandWildcard(raw, allNamespaces)) {
-        if (t !== namespace) bucket.add(t);
+        if (t !== namespace && !userNamespaces.has(t)) bucket.add(t);
       }
     }
   }
