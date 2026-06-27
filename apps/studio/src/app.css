@@ -653,7 +653,15 @@ html {
     gap: var(--space-1);
     align-items: center;
     min-width: 0;
-    overflow: hidden;
+    /* Excess open-file tabs scroll horizontally rather than being clipped
+     * unreachably (overflow: hidden) or pushing the topbar — and the whole
+     * dockview layout — past the viewport. `min-width: 0` + `flex: 1` bound
+     * the strip to the available width; `overflow-x: auto` keeps every tab
+     * reachable. `overscroll-behavior-x: contain` stops trackpad overscroll
+     * from triggering the browser's swipe-to-go-back gesture. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
     flex: 1;
   }
 
