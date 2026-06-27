@@ -432,24 +432,63 @@ type Quantity:
   // When the client sends pre-loaded docs, the server must deserialize them
   // directly and perform NO manifest/namespace fetch at all.
 
-  it('path A: deserializes provided curatedDocs without any fetch', async () => {
+  it('path A: deserializes provided curatedDocs and emits them, without any fetch', async () => {
+    // A REAL curated doc (with an actual Quantity type) so the generated output
+    // proves the provided doc was deserialized AND fed to the generator — not
+    // merely that no fetch occurred (which would pass even if curatedDocs were
+    // silently dropped). cgSM produces empty-element docs and can't prove this.
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
     const mod = await import('../lib/curated-fetch.js');
     const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest');
     const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
     const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
 
     const res = await onRequestPost({
-      request: new Request('http://x/api/codegen', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: [{ path: 'app.rune', content: 'namespace app\nimport cdm.base.math\n' }],
-          target: 'typescript',
-          curatedDocs: [{ uri: 'cdm/base/math.rosetta', serializedModel: cgSM('cdm.base.math') }]
-        })
-      }), env: {}
+      request: makeRequest({
+        files: [], // pure curated workspace, supplied entirely via curatedDocs
+        target: 'zod',
+        curatedDocs: [{ uri: curatedDoc.uri, serializedModel: curatedDoc.serializedModel }],
+        namespaces: ['cdm.base.math']
+      })
     } as never);
 
-    expect(res.status).not.toBe(503);
+    // Path A performs NO curated fetch of any kind.
+    expect(manifestSpy).not.toHaveBeenCalled();
+    expect(nsSpy).not.toHaveBeenCalled();
+    expect(bundleSpy).not.toHaveBeenCalled();
+    // Proof the supplied doc was hydrated AND used by generation:
+    expect(res.status).toBe(200);
+    const zip = await JSZip.loadAsync(new Uint8Array(await res.arrayBuffer()));
+    expect(Object.keys(zip.files)).toContain('cdm/base/math.zod.ts');
+    const nsFile = await zip.files['cdm/base/math.zod.ts']!.async('string');
+    expect(nsFile).toMatch(/QuantitySchema/);
+  });
+
+  it('path A wins over curatedBundles when both are present (no fetch)', async () => {
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const mod = await import('../lib/curated-fetch.js');
+    const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest');
+    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
+    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
+
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedDocs: [{ uri: curatedDoc.uri, serializedModel: curatedDoc.serializedModel }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }], // present, but must be ignored
+        namespaces: ['cdm.base.math']
+      })
+    } as never);
+
+    expect(res.status).toBe(200);
+    // curatedDocs wins → the fetch path is never taken despite curatedBundles.
     expect(manifestSpy).not.toHaveBeenCalled();
     expect(nsSpy).not.toHaveBeenCalled();
     expect(bundleSpy).not.toHaveBeenCalled();

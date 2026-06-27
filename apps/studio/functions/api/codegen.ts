@@ -460,11 +460,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const curatedBundles = body.curatedBundles ?? [];
-  // 019 Task #88 — a pure curated workspace ships zero user files but
-  // a non-empty curatedBundles list. Both being empty is the genuine
-  // bad-input case.
-  if (body.files.length === 0 && curatedBundles.length === 0) {
-    return jsonError(400, 'files / curatedBundles: at least one must be non-empty');
+  const curatedDocs = body.curatedDocs ?? [];
+  // 019 Task #88 — a pure curated workspace ships zero user files but a
+  // non-empty curated source: either curatedBundles (path C) OR pre-loaded
+  // curatedDocs (path A). All three empty is the genuine bad-input case.
+  if (body.files.length === 0 && curatedBundles.length === 0 && curatedDocs.length === 0) {
+    return jsonError(400, 'files / curatedBundles / curatedDocs: at least one must be non-empty');
   }
 
   try {
@@ -476,7 +477,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       curatedBundles,
       curatedFetcher,
       body.namespaces ?? [],
-      body.curatedDocs ?? []
+      curatedDocs
     );
     if (curatedError) return curatedError;
 
