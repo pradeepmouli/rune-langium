@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
-import { computeCuratedClosure, refUriToCuratedKey, closeNamespacesFromManifest } from '../lib/curated-closure.js';
+import { computeCuratedClosure, refUriToCuratedKey, closeNamespacesFromManifest, expandWildcard, buildDependencyGraph } from '../lib/curated-closure.js';
 
 /**
  * Build a ClosureDoc fixture.
@@ -259,5 +259,59 @@ describe('closeNamespacesFromManifest', () => {
     const ns = G({ 'cdm.trade': ['cdm.missing'] });
     const closure = closeNamespacesFromManifest(['cdm.trade', 'cdm.absent'], ns);
     expect([...closure].sort()).toEqual(['cdm.trade']);
+  });
+});
+
+describe('expandWildcard', () => {
+  const allNs = new Set(['cdm.base.math', 'cdm.base.datetime', 'cdm.trade', 'app']);
+
+  it('expands a wildcard to matching namespaces (exact prefix + dotted children)', () => {
+    expect(expandWildcard('cdm.base.*', allNs).sort()).toEqual(['cdm.base.datetime', 'cdm.base.math']);
+  });
+
+  it('returns a bare name iff present', () => {
+    expect(expandWildcard('cdm.trade', allNs)).toEqual(['cdm.trade']);
+    expect(expandWildcard('cdm.unknown', allNs)).toEqual([]);
+  });
+
+  it('matches the wildcard prefix itself when present', () => {
+    const ns = new Set(['cdm.base', 'cdm.base.math']);
+    expect(expandWildcard('cdm.base.*', ns).sort()).toEqual(['cdm.base', 'cdm.base.math']);
+  });
+});
+
+describe('buildDependencyGraph', () => {
+  // Topology: cdm.trade → cdm.base.datetime → cdm.base.math ; cdm.other isolated.
+  const curatedDeps = new Map<string, Set<string>>([
+    ['cdm.trade', new Set(['cdm.base.datetime'])],
+    ['cdm.base.datetime', new Set(['cdm.base.math'])],
+    ['cdm.base.math', new Set()],
+  ]);
+  const closure = new Set(['cdm.trade', 'cdm.base.datetime', 'cdm.base.math']);
+
+  it('transitively closes curated edges, every namespace is a key, values sorted + include self', () => {
+    const g = buildDependencyGraph([], curatedDeps, closure);
+    expect(g['cdm.trade']).toEqual(['cdm.base.datetime', 'cdm.base.math', 'cdm.trade']);
+    expect(g['cdm.base.datetime']).toEqual(['cdm.base.math', 'cdm.base.datetime'].sort());
+    expect(g['cdm.base.math']).toEqual(['cdm.base.math']);
+    expect(Object.keys(g).sort()).toEqual(['cdm.base.datetime', 'cdm.base.math', 'cdm.trade']);
+  });
+
+  it('adds user→curated edges from imports (wildcard-expanded) and keys the user namespace', () => {
+    const all = new Set([...closure, 'app']);
+    const g = buildDependencyGraph([{ namespace: 'app', imports: ['cdm.trade'] }], curatedDeps, all);
+    // app imports cdm.trade → app's closure pulls the whole transitive chain.
+    expect(g['app']).toEqual(['app', 'cdm.base.datetime', 'cdm.base.math', 'cdm.trade']);
+  });
+
+  it('ignores import targets outside allNamespaces and self-imports', () => {
+    const all = new Set([...closure, 'app']);
+    const g = buildDependencyGraph(
+      [{ namespace: 'app', imports: ['cdm.unknown', 'app', 'cdm.base.*'] }],
+      curatedDeps,
+      all
+    );
+    // cdm.unknown dropped (absent); 'app' self-edge dropped; cdm.base.* expands.
+    expect(g['app']).toEqual(['app', 'cdm.base.datetime', 'cdm.base.math']);
   });
 });

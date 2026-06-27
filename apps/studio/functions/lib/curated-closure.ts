@@ -2,6 +2,21 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { readSerializedModelMeta } from './serialized-model-meta.js';
+import { closeNamespaceDependencies } from '@rune-langium/core';
+
+/**
+ * Expand a possibly-wildcarded namespace token against a known namespace set.
+ * `a.b.*` → every ns equal to `a.b` or starting with `a.b.`; a bare name →
+ * `[name]` iff present, else `[]`. Shared by closeNamespacesFromManifest and
+ * buildDependencyGraph so both agree on wildcard semantics.
+ */
+export function expandWildcard(raw: string, allNs: ReadonlySet<string>): string[] {
+  if (raw.endsWith('.*')) {
+    const prefix = raw.slice(0, -2);
+    return [...allNs].filter((ns) => ns === prefix || ns.startsWith(prefix + '.'));
+  }
+  return allNs.has(raw) ? [raw] : [];
+}
 
 export interface ClosureDoc {
   /**
@@ -230,26 +245,70 @@ export function closeNamespacesFromManifest(
   namespaces: Readonly<Record<string, { deps: readonly string[] }>>
 ): Set<string> {
   const allNs = new Set(Object.keys(namespaces));
-
-  const expand = (raw: string): string[] => {
-    if (raw.endsWith('.*')) {
-      const prefix = raw.slice(0, -2);
-      return [...allNs].filter((ns) => ns === prefix || ns.startsWith(prefix + '.'));
-    }
-    return allNs.has(raw) ? [raw] : [];
-  };
-
   const visited = new Set<string>();
-  const queue: string[] = [...seedNamespaces].flatMap(expand);
+  const queue: string[] = [...seedNamespaces].flatMap((raw) => expandWildcard(raw, allNs));
   while (queue.length > 0) {
     const ns = queue.shift()!;
     if (!allNs.has(ns) || visited.has(ns)) continue;
     visited.add(ns);
     for (const raw of namespaces[ns]!.deps) {
-      for (const target of expand(raw)) {
+      for (const target of expandWildcard(raw, allNs)) {
         if (!visited.has(target)) queue.push(target);
       }
     }
   }
   return visited;
+}
+
+/**
+ * Build the /api/parse cross-namespace dependency graph WITHOUT deserializing or
+ * linking any curated document. Curated→curated edges come from the precomputed
+ * manifest `deps` (`curatedDeps`); user→* edges come from each user model's
+ * import declarations. Returns every namespace in `allNamespaces` mapped to its
+ * transitive dependency closure (including itself), sorted for stable bytes.
+ *
+ * @param userModels   user docs' {namespace, imports} (from readSerializedModelMeta)
+ * @param curatedDeps  direct curated edges: ns → its direct dep namespaces
+ * @param allNamespaces every namespace that must be a key (user ∪ curated closure)
+ */
+export function buildDependencyGraph(
+  userModels: ReadonlyArray<{ namespace: string; imports: readonly string[] }>,
+  curatedDeps: ReadonlyMap<string, ReadonlySet<string>>,
+  allNamespaces: ReadonlySet<string>
+): Record<string, string[]> {
+  const directDeps = new Map<string, Set<string>>();
+  const ensure = (ns: string): Set<string> => {
+    let s = directDeps.get(ns);
+    if (!s) {
+      s = new Set<string>();
+      directDeps.set(ns, s);
+    }
+    return s;
+  };
+
+  // Every namespace is a key even with no deps: consumers read Object.keys as
+  // the namespace list, and a selected ns with no closure entry emits itself.
+  for (const ns of allNamespaces) ensure(ns);
+
+  // Curated → curated (precomputed manifest edges). Filter to known namespaces.
+  for (const [ns, targets] of curatedDeps) {
+    const bucket = ensure(ns);
+    for (const t of targets) if (allNamespaces.has(t)) bucket.add(t);
+  }
+
+  // User → (user | curated) from import declarations, wildcard-expanded.
+  for (const { namespace, imports } of userModels) {
+    const bucket = ensure(namespace);
+    for (const raw of imports) {
+      for (const t of expandWildcard(raw, allNamespaces)) {
+        if (t !== namespace) bucket.add(t);
+      }
+    }
+  }
+
+  const graph: Record<string, string[]> = {};
+  for (const ns of allNamespaces) {
+    graph[ns] = [...closeNamespaceDependencies(ns, directDeps)].sort();
+  }
+  return graph;
 }
