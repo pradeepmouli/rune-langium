@@ -427,4 +427,31 @@ type Quantity:
     expect(res.status).toBe(502);
     expect(bundleSpy).not.toHaveBeenCalled();
   });
+
+  // ── Path A: accept pre-loaded serialized curatedDocs (Task 2) ───────────
+  // When the client sends pre-loaded docs, the server must deserialize them
+  // directly and perform NO manifest/namespace fetch at all.
+
+  it('path A: deserializes provided curatedDocs without any fetch', async () => {
+    const mod = await import('../lib/curated-fetch.js');
+    const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest');
+    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace');
+    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
+
+    const res = await onRequestPost({
+      request: new Request('http://x/api/codegen', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: [{ path: 'app.rune', content: 'namespace app\nimport cdm.base.math\n' }],
+          target: 'typescript',
+          curatedDocs: [{ uri: 'cdm/base/math.rosetta', serializedModel: cgSM('cdm.base.math') }]
+        })
+      }), env: {}
+    } as never);
+
+    expect(res.status).not.toBe(503);
+    expect(manifestSpy).not.toHaveBeenCalled();
+    expect(nsSpy).not.toHaveBeenCalled();
+    expect(bundleSpy).not.toHaveBeenCalled();
+  });
 });

@@ -70,6 +70,13 @@ interface CodegenRequestBody {
    */
   curatedBundles?: Array<{ id: string; version: string }>;
   /**
+   * Pre-loaded serialized curated docs (path A). When present, the server
+   * deserializes these directly and performs NO manifest/namespace fetch —
+   * the studio passes the closure it already loaded via /api/parse. Mutually
+   * exclusive with curatedBundles; if both are sent, curatedDocs wins.
+   */
+  curatedDocs?: Array<{ uri: string; serializedModel: string }>;
+  /**
    * Optional namespace allowlist (019 spec §5.1/§5.3). The Download config
    * modal sends the dependency-closed subset (selected ∪ transitively
    * pulled). Passed straight through to `generate()` as `options.namespaces`.
@@ -112,7 +119,7 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
 
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
-  const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown };
+  const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown; curatedDocs?: unknown };
   if (
     !Array.isArray(b.files) ||
     !b.files.every(
@@ -139,6 +146,23 @@ function isValidRequest(body: unknown): body is CodegenRequestBody {
           typeof entry === 'object' &&
           typeof (entry as { id?: unknown }).id === 'string' &&
           typeof (entry as { version?: unknown }).version === 'string'
+      )
+    ) {
+      return false;
+    }
+  }
+  // Path A — when `curatedDocs` is supplied, each entry must be
+  // `{ uri: string, serializedModel: string }`. A non-array or
+  // structurally invalid entry is rejected with a 400.
+  if (b.curatedDocs !== undefined) {
+    if (
+      !Array.isArray(b.curatedDocs) ||
+      !b.curatedDocs.every(
+        (d) =>
+          d &&
+          typeof d === 'object' &&
+          typeof (d as { uri?: unknown }).uri === 'string' &&
+          typeof (d as { serializedModel?: unknown }).serializedModel === 'string'
       )
     ) {
       return false;
@@ -188,7 +212,8 @@ async function loadAllDocuments(
   files: ReadonlyArray<{ path: string; content: string }>,
   curatedBundles: ReadonlyArray<{ id: string; version: string }>,
   curatedFetcher: ((url: string, init?: RequestInit) => Promise<Response>) | undefined,
-  requestedNamespaces: readonly string[]
+  requestedNamespaces: readonly string[],
+  curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }>
 ): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response }> {
   const [{ createRuneDslServices, hydrateModelDocument }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
@@ -219,60 +244,75 @@ async function loadAllDocuments(
     }
   }
 
-  // Curated bundles — fetch only the import closure via the manifest. This
-  // avoids loading the whole serialized workspace artifact (which OOMs on CDM
-  // at 128 MiB). The manifest records the dependency graph so we walk it here
-  // without fetching+parsing any documents upfront.
-  for (const bundle of curatedBundles) {
-    try {
-      const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
-      if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
-        return {
-          docs: [],
-          curatedError: new Response(
-            JSON.stringify({ ok: false, error: 'curated_manifest_missing', bundleId: bundle.id, version: bundle.version }),
-            { status: 502, headers: { 'Content-Type': 'application/json' } }
-          )
-        };
-      }
-      const nsGraph = manifest.namespaces;
-      const closure = closeNamespacesFromManifest(seeds, nsGraph);
-      const closureNs = [...closure].filter((ns) => nsGraph[ns]);
-      const FETCH_CONCURRENCY = 8;
-      for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
-        const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
-        const fetched = await Promise.all(
-          window.map((ns) => fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher))
-        );
-        for (const nsDocs of fetched) {
-          for (const cd of nsDocs) {
-            const { document } = hydrateModelDocument(
-              { RuneDsl, shared: RuneDsl.shared },
-              URI.parse(`curated:///${cd.uri}`),
-              cd.serializedModel,
-              { register: 'idempotent' }
-            );
-            docs.push(document);
+  // Path A — client pre-loaded the curated docs via /api/parse and sends them
+  // in the request. Deserialize each entry directly; skip all manifest/
+  // namespace fetching entirely. curatedDocs wins when both are present.
+  if (curatedDocs.length > 0) {
+    for (const cd of curatedDocs) {
+      const { document } = hydrateModelDocument(
+        { RuneDsl, shared: RuneDsl.shared },
+        URI.parse(`curated:///${cd.uri}`),
+        cd.serializedModel,
+        { register: 'idempotent' }
+      );
+      docs.push(document);
+    }
+  } else {
+    // Path C — fetch only the import closure via the manifest. This avoids
+    // loading the whole serialized workspace artifact (which OOMs on CDM at
+    // 128 MiB). The manifest records the dependency graph so we walk it here
+    // without fetching+parsing any documents upfront.
+    for (const bundle of curatedBundles) {
+      try {
+        const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
+        if (!manifest?.namespaces || Object.keys(manifest.namespaces).length === 0) {
+          return {
+            docs: [],
+            curatedError: new Response(
+              JSON.stringify({ ok: false, error: 'curated_manifest_missing', bundleId: bundle.id, version: bundle.version }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+            )
+          };
+        }
+        const nsGraph = manifest.namespaces;
+        const closure = closeNamespacesFromManifest(seeds, nsGraph);
+        const closureNs = [...closure].filter((ns) => nsGraph[ns]);
+        const FETCH_CONCURRENCY = 8;
+        for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
+          const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
+          const fetched = await Promise.all(
+            window.map((ns) => fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher))
+          );
+          for (const nsDocs of fetched) {
+            for (const cd of nsDocs) {
+              const { document } = hydrateModelDocument(
+                { RuneDsl, shared: RuneDsl.shared },
+                URI.parse(`curated:///${cd.uri}`),
+                cd.serializedModel,
+                { register: 'idempotent' }
+              );
+              docs.push(document);
+            }
           }
         }
+      } catch (err) {
+        if (err instanceof CuratedBundleUnavailableError) {
+          return {
+            docs: [],
+            curatedError: new Response(
+              JSON.stringify({
+                ok: false,
+                error: 'curated_bundle_unavailable',
+                bundleId: err.bundleId,
+                version: err.version,
+                upstreamStatus: err.status
+              }),
+              { status: 502, headers: { 'Content-Type': 'application/json' } }
+            )
+          };
+        }
+        throw err;
       }
-    } catch (err) {
-      if (err instanceof CuratedBundleUnavailableError) {
-        return {
-          docs: [],
-          curatedError: new Response(
-            JSON.stringify({
-              ok: false,
-              error: 'curated_bundle_unavailable',
-              bundleId: err.bundleId,
-              version: err.version,
-              upstreamStatus: err.status
-            }),
-            { status: 502, headers: { 'Content-Type': 'application/json' } }
-          )
-        };
-      }
-      throw err;
     }
   }
 
@@ -435,7 +475,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       body.files,
       curatedBundles,
       curatedFetcher,
-      body.namespaces ?? []
+      body.namespaces ?? [],
+      body.curatedDocs ?? []
     );
     if (curatedError) return curatedError;
 
