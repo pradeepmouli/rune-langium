@@ -48,7 +48,6 @@ export { parsedAdapter } from './adapters/parsed-adapter.js';
 export { curatedAdapter } from './adapters/curated-adapter.js';
 
 // Serializer
-export { serializeModel, serializeElement, serializeModels } from './serializer/rosetta-serializer.js';
 export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
 export { preserveCstText } from './serializer/preserve-cst-text.js';
 export { deserializeRuneModel, hydrateModelDocument } from './serializer/hydrate-model-document.js';
