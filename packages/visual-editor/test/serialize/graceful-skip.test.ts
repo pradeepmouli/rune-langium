@@ -37,27 +37,27 @@ function makeNode(data: unknown, id: string, ns = 'test'): TypeGraphNode {
 }
 
 describe('graceful skip — unemittable new nodes', () => {
-  it('does NOT throw when a new Condition (no $cstRange) is added to a Data node', async () => {
+  it('does NOT throw when a new node of an unimplemented $type (no $cstRange) is added to a Data node', async () => {
     // Parse the source to get a dehydrated Data node whose children all have $cstRange.
     const { value } = await parse(SRC);
     const raw = (value as unknown as { elements: unknown[] }).elements[0];
     const d = parsedAdapter.dehydrate(raw as Parameters<typeof parsedAdapter.dehydrate>[0]);
 
-    // Inject a brand-new Condition without $cstRange — simulates the inspector
-    // appending a condition that the emit-core cannot yet regenerate.
-    const newCond = {
-      $type: 'Condition',
-      name: 'NewCond',
-      expression: { $type: 'RosettaBooleanLiteral', value: true }
+    // Inject a brand-new node with a $type that renderNode has no case for
+    // (RosettaSynonymSource is not in the switch) and no $cstRange — simulates
+    // the inspector appending a node whose render support hasn't landed yet.
+    const newNode = {
+      $type: 'RosettaSynonymSource',
+      name: 'X'
       // deliberately NO $cstRange
     };
-    (d as unknown as { conditions: unknown[] }).conditions.push(newCond);
+    (d as unknown as { conditions: unknown[] }).conditions.push(newNode);
 
     const patches = [
-      { op: 'add', path: ['nodes', 'test.Foo', 'data', 'conditions', 1], value: newCond }
+      { op: 'add', path: ['nodes', 'test.Foo', 'data', 'conditions', 1], value: newNode }
     ] as unknown as Patches;
 
-    // Must not throw — the unemittable condition is silently skipped.
+    // Must not throw — the unemittable node is silently skipped.
     let out = '';
     expect(() => {
       out = renderNamespace({
@@ -76,8 +76,9 @@ describe('graceful skip — unemittable new nodes', () => {
     expect(out).toContain('condition NonEmpty:');
     expect(out).toContain('if bar exists then baz exists');
 
-    // The new unemittable condition must not appear in the output.
-    expect(out).not.toContain('NewCond');
+    // The new unemittable node must not appear in the output.
+    expect(out).not.toContain('RosettaSynonymSource');
+    expect(out).not.toContain(newNode.name);
   });
 
   it('backstop: buildSourceForNamespaces does not throw and still returns good namespaces when one namespace serializer fails unexpectedly', async () => {

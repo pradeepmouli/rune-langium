@@ -155,11 +155,17 @@ function renderEnum(e: Dehydrated<RosettaEnumeration>, renderChild: RenderChild)
 function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
   const cc = c as unknown as {
     name?: string; definition?: string; postCondition?: boolean; expression?: unknown;
+    annotations?: readonly unknown[]; references?: readonly unknown[];
   };
   const head = cc.postCondition ? 'post-condition' : 'condition';
   const lines = [cc.name ? `${head} ${cc.name}:` : `${head}:`];
   const def = definitionLine(cc.definition);
   if (def) lines.push(indentBlock(def));
+  // Delegate annotation/doc-ref children so an edited condition keeps its
+  // annotations and references (mirrors renderData/renderAttribute).
+  for (const child of childList(cc.annotations, cc.references)) {
+    lines.push(indentBlock(renderChild(child)));
+  }
   const body = exprText(cc.expression);
   if (body) lines.push(indentBlock(body));
   return lines.join('\n');
