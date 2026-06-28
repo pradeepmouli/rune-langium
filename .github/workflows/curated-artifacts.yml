@@ -2,12 +2,17 @@ name: Curated Serialized Artifacts
 
 # Build pre-parsed Langium artifacts for curated models (CDM, FpML, rune-dsl).
 #
-# The curated-mirror Worker's nightly cron handles archive mirroring but OOMs
-# when parsing CDM through Langium for the serialized artifact. This workflow
-# runs with 4GB+ heap in CI and uploads the artifacts to R2 afterward.
+# This workflow is the SINGLE source of truth for the curated v2 manifest
+# (the per-namespace dependency graph) and the serialized artifacts the live
+# load path consumes (/api/parse reads manifest.namespaces +
+# artifacts.serializedWorkspace; the browser path fetches latest.serialized.json.gz).
+# It downloads source archives from codeload.github.com (upstream) directly and
+# parses CDM through Langium with 4GB+ heap — the curated-mirror Worker can't do
+# this (it OOMs on CDM) and its publish cron is now DISABLED, so this Action owns
+# manifest + artifact freshness end to end.
 #
 # Triggers:
-#   - Nightly at 04:00 UTC (1 hour after the archive mirror cron at 03:00)
+#   - Nightly at 04:00 UTC
 #   - Manual dispatch
 
 on:
