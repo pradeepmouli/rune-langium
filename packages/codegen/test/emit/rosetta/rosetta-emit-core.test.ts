@@ -93,8 +93,8 @@ describe('renderNode — implemented scalars', () => {
     );
   });
 
-  it('returns null for an unimplemented $type', () => {
+  it('renders a minimal RosettaFunction with no children', () => {
     const fn = { $type: 'RosettaFunction', name: 'DoIt' } as never;
-    expect(renderNode(fn, regen)).toBeNull();
+    expect(renderNode(fn, regen)).toBe('func DoIt:');
   });
 });

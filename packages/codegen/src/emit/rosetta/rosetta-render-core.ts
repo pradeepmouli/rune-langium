@@ -152,6 +152,65 @@ function renderEnum(e: Dehydrated<RosettaEnumeration>, renderChild: RenderChild)
   return lines.join('\n');
 }
 
+function renderSegment(seg: unknown): string {
+  let out = '';
+  let s = seg as { feature?: { $refText?: string }; next?: unknown } | undefined;
+  while (s) { const f = s.feature?.$refText; if (f) out += ` -> ${f}`; s = s.next as typeof s; }
+  return out;
+}
+
+function renderOperation(o: DehydratedNode): string {
+  const op = o as unknown as { add?: boolean; assignRoot?: { $refText?: string }; path?: unknown; definition?: string; expression?: unknown };
+  const kw = op.add ? 'add' : 'set';
+  const head = `${kw} ${op.assignRoot?.$refText ?? ''}${renderSegment(op.path)}:`;
+  const lines = [head];
+  const def = definitionLine(op.definition);
+  if (def) lines.push(indentBlock(def, 2));
+  const body = exprText(op.expression);
+  if (body) lines.push(indentBlock(body, 2));
+  return lines.join('\n');
+}
+
+function renderShortcut(s: DehydratedNode): string {
+  const sc = s as unknown as { name?: string; definition?: string; expression?: unknown };
+  const lines = [`alias ${sc.name ?? ''}:`];
+  const def = definitionLine(sc.definition);
+  if (def) lines.push(indentBlock(def, 2));
+  const body = exprText(sc.expression);
+  if (body) lines.push(indentBlock(body, 2));
+  return lines.join('\n');
+}
+
+function renderFunction(f: DehydratedNode, renderChild: RenderChild): string {
+  const fn = f as unknown as {
+    name?: string; definition?: string; superFunction?: { $refText?: string };
+    annotations?: unknown[]; references?: unknown[];
+    inputs?: unknown[]; output?: unknown; shortcuts?: unknown[];
+    conditions?: unknown[]; operations?: unknown[]; postConditions?: unknown[];
+  };
+  let header = `func ${fn.name}`;
+  const sup = fn.superFunction?.$refText;
+  if (sup) header += ` extends ${sup}`;
+  header += ':';
+  const lines = [header];
+  const def = definitionLine(fn.definition);
+  if (def) lines.push(indentBlock(def));
+  for (const child of childList(fn.annotations, fn.references)) lines.push(indentBlock(renderChild(child)));
+  if ((fn.inputs ?? []).length > 0) {
+    lines.push(indentBlock('inputs:'));
+    for (const i of fn.inputs!) lines.push(indentBlock(renderChild(i as DehydratedNode), 2));
+  }
+  if (fn.output) {
+    lines.push(indentBlock('output:'));
+    lines.push(indentBlock(renderChild(fn.output as DehydratedNode), 2));
+  }
+  for (const sc of fn.shortcuts ?? []) lines.push(indentBlock(renderChild(sc as DehydratedNode)));
+  for (const c of fn.conditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(c as DehydratedNode))); }
+  for (const op of fn.operations ?? []) { lines.push(''); lines.push(indentBlock(renderChild(op as DehydratedNode))); }
+  for (const pc of fn.postConditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(pc as DehydratedNode))); }
+  return lines.join('\n');
+}
+
 function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
   const cc = c as unknown as {
     name?: string; definition?: string; postCondition?: boolean; expression?: unknown;
@@ -192,6 +251,9 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
     case 'RosettaEnumeration': return renderEnum(node as Dehydrated<RosettaEnumeration>, renderChild);
     case 'RosettaEnumValue': return renderEnumValue(node as Dehydrated<RosettaEnumValue>, renderChild);
     case 'Condition': return renderCondition(node, renderChild);
+    case 'RosettaFunction': return renderFunction(node, renderChild);
+    case 'Operation': return renderOperation(node);
+    case 'ShortcutDeclaration': return renderShortcut(node);
     default: return null; // unimplemented → caller uses CST
   }
 }

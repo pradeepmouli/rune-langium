@@ -75,7 +75,8 @@ describe('cst-reuse — cascade + degraded', () => {
     const d = parsedAdapter.dehydrate(data as Parameters<typeof parsedAdapter.dehydrate>[0]);
     // Force the "unimplemented" branch by masking $type (simulates a future node
     // kind the render-core hasn't learned yet) while keeping the original $cstRange.
-    (d as { $type: string }).$type = 'RosettaFunction';
+    // Use a placeholder type that renderNode provably returns null for.
+    (d as { $type: string }).$type = '__UnimplementedFutureNodeKind__';
     const patches = [
       { op: 'replace', path: ['nodes', 'test.Uses', 'data', 'name'], value: 'x' }
     ] as unknown as Patches;

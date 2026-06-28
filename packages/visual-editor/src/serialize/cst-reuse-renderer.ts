@@ -190,5 +190,6 @@ function childIndex(
 
 const CHILD_ARRAY_KEYS = [
   'attributes', 'conditions', 'annotations', 'references',
-  'synonyms', 'enumSynonyms', 'labels', 'ruleReferences', 'enumValues'
+  'synonyms', 'enumSynonyms', 'labels', 'ruleReferences', 'enumValues',
+  'inputs', 'operations', 'shortcuts', 'postConditions', 'parameters'
 ];
