@@ -25,10 +25,13 @@
  */
 
 import { useEffect, useRef } from 'react';
+import type { Patches } from 'mutative';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
-import { astRelevantProjection } from '../store/node-projection.js';
+import { astRelevantProjection, nameFromNodeId } from '../store/node-projection.js';
 import { serializeModel } from '@rune-langium/core';
+import { serializeNamespaceToSource } from '../serialize/cst-reuse-serializer.js';
+import { buildDirtyIndex } from '../serialize/dirty-paths.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -76,6 +79,76 @@ function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[
 }
 
 // ---------------------------------------------------------------------------
+// Pure helper — exported so it can be unit-tested without React
+// ---------------------------------------------------------------------------
+
+export interface BuildSourceArgs {
+  nodes: TypeGraphNode[];
+  edges: TypeGraphEdge[];
+  originalSourceByNamespace: Map<string, string>;
+  patches: Patches;
+}
+
+/** Pure: produce Map<namespace, full .rosetta source> via CST-reuse. */
+export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, string> {
+  const { nodes, edges, originalSourceByNamespace, patches } = args;
+  const dirty = buildDirtyIndex(patches);
+
+  // Inheritance is carried on EDGES (extends / enum-extends), not on the
+  // node's data subtree, so an inheritance change does NOT produce a `nodes`
+  // patch. Reflect the edge-derived parent onto a shallow clone of node.data
+  // and force-regenerate any node whose effective parent differs from the
+  // original (dehydrated) value. Mirrors model-to-ast.ts:buildInheritanceMap.
+  const inheritanceTarget = new Map<string, string>(); // sourceNodeId -> targetNodeId
+  for (const e of edges) {
+    if (e.data?.kind === 'extends' || e.data?.kind === 'enum-extends') {
+      inheritanceTarget.set(e.source, e.target);
+    }
+  }
+  const forceDirtyNodeIds = new Set<string>();
+  const effectiveNodes = nodes.map((n) => {
+    const targetId = inheritanceTarget.get(n.id);
+    const d = n.data as { $type?: string; superType?: { $refText?: string }; parent?: { $refText?: string } };
+    const refKey = d.$type === 'RosettaEnumeration' ? 'parent' : 'superType';
+    const original = (d as Record<string, { $refText?: string } | undefined>)[refKey]?.$refText;
+    const effective = targetId === undefined ? undefined : nameFromNodeId(targetId);
+    // Prefer the existing qualified $refText when the edge agrees; only override
+    // when the edge introduces/changes/removes inheritance.
+    if (effective !== undefined && original === undefined) {
+      forceDirtyNodeIds.add(n.id);
+      return cloneWithRef(n, refKey, effective);
+    }
+    if (effective === undefined && original !== undefined) {
+      forceDirtyNodeIds.add(n.id);
+      return cloneWithRef(n, refKey, undefined);
+    }
+    return n; // unchanged inheritance (or both absent) — reuse as-is
+  });
+
+  const byNs = new Map<string, TypeGraphNode[]>();
+  for (const n of effectiveNodes) {
+    if (n.meta.deferred) continue; // curated placeholders are never source
+    const ns = n.meta.namespace;
+    (byNs.get(ns) ?? byNs.set(ns, []).get(ns)!).push(n);
+  }
+  const out = new Map<string, string>();
+  for (const [ns, nsNodes] of byNs) {
+    const originalSource = originalSourceByNamespace.get(ns);
+    if (originalSource === undefined) continue; // no baseline to reuse — skip (degraded)
+    out.set(ns, serializeNamespaceToSource({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
+  }
+  return out;
+}
+
+// Shallow-clone a node, replacing the inheritance ref field. $cstRange survives
+// the shallow clone (it is a sibling field on data).
+function cloneWithRef(n: TypeGraphNode, refKey: string, refText: string | undefined): TypeGraphNode {
+  const data = { ...(n.data as Record<string, unknown>) };
+  data[refKey] = refText === undefined ? undefined : { $refText: refText };
+  return { ...n, data } as TypeGraphNode;
+}
+
+// ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
@@ -103,7 +176,20 @@ export function useModelSourceSync(
    * Optional/defaulted so non-studio callers (tests, standalone) keep the old
    * "serialize every content change" behavior.
    */
-  parseEpoch = 0
+  parseEpoch = 0,
+  /**
+   * The store's accumulated Mutative patches since the last parse. Drives the
+   * CST-reuse dirty set: only nodes/subtrees touched by a patch are
+   * regenerated; everything else is sliced verbatim from originalSourceByNamespace.
+   */
+  patches: Patches = [],
+  /**
+   * Original source text keyed by namespace name — used as the CST baseline for
+   * the reuse serializer. Built by the caller from the current workspace files.
+   * Defaults to an empty map so legacy/test callers that don't supply it get an
+   * empty output (no write-back).
+   */
+  originalSourceByNamespace: Map<string, string> = new Map()
 ): void {
   // Keep a stable ref so the effect doesn't need to re-register when the
   // callback identity changes (e.g. inline arrow in EditorPage).
@@ -153,15 +239,7 @@ export function useModelSourceSync(
       return;
     }
 
-    const outputModels = modelsToAst(nodes, edges);
-    const next = new Map<string, string>();
-    for (const model of outputModels) {
-      try {
-        next.set(model.name, serializeModel(model));
-      } catch {
-        next.set(model.name, `// Error serializing ${model.name}`);
-      }
-    }
+    const next = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace, patches });
 
     // Skip the very first emission after mount — at load time the source
     // pane already has the authoritative parsed text, and re-emitting would
@@ -189,5 +267,5 @@ export function useModelSourceSync(
     // async smart-merge), but the source-sync effect intentionally does
     // not await it.
     void handler(next);
-  }, [nodes, edges, parseEpoch]);
+  }, [nodes, edges, parseEpoch, patches, originalSourceByNamespace]);
 }
