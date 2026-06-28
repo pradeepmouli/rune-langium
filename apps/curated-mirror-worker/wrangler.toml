@@ -16,10 +16,15 @@ compatibility_flags = ["nodejs_compat"]
 account_id = "8327a4da4660eab7d78695268282da09"
 workers_dev = false
 
-# Nightly at 03:00 UTC. Off-peak; gives a fresh archive in time for any
-# user opening Studio first thing in the morning across most timezones.
+# Cron DISABLED. The curated v2 serialized artifacts + the manifest (incl. the
+# per-namespace dependency graph) are now published by the `curated-artifacts.yml`
+# GitHub Action (nightly 04:00 UTC), which builds with 4GB heap in CI — this
+# Worker OOMs parsing CDM through Langium and can only PRESERVE a prior manifest,
+# so its nightly republish kept clobbering the v2 namespaces graph back to a v1
+# manifest. The Action is now the single source of truth. This Worker still
+# SERVES /curated/* reads from R2; it just no longer runs the publish cron.
 [triggers]
-crons = ["0 3 * * *"]
+crons = []
 
 # Same-origin read route — Studio fetches from www.daikonic.dev/curated/...
 # (no CORS preflight) and the worker serves bytes from R2.
