@@ -57,5 +57,9 @@ describe('cst-reuse — cascade + degraded', () => {
       nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
     });
     expect(out).toContain('type Uses:'); // sliced from CST, not dropped
+    // T7-Minor-2: the degraded fallback slices the whole element verbatim, so the
+    // rename ('x') is NOT applied and the output is BYTE-EXACT the baseline — the
+    // emit-core never touched it. Strengthened from `toContain` to pin the body.
+    expect(out).toBe(SRC);
   });
 });

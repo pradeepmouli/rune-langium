@@ -41,8 +41,16 @@ export function serializeNamespaceToSource(args: SerializeArgs): string {
       const range = cstRange(child);
       const forced = dataPath.length === 0 && (forceDirtyNodeIds?.has(nodeId) ?? false);
       const subtreeDirty = forced || isSubtreeDirty(dirty, nodeId, dataPath);
+      // A reused slice that is a CHILD (dataPath.length > 0) gets re-composed by
+      // the parent emitter, which re-applies the block's indent via `indentBlock`.
+      // Normalize the slice to RELATIVE indentation first so the parent's pad
+      // lands uniformly — otherwise continuation lines keep their ABSOLUTE source
+      // indentation and get over-indented (+2 per edit) → byte drift. Top-level
+      // elements (dataPath.length === 0) are placed verbatim and must stay
+      // byte-identical, so they are never normalized.
+      const isChild = dataPath.length > 0;
       if (range && !subtreeDirty) {
-        return originalSource.slice(range.offset, range.end); // clean → reuse
+        return reuseSlice(originalSource, range, isChild); // clean → reuse
       }
       // Dirty or new → regenerate. emitChild recurses with extended dataPath.
       const emitChild: EmitChild = (c) => {
@@ -51,7 +59,7 @@ export function serializeNamespaceToSource(args: SerializeArgs): string {
       };
       const generated = emitNode(child, emitChild);
       if (generated !== null) return generated;
-      if (range) return originalSource.slice(range.offset, range.end); // unimplemented but had bytes
+      if (range) return reuseSlice(originalSource, range, isChild); // unimplemented but had bytes
       throw new Error(
         `cannot serialize new node of unimplemented $type ${(child as { $type: string }).$type}`
       );
@@ -90,6 +98,52 @@ export function serializeNamespaceToSource(args: SerializeArgs): string {
   }
 
   return parts.join('');
+}
+
+/**
+ * Slice a clean/unimplemented subtree from the baseline source. A top-level
+ * element is returned verbatim (byte-identical placement). A child slice is
+ * normalized to RELATIVE indentation (see {@link normalizeReusedSlice}) so the
+ * parent emitter's `indentBlock` re-applies the level uniformly.
+ */
+function reuseSlice(source: string, range: CstRange, isChild: boolean): string {
+  const slice = source.slice(range.offset, range.end);
+  return isChild ? normalizeReusedSlice(slice, source, range.offset) : slice;
+}
+
+/**
+ * Strip the node's own source base-column indentation from every continuation
+ * line of a reused CST slice, so the slice composes like freshly-emitted
+ * RELATIVE text: line 0 sits at column 0 (the slice starts at the node's first
+ * token), and continuation lines are indented relative to it. The parent
+ * emitter then re-applies the block's indent uniformly via `indentBlock`.
+ *
+ * Without this, a reused multi-line child (e.g. a `condition` body) keeps its
+ * ABSOLUTE source indentation on continuation lines; `indentBlock` adds the
+ * parent level on top, over-indenting every continuation line by the parent pad
+ * (+2) on each edit — valid but NOT byte-for-byte `.rosetta`.
+ *
+ * The base column is the leading whitespace of the baseline line that contains
+ * `offset`. Single-line slices need no normalization.
+ */
+function normalizeReusedSlice(slice: string, source: string, offset: number): string {
+  if (slice.indexOf('\n') === -1) return slice; // single line — nothing to re-indent
+  const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
+  let baseCol = 0;
+  while (lineStart + baseCol < source.length) {
+    const ch = source[lineStart + baseCol];
+    if (ch === ' ' || ch === '\t') baseCol++;
+    else break;
+  }
+  if (baseCol === 0) return slice;
+  const lines = slice.split('\n');
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]!;
+    let strip = 0;
+    while (strip < baseCol && (line[strip] === ' ' || line[strip] === '\t')) strip++;
+    lines[i] = line.slice(strip);
+  }
+  return lines.join('\n');
 }
 
 /**
