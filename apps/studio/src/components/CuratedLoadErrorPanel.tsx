@@ -11,7 +11,7 @@
 
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
-import type { ErrorCategory } from '../services/curated-loader.js';
+import type { ErrorCategory } from '@rune-langium/curated-schema';
 
 interface ErrorCopy {
   title: string;
