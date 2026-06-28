@@ -133,7 +133,15 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
   for (const [ns, nsNodes] of byNs) {
     const originalSource = originalSourceByNamespace.get(ns);
     if (originalSource === undefined) continue; // no baseline to reuse — skip (degraded)
-    out.set(ns, serializeNamespaceToSource({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
+    // Backstop: an unexpected serializer error must never crash the source-sync
+    // effect. Skip the failing namespace (do NOT write to out) so other
+    // namespaces continue to serialize normally. The previous persisted text for
+    // this namespace remains in effect until a successful serialize or reparse.
+    try {
+      out.set(ns, serializeNamespaceToSource({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
+    } catch (err) {
+      console.warn(`[cst-reuse] namespace "${ns}" serialization failed — skipping`, err);
+    }
   }
   return out;
 }

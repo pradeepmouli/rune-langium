@@ -60,9 +60,13 @@ export function serializeNamespaceToSource(args: SerializeArgs): string {
       const generated = emitNode(child, emitChild);
       if (generated !== null) return generated;
       if (range) return reuseSlice(originalSource, range, isChild); // unimplemented but had bytes
-      throw new Error(
-        `cannot serialize new node of unimplemented $type ${(child as { $type: string }).$type}`
+      // Brand-new node of an unimplemented $type — no bytes to slice and no
+      // emitter to regenerate it. Degrade gracefully: return '' so this node is
+      // absent from the output rather than crashing the source-sync effect.
+      console.warn(
+        `[cst-reuse] skipping new node of unimplemented $type "${(child as { $type: string }).$type}" — emitNode returned null and no $cstRange`
       );
+      return '';
     };
     return serialize;
   }
@@ -86,15 +90,22 @@ export function serializeNamespaceToSource(args: SerializeArgs): string {
   if (cursor < originalSource.length) parts.push(originalSource.slice(cursor));
 
   // New top-level nodes (no $cstRange) → append at the namespace tail.
+  // Filter out empty strings: a fresh node whose $type is unimplemented returns
+  // '' from the serialize closure (graceful skip) and must not appear in output.
   const fresh = nodes.filter((n) => cstRange(n.data) === undefined);
   if (fresh.length > 0) {
     let body = parts.join('');
     if (!body.endsWith('\n')) body += '\n';
-    const additions = fresh.map((n) => {
-      const serialize = makeSerialize(n.id);
-      return serialize(n.data as unknown as DehydratedNode, []);
-    });
-    return body + '\n' + additions.join('\n\n') + '\n';
+    const additions = fresh
+      .map((n) => {
+        const serialize = makeSerialize(n.id);
+        return serialize(n.data as unknown as DehydratedNode, []);
+      })
+      .filter((s) => s !== '');
+    if (additions.length > 0) {
+      return body + '\n' + additions.join('\n\n') + '\n';
+    }
+    return body;
   }
 
   return parts.join('');
