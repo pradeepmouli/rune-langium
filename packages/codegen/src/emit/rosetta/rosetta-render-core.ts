@@ -242,6 +242,38 @@ function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
   return lines.join('\n');
 }
 
+function renderAnnotationRef(a: DehydratedNode): string {
+  const ar = a as unknown as { annotation?: { $refText?: string }; attribute?: { $refText?: string }; qualifiers?: unknown[] };
+  const parts = [ar.annotation?.$refText ?? ''];
+  if (ar.attribute?.$refText) parts.push(ar.attribute.$refText);
+  // Qualifiers (qualName=value) are not inspector-editable; render any present verbatim-ish.
+  for (const q of ar.qualifiers ?? []) {
+    const qq = q as { qualName?: string; qualValue?: string };
+    if (qq.qualName) parts.push(qq.qualValue !== undefined ? `${qq.qualName}="${qq.qualValue}"` : qq.qualName);
+  }
+  return `[${parts.join(' ')}]`;
+}
+
+function synonymSources(sources: unknown[] | undefined): string {
+  return (sources ?? []).map((s) => (s as { $refText?: string }).$refText ?? '').filter(Boolean).join(', ');
+}
+
+function renderClassSynonym(s: DehydratedNode): string {
+  const cs = s as unknown as { sources?: unknown[] };
+  return `[synonym ${synonymSources(cs.sources)}]`;
+}
+
+function renderSynonym(s: DehydratedNode): string {
+  const sy = s as unknown as { sources?: unknown[] };
+  return `[synonym ${synonymSources(sy.sources)}]`;
+}
+
+function renderEnumSynonym(s: DehydratedNode): string {
+  const es = s as unknown as { sources?: unknown[]; synonymValue?: string };
+  const base = `[synonym ${synonymSources(es.sources)}`;
+  return es.synonymValue !== undefined ? `${base} value "${es.synonymValue}"]` : `${base}]`;
+}
+
 /** Flatten present child arrays into one ordered list of DehydratedNodes. */
 function childList(...arrays: Array<ReadonlyArray<unknown> | undefined>): DehydratedNode[] {
   const out: DehydratedNode[] = [];
@@ -267,6 +299,10 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
     case 'Operation': return renderOperation(node);
     case 'ShortcutDeclaration': return renderShortcut(node);
     case 'RosettaTypeAlias': return renderTypeAlias(node, renderChild);
+    case 'AnnotationRef': return renderAnnotationRef(node);
+    case 'RosettaClassSynonym': return renderClassSynonym(node);
+    case 'RosettaSynonym': return renderSynonym(node);
+    case 'RosettaEnumSynonym': return renderEnumSynonym(node);
     default: return null; // unimplemented → caller uses CST
   }
 }
