@@ -44,6 +44,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   EditorFormActions,
+  TypeAliasFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback,
   TypeOption
@@ -62,7 +63,7 @@ export interface TypeAliasFormProps {
   /** Data payload for the selected type alias node (AnyGraphNode with $type='RosettaTypeAlias'). */
   data: AnyGraphNode;
   /** TypeAlias editor form action callbacks. */
-  actions: EditorFormActions<'typeAlias'>;
+  actions: TypeAliasFormActions;
   /** Available type options for the wrapped-type selector. */
   availableTypes?: TypeOption[];
   /** Optional render-prop for a rich expression editor (parity slot — unused for TypeAlias). */
@@ -152,8 +153,11 @@ function TypeAliasForm({
       // Update the form's typeCall.type — RHF tolerates the looseObject
       // extras at the nested `type` key.
       form.setValue('typeCall.type' as never, { $refText: label } as never, { shouldDirty: true });
+      // Propagate the wrapped-type change to the graph store so edits
+      // reach source (mirrors updateOutputType in FunctionForm).
+      actions.updateTypeAliasType(nodeId, label);
     },
-    [availableTypes, form]
+    [availableTypes, form, actions, nodeId]
   );
 
   // ---- Resolve current wrapped-type for display ----------------------------

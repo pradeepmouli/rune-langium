@@ -211,6 +211,18 @@ function renderFunction(f: DehydratedNode, renderChild: RenderChild): string {
   return lines.join('\n');
 }
 
+function renderTypeAlias(t: DehydratedNode, renderChild: RenderChild): string {
+  const ta = t as unknown as { name?: string; definition?: string; typeCall?: { type?: { $refText?: string } }; conditions?: unknown[] };
+  const wrapped = ta.typeCall?.type?.$refText ?? '';
+  const def = definitionLine(ta.definition);
+  if (!def && (ta.conditions ?? []).length === 0) return `typeAlias ${ta.name}: ${wrapped}`;
+  const lines = [`typeAlias ${ta.name}:`];
+  if (def) lines.push(indentBlock(def));
+  lines.push(indentBlock(wrapped));
+  for (const c of ta.conditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(c as DehydratedNode))); }
+  return lines.join('\n');
+}
+
 function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
   const cc = c as unknown as {
     name?: string; definition?: string; postCondition?: boolean; expression?: unknown;
@@ -254,6 +266,7 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
     case 'RosettaFunction': return renderFunction(node, renderChild);
     case 'Operation': return renderOperation(node);
     case 'ShortcutDeclaration': return renderShortcut(node);
+    case 'RosettaTypeAlias': return renderTypeAlias(node, renderChild);
     default: return null; // unimplemented → caller uses CST
   }
 }
@@ -270,10 +283,16 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
  *
  * Browser-safe: no fs / ExcelJS / generator imports.
  */
-export function renderModel(model: { name: string; version?: string; elements: unknown[] }): string {
+function modelName(name: unknown): string {
+  if (typeof name === 'string') return name;
+  if (name && typeof name === 'object' && 'segments' in name) return (name as { segments: string[] }).segments.join('.');
+  return String(name ?? '');
+}
+
+export function renderModel(model: { name: unknown; version?: string; elements: unknown[] }): string {
   const renderChild: RenderChild = (c: DehydratedNode) => renderNode(c, renderChild) ?? '';
   const lines: string[] = [];
-  lines.push(`namespace ${model.name}`);
+  lines.push(`namespace ${modelName(model.name)}`);
   lines.push(`version "${model.version ?? '0.0.0'}"`);
   for (const element of model.elements) {
     const text = renderNode(element as DehydratedNode, renderChild);

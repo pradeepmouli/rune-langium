@@ -352,6 +352,7 @@ export interface EditorActions {
   ): void;
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
+  updateTypeAliasType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
   // --- Condition operations ---
@@ -1972,6 +1973,17 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 type: { $refText: typeName },
                 arguments: []
               };
+            });
+          },
+
+          updateTypeAliasType(nodeId: string, typeName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (!n || n.data.$type !== 'RosettaTypeAlias') return;
+              const d = n.data as { typeCall?: { type?: { $refText?: string }; arguments?: unknown[] } };
+              if (!d.typeCall) d.typeCall = { type: { $refText: typeName }, arguments: [] } as never;
+              else if (!d.typeCall.type) d.typeCall.type = { $refText: typeName };
+              else d.typeCall.type.$refText = typeName;
             });
           },
 

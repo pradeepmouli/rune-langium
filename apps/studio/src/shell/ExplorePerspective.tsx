@@ -1421,6 +1421,7 @@ export function ExplorePerspective() {
       updateInputParam: (nodeId, oldN, newN, type, card) => s().updateInputParam(nodeId, oldN, newN, type, card),
       reorderInputParam: (nodeId, from, to) => s().reorderInputParam(nodeId, from, to),
       updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
+      updateTypeAliasType: (nodeId, type) => s().updateTypeAliasType(nodeId, type),
       updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
       addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
       removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),

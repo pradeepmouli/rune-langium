@@ -84,6 +84,7 @@ function makeActions(overrides: Partial<EditorFormActions<'typeAlias'>> = {}): E
     updateCondition: vi.fn(),
     reorderCondition: vi.fn(),
     validate: vi.fn(() => []),
+    updateTypeAliasType: vi.fn(),
     ...overrides
   };
 }
