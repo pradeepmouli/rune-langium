@@ -94,9 +94,13 @@ Two facts make this lean:
 - Make inspector edits **lossless**: conditions, attribute annotations,
   metadata, synonyms, doc references, comments, and formatting survive an edit to
   any other field of the same element.
-- Provide a **complete AST → `.rosetta` generator for the domain surface**
-  (`Data`, `Choice`, `RosettaEnumeration` and their full internals) for new and
-  edited nodes, reusable outside the editor (batch export, CLI, server).
+- Provide a **whole-AST emit-core** that returns structural `.rosetta` text where
+  a construct is implemented and **`null`** where it is not, so the caller falls
+  back to the node's CST-range slice. The implemented set is seeded with the
+  inspector-editable surface (`Data`/`Choice`/`RosettaEnumeration` scalars +
+  add/remove children) and grows incrementally; **correctness is universal from
+  day one** because any unimplemented `$type` rides CST-reuse. Reusable outside the
+  editor (batch export, CLI, server).
 - Share **one emit core** between the editor's incremental path and a batch
   codegen `.rosetta` target (DRY).
 - Eliminate the lossy `serializeModel` → `mergeSerializedIntoSource` round-trip
@@ -104,10 +108,12 @@ Two facts make this lean:
 
 ## Non-Goals
 
-- A general unparser for the **whole** grammar. Generation is scoped to the
-  domain surface; everything else rides through on CST-reuse and is never
-  generated. (A grammar-driven generic unparser remains a possible future
-  direction, kept reachable behind the emit-core interface.)
+- **Day-one structural coverage of every construct.** The emit-core dispatches
+  over the whole AST but returns `null` for `$type`s it does not yet structurally
+  emit; those fall back to CST-reuse. Coverage grows incrementally — there is no
+  point where an unimplemented construct causes data loss (it slices its original
+  bytes). A grammar-driven generic generator remains a possible future direction,
+  reachable behind the same `emitNode` interface.
 - Preserving user formatting *within* a node that is structurally edited — an
   edited node is regenerated with canonical formatting; its untouched siblings
   and descendants keep their original bytes.
@@ -119,11 +125,15 @@ Adopt option **B** (CST-reuse via carried offsets) for the editor write-back, an
 implement the generation half as a **shared pure emit core** that is also wrapped
 as a codegen `.rosetta` target.
 
-Reuse and byte-source are fused into **one field**: each dehydrated node carries
-`$cstRange = { offset, end }`. Editing a node clears `$cstRange` on it and its
-ancestors. Therefore **"`$cstRange` present" ⟺ the node's whole subtree is
-unchanged ⟺ safe to slice the original source.** No reparse, no separate dirty
-lookup, no per-node text.
+Each dehydrated node carries `$cstRange = { offset, end }` — a **permanent
+baseline locator** stamped at dehydrate time and refreshed on every reparse,
+indexing the source that produced the current parse. It is **never cleared**; it
+serves both as the slice source for a clean node and as the splice location for a
+dirty one. **Dirtiness is a separate, free signal:** `pendingEditPatches` (the
+Mutative patches `mutateGraph` already captures since the last parse). A node is
+dirty iff some patch path is at-or-under it. So `subtreeClean(node)` ≡ `node` has
+a `$cstRange` AND no patch path falls at-or-under it → slice; otherwise
+regenerate. No reparse, no per-node text, and `mutateGraph` needs no change.
 
 ## Architecture
 
@@ -146,8 +156,9 @@ packages/core/src/serializer/
   (dehydrate adapter)      Stamps $cstRange from $cstNode at dehydrate time.
 
 packages/visual-editor/src/
-  store/editor-store.ts    mutateGraph clears $cstRange on the edited node and
-                           its ancestors (driven by pendingEditPatches paths).
+  store/editor-store.ts    (no change to mutateGraph — it already captures
+                           pendingEditPatches; the serializer reads them as the
+                           dirty signal.)
   serialize/
     cst-reuse-serializer.ts  Option B. Recursive: $cstRange present → slice
                              baseline source; else emit-core(node) + recurse.
@@ -159,25 +170,37 @@ packages/visual-editor/src/
 
 ```ts
 // packages/codegen/src/emit/rosetta/rosetta-emit-core.ts
-export function emitDataText(d: Dehydrated<Data>): string;
-export function emitChoiceText(d: Dehydrated<Choice>): string;
-export function emitEnumText(d: Dehydrated<RosettaEnumeration>): string;
-export function emitAttributeText(a: Dehydrated<Attribute>): string;
-export function emitConditionText(c: Dehydrated<Condition>): string;
+type DehydratedNode = Dehydrated<AstNode>;
+export type EmitChild = (child: DehydratedNode) => string;
+
+// Whole-AST dispatcher. Returns structural .rosetta text for an implemented
+// $type, or `null` for any $type not yet implemented. Composite children are
+// emitted via `emitChild` (the driver supplies the reuse-or-regenerate policy).
+export function emitNode(node: DehydratedNode, emitChild: EmitChild): string | null;
 ```
 
-- Typed against `Dehydrated<T>`; `$refText`-first throughout (works for the
-  editor's unlinked payload AND a codegen-supplied linked AST node, which is
-  structurally compatible).
-- Lossless for the domain surface: emits **all** attribute annotations
-  (`[metadata …]`, `[synonym …]`, doc refs, labels, rule refs), full condition
-  bodies, choice-option and enum-value annotations — every field present on
-  `Dehydrated<T>`.
-- Condition expression bodies: emit from the dehydrated expression payload.
-  Where an expression cannot be reconstructed structurally, fall back to its
-  carried original slice (it is, by construction, an unchanged child and so has a
-  `$cstRange`).
+- **Whole-AST, `null`-for-unimplemented.** `emitNode` switches on `node.$type`.
+  Implemented cases (seeded with `Data`/`Choice`/`RosettaEnumeration` and their
+  editable scalars) return text; every other `$type` returns `null`. `null` means
+  "I cannot generate this — use the CST." This is the universal correctness valve.
+- **Inversion of control for children.** An implemented case emits the node's own
+  scalars and calls `emitChild(child)` for each composite child (attributes,
+  conditions, annotations, …). The driver supplies `emitChild`:
+  - editor: `emitChild = c => emitNode(c, emitChild) ?? slice(c.$cstRange)` —
+    so an untouched child of an edited node rides its CST slice even if its
+    `$type` is unimplemented.
+  - codegen batch: `emitChild = c => emitNode(c, emitChild) ?? gap(c)` — no CST to
+    slice, so an unimplemented child is a known gap (logged, never silent).
+- **Typed against `Dehydrated<T>`; `$refText`-first** throughout — works for the
+  editor's unlinked payload AND a structurally-compatible codegen AST node.
+  Cross-references emit `ref.$refText`; never `.ref` (may be undefined/stale).
 - No duck-typing; the legacy `(el as { $type })` guards do not carry forward.
+- Implemented scalars (Plan A seed): `Data` (name/`extends`/`<definition>`),
+  `Attribute` (`override`/name/type/`card`/`<definition>`), `Choice` (name/
+  `<definition>`), `ChoiceOption` (type), `RosettaEnumeration` (name/`extends`/
+  `<definition>`), `RosettaEnumValue` (name/`displayName`/`<definition>`). All
+  other fields/children (annotations, synonyms, doc refs, labels, rule refs,
+  conditions, expressions) ride CST-reuse until structural cases are added.
 
 ### The codegen `.rosetta` target (batch generation)
 
@@ -196,31 +219,39 @@ Evolves `apps/studio/src/utils/source-merge.ts` from element-granular splice to
 recursive, offset-driven CST-reuse:
 
 ```
-serialize(node, originalSource):
-  if node.$cstRange present:
+serialize(node, originalSource, dirtyPaths):
+  if subtreeClean(node, dirtyPaths):     // has $cstRange AND no patch at-or-under
     return originalSource.slice(node.$cstRange.offset, node.$cstRange.end)   // reuse
   else:
-    return emit-core(node), recursing into children (each child reuses if clean) // regenerate
+    return emitNode(node, child => serialize(child, originalSource, dirtyPaths))
+           ?? originalSource.slice(node.$cstRange.offset, node.$cstRange.end)  // regen, else slice
+           ?? throw                                                           // new + unimplemented
 ```
 
 - **Dirty signal:** `pendingEditPatches` (id-rooted Mutative patches, already
   captured by `mutateGraph`). Every write — including cascaded `$refText` rewrites
-  from a rename — produces a patch, so the cascade clears the right `$cstRange`s.
+  from a rename — produces a patch at the rewritten path, so referencing
+  attributes are correctly marked dirty and regenerated.
 - **Byte source:** `originalSource.slice(offset, end)` using carried offsets. No
   reparse.
 - **New nodes** (no `$cstRange`): full emit-core; inserted after the last clean
   sibling's range, or at the namespace tail when there is no sibling to anchor to.
-- **Deleted nodes:** their range is dropped (no contribution).
+- **Deleted nodes:** conservatively **preserved** in Plan A — a node removed from
+  the graph has no current `$cstRange`, so its original source range falls into a
+  copied "gap" and survives (matching `source-merge`'s current behavior: deletion
+  is done through the source editor, never silent loss). Lossless inspector-driven
+  deletion needs a retained baseline element-id→range index and is a follow-up.
 
 ### Data flow
 
 ```
 parse → AST(+CST) → dehydrate (stamp $cstRange) → node.data
-inspector edit → mutateGraph → patch node.data + CLEAR $cstRange (node + ancestors)
-useModelSourceSync (parseEpoch unchanged) → cst-reuse-serializer(nodes, originalSource)
-  → per element: reuse slice OR emit-core
+inspector edit → mutateGraph → patch node.data, append pendingEditPatches ($cstRange untouched)
+useModelSourceSync (parseEpoch unchanged) →
+    cst-reuse-serializer(nodes, originalSource, dirtyPaths from pendingEditPatches)
+  → per element: subtreeClean ? slice($cstRange) : emitNode (recurse)
   → assembled file text → onFilesChange → write
-reparse (parseEpoch++) → re-stamp $cstRange from fresh CST
+reparse (parseEpoch++) → re-stamp $cstRange from fresh CST, pendingEditPatches cleared
 ```
 
 ## Correctness constraints
@@ -232,13 +263,15 @@ reparse (parseEpoch++) → re-stamp $cstRange from fresh CST
   (`parseEpoch` bump). (3) **Do not trust `$cstRange` from a degraded / worker-
   unavailable parse** — fall back to full emit-core (ties into the existing
   degraded-parse guard / parseEpoch gate in `useModelSourceSync`).
-- **Ancestor invalidation.** A dirty descendant invalidates the parent's
-  whole-block slice, so `mutateGraph` clears `$cstRange` up the spine. This makes
-  "`$cstRange` present" a sound subtree-clean predicate.
+- **Subtree-aware dirtiness.** A dirty descendant must force the parent to
+  regenerate (its whole-block slice is stale). So `subtreeClean(node)` tests
+  whether ANY patch path falls at-or-under `node`'s path, not just on `node`
+  itself. `$cstRange` stays put as the locator either way.
 - **Cross-reference cascades.** Rename → the cascade rewrites `$refText` in
-  referencing attributes via `mutateGraph`; those patches clear those attributes'
-  `$cstRange` → they regenerate with the new name. A naive "only the clicked node
-  is dirty" rule would reuse stale references; patch-driven clearing avoids that.
+  referencing attributes via `mutateGraph`; those rewrites emit patches at those
+  attributes' paths → they are dirty → regenerated with the new name. A naive
+  "only the clicked node is dirty" rule would reuse stale references; the
+  patch-path test avoids that.
 - **Browser safety.** The editor imports `@rune-langium/codegen/rosetta` (emit
   core only). The package barrel must not be on that path, because
   `index.ts → generator.ts → excel-emitter → exceljs` would bundle ExcelJS.
@@ -257,10 +290,11 @@ reparse (parseEpoch++) → re-stamp $cstRange from fresh CST
 
 ## Testing
 
-- **Emit-core unit tests** (`packages/codegen/test/`): one `Dehydrated<T>`
-  fixture per construct asserting exact `.rosetta` text, including every
-  annotation kind, full condition bodies, cardinality forms, `override`,
-  `extends`, choice options, enum values.
+- **Emit-core unit tests** (`packages/codegen/test/`): per implemented `$type`, a
+  `Dehydrated<T>` fixture asserting exact `.rosetta` text for the implemented
+  scalars (cardinality forms, `override`, `extends`, `<definition>`, choice
+  options, enum values incl. `displayName`). Plus a test that `emitNode` returns
+  `null` for an unimplemented `$type` (e.g. `RosettaFunction`).
 - **Round-trip regression (the bug):** parse a `type` with a condition AND an
   attribute `[metadata …]`/`[synonym …]`; load to graph; edit an *unrelated*
   attribute via a store action; run the cst-reuse serializer; assert the condition
@@ -283,10 +317,13 @@ reparse (parseEpoch++) → re-stamp $cstRange from fresh CST
 ## Rollout / phasing
 
 1. **Emit-core + tests** (`packages/codegen/src/emit/rosetta/`), browser-safe
-   subpath, ExcelJS-avoidance verified. Lossless for the domain surface.
+   subpath, ExcelJS-avoidance verified. Whole-AST dispatcher; structural cases for
+   the inspector-editable scalars, `null` for the rest.
 2. **Offset preservation:** `Dehydrated<T>.$cstRange`, stamp at dehydrate,
    re-stamp on reparse.
-3. **`mutateGraph` invalidation:** clear `$cstRange` on edited node + ancestors.
+3. **Dirty-path wiring:** thread `pendingEditPatches` (as a dirty-path set) from
+   the store through `useModelSourceSync` into the serializer. No `mutateGraph`
+   change.
 4. **cst-reuse serializer** replacing `serializeModel`/`mergeSerializedIntoSource`
    on the edit path; round-trip + cascade + degraded tests green.
 5. **codegen `.rosetta` batch target** + `Choice` walker support + registration.
