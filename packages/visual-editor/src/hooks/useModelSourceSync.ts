@@ -201,6 +201,20 @@ export function useModelSourceSync(
   const lastContentFingerprintRef = useRef<string | null>(null);
   const lastParseEpochRef = useRef(parseEpoch);
 
+  // PARSE-BASELINE source (offset-drift fix). Each dehydrated node's `$cstRange`
+  // offsets index the EXACT source text the parser consumed; they are only
+  // re-stamped on a reparse (which bumps `parseEpoch`). The `originalSourceByNamespace`
+  // the caller passes is built from LIVE file content, which DIVERGES from those
+  // offsets the moment the first write-back mutates the file. Slicing the
+  // already-mutated live text with stale baseline offsets corrupts clean siblings
+  // on a SECOND edit made before a reparse re-stamps `$cstRange`.
+  //
+  // Freeze the baseline here and advance it ONLY when `parseEpoch` advances, so
+  // it stays in lockstep with `$cstRange`. Every serialize between reparses then
+  // slices the exact text the offsets point at — never live file content.
+  // Initialised to the mount-time source (the authoritative parsed text at load).
+  const parseBaselineSourceRef = useRef(originalSourceByNamespace);
+
   useEffect(() => {
     const handler = onModelChangedRef.current;
     if (!handler) return;
@@ -210,6 +224,16 @@ export function useModelSourceSync(
     // the graph was rebuilt FROM source — it must NOT be serialized back.
     const parseAdvanced = parseEpoch !== lastParseEpochRef.current;
     lastParseEpochRef.current = parseEpoch;
+
+    // Advance the frozen parse-baseline ONLY when a reparse re-stamped `$cstRange`
+    // (parseEpoch bump). The just-arrived `originalSourceByNamespace` is the exact
+    // text those new offsets index. Between reparses the ref stays frozen so every
+    // serialize slices the baseline the offsets actually point at — never the
+    // already-mutated live file content. (See parseBaselineSourceRef above.)
+    if (parseAdvanced) {
+      parseBaselineSourceRef.current = originalSourceByNamespace;
+    }
+    const baselineSource = parseBaselineSourceRef.current;
 
     const fingerprint = computeContentFingerprint(nodes, edges);
     if (lastContentFingerprintRef.current === fingerprint) return;
@@ -228,12 +252,12 @@ export function useModelSourceSync(
       // Using the same serializer as the user-edit path keeps the
       // lastSerializedRef baseline byte-equal to what the edit path will produce,
       // so the byte-equality de-dup fires correctly on the first user edit.
-      lastSerializedRef.current = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace, patches });
+      lastSerializedRef.current = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches });
       hasFiredInitialSerializeRef.current = true;
       return;
     }
 
-    const next = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace, patches });
+    const next = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches });
 
     // Skip the very first emission after mount — at load time the source
     // pane already has the authoritative parsed text, and re-emitting would

@@ -135,6 +135,91 @@ describe('useModelSourceSync', () => {
     expect(text).not.toMatch(/currency CurrencyEnum\b/);
   });
 
+  it('slices the FROZEN parse-baseline across two edits before a reparse (offset-drift guard)', async () => {
+    // Finding A: `$cstRange` offsets index the source the parser CONSUMED, and are
+    // only re-stamped on a reparse (parseEpoch bump). The caller builds
+    // originalSourceByNamespace from LIVE file content, which diverges from those
+    // offsets the moment the FIRST write-back mutates the file. A SECOND edit made
+    // before a reparse then slices the already-mutated content with STALE offsets,
+    // corrupting clean siblings. The hook must freeze the baseline at parse time
+    // and ignore live content until parseEpoch advances.
+    const onModelChanged = vi.fn();
+    const baseline = COMBINED_MODEL_SOURCE;
+
+    const baselineNodes = useEditorStore.getState().nodes;
+    const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
+    const tradeId = tradeNode.id;
+    const productId = productNode.id;
+
+    // parseEpoch is held CONSTANT (no reparse) across both edits.
+    const EPOCH = 5;
+    const { rerender } = renderHook(
+      ({
+        nodes,
+        patches,
+        srcMap
+      }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        patches: Patches;
+        srcMap: Map<string, string>;
+      }) => useModelSourceSync(nodes, [], onModelChanged, EPOCH, patches, srcMap),
+      {
+        initialProps: {
+          nodes: baselineNodes,
+          patches: [] as Patches,
+          srcMap: new Map([['test.combined', baseline]])
+        }
+      }
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // --- Edit #1: Trade.currency CurrencyEnum -> Product (a length-changing edit
+    // that shifts every offset after the Trade block). ---
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeId, 'currency', 'Product', productId);
+    });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      patches: useEditorStore.getState().pendingEditPatches,
+      srcMap: new Map([['test.combined', baseline]])
+    });
+    await waitFor(() => expect(onModelChanged).toHaveBeenCalled());
+    const out1 = (onModelChanged.mock.calls.at(-1)![0] as Map<string, string>).get('test.combined')!;
+    expect(out1).toContain('currency Product (1..1)');
+
+    // Simulate the write-back: live file content is now `out1`. A BUGGY caller
+    // would feed THIS (already-mutated, offsets stale) into the next serialize.
+    const liveAfterWriteback = new Map([['test.combined', out1]]);
+    onModelChanged.mockClear();
+
+    // --- Edit #2 BEFORE any reparse (parseEpoch still EPOCH): Product.productName
+    // string -> Trade. Patches accumulate; both Trade and Product are now dirty. ---
+    act(() => {
+      useEditorStore.getState().updateAttributeType(productId, 'productName', 'Trade', tradeId);
+    });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      patches: useEditorStore.getState().pendingEditPatches,
+      srcMap: liveAfterWriteback // the live, mutated content — must be IGNORED
+    });
+    await waitFor(() => expect(onModelChanged).toHaveBeenCalled());
+    const out2 = (onModelChanged.mock.calls.at(-1)![0] as Map<string, string>).get('test.combined')!;
+
+    // Correct result = baseline with BOTH edits applied; clean siblings (the
+    // PaymentType choice and CurrencyEnum enum) byte-for-byte intact. Slicing the
+    // mutated `out1` with stale offsets would corrupt those clean blocks.
+    const expected = baseline
+      .replace('currency CurrencyEnum (1..1)', 'currency Product (1..1)')
+      .replace('productName string (1..1)', 'productName Trade (1..1)');
+    expect(out2).toBe(expected);
+  });
+
   it('does NOT call onModelChanged when only node position changes', async () => {
     const onModelChanged = vi.fn();
 
