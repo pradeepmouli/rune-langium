@@ -27,9 +27,7 @@
 import { useEffect, useRef } from 'react';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
-import { modelsToAst } from '../adapters/model-to-ast.js';
 import { astRelevantProjection, nameFromNodeId } from '../store/node-projection.js';
-import { serializeModel } from '@rune-langium/core';
 import { serializeNamespaceToSource } from '../serialize/cst-reuse-serializer.js';
 import { buildDirtyIndex } from '../serialize/dirty-paths.js';
 
@@ -224,18 +222,14 @@ export function useModelSourceSync(
     // the parse as the new serialize baseline and bail without emitting. Only
     // genuine USER edits (parseEpoch unchanged) fall through to serialize.
     if (parseAdvanced) {
-      const baseline = new Map<string, string>();
-      // Deferred placeholder nodes are excluded inside modelsToAst itself —
-      // the serialization-boundary filter covers every caller.
-      for (const model of modelsToAst(nodes, edges)) {
-        try {
-          baseline.set(model.name, serializeModel(model));
-        } catch {
-          baseline.set(model.name, `// Error serializing ${model.name}`);
-        }
-      }
+      // At parse time pendingEditPatches has just been cleared, so patches is
+      // empty → every node is subtree-clean → each namespace's text is sliced
+      // verbatim from originalSourceByNamespace (the authoritative parsed source).
+      // Using the same serializer as the user-edit path keeps the
+      // lastSerializedRef baseline byte-equal to what the edit path will produce,
+      // so the byte-equality de-dup fires correctly on the first user edit.
+      lastSerializedRef.current = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace, patches });
       hasFiredInitialSerializeRef.current = true;
-      lastSerializedRef.current = baseline;
       return;
     }
 
