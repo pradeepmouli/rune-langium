@@ -236,6 +236,7 @@ export interface EditorState {
    * it is not part of undo history — patches track in-flight intent, not state.
    */
   pendingEditPatches: Patches;
+  pendingInversePatches: Patches;
 }
 
 export interface DeferredExportEntry {
@@ -820,7 +821,7 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
  */
 type GraphMutationExtra = Omit<
   Partial<EditorState>,
-  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'parseEpoch'
+  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'pendingInversePatches' | 'parseEpoch'
 >;
 
 /**
@@ -845,8 +846,8 @@ function mutateGraph(
   recipe: GraphEditRecipe,
   extra?: GraphMutationExtra
 ): void {
-  const { nodesById, edgesById, pendingEditPatches } = get();
-  const [next, patches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
+  const { nodesById, edgesById, pendingEditPatches, pendingInversePatches } = get();
+  const [next, patches, inversePatches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
   if (patches.length === 0 && !extra) return; // no-op recipe — leave state untouched
   set({
     nodesById: next.nodes,
@@ -854,6 +855,7 @@ function mutateGraph(
     nodes: nodesFromMap(next.nodes), // re-derive array caches from updated Maps
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
+    pendingInversePatches: inversePatches.length > 0 ? [...pendingInversePatches, ...inversePatches] : pendingInversePatches,
     ...extra
   });
 }
@@ -925,7 +927,8 @@ const initialState: EditorState = {
   hydratedNamespaces: [],
   hydrationNonce: 0,
   parseEpoch: 0,
-  pendingEditPatches: []
+  pendingEditPatches: [],
+  pendingInversePatches: []
 };
 
 // ---------------------------------------------------------------------------
@@ -1086,6 +1089,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // One-shot: edits since the last parse have now been replayed; clear
               // so they can never accumulate or replay stale data across reparses.
               pendingEditPatches: [],
+              pendingInversePatches: [],
               visibility: {
                 expandedNamespaces,
                 hiddenNodeIds: new Set<string>(),
