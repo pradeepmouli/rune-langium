@@ -13,6 +13,10 @@
     "./zod-schemas": {
       "types": "./dist/generated/zod-schemas.d.ts",
       "default": "./dist/generated/zod-schemas.js"
+    },
+    "./adapters/parsed-adapter": {
+      "types": "./dist/adapters/parsed-adapter.d.ts",
+      "default": "./dist/adapters/parsed-adapter.js"
     }
   },
   "files": [
