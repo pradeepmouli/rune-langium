@@ -8,5 +8,5 @@
  * `./generator.js`, or anything under `./emit/excel-emitter.js` — those pull in
  * ExcelJS (Node-only) and would break browser bundling of the visual editor.
  */
-export { emitNode } from './emit/rosetta/rosetta-emit-core.js';
+export { emitNode, emitModelText } from './emit/rosetta/rosetta-emit-core.js';
 export type { EmitChild, DehydratedNode } from './emit/rosetta/rosetta-emit-core.js';

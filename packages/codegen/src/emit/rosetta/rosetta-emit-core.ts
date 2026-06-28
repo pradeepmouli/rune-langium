@@ -169,3 +169,31 @@ export function emitNode(node: DehydratedNode, emitChild: EmitChild): string | n
     default: return null; // unimplemented → caller uses CST
   }
 }
+
+// --- full-model serializer ------------------------------------------------
+
+/**
+ * Serialize a complete namespace model to `.rosetta` source text.
+ *
+ * Emits `namespace <name>`, `version "<version>"`, then each element via
+ * `emitNode`. Elements whose `emitNode` returns `null` (unimplemented `$type`)
+ * are silently skipped. Elements are separated by blank lines; the output ends
+ * with a trailing newline.
+ *
+ * Browser-safe: no fs / ExcelJS / generator imports.
+ */
+export function emitModelText(model: { name: string; version?: string; elements: unknown[] }): string {
+  const emitChild: EmitChild = (c: DehydratedNode) => emitNode(c, emitChild) ?? '';
+  const lines: string[] = [];
+  lines.push(`namespace ${model.name}`);
+  lines.push(`version "${model.version ?? '0.0.0'}"`);
+  for (const element of model.elements) {
+    const text = emitNode(element as DehydratedNode, emitChild);
+    if (text !== null) {
+      lines.push('');
+      lines.push(text);
+    }
+  }
+  lines.push('');
+  return lines.join('\n');
+}
