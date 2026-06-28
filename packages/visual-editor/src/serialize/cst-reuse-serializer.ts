@@ -125,6 +125,14 @@ function reuseSlice(source: string, range: CstRange, isChild: boolean): string {
  *
  * The base column is the leading whitespace of the baseline line that contains
  * `offset`. Single-line slices need no normalization.
+ *
+ * NOTE — 2-space indent assumption: this function strips the base-column indent
+ * based on the ACTUAL leading whitespace of the containing source line, not a
+ * fixed constant. However, emit-core's `indentBlock` always pads with 2 spaces
+ * per level, matching the Rosetta convention. If the original source used a
+ * different indent width (e.g. 4 spaces), the stripped slice is re-indented at
+ * 2 spaces per level on regeneration — strictly better than the prior
+ * accumulating +2 drift, and acceptable for the Rosetta style convention.
  */
 function normalizeReusedSlice(slice: string, source: string, offset: number): string {
   if (slice.indexOf('\n') === -1) return slice; // single line — nothing to re-indent

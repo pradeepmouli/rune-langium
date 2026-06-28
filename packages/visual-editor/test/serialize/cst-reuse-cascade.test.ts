@@ -26,7 +26,7 @@ describe('cst-reuse — cascade + degraded', () => {
     const data = (value as unknown as { elements: unknown[] }).elements[0];
     const d = parsedAdapter.dehydrate(data as Parameters<typeof parsedAdapter.dehydrate>[0]);
     // Cascade: rename Target -> Target2 rewrote the attribute's typeCall ref.
-    (d as { attributes: Array<{ typeCall: { type: { $refText: string } } }> })
+    (d as unknown as { attributes: Array<{ typeCall: { type: { $refText: string } } }> })
       .attributes[0].typeCall.type.$refText = 'Target2';
     const patches = [
       { op: 'replace',
@@ -39,6 +39,32 @@ describe('cst-reuse — cascade + degraded', () => {
     });
     expect(out).toContain('field Target2 (0..1)');
     expect(out).not.toContain('field Target (0..1)');
+  });
+
+  it('regenerates the whole node on a whole-node replace patch (renameType shape)', async () => {
+    // renameType emits a whole-node patch — path = ['nodes', nodeId] (only 2 segments)
+    // rather than a granular sub-field path.  The bidirectional prefix check in
+    // isSubtreeDirty must mark the ENTIRE subtree dirty so the node is fully
+    // regenerated rather than sliced verbatim from the stale CST baseline.
+    const { value } = await parse(SRC);
+    const data = (value as unknown as { elements: unknown[] }).elements[0];
+    const d = parsedAdapter.dehydrate(data as Parameters<typeof parsedAdapter.dehydrate>[0]);
+    // Simulate the rename: update the node's name in the dehydrated data.
+    (d as unknown as { name: string }).name = 'Renamed';
+    const patches = [
+      // Whole-node replace: path has only 2 segments — ['nodes', id].
+      { op: 'replace', path: ['nodes', 'test.Uses'], value: {} }
+    ] as unknown as Patches;
+
+    const out = serializeNamespaceToSource({
+      nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
+    });
+    // The node must be regenerated using the updated dehydrated data (name = Renamed),
+    // not sliced from the stale CST (which still has 'type Uses:').
+    expect(out).toContain('type Renamed:');
+    expect(out).not.toContain('type Uses:');
+    // The attribute body must also survive in the regenerated output.
+    expect(out).toContain('field Target (0..1)');
   });
 
   it('falls back to whole-element reuse when a dirty node still has its $cstRange (degraded emit)', async () => {
@@ -59,7 +85,8 @@ describe('cst-reuse — cascade + degraded', () => {
     expect(out).toContain('type Uses:'); // sliced from CST, not dropped
     // T7-Minor-2: the degraded fallback slices the whole element verbatim, so the
     // rename ('x') is NOT applied and the output is BYTE-EXACT the baseline — the
-    // emit-core never touched it. Strengthened from `toContain` to pin the body.
+    // emit-core never touched it. Pin BOTH header and body so a truncated slice cannot pass.
+    expect(out).toContain('field Target (0..1)'); // element body survives verbatim
     expect(out).toBe(SRC);
   });
 });

@@ -394,6 +394,57 @@ describe('useModelSourceSync', () => {
     expect(serialized.has('other.curated')).toBe(false);
   });
 
+  it('re-captures the frozen baseline on parseEpoch advance so subsequent user edits fire correctly', async () => {
+    // Regression guard: the hook freezes a parse-origin source baseline at mount
+    // and advances it ONLY when parseEpoch bumps. This test confirms the advance
+    // happens: after a parse-origin render (epoch bumped, no callback), a
+    // subsequent user edit (epoch unchanged) must still fire onModelChanged.
+    // If the hook failed to re-capture the baseline on epoch advance its
+    // lastSerializedRef would stay stale, the byte-equality de-dup could misfire,
+    // and the user edit would be silently lost.
+    const onModelChanged = vi.fn();
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
+    const baselineNodes = useEditorStore.getState().nodes;
+    const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
+
+    const { rerender } = renderHook(
+      ({ nodes, epoch, patches }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        epoch: number;
+        patches: Patches;
+      }) => useModelSourceSync(nodes, [], onModelChanged, epoch, patches, srcMap),
+      { initialProps: { nodes: baselineNodes, epoch: 5, patches: [] as Patches } }
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // Parse-origin render: epoch bumps, hook must NOT call onModelChanged but
+    // MUST re-capture srcMap as the new frozen baseline for subsequent edits.
+    rerender({ nodes: baselineNodes, epoch: 6, patches: [] as Patches });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onModelChanged).not.toHaveBeenCalled(); // parse-origin gate fires
+
+    // User edit (epoch unchanged at 6): the re-captured baseline means the
+    // hook correctly diffs the edited nodes against the frozen source and fires.
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+    });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      epoch: 6,
+      patches: useEditorStore.getState().pendingEditPatches
+    });
+    await waitFor(() => expect(onModelChanged).toHaveBeenCalled());
+
+    const out = (onModelChanged.mock.calls.at(-1)![0] as Map<string, string>).get('test.combined')!;
+    expect(out).toMatch(/currency Product\b/);
+    expect(out).not.toMatch(/currency CurrencyEnum\b/);
+  });
+
   it('does NOT call onModelChanged when onModelChanged is undefined', async () => {
     // Should not throw, should be a no-op.
     const nodes = useEditorStore.getState().nodes;

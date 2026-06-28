@@ -22,10 +22,18 @@
 import type { Patches } from 'mutative';
 
 type PathSeg = string | number;
-export interface DirtyIndex {
-  /** All patch paths that target the `nodes` draft, normalized to arrays. */
-  readonly paths: ReadonlyArray<ReadonlyArray<PathSeg>>;
-}
+
+declare const _dirtyIndexBrand: unique symbol;
+/**
+ * Opaque index of patch paths produced by {@link buildDirtyIndex}.
+ * Pass only to {@link isNodeDirty} or {@link isSubtreeDirty} — internal
+ * structure (`.paths`) is not part of the public API.
+ */
+export type DirtyIndex = { readonly [_dirtyIndexBrand]: true };
+
+/** Internal shape kept separate so callers cannot access `.paths`. */
+type DirtyIndexData = { paths: ReadonlyArray<ReadonlyArray<PathSeg>> };
+function _data(idx: DirtyIndex): DirtyIndexData { return idx as unknown as DirtyIndexData; }
 
 export function buildDirtyIndex(patches: Patches): DirtyIndex {
   const paths: PathSeg[][] = [];
@@ -33,7 +41,7 @@ export function buildDirtyIndex(patches: Patches): DirtyIndex {
     const path = p.path as PathSeg[];
     if (Array.isArray(path) && path[0] === 'nodes') paths.push(path);
   }
-  return { paths };
+  return { paths } as unknown as DirtyIndex;
 }
 
 /**
@@ -49,10 +57,10 @@ function related(a: ReadonlyArray<PathSeg>, b: ReadonlyArray<PathSeg>): boolean 
 
 export function isNodeDirty(index: DirtyIndex, nodeId: string): boolean {
   const prefix: PathSeg[] = ['nodes', nodeId];
-  return index.paths.some((p) => related(p, prefix));
+  return _data(index).paths.some((p) => related(p, prefix));
 }
 
 export function isSubtreeDirty(index: DirtyIndex, nodeId: string, dataPath: PathSeg[]): boolean {
   const prefix: PathSeg[] = ['nodes', nodeId, 'data', ...dataPath];
-  return index.paths.some((p) => related(p, prefix));
+  return _data(index).paths.some((p) => related(p, prefix));
 }

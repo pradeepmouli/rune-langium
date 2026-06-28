@@ -1247,7 +1247,7 @@ export function ExplorePerspective() {
   );
 
   const handleModelChanged = useCallback(
-    async (serialized: Map<string, string>) => {
+    (serialized: Map<string, string>) => {
       // The CST-reuse serializer (buildSourceForNamespaces) already produces
       // full merged file text — no separate mergeSerializedIntoSource step.
       const filesAtStart = filesRef.current;
@@ -1259,7 +1259,6 @@ export function ExplorePerspective() {
         }
         return f;
       });
-      if (filesRef.current !== filesAtStart) return;
       if (!merged.some((e, i) => e !== filesAtStart[i])) return;
       onFilesChange?.(merged);
     },
