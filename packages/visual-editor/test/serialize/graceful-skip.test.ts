@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Tests for the graceful-skip hotfix: `serializeNamespaceToSource` must not
+ * Tests for the graceful-skip hotfix: `renderNamespace` must not
  * throw when it encounters a brand-new node whose `$type` is unimplemented by
  * the emit-core AND that has no `$cstRange` to fall back to. Similarly,
  * `buildSourceForNamespaces` must never propagate an unexpected serializer
@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { parsedAdapter } from '@rune-langium/core';
-import { serializeNamespaceToSource } from '../../src/serialize/cst-reuse-serializer.js';
+import { renderNamespace } from '../../src/serialize/cst-reuse-renderer.js';
 import { buildSourceForNamespaces } from '../../src/hooks/useModelSourceSync.js';
 import { buildDirtyIndex } from '../../src/serialize/dirty-paths.js';
 import type { Patches } from 'mutative';
@@ -60,7 +60,7 @@ describe('graceful skip — unemittable new nodes', () => {
     // Must not throw — the unemittable condition is silently skipped.
     let out = '';
     expect(() => {
-      out = serializeNamespaceToSource({
+      out = renderNamespace({
         nodes: [makeNode(d, 'test.Foo')],
         originalSource: SRC,
         dirty: buildDirtyIndex(patches)
@@ -82,7 +82,7 @@ describe('graceful skip — unemittable new nodes', () => {
 
   it('backstop: buildSourceForNamespaces does not throw and still returns good namespaces when one namespace serializer fails unexpectedly', async () => {
     // Construct a "poison" node whose $cstRange getter throws inside
-    // serializeNamespaceToSource (which is the first cstRange() call for this
+    // renderNamespace (which is the first cstRange() call for this
     // node).  $type is readable (returns 'Condition') so the earlier inheritance
     // mapping in buildSourceForNamespaces doesn't throw — only the per-namespace
     // try/catch block is tested here.  This exercises Fix #2 (the backstop

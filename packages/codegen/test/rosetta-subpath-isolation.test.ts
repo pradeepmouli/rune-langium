@@ -44,8 +44,8 @@ describe('@rune-langium/codegen/rosetta isolation', () => {
     expect(graph.has('pkg:exceljs')).toBe(false);
   });
 
-  it('re-exports emitNode', async () => {
+  it('re-exports renderNode', async () => {
     const mod = await import('../src/rosetta.js');
-    expect(typeof mod.emitNode).toBe('function');
+    expect(typeof mod.renderNode).toBe('function');
   });
 });

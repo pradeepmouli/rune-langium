@@ -2,12 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Whole-AST → `.rosetta` source emit-core.
+ * Whole-AST → `.rosetta` source render-core.
  *
- * `emitNode` dispatches on `$type`. Implemented constructs return structural
+ * `renderNode` dispatches on `$type`. Implemented constructs return structural
  * `.rosetta` text; every other `$type` returns `null`, meaning "I cannot
- * generate this — use the CST". Composite children are emitted via the caller's
- * `emitChild` policy (reuse-or-regenerate). Cross-references emit `$refText`.
+ * generate this — use the CST". Composite children are rendered via the caller's
+ * `renderChild` policy (reuse-or-regenerate). Cross-references emit `$refText`.
  *
  * No fs / ExcelJS / generator imports — safe to import in a browser hot path via
  * the `@rune-langium/codegen/rosetta` subpath.
@@ -21,7 +21,7 @@ import type {
 } from '@rune-langium/core';
 
 export type DehydratedNode = Dehydrated<AstNode>;
-export type EmitChild = (child: DehydratedNode) => string;
+export type RenderChild = (child: DehydratedNode) => string;
 
 // --- helpers --------------------------------------------------------------
 
@@ -51,9 +51,9 @@ function definitionLine(def: string | undefined): string | undefined {
   return def === undefined ? undefined : `<"${escapeString(def)}">`;
 }
 
-// --- per-construct emitters ----------------------------------------------
+// --- per-construct renderers ----------------------------------------------
 
-function emitAttribute(a: Dehydrated<Attribute>, emitChild: EmitChild): string {
+function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): string {
   const head: string[] = [];
   if (a.override) head.push('override');
   head.push(a.name);
@@ -63,25 +63,25 @@ function emitAttribute(a: Dehydrated<Attribute>, emitChild: EmitChild): string {
   const lines = [head.join(' ')];
   const def = definitionLine(typeof a.definition === 'string' ? a.definition : undefined);
   if (def) lines.push(indentBlock(def));
-  // Unimplemented annotation/synonym/label/ref children ride CST via emitChild.
+  // Unimplemented annotation/synonym/label/ref children ride CST via renderChild.
   for (const child of childList(a.annotations, a.references, a.synonyms, a.labels, a.ruleReferences)) {
-    lines.push(indentBlock(emitChild(child)));
+    lines.push(indentBlock(renderChild(child)));
   }
   return lines.join('\n');
 }
 
-function emitChoiceOption(o: Dehydrated<ChoiceOption>, emitChild: EmitChild): string {
+function renderChoiceOption(o: Dehydrated<ChoiceOption>, renderChild: RenderChild): string {
   const type = refText(o.typeCall?.type) ?? 'unknown';
   const lines = [type];
   const def = definitionLine(typeof o.definition === 'string' ? o.definition : undefined);
   if (def) lines.push(indentBlock(def));
   for (const child of childList(o.annotations, o.references, o.synonyms, o.labels, o.ruleReferences)) {
-    lines.push(indentBlock(emitChild(child)));
+    lines.push(indentBlock(renderChild(child)));
   }
   return lines.join('\n');
 }
 
-function emitEnumValue(v: Dehydrated<RosettaEnumValue>, emitChild: EmitChild): string {
+function renderEnumValue(v: Dehydrated<RosettaEnumValue>, renderChild: RenderChild): string {
   let head = v.name;
   const display = typeof v.display === 'string' ? v.display : undefined;
   if (display) head += ` displayName "${escapeString(display)}"`;
@@ -89,12 +89,12 @@ function emitEnumValue(v: Dehydrated<RosettaEnumValue>, emitChild: EmitChild): s
   const def = definitionLine(typeof v.definition === 'string' ? v.definition : undefined);
   if (def) lines.push(indentBlock(def));
   for (const child of childList(v.annotations, v.references, v.enumSynonyms)) {
-    lines.push(indentBlock(emitChild(child)));
+    lines.push(indentBlock(renderChild(child)));
   }
   return lines.join('\n');
 }
 
-function emitData(d: Dehydrated<Data>, emitChild: EmitChild): string {
+function renderData(d: Dehydrated<Data>, renderChild: RenderChild): string {
   let header = `type ${d.name}`;
   const parent = refText(d.superType);
   if (parent) header += ` extends ${parent}`;
@@ -104,32 +104,32 @@ function emitData(d: Dehydrated<Data>, emitChild: EmitChild): string {
   if (def) lines.push(indentBlock(def));
   // Meta block (annotations/refs/synonyms) — unimplemented, ride CST.
   for (const child of childList(d.annotations, d.references, d.synonyms)) {
-    lines.push(indentBlock(emitChild(child)));
+    lines.push(indentBlock(renderChild(child)));
   }
   for (const attr of d.attributes ?? []) {
-    lines.push(indentBlock(emitChild(attr as DehydratedNode)));
+    lines.push(indentBlock(renderChild(attr as DehydratedNode)));
   }
   for (const cond of d.conditions ?? []) {
     lines.push('');
-    lines.push(indentBlock(emitChild(cond as DehydratedNode)));
+    lines.push(indentBlock(renderChild(cond as DehydratedNode)));
   }
   return lines.join('\n');
 }
 
-function emitChoice(c: Dehydrated<Choice>, emitChild: EmitChild): string {
+function renderChoice(c: Dehydrated<Choice>, renderChild: RenderChild): string {
   const lines = [`choice ${c.name}:`];
   const def = definitionLine(typeof c.definition === 'string' ? c.definition : undefined);
   if (def) lines.push(indentBlock(def));
   for (const child of childList(c.annotations, c.synonyms)) {
-    lines.push(indentBlock(emitChild(child)));
+    lines.push(indentBlock(renderChild(child)));
   }
   for (const opt of c.attributes ?? []) {
-    lines.push(indentBlock(emitChild(opt as DehydratedNode)));
+    lines.push(indentBlock(renderChild(opt as DehydratedNode)));
   }
   return lines.join('\n');
 }
 
-function emitEnum(e: Dehydrated<RosettaEnumeration>, emitChild: EmitChild): string {
+function renderEnum(e: Dehydrated<RosettaEnumeration>, renderChild: RenderChild): string {
   let header = `enum ${e.name}`;
   const parent = refText(e.parent);
   if (parent) header += ` extends ${parent}`;
@@ -138,10 +138,10 @@ function emitEnum(e: Dehydrated<RosettaEnumeration>, emitChild: EmitChild): stri
   const def = definitionLine(typeof e.definition === 'string' ? e.definition : undefined);
   if (def) lines.push(indentBlock(def));
   for (const child of childList(e.annotations, e.references, e.synonyms)) {
-    lines.push(indentBlock(emitChild(child)));
+    lines.push(indentBlock(renderChild(child)));
   }
   for (const val of e.enumValues ?? []) {
-    lines.push(indentBlock(emitChild(val as DehydratedNode)));
+    lines.push(indentBlock(renderChild(val as DehydratedNode)));
   }
   return lines.join('\n');
 }
@@ -158,37 +158,37 @@ function childList(...arrays: Array<ReadonlyArray<unknown> | undefined>): Dehydr
 
 // --- dispatcher -----------------------------------------------------------
 
-export function emitNode(node: DehydratedNode, emitChild: EmitChild): string | null {
+export function renderNode(node: DehydratedNode, renderChild: RenderChild): string | null {
   switch ((node as { $type: string }).$type) {
-    case 'Data': return emitData(node as Dehydrated<Data>, emitChild);
-    case 'Attribute': return emitAttribute(node as Dehydrated<Attribute>, emitChild);
-    case 'Choice': return emitChoice(node as Dehydrated<Choice>, emitChild);
-    case 'ChoiceOption': return emitChoiceOption(node as Dehydrated<ChoiceOption>, emitChild);
-    case 'RosettaEnumeration': return emitEnum(node as Dehydrated<RosettaEnumeration>, emitChild);
-    case 'RosettaEnumValue': return emitEnumValue(node as Dehydrated<RosettaEnumValue>, emitChild);
+    case 'Data': return renderData(node as Dehydrated<Data>, renderChild);
+    case 'Attribute': return renderAttribute(node as Dehydrated<Attribute>, renderChild);
+    case 'Choice': return renderChoice(node as Dehydrated<Choice>, renderChild);
+    case 'ChoiceOption': return renderChoiceOption(node as Dehydrated<ChoiceOption>, renderChild);
+    case 'RosettaEnumeration': return renderEnum(node as Dehydrated<RosettaEnumeration>, renderChild);
+    case 'RosettaEnumValue': return renderEnumValue(node as Dehydrated<RosettaEnumValue>, renderChild);
     default: return null; // unimplemented → caller uses CST
   }
 }
 
-// --- full-model serializer ------------------------------------------------
+// --- full-model renderer --------------------------------------------------
 
 /**
- * Serialize a complete namespace model to `.rosetta` source text.
+ * Render a complete namespace model to `.rosetta` source text.
  *
  * Emits `namespace <name>`, `version "<version>"`, then each element via
- * `emitNode`. Elements whose `emitNode` returns `null` (unimplemented `$type`)
+ * `renderNode`. Elements whose `renderNode` returns `null` (unimplemented `$type`)
  * are silently skipped. Elements are separated by blank lines; the output ends
  * with a trailing newline.
  *
  * Browser-safe: no fs / ExcelJS / generator imports.
  */
-export function emitModelText(model: { name: string; version?: string; elements: unknown[] }): string {
-  const emitChild: EmitChild = (c: DehydratedNode) => emitNode(c, emitChild) ?? '';
+export function renderModel(model: { name: string; version?: string; elements: unknown[] }): string {
+  const renderChild: RenderChild = (c: DehydratedNode) => renderNode(c, renderChild) ?? '';
   const lines: string[] = [];
   lines.push(`namespace ${model.name}`);
   lines.push(`version "${model.version ?? '0.0.0'}"`);
   for (const element of model.elements) {
-    const text = emitNode(element as DehydratedNode, emitChild);
+    const text = renderNode(element as DehydratedNode, renderChild);
     if (text !== null) {
       lines.push('');
       lines.push(text);

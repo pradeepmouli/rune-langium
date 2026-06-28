@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { parsedAdapter } from '@rune-langium/core';
-import { serializeNamespaceToSource } from '../../src/serialize/cst-reuse-serializer.js';
+import { renderNamespace } from '../../src/serialize/cst-reuse-renderer.js';
 import { buildDirtyIndex } from '../../src/serialize/dirty-paths.js';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode } from '../../src/types.js';
@@ -40,7 +40,7 @@ async function fooNode(): Promise<{ node: TypeGraphNode; nodeId: string }> {
 describe('cst-reuse serializer', () => {
   it('reuses the whole element verbatim when nothing is dirty', async () => {
     const { node } = await fooNode();
-    const out = serializeNamespaceToSource({
+    const out = renderNamespace({
       nodes: [node], originalSource: SRC, dirty: buildDirtyIndex([] as unknown as Patches)
     });
     expect(out).toBe(SRC); // byte-for-byte
@@ -54,7 +54,7 @@ describe('cst-reuse serializer', () => {
       { op: 'replace', path: ['nodes', nodeId, 'data', 'attributes', 0, 'name'], value: 'barRenamed' }
     ] as unknown as Patches;
 
-    const out = serializeNamespaceToSource({
+    const out = renderNamespace({
       nodes: [node], originalSource: SRC, dirty: buildDirtyIndex(patches)
     });
 
@@ -78,7 +78,7 @@ describe('cst-reuse serializer', () => {
       { op: 'replace', path: ['nodes', nodeId, 'data', 'attributes', 0, 'name'], value: 'barRenamed' }
     ] as unknown as Patches;
 
-    const out = serializeNamespaceToSource({
+    const out = renderNamespace({
       nodes: [node], originalSource: SRC, dirty: buildDirtyIndex(patches)
     });
 

@@ -9,7 +9,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
-import { emitModelText } from '@rune-langium/codegen/rosetta';
+import { renderModel } from '@rune-langium/codegen/rosetta';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { modelsToAst } from '../../src/adapters/model-to-ast.js';
 
@@ -38,7 +38,7 @@ describe('Round-trip edits', () => {
     expect(models.length).toBeGreaterThan(0);
 
     // Serialize back to text
-    const text = emitModelText(models[0]);
+    const text = renderModel(models[0]);
     expect(text).toContain('namespace test.roundtrip');
     expect(text).toContain('type Foo');
     expect(text).toContain('bar string');
@@ -54,7 +54,7 @@ describe('Round-trip edits', () => {
 
     // Export graph to synthetic models
     const models = modelsToAst(store.getState().nodes, store.getState().edges);
-    const text = emitModelText(models[0]);
+    const text = renderModel(models[0]);
 
     // Re-parse
     const reparsed = await parse(text);
@@ -76,7 +76,7 @@ describe('Round-trip edits', () => {
     store.getState().deleteType(barNode!.id);
 
     const models = modelsToAst(store.getState().nodes, store.getState().edges);
-    const text = emitModelText(models[0]);
+    const text = renderModel(models[0]);
 
     const reparsed = await parse(text);
     const elements = (reparsed.value as { elements?: unknown[] }).elements ?? [];
@@ -96,7 +96,7 @@ describe('Round-trip edits', () => {
     store.getState().addAttribute(fooNode!.id, 'newField', 'date', '1..1');
 
     const models = modelsToAst(store.getState().nodes, store.getState().edges);
-    const text = emitModelText(models[0]);
+    const text = renderModel(models[0]);
 
     expect(text).toContain('newField date');
     expect(text).toContain('(1..1)');
@@ -118,7 +118,7 @@ describe('Round-trip edits', () => {
     store.getState().setInheritance(fooNode!.id, superNode!.id);
 
     const models = modelsToAst(store.getState().nodes, store.getState().edges);
-    const text = emitModelText(models[0]);
+    const text = renderModel(models[0]);
 
     expect(text).toContain('type Foo extends SuperBase:');
   });
@@ -140,7 +140,7 @@ describe('Round-trip edits', () => {
 
     const models = modelsToAst(store.getState().nodes, store.getState().edges);
     const childModel = models.find((m) => m.name === 'cdm.x')!;
-    const text = emitModelText(childModel);
+    const text = renderModel(childModel);
 
     // Serialized text must carry the QUALIFIED ref, not the bare name.
     expect(text).toContain('type Child extends ns.b.Base:');
@@ -199,7 +199,7 @@ describe('Phase 3D-2 generated-accessor conformance (T060-3D2)', () => {
     store.getState().addEnumValue(enumNode!.id, 'Pending');
 
     const models = modelsToAst(store.getState().nodes, store.getState().edges);
-    const text = emitModelText(models[0]);
+    const text = renderModel(models[0]);
 
     // New value must be present in serialized output
     expect(text).toContain('Pending');

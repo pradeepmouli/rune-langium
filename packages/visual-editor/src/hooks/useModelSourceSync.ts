@@ -28,7 +28,7 @@ import { useEffect, useRef } from 'react';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
 import { astRelevantProjection, nameFromNodeId } from '../store/node-projection.js';
-import { serializeNamespaceToSource } from '../serialize/cst-reuse-serializer.js';
+import { renderNamespace } from '../serialize/cst-reuse-renderer.js';
 import { buildDirtyIndex } from '../serialize/dirty-paths.js';
 
 // ---------------------------------------------------------------------------
@@ -138,7 +138,7 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
     // namespaces continue to serialize normally. The previous persisted text for
     // this namespace remains in effect until a successful serialize or reparse.
     try {
-      out.set(ns, serializeNamespaceToSource({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
+      out.set(ns, renderNamespace({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
     } catch (err) {
       console.warn(`[cst-reuse] namespace "${ns}" serialization failed — skipping`, err);
     }

@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { parsedAdapter } from '@rune-langium/core';
-import { serializeNamespaceToSource } from '../../src/serialize/cst-reuse-serializer.js';
+import { renderNamespace } from '../../src/serialize/cst-reuse-renderer.js';
 import { buildDirtyIndex } from '../../src/serialize/dirty-paths.js';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode } from '../../src/types.js';
@@ -34,7 +34,7 @@ describe('cst-reuse — cascade + degraded', () => {
         value: 'Target2' }
     ] as unknown as Patches;
 
-    const out = serializeNamespaceToSource({
+    const out = renderNamespace({
       nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
     });
     expect(out).toContain('field Target2 (0..1)');
@@ -56,7 +56,7 @@ describe('cst-reuse — cascade + degraded', () => {
       { op: 'replace', path: ['nodes', 'test.Uses'], value: {} }
     ] as unknown as Patches;
 
-    const out = serializeNamespaceToSource({
+    const out = renderNamespace({
       nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
     });
     // The node must be regenerated using the updated dehydrated data (name = Renamed),
@@ -67,19 +67,19 @@ describe('cst-reuse — cascade + degraded', () => {
     expect(out).toContain('field Target (0..1)');
   });
 
-  it('falls back to whole-element reuse when a dirty node still has its $cstRange (degraded emit)', async () => {
-    // If emitNode were to return null for an edited-but-unimplemented node that
-    // still carries a $cstRange, the serializer slices rather than dropping it.
+  it('falls back to whole-element reuse when a dirty node still has its $cstRange (degraded render)', async () => {
+    // If renderNode were to return null for an edited-but-unimplemented node that
+    // still carries a $cstRange, the renderer slices rather than dropping it.
     const { value } = await parse(SRC);
     const data = (value as unknown as { elements: unknown[] }).elements[0];
     const d = parsedAdapter.dehydrate(data as Parameters<typeof parsedAdapter.dehydrate>[0]);
     // Force the "unimplemented" branch by masking $type (simulates a future node
-    // kind the emit-core hasn't learned yet) while keeping the original $cstRange.
+    // kind the render-core hasn't learned yet) while keeping the original $cstRange.
     (d as { $type: string }).$type = 'RosettaFunction';
     const patches = [
       { op: 'replace', path: ['nodes', 'test.Uses', 'data', 'name'], value: 'x' }
     ] as unknown as Patches;
-    const out = serializeNamespaceToSource({
+    const out = renderNamespace({
       nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
     });
     expect(out).toContain('type Uses:'); // sliced from CST, not dropped
