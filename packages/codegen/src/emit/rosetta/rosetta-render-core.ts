@@ -51,6 +51,12 @@ function definitionLine(def: string | undefined): string | undefined {
   return def === undefined ? undefined : `<"${escapeString(def)}">`;
 }
 
+/** Extract expression body text from $cstText or $cstNode.text. */
+function exprText(expr: unknown): string {
+  const e = expr as { $cstText?: string; $cstNode?: { text?: string } } | undefined;
+  return (e?.$cstText ?? e?.$cstNode?.text ?? '').trim();
+}
+
 // --- per-construct renderers ----------------------------------------------
 
 function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): string {
@@ -146,6 +152,19 @@ function renderEnum(e: Dehydrated<RosettaEnumeration>, renderChild: RenderChild)
   return lines.join('\n');
 }
 
+function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
+  const cc = c as unknown as {
+    name?: string; definition?: string; postCondition?: boolean; expression?: unknown;
+  };
+  const head = cc.postCondition ? 'post-condition' : 'condition';
+  const lines = [cc.name ? `${head} ${cc.name}:` : `${head}:`];
+  const def = definitionLine(cc.definition);
+  if (def) lines.push(indentBlock(def));
+  const body = exprText(cc.expression);
+  if (body) lines.push(indentBlock(body));
+  return lines.join('\n');
+}
+
 /** Flatten present child arrays into one ordered list of DehydratedNodes. */
 function childList(...arrays: Array<ReadonlyArray<unknown> | undefined>): DehydratedNode[] {
   const out: DehydratedNode[] = [];
@@ -166,6 +185,7 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
     case 'ChoiceOption': return renderChoiceOption(node as Dehydrated<ChoiceOption>, renderChild);
     case 'RosettaEnumeration': return renderEnum(node as Dehydrated<RosettaEnumeration>, renderChild);
     case 'RosettaEnumValue': return renderEnumValue(node as Dehydrated<RosettaEnumValue>, renderChild);
+    case 'Condition': return renderCondition(node, renderChild);
     default: return null; // unimplemented → caller uses CST
   }
 }
