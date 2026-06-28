@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parse } from '@rune-langium/core';
-import { parsedAdapter } from '@rune-langium/core/adapters/parsed-adapter';
+import { parsedAdapter } from '@rune-langium/core';
 import { serializeNamespaceToSource } from '../../src/serialize/cst-reuse-serializer.js';
 import { buildDirtyIndex } from '../../src/serialize/dirty-paths.js';
 import type { Patches } from 'mutative';
