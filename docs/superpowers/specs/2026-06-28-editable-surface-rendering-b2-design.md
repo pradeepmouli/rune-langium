@@ -104,54 +104,66 @@ children still ride their CST slice — only the edited part regenerates):
 Expression bodies are `$cstText` passthrough in B2 (the B1 swap point). All
 cross-references render `$refText` (never `.ref`), consistent with Plan A.
 
-### Deletion (lossless `deleteType`)
+### Deletion (lossless `deleteType`) — native, via Mutative inverse patches
 
-Capture a **baseline `elementId → range` index** at parse time, in lockstep with
-`$cstRange`/`parseEpoch` (the same parse that stamps offsets). The renderer's
-top-level assembly then, instead of copying every inter-element gap verbatim,
-**drops the range of a baseline element that has no corresponding current node**
-(a delete) while still copying genuine gaps (header, comments, non-graph
-elements). A node still present renders/slices as today; a node absent from the
-current graph but present in the baseline index is omitted. Additions
-(new nodes, no `$cstRange`) continue to append at the namespace tail.
+Deletion is just another tracked change in the domain change log; **no baseline
+index and no identity heuristic.** `deleteType` does `draft.nodes.delete(id)`,
+which Mutative records as a **`remove` patch at `['nodes', <id>]`**. Its
+**inverse patch carries the deleted node value** — including `.data.$cstRange`
+(the element's original byte range).
+
+Today `mutateGraph` discards inverse patches (`const [next, patches] =
+mutativeCreate(...)`); B2 captures the third tuple element and threads it to the
+renderer alongside `pendingEditPatches`. The renderer then, instead of copying
+every inter-element gap verbatim, **drops the range of any element whose `remove`
+patch deleted it** (range read from the inverse patch's old value) while still
+copying genuine gaps (header, comments, non-graph elements). Present nodes
+render/slice as today; additions (new nodes, no `$cstRange`) append at the tail.
 
 ### Change-tracking comprehensiveness
 
 Render's dirty signal is the Mutative patches produced at the `mutateGraph`
-chokepoint (Plan A). The ops themselves stay pure/Mutative-agnostic; `mutateGraph`
-is the single tracking boundary. B2 ensures **every** inspector edit flows through
-it so render sees it:
+chokepoint (Plan A). DomainOps are pure/Mutative-agnostic; they "hook into"
+Mutative only by being run against the draft Proxy `mutateGraph` creates — the
+Proxy intercepts their plain mutations as patches (+ inverse patches). So any
+edit expressed as DomainOps-on-the-draft is tracked automatically, including
+deletes (`remove` patches). B2:
 
+- **Capture inverse patches** in `mutateGraph` (currently dropped) — needed for
+  deletion (above) and useful for undo.
 - Add the missing **TypeAlias wrapped-type store action** (today the form has no
-  action) routed through `mutateGraph`.
-- Audit the inspector actions for any that mutate outside the `data` draft /
-  bypass `mutateGraph`; route them through it. (Comments are explicitly out of
-  scope — they remain `meta`-only / unrendered.)
+  op) routed through `mutateGraph`, so its edits become patches.
+- Audit inspector actions for any that mutate outside an op / bypass `mutateGraph`
+  and route them through it. (Comments are explicitly out of scope — they write
+  `meta` directly and remain unrendered.)
 
 ## Data flow
 
 ```
-parse → AST(+CST) → dehydrate (stamp $cstRange, build baseline elementId→range index)
-inspector edit/add/delete → mutateGraph (Mutative patches) → render dirty signal
-renderNamespace(nodes, baselineSource, dirty, baselineIndex):
-  - present node, subtree clean → slice baseline ($cstRange)        [Plan A]
+parse → AST(+CST) → dehydrate (stamp $cstRange)
+inspector edit/add/delete → mutateGraph → Mutative patches + INVERSE patches
+renderNamespace(nodes, baselineSource, dirty, removals):
+  - present node, subtree clean → slice baseline ($cstRange)         [Plan A]
   - present node, dirty/new     → renderNode (Condition/Function/… cases;
                                    bodies via $cstText; children reuse if clean)
-  - baseline element absent from current nodes → DROP its range     [B2 deletion]
-  - new node (no $cstRange)     → append at tail                    [Plan A]
+  - removed node ('remove' patch at ['nodes',id]) → DROP its range,  [B2 deletion]
+        range read from the inverse patch's old value (.data.$cstRange)
+  - new node (no $cstRange)     → append at tail                     [Plan A]
 ```
 
 ## Correctness constraints
 
 - Expression bodies emit `$cstText` verbatim (no parsing, no reformatting) in B2.
 - Unchanged children always ride their CST slice (Plan A invariant preserved).
-- The baseline `elementId→range` index advances only on reparse (lockstep with
-  `$cstRange`); deletion uses it against the *current* node set from the same
-  baseline epoch — never mix epochs.
-- Deletion drops a range only when a baseline element has **no** current node of
-  the same identity; ambiguity → preserve (never delete on uncertainty).
-- `$cstRange` and the baseline index are read-only post-parse; dirtiness comes
-  only from patches.
+- Deletion ranges come from the **inverse patch's** old node value
+  (`.data.$cstRange`), captured in the same edit batch as the `remove` patch — so
+  they are baseline-consistent with the frozen parse-baseline source by
+  construction. Inverse patches (like `pendingEditPatches`) accumulate since the
+  last parse and clear on reparse — never mix epochs.
+- A range is dropped only for an actual `remove` patch at `['nodes', <id>]`; no
+  inference/heuristic, so no accidental deletion.
+- `$cstRange` is read-only post-parse; dirtiness and removals come only from
+  patches / inverse patches.
 
 ## Error handling
 
@@ -181,7 +193,8 @@ the change:
 1. **Render rename** (mechanical; isolated commit).
 2. **render-core cases** for Condition / Function / TypeAlias / AnnotationRef /
    synonyms (bodies via `$cstText`), with per-construct round-trip tests.
-3. **Baseline index + deletion** in the assembly, with deletion tests.
+3. **Inverse-patch capture + deletion**: `mutateGraph` captures inverse patches;
+   the assembly drops removed elements' ranges, with deletion tests.
 4. **Change-tracking comprehensiveness**: TypeAlias wrapped-type action + bypass
    audit.
 
@@ -195,11 +208,15 @@ Each phase is independently testable; phase 2 is the bulk.
   audit against the AST shapes + the degrade backstop.
 - **`RosettaFunction` AST shape** — inputs/output/operations/shortcuts field names
   fixed at plan time against `generated/ast.ts`; body stays `$cstText`.
-- **Deletion identity mapping** — needs a stable element identity between baseline
-  index and current nodes (node id / name+kind). Preserve-on-doubt avoids
-  accidental deletion.
-- **Baseline-index plumbing** — must be captured where the parsed source +
-  offsets are (same point Plan A freezes the baseline source / stamps `$cstRange`).
+- **Inverse-patch capture** — `mutateGraph` must start capturing the inverse
+  patches it currently discards, and thread them to the renderer. The deleted
+  node's `.data.$cstRange` must be present on the pre-delete value (it is — the
+  node carried it from parse); a node deleted before ever being parsed (created
+  then deleted in-session) has no `$cstRange` and was never in source, so there is
+  nothing to drop — a no-op, correct.
+- **Range-drop assembly** — dropping a removed element's range must still copy the
+  surrounding gaps (a deleted element's leading/trailing whitespace handling) so
+  the result stays well-formed; covered by deletion tests.
 
 ## Relationship to B1 (next spec)
 
