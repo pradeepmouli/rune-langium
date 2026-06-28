@@ -10,7 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { CuratedLoadErrorPanel } from '../../src/components/CuratedLoadErrorPanel.js';
-import type { ErrorCategory } from '../../src/services/curated-loader.js';
+import type { ErrorCategory } from '@rune-langium/curated-schema';
 
 function renderPanel(category: ErrorCategory, onRetry = vi.fn()) {
   return {
