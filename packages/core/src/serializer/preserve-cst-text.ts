@@ -12,6 +12,11 @@
  * conditions, copying both the part's and its `expression`'s CST text. Single
  * source of truth shared by the browser parse worker and the server parse
  * function (previously duplicated, byte-identical, in both — V7).
+ *
+ * **Retained (Task 9 / CST-reuse eval):** Though `$cstRange` is now stamped on
+ * all nodes during hydration, visual-editor expression consumers (FunctionForm,
+ * model-helpers, etc.) cannot access originalSourceByNamespace to slice via offsets—
+ * they are across a source-less boundary post-serialization. Keep `preserveCstText`.
  */
 export function preserveCstText(model: any): void {
   for (const elem of model?.elements ?? []) {
