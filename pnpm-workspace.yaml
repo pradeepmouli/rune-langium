@@ -20,7 +20,6 @@ allowBuilds:
   workerd: false
 
 minimumReleaseAgeExclude:
-  - langium-zod@0.10.0
   - langium-zod@0.10.1
 
 # pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
