@@ -30,6 +30,36 @@ export interface RenderArgs {
    * EDGE, not a `nodes` patch). See Task 6's inheritance handling.
    */
   forceDirtyNodeIds?: ReadonlySet<string>;
+  /**
+   * Source byte ranges of genuinely-deleted top-level elements. These ranges
+   * are subtracted from inter-node gaps so deleted elements do not appear in
+   * the assembled output. Pre-sorted by offset; caller is responsible for
+   * excluding ranges still occupied by a renamed/replaced node (rename-safety).
+   */
+  removedRanges?: ReadonlyArray<{ offset: number; end: number }>;
+}
+
+/**
+ * Copy bytes from `source[from..to)`, excluding any sub-range in `removed`.
+ * `removed` MUST be pre-sorted by offset (ascending). Ranges that fall
+ * entirely outside `[from, to)` are silently skipped. Overlapping removed
+ * ranges are handled correctly by advancing `cur` to `Math.max(cur, r.end)`.
+ */
+function copyGapExcluding(
+  source: string,
+  from: number,
+  to: number,
+  removed: ReadonlyArray<{ offset: number; end: number }>
+): string {
+  let out = '';
+  let cur = from;
+  for (const r of removed) {
+    if (r.end <= from || r.offset >= to) continue; // outside this gap
+    if (r.offset > cur) out += source.slice(cur, r.offset);
+    cur = Math.max(cur, r.end);
+  }
+  if (cur < to) out += source.slice(cur, to);
+  return out;
 }
 
 export function renderNamespace(args: RenderArgs): string {
@@ -73,7 +103,10 @@ export function renderNamespace(args: RenderArgs): string {
 
   // Top-level elements that exist in the baseline (have a $cstRange), sorted by
   // source offset, drive the assembly. Gaps between them (header, comments,
-  // non-graph elements like functions) are copied verbatim.
+  // non-graph elements like functions) are copied verbatim — minus any ranges
+  // belonging to genuinely-deleted elements.
+  const sortedRemoved = [...(args.removedRanges ?? [])].sort((a, b) => a.offset - b.offset);
+
   const placed = nodes
     .map((n) => ({ n, range: cstRange(n.data) }))
     .filter((x): x is { n: TypeGraphNode; range: CstRange } => x.range !== undefined)
@@ -82,12 +115,12 @@ export function renderNamespace(args: RenderArgs): string {
   const parts: string[] = [];
   let cursor = 0;
   for (const { n, range } of placed) {
-    if (range.offset > cursor) parts.push(originalSource.slice(cursor, range.offset));
+    if (range.offset > cursor) parts.push(copyGapExcluding(originalSource, cursor, range.offset, sortedRemoved));
     const render = makeRender(n.id);
     parts.push(render(n.data as unknown as DehydratedNode, []));
     cursor = range.end;
   }
-  if (cursor < originalSource.length) parts.push(originalSource.slice(cursor));
+  if (cursor < originalSource.length) parts.push(copyGapExcluding(originalSource, cursor, originalSource.length, sortedRemoved));
 
   // New top-level nodes (no $cstRange) → append at the namespace tail.
   // Filter out empty strings: a fresh node whose $type is unimplemented returns
