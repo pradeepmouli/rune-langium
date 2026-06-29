@@ -80,6 +80,8 @@ export interface MetadataSectionProps {
 type SynonymEntry = {
   sources?: { $refText?: string }[];
   value?: { name?: string };
+  /** RosettaSynonym (enum host) stores value text here instead of `value.name`. */
+  body?: { values?: { name?: string }[] };
 };
 
 // ---------------------------------------------------------------------------
@@ -273,7 +275,9 @@ export function MetadataSection({
               <div className="flex flex-wrap gap-1.5 mb-1.5">
                 {synonymValues.map((syn: SynonymEntry, index: number) => {
                   const sourceRef = syn.sources?.[0]?.$refText ?? '';
-                  const valueName = syn.value?.name;
+                  // RosettaClassSynonym stores value under `value.name`;
+                  // RosettaSynonym (enum host) stores it under `body.values[0].name`.
+                  const valueName = syn.value?.name ?? syn.body?.values?.[0]?.name;
                   const chipLabel = valueName ? `${sourceRef} — ${valueName}` : sourceRef;
                   return (
                     <span
@@ -321,7 +325,7 @@ export function MetadataSection({
                 <button
                   type="button"
                   onClick={handleAddSynonym}
-                  disabled={!pendingSource}
+                  disabled={!pendingSource || (isEnumHost && !pendingValue)}
                   className="rounded bg-card px-2 py-1 text-xs text-foreground
                     hover:bg-muted transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed"

@@ -21,6 +21,12 @@ describe('renderNode — annotations & synonyms', () => {
     const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'FpML' }], value: { name: 'a "quoted" v' } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "a \\"quoted\\" v"]');
   });
+  it('renders a cross-namespace qualified class synonym verbatim (plan L15 serialize half)', () => {
+    // The UI picker writes the qualified id (`other.FIX`) as $refText for cross-ns sources.
+    // renderClassSynonym must emit it verbatim — no further qualify / strip.
+    const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'other.FIX' }], value: undefined } as never;
+    expect(renderNode(s, regen)).toBe('[synonym other.FIX]');
+  });
   it('renders an enum-level RosettaSynonym (source + value body)', () => {
     const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "tradeDate"]');

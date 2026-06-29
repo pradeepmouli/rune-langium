@@ -209,6 +209,21 @@ describe('MetadataSection — synonym source control', () => {
     expect(addBtn).toBeDisabled();
   });
 
+  it('Enum host: Add button stays disabled when source selected but value is blank', () => {
+    // Verifies the phantom-chip guard: store no-ops value-less enum synonyms,
+    // so the UI must require both source AND value before enabling Add.
+    const onSynonymAdd = vi.fn();
+    renderSection({ $type: 'RosettaEnumeration', onSynonymAdd, nodeId: 'ns.Rates' });
+
+    // Pick source but leave value empty → Add must remain disabled
+    pickSource('FpML');
+    const addBtn = screen.getByRole('button', { name: /^add$/i });
+    expect(addBtn).toBeDisabled();
+
+    // Store must NOT be called (no phantom chip)
+    expect(onSynonymAdd).not.toHaveBeenCalled();
+  });
+
   // ── existing chip rendering ──────────────────────────────────────────────
 
   it('existing synonym chips render the source $refText', () => {

@@ -545,6 +545,14 @@ describe('inline type-call args round-trip', () => {
 // The z2f picker guarantees every synonym added via the UI has ≥1 source;
 // parsed synonyms are grammar-valid. Assert that both the original CST-
 // preserved synonym AND a newly added synonym survive the render/re-parse cycle.
+//
+// SCOPE NOTE — LOCAL (same-namespace) source only.
+// Full cross-namespace synonym RE-LINKING on re-parse requires the document to
+// declare or import the other namespace, which depends on the calling document's
+// import scope — genuinely out of this feature's scope. The serialize half
+// (qualified $refText → `[synonym other.FIX]` emitted verbatim) is covered by
+// render-annotations-synonyms.test.ts
+// ('renders a cross-namespace qualified class synonym verbatim').
 // ---------------------------------------------------------------------------
 
 const SRC_ADD_SYNONYM = `namespace test
