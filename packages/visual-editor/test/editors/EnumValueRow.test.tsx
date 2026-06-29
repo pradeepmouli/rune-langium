@@ -16,6 +16,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { EnumValueRow } from '../../src/components/editors/EnumValueRow.js';
+import { EditorActionsProvider } from '../../src/components/forms/sections/EditorActionsContext.js';
+import type { SourceRefOption } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,5 +127,157 @@ describe('EnumValueRow', () => {
 
     const nameInput = screen.getByLabelText(/value name/i);
     expect(nameInput).toHaveProperty('disabled', true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Synonym tests (Task 6)
+// Tests cover BOTH inverse halves of the cross-ns qualify rule (plan L15):
+//   same-ns  → bare label written to $refText  (local-stays-bare half)
+//   cross-ns → qualified `${ns}.${name}` written to $refText (qualify half)
+// ---------------------------------------------------------------------------
+
+// Same-namespace option: host 'ns.Color', source 'ns.FIX' → same ns
+const SAME_NS_OPTIONS: SourceRefOption[] = [{ value: 'ns.FIX', label: 'FIX', namespace: 'ns' }];
+
+// Cross-namespace option: host 'ns.Color', source 'other.FpML' → different ns
+const CROSS_NS_OPTIONS: SourceRefOption[] = [{ value: 'other.FpML', label: 'FpML', namespace: 'other' }];
+
+/** FormProvider seeded with enumSynonyms at the expected AST path. */
+function SynonymWrapper({
+  children,
+  enumSynonyms = []
+}: {
+  children: React.ReactNode;
+  enumSynonyms?: unknown[];
+}) {
+  const form = useForm({
+    defaultValues: {
+      enumValues: [{ $type: 'RosettaEnumValue', name: 'USD', display: 'US Dollar', enumSynonyms }]
+    }
+  });
+  return <FormProvider {...form}>{children}</FormProvider>;
+}
+
+function renderSynonymRow(opts: {
+  nodeId?: string;
+  enumSynonyms?: unknown[];
+  synonymSourceOptions?: SourceRefOption[];
+  addEnumValueSynonym?: ReturnType<typeof vi.fn>;
+  removeEnumValueSynonym?: ReturnType<typeof vi.fn>;
+} = {}) {
+  const {
+    nodeId = 'ns.Color',
+    enumSynonyms = [],
+    synonymSourceOptions = SAME_NS_OPTIONS,
+    addEnumValueSynonym = vi.fn(),
+    removeEnumValueSynonym = vi.fn()
+  } = opts;
+
+  const mockActions = { addEnumValueSynonym, removeEnumValueSynonym } as any;
+
+  return {
+    ...render(
+      <SynonymWrapper enumSynonyms={enumSynonyms}>
+        <EditorActionsProvider nodeId={nodeId} actions={mockActions}>
+          <EnumValueRow
+            name="USD"
+            displayName="US Dollar"
+            nodeId={nodeId}
+            index={0}
+            onUpdate={vi.fn()}
+            onRemove={vi.fn()}
+            onReorder={vi.fn()}
+            synonymSourceOptions={synonymSourceOptions}
+          />
+        </EditorActionsProvider>
+      </SynonymWrapper>
+    ),
+    addEnumValueSynonym,
+    removeEnumValueSynonym
+  };
+}
+
+/** Drive the SourceRefField picker (Radix Popover works in jsdom). */
+function pickSourceInSynonymRow(label: string) {
+  const trigger = document.querySelector('[data-slot="source-ref-trigger"]');
+  expect(trigger).not.toBeNull();
+  fireEvent.click(trigger!);
+  fireEvent.click(screen.getByText(label));
+}
+
+describe('EnumValueRow — synonym control (Task 6)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // ── plan L15 — same-namespace: local source stays bare ───────────────────
+
+  it('same-namespace: addEnumValueSynonym fires with bare refText', () => {
+    const addEnumValueSynonym = vi.fn();
+    renderSynonymRow({
+      nodeId: 'ns.Color',
+      synonymSourceOptions: SAME_NS_OPTIONS,
+      addEnumValueSynonym
+    });
+
+    pickSourceInSynonymRow('FIX');
+
+    const valueInput = document.querySelector<HTMLInputElement>('[data-slot="enum-synonym-value-input"]')!;
+    fireEvent.change(valueInput, { target: { value: 'TD' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // host 'ns.Color' and source 'ns.FIX' share namespace 'ns' → bare 'FIX'
+    expect(addEnumValueSynonym).toHaveBeenCalledWith('ns.Color', 0, 'FIX', 'TD');
+  });
+
+  // ── plan L15 — cross-namespace: source qualifies ─────────────────────────
+
+  it('cross-namespace: addEnumValueSynonym fires with qualified refText', () => {
+    const addEnumValueSynonym = vi.fn();
+    renderSynonymRow({
+      nodeId: 'ns.Color',
+      synonymSourceOptions: CROSS_NS_OPTIONS,
+      addEnumValueSynonym
+    });
+
+    pickSourceInSynonymRow('FpML');
+
+    const valueInput = document.querySelector<HTMLInputElement>('[data-slot="enum-synonym-value-input"]')!;
+    fireEvent.change(valueInput, { target: { value: 'TD' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // host 'ns.Color' and source 'other.FpML' differ → qualified 'other.FpML'
+    expect(addEnumValueSynonym).toHaveBeenCalledWith('ns.Color', 0, 'other.FpML', 'TD');
+  });
+
+  // ── chip rendering ────────────────────────────────────────────────────────
+
+  it('existing synonym chip renders source $refText and synonymValue', () => {
+    renderSynonymRow({
+      enumSynonyms: [{ sources: [{ $refText: 'FIX' }], synonymValue: 'TD' }]
+    });
+
+    // Chip label is "FIX — TD"; both parts must be visible
+    expect(screen.getByText(/FIX/)).toBeInTheDocument();
+    expect(screen.getByText(/TD/)).toBeInTheDocument();
+  });
+
+  // ── remove ────────────────────────────────────────────────────────────────
+
+  it('chip remove button calls removeEnumValueSynonym(nodeId, index, synIndex)', () => {
+    const removeEnumValueSynonym = vi.fn();
+    renderSynonymRow({
+      nodeId: 'ns.Color',
+      enumSynonyms: [{ sources: [{ $refText: 'FIX' }], synonymValue: 'TD' }],
+      removeEnumValueSynonym
+    });
+
+    const removeBtn = screen.getByLabelText(/remove enum synonym FIX/i);
+    fireEvent.click(removeBtn);
+
+    expect(removeEnumValueSynonym).toHaveBeenCalledWith('ns.Color', 0, 0);
   });
 });
