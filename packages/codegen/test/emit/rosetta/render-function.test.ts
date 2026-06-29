@@ -32,6 +32,17 @@ describe('renderNode — RosettaFunction', () => {
     );
   });
 
+  it('preserves the dispatch selector in the header', () => {
+    const fn = {
+      $type: 'RosettaFunction', name: 'Calc', definition: undefined,
+      dispatchAttribute: { $refText: 'kind' },
+      dispatchValue: { enumeration: { $refText: 'Kind' }, value: { $refText: 'Cash' } },
+      annotations: [], references: [], conditions: [], postConditions: [], shortcuts: [],
+      inputs: [], output: undefined, operations: []
+    } as never;
+    expect(renderNode(fn, regen)).toBe('func Calc(kind: Kind -> Cash):');
+  });
+
   it('renders an add operation with a path and an alias shortcut', () => {
     const op = { $type: 'Operation', add: true, assignRoot: { $refText: 'out' }, path: { feature: { $refText: 'items' }, next: undefined }, definition: undefined, expression: { $cstText: 'x' } } as never;
     expect(renderNode(op, regen)).toBe('add out -> items:\n    x');

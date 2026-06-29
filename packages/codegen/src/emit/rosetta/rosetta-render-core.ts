@@ -224,11 +224,21 @@ function renderShortcut(s: DehydratedNode): string {
 function renderFunction(f: DehydratedNode, renderChild: RenderChild): string {
   const fn = f as unknown as {
     name?: string; definition?: string; superFunction?: { $refText?: string };
+    dispatchAttribute?: { $refText?: string };
+    dispatchValue?: { enumeration?: { $refText?: string }; value?: { $refText?: string } };
     annotations?: unknown[]; references?: unknown[];
     inputs?: unknown[]; output?: unknown; shortcuts?: unknown[];
     conditions?: unknown[]; operations?: unknown[]; postConditions?: unknown[];
   };
   let header = `func ${fn.name}`;
+  // Optional dispatch selector — `func F(attr: Enum -> Value):` (grammar). This
+  // is overload/dispatch semantics, so it MUST survive a function-body edit. The
+  // grammar requires both the attribute and a full enum-value reference inside
+  // the parens, so emit only when every part is present.
+  const dispAttr = fn.dispatchAttribute?.$refText;
+  const dispEnum = fn.dispatchValue?.enumeration?.$refText;
+  const dispVal = fn.dispatchValue?.value?.$refText;
+  if (dispAttr && dispEnum && dispVal) header += `(${dispAttr}: ${dispEnum} -> ${dispVal})`;
   const sup = fn.superFunction?.$refText;
   if (sup) header += ` extends ${sup}`;
   header += ':';

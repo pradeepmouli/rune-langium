@@ -458,6 +458,59 @@ type Money:
   amount number(digits: 18, fractionalDigits: 2) (1..1)
 `;
 
+// ---------------------------------------------------------------------------
+// (10) Function dispatch selector survives a body edit (PR #350 review).
+// Editing a dispatch function's body dirties it → renderFunction rebuilds the
+// header. The dispatch clause (`(method: Kind -> Cash)`) is overload semantics
+// and MUST NOT be dropped.
+// ---------------------------------------------------------------------------
+
+const SRC_DISPATCH = `namespace test
+version "1.0.0"
+
+enum Kind:
+  Cash
+  Physical
+
+func Settle(method: Kind -> Cash):
+  inputs:
+    amt number (1..1)
+  output:
+    result number (1..1)
+
+  set result:
+    amt
+`;
+
+describe('dispatch-function round-trip', () => {
+  it('preserves the dispatch selector when the body is edited', async () => {
+    const parsed = await parse(SRC_DISPATCH);
+    expect(parsed.hasErrors).toBe(false);
+    const store = createEditorStore();
+    store.getState().loadModels(parsed.value);
+
+    const func = store.getState().nodes.find((n) => n.data.name === 'Settle');
+    expect(func).toBeDefined();
+
+    store.getState().updateExpression(func!.id, 'amt + amt');
+
+    const out = buildSourceForNamespaces({
+      nodes: store.getState().nodes,
+      edges: store.getState().edges,
+      originalSourceByNamespace: new Map([['test', SRC_DISPATCH]]),
+      patches: store.getState().pendingEditPatches,
+      inversePatches: store.getState().pendingInversePatches
+    }).get('test');
+
+    expect(out).toBeTruthy();
+    // The edit applied AND the dispatch selector survived the header rebuild.
+    expect(out).toContain('func Settle(method: Kind -> Cash):');
+    expect(out).toContain('amt + amt');
+    const re = await parse(out!);
+    expect(re.hasErrors).toBe(false);
+  });
+});
+
 describe('inline type-call args round-trip', () => {
   it('preserves an attribute type-call args when the attribute is renamed', async () => {
     const { value } = await parse(SRC_TYPECALL_ARGS);
