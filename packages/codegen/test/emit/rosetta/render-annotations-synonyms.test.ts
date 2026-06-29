@@ -31,6 +31,13 @@ describe('renderNode — annotations & synonyms', () => {
     const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "tradeDate"]');
   });
+  it('returns null for a non-value-body RosettaSynonym (hint/meta/mappingLogic → CST fallback)', () => {
+    // RosettaSynonymBody has alternatives beyond value (hint, mappingLogic, meta, etc.).
+    // When body.values is absent/empty, renderSynonym returns null so renderNode falls
+    // back to CST and preserves the original body rather than emitting `[synonym src value ]`.
+    const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: {} } as never;
+    expect(renderNode(s, regen)).toBeNull();
+  });
   it('escapes the enum-value synonym STRING', () => {
     const s = { $type: 'RosettaEnumSynonym', sources: [{ $refText: 'FIX' }], synonymValue: 'a"b\\c' } as never;
     expect(renderNode(s, regen)).toBe('[synonym FIX value "a\\"b\\\\c"]');

@@ -78,9 +78,10 @@ export interface MetadataSectionProps {
 // ---------------------------------------------------------------------------
 
 type SynonymEntry = {
+  $type?: string;
   sources?: { $refText?: string }[];
   value?: { name?: string };
-  /** RosettaSynonym (enum host) stores value text here instead of `value.name`. */
+  /** RosettaSynonym (enum host) stores value text under body.values, not value.name. */
   body?: { values?: { name?: string }[] };
 };
 
@@ -168,9 +169,13 @@ export function MetadataSection({
     const refText = resolveSynonymRefText(opt, ctx?.nodeId, pendingSource);
     const value = isEnumHost ? pendingValue || undefined : undefined;
 
-    // Optimistic form-state update for immediate chip display
-    const entry: SynonymEntry = { sources: [{ $refText: refText }] };
-    if (value) entry.value = { name: value };
+    // Optimistic form-state update for immediate chip display.
+    // Shape must match what the store's addSynonym writes so form state stays
+    // in sync with the model: Data/Choice → RosettaClassSynonym shape;
+    // RosettaEnumeration → RosettaSynonym shape (body.values, not value.name).
+    const entry: SynonymEntry = isEnumHost
+      ? { $type: 'RosettaSynonym', sources: [{ $refText: refText }], body: { values: [{ name: value! }] } }
+      : { $type: 'RosettaClassSynonym', sources: [{ $refText: refText }], ...(value ? { value: { name: value } } : {}) };
     appendSynonym(entry as any);
 
     // Commit to graph

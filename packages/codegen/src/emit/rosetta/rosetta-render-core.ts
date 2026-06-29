@@ -333,7 +333,9 @@ function synonymSources(sources: unknown[] | undefined): string {
   return (sources ?? []).map((s) => (s as { $refText?: string }).$refText ?? '').filter(Boolean).join(', ');
 }
 
-// Validity is enforced upstream (z2f source picker + grammar), so these emit unconditionally.
+// Sources are upstream-guaranteed (z2f picker + grammar); the !sources guard is removed.
+// renderSynonym/renderEnumSynonym still return string|null to fall back to CST for
+// non-value bodies or missing synonymValue (grammar alternatives beyond the value form).
 
 function renderClassSynonym(s: DehydratedNode): string {
   const cs = s as unknown as { sources?: unknown[]; value?: { name?: string } };
@@ -345,19 +347,23 @@ function renderClassSynonym(s: DehydratedNode): string {
     : `[synonym ${sources}]`;
 }
 
-function renderSynonym(s: DehydratedNode): string {
+function renderSynonym(s: DehydratedNode): string | null {
   const sy = s as unknown as { sources?: unknown[]; body?: { values?: Array<{ name?: string }> } };
   const sources = synonymSources(sy.sources);
   const values = sy.body?.values ?? [];
+  // Non-value bodies (hint/mappingLogic/meta/etc.) have no `values` entries.
+  // Return null so renderNode falls back to CST and preserves the original body.
+  if (values.length === 0) return null;
   const rendered = values.map((v) => `"${escapeString(v.name ?? '')}"`).join(', ');
   return `[synonym ${sources} value ${rendered}]`;
 }
 
-function renderEnumSynonym(s: DehydratedNode): string {
+function renderEnumSynonym(s: DehydratedNode): string | null {
   const es = s as unknown as { sources?: unknown[]; synonymValue?: string };
   const sources = synonymSources(es.sources);
-  // `synonymValue` is a STRING in the grammar — must be escaped.
-  return `[synonym ${sources} value "${escapeString(es.synonymValue ?? '')}"]`;
+  // synonymValue is absent on non-value-form enum synonyms — fall back to CST.
+  if (es.synonymValue === undefined) return null;
+  return `[synonym ${sources} value "${escapeString(es.synonymValue)}"]`;
 }
 
 /** Flatten present child arrays into one ordered list of DehydratedNodes. */

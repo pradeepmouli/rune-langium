@@ -233,13 +233,37 @@ describe('MetadataSection — synonym source control', () => {
     expect(screen.getByText('FpML')).toBeInTheDocument();
   });
 
-  it('existing synonym chips show value name when present', () => {
+  it('existing synonym chips show value name when present (class shape)', () => {
     renderSection({
       synonyms: [{ sources: [{ $refText: 'FIX' }], value: { name: 'TradeDate' } }]
     });
     // Chip label is "FIX — TradeDate"
     expect(screen.getByText(/FIX/)).toBeInTheDocument();
     expect(screen.getByText(/TradeDate/)).toBeInTheDocument();
+  });
+
+  it('existing enum-host synonym chips show value from body.values (RosettaSynonym shape)', () => {
+    // After reload the store sends body.values (not value.name) for enum-host synonyms.
+    renderSection({
+      $type: 'RosettaEnumeration',
+      synonyms: [{ $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } }]
+    });
+    // Chip must show "FpML — tradeDate" by reading body.values[0].name.
+    expect(screen.getByText('FpML — tradeDate')).toBeInTheDocument();
+  });
+
+  it('Enum host: optimistic chip after add shows source — value from body.values shape', () => {
+    // After add, the optimistic entry must use body.values (RosettaSynonym) not value.name
+    // (RosettaClassSynonym) so the chip label and form state match the store's representation.
+    renderSection({ $type: 'RosettaEnumeration', nodeId: 'ns.Rates' });
+
+    pickSource('FpML');
+    const valueInput = document.querySelector<HTMLInputElement>('[data-slot="synonym-value-input"]')!;
+    fireEvent.change(valueInput, { target: { value: 'TD' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Chip label "FpML — TD" requires body.values[0].name to be set on the entry.
+    expect(screen.getByText('FpML — TD')).toBeInTheDocument();
   });
 
   // ── remove ───────────────────────────────────────────────────────────────
