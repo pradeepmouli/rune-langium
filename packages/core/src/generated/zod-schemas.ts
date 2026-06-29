@@ -185,11 +185,11 @@ export const AttributeSchema = z.looseObject({
   typeCallArgs: z.array(TypeCallArgumentSchema).optional(),
   card: RosettaCardinalitySchema,
   definition: z.string().optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
-  synonyms: z.array(RosettaSynonymSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
+  synonyms: z.array(RosettaSynonymSchema).optional(),
   labels: z.array(LabelAnnotationSchema).optional(),
-  ruleReferences: z.array(RuleReferenceAnnotationSchema).min(1).optional()
+  ruleReferences: z.array(RuleReferenceAnnotationSchema).optional()
 });
 
 export const AnnotationSchema = z.looseObject({
@@ -236,11 +236,11 @@ export const ChoiceOptionSchema = z.looseObject({
   $type: z.literal('ChoiceOption'),
   typeCall: TypeCallSchema,
   definition: z.string().optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
-  synonyms: z.array(RosettaSynonymSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
+  synonyms: z.array(RosettaSynonymSchema).optional(),
   labels: z.array(LabelAnnotationSchema).optional(),
-  ruleReferences: z.array(RuleReferenceAnnotationSchema).min(1).optional()
+  ruleReferences: z.array(RuleReferenceAnnotationSchema).optional()
 });
 
 export const RosettaClassSynonymSchema = z.looseObject({
@@ -255,8 +255,8 @@ export const ChoiceSchema = z.looseObject({
   name: ValidIDSchema,
   definition: z.string().optional(),
   attributes: z.array(ChoiceOptionSchema).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
-  synonyms: z.array(RosettaClassSynonymSchema).min(1).optional()
+  annotations: z.array(AnnotationRefSchema).optional(),
+  synonyms: z.array(RosettaClassSynonymSchema).optional()
 });
 
 export const ChoiceOperationSchema = z.looseObject({
@@ -282,8 +282,8 @@ export const ConditionSchema = z.looseObject({
   name: ValidIDSchema.optional(),
   definition: z.string().optional(),
   expression: z.lazy(() => RosettaExpressionSchema),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
   postCondition: z.boolean().optional()
 });
 
@@ -300,9 +300,9 @@ export const DataSchema = z.looseObject({
   definition: z.string().optional(),
   attributes: z.array(AttributeSchema).optional(),
   conditions: z.array(ConditionSchema).optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
-  synonyms: z.array(RosettaClassSynonymSchema).min(1).optional()
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
+  synonyms: z.array(RosettaClassSynonymSchema).optional()
 });
 
 export const DefaultOperationSchema = z.looseObject({
@@ -455,7 +455,7 @@ export const TypeParameterSchema = z.looseObject({
 export const RosettaBasicTypeSchema = z.looseObject({
   $type: z.literal('RosettaBasicType'),
   name: ValidIDSchema,
-  parameters: z.array(TypeParameterSchema).min(1).optional(),
+  parameters: z.array(TypeParameterSchema).optional(),
   definition: z.string().optional()
 });
 
@@ -551,8 +551,8 @@ export const RosettaEnumValueSchema = z.looseObject({
   name: ValidIDSchema,
   display: z.string().optional(),
   definition: z.string().optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
   enumSynonyms: z.array(RosettaEnumSynonymSchema).optional()
 });
 
@@ -562,8 +562,8 @@ export const RosettaEnumerationSchema = z.looseObject({
   parent: ReferenceSchema.optional(),
   definition: z.string().optional(),
   enumValues: z.array(RosettaEnumValueSchema).optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
   synonyms: z.array(RosettaSynonymSchema).optional()
 });
 
@@ -662,8 +662,8 @@ export const RosettaFunctionSchema = z.looseObject({
   dispatchValue: RosettaEnumValueReferenceSchema.optional(),
   superFunction: ReferenceSchema.optional(),
   definition: z.string().optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
-  annotations: z.array(AnnotationRefSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
+  annotations: z.array(AnnotationRefSchema).optional(),
   inputs: z.array(AttributeSchema).optional(),
   output: AttributeSchema.optional(),
   shortcuts: z.array(ShortcutDeclarationSchema).optional(),
@@ -791,7 +791,7 @@ export const RosettaRuleSchema = z.looseObject({
   eligibility: z.boolean().optional(),
   input: TypeCallSchema.optional(),
   definition: z.string().optional(),
-  references: z.array(RosettaDocReferenceSchema).min(1).optional(),
+  references: z.array(RosettaDocReferenceSchema).optional(),
   expression: z.lazy(() => RosettaExpressionSchema),
   identifier: z.string().optional()
 });
@@ -822,7 +822,7 @@ export const RosettaSynonymSourceSchema = z.looseObject({
 export const RosettaTypeAliasSchema = z.looseObject({
   $type: z.literal('RosettaTypeAlias'),
   name: ValidIDSchema,
-  parameters: z.array(TypeParameterSchema).min(1).optional(),
+  parameters: z.array(TypeParameterSchema).optional(),
   definition: z.string().optional(),
   typeCall: TypeCallSchema,
   conditions: z.array(ConditionSchema).optional()
