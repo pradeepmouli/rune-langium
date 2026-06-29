@@ -29,8 +29,8 @@ importers:
   .:
     dependencies:
       '@lspeasy/client':
-        specifier: ^3.1.2
-        version: 3.1.2(ws@8.21.0)
+        specifier: ^3.1.5
+        version: 3.1.5(ws@8.21.0)
       '@lspeasy/core':
         specifier: ^2.3.0
         version: 2.3.0(ws@8.21.0)
@@ -662,8 +662,8 @@ importers:
         version: 8.21.0
     devDependencies:
       '@lspeasy/client':
-        specifier: ^3.1.2
-        version: 3.1.2(ws@8.21.0)
+        specifier: ^3.1.5
+        version: 3.1.5(ws@8.21.0)
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -1633,12 +1633,21 @@ packages:
   '@lezer/lr@1.4.10':
     resolution: {integrity: sha512-rnCpTIBafOx4mRp43xOxDJbFipJm/c0cia/V5TiGlhmMa+wsSdoGmUN3w5Bqrks/09Q/D4tNAmWaT8p6NRi77A==}
 
-  '@lspeasy/client@3.1.2':
-    resolution: {integrity: sha512-tp+HLC1cKEfV4idv0G7fNzC7Ow0noMDIlsqtw3V+Hx9M7C/ZkYZlerwJnneKV1LSB2knPUiWbKW/4YxYNlTCNQ==}
+  '@lspeasy/client@3.1.5':
+    resolution: {integrity: sha512-fWnJSYhWxZRPD/66VCyg5BjAH+lKnKusyWO0nT/2iCRdB56/e/ExcPnZ3S9XQgumaZiRwWwqDGAWe/0fcIRyQA==}
     engines: {node: '>=20.0.0'}
 
   '@lspeasy/core@2.3.0':
     resolution: {integrity: sha512-kwcmswcvmePAMxTd04sL/ROc7Y1H8Vlu2tgUyzo9G7bpXYFoucByk+GfE9iE4bNAsTHKjyYHQ9k8nHjFTlozNw==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      ws: '>=8.21.0'
+    peerDependenciesMeta:
+      ws:
+        optional: true
+
+  '@lspeasy/core@2.6.0':
+    resolution: {integrity: sha512-QxG0kkUnEvrO2abDWY//4X68aagJ7QNWzQgO/FQC/OKfGvXInh761G2bYVfArNDykrbRbJ/gfyViIaUo1HM6+Q==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       ws: '>=8.21.0'
@@ -6925,9 +6934,9 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.2
 
-  '@lspeasy/client@3.1.2(ws@8.21.0)':
+  '@lspeasy/client@3.1.5(ws@8.21.0)':
     dependencies:
-      '@lspeasy/core': 2.3.0(ws@8.21.0)
+      '@lspeasy/core': 2.6.0(ws@8.21.0)
       camelcase: 9.0.0
     optionalDependencies:
       zod: 4.4.3
@@ -6935,6 +6944,11 @@ snapshots:
       - ws
 
   '@lspeasy/core@2.3.0(ws@8.21.0)':
+    optionalDependencies:
+      ws: 8.21.0
+      zod: 4.4.3
+
+  '@lspeasy/core@2.6.0(ws@8.21.0)':
     optionalDependencies:
       ws: 8.21.0
       zod: 4.4.3
