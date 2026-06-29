@@ -129,8 +129,8 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
       const targetNode = byId.get(targetId);
       const bare = nameFromNodeId(targetId);
       // Qualify with namespace when the parent lives in a different namespace.
-      effective = targetNode && targetNode.meta.namespace !== n.meta.namespace
-        ? `${targetNode.meta.namespace}.${bare}` : bare;
+      effective =
+        targetNode && targetNode.meta.namespace !== n.meta.namespace ? `${targetNode.meta.namespace}.${bare}` : bare;
       // If the existing $refText already matches what we'd compute, keep it
       // byte-stable (no unnecessary force-dirty).
       if (original === effective) effective = original;
@@ -158,7 +158,7 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
     if (n.meta.deferred) continue;
     try {
       const r = (n.data as { $cstRange?: { offset: number; end: number } }).$cstRange;
-      if (r) occupied.add(`${r.offset}:${r.end}`);
+      if (r) occupied.add(`${n.meta.namespace}:${r.offset}:${r.end}`);
     } catch {
       // Defensive: a malformed/poison node whose $cstRange getter throws must
       // not prevent the occupied-range guard from running for other nodes.
@@ -175,7 +175,7 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
     const r = node?.data?.$cstRange;
     const ns = node?.meta?.namespace;
     if (!r || !ns || node?.meta?.deferred) continue;
-    if (occupied.has(`${r.offset}:${r.end}`)) continue; // renamed/replaced — not a deletion
+    if (occupied.has(`${ns}:${r.offset}:${r.end}`)) continue; // renamed/replaced — not a deletion
     (removalsByNs.get(ns) ?? removalsByNs.set(ns, []).get(ns)!).push(r);
   }
 
@@ -324,12 +324,24 @@ export function useModelSourceSync(
       // Using the same serializer as the user-edit path keeps the
       // lastSerializedRef baseline byte-equal to what the edit path will produce,
       // so the byte-equality de-dup fires correctly on the first user edit.
-      lastSerializedRef.current = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches, inversePatches });
+      lastSerializedRef.current = buildSourceForNamespaces({
+        nodes,
+        edges,
+        originalSourceByNamespace: baselineSource,
+        patches,
+        inversePatches
+      });
       hasFiredInitialSerializeRef.current = true;
       return;
     }
 
-    const next = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches, inversePatches });
+    const next = buildSourceForNamespaces({
+      nodes,
+      edges,
+      originalSourceByNamespace: baselineSource,
+      patches,
+      inversePatches
+    });
 
     // Skip the very first emission after mount — at load time the source
     // pane already has the authoritative parsed text, and re-emitting would

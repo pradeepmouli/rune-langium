@@ -72,9 +72,7 @@ describe('deletion drops the removed element range', () => {
     const currentNodes = [foo, renamed];
 
     // Inverse patch for the old 'test.Bar' node — same $cstRange as the renamed node.
-    const inversePatches = [
-      { op: 'remove', path: ['nodes', 'test.Bar'], value: bar }
-    ] as unknown as Patches;
+    const inversePatches = [{ op: 'remove', path: ['nodes', 'test.Bar'], value: bar }] as unknown as Patches;
 
     const out = buildSourceForNamespaces({
       nodes: currentNodes,
@@ -99,6 +97,94 @@ describe('deletion drops the removed element range', () => {
 });
 
 // ---------------------------------------------------------------------------
+// (A2) Cross-namespace collision: occupied-range key must be namespace-qualified
+//
+// Regression for: two different namespaces whose first type happens to land at
+// the same $cstRange offset:end (identical source structure, same-length header).
+// Before the fix the occupied set keyed ranges as `offset:end`, so a current
+// node in namespace B would wrongly block a deletion in namespace A whose range
+// coincides. After the fix keys are `namespace:offset:end`.
+// ---------------------------------------------------------------------------
+
+// Two sources with identical structure but different namespace names (same
+// byte-length "namespace a" vs "namespace b") so their first type declaration
+// occupies the exact same offsets.
+//
+// Offset accounting for both sources (counts are in parentheses):
+//   "namespace a\n"      = 12 chars  [0..11]
+//   "version \"1.0.0\"\n" = 16 chars  [12..27]
+//   "\n"                 =  1 char   [28]
+//   "type AxType:\n"     = 13 chars  [29..41]   ← COLLISION_RANGE start
+//   "  p int (1..1)\n"  = 15 chars  [42..56]   ← COLLISION_RANGE end (exclusive) = 57
+//
+// SRC_A additionally appends a blank separator + a second type AxOther:
+//   "\n"                 =  1 char   [57]
+//   "type AxOther:\n"    = 14 chars  [58..71]
+//   "  r bool (0..1)\n" = 16 chars  [72..87]   ← total length 88
+
+const SRC_A_COLLISION =
+  'namespace a\nversion "1.0.0"\n\ntype AxType:\n  p int (1..1)\n\ntype AxOther:\n  r bool (0..1)\n';
+const SRC_B_COLLISION = 'namespace b\nversion "1.0.0"\n\ntype BxType:\n  q int (1..1)\n';
+
+// Shared $cstRange — both AxType (in SRC_A) and BxType (in SRC_B) live here.
+const COLLISION_RANGE = { offset: 29, end: 57 };
+
+describe('cross-namespace collision: occupied-range is namespace-qualified', () => {
+  it('removes AxType from ns a even when ns b has a node at the same offset:end', () => {
+    // Current nodes: a.AxOther survives (keeps namespace a in the output);
+    // b.BxType is present with $cstRange identical to the deleted a.AxType.
+    const nodeAxOther = {
+      id: 'a.AxOther',
+      data: { $cstRange: { offset: 58, end: 88 } },
+      meta: { namespace: 'a', deferred: false }
+    } as unknown as TypeGraphNode;
+
+    const nodeBxType = {
+      id: 'b.BxType',
+      data: { $cstRange: COLLISION_RANGE },
+      meta: { namespace: 'b', deferred: false }
+    } as unknown as TypeGraphNode;
+
+    // Inverse patch: a.AxType was removed; its $cstRange collides with b.BxType.
+    const inversePatchesCollision = [
+      {
+        op: 'remove',
+        path: ['nodes', 'a.AxType'],
+        value: {
+          meta: { namespace: 'a', deferred: false },
+          data: { $cstRange: COLLISION_RANGE }
+        }
+      }
+    ] as unknown as Patches;
+
+    const out = buildSourceForNamespaces({
+      nodes: [nodeAxOther, nodeBxType],
+      edges: [],
+      originalSourceByNamespace: new Map([
+        ['a', SRC_A_COLLISION],
+        ['b', SRC_B_COLLISION]
+      ]),
+      patches: [] as unknown as Patches,
+      inversePatches: inversePatchesCollision
+    });
+
+    // Namespace a: AxType must be DELETED; AxOther must survive.
+    const textA = out.get('a')!;
+    expect(textA).toBeDefined();
+    expect(textA).toContain('AxOther');
+    expect(textA).toContain('r bool (0..1)');
+    expect(textA).not.toContain('AxType');
+    expect(textA).not.toContain('p int (1..1)');
+
+    // Namespace b: BxType must be unchanged.
+    const textB = out.get('b')!;
+    expect(textB).toBeDefined();
+    expect(textB).toContain('BxType');
+    expect(textB).toContain('q int (1..1)');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (B1) Inheritance edge change A→B: node is force-regenerated with new parent
 // ---------------------------------------------------------------------------
 
@@ -119,12 +205,23 @@ describe('inheritance edge change A→B', () => {
   it('regenerates Sub with the new parent when the extends edge changes from Base to Alt', async () => {
     const { value } = await parse(SRC_INHERIT);
     const els = (value as unknown as { elements: unknown[] }).elements;
-    const dehydrate = (e: unknown) =>
-      parsedAdapter.dehydrate(e as Parameters<typeof parsedAdapter.dehydrate>[0]);
+    const dehydrate = (e: unknown) => parsedAdapter.dehydrate(e as Parameters<typeof parsedAdapter.dehydrate>[0]);
 
-    const base = { id: 'test.Base', data: dehydrate(els[0]), meta: { namespace: 'test', deferred: false } } as unknown as TypeGraphNode;
-    const alt  = { id: 'test.Alt',  data: dehydrate(els[1]), meta: { namespace: 'test', deferred: false } } as unknown as TypeGraphNode;
-    const sub  = { id: 'test.Sub',  data: dehydrate(els[2]), meta: { namespace: 'test', deferred: false } } as unknown as TypeGraphNode;
+    const base = {
+      id: 'test.Base',
+      data: dehydrate(els[0]),
+      meta: { namespace: 'test', deferred: false }
+    } as unknown as TypeGraphNode;
+    const alt = {
+      id: 'test.Alt',
+      data: dehydrate(els[1]),
+      meta: { namespace: 'test', deferred: false }
+    } as unknown as TypeGraphNode;
+    const sub = {
+      id: 'test.Sub',
+      data: dehydrate(els[2]),
+      meta: { namespace: 'test', deferred: false }
+    } as unknown as TypeGraphNode;
 
     // Edge now points to Alt instead of Base.
     const edges = [
@@ -169,11 +266,18 @@ describe('cross-namespace inheritance edge', () => {
     const { value: valB } = await parse(SRC_NS_B);
     const elsA = (valA as unknown as { elements: unknown[] }).elements;
     const elsB = (valB as unknown as { elements: unknown[] }).elements;
-    const dehydrate = (e: unknown) =>
-      parsedAdapter.dehydrate(e as Parameters<typeof parsedAdapter.dehydrate>[0]);
+    const dehydrate = (e: unknown) => parsedAdapter.dehydrate(e as Parameters<typeof parsedAdapter.dehydrate>[0]);
 
-    const parent = { id: 'nsA.Parent', data: dehydrate(elsA[0]), meta: { namespace: 'nsA', deferred: false } } as unknown as TypeGraphNode;
-    const child  = { id: 'nsB.Child',  data: dehydrate(elsB[0]), meta: { namespace: 'nsB', deferred: false } } as unknown as TypeGraphNode;
+    const parent = {
+      id: 'nsA.Parent',
+      data: dehydrate(elsA[0]),
+      meta: { namespace: 'nsA', deferred: false }
+    } as unknown as TypeGraphNode;
+    const child = {
+      id: 'nsB.Child',
+      data: dehydrate(elsB[0]),
+      meta: { namespace: 'nsB', deferred: false }
+    } as unknown as TypeGraphNode;
 
     const edges = [
       { id: 'e1', source: 'nsB.Child', target: 'nsA.Parent', data: { kind: 'extends' } }
@@ -182,7 +286,10 @@ describe('cross-namespace inheritance edge', () => {
     const out = buildSourceForNamespaces({
       nodes: [parent, child],
       edges,
-      originalSourceByNamespace: new Map([['nsA', SRC_NS_A], ['nsB', SRC_NS_B]]),
+      originalSourceByNamespace: new Map([
+        ['nsA', SRC_NS_A],
+        ['nsB', SRC_NS_B]
+      ]),
       patches: [] as unknown as Patches
     });
 
