@@ -261,8 +261,8 @@ function DataTypeForm({
   );
 
   const handleAddSynonym = useCallback(
-    (synonym: string) => {
-      actions.addSynonym(nodeId, synonym);
+    (source: string, value?: string) => {
+      actions.addSynonym(nodeId, source, value);
     },
     [nodeId, actions]
   );
@@ -523,6 +523,7 @@ function DataTypeForm({
             {/* Doc tab — description, comments, synonyms */}
             <TabsContent value="doc" className="studio-scroll flex-1 overflow-y-auto p-4 mt-0">
               <MetadataSection
+                synonymSourceOptions={synonymSourceOptions}
                 onDefinitionCommit={commitDefinition}
                 onCommentsCommit={commitComments}
                 onSynonymAdd={handleAddSynonym}

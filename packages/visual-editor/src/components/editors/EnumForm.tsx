@@ -324,7 +324,7 @@ function EnumForm({
               callbacks from the EditorActionsProvider above. No imperative
               wiring needed at this site. */}
           <AnnotationSection />
-          <MetadataSection />
+          <MetadataSection synonymSourceOptions={synonymSourceOptions} />
         </div>
       </EditorActionsProvider>
     </FormProvider>

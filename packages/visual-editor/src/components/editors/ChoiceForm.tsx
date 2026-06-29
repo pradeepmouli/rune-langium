@@ -176,8 +176,8 @@ function ChoiceForm({
   );
 
   const handleAddSynonym = useCallback(
-    (synonym: string) => {
-      actions.addSynonym(nodeId, synonym);
+    (source: string, value?: string) => {
+      actions.addSynonym(nodeId, source, value);
     },
     [nodeId, actions]
   );
@@ -259,6 +259,7 @@ function ChoiceForm({
 
           {/* Metadata */}
           <MetadataSection
+            synonymSourceOptions={synonymSourceOptions}
             onDefinitionCommit={commitDefinition}
             onCommentsCommit={commitComments}
             onSynonymAdd={handleAddSynonym}
