@@ -51,6 +51,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   TypeOption,
+  SourceRefOption,
   TypeGraphNode,
   EditorFormActions,
   NavigateToNodeCallback
@@ -69,6 +70,8 @@ export interface EnumFormProps {
   data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** Enum-specific editor form action callbacks. */
   actions: EditorFormActions<'enum'>;
   /** All graph nodes for inherited member resolution. */
@@ -98,6 +101,7 @@ function EnumForm({
   nodeId,
   data,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   allNodes = EMPTY_NODES,
   onNavigateToNode,

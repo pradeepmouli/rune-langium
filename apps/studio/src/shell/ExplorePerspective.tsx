@@ -49,6 +49,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
   FunctionScope,
@@ -1396,6 +1397,20 @@ export function ExplorePerspective() {
     return [...builtinOptions, ...graphOptions];
   }, [storeNodes]);
 
+  const synonymSourceOptions: SourceRefOption[] = useMemo(() => {
+    const out: SourceRefOption[] = [];
+    for (const { model } of resolvedModelFiles) {
+      const namespace = namespaceFromModelName(model.name) ?? undefined;
+      for (const element of model.elements ?? []) {
+        if ((element as { $type?: string }).$type === 'RosettaSynonymSource') {
+          const name = (element as { name: string }).name;
+          out.push({ value: namespace ? `${namespace}.${name}` : name, label: name, namespace });
+        }
+      }
+    }
+    return out;
+  }, [resolvedModelFiles]);
+
   const editorActions: EditorFormActions = useMemo(() => {
     const s = useEditorStore.getState;
     return {
@@ -1705,6 +1720,7 @@ export function ExplorePerspective() {
           nodeId={selectedNodeId}
           refOnly={selectedNodeIsRefOnly}
           availableTypes={availableTypes}
+          synonymSourceOptions={synonymSourceOptions}
           actions={editorActions}
           allNodes={storeNodes}
           nodeRepository={nodeRepository}
@@ -1722,6 +1738,7 @@ export function ExplorePerspective() {
       selectedNodeId,
       selectedNodeIsRefOnly,
       availableTypes,
+      synonymSourceOptions,
       editorActions,
       storeNodes,
       nodeRepository,

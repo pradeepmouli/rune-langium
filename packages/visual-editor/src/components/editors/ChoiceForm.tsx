@@ -50,6 +50,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
@@ -65,6 +66,8 @@ export interface ChoiceFormProps {
   data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** Choice-specific editor form action callbacks. */
   actions: EditorFormActions<'choice'>;
   /** Callback to navigate to a type's graph node. */
@@ -92,6 +95,7 @@ function ChoiceForm({
   nodeId,
   data,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   onNavigateToNode,
   allNodeIds,

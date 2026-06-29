@@ -398,4 +398,24 @@ describe('EditorFormPanel', () => {
     // DataTypeForm must NOT be rendered for refOnly entries.
     expect(panel.querySelector('[data-slot="data-type-form"]')).toBeNull();
   });
+
+  // ---- synonymSourceOptions threading -------------------------------------
+
+  it('accepts synonymSourceOptions without error and renders the DataTypeForm', () => {
+    // The prop is optional; supplying it must not crash the panel or the form.
+    // Full rendering of the source picker UI is tested in Task 5 (MetadataSection).
+    const synonymSourceOptions = [{ value: 'ns.FpML', label: 'FpML', namespace: 'ns' }];
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({ $type: 'Data' })}
+        nodeId="node-1"
+        availableTypes={AVAILABLE_TYPES}
+        synonymSourceOptions={synonymSourceOptions}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    expect(panel.querySelector('[data-slot="data-type-form"]')).not.toBeNull();
+  });
 });

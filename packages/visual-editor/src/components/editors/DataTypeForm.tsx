@@ -45,6 +45,7 @@ import type {
   GraphNodeMeta,
   TypeGraphNode,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
   NavigateToNodeCallback
@@ -64,6 +65,8 @@ export interface DataTypeFormProps {
   data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** Data-specific editor form action callbacks. */
   actions: EditorFormActions<'data'>;
   /** All graph nodes (for inherited member resolution via useEffectiveMembers). */
@@ -97,6 +100,7 @@ function DataTypeForm({
   nodeId,
   data,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   allNodes = EMPTY_NODES,
   renderExpressionEditor,
