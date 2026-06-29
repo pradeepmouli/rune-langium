@@ -2147,9 +2147,18 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data;
               if (!d) return;
               const dd = d as { synonyms?: any[] };
-              // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
+              // Every synonym kind REQUIRES at least one source (grammar:
+              // `'[' 'synonym' sources+=[RosettaSynonymSource:QualifiedName] ...`).
+              // The metadata UI collects a single free-text tag; the only field it
+              // can validly become is the synonym SOURCE — a source-only
+              // `[synonym <src>]` parses for class synonyms, whereas the previous
+              // `value.name`/`body.values`-only shapes rendered as unparsable
+              // `[synonym ]`. Data/Choice use RosettaClassSynonym, Enum uses
+              // RosettaSynonym (which additionally needs a body — see render-core,
+              // where a body-less enum synonym is omitted rather than corrupting).
+              const source = { $refText: synonym };
               if (d.$type === 'Data' || d.$type === 'Choice') {
-                const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
+                const newSyn = { $type: 'RosettaClassSynonym', sources: [source] };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 if (d.$type === 'Data') {
                   Data.addSynonym(d, newSyn as Parameters<typeof Data.addSynonym>[1]);
@@ -2157,7 +2166,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   Choice.addSynonym(d, newSyn as Parameters<typeof Choice.addSynonym>[1]);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
-                const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
+                const newSyn = { $type: 'RosettaSynonym', sources: [source] };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 RosettaEnumeration.addSynonym(d, newSyn as Parameters<typeof RosettaEnumeration.addSynonym>[1]);
               }

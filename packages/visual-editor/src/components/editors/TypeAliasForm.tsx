@@ -149,15 +149,24 @@ function TypeAliasForm({
 
   const handleTypeSelect = useCallback(
     (value: string | null) => {
-      const label = value ? (availableTypes.find((opt) => opt.value === value)?.label ?? '') : '';
+      const opt = value ? availableTypes.find((o) => o.value === value) : undefined;
+      const label = opt?.label ?? '';
+      // Qualify the wrapped-type ref with its namespace when it lives in a
+      // DIFFERENT namespace than this alias — otherwise `typeAlias A: Price`
+      // reparses as the local/ambiguous `Price` instead of the selected
+      // `nsB.Price`. Mirrors the cross-namespace inheritance qualify in
+      // useModelSourceSync (`${targetNs}.${bare}`). A local/bare type keeps its
+      // unqualified name.
+      const refText =
+        opt?.namespace && opt.namespace !== nodeMeta.namespace ? `${opt.namespace}.${label}` : label;
       // Update the form's typeCall.type — RHF tolerates the looseObject
       // extras at the nested `type` key.
-      form.setValue('typeCall.type' as never, { $refText: label } as never, { shouldDirty: true });
+      form.setValue('typeCall.type' as never, { $refText: refText } as never, { shouldDirty: true });
       // Propagate the wrapped-type change to the graph store so edits
       // reach source (mirrors updateOutputType in FunctionForm).
-      actions.updateTypeAliasType(nodeId, label);
+      actions.updateTypeAliasType(nodeId, refText);
     },
-    [availableTypes, form, actions, nodeId]
+    [availableTypes, form, actions, nodeId, nodeMeta.namespace]
   );
 
   // ---- Resolve current wrapped-type for display ----------------------------

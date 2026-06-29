@@ -298,7 +298,19 @@ export function useModelSourceSync(
   useEffect(() => {
     const handler = onModelChangedRef.current;
     if (!handler) return;
-    if (nodes.length === 0) return;
+    // Deleting the LAST remaining node empties `nodes`, but the removal is
+    // carried only by an inverse `remove` patch at ['nodes', <id>]. Bailing on
+    // `nodes.length === 0` here would skip buildSourceForNamespaces entirely, so
+    // the deleted type would survive in the file. Proceed when a genuine
+    // node-removal is pending (a parsed node — has $cstRange + namespace); a
+    // truly-empty graph with no pending removal still bails.
+    const hasPendingNodeRemoval = inversePatches.some((p) => {
+      const path = p.path as (string | number)[];
+      if (path[0] !== 'nodes' || path.length !== 2) return false;
+      const v = p.value as { meta?: { namespace?: string }; data?: { $cstRange?: unknown } } | undefined;
+      return Boolean(v?.data?.$cstRange) && Boolean(v?.meta?.namespace);
+    });
+    if (nodes.length === 0 && !hasPendingNodeRemoval) return;
 
     // Did this render's nodes/edges change arrive together with a parse? If so
     // the graph was rebuilt FROM source — it must NOT be serialized back.

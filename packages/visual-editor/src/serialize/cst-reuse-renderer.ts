@@ -224,5 +224,8 @@ function childIndex(
 const CHILD_ARRAY_KEYS = [
   'attributes', 'conditions', 'annotations', 'references',
   'synonyms', 'enumSynonyms', 'labels', 'ruleReferences', 'enumValues',
-  'inputs', 'operations', 'shortcuts', 'postConditions', 'parameters'
+  'inputs', 'operations', 'shortcuts', 'postConditions', 'parameters',
+  // Inline type-call args (`Type(param: value)`): `typeCallArgs` on Attribute,
+  // `arguments` on a TypeCall (ChoiceOption / TypeAlias wrapped type).
+  'typeCallArgs', 'arguments'
 ];

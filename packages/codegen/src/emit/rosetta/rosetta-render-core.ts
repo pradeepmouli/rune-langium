@@ -57,6 +57,27 @@ function exprText(expr: unknown): string {
   return (e?.$cstText ?? e?.$cstNode?.text ?? '').trim();
 }
 
+/**
+ * Render a parenthesized, comma-joined inline child list — type-call arguments
+ * (`Type(param: value)`) and type-alias parameters (`typeAlias Foo(p int)`).
+ *
+ * Each child is delegated to the caller's `renderChild` policy: an unchanged
+ * argument subtree (whose value is a `RosettaExpression` — a B1 leaf) rides its
+ * CST slice via `$cstRange`; a structural construct like `TypeParameter` renders
+ * from `renderNode`. Children that render empty (the pure `renderModel` path has
+ * no CST to reuse for an expression leaf) are dropped so we never emit a
+ * malformed `Type(param: )`. Returns `''` when nothing renders.
+ */
+function renderInlineChildren(
+  items: ReadonlyArray<unknown> | undefined,
+  renderChild: RenderChild
+): string {
+  const texts = (items ?? [])
+    .map((c) => renderChild(c as DehydratedNode).trim())
+    .filter(Boolean);
+  return texts.length ? `(${texts.join(', ')})` : '';
+}
+
 // --- per-construct renderers ----------------------------------------------
 
 function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): string {
@@ -64,7 +85,15 @@ function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): st
   if (a.override) head.push('override');
   head.push(a.name);
   const type = refText(a.typeCall?.type);
-  if (type) head.push(type);
+  if (type) {
+    // Inline type-call args live on the Attribute itself (`name Type(arg) (1..1)`),
+    // NOT on typeCall — see grammar `Attribute`. Preserve them when re-rendering.
+    const args = renderInlineChildren(
+      (a as { typeCallArgs?: ReadonlyArray<unknown> }).typeCallArgs,
+      renderChild
+    );
+    head.push(`${type}${args}`);
+  }
   head.push(formatCardinality(a.card));
   const lines = [head.join(' ')];
   const def = definitionLine(typeof a.definition === 'string' ? a.definition : undefined);
@@ -78,7 +107,12 @@ function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): st
 
 function renderChoiceOption(o: Dehydrated<ChoiceOption>, renderChild: RenderChild): string {
   const type = refText(o.typeCall?.type) ?? 'unknown';
-  const lines = [type];
+  // ChoiceOption type-call args live on `typeCall.arguments` (grammar `TypeCall`).
+  const args = renderInlineChildren(
+    (o.typeCall as { arguments?: ReadonlyArray<unknown> } | undefined)?.arguments,
+    renderChild
+  );
+  const lines = [`${type}${args}`];
   const def = definitionLine(typeof o.definition === 'string' ? o.definition : undefined);
   if (def) lines.push(indentBlock(def));
   for (const child of childList(o.annotations, o.references, o.synonyms, o.labels, o.ruleReferences)) {
@@ -217,12 +251,28 @@ function renderFunction(f: DehydratedNode, renderChild: RenderChild): string {
   return lines.join('\n');
 }
 
+/** A generic type parameter: `name TypeName` (grammar `TypeParameter`). */
+function renderTypeParameter(p: DehydratedNode): string {
+  const tp = p as unknown as { name?: string; typeCall?: { type?: { $refText?: string } } };
+  const ty = tp.typeCall?.type?.$refText;
+  return ty ? `${tp.name ?? ''} ${ty}` : `${tp.name ?? ''}`;
+}
+
 function renderTypeAlias(t: DehydratedNode, renderChild: RenderChild): string {
-  const ta = t as unknown as { name?: string; definition?: string; typeCall?: { type?: { $refText?: string } }; conditions?: unknown[] };
-  const wrapped = ta.typeCall?.type?.$refText ?? '';
+  const ta = t as unknown as {
+    name?: string; definition?: string;
+    parameters?: ReadonlyArray<unknown>;
+    typeCall?: { type?: { $refText?: string }; arguments?: ReadonlyArray<unknown> };
+    conditions?: unknown[];
+  };
+  // Generic parameters render BEFORE the colon: `typeAlias Foo(p int):` (grammar
+  // `TypeParameters`). The wrapped type may itself carry type-call arguments.
+  const params = renderInlineChildren(ta.parameters, renderChild);
+  let wrapped = ta.typeCall?.type?.$refText ?? '';
+  if (wrapped) wrapped += renderInlineChildren(ta.typeCall?.arguments, renderChild);
   const def = definitionLine(ta.definition);
-  if (!def && (ta.conditions ?? []).length === 0) return `typeAlias ${ta.name}: ${wrapped}`;
-  const lines = [`typeAlias ${ta.name}:`];
+  if (!def && (ta.conditions ?? []).length === 0) return `typeAlias ${ta.name}${params}: ${wrapped}`;
+  const lines = [`typeAlias ${ta.name}${params}:`];
   if (def) lines.push(indentBlock(def));
   lines.push(indentBlock(wrapped));
   for (const c of ta.conditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(c as DehydratedNode))); }
@@ -249,13 +299,22 @@ function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
 }
 
 function renderAnnotationRef(a: DehydratedNode): string {
-  const ar = a as unknown as { annotation?: { $refText?: string }; attribute?: { $refText?: string }; qualifiers?: unknown[] };
+  const ar = a as unknown as {
+    annotation?: { $refText?: string }; attribute?: { $refText?: string };
+    qualifiers?: unknown[];
+  };
   const parts = [ar.annotation?.$refText ?? ''];
   if (ar.attribute?.$refText) parts.push(ar.attribute.$refText);
-  // Qualifiers (qualName=value) are not inspector-editable; render any present verbatim-ish.
+  // Grammar `AnnotationQualifier`: `qualName=STRING '=' (qualValue=STRING | qualPath=...)`.
+  // Both sides originate from STRING, so qualName and qualValue must be quoted +
+  // escaped or embedded quotes/backslashes produce invalid `.rosetta`. A
+  // qualPath alternative (a reference, not inspector-editable) rides its CST when
+  // present and is skipped here.
   for (const q of ar.qualifiers ?? []) {
-    const qq = q as { qualName?: string; qualValue?: string };
-    if (qq.qualName) parts.push(qq.qualValue !== undefined ? `${qq.qualName}="${qq.qualValue}"` : qq.qualName);
+    const qq = q as { qualName?: string; qualValue?: string; qualPath?: unknown };
+    if (!qq.qualName) continue;
+    const name = `"${escapeString(qq.qualName)}"`;
+    if (qq.qualValue !== undefined) parts.push(`${name}="${escapeString(qq.qualValue)}"`);
   }
   return `[${parts.join(' ')}]`;
 }
@@ -264,20 +323,40 @@ function synonymSources(sources: unknown[] | undefined): string {
   return (sources ?? []).map((s) => (s as { $refText?: string }).$refText ?? '').filter(Boolean).join(', ');
 }
 
-function renderClassSynonym(s: DehydratedNode): string {
-  const cs = s as unknown as { sources?: unknown[] };
-  return `[synonym ${synonymSources(cs.sources)}]`;
+// Synonyms of every kind REQUIRE at least one source (grammar `[' 'synonym'
+// sources+=[...]`). Returning null when sources are absent makes renderNode fall
+// back to CST — and for a freshly-added source-less synonym (no CST) the driver
+// omits it — so we never emit an unparsable `[synonym ]` that breaks round-trip.
+
+function renderClassSynonym(s: DehydratedNode): string | null {
+  const cs = s as unknown as { sources?: unknown[]; value?: { name?: string } };
+  const sources = synonymSources(cs.sources);
+  if (!sources) return null;
+  // `value` is optional (grammar `('value' value=RosettaClassSynonymValue)?`).
+  const name = cs.value?.name;
+  return name !== undefined
+    ? `[synonym ${sources} value "${escapeString(name)}"]`
+    : `[synonym ${sources}]`;
 }
 
-function renderSynonym(s: DehydratedNode): string {
-  const sy = s as unknown as { sources?: unknown[] };
-  return `[synonym ${synonymSources(sy.sources)}]`;
+function renderSynonym(s: DehydratedNode): string | null {
+  const sy = s as unknown as { sources?: unknown[]; body?: { values?: Array<{ name?: string }> } };
+  const sources = synonymSources(sy.sources);
+  // `RosettaSynonym` requires BOTH a source and a body (grammar
+  // `body=RosettaSynonymBody`). The inspector produces a `value`-form body.
+  const values = sy.body?.values ?? [];
+  if (!sources || values.length === 0) return null;
+  const rendered = values.map((v) => `"${escapeString(v.name ?? '')}"`).join(', ');
+  return `[synonym ${sources} value ${rendered}]`;
 }
 
-function renderEnumSynonym(s: DehydratedNode): string {
+function renderEnumSynonym(s: DehydratedNode): string | null {
   const es = s as unknown as { sources?: unknown[]; synonymValue?: string };
-  const base = `[synonym ${synonymSources(es.sources)}`;
-  return es.synonymValue !== undefined ? `${base} value "${es.synonymValue}"]` : `${base}]`;
+  const sources = synonymSources(es.sources);
+  // `RosettaEnumSynonym` requires a source AND a `value` (grammar `'value'
+  // synonymValue=STRING`). The STRING must be escaped.
+  if (!sources || es.synonymValue === undefined) return null;
+  return `[synonym ${sources} value "${escapeString(es.synonymValue)}"]`;
 }
 
 /** Flatten present child arrays into one ordered list of DehydratedNodes. */
@@ -305,6 +384,7 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
     case 'Operation': return renderOperation(node);
     case 'ShortcutDeclaration': return renderShortcut(node);
     case 'RosettaTypeAlias': return renderTypeAlias(node, renderChild);
+    case 'TypeParameter': return renderTypeParameter(node);
     case 'AnnotationRef': return renderAnnotationRef(node);
     case 'RosettaClassSynonym': return renderClassSynonym(node);
     case 'RosettaSynonym': return renderSynonym(node);

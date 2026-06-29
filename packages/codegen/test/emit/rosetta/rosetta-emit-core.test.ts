@@ -65,6 +65,41 @@ describe('renderNode — implemented scalars', () => {
     expect(renderNode(attr, regen)).toBe('override y int (0..0)');
   });
 
+  it('preserves inline type-call args on an attribute via the child policy', () => {
+    // Driver-like policy: an unchanged TypeCallArgument rides its CST slice.
+    const slice: RenderChild = (c) => {
+      const n = c as { $type: string; $cstText?: string };
+      if (n.$type === 'TypeCallArgument') return n.$cstText ?? '';
+      const t = renderNode(c, slice);
+      if (t === null) throw new Error(`unimplemented child ${n.$type}`);
+      return t;
+    };
+    const attr = {
+      $type: 'Attribute', name: 'amount', override: false,
+      typeCall: { type: { $refText: 'number' } },
+      card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false },
+      annotations: [], references: [], synonyms: [], labels: [], ruleReferences: [],
+      typeCallArgs: [{ $type: 'TypeCallArgument', $cstText: 'digits: 18' }]
+    } as never;
+    expect(renderNode(attr, slice)).toBe('amount number(digits: 18) (1..1)');
+  });
+
+  it('preserves type-call args on a choice option via the child policy', () => {
+    const slice: RenderChild = (c) => {
+      const n = c as { $type: string; $cstText?: string };
+      if (n.$type === 'TypeCallArgument') return n.$cstText ?? '';
+      const t = renderNode(c, slice);
+      if (t === null) throw new Error(`unimplemented child ${n.$type}`);
+      return t;
+    };
+    const opt = {
+      $type: 'ChoiceOption',
+      typeCall: { type: { $refText: 'Money' }, arguments: [{ $type: 'TypeCallArgument', $cstText: 'ccy: "USD"' }] },
+      annotations: [], references: [], synonyms: [], labels: [], ruleReferences: []
+    } as never;
+    expect(renderNode(opt, slice)).toBe('Money(ccy: "USD")');
+  });
+
   it('emits a choice with options', () => {
     const node = {
       $type: 'Choice', name: 'Pick', annotations: [], synonyms: [],

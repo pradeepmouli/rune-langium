@@ -443,3 +443,44 @@ describe('rename-type round-trip', () => {
     expect(elementNames(re.value)).not.toContain('Foo');
   });
 });
+
+// ---------------------------------------------------------------------------
+// (9) Inline type-call args survive an attribute re-render (PR #350 review #6).
+// Renaming an attribute marks it dirty → renderAttribute regenerates it. Its
+// inline type-call args (`number(digits: 18, ...)`) must be preserved (they ride
+// their CST slice via the renderChild policy), not silently dropped.
+// ---------------------------------------------------------------------------
+
+const SRC_TYPECALL_ARGS = `namespace test
+version "1.0.0"
+
+type Money:
+  amount number(digits: 18, fractionalDigits: 2) (1..1)
+`;
+
+describe('inline type-call args round-trip', () => {
+  it('preserves an attribute type-call args when the attribute is renamed', async () => {
+    const { value } = await parse(SRC_TYPECALL_ARGS);
+    const store = createEditorStore();
+    store.getState().loadModels(value);
+
+    const money = store.getState().nodes.find((n) => n.data.name === 'Money');
+    expect(money).toBeDefined();
+
+    store.getState().renameAttribute(money!.id, 'amount', 'total');
+
+    const out = buildSourceForNamespaces({
+      nodes: store.getState().nodes,
+      edges: store.getState().edges,
+      originalSourceByNamespace: new Map([['test', SRC_TYPECALL_ARGS]]),
+      patches: store.getState().pendingEditPatches,
+      inversePatches: store.getState().pendingInversePatches
+    }).get('test');
+
+    expect(out).toBeTruthy();
+    // The rename applied AND the inline type-call args survived.
+    expect(out).toContain('total number(digits: 18, fractionalDigits: 2) (1..1)');
+    const re = await parse(out!);
+    expect(re.hasErrors).toBe(false);
+  });
+});
