@@ -182,6 +182,16 @@ export interface TypeOption {
   namespace?: string;
 }
 
+/** Option for the synonym-source reference picker. */
+export interface SourceRefOption {
+  /** Canonical id of the source declaration (e.g. `ns.FpML`). */
+  value: string;
+  /** Display name (bare source name). */
+  label: string;
+  /** Namespace for cross-namespace qualification. */
+  namespace?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Kind-specific form action interfaces
 // ---------------------------------------------------------------------------
