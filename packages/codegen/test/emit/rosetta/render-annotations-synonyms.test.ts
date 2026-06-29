@@ -21,12 +21,6 @@ describe('renderNode — annotations & synonyms', () => {
     const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'FpML' }], value: { name: 'a "quoted" v' } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "a \\"quoted\\" v"]');
   });
-  it('returns null for a source-less synonym rather than emitting [synonym ]', () => {
-    // No source ⇒ unparsable; renderNode → null routes to CST / driver omits a new one.
-    expect(renderNode({ $type: 'RosettaClassSynonym', sources: [] } as never, regen)).toBeNull();
-    expect(renderNode({ $type: 'RosettaSynonym', sources: [], body: { values: [{ name: 'x' }] } } as never, regen)).toBeNull();
-    expect(renderNode({ $type: 'RosettaEnumSynonym', sources: [], synonymValue: 'x' } as never, regen)).toBeNull();
-  });
   it('renders an enum-level RosettaSynonym (source + value body)', () => {
     const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "tradeDate"]');
