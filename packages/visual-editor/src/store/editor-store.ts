@@ -1995,12 +1995,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d.$type === 'RosettaFunction') {
                 // Function body is in operations[0].expression.$cstText.
                 // Also write expressionText as a display field.
-                const fd = d as { operations?: any[]; expressionText?: string };
+                const fd = d as { operations?: any[]; expressionText?: string; output?: { name?: string } };
                 if (!fd.operations || fd.operations.length === 0) {
                   fd.operations = [
                     {
                       $type: 'Operation',
-                      operator: 'set',
+                      add: false,
+                      assignRoot: { $refText: fd.output?.name ?? '' },
                       expression: { $cstText: expressionText }
                     }
                   ];

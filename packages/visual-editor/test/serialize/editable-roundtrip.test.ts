@@ -283,6 +283,114 @@ describe('delete-type round-trip', () => {
 });
 
 // ---------------------------------------------------------------------------
+// (7) updateExpression — function WITH output but NO pre-existing operation
+//
+// Bug: the "no operations" branch synthesized { $type:'Operation', operator:'set',
+// expression:… } with no `assignRoot`. renderOperation emitted "set :" (empty root)
+// which is invalid .rosetta and fails re-parse.
+// Fix: seed assignRoot from fd.output.name and use `add: false`.
+// ---------------------------------------------------------------------------
+
+const SRC_NO_BODY = `namespace test
+version "1.0.0"
+
+func MyFunc:
+  inputs:
+    x string (1..1)
+  output:
+    result string (1..1)
+`;
+
+describe('updateExpression on function with output but no body', () => {
+  it('synthesizes a valid set <output>: operation and re-parses without errors', async () => {
+    const { value } = await parse(SRC_NO_BODY);
+    const store = createEditorStore();
+    store.getState().loadModels(value);
+
+    const func = store.getState().nodes.find((n) => n.data.name === 'MyFunc');
+    expect(func).toBeDefined();
+
+    store.getState().updateExpression(func!.id, 'x count');
+
+    const sourceMap = buildSourceForNamespaces({
+      nodes: store.getState().nodes,
+      edges: store.getState().edges,
+      originalSourceByNamespace: new Map([['test', SRC_NO_BODY]]),
+      patches: store.getState().pendingEditPatches,
+      inversePatches: store.getState().pendingInversePatches
+    });
+    const out = sourceMap.get('test');
+    expect(out).toBeTruthy();
+
+    // Valid "set result:" head must be present (not "set :")
+    expect(out).toContain('set result:');
+    expect(out).not.toMatch(/set\s+:/); // must not emit empty-root "set :"
+    // Body expression is present
+    expect(out).toContain('x count');
+    // Existing attributes survive
+    expect(out).toContain('x string (1..1)');
+    expect(out).toContain('result string (1..1)');
+
+    // Re-parse succeeds with no parse errors
+    const re = await parse(out!);
+    expect(re.hasErrors).toBe(false);
+    expect(elementNames(re.value)).toContain('MyFunc');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (8) delete-last-in-namespace — deleting the only element must persist
+//
+// Bug: buildSourceForNamespaces drove the render loop from byNs (live nodes
+// only). When the last node in a namespace was deleted, byNs had no entry for
+// that namespace → renderNamespace was never called → the deleted type
+// reappeared on reparse. removalsByNs had the range but was never consumed.
+// Fix: iterate over UNION of byNs.keys() and removalsByNs.keys().
+// ---------------------------------------------------------------------------
+
+const SRC_SOLE_TYPE = `namespace solo
+version "1.0.0"
+
+type OnlyOne:
+  x string (1..1)
+`;
+
+describe('delete-last-in-namespace round-trip', () => {
+  it('persists the deletion when it is the only type in the namespace', async () => {
+    const { value } = await parse(SRC_SOLE_TYPE);
+    const store = createEditorStore();
+    store.getState().loadModels(value);
+
+    const only = store.getState().nodes.find((n) => n.data.name === 'OnlyOne');
+    expect(only).toBeDefined();
+
+    store.getState().deleteType(only!.id);
+
+    const sourceMap = buildSourceForNamespaces({
+      nodes: store.getState().nodes,
+      edges: store.getState().edges,
+      originalSourceByNamespace: new Map([['solo', SRC_SOLE_TYPE]]),
+      patches: store.getState().pendingEditPatches,
+      inversePatches: store.getState().pendingInversePatches
+    });
+    const out = sourceMap.get('solo');
+    expect(out).toBeTruthy();
+
+    // Deleted type is gone
+    expect(out).not.toContain('type OnlyOne:');
+    expect(out).not.toContain('x string (1..1)');
+    // Namespace header and version must survive
+    expect(out).toContain('namespace solo');
+    expect(out).toContain('version "1.0.0"');
+
+    // Re-parse succeeds
+    const re = await parse(out!);
+    expect(re.hasErrors).toBe(false);
+    expect(elementNames(re.value)).not.toContain('OnlyOne');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // (6) rename-type — guards the occupied-range exclusion logic
 //
 // renameType does: delete old id + insert new id (same $cstRange).

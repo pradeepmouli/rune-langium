@@ -162,7 +162,13 @@ function renderSegment(seg: unknown): string {
 function renderOperation(o: DehydratedNode): string {
   const op = o as unknown as { add?: boolean; assignRoot?: { $refText?: string }; path?: unknown; definition?: string; expression?: unknown };
   const kw = op.add ? 'add' : 'set';
-  const head = `${kw} ${op.assignRoot?.$refText ?? ''}${renderSegment(op.path)}:`;
+  const root = op.assignRoot?.$refText;
+  if (!root) {
+    // Guard: no assignRoot (or empty $refText) — skip this operation entirely
+    // rather than emitting an invalid "set :" head that fails re-parse.
+    return '';
+  }
+  const head = `${kw} ${root}${renderSegment(op.path)}:`;
   const lines = [head];
   const def = definitionLine(op.definition);
   if (def) lines.push(indentBlock(def, 2));

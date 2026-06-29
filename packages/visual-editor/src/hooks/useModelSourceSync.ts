@@ -186,7 +186,15 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
     (byNs.get(ns) ?? byNs.set(ns, []).get(ns)!).push(n);
   }
   const out = new Map<string, string>();
-  for (const [ns, nsNodes] of byNs) {
+  // Drive the render loop from the UNION of namespaces that have live nodes OR
+  // pending removals. Without this, deleting the LAST element in a namespace
+  // leaves byNs empty for that namespace → renderNamespace is never called →
+  // the deleted type reappears on reparse. removalsByNs already holds the range
+  // but it was never consumed. With the union, we call renderNamespace with
+  // nodes: [] for removal-only namespaces; copyGapExcluding omits the deleted
+  // range and the header/version/comments survive verbatim.
+  for (const ns of new Set([...byNs.keys(), ...removalsByNs.keys()])) {
+    const nsNodes = byNs.get(ns) ?? [];
     const originalSource = originalSourceByNamespace.get(ns);
     if (originalSource === undefined) continue; // no baseline to reuse — skip (degraded)
     const removedRanges = removalsByNs.get(ns) ?? [];
