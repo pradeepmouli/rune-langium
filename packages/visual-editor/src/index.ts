@@ -91,6 +91,7 @@ export type {
   EnumFormActions,
   ChoiceFormActions,
   FuncFormActions,
+  TypeAliasFormActions,
   FormActionsKindMap,
   AllEditorFormActions,
   EditorFormActions,

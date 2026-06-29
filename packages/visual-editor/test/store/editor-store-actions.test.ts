@@ -166,7 +166,7 @@ describe('EditorStore — new actions', () => {
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
       const syns = (updated!.data as any).synonyms;
       expect(syns).toHaveLength(1);
-      expect(syns[0].value.name).toBe('FpML_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FpML_Trade');
     });
 
     it('appends to existing synonyms', () => {
@@ -179,8 +179,8 @@ describe('EditorStore — new actions', () => {
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
       const syns = (updated!.data as any).synonyms;
       expect(syns).toHaveLength(2);
-      expect(syns[0].value.name).toBe('FpML_Trade');
-      expect(syns[1].value.name).toBe('FIX_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FpML_Trade');
+      expect(syns[1].sources[0].$refText).toBe('FIX_Trade');
     });
   });
 
@@ -196,7 +196,7 @@ describe('EditorStore — new actions', () => {
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
       const syns = (updated!.data as any).synonyms;
       expect(syns).toHaveLength(1);
-      expect(syns[0].value.name).toBe('FIX_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FIX_Trade');
     });
 
     it('negative / out-of-range index is a true no-op (does not delete the last synonym)', () => {
@@ -209,7 +209,7 @@ describe('EditorStore — new actions', () => {
       store.getState().removeSynonym(tradeNode!.id, 99); // out of range
 
       const syns = (store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any).synonyms;
-      expect(syns.map((s: any) => s.value.name)).toEqual(['FpML_Trade', 'FIX_Trade']); // both intact
+      expect(syns.map((s: any) => s.sources[0].$refText)).toEqual(['FpML_Trade', 'FIX_Trade']); // both intact
       expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });
   });
@@ -2079,7 +2079,7 @@ describe('EditorStore — metadata actions — id-rooted patches (Wave F)', () =
       const updated = store.getState().nodes.find((n) => n.id === nodeId);
       const syns = (updated!.data as any).synonyms ?? [];
       expect(syns[0].$type).toBe('RosettaClassSynonym');
-      expect(syns[0].value.name).toBe('FpML_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FpML_Trade');
     });
   });
 

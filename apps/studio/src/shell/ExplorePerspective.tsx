@@ -621,6 +621,7 @@ export function ExplorePerspective() {
   // graph rebuilds) get written back to source — see useModelSourceSync.
   const storeParseEpoch = useEditorStore((s) => s.parseEpoch);
   const storePendingEditPatches = useEditorStore((s) => s.pendingEditPatches);
+  const storePendingInversePatches = useEditorStore((s) => s.pendingInversePatches);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
   const expandedNamespaces = visibility.expandedNamespaces;
@@ -1270,7 +1271,7 @@ export function ExplorePerspective() {
   // Previously this subscription lived inside RuneTypeGraph, which is only
   // mounted when the Graph pane is active; Structure-pane edits never reached
   // the source pane (2026-05-21, fix/inspector-source-sync).
-  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch, storePendingEditPatches, originalSourceByNamespace);
+  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch, storePendingEditPatches, originalSourceByNamespace, storePendingInversePatches);
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics } = useDiagnosticsStore();
@@ -1421,6 +1422,7 @@ export function ExplorePerspective() {
       updateInputParam: (nodeId, oldN, newN, type, card) => s().updateInputParam(nodeId, oldN, newN, type, card),
       reorderInputParam: (nodeId, from, to) => s().reorderInputParam(nodeId, from, to),
       updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
+      updateTypeAliasType: (nodeId, type) => s().updateTypeAliasType(nodeId, type),
       updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
       addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
       removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),

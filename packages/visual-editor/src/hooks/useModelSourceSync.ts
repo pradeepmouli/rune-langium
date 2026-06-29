@@ -28,7 +28,7 @@ import { useEffect, useRef } from 'react';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
 import { astRelevantProjection, nameFromNodeId } from '../store/node-projection.js';
-import { serializeNamespaceToSource } from '../serialize/cst-reuse-serializer.js';
+import { renderNamespace } from '../serialize/cst-reuse-renderer.js';
 import { buildDirtyIndex } from '../serialize/dirty-paths.js';
 
 // ---------------------------------------------------------------------------
@@ -85,11 +85,17 @@ export interface BuildSourceArgs {
   edges: TypeGraphEdge[];
   originalSourceByNamespace: Map<string, string>;
   patches: Patches;
+  /**
+   * Mutative inverse patches accumulated since the last parse. Used to derive
+   * the source ranges of genuinely-deleted elements so those ranges are
+   * excluded from the assembled output. Defaults to [] (no deletions).
+   */
+  inversePatches?: Patches;
 }
 
 /** Pure: produce Map<namespace, full .rosetta source> via CST-reuse. */
 export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, string> {
-  const { nodes, edges, originalSourceByNamespace, patches } = args;
+  const { nodes, edges, originalSourceByNamespace, patches, inversePatches = [] } = args;
   const dirty = buildDirtyIndex(patches);
 
   // Inheritance is carried on EDGES (extends / enum-extends), not on the
@@ -97,31 +103,81 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
   // patch. Reflect the edge-derived parent onto a shallow clone of node.data
   // and force-regenerate any node whose effective parent differs from the
   // original (dehydrated) value. Mirrors model-to-ast.ts:buildInheritanceMap.
+  //
+  // Bug fixes (Task 7 / B):
+  //   B1 — changing an extends edge from parent A to parent B (both defined,
+  //        different) must also force-dirty; the old logic only caught
+  //        add/remove (original↔undefined).
+  //   B2 — a cross-namespace parent must produce a QUALIFIED $refText
+  //        (`<ns>.<Name>`), not a bare name that gets mis-linked.
   const inheritanceTarget = new Map<string, string>(); // sourceNodeId -> targetNodeId
   for (const e of edges) {
     if (e.data?.kind === 'extends' || e.data?.kind === 'enum-extends') {
       inheritanceTarget.set(e.source, e.target);
     }
   }
+  // Build an id→node map for namespace lookup (needed for B2 cross-ns qualify).
+  const byId = new Map(nodes.map((n) => [n.id, n]));
   const forceDirtyNodeIds = new Set<string>();
   const effectiveNodes = nodes.map((n) => {
     const targetId = inheritanceTarget.get(n.id);
     const d = n.data as { $type?: string; superType?: { $refText?: string }; parent?: { $refText?: string } };
     const refKey = d.$type === 'RosettaEnumeration' ? 'parent' : 'superType';
     const original = (d as Record<string, { $refText?: string } | undefined>)[refKey]?.$refText;
-    const effective = targetId === undefined ? undefined : nameFromNodeId(targetId);
-    // Prefer the existing qualified $refText when the edge agrees; only override
-    // when the edge introduces/changes/removes inheritance.
-    if (effective !== undefined && original === undefined) {
-      forceDirtyNodeIds.add(n.id);
-      return cloneWithRef(n, refKey, effective);
+    let effective: string | undefined;
+    if (targetId !== undefined) {
+      const targetNode = byId.get(targetId);
+      const bare = nameFromNodeId(targetId);
+      // Qualify with namespace when the parent lives in a different namespace.
+      effective =
+        targetNode && targetNode.meta.namespace !== n.meta.namespace ? `${targetNode.meta.namespace}.${bare}` : bare;
+      // If the existing $refText already matches what we'd compute, keep it
+      // byte-stable (no unnecessary force-dirty).
+      if (original === effective) effective = original;
     }
-    if (effective === undefined && original !== undefined) {
+    // Covers: add (undefined→defined), remove (defined→undefined), change A→B.
+    if (effective !== original) {
       forceDirtyNodeIds.add(n.id);
-      return cloneWithRef(n, refKey, undefined);
+      return cloneWithRef(n, refKey, effective); // effective may be undefined (remove)
     }
-    return n; // unchanged inheritance (or both absent) — reuse as-is
+    return n; // inheritance unchanged — reuse as-is
   });
+
+  // ---------------------------------------------------------------------------
+  // Deletion: derive per-namespace ranges of genuinely-removed elements from
+  // the inverse patches, then pass them into renderNamespace so those byte
+  // ranges are excluded from the assembled output.
+  //
+  // Rename-safety: a `renameType` re-keys via (delete-old + set-new), so the
+  // old id's inverse patch carries the SAME $cstRange that the renamed node now
+  // occupies. Exclude any range still occupied by a current (non-deferred) node
+  // so a rename does NOT drop the element from the source.
+  // ---------------------------------------------------------------------------
+  const occupied = new Set<string>();
+  for (const n of nodes) {
+    if (n.meta.deferred) continue;
+    try {
+      const r = (n.data as { $cstRange?: { offset: number; end: number } }).$cstRange;
+      if (r) occupied.add(`${n.meta.namespace}:${r.offset}:${r.end}`);
+    } catch {
+      // Defensive: a malformed/poison node whose $cstRange getter throws must
+      // not prevent the occupied-range guard from running for other nodes.
+    }
+  }
+  const removalsByNs = new Map<string, Array<{ offset: number; end: number }>>();
+  for (const p of inversePatches) {
+    const path = p.path as (string | number)[];
+    // Only whole-node inverse patches at path ['nodes', <id>].
+    if (path[0] !== 'nodes' || path.length !== 2) continue;
+    const node = p.value as
+      | { meta?: { namespace?: string; deferred?: boolean }; data?: { $cstRange?: { offset: number; end: number } } }
+      | undefined;
+    const r = node?.data?.$cstRange;
+    const ns = node?.meta?.namespace;
+    if (!r || !ns || node?.meta?.deferred) continue;
+    if (occupied.has(`${ns}:${r.offset}:${r.end}`)) continue; // renamed/replaced — not a deletion
+    (removalsByNs.get(ns) ?? removalsByNs.set(ns, []).get(ns)!).push(r);
+  }
 
   const byNs = new Map<string, TypeGraphNode[]>();
   for (const n of effectiveNodes) {
@@ -130,15 +186,24 @@ export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, str
     (byNs.get(ns) ?? byNs.set(ns, []).get(ns)!).push(n);
   }
   const out = new Map<string, string>();
-  for (const [ns, nsNodes] of byNs) {
+  // Drive the render loop from the UNION of namespaces that have live nodes OR
+  // pending removals. Without this, deleting the LAST element in a namespace
+  // leaves byNs empty for that namespace → renderNamespace is never called →
+  // the deleted type reappears on reparse. removalsByNs already holds the range
+  // but it was never consumed. With the union, we call renderNamespace with
+  // nodes: [] for removal-only namespaces; copyGapExcluding omits the deleted
+  // range and the header/version/comments survive verbatim.
+  for (const ns of new Set([...byNs.keys(), ...removalsByNs.keys()])) {
+    const nsNodes = byNs.get(ns) ?? [];
     const originalSource = originalSourceByNamespace.get(ns);
     if (originalSource === undefined) continue; // no baseline to reuse — skip (degraded)
+    const removedRanges = removalsByNs.get(ns) ?? [];
     // Backstop: an unexpected serializer error must never crash the source-sync
     // effect. Skip the failing namespace (do NOT write to out) so other
     // namespaces continue to serialize normally. The previous persisted text for
     // this namespace remains in effect until a successful serialize or reparse.
     try {
-      out.set(ns, serializeNamespaceToSource({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
+      out.set(ns, renderNamespace({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds, removedRanges }));
     } catch (err) {
       console.warn(`[cst-reuse] namespace "${ns}" serialization failed — skipping`, err);
     }
@@ -195,7 +260,14 @@ export function useModelSourceSync(
    * Defaults to an empty map so legacy/test callers that don't supply it get an
    * empty output (no write-back).
    */
-  originalSourceByNamespace: Map<string, string> = new Map()
+  originalSourceByNamespace: Map<string, string> = new Map(),
+  /**
+   * The store's accumulated Mutative INVERSE patches since the last parse.
+   * Used to derive the source byte ranges of genuinely-deleted elements so
+   * those ranges are omitted from the assembled output. Defaults to [] so
+   * legacy/test callers without deletion support keep the old behavior.
+   */
+  inversePatches: Patches = []
 ): void {
   // Keep a stable ref so the effect doesn't need to re-register when the
   // callback identity changes (e.g. inline arrow in EditorPage).
@@ -226,7 +298,19 @@ export function useModelSourceSync(
   useEffect(() => {
     const handler = onModelChangedRef.current;
     if (!handler) return;
-    if (nodes.length === 0) return;
+    // Deleting the LAST remaining node empties `nodes`, but the removal is
+    // carried only by an inverse `remove` patch at ['nodes', <id>]. Bailing on
+    // `nodes.length === 0` here would skip buildSourceForNamespaces entirely, so
+    // the deleted type would survive in the file. Proceed when a genuine
+    // node-removal is pending (a parsed node — has $cstRange + namespace); a
+    // truly-empty graph with no pending removal still bails.
+    const hasPendingNodeRemoval = inversePatches.some((p) => {
+      const path = p.path as (string | number)[];
+      if (path[0] !== 'nodes' || path.length !== 2) return false;
+      const v = p.value as { meta?: { namespace?: string }; data?: { $cstRange?: unknown } } | undefined;
+      return Boolean(v?.data?.$cstRange) && Boolean(v?.meta?.namespace);
+    });
+    if (nodes.length === 0 && !hasPendingNodeRemoval) return;
 
     // Did this render's nodes/edges change arrive together with a parse? If so
     // the graph was rebuilt FROM source — it must NOT be serialized back.
@@ -260,12 +344,24 @@ export function useModelSourceSync(
       // Using the same serializer as the user-edit path keeps the
       // lastSerializedRef baseline byte-equal to what the edit path will produce,
       // so the byte-equality de-dup fires correctly on the first user edit.
-      lastSerializedRef.current = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches });
+      lastSerializedRef.current = buildSourceForNamespaces({
+        nodes,
+        edges,
+        originalSourceByNamespace: baselineSource,
+        patches,
+        inversePatches
+      });
       hasFiredInitialSerializeRef.current = true;
       return;
     }
 
-    const next = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches });
+    const next = buildSourceForNamespaces({
+      nodes,
+      edges,
+      originalSourceByNamespace: baselineSource,
+      patches,
+      inversePatches
+    });
 
     // Skip the very first emission after mount — at load time the source
     // pane already has the authoritative parsed text, and re-emitting would
@@ -293,5 +389,5 @@ export function useModelSourceSync(
     // async smart-merge), but the source-sync effect intentionally does
     // not await it.
     void handler(next);
-  }, [nodes, edges, parseEpoch, patches, originalSourceByNamespace]);
+  }, [nodes, edges, parseEpoch, patches, originalSourceByNamespace, inversePatches]);
 }

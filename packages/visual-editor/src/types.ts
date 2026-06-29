@@ -260,6 +260,11 @@ export interface FuncFormActions extends CommonFormActions {
   updateExpression(nodeId: string, expressionText: string): void;
 }
 
+/** TypeAlias-specific editor actions. */
+export interface TypeAliasFormActions extends CommonFormActions {
+  updateTypeAliasType(nodeId: string, typeName: string): void;
+}
+
 /** Maps each `TypeKind` to its form actions interface. */
 export interface FormActionsKindMap {
   data: DataFormActions;
@@ -267,13 +272,13 @@ export interface FormActionsKindMap {
   choice: ChoiceFormActions;
   func: FuncFormActions;
   record: CommonFormActions;
-  typeAlias: CommonFormActions;
+  typeAlias: TypeAliasFormActions;
   basicType: CommonFormActions;
   annotation: CommonFormActions;
 }
 
 /** Intersection of all kind-specific actions (every method available). */
-export type AllEditorFormActions = DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions;
+export type AllEditorFormActions = DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions & TypeAliasFormActions;
 
 /**
  * Kind-aware editor form actions.

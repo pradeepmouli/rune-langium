@@ -76,7 +76,7 @@ import { STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { shouldReplaceLayoutPositions } from './layout-sync.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
 import { indexById } from '@rune-langium/core';
-import { emitModelText } from '@rune-langium/codegen/rosetta';
+import { renderModel } from '@rune-langium/codegen/rosetta';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
 import { selectNodeRepository } from '../store/node-repository.js';
@@ -831,7 +831,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         const result = new Map<string, string>();
         for (const model of outputModels) {
           try {
-            result.set(model.name, emitModelText(model));
+            result.set(model.name, renderModel(model));
           } catch {
             result.set(model.name, `// Error serializing ${model.name}`);
           }

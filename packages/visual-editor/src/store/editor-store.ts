@@ -236,6 +236,7 @@ export interface EditorState {
    * it is not part of undo history — patches track in-flight intent, not state.
    */
   pendingEditPatches: Patches;
+  pendingInversePatches: Patches;
 }
 
 export interface DeferredExportEntry {
@@ -351,6 +352,7 @@ export interface EditorActions {
   ): void;
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
+  updateTypeAliasType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
   // --- Condition operations ---
@@ -820,7 +822,7 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
  */
 type GraphMutationExtra = Omit<
   Partial<EditorState>,
-  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'parseEpoch'
+  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'pendingInversePatches' | 'parseEpoch'
 >;
 
 /**
@@ -845,8 +847,8 @@ function mutateGraph(
   recipe: GraphEditRecipe,
   extra?: GraphMutationExtra
 ): void {
-  const { nodesById, edgesById, pendingEditPatches } = get();
-  const [next, patches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
+  const { nodesById, edgesById, pendingEditPatches, pendingInversePatches } = get();
+  const [next, patches, inversePatches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
   if (patches.length === 0 && !extra) return; // no-op recipe — leave state untouched
   set({
     nodesById: next.nodes,
@@ -854,6 +856,7 @@ function mutateGraph(
     nodes: nodesFromMap(next.nodes), // re-derive array caches from updated Maps
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
+    pendingInversePatches: inversePatches.length > 0 ? [...pendingInversePatches, ...inversePatches] : pendingInversePatches,
     ...extra
   });
 }
@@ -925,7 +928,8 @@ const initialState: EditorState = {
   hydratedNamespaces: [],
   hydrationNonce: 0,
   parseEpoch: 0,
-  pendingEditPatches: []
+  pendingEditPatches: [],
+  pendingInversePatches: []
 };
 
 // ---------------------------------------------------------------------------
@@ -1086,6 +1090,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // One-shot: edits since the last parse have now been replayed; clear
               // so they can never accumulate or replay stale data across reparses.
               pendingEditPatches: [],
+              pendingInversePatches: [],
               visibility: {
                 expandedNamespaces,
                 hiddenNodeIds: new Set<string>(),
@@ -1971,6 +1976,17 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          updateTypeAliasType(nodeId: string, typeName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (!n || n.data.$type !== 'RosettaTypeAlias') return;
+              const d = n.data as { typeCall?: { type?: { $refText?: string }; arguments?: unknown[] } };
+              if (!d.typeCall) d.typeCall = { type: { $refText: typeName }, arguments: [] } as never;
+              else if (!d.typeCall.type) d.typeCall.type = { $refText: typeName };
+              else d.typeCall.type.$refText = typeName;
+            });
+          },
+
           updateExpression(nodeId: string, expressionText: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1979,12 +1995,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (d.$type === 'RosettaFunction') {
                 // Function body is in operations[0].expression.$cstText.
                 // Also write expressionText as a display field.
-                const fd = d as { operations?: any[]; expressionText?: string };
+                const fd = d as { operations?: any[]; expressionText?: string; output?: { name?: string } };
                 if (!fd.operations || fd.operations.length === 0) {
                   fd.operations = [
                     {
                       $type: 'Operation',
-                      operator: 'set',
+                      add: false,
+                      assignRoot: { $refText: fd.output?.name ?? '' },
                       expression: { $cstText: expressionText }
                     }
                   ];
@@ -2130,9 +2147,18 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const d = n?.data;
               if (!d) return;
               const dd = d as { synonyms?: any[] };
-              // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
+              // Every synonym kind REQUIRES at least one source (grammar:
+              // `'[' 'synonym' sources+=[RosettaSynonymSource:QualifiedName] ...`).
+              // The metadata UI collects a single free-text tag; the only field it
+              // can validly become is the synonym SOURCE — a source-only
+              // `[synonym <src>]` parses for class synonyms, whereas the previous
+              // `value.name`/`body.values`-only shapes rendered as unparsable
+              // `[synonym ]`. Data/Choice use RosettaClassSynonym, Enum uses
+              // RosettaSynonym (which additionally needs a body — see render-core,
+              // where a body-less enum synonym is omitted rather than corrupting).
+              const source = { $refText: synonym };
               if (d.$type === 'Data' || d.$type === 'Choice') {
-                const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
+                const newSyn = { $type: 'RosettaClassSynonym', sources: [source] };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 if (d.$type === 'Data') {
                   Data.addSynonym(d, newSyn as Parameters<typeof Data.addSynonym>[1]);
@@ -2140,7 +2166,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   Choice.addSynonym(d, newSyn as Parameters<typeof Choice.addSynonym>[1]);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
-                const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
+                const newSyn = { $type: 'RosettaSynonym', sources: [source] };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 RosettaEnumeration.addSynonym(d, newSyn as Parameters<typeof RosettaEnumeration.addSynonym>[1]);
               }

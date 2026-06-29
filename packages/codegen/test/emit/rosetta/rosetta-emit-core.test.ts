@@ -2,17 +2,17 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { emitNode, type EmitChild } from '../../../src/emit/rosetta/rosetta-emit-core.js';
+import { renderNode, type RenderChild } from '../../../src/emit/rosetta/rosetta-render-core.js';
 
 // Child policy for tests: always regenerate; throw if a child is unimplemented
 // (the tests below only use implemented children).
-const regen: EmitChild = (c) => {
-  const t = emitNode(c, regen);
+const regen: RenderChild = (c) => {
+  const t = renderNode(c, regen);
   if (t === null) throw new Error(`unimplemented child ${(c as { $type: string }).$type}`);
   return t;
 };
 
-describe('emitNode — implemented scalars', () => {
+describe('renderNode — implemented scalars', () => {
   it('emits a Data header with extends and definition', () => {
     const node = {
       $type: 'Data',
@@ -36,7 +36,7 @@ describe('emitNode — implemented scalars', () => {
       ]
     } as never;
 
-    expect(emitNode(node, regen)).toBe(
+    expect(renderNode(node, regen)).toBe(
       'type Foo extends Bar:\n' +
       '  <"a foo">\n' +
       '  bar string (0..1)'
@@ -51,7 +51,7 @@ describe('emitNode — implemented scalars', () => {
       annotations: [], references: [], synonyms: [], labels: [],
       ruleReferences: [], typeCallArgs: []
     } as never;
-    expect(emitNode(attr, regen)).toBe('xs string (1..*)');
+    expect(renderNode(attr, regen)).toBe('xs string (1..*)');
   });
 
   it('emits override and a missing definition', () => {
@@ -62,7 +62,42 @@ describe('emitNode — implemented scalars', () => {
       annotations: [], references: [], synonyms: [], labels: [],
       ruleReferences: [], typeCallArgs: []
     } as never;
-    expect(emitNode(attr, regen)).toBe('override y int (0..0)');
+    expect(renderNode(attr, regen)).toBe('override y int (0..0)');
+  });
+
+  it('preserves inline type-call args on an attribute via the child policy', () => {
+    // Driver-like policy: an unchanged TypeCallArgument rides its CST slice.
+    const slice: RenderChild = (c) => {
+      const n = c as { $type: string; $cstText?: string };
+      if (n.$type === 'TypeCallArgument') return n.$cstText ?? '';
+      const t = renderNode(c, slice);
+      if (t === null) throw new Error(`unimplemented child ${n.$type}`);
+      return t;
+    };
+    const attr = {
+      $type: 'Attribute', name: 'amount', override: false,
+      typeCall: { type: { $refText: 'number' } },
+      card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false },
+      annotations: [], references: [], synonyms: [], labels: [], ruleReferences: [],
+      typeCallArgs: [{ $type: 'TypeCallArgument', $cstText: 'digits: 18' }]
+    } as never;
+    expect(renderNode(attr, slice)).toBe('amount number(digits: 18) (1..1)');
+  });
+
+  it('preserves type-call args on a choice option via the child policy', () => {
+    const slice: RenderChild = (c) => {
+      const n = c as { $type: string; $cstText?: string };
+      if (n.$type === 'TypeCallArgument') return n.$cstText ?? '';
+      const t = renderNode(c, slice);
+      if (t === null) throw new Error(`unimplemented child ${n.$type}`);
+      return t;
+    };
+    const opt = {
+      $type: 'ChoiceOption',
+      typeCall: { type: { $refText: 'Money' }, arguments: [{ $type: 'TypeCallArgument', $cstText: 'ccy: "USD"' }] },
+      annotations: [], references: [], synonyms: [], labels: [], ruleReferences: []
+    } as never;
+    expect(renderNode(opt, slice)).toBe('Money(ccy: "USD")');
   });
 
   it('emits a choice with options', () => {
@@ -73,7 +108,7 @@ describe('emitNode — implemented scalars', () => {
         { $type: 'ChoiceOption', typeCall: { type: { $refText: 'B' } }, annotations: [], references: [], synonyms: [], labels: [], ruleReferences: [] }
       ]
     } as never;
-    expect(emitNode(node, regen)).toBe('choice Pick:\n  A\n  B');
+    expect(renderNode(node, regen)).toBe('choice Pick:\n  A\n  B');
   });
 
   it('emits an enum with extends, displayName and values', () => {
@@ -86,15 +121,15 @@ describe('emitNode — implemented scalars', () => {
         { $type: 'RosettaEnumValue', name: 'GREEN', display: undefined, definition: undefined, annotations: [], references: [], enumSynonyms: [] }
       ]
     } as never;
-    expect(emitNode(node, regen)).toBe(
+    expect(renderNode(node, regen)).toBe(
       'enum Color extends BaseColor:\n' +
       '  RED displayName "Red"\n' +
       '  GREEN'
     );
   });
 
-  it('returns null for an unimplemented $type', () => {
+  it('renders a minimal RosettaFunction with no children', () => {
     const fn = { $type: 'RosettaFunction', name: 'DoIt' } as never;
-    expect(emitNode(fn, regen)).toBeNull();
+    expect(renderNode(fn, regen)).toBe('func DoIt:');
   });
 });
