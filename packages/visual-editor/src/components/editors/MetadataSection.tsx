@@ -23,6 +23,11 @@
  * `fields` prop is informational — this section knows it owns
  * `definition`, `comments`, and `synonyms` and renders them directly.
  *
+ * Synonym input uses a `SourceRefField` picker instead of free text.
+ * The host provides `synonymSourceOptions` with the available sources.
+ * For `RosettaEnumeration` hosts a value `Input` also appears (the
+ * host kind is derived from `getValues('$type')` in the form context).
+ *
  * @module
  */
 
@@ -32,6 +37,9 @@ import { Field, FieldLabel, FieldGroup } from '@rune-langium/design-system/ui/fi
 import { Input } from '@rune-langium/design-system/ui/input';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
+import { SourceRefField } from './SourceRefField.js';
+import { resolveSynonymRefText } from './synonym-ref.js';
+import type { SourceRefOption } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,10 +52,19 @@ export interface MetadataSectionProps {
   onDefinitionCommit?: (definition: string) => void;
   /** Called when comments change (debounced commit to graph). */
   onCommentsCommit?: (comments: string) => void;
-  /** Called when a synonym is added (immediate commit to graph). */
-  onSynonymAdd?: (synonym: string) => void;
+  /**
+   * Called when a synonym is added (immediate commit to graph).
+   * `source` is the bare source name (i.e. the option label / `$refText`).
+   * `value` is the optional synonym value name, present for enum hosts.
+   */
+  onSynonymAdd?: (source: string, value?: string) => void;
   /** Called when a synonym is removed by index (immediate commit to graph). */
   onSynonymRemove?: (index: number) => void;
+  /**
+   * Available synonym sources — passed in from the host form which derives
+   * them from the graph store (Task 3). Defaults to empty (no picker options).
+   */
+  synonymSourceOptions?: SourceRefOption[];
   /**
    * z2f-host-supplied list of field paths this section groups (declarative
    * path). Optional and intentionally unused at render time per
@@ -57,6 +74,18 @@ export interface MetadataSectionProps {
 }
 
 // ---------------------------------------------------------------------------
+// Synonym AST shape (read from form state)
+// ---------------------------------------------------------------------------
+
+type SynonymEntry = {
+  $type?: string;
+  sources?: { $refText?: string }[];
+  value?: { name?: string };
+  /** RosettaSynonym (enum host) stores value text under body.values, not value.name. */
+  body?: { values?: { name?: string }[] };
+};
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -64,18 +93,22 @@ export interface MetadataSectionProps {
  * Collapsible metadata section with description, comments, and synonym fields.
  *
  * Reads field values from the parent `FormProvider` context. Auto-resize
- * textareas for description and comments, tag-list with inline add for synonyms.
+ * textareas for description and comments; SourceRefField picker for synonyms.
  */
 export function MetadataSection({
   readOnly,
   onDefinitionCommit,
   onCommentsCommit,
   onSynonymAdd,
-  onSynonymRemove
+  onSynonymRemove,
+  synonymSourceOptions = []
 }: MetadataSectionProps): React.ReactNode {
   const { control, getValues } = useFormContext();
   const [expanded, setExpanded] = useState(true);
-  const [synonymInput, setSynonymInput] = useState('');
+
+  // Pending add state: canonical id from SourceRefField + bare value text
+  const [pendingSource, setPendingSource] = useState<string | null>(null);
+  const [pendingValue, setPendingValue] = useState('');
 
   // ------ Declarative-path fallback (Phase 7 / US5) -----------------------
   //
@@ -84,6 +117,10 @@ export function MetadataSection({
   // If neither is present we no-op (read-only-style behaviour, contract §6).
   const ctx = useEditorActionsContext();
   const effectiveReadOnly = readOnly ?? ctx?.readOnly ?? false;
+
+  // Derive host kind from form state ($type is spread into form values by
+  // formValuesProjection so it is always present for any form using that helper).
+  const isEnumHost = getValues('$type') === 'RosettaEnumeration';
 
   const effectiveOnDefinitionCommit = useCallback(
     (value: string) => {
@@ -100,9 +137,9 @@ export function MetadataSection({
     [onCommentsCommit, ctx]
   );
   const effectiveOnSynonymAdd = useCallback(
-    (synonym: string) => {
-      if (onSynonymAdd) return onSynonymAdd(synonym);
-      if (ctx) ctx.actions.addSynonym(ctx.nodeId, synonym);
+    (source: string, value?: string) => {
+      if (onSynonymAdd) return onSynonymAdd(source, value);
+      if (ctx) ctx.actions.addSynonym(ctx.nodeId, source, value);
     },
     [onSynonymAdd, ctx]
   );
@@ -127,14 +164,27 @@ export function MetadataSection({
   const debouncedComments = useAutoSave(effectiveOnCommentsCommit, 500);
 
   const handleAddSynonym = useCallback(() => {
-    const trimmed = synonymInput.trim();
-    if (!trimmed) return;
-    // Update form state
-    appendSynonym(trimmed as any);
+    if (!pendingSource) return;
+    const opt = synonymSourceOptions.find((o) => o.value === pendingSource);
+    const refText = resolveSynonymRefText(opt, ctx?.nodeId, pendingSource);
+    const value = isEnumHost ? pendingValue || undefined : undefined;
+
+    // Optimistic form-state update for immediate chip display.
+    // Shape must match what the store's addSynonym writes so form state stays
+    // in sync with the model: Data/Choice → RosettaClassSynonym shape;
+    // RosettaEnumeration → RosettaSynonym shape (body.values, not value.name).
+    const entry: SynonymEntry = isEnumHost
+      ? { $type: 'RosettaSynonym', sources: [{ $refText: refText }], body: { values: [{ name: value! }] } }
+      : { $type: 'RosettaClassSynonym', sources: [{ $refText: refText }], ...(value ? { value: { name: value } } : {}) };
+    appendSynonym(entry as any);
+
     // Commit to graph
-    effectiveOnSynonymAdd(trimmed);
-    setSynonymInput('');
-  }, [synonymInput, appendSynonym, effectiveOnSynonymAdd]);
+    effectiveOnSynonymAdd(refText, value);
+
+    // Reset picker
+    setPendingSource(null);
+    setPendingValue('');
+  }, [pendingSource, pendingValue, isEnumHost, synonymSourceOptions, ctx, appendSynonym, effectiveOnSynonymAdd]);
 
   const handleRemoveSynonym = useCallback(
     (index: number) => {
@@ -144,18 +194,8 @@ export function MetadataSection({
     [removeSynonymField, effectiveOnSynonymRemove]
   );
 
-  const handleSynonymKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleAddSynonym();
-      }
-    },
-    [handleAddSynonym]
-  );
-
-  // Read synonym values from form state
-  const synonymValues: string[] = getValues('synonyms') ?? [];
+  // Read synonym values from form state as AST objects (not plain strings)
+  const synonymValues: SynonymEntry[] = (getValues('synonyms') ?? []) as SynonymEntry[];
 
   return (
     <div data-slot="metadata-section" className="border-t border-border mt-3 pt-3">
@@ -166,7 +206,7 @@ export function MetadataSection({
         aria-expanded={expanded}
       >
         <span>Metadata</span>
-        <span className="text-xs text-muted-foreground">{expanded ? '\u25be' : '\u25b8'}</span>
+        <span className="text-xs text-muted-foreground">{expanded ? '▾' : '▸'}</span>
       </button>
 
       {expanded && (
@@ -234,43 +274,63 @@ export function MetadataSection({
           {/* Synonyms */}
           <Field>
             <FieldLabel className="text-xs text-muted-foreground">Synonyms</FieldLabel>
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {synonymValues.map((synonym: string, index: number) => (
-                <span
-                  key={`synonym-${synonym}:${index}`}
-                  className="inline-flex items-center gap-1 rounded bg-card
-                    px-2 py-0.5 text-xs text-foreground"
-                >
-                  {synonym}
-                  {!effectiveReadOnly && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveSynonym(index)}
-                      aria-label={`Remove synonym "${synonym}"`}
-                      className="text-muted-foreground hover:text-destructive transition-colors"
+
+            {/* Existing synonym chips */}
+            {synonymValues.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {synonymValues.map((syn: SynonymEntry, index: number) => {
+                  const sourceRef = syn.sources?.[0]?.$refText ?? '';
+                  // RosettaClassSynonym stores value under `value.name`;
+                  // RosettaSynonym (enum host) stores it under `body.values[0].name`.
+                  const valueName = syn.value?.name ?? syn.body?.values?.[0]?.name;
+                  const chipLabel = valueName ? `${sourceRef} — ${valueName}` : sourceRef;
+                  return (
+                    <span
+                      key={`synonym-${sourceRef}:${index}`}
+                      className="inline-flex items-center gap-1 rounded bg-card
+                        px-2 py-0.5 text-xs text-foreground"
                     >
-                      ×
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
+                      {chipLabel}
+                      {!effectiveReadOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSynonym(index)}
+                          aria-label="remove synonym"
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add row — source picker + optional value input + Add button */}
             {!effectiveReadOnly && (
-              <div className="flex items-center gap-1">
-                <Input
-                  variant="inline"
-                  type="text"
-                  value={synonymInput}
-                  onChange={(e) => setSynonymInput(e.target.value)}
-                  onKeyDown={handleSynonymKeyDown}
-                  placeholder="Add synonym..."
-                  data-slot="metadata-synonym-input"
-                  className="flex-1 px-2 py-1 text-xs"
+              <div className="flex items-center gap-1 flex-wrap">
+                <SourceRefField
+                  value={pendingSource}
+                  options={synonymSourceOptions}
+                  onSelect={setPendingSource}
+                  placeholder="Select source…"
                 />
+                {isEnumHost && (
+                  <Input
+                    variant="inline"
+                    type="text"
+                    value={pendingValue}
+                    onChange={(e) => setPendingValue(e.target.value)}
+                    placeholder="Value name…"
+                    data-slot="synonym-value-input"
+                    className="flex-1 min-w-0 px-2 py-1 text-xs"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={handleAddSynonym}
-                  disabled={!synonymInput.trim()}
+                  disabled={!pendingSource || (isEnumHost && !pendingValue)}
                   className="rounded bg-card px-2 py-1 text-xs text-foreground
                     hover:bg-muted transition-colors
                     disabled:opacity-50 disabled:cursor-not-allowed"

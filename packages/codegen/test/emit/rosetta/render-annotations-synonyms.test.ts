@@ -21,15 +21,22 @@ describe('renderNode — annotations & synonyms', () => {
     const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'FpML' }], value: { name: 'a "quoted" v' } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "a \\"quoted\\" v"]');
   });
-  it('returns null for a source-less synonym rather than emitting [synonym ]', () => {
-    // No source ⇒ unparsable; renderNode → null routes to CST / driver omits a new one.
-    expect(renderNode({ $type: 'RosettaClassSynonym', sources: [] } as never, regen)).toBeNull();
-    expect(renderNode({ $type: 'RosettaSynonym', sources: [], body: { values: [{ name: 'x' }] } } as never, regen)).toBeNull();
-    expect(renderNode({ $type: 'RosettaEnumSynonym', sources: [], synonymValue: 'x' } as never, regen)).toBeNull();
+  it('renders a cross-namespace qualified class synonym verbatim (plan L15 serialize half)', () => {
+    // The UI picker writes the qualified id (`other.FIX`) as $refText for cross-ns sources.
+    // renderClassSynonym must emit it verbatim — no further qualify / strip.
+    const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'other.FIX' }], value: undefined } as never;
+    expect(renderNode(s, regen)).toBe('[synonym other.FIX]');
   });
   it('renders an enum-level RosettaSynonym (source + value body)', () => {
     const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "tradeDate"]');
+  });
+  it('returns null for a non-value-body RosettaSynonym (hint/meta/mappingLogic → CST fallback)', () => {
+    // RosettaSynonymBody has alternatives beyond value (hint, mappingLogic, meta, etc.).
+    // When body.values is absent/empty, renderSynonym returns null so renderNode falls
+    // back to CST and preserves the original body rather than emitting `[synonym src value ]`.
+    const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: {} } as never;
+    expect(renderNode(s, regen)).toBeNull();
   });
   it('escapes the enum-value synonym STRING', () => {
     const s = { $type: 'RosettaEnumSynonym', sources: [{ $refText: 'FIX' }], synonymValue: 'a"b\\c' } as never;

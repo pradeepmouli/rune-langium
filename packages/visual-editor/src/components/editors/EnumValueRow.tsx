@@ -14,17 +14,36 @@
  * Name/displayName changes are debounced (500 ms). Empty names show a
  * destructive border (token-backed per R12).
  *
+ * A synonym sub-section below the main row appears when `synonymSourceOptions`
+ * is supplied (threaded from EnumForm). Synonym add requires both a source
+ * pick AND a value string — RosettaEnumSynonym always has a `synonymValue`.
+ * Qualify rule (plan L15) matches MetadataSection: cross-namespace sources
+ * persist as `${ns}.${name}` via `resolveSynonymRefText`.
+ *
  * @module
  */
 
-import { useCallback } from 'react';
-import { useFormContext, Controller } from 'react-hook-form';
+import { useState, useCallback } from 'react';
+import { useFormContext, Controller, useWatch } from 'react-hook-form';
 import { X } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
+import { SourceRefField } from './SourceRefField.js';
+import { resolveSynonymRefText } from './synonym-ref.js';
+import type { SourceRefOption } from '../../types.js';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type EnumSynonymEntry = {
+  $type?: string;
+  sources?: { $refText?: string }[];
+  synonymValue?: string;
+};
 
 // ---------------------------------------------------------------------------
 // Props
@@ -51,6 +70,11 @@ export interface EnumValueRowProps {
   isOverride?: boolean;
   /** Callback to revert this override, restoring the inherited value. */
   onRevert?: () => void;
+  /**
+   * Available synonym source options threaded from EnumForm via PaginatedEnumValues.
+   * When non-empty, a synonym sub-section (chips + add-row) appears below the main row.
+   */
+  synonymSourceOptions?: SourceRefOption[];
 }
 
 // ---------------------------------------------------------------------------
@@ -67,15 +91,31 @@ function EnumValueRow({
   onReorder,
   disabled = false,
   isOverride = false,
-  onRevert
+  onRevert,
+  synonymSourceOptions = []
 }: EnumValueRowProps) {
-  const { control, getValues } = useFormContext();
+  const { control, getValues, setValue } = useFormContext();
   const editorCtx = useEditorActionsContext();
   const effectiveReadOnly = Boolean(disabled || editorCtx?.readOnly);
   // AST-canonical paths (R11): `enumValues[].name` and `enumValues[].display`.
   // Pre-migration this row read `members.${index}.{name,displayName}` from a
   // hand-authored projection schema; the projection layer is gone now.
   const prefix = `enumValues.${index}`;
+
+  // Synonym picker state — source canonical id + value text
+  const [pendingSource, setPendingSource] = useState<string | null>(null);
+  const [pendingValue, setPendingValue] = useState('');
+
+  // Subscribe to the synonym array so chips update after add/remove.
+  // defaultValue is seeded from getValues() (a synchronous form-store read)
+  // rather than a bare [] because useWatch does not auto-populate from nested
+  // defaultValues on the initial render — getValues does.
+  const rawEnumSynonyms = useWatch({
+    control,
+    name: `${prefix}.enumSynonyms` as any,
+    defaultValue: getValues(`${prefix}.enumSynonyms`) ?? []
+  });
+  const enumSynonyms = (Array.isArray(rawEnumSynonyms) ? rawEnumSynonyms : []) as EnumSynonymEntry[];
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
@@ -121,109 +161,214 @@ function EnumValueRow({
     }
   }
 
+  // ---- Synonym add/remove --------------------------------------------------
+
+  const handleAddEnumSynonym = useCallback(() => {
+    if (!pendingSource || !pendingValue) return;
+    const opt = synonymSourceOptions.find((o) => o.value === pendingSource);
+    // plan L15: cross-namespace qualifies; same-namespace stays bare.
+    const refText = resolveSynonymRefText(opt, editorCtx?.nodeId, pendingSource);
+    // Optimistic form-state update for immediate chip display
+    const currentSyns: EnumSynonymEntry[] = (getValues(`${prefix}.enumSynonyms`) ?? []) as EnumSynonymEntry[];
+    setValue(
+      `${prefix}.enumSynonyms` as any,
+      [...currentSyns, { $type: 'RosettaEnumSynonym', sources: [{ $refText: refText }], synonymValue: pendingValue }]
+    );
+    // Commit to graph
+    if (editorCtx) {
+      editorCtx.actions.addEnumValueSynonym(editorCtx.nodeId, index, refText, pendingValue);
+    }
+    setPendingSource(null);
+    setPendingValue('');
+  }, [pendingSource, pendingValue, synonymSourceOptions, editorCtx, prefix, getValues, setValue, index]);
+
+  const handleRemoveEnumSynonym = useCallback(
+    (synIndex: number) => {
+      const currentSyns: EnumSynonymEntry[] = (getValues(`${prefix}.enumSynonyms`) ?? []) as EnumSynonymEntry[];
+      setValue(`${prefix}.enumSynonyms` as any, currentSyns.filter((_, i) => i !== synIndex));
+      if (editorCtx) {
+        editorCtx.actions.removeEnumValueSynonym(editorCtx.nodeId, index, synIndex);
+      }
+    },
+    [editorCtx, prefix, getValues, setValue, index]
+  );
+
+  // Show the synonym section when there are existing synonyms OR when the
+  // host supplies options (so the user can add synonyms to this value).
+  const showSynonymSection = enumSynonyms.length > 0 || (!effectiveReadOnly && synonymSourceOptions.length > 0);
+
   // ---- Render -------------------------------------------------------------
 
   return (
     <div
       data-slot="enum-value-row"
-      className="rune-inspector-row flex items-center gap-1.5 border border-transparent px-1 py-1 hover:border-border"
+      className="rune-inspector-row border border-transparent px-1 py-1 hover:border-border"
       role="listitem"
       draggable={!effectiveReadOnly}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {/* Drag handle */}
-      <span
-        data-slot="drag-handle"
-        className="cursor-grab text-muted-foreground text-xs select-none shrink-0"
-        aria-hidden="true"
-      >
-        ⠿
-      </span>
+      {/* Main row: handle | name | display | badge | action button */}
+      <div className="flex items-center gap-1.5">
+        {/* Drag handle */}
+        <span
+          data-slot="drag-handle"
+          className="cursor-grab text-muted-foreground text-xs select-none shrink-0"
+          aria-hidden="true"
+        >
+          ⠿
+        </span>
 
-      {/* Value name via Controller */}
-      <Controller
-        control={control}
-        name={`${prefix}.name`}
-        render={({ field }) => {
-          const isEmpty = (field.value ?? '').trim() === '';
-          return (
+        {/* Value name via Controller */}
+        <Controller
+          control={control}
+          name={`${prefix}.name`}
+          render={({ field }) => {
+            const isEmpty = (field.value ?? '').trim() === '';
+            return (
+              <Input
+                variant="inline"
+                type="text"
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  field.onChange(e);
+                  debouncedName(e.target.value);
+                }}
+                onBlur={field.onBlur}
+                disabled={effectiveReadOnly}
+                aria-label={`Value name for ${name || 'new value'}`}
+                placeholder="Value name"
+                className={`flex-1 min-w-0 px-2 py-1 text-sm${isEmpty ? ' border-destructive' : ''}`}
+              />
+            );
+          }}
+        />
+
+        {/* Display name via Controller */}
+        <Controller
+          control={control}
+          name={`${prefix}.display`}
+          render={({ field }) => (
             <Input
               variant="inline"
               type="text"
               value={field.value ?? ''}
               onChange={(e) => {
                 field.onChange(e);
-                debouncedName(e.target.value);
+                debouncedDisplayName(e.target.value);
               }}
               onBlur={field.onBlur}
               disabled={effectiveReadOnly}
-              aria-label={`Value name for ${name || 'new value'}`}
-              placeholder="Value name"
-              className={`flex-1 min-w-0 px-2 py-1 text-sm${isEmpty ? ' border-destructive' : ''}`}
+              placeholder="Display name (optional)"
+              className="flex-1 min-w-0 px-2 py-1 text-sm"
             />
-          );
-        }}
-      />
+          )}
+        />
 
-      {/* Display name via Controller */}
-      <Controller
-        control={control}
-        name={`${prefix}.display`}
-        render={({ field }) => (
-          <Input
-            variant="inline"
-            type="text"
-            value={field.value ?? ''}
-            onChange={(e) => {
-              field.onChange(e);
-              debouncedDisplayName(e.target.value);
-            }}
-            onBlur={field.onBlur}
-            disabled={effectiveReadOnly}
-            placeholder="Display name (optional)"
-            className="flex-1 min-w-0 px-2 py-1 text-sm"
-          />
+        {/* Override badge */}
+        {isOverride && (
+          <Badge data-slot="override-badge" variant="warning" className="shrink-0 text-3xs">
+            override
+          </Badge>
         )}
-      />
 
-      {/* Override badge */}
-      {isOverride && (
-        <Badge data-slot="override-badge" variant="warning" className="shrink-0 text-3xs">
-          override
-        </Badge>
-      )}
+        {/* Revert button (for overrides) or Remove button */}
+        {isOverride && onRevert ? (
+          <button
+            type="button"
+            onClick={onRevert}
+            disabled={effectiveReadOnly}
+            aria-label={`Revert override for value ${name || 'unnamed'}`}
+            className="shrink-0 text-xs px-2 py-0.5 border border-border rounded
+              text-muted-foreground hover:text-foreground hover:border-input transition-colors
+              disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Revert
+          </button>
+        ) : (
+          // Icon-button replaces literal "✕" Unicode glyph. Same pattern as
+          // AttributeRow / ChoiceOptionRow / FunctionInputRow — lucide <X />
+          // in a ghost icon-button with hover:text-destructive preserved.
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onRemove(nodeId, name)}
+            disabled={effectiveReadOnly}
+            aria-label={`Remove value ${name || 'unnamed'}`}
+            title={`Remove value ${name || 'unnamed'}`}
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+          >
+            <X className="size-3" />
+          </Button>
+        )}
+      </div>
 
-      {/* Revert button (for overrides) or Remove button */}
-      {isOverride && onRevert ? (
-        <button
-          type="button"
-          onClick={onRevert}
-          disabled={effectiveReadOnly}
-          aria-label={`Revert override for value ${name || 'unnamed'}`}
-          className="shrink-0 text-xs px-2 py-0.5 border border-border rounded
-            text-muted-foreground hover:text-foreground hover:border-input transition-colors
-            disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Revert
-        </button>
-      ) : (
-        // Icon-button replaces literal "✕" Unicode glyph. Same pattern as
-        // AttributeRow / ChoiceOptionRow / FunctionInputRow — lucide <X />
-        // in a ghost icon-button with hover:text-destructive preserved.
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => onRemove(nodeId, name)}
-          disabled={effectiveReadOnly}
-          aria-label={`Remove value ${name || 'unnamed'}`}
-          title={`Remove value ${name || 'unnamed'}`}
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-        >
-          <X className="size-3" />
-        </Button>
+      {/* Synonym sub-section — chips + add-row */}
+      {showSynonymSection && (
+        <div data-slot="enum-value-synonyms" className="pl-4 pt-1 flex flex-col gap-1">
+          {/* Existing synonym chips */}
+          {enumSynonyms.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {enumSynonyms.map((syn: EnumSynonymEntry, synIdx: number) => {
+                const sourceRef = syn.sources?.[0]?.$refText ?? '';
+                const synonymValue = syn.synonymValue ?? '';
+                const chipLabel = synonymValue ? `${sourceRef} — ${synonymValue}` : sourceRef;
+                return (
+                  <span
+                    key={`enum-syn-${sourceRef}:${synIdx}`}
+                    className="inline-flex items-center gap-1 rounded bg-card
+                      px-2 py-0.5 text-xs text-foreground"
+                  >
+                    {chipLabel}
+                    {!effectiveReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveEnumSynonym(synIdx)}
+                        aria-label={`remove enum synonym ${sourceRef}`}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add row: source picker + value input + Add button */}
+          {!effectiveReadOnly && synonymSourceOptions.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <SourceRefField
+                value={pendingSource}
+                options={synonymSourceOptions}
+                onSelect={setPendingSource}
+                placeholder="Select source…"
+              />
+              <Input
+                variant="inline"
+                type="text"
+                value={pendingValue}
+                onChange={(e) => setPendingValue(e.target.value)}
+                placeholder="Synonym value…"
+                data-slot="enum-synonym-value-input"
+                className="flex-1 min-w-0 px-2 py-1 text-xs"
+              />
+              <button
+                type="button"
+                onClick={handleAddEnumSynonym}
+                disabled={!pendingSource || !pendingValue}
+                className="rounded bg-card px-2 py-1 text-xs text-foreground
+                  hover:bg-muted transition-colors
+                  disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

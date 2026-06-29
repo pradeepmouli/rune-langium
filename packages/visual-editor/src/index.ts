@@ -86,6 +86,7 @@ export type {
   ValidationError,
   ExpressionEditorSlotProps,
   TypeOption,
+  SourceRefOption,
   CommonFormActions,
   DataFormActions,
   EnumFormActions,

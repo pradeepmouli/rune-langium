@@ -537,3 +537,67 @@ describe('inline type-call args round-trip', () => {
     expect(re.hasErrors).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// (11) add-synonym round-trip — guards the removed source-less null guard
+//
+// renderClassSynonym now emits unconditionally (guard removed in Task 7).
+// The z2f picker guarantees every synonym added via the UI has ≥1 source;
+// parsed synonyms are grammar-valid. Assert that both the original CST-
+// preserved synonym AND a newly added synonym survive the render/re-parse cycle.
+//
+// SCOPE NOTE — LOCAL (same-namespace) source only.
+// Full cross-namespace synonym RE-LINKING on re-parse requires the document to
+// declare or import the other namespace, which depends on the calling document's
+// import scope — genuinely out of this feature's scope. The serialize half
+// (qualified $refText → `[synonym other.FIX]` emitted verbatim) is covered by
+// render-annotations-synonyms.test.ts
+// ('renders a cross-namespace qualified class synonym verbatim').
+// ---------------------------------------------------------------------------
+
+const SRC_ADD_SYNONYM = `namespace test
+version "1.0.0"
+
+synonym source FpML
+
+type Trade:
+  [synonym FpML]
+  notional number (1..1)
+`;
+
+describe('add-synonym round-trip (Task 7)', () => {
+  it('both the original and newly added class synonym survive render + reparse', async () => {
+    const { value } = await parse(SRC_ADD_SYNONYM);
+    const store = createEditorStore();
+    store.getState().loadModels(value);
+
+    const trade = store.getState().nodes.find((n) => n.data.name === 'Trade');
+    expect(trade).toBeDefined();
+
+    // Add a second class synonym with the same source (local same-namespace → bare $refText).
+    store.getState().addSynonym(trade!.id, 'FpML');
+
+    const sourceMap = buildSourceForNamespaces({
+      nodes: store.getState().nodes,
+      edges: store.getState().edges,
+      originalSourceByNamespace: new Map([['test', SRC_ADD_SYNONYM]]),
+      patches: store.getState().pendingEditPatches,
+      inversePatches: store.getState().pendingInversePatches
+    });
+    const out = sourceMap.get('test');
+    expect(out).toBeTruthy();
+
+    // Both synonyms must survive: original (CST-preserved) + newly added (rendered via
+    // the now-unconditional renderClassSynonym — the null guard removed in Task 7).
+    const synonymCount = (out!.match(/\[synonym FpML\]/g) ?? []).length;
+    expect(synonymCount).toBe(2);
+
+    // Existing attribute is byte-intact
+    expect(out).toContain('notional number (1..1)');
+
+    // Re-parse succeeds — `[synonym FpML]` is valid Rosetta (source declared above)
+    const re = await parse(out!);
+    expect(re.hasErrors).toBe(false);
+    expect(elementNames(re.value)).toContain('Trade');
+  });
+});

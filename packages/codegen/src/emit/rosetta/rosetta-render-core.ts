@@ -333,15 +333,13 @@ function synonymSources(sources: unknown[] | undefined): string {
   return (sources ?? []).map((s) => (s as { $refText?: string }).$refText ?? '').filter(Boolean).join(', ');
 }
 
-// Synonyms of every kind REQUIRE at least one source (grammar `[' 'synonym'
-// sources+=[...]`). Returning null when sources are absent makes renderNode fall
-// back to CST — and for a freshly-added source-less synonym (no CST) the driver
-// omits it — so we never emit an unparsable `[synonym ]` that breaks round-trip.
+// Sources are upstream-guaranteed (z2f picker + grammar); the !sources guard is removed.
+// renderSynonym/renderEnumSynonym still return string|null to fall back to CST for
+// non-value bodies or missing synonymValue (grammar alternatives beyond the value form).
 
-function renderClassSynonym(s: DehydratedNode): string | null {
+function renderClassSynonym(s: DehydratedNode): string {
   const cs = s as unknown as { sources?: unknown[]; value?: { name?: string } };
   const sources = synonymSources(cs.sources);
-  if (!sources) return null;
   // `value` is optional (grammar `('value' value=RosettaClassSynonymValue)?`).
   const name = cs.value?.name;
   return name !== undefined
@@ -352,10 +350,10 @@ function renderClassSynonym(s: DehydratedNode): string | null {
 function renderSynonym(s: DehydratedNode): string | null {
   const sy = s as unknown as { sources?: unknown[]; body?: { values?: Array<{ name?: string }> } };
   const sources = synonymSources(sy.sources);
-  // `RosettaSynonym` requires BOTH a source and a body (grammar
-  // `body=RosettaSynonymBody`). The inspector produces a `value`-form body.
   const values = sy.body?.values ?? [];
-  if (!sources || values.length === 0) return null;
+  // Non-value bodies (hint/mappingLogic/meta/etc.) have no `values` entries.
+  // Return null so renderNode falls back to CST and preserves the original body.
+  if (values.length === 0) return null;
   const rendered = values.map((v) => `"${escapeString(v.name ?? '')}"`).join(', ');
   return `[synonym ${sources} value ${rendered}]`;
 }
@@ -363,9 +361,8 @@ function renderSynonym(s: DehydratedNode): string | null {
 function renderEnumSynonym(s: DehydratedNode): string | null {
   const es = s as unknown as { sources?: unknown[]; synonymValue?: string };
   const sources = synonymSources(es.sources);
-  // `RosettaEnumSynonym` requires a source AND a `value` (grammar `'value'
-  // synonymValue=STRING`). The STRING must be escaped.
-  if (!sources || es.synonymValue === undefined) return null;
+  // synonymValue is absent on non-value-form enum synonyms — fall back to CST.
+  if (es.synonymValue === undefined) return null;
   return `[synonym ${sources} value "${escapeString(es.synonymValue)}"]`;
 }
 

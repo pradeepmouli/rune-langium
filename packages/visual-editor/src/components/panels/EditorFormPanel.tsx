@@ -38,6 +38,7 @@ import type {
   GraphNodeMeta,
   AnyGraphNode,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   TypeGraphNode,
   ExpressionEditorSlotProps
@@ -127,6 +128,8 @@ export interface EditorFormPanelProps {
   refOnly?: boolean;
   /** Available type options for type selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** All editor form actions. */
   actions: EditorFormActions;
   /** All graph nodes (for inherited member resolution). */
@@ -155,6 +158,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   isReadOnly = false,
   refOnly = false,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   allNodes = [],
   nodeRepository,
@@ -255,6 +259,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             meta={nodeMeta}
             availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
             actions={actions}
             allNodes={allNodes}
             renderExpressionEditor={renderExpressionEditor}
@@ -272,6 +277,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             meta={nodeMeta}
             availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
             actions={actions}
             allNodes={allNodes}
             onNavigateToNode={onNavigateToNode}
@@ -288,6 +294,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             meta={nodeMeta}
             availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
             actions={actions}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}

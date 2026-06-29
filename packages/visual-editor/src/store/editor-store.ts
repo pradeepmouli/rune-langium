@@ -323,6 +323,8 @@ export interface EditorActions {
   removeEnumValue(nodeId: string, valueName: string): void;
   updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
   reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
+  addEnumValueSynonym(nodeId: string, valueIndex: number, source: string, value: string): void;
+  removeEnumValueSynonym(nodeId: string, valueIndex: number, synIndex: number): void;
   setEnumParent(nodeId: string, parentId: string | null): void;
 
   // --- Choice operations ---
@@ -380,7 +382,7 @@ export interface EditorActions {
   // --- Metadata operations ---
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
-  addSynonym(nodeId: string, synonym: string): void;
+  addSynonym(nodeId: string, source: string, value?: string): void;
   removeSynonym(nodeId: string, index: number): void;
 
   // --- Annotation operations ---
@@ -1723,6 +1725,30 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no generated domain op at the enum-value level; push/splice inline
+          addEnumValueSynonym(nodeId: string, valueIndex: number, source: string, value: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as { $type?: string; enumValues?: any[] } | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const ev = d.enumValues?.[valueIndex];
+              if (!ev) return;
+              if (!Array.isArray(ev.enumSynonyms)) ev.enumSynonyms = [];
+              ev.enumSynonyms.push({ $type: 'RosettaEnumSynonym', sources: [{ $refText: source }], synonymValue: value });
+            });
+          },
+
+          removeEnumValueSynonym(nodeId: string, valueIndex: number, synIndex: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as { $type?: string; enumValues?: any[] } | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const arr = d.enumValues?.[valueIndex]?.enumSynonyms;
+              // Bounds guard: splice(-1, 1) would delete the LAST entry; out-of-range emits spurious patch.
+              if (Array.isArray(arr) && synIndex >= 0 && synIndex < arr.length) arr.splice(synIndex, 1);
+            });
+          },
+
           setEnumParent(nodeId: string, parentId: string | null) {
             const state = get();
             const parentNode = parentId ? state.nodesById.get(parentId) : null;
@@ -2141,7 +2167,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           },
 
           // item construction stays bespoke (rich-ref synonym shapes); append delegated to DomainOps
-          addSynonym(nodeId: string, synonym: string) {
+          addSynonym(nodeId: string, source: string, value?: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data;
@@ -2149,16 +2175,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const dd = d as { synonyms?: any[] };
               // Every synonym kind REQUIRES at least one source (grammar:
               // `'[' 'synonym' sources+=[RosettaSynonymSource:QualifiedName] ...`).
-              // The metadata UI collects a single free-text tag; the only field it
-              // can validly become is the synonym SOURCE — a source-only
-              // `[synonym <src>]` parses for class synonyms, whereas the previous
-              // `value.name`/`body.values`-only shapes rendered as unparsable
-              // `[synonym ]`. Data/Choice use RosettaClassSynonym, Enum uses
-              // RosettaSynonym (which additionally needs a body — see render-core,
-              // where a body-less enum synonym is omitted rather than corrupting).
-              const source = { $refText: synonym };
+              // Data/Choice use RosettaClassSynonym (optional value → { name }),
+              // Enum uses RosettaSynonym with a body (requires value — no-op when absent,
+              // since a body-less enum synonym renders unparsable in rosetta-render-core).
+              const sources = [{ $refText: source }];
               if (d.$type === 'Data' || d.$type === 'Choice') {
-                const newSyn = { $type: 'RosettaClassSynonym', sources: [source] };
+                const newSyn: any = { $type: 'RosettaClassSynonym', sources };
+                if (value) newSyn.value = { name: value };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 if (d.$type === 'Data') {
                   Data.addSynonym(d, newSyn as Parameters<typeof Data.addSynonym>[1]);
@@ -2166,7 +2189,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   Choice.addSynonym(d, newSyn as Parameters<typeof Choice.addSynonym>[1]);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
-                const newSyn = { $type: 'RosettaSynonym', sources: [source] };
+                if (!value) return; // enum-level RosettaSynonym requires a body value
+                const newSyn = { $type: 'RosettaSynonym', sources, body: { values: [{ name: value }] } };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 RosettaEnumeration.addSynonym(d, newSyn as Parameters<typeof RosettaEnumeration.addSynonym>[1]);
               }
