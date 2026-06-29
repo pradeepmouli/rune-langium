@@ -38,6 +38,7 @@ import { Input } from '@rune-langium/design-system/ui/input';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
 import { SourceRefField } from './SourceRefField.js';
+import { splitNodeId } from '../../store/node-projection.js';
 import type { SourceRefOption } from '../../types.js';
 
 // ---------------------------------------------------------------------------
@@ -161,23 +162,27 @@ export function MetadataSection({
 
   const handleAddSynonym = useCallback(() => {
     if (!pendingSource) return;
-    // Resolve the canonical id back to the bare source label (= $refText in AST)
-    const label =
-      synonymSourceOptions.find((o) => o.value === pendingSource)?.label ?? pendingSource;
+    const opt = synonymSourceOptions.find((o) => o.value === pendingSource);
+    // plan L15: a local (same-namespace) source stays bare; a cross-namespace
+    // source qualifies as `${ns}.${name}` (= opt.value, the canonical id).
+    // hostNs derives from ctx.nodeId when available; falls back to '' (root).
+    const hostNs = ctx?.nodeId ? splitNodeId(ctx.nodeId).namespace : '';
+    const refText =
+      opt?.namespace && opt.namespace !== hostNs ? opt.value : (opt?.label ?? pendingSource);
     const value = isEnumHost ? pendingValue || undefined : undefined;
 
     // Optimistic form-state update for immediate chip display
-    const entry: SynonymEntry = { sources: [{ $refText: label }] };
+    const entry: SynonymEntry = { sources: [{ $refText: refText }] };
     if (value) entry.value = { name: value };
     appendSynonym(entry as any);
 
     // Commit to graph
-    effectiveOnSynonymAdd(label, value);
+    effectiveOnSynonymAdd(refText, value);
 
     // Reset picker
     setPendingSource(null);
     setPendingValue('');
-  }, [pendingSource, pendingValue, isEnumHost, synonymSourceOptions, appendSynonym, effectiveOnSynonymAdd]);
+  }, [pendingSource, pendingValue, isEnumHost, synonymSourceOptions, ctx, appendSynonym, effectiveOnSynonymAdd]);
 
   const handleRemoveSynonym = useCallback(
     (index: number) => {

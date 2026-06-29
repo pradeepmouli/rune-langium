@@ -6,24 +6,40 @@
  *
  * Covers:
  * - Source trigger is reachable from the rendered section (Task 3 note)
- * - Data host: pick source → addSynonym(nodeId, label) fires, chip appears
- * - Data host with value: pick source + type value → addSynonym(nodeId, label, value) fires
- * - Enum host: value Input is visible; addSynonym(nodeId, label, value) fires
+ * - Same-namespace: picked source stays bare (plan L15, local-stays-bare half)
+ * - Cross-namespace: picked source qualifies as `${ns}.${name}` (plan L15, cross-ns half)
+ * - Enum host: value Input appears; addSynonym fires with (source, value)
+ * - Chip rendering: existing synonyms read AST {sources,value} objects
  * - Remove chip calls removeSynonym(index)
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { FormProvider, useForm } from 'react-hook-form';
 import type { ReactNode } from 'react';
 import { MetadataSection } from '../../src/components/editors/MetadataSection.js';
+import { EditorActionsProvider } from '../../src/components/forms/sections/EditorActionsContext.js';
 import type { SourceRefOption } from '../../src/types.js';
 
 // ---------------------------------------------------------------------------
 // Fixture options
 // ---------------------------------------------------------------------------
 
+// Default option list — source lives in namespace 'ns'
 const OPTIONS: SourceRefOption[] = [{ value: 'ns.FpML', label: 'FpML', namespace: 'ns' }];
+
+// Cross-namespace option — source lives in namespace 'other'
+const CROSS_NS_OPTIONS: SourceRefOption[] = [
+  { value: 'other.FIX', label: 'FIX', namespace: 'other' }
+];
+
+// Minimal EditorFormActions stub — only properties used by MetadataSection
+const MINIMAL_ACTIONS = {
+  addSynonym: vi.fn(),
+  removeSynonym: vi.fn(),
+  updateDefinition: vi.fn(),
+  updateComments: vi.fn()
+} as any;
 
 // ---------------------------------------------------------------------------
 // Test wrapper — provides RHF FormProvider with a given $type and synonyms
@@ -50,22 +66,40 @@ function renderSection(opts: {
   onSynonymAdd?: (source: string, value?: string) => void;
   onSynonymRemove?: (index: number) => void;
   synonymSourceOptions?: SourceRefOption[];
+  /** When provided, wraps MetadataSection with EditorActionsProvider so
+   *  ctx.nodeId is available for same-/cross-namespace resolution. */
+  nodeId?: string;
 }) {
   const {
     $type = 'Data',
     synonyms = [],
     onSynonymAdd = vi.fn(),
     onSynonymRemove = vi.fn(),
-    synonymSourceOptions = OPTIONS
+    synonymSourceOptions = OPTIONS,
+    nodeId
   } = opts;
+
+  const section = (
+    <MetadataSection
+      synonymSourceOptions={synonymSourceOptions}
+      onSynonymAdd={onSynonymAdd}
+      onSynonymRemove={onSynonymRemove}
+    />
+  );
+
+  // Wrap with EditorActionsProvider when nodeId is supplied so that
+  // handleAddSynonym can resolve ctx.nodeId → hostNs for namespace comparison.
+  const inner = nodeId ? (
+    <EditorActionsProvider nodeId={nodeId} actions={MINIMAL_ACTIONS}>
+      {section}
+    </EditorActionsProvider>
+  ) : (
+    section
+  );
 
   const utils = render(
     <Wrapper $type={$type} synonyms={synonyms}>
-      <MetadataSection
-        synonymSourceOptions={synonymSourceOptions}
-        onSynonymAdd={onSynonymAdd}
-        onSynonymRemove={onSynonymRemove}
-      />
+      {inner}
     </Wrapper>
   );
   return { ...utils, onSynonymAdd, onSynonymRemove };
@@ -76,11 +110,9 @@ function renderSection(opts: {
 // ---------------------------------------------------------------------------
 
 function pickSource(label: string) {
-  // Open the picker by clicking the trigger
   const trigger = document.querySelector('[data-slot="source-ref-trigger"]');
   expect(trigger).not.toBeNull();
   fireEvent.click(trigger!);
-  // Click the option
   fireEvent.click(screen.getByText(label));
 }
 
@@ -89,10 +121,6 @@ function pickSource(label: string) {
 // ---------------------------------------------------------------------------
 
 describe('MetadataSection — synonym source control', () => {
-  beforeEach(() => {
-    // No fake timers needed — synonym add is immediate (no debounce)
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -103,26 +131,49 @@ describe('MetadataSection — synonym source control', () => {
     expect(trigger).toBeInTheDocument();
   });
 
-  it('Data host: picking a source and clicking Add fires addSynonym(source)', () => {
+  // ── plan L15 — same-namespace: local source stays bare ──────────────────
+
+  it('same-namespace source: addSynonym fired with bare label (plan L15 local half)', () => {
+    // host in namespace 'ns', source also in 'ns' → refText = 'FpML' (bare)
     const onSynonymAdd = vi.fn();
-    renderSection({ $type: 'Data', onSynonymAdd });
+    renderSection({ $type: 'Data', onSynonymAdd, nodeId: 'ns.Trade' });
 
     pickSource('FpML');
-
-    const addBtn = screen.getByRole('button', { name: /^add$/i });
-    fireEvent.click(addBtn);
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
     expect(onSynonymAdd).toHaveBeenCalledWith('FpML', undefined);
   });
 
-  it('Data host: synonym chip appears after adding', () => {
-    renderSection({ $type: 'Data' });
+  // ── plan L15 — cross-namespace: source qualifies ────────────────────────
+
+  it('cross-namespace source: addSynonym fired with qualified $refText (plan L15 cross-ns half)', () => {
+    // host in namespace 'ns', source in namespace 'other' → refText = 'other.FIX'
+    const onSynonymAdd = vi.fn();
+    renderSection({
+      $type: 'Data',
+      onSynonymAdd,
+      nodeId: 'ns.Trade',
+      synonymSourceOptions: CROSS_NS_OPTIONS
+    });
+
+    pickSource('FIX');
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    expect(onSynonymAdd).toHaveBeenCalledWith('other.FIX', undefined);
+  });
+
+  // ── chip appearance ──────────────────────────────────────────────────────
+
+  it('synonym chip appears after adding (same-namespace)', () => {
+    renderSection({ $type: 'Data', nodeId: 'ns.Trade' });
 
     pickSource('FpML');
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
     expect(screen.getByText('FpML')).toBeInTheDocument();
   });
+
+  // ── enum host ────────────────────────────────────────────────────────────
 
   it('Data host: value Input is NOT visible for non-enum hosts', () => {
     renderSection({ $type: 'Data' });
@@ -136,25 +187,29 @@ describe('MetadataSection — synonym source control', () => {
     expect(valueInput).toBeInTheDocument();
   });
 
-  it('Enum host: addSynonym(source, value) fires with both args', () => {
+  it('Enum host: addSynonym(source, value) fires with both args (same-namespace)', () => {
+    // host in 'ns', source in 'ns' → refText = 'FpML' bare; value = 'TD'
     const onSynonymAdd = vi.fn();
-    renderSection({ $type: 'RosettaEnumeration', onSynonymAdd });
+    renderSection({ $type: 'RosettaEnumeration', onSynonymAdd, nodeId: 'ns.Rates' });
 
     pickSource('FpML');
 
     const valueInput = document.querySelector<HTMLInputElement>('[data-slot="synonym-value-input"]')!;
     fireEvent.change(valueInput, { target: { value: 'TD' } });
-
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
     expect(onSynonymAdd).toHaveBeenCalledWith('FpML', 'TD');
   });
+
+  // ── disabled state ───────────────────────────────────────────────────────
 
   it('Add button is disabled when no source is selected', () => {
     renderSection({});
     const addBtn = screen.getByRole('button', { name: /^add$/i });
     expect(addBtn).toBeDisabled();
   });
+
+  // ── existing chip rendering ──────────────────────────────────────────────
 
   it('existing synonym chips render the source $refText', () => {
     renderSection({
@@ -167,10 +222,12 @@ describe('MetadataSection — synonym source control', () => {
     renderSection({
       synonyms: [{ sources: [{ $refText: 'FIX' }], value: { name: 'TradeDate' } }]
     });
-    // Chip shows "FIX — TradeDate"
+    // Chip label is "FIX — TradeDate"
     expect(screen.getByText(/FIX/)).toBeInTheDocument();
     expect(screen.getByText(/TradeDate/)).toBeInTheDocument();
   });
+
+  // ── remove ───────────────────────────────────────────────────────────────
 
   it('clicking chip × calls removeSynonym(index)', () => {
     const onSynonymRemove = vi.fn();
