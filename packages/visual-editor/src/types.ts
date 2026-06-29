@@ -202,7 +202,7 @@ export interface CommonFormActions {
   deleteType(nodeId: string): void;
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
-  addSynonym(nodeId: string, synonym: string): void;
+  addSynonym(nodeId: string, source: string, value?: string): void;
   removeSynonym(nodeId: string, index: number): void;
   addAnnotation(nodeId: string, annotationName: string): void;
   removeAnnotation(nodeId: string, index: number): void;
@@ -244,6 +244,8 @@ export interface EnumFormActions extends CommonFormActions {
   removeEnumValue(nodeId: string, valueName: string): void;
   updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
   reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
+  addEnumValueSynonym(nodeId: string, valueIndex: number, source: string, value: string): void;
+  removeEnumValueSynonym(nodeId: string, valueIndex: number, synIndex: number): void;
   setEnumParent(nodeId: string, parentId: string | null): void;
 }
 

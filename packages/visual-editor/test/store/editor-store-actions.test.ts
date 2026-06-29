@@ -157,16 +157,21 @@ describe('EditorStore — new actions', () => {
   // -----------------------------------------------------------------------
 
   describe('addSynonym', () => {
-    it('adds a synonym to a node', () => {
-      const nodes = store.getState().nodes;
-      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+    it('adds a class synonym from a source ref (Data)', () => {
+      const node = store.getState().nodes.find((n) => n.data.name === 'Trade')!;
+      store.getState().addSynonym(node.id, 'FpML');
+      const syns = (store.getState().nodes.find((n) => n.id === node.id)!.data as any).synonyms;
+      expect(syns[0].$type).toBe('RosettaClassSynonym');
+      expect(syns[0].sources[0].$refText).toBe('FpML');
+    });
 
-      store.getState().addSynonym(tradeNode!.id, 'FpML_Trade');
-
-      const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      const syns = (updated!.data as any).synonyms;
-      expect(syns).toHaveLength(1);
-      expect(syns[0].sources[0].$refText).toBe('FpML_Trade');
+    it('sets a value on the synonym when provided', () => {
+      const node = store.getState().nodes.find((n) => n.data.name === 'Trade')!;
+      store.getState().addSynonym(node.id, 'FpML', 'Trade');
+      const syns = (store.getState().nodes.find((n) => n.id === node.id)!.data as any).synonyms;
+      expect(syns[0].$type).toBe('RosettaClassSynonym');
+      expect(syns[0].sources[0].$refText).toBe('FpML');
+      expect(syns[0].value).toEqual({ name: 'Trade' });
     });
 
     it('appends to existing synonyms', () => {
@@ -210,6 +215,67 @@ describe('EditorStore — new actions', () => {
 
       const syns = (store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any).synonyms;
       expect(syns.map((s: any) => s.sources[0].$refText)).toEqual(['FpML_Trade', 'FIX_Trade']); // both intact
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addEnumValueSynonym / removeEnumValueSynonym (separate model)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — enum-value synonym actions', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(ENUM_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  describe('addEnumValueSynonym', () => {
+    it('adds a RosettaEnumSynonym to enumValues[0].enumSynonyms', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration')!;
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FIX', 'TD');
+      const ev = (store.getState().nodes.find((n) => n.id === enumNode.id)!.data as any).enumValues[0];
+      expect(ev.enumSynonyms[0]).toMatchObject({
+        $type: 'RosettaEnumSynonym',
+        sources: [{ $refText: 'FIX' }],
+        synonymValue: 'TD'
+      });
+    });
+
+    it('is a no-op for a non-RosettaEnumeration node', () => {
+      // USD is an enumValue name, but the nodeId must be the enum itself.
+      // Using a non-existent nodeId — should silently no-op.
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().addEnumValueSynonym('non-existent-id', 0, 'FIX', 'TD');
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore);
+    });
+  });
+
+  describe('removeEnumValueSynonym', () => {
+    it('removes the enum-value synonym at synIndex', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration')!;
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FIX', 'TD');
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FpML', 'TradeDate');
+      store.getState().removeEnumValueSynonym(enumNode.id, 0, 0); // remove first
+
+      const ev = (store.getState().nodes.find((n) => n.id === enumNode.id)!.data as any).enumValues[0];
+      expect(ev.enumSynonyms).toHaveLength(1);
+      expect(ev.enumSynonyms[0].sources[0].$refText).toBe('FpML');
+    });
+
+    it('negative / out-of-range synIndex is a true no-op (does not delete the last entry)', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration')!;
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FIX', 'TD');
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().removeEnumValueSynonym(enumNode.id, 0, -1); // would delete last
+      store.getState().removeEnumValueSynonym(enumNode.id, 0, 99); // out of range
+
+      const ev = (store.getState().nodes.find((n) => n.id === enumNode.id)!.data as any).enumValues[0];
+      expect(ev.enumSynonyms).toHaveLength(1); // entry preserved
       expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });
   });
