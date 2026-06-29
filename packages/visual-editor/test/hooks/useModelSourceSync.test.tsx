@@ -22,6 +22,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import type { Patches } from 'mutative';
 import { parse } from '@rune-langium/core';
 import { useModelSourceSync } from '../../src/hooks/useModelSourceSync.js';
 import { useEditorStore } from '../../src/store/editor-store.js';
@@ -71,19 +72,25 @@ describe('useModelSourceSync', () => {
 
   it('calls onModelChanged with a non-empty Map when a node attribute changes', async () => {
     const onModelChanged = vi.fn();
+    // Supply the original source so the CST-reuse serializer has a baseline
+    // to slice clean subtrees from and regenerate the dirty attribute.
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
 
     const { rerender } = renderHook(
       ({
         nodes,
-        edges
+        edges,
+        patches
       }: {
         nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
         edges: ReturnType<typeof useEditorStore.getState>['edges'];
-      }) => useModelSourceSync(nodes, edges, onModelChanged),
+        patches: Patches;
+      }) => useModelSourceSync(nodes, edges, onModelChanged, 0, patches, srcMap),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,
-          edges: useEditorStore.getState().edges
+          edges: useEditorStore.getState().edges,
+          patches: [] as Patches
         }
       }
     );
@@ -103,10 +110,11 @@ describe('useModelSourceSync', () => {
       useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
 
-    // Re-render the hook with the new nodes/edges from the store.
+    // Re-render the hook with the new nodes/edges + accumulated patches from the store.
     const newNodes = useEditorStore.getState().nodes;
     const newEdges = useEditorStore.getState().edges;
-    rerender({ nodes: newNodes, edges: newEdges });
+    const newPatches = useEditorStore.getState().pendingEditPatches;
+    rerender({ nodes: newNodes, edges: newEdges, patches: newPatches });
 
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();
@@ -119,11 +127,97 @@ describe('useModelSourceSync', () => {
     expect(serialized).toBeInstanceOf(Map);
     expect(serialized.size).toBeGreaterThan(0);
 
-    // The serialized text must reflect the updated attribute type.
+    // The CST-reuse serializer regenerates the dirty Trade node and preserves
+    // all other content. The updated attribute type must appear in the output.
     const text = serialized.get('test.combined')!;
     expect(text).toBeDefined();
     expect(text).toMatch(/currency Product\b/);
     expect(text).not.toMatch(/currency CurrencyEnum\b/);
+  });
+
+  it('slices the FROZEN parse-baseline across two edits before a reparse (offset-drift guard)', async () => {
+    // Finding A: `$cstRange` offsets index the source the parser CONSUMED, and are
+    // only re-stamped on a reparse (parseEpoch bump). The caller builds
+    // originalSourceByNamespace from LIVE file content, which diverges from those
+    // offsets the moment the FIRST write-back mutates the file. A SECOND edit made
+    // before a reparse then slices the already-mutated content with STALE offsets,
+    // corrupting clean siblings. The hook must freeze the baseline at parse time
+    // and ignore live content until parseEpoch advances.
+    const onModelChanged = vi.fn();
+    const baseline = COMBINED_MODEL_SOURCE;
+
+    const baselineNodes = useEditorStore.getState().nodes;
+    const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
+    const tradeId = tradeNode.id;
+    const productId = productNode.id;
+
+    // parseEpoch is held CONSTANT (no reparse) across both edits.
+    const EPOCH = 5;
+    const { rerender } = renderHook(
+      ({
+        nodes,
+        patches,
+        srcMap
+      }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        patches: Patches;
+        srcMap: Map<string, string>;
+      }) => useModelSourceSync(nodes, [], onModelChanged, EPOCH, patches, srcMap),
+      {
+        initialProps: {
+          nodes: baselineNodes,
+          patches: [] as Patches,
+          srcMap: new Map([['test.combined', baseline]])
+        }
+      }
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // --- Edit #1: Trade.currency CurrencyEnum -> Product (a length-changing edit
+    // that shifts every offset after the Trade block). ---
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeId, 'currency', 'Product', productId);
+    });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      patches: useEditorStore.getState().pendingEditPatches,
+      srcMap: new Map([['test.combined', baseline]])
+    });
+    await waitFor(() => expect(onModelChanged).toHaveBeenCalled());
+    const out1 = (onModelChanged.mock.calls.at(-1)![0] as Map<string, string>).get('test.combined')!;
+    expect(out1).toContain('currency Product (1..1)');
+
+    // Simulate the write-back: live file content is now `out1`. A BUGGY caller
+    // would feed THIS (already-mutated, offsets stale) into the next serialize.
+    const liveAfterWriteback = new Map([['test.combined', out1]]);
+    onModelChanged.mockClear();
+
+    // --- Edit #2 BEFORE any reparse (parseEpoch still EPOCH): Product.productName
+    // string -> Trade. Patches accumulate; both Trade and Product are now dirty. ---
+    act(() => {
+      useEditorStore.getState().updateAttributeType(productId, 'productName', 'Trade', tradeId);
+    });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      patches: useEditorStore.getState().pendingEditPatches,
+      srcMap: liveAfterWriteback // the live, mutated content — must be IGNORED
+    });
+    await waitFor(() => expect(onModelChanged).toHaveBeenCalled());
+    const out2 = (onModelChanged.mock.calls.at(-1)![0] as Map<string, string>).get('test.combined')!;
+
+    // Correct result = baseline with BOTH edits applied; clean siblings (the
+    // PaymentType choice and CurrencyEnum enum) byte-for-byte intact. Slicing the
+    // mutated `out1` with stale offsets would corrupt those clean blocks.
+    const expected = baseline
+      .replace('currency CurrencyEnum (1..1)', 'currency Product (1..1)')
+      .replace('productName string (1..1)', 'productName Trade (1..1)');
+    expect(out2).toBe(expected);
   });
 
   it('does NOT call onModelChanged when only node position changes', async () => {
@@ -218,6 +312,8 @@ describe('useModelSourceSync', () => {
     const onModelChanged = vi.fn();
     const baselineNodes = useEditorStore.getState().nodes;
     const edges = useEditorStore.getState().edges;
+    // Supply source so CST-reuse can produce content to compare.
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
 
     const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
     const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
@@ -225,11 +321,12 @@ describe('useModelSourceSync', () => {
       useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
     const changedNodes = useEditorStore.getState().nodes;
+    const changedPatches = useEditorStore.getState().pendingEditPatches;
 
     const { rerender } = renderHook(
-      ({ nodes, epoch }: { nodes: typeof baselineNodes; epoch: number }) =>
-        useModelSourceSync(nodes, edges, onModelChanged, epoch),
-      { initialProps: { nodes: baselineNodes, epoch: 7 } }
+      ({ nodes, epoch, patches }: { nodes: typeof baselineNodes; epoch: number; patches: Patches }) =>
+        useModelSourceSync(nodes, edges, onModelChanged, epoch, patches, srcMap),
+      { initialProps: { nodes: baselineNodes, epoch: 7, patches: [] as Patches } }
     );
     await act(async () => {
       await Promise.resolve();
@@ -238,7 +335,7 @@ describe('useModelSourceSync', () => {
     onModelChanged.mockClear();
 
     // Content differs, parseEpoch UNCHANGED (7) → user-origin → serialize fires.
-    rerender({ nodes: changedNodes, epoch: 7 });
+    rerender({ nodes: changedNodes, epoch: 7, patches: changedPatches });
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();
     });
@@ -247,9 +344,9 @@ describe('useModelSourceSync', () => {
   it('does NOT serialize deferred placeholder nodes (curated stubs the user did not author)', async () => {
     // Deferred-export placeholders (`meta.deferred === true`) are `{ $type, name }`
     // stubs for namespaces the user did NOT author. Serializing them emits stub
-    // elements into source files the user never wrote — modelsToAst filters them
-    // at the serialization boundary; this pins that end-to-end through the
-    // hook's emission path.
+    // elements into source files the user never wrote — buildSourceForNamespaces
+    // filters them at the serialization boundary; this pins that end-to-end
+    // through the hook's emission path.
     const onModelChanged = vi.fn();
     const deferredStub = {
       id: 'other.curated.Stub',
@@ -261,10 +358,13 @@ describe('useModelSourceSync', () => {
 
     const baselineNodes = [...useEditorStore.getState().nodes, deferredStub];
     const edges = useEditorStore.getState().edges;
+    // Supply source only for the user-authored namespace; curated has none.
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
 
     const { rerender } = renderHook(
-      ({ nodes }: { nodes: typeof baselineNodes }) => useModelSourceSync(nodes, edges, onModelChanged),
-      { initialProps: { nodes: baselineNodes } }
+      ({ nodes, patches }: { nodes: typeof baselineNodes; patches: Patches }) =>
+        useModelSourceSync(nodes, edges, onModelChanged, 0, patches, srcMap),
+      { initialProps: { nodes: baselineNodes, patches: [] as Patches } }
     );
 
     // Allow initial-skip to settle.
@@ -281,7 +381,8 @@ describe('useModelSourceSync', () => {
       useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
 
-    rerender({ nodes: [...useEditorStore.getState().nodes, deferredStub] });
+    const newPatches = useEditorStore.getState().pendingEditPatches;
+    rerender({ nodes: [...useEditorStore.getState().nodes, deferredStub], patches: newPatches });
 
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();
@@ -291,6 +392,57 @@ describe('useModelSourceSync', () => {
     // The user-authored namespace serializes; the deferred stub's namespace must NOT.
     expect(serialized.has('test.combined')).toBe(true);
     expect(serialized.has('other.curated')).toBe(false);
+  });
+
+  it('re-captures the frozen baseline on parseEpoch advance so subsequent user edits fire correctly', async () => {
+    // Regression guard: the hook freezes a parse-origin source baseline at mount
+    // and advances it ONLY when parseEpoch bumps. This test confirms the advance
+    // happens: after a parse-origin render (epoch bumped, no callback), a
+    // subsequent user edit (epoch unchanged) must still fire onModelChanged.
+    // If the hook failed to re-capture the baseline on epoch advance its
+    // lastSerializedRef would stay stale, the byte-equality de-dup could misfire,
+    // and the user edit would be silently lost.
+    const onModelChanged = vi.fn();
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
+    const baselineNodes = useEditorStore.getState().nodes;
+    const tradeNode = baselineNodes.find((n) => n.data.name === 'Trade')!;
+    const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
+
+    const { rerender } = renderHook(
+      ({ nodes, epoch, patches }: {
+        nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
+        epoch: number;
+        patches: Patches;
+      }) => useModelSourceSync(nodes, [], onModelChanged, epoch, patches, srcMap),
+      { initialProps: { nodes: baselineNodes, epoch: 5, patches: [] as Patches } }
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    onModelChanged.mockClear();
+
+    // Parse-origin render: epoch bumps, hook must NOT call onModelChanged but
+    // MUST re-capture srcMap as the new frozen baseline for subsequent edits.
+    rerender({ nodes: baselineNodes, epoch: 6, patches: [] as Patches });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onModelChanged).not.toHaveBeenCalled(); // parse-origin gate fires
+
+    // User edit (epoch unchanged at 6): the re-captured baseline means the
+    // hook correctly diffs the edited nodes against the frozen source and fires.
+    act(() => {
+      useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
+    });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      epoch: 6,
+      patches: useEditorStore.getState().pendingEditPatches
+    });
+    await waitFor(() => expect(onModelChanged).toHaveBeenCalled());
+
+    const out = (onModelChanged.mock.calls.at(-1)![0] as Map<string, string>).get('test.combined')!;
+    expect(out).toMatch(/currency Product\b/);
+    expect(out).not.toMatch(/currency CurrencyEnum\b/);
   });
 
   it('does NOT call onModelChanged when onModelChanged is undefined', async () => {

@@ -6,7 +6,7 @@
  * declarations — JSON only, NO Langium deserialize/link. Used to compute the
  * curated dependency closure without paying the link cost.
  *
- * Serialized shape (packages/core/src/serializer/rosetta-serializer.ts):
+ * Serialized shape (packages/core/src/serializer/rune-serialize.ts via Langium JsonSerializer):
  *   { $type:'RosettaModel', name: string | { segments: string[] },
  *     imports?: Array<{ importedNamespace?: string }> }
  * `importedNamespace` is a QualifiedNameWithWildcard, e.g. `cdm.base.datetime`

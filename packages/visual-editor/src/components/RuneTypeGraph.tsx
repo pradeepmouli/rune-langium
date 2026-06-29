@@ -75,7 +75,8 @@ import { getNodeHeight, getNodeWidth } from '../layout/node-dimensions.js';
 import { STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { shouldReplaceLayoutPositions } from './layout-sync.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
-import { serializeModel, indexById } from '@rune-langium/core';
+import { indexById } from '@rune-langium/core';
+import { emitModelText } from '@rune-langium/codegen/rosetta';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
 import { selectNodeRepository } from '../store/node-repository.js';
@@ -830,12 +831,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         const result = new Map<string, string>();
         for (const model of outputModels) {
           try {
-            // Use the real serializer from @rune-langium/core. The prior
-            // placeholder emitted a single-line comment instead of actual
-            // .rosetta text, so inspector/structure edits never reached the
-            // source pane downstream of onModelChanged (2026-05-20 prod-smoke
-            // check, Defect B).
-            result.set(model.name, serializeModel(model));
+            result.set(model.name, emitModelText(model));
           } catch {
             result.set(model.name, `// Error serializing ${model.name}`);
           }

@@ -105,7 +105,6 @@ import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
-import { mergeSerializedIntoSource } from '../utils/source-merge.js';
 import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
@@ -621,6 +620,7 @@ export function ExplorePerspective() {
   // parseEpoch gates source serialization: only USER edits (not parse-driven
   // graph rebuilds) get written back to source — see useModelSourceSync.
   const storeParseEpoch = useEditorStore((s) => s.parseEpoch);
+  const storePendingEditPatches = useEditorStore((s) => s.pendingEditPatches);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
   const expandedNamespaces = visibility.expandedNamespaces;
@@ -1060,6 +1060,17 @@ export function ExplorePerspective() {
     return map;
   }, [resolvedModelFiles]);
 
+  // Invert namespaceToFile against the current file content so the CST-reuse
+  // serializer has the original source text to slice for clean subtrees.
+  const originalSourceByNamespace = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [ns, filePath] of namespaceToFile) {
+      const file = files.find((f) => f.path === filePath);
+      if (file) map.set(ns, file.content);
+    }
+    return map;
+  }, [files, namespaceToFile]);
+
   const nodeIdToFilePath = useMemo(() => {
     const map = new Map<string, string>();
     for (const entry of resolvedModelFiles) {
@@ -1236,35 +1247,20 @@ export function ExplorePerspective() {
   );
 
   const handleModelChanged = useCallback(
-    async (serialized: Map<string, string>) => {
-      // Smart-merge serialized output into the original source so we don't
-      // erase root elements the serializer can't emit (Function bodies,
-      // TypeAlias, Rule, Report, RecordType, BasicType, …). See
-      // `mergeSerializedIntoSource` and PR #221's Codex P1 review for the
-      // history. Wholesale-overwriting `f.content` with `text` was a
-      // data-loss regression strictly worse than the bug it fixed.
+    (serialized: Map<string, string>) => {
+      // The CST-reuse serializer (buildSourceForNamespaces) already produces
+      // full merged file text — no separate mergeSerializedIntoSource step.
       const filesAtStart = filesRef.current;
-      const mergedEntries = await Promise.all(
-        filesAtStart.map(async (f) => {
-          for (const [ns, text] of serialized) {
-            if (namespaceToFile.get(ns) !== f.path) continue;
-            const merged = await mergeSerializedIntoSource(f.content, text);
-            // Avoid marking the file dirty when the merge collapsed to a
-            // no-op (effect re-fired but content actually matched). This
-            // mirrors the visual-editor source-sync's own equality guard.
-            if (merged === f.content) return f;
-            return { ...f, content: merged, dirty: true };
-          }
-          return f;
-        })
-      );
-      // Discard the result if the underlying files array changed under us
-      // mid-await — the next handler invocation will produce a fresh merge
-      // from the up-to-date baseline.
-      if (filesRef.current !== filesAtStart) return;
-      const changed = mergedEntries.some((entry, i) => entry !== filesAtStart[i]);
-      if (!changed) return;
-      onFilesChange?.(mergedEntries);
+      const merged = filesAtStart.map((f) => {
+        for (const [ns, text] of serialized) {
+          if (namespaceToFile.get(ns) !== f.path) continue;
+          if (text === f.content) return f;
+          return { ...f, content: text, dirty: true };
+        }
+        return f;
+      });
+      if (!merged.some((e, i) => e !== filesAtStart[i])) return;
+      onFilesChange?.(merged);
     },
     [namespaceToFile, onFilesChange]
   );
@@ -1274,7 +1270,7 @@ export function ExplorePerspective() {
   // Previously this subscription lived inside RuneTypeGraph, which is only
   // mounted when the Graph pane is active; Structure-pane edits never reached
   // the source pane (2026-05-21, fix/inspector-source-sync).
-  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch);
+  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch, storePendingEditPatches, originalSourceByNamespace);
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics } = useDiagnosticsStore();

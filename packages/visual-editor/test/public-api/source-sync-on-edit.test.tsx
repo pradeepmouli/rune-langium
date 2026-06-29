@@ -29,6 +29,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, renderHook, act, waitFor, cleanup } from '@testing-library/react';
 import { createRef } from 'react';
+import type { Patches } from 'mutative';
 import { parse } from '@rune-langium/core';
 import { RuneTypeGraph } from '../../src/components/RuneTypeGraph.js';
 import { useModelSourceSync } from '../../src/hooks/useModelSourceSync.js';
@@ -85,18 +86,24 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
 
     // Push-subscription now lives in useModelSourceSync (lifted out of
     // RuneTypeGraph so the sync works regardless of which pane is mounted).
+    // Supply original source so the CST-reuse serializer has a baseline to
+    // slice unchanged subtrees and regenerate only the dirty attribute.
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
     const { rerender } = renderHook(
       ({
         nodes,
-        edges
+        edges,
+        patches
       }: {
         nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
         edges: ReturnType<typeof useEditorStore.getState>['edges'];
-      }) => useModelSourceSync(nodes, edges, onModelChanged),
+        patches: Patches;
+      }) => useModelSourceSync(nodes, edges, onModelChanged, 0, patches, srcMap),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,
-          edges: useEditorStore.getState().edges
+          edges: useEditorStore.getState().edges,
+          patches: [] as Patches
         }
       }
     );
@@ -118,7 +125,11 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
       useEditorStore.getState().updateAttributeType(tradeNode.id, 'currency', productNode.data.name, productNode.id);
     });
 
-    rerender({ nodes: useEditorStore.getState().nodes, edges: useEditorStore.getState().edges });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      edges: useEditorStore.getState().edges,
+      patches: useEditorStore.getState().pendingEditPatches
+    });
 
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();
@@ -128,9 +139,8 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
     const serialized = lastCall[0] as Map<string, string>;
     const text = serialized.get('test.combined')!;
 
-    // The updated source should now reflect `currency Product` instead of
-    // `currency CurrencyEnum`. Match flexibly because cardinality formatting
-    // is independent of the bug we're guarding.
+    // The CST-reuse serializer regenerates the dirty Trade node: the updated
+    // attribute type must appear in the output while the rest is preserved.
     expect(text).toMatch(/currency Product\b/);
     expect(text).not.toMatch(/currency CurrencyEnum\b/);
   });
@@ -141,18 +151,23 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
 
     // Push-subscription now lives in useModelSourceSync (lifted out of
     // RuneTypeGraph so the sync works regardless of which pane is mounted).
+    // Supply original source so the CST-reuse serializer has a baseline.
+    const srcMap = new Map([['test.combined', COMBINED_MODEL_SOURCE]]);
     const { rerender } = renderHook(
       ({
         nodes,
-        edges
+        edges,
+        patches
       }: {
         nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
         edges: ReturnType<typeof useEditorStore.getState>['edges'];
-      }) => useModelSourceSync(nodes, edges, onModelChanged),
+        patches: Patches;
+      }) => useModelSourceSync(nodes, edges, onModelChanged, 0, patches, srcMap),
       {
         initialProps: {
           nodes: useEditorStore.getState().nodes,
-          edges: useEditorStore.getState().edges
+          edges: useEditorStore.getState().edges,
+          patches: [] as Patches
         }
       }
     );
@@ -171,7 +186,11 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
       useEditorStore.getState().renameAttribute(tradeNode.id, 'tradeDate', 'executionDate');
     });
 
-    rerender({ nodes: useEditorStore.getState().nodes, edges: useEditorStore.getState().edges });
+    rerender({
+      nodes: useEditorStore.getState().nodes,
+      edges: useEditorStore.getState().edges,
+      patches: useEditorStore.getState().pendingEditPatches
+    });
 
     await waitFor(() => {
       expect(onModelChanged).toHaveBeenCalled();
@@ -179,6 +198,7 @@ describe('Inspector/structure edits -> source pane sync (Defect B)', () => {
 
     const serialized = onModelChanged.mock.calls.at(-1)![0] as Map<string, string>;
     const text = serialized.get('test.combined')!;
+    // The CST-reuse serializer regenerates the dirty Trade node with the renamed attribute.
     expect(text).toMatch(/\bexecutionDate\b/);
     expect(text).not.toMatch(/\btradeDate\b/);
   });

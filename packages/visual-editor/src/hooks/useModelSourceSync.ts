@@ -25,10 +25,11 @@
  */
 
 import { useEffect, useRef } from 'react';
+import type { Patches } from 'mutative';
 import type { TypeGraphNode, TypeGraphEdge } from '../types.js';
-import { modelsToAst } from '../adapters/model-to-ast.js';
-import { astRelevantProjection } from '../store/node-projection.js';
-import { serializeModel } from '@rune-langium/core';
+import { astRelevantProjection, nameFromNodeId } from '../store/node-projection.js';
+import { serializeNamespaceToSource } from '../serialize/cst-reuse-serializer.js';
+import { buildDirtyIndex } from '../serialize/dirty-paths.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -76,6 +77,84 @@ function computeContentFingerprint(nodes: TypeGraphNode[], edges: TypeGraphEdge[
 }
 
 // ---------------------------------------------------------------------------
+// Pure helper — exported so it can be unit-tested without React
+// ---------------------------------------------------------------------------
+
+export interface BuildSourceArgs {
+  nodes: TypeGraphNode[];
+  edges: TypeGraphEdge[];
+  originalSourceByNamespace: Map<string, string>;
+  patches: Patches;
+}
+
+/** Pure: produce Map<namespace, full .rosetta source> via CST-reuse. */
+export function buildSourceForNamespaces(args: BuildSourceArgs): Map<string, string> {
+  const { nodes, edges, originalSourceByNamespace, patches } = args;
+  const dirty = buildDirtyIndex(patches);
+
+  // Inheritance is carried on EDGES (extends / enum-extends), not on the
+  // node's data subtree, so an inheritance change does NOT produce a `nodes`
+  // patch. Reflect the edge-derived parent onto a shallow clone of node.data
+  // and force-regenerate any node whose effective parent differs from the
+  // original (dehydrated) value. Mirrors model-to-ast.ts:buildInheritanceMap.
+  const inheritanceTarget = new Map<string, string>(); // sourceNodeId -> targetNodeId
+  for (const e of edges) {
+    if (e.data?.kind === 'extends' || e.data?.kind === 'enum-extends') {
+      inheritanceTarget.set(e.source, e.target);
+    }
+  }
+  const forceDirtyNodeIds = new Set<string>();
+  const effectiveNodes = nodes.map((n) => {
+    const targetId = inheritanceTarget.get(n.id);
+    const d = n.data as { $type?: string; superType?: { $refText?: string }; parent?: { $refText?: string } };
+    const refKey = d.$type === 'RosettaEnumeration' ? 'parent' : 'superType';
+    const original = (d as Record<string, { $refText?: string } | undefined>)[refKey]?.$refText;
+    const effective = targetId === undefined ? undefined : nameFromNodeId(targetId);
+    // Prefer the existing qualified $refText when the edge agrees; only override
+    // when the edge introduces/changes/removes inheritance.
+    if (effective !== undefined && original === undefined) {
+      forceDirtyNodeIds.add(n.id);
+      return cloneWithRef(n, refKey, effective);
+    }
+    if (effective === undefined && original !== undefined) {
+      forceDirtyNodeIds.add(n.id);
+      return cloneWithRef(n, refKey, undefined);
+    }
+    return n; // unchanged inheritance (or both absent) — reuse as-is
+  });
+
+  const byNs = new Map<string, TypeGraphNode[]>();
+  for (const n of effectiveNodes) {
+    if (n.meta.deferred) continue; // curated placeholders are never source
+    const ns = n.meta.namespace;
+    (byNs.get(ns) ?? byNs.set(ns, []).get(ns)!).push(n);
+  }
+  const out = new Map<string, string>();
+  for (const [ns, nsNodes] of byNs) {
+    const originalSource = originalSourceByNamespace.get(ns);
+    if (originalSource === undefined) continue; // no baseline to reuse — skip (degraded)
+    // Backstop: an unexpected serializer error must never crash the source-sync
+    // effect. Skip the failing namespace (do NOT write to out) so other
+    // namespaces continue to serialize normally. The previous persisted text for
+    // this namespace remains in effect until a successful serialize or reparse.
+    try {
+      out.set(ns, serializeNamespaceToSource({ nodes: nsNodes, originalSource, dirty, forceDirtyNodeIds }));
+    } catch (err) {
+      console.warn(`[cst-reuse] namespace "${ns}" serialization failed — skipping`, err);
+    }
+  }
+  return out;
+}
+
+// Shallow-clone a node, replacing the inheritance ref field. $cstRange survives
+// the shallow clone (it is a sibling field on data).
+function cloneWithRef(n: TypeGraphNode, refKey: string, refText: string | undefined): TypeGraphNode {
+  const data = { ...(n.data as Record<string, unknown>) };
+  data[refKey] = refText === undefined ? undefined : { $refText: refText };
+  return { ...n, data } as TypeGraphNode;
+}
+
+// ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
@@ -103,7 +182,20 @@ export function useModelSourceSync(
    * Optional/defaulted so non-studio callers (tests, standalone) keep the old
    * "serialize every content change" behavior.
    */
-  parseEpoch = 0
+  parseEpoch = 0,
+  /**
+   * The store's accumulated Mutative patches since the last parse. Drives the
+   * CST-reuse dirty set: only nodes/subtrees touched by a patch are
+   * regenerated; everything else is sliced verbatim from originalSourceByNamespace.
+   */
+  patches: Patches = [],
+  /**
+   * Original source text keyed by namespace name — used as the CST baseline for
+   * the reuse serializer. Built by the caller from the current workspace files.
+   * Defaults to an empty map so legacy/test callers that don't supply it get an
+   * empty output (no write-back).
+   */
+  originalSourceByNamespace: Map<string, string> = new Map()
 ): void {
   // Keep a stable ref so the effect doesn't need to re-register when the
   // callback identity changes (e.g. inline arrow in EditorPage).
@@ -117,6 +209,20 @@ export function useModelSourceSync(
   const lastContentFingerprintRef = useRef<string | null>(null);
   const lastParseEpochRef = useRef(parseEpoch);
 
+  // PARSE-BASELINE source (offset-drift fix). Each dehydrated node's `$cstRange`
+  // offsets index the EXACT source text the parser consumed; they are only
+  // re-stamped on a reparse (which bumps `parseEpoch`). The `originalSourceByNamespace`
+  // the caller passes is built from LIVE file content, which DIVERGES from those
+  // offsets the moment the first write-back mutates the file. Slicing the
+  // already-mutated live text with stale baseline offsets corrupts clean siblings
+  // on a SECOND edit made before a reparse re-stamps `$cstRange`.
+  //
+  // Freeze the baseline here and advance it ONLY when `parseEpoch` advances, so
+  // it stays in lockstep with `$cstRange`. Every serialize between reparses then
+  // slices the exact text the offsets point at — never live file content.
+  // Initialised to the mount-time source (the authoritative parsed text at load).
+  const parseBaselineSourceRef = useRef(originalSourceByNamespace);
+
   useEffect(() => {
     const handler = onModelChangedRef.current;
     if (!handler) return;
@@ -126,6 +232,16 @@ export function useModelSourceSync(
     // the graph was rebuilt FROM source — it must NOT be serialized back.
     const parseAdvanced = parseEpoch !== lastParseEpochRef.current;
     lastParseEpochRef.current = parseEpoch;
+
+    // Advance the frozen parse-baseline ONLY when a reparse re-stamped `$cstRange`
+    // (parseEpoch bump). The just-arrived `originalSourceByNamespace` is the exact
+    // text those new offsets index. Between reparses the ref stays frozen so every
+    // serialize slices the baseline the offsets actually point at — never the
+    // already-mutated live file content. (See parseBaselineSourceRef above.)
+    if (parseAdvanced) {
+      parseBaselineSourceRef.current = originalSourceByNamespace;
+    }
+    const baselineSource = parseBaselineSourceRef.current;
 
     const fingerprint = computeContentFingerprint(nodes, edges);
     if (lastContentFingerprintRef.current === fingerprint) return;
@@ -138,30 +254,18 @@ export function useModelSourceSync(
     // the parse as the new serialize baseline and bail without emitting. Only
     // genuine USER edits (parseEpoch unchanged) fall through to serialize.
     if (parseAdvanced) {
-      const baseline = new Map<string, string>();
-      // Deferred placeholder nodes are excluded inside modelsToAst itself —
-      // the serialization-boundary filter covers every caller.
-      for (const model of modelsToAst(nodes, edges)) {
-        try {
-          baseline.set(model.name, serializeModel(model));
-        } catch {
-          baseline.set(model.name, `// Error serializing ${model.name}`);
-        }
-      }
+      // At parse time pendingEditPatches has just been cleared, so patches is
+      // empty → every node is subtree-clean → each namespace's text is sliced
+      // verbatim from originalSourceByNamespace (the authoritative parsed source).
+      // Using the same serializer as the user-edit path keeps the
+      // lastSerializedRef baseline byte-equal to what the edit path will produce,
+      // so the byte-equality de-dup fires correctly on the first user edit.
+      lastSerializedRef.current = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches });
       hasFiredInitialSerializeRef.current = true;
-      lastSerializedRef.current = baseline;
       return;
     }
 
-    const outputModels = modelsToAst(nodes, edges);
-    const next = new Map<string, string>();
-    for (const model of outputModels) {
-      try {
-        next.set(model.name, serializeModel(model));
-      } catch {
-        next.set(model.name, `// Error serializing ${model.name}`);
-      }
-    }
+    const next = buildSourceForNamespaces({ nodes, edges, originalSourceByNamespace: baselineSource, patches });
 
     // Skip the very first emission after mount — at load time the source
     // pane already has the authoritative parsed text, and re-emitting would
@@ -189,5 +293,5 @@ export function useModelSourceSync(
     // async smart-merge), but the source-sync effect intentionally does
     // not await it.
     void handler(next);
-  }, [nodes, edges, parseEpoch]);
+  }, [nodes, edges, parseEpoch, patches, originalSourceByNamespace]);
 }

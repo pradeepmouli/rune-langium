@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
+    },
+    "./rosetta": {
+      "types": "./dist/src/rosetta.d.ts",
+      "default": "./dist/src/rosetta.js"
     }
   },
   "bin": {
