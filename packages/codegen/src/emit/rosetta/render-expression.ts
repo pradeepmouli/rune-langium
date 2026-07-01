@@ -132,7 +132,102 @@ function dispatch(node: AnyNode): string {
   }
 }
 
-// Task 3 fills this with postfix/functional/control-flow/constructor cases.
+const SIMPLE_POSTFIX = new Set([
+  'RosettaOnlyElement', 'RosettaCountOperation', 'FlattenOperation', 'DistinctOperation',
+  'ReverseOperation', 'FirstOperation', 'LastOperation', 'SumOperation', 'OneOfOperation',
+  'ToStringOperation', 'ToNumberOperation', 'ToIntOperation', 'ToTimeOperation',
+  'ToDateOperation', 'ToDateTimeOperation', 'ToZonedDateTimeOperation'
+]);
+
+const FUNCTIONAL_OPS = new Set([
+  'FilterOperation', 'MapOperation', 'ReduceOperation', 'SortOperation', 'MinOperation', 'MaxOperation'
+]);
+
+/** `arg ` prefix for postfix operators (empty when the op is argument-less). */
+function argPrefix(node: AnyNode): string {
+  return node['argument'] ? `${r(node['argument'], PREC_POSTFIX)} ` : '';
+}
+
+/** Grammar: `(params (',' params)*)? '[' body ']'` — params BEFORE the bracket. */
+function renderInlineFunction(fn: { body: unknown; parameters?: Array<{ name: string }> }): string {
+  const params = (fn.parameters ?? []).map((p) => p.name);
+  const prefix = params.length > 0 ? `${params.join(', ')} ` : '';
+  return `${prefix}[${r(fn.body, 1)}]`;
+}
+
+function renderSwitchCase(c: AnyNode): string {
+  const expr = r(c['expression'], 1);
+  const guard = c['guard'] as AnyNode | undefined;
+  if (!guard) return `default ${expr}`;
+  const guardText = guard['referenceGuard']
+    ? refText(guard['referenceGuard'])
+    : dispatch(guard['literalGuard'] as AnyNode);
+  return `${guardText} then ${expr}`;
+}
+
 function dispatchExtended(node: AnyNode, _p: number): string {
-  throw new UnsupportedExpressionError(node.$type);
+  const $type = node.$type;
+
+  if (SIMPLE_POSTFIX.has($type)) return `${argPrefix(node)}${node['operator']}`;
+
+  if (FUNCTIONAL_OPS.has($type)) {
+    const fn = node['function'] as { body: unknown; parameters?: Array<{ name: string }> } | undefined;
+    return `${argPrefix(node)}${node['operator']}${fn ? ` ${renderInlineFunction(fn)}` : ''}`;
+  }
+
+  switch ($type) {
+    case 'RosettaExistsExpression': {
+      const modifier = node['modifier'] ? `${node['modifier']} ` : '';
+      return `${argPrefix(node)}${modifier}exists`;
+    }
+    case 'RosettaAbsentExpression':
+      return `${argPrefix(node)}is absent`;
+    case 'RosettaOnlyExistsExpression': {
+      const args = (node['args'] as unknown[] | undefined) ?? [];
+      if (args.length > 0) return `(${args.map((a) => r(a, 1)).join(', ')}) only exists`;
+      return `${argPrefix(node)}only exists`;
+    }
+    case 'ToEnumOperation':
+      return `${argPrefix(node)}to-enum ${refText(node['enumeration'])}`;
+    case 'ThenOperation': {
+      // Grammar: function=ImplicitInlineFunction (body=OrOperation) — render BARE.
+      const fn = node['function'] as { body: unknown } | undefined;
+      const body = fn ? ` ${r(fn.body, 2)}` : '';
+      return `${r(node['argument'], 1)} then${body}`;
+    }
+    case 'ChoiceOperation': {
+      const attrs = ((node['attributes'] as unknown[] | undefined) ?? []).map(refText).join(', ');
+      return `${argPrefix(node)}${node['necessity']} choice ${attrs}`;
+    }
+    case 'SwitchOperation': {
+      const cases = ((node['cases'] as AnyNode[] | undefined) ?? []).map(renderSwitchCase).join(', ');
+      return `${argPrefix(node)}switch ${cases}`;
+    }
+    case 'WithMetaOperation': {
+      const entries = ((node['entries'] as AnyNode[] | undefined) ?? [])
+        .map((e) => `${refText(e['key'])}: ${r(e['value'], 1)}`).join(', ');
+      const suffix = entries ? ` { ${entries} }` : '';
+      return `${r(node['argument'], PREC_POSTFIX)} with-meta${suffix}`;
+    }
+    case 'AsKeyOperation':
+      return `${r(node['argument'], 1)} as-key`;
+    case 'RosettaConditionalExpression': {
+      // Grammar branches are OrOperation — a then/conditional child needs parens.
+      const head = `if ${r(node['if'], 2)} then ${r(node['ifthen'], 2)}`;
+      return node['full'] ? `${head} else ${r(node['elsethen'], 2)}` : head;
+    }
+    case 'RosettaConstructorExpression': {
+      const typeName = dispatch(node['typeRef'] as AnyNode);
+      const typeArgs = ((node['constructorTypeArgs'] as AnyNode[] | undefined) ?? [])
+        .map((a) => `${refText(a['parameter'])}: ${r(a['value'], 1)}`).join(', ');
+      const argsPart = typeArgs ? `(${typeArgs})` : '';
+      const pairs = ((node['values'] as AnyNode[] | undefined) ?? [])
+        .map((v) => `${refText(v['key'])}: ${r(v['value'], 1)}`);
+      if (node['implicitEmpty']) pairs.push('...');
+      const body = pairs.length > 0 ? `{ ${pairs.join(', ')} }` : '{}';
+      return `${typeName}${argsPart} ${body}`;
+    }
+    default:
+      throw new UnsupportedExpressionError($type);
+  }
 }

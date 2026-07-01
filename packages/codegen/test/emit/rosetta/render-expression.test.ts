@@ -92,3 +92,64 @@ describe('renderExpression — RawDsl leaf and unknown types', () => {
     expect(() => renderExpression({ $type: 'SomethingNew' } as never)).toThrow(UnsupportedExpressionError);
   });
 });
+
+describe('renderExpression — postfix & functional', () => {
+  const sym2 = sym; // alias for readability below
+  it('renders simple postfix chains', () => {
+    expect(renderExpression({ $type: 'RosettaCountOperation', operator: 'count', argument: sym2('items') } as never)).toBe('items count');
+    expect(renderExpression({ $type: 'RosettaOnlyElement', operator: 'only-element', argument: sym2('items') } as never)).toBe('items only-element');
+    expect(renderExpression({ $type: 'SumOperation', operator: 'sum', argument: undefined } as never)).toBe('sum');
+  });
+
+  it('renders exists/absent/only-exists forms', () => {
+    expect(renderExpression({ $type: 'RosettaExistsExpression', operator: 'exists', argument: sym2('a'), modifier: 'single' } as never)).toBe('a single exists');
+    expect(renderExpression({ $type: 'RosettaAbsentExpression', operator: 'absent', argument: sym2('a') } as never)).toBe('a is absent');
+    expect(renderExpression({ $type: 'RosettaOnlyExistsExpression', operator: 'exists', argument: sym2('a'), args: [] } as never)).toBe('a only exists');
+    expect(renderExpression({ $type: 'RosettaOnlyExistsExpression', args: [sym2('a'), sym2('b')], argument: undefined } as never)).toBe('(a, b) only exists');
+  });
+
+  it('parenthesizes a binary argument of a postfix op', () => {
+    expect(renderExpression({ $type: 'RosettaExistsExpression', operator: 'exists', argument: bin('LogicalOperation', 'or', sym2('a'), sym2('b')) } as never)).toBe('(a or b) exists');
+  });
+
+  it('renders to-enum with its enumeration ref', () => {
+    expect(renderExpression({ $type: 'ToEnumOperation', operator: 'to-enum', argument: sym2('code'), enumeration: { $refText: 'ns.Color' } } as never)).toBe('code to-enum ns.Color');
+  });
+
+  it('renders functional ops with params BEFORE the bracket (grammar fix)', () => {
+    const fn = { body: bin('ArithmeticOperation', '+', sym2('a'), sym2('b')), parameters: [{ name: 'a' }, { name: 'b' }] };
+    expect(renderExpression({ $type: 'ReduceOperation', operator: 'reduce', argument: sym2('items'), function: fn } as never)).toBe('items reduce a, b [a + b]');
+    const noParams = { body: bin('ComparisonOperation', '>', { $type: 'RosettaImplicitVariable', name: 'item' }, int(0)), parameters: [] };
+    expect(renderExpression({ $type: 'FilterOperation', operator: 'filter', argument: sym2('items'), function: noParams } as never)).toBe('items filter [item > 0]');
+  });
+
+  it('renders then with a BARE body (no brackets — grammar fix)', () => {
+    const fn = { body: { $type: 'FilterOperation', operator: 'filter', argument: undefined, function: { body: bool(true), parameters: [] } }, parameters: [] };
+    expect(renderExpression({ $type: 'ThenOperation', operator: 'then', argument: sym2('items'), function: fn } as never)).toBe('items then filter [True]');
+  });
+
+  it('renders choice / switch / with-meta / as-key', () => {
+    expect(renderExpression({ $type: 'ChoiceOperation', operator: 'choice', necessity: 'optional', argument: undefined, attributes: [{ $refText: 'a' }, { $refText: 'b' }] } as never)).toBe('optional choice a, b');
+    const cases = [
+      { $type: 'SwitchCaseOrDefault', guard: { $type: 'SwitchCaseGuard', referenceGuard: { $refText: 'Red' } }, expression: int(1) },
+      { $type: 'SwitchCaseOrDefault', guard: undefined, expression: int(0) }
+    ];
+    expect(renderExpression({ $type: 'SwitchOperation', operator: 'switch', argument: sym2('color'), cases } as never)).toBe('color switch Red then 1, default 0');
+    expect(renderExpression({ $type: 'WithMetaOperation', operator: 'with-meta', argument: sym2('a'), entries: [{ key: { $refText: 'scheme' }, value: str('x') }] } as never)).toBe('a with-meta { scheme: "x" }');
+    expect(renderExpression({ $type: 'WithMetaOperation', operator: 'with-meta', argument: sym2('a'), entries: [] } as never)).toBe('a with-meta');
+    expect(renderExpression({ $type: 'AsKeyOperation', operator: 'as-key', argument: sym2('ref') } as never)).toBe('ref as-key');
+  });
+
+  it('renders conditionals, always parenthesized as a child', () => {
+    const cond = { $type: 'RosettaConditionalExpression', if: sym2('flag'), ifthen: int(1), full: true, elsethen: int(0) } as never;
+    expect(renderExpression(cond)).toBe('if flag then 1 else 0');
+    expect(renderExpression(bin('ArithmeticOperation', '+', sym2('x'), cond))).toBe('x + (if flag then 1 else 0)');
+  });
+
+  it('renders constructors', () => {
+    const typeRef = sym2('Trade');
+    expect(renderExpression({ $type: 'RosettaConstructorExpression', typeRef, constructorTypeArgs: [], implicitEmpty: false, values: [{ key: { $refText: 'quantity' }, value: int(1) }] } as never)).toBe('Trade { quantity: 1 }');
+    expect(renderExpression({ $type: 'RosettaConstructorExpression', typeRef: sym2('Trade'), constructorTypeArgs: [], implicitEmpty: true, values: [{ key: { $refText: 'q' }, value: int(1) }] } as never)).toBe('Trade { q: 1, ... }');
+    expect(renderExpression({ $type: 'RosettaConstructorExpression', typeRef: sym2('Trade'), constructorTypeArgs: [{ parameter: { $refText: 'T' }, value: int(5) }], implicitEmpty: false, values: [] } as never)).toBe('Trade(T: 5) {}');
+  });
+});
