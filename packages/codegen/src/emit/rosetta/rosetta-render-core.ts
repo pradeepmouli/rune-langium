@@ -25,7 +25,7 @@ export type RenderChild = (child: DehydratedNode) => string;
 
 // --- helpers --------------------------------------------------------------
 
-function escapeString(s: string): string {
+export function escapeString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
