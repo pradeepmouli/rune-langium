@@ -4,7 +4,7 @@
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import type { RosettaModel } from '../generated/ast.js';
-import { createRuneDslServices } from '../services/rune-dsl-module.js';
+import { getSharedServices } from './shared-services.js';
 
 /**
  * Result of parsing a Rosetta DSL source string.
@@ -44,15 +44,6 @@ export interface ParseResult {
   }>;
   /** Whether the parse completed without errors. */
   hasErrors: boolean;
-}
-
-let _services: ReturnType<typeof createRuneDslServices> | undefined;
-
-function getServices() {
-  if (!_services) {
-    _services = createRuneDslServices();
-  }
-  return _services;
 }
 
 /**
@@ -109,7 +100,7 @@ function getServices() {
  * @category Core
  */
 export async function parse(input: string, uri?: string): Promise<ParseResult> {
-  const { RuneDsl } = getServices();
+  const { RuneDsl } = getSharedServices();
   const documentUri = URI.parse(uri ?? 'inmemory:///model.rosetta');
   const document: LangiumDocument<RosettaModel> = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
     input,
@@ -192,7 +183,7 @@ export async function parse(input: string, uri?: string): Promise<ParseResult> {
  * @category Core
  */
 export async function parseWorkspace(entries: Array<{ uri: string; content: string }>): Promise<ParseResult[]> {
-  const { RuneDsl } = getServices();
+  const { RuneDsl } = getSharedServices();
   const factory = RuneDsl.shared.workspace.LangiumDocumentFactory;
   const builder = RuneDsl.shared.workspace.DocumentBuilder;
 
