@@ -19,6 +19,7 @@ import type {
   Data, Attribute, Choice, ChoiceOption,
   RosettaEnumeration, RosettaEnumValue, RosettaCardinality
 } from '@rune-langium/core';
+import { renderExpression } from './render-expression.js';
 
 export type DehydratedNode = Dehydrated<AstNode>;
 export type RenderChild = (child: DehydratedNode) => string;
@@ -51,10 +52,20 @@ function definitionLine(def: string | undefined): string | undefined {
   return def === undefined ? undefined : `<"${escapeString(def)}">`;
 }
 
-/** Extract expression body text from $cstText or $cstNode.text. */
+/**
+ * Render an expression body: structural renderExpression first; on an
+ * unknown node type (future grammar additions) fall back to the CST text.
+ * Fallback-not-corrupt is the render-core invariant (see PR #357 lesson:
+ * a removed CST fallback corrupted non-value synonym bodies).
+ */
 function exprText(expr: unknown): string {
-  const e = expr as { $cstText?: string; $cstNode?: { text?: string } } | undefined;
-  return (e?.$cstText ?? e?.$cstNode?.text ?? '').trim();
+  if (expr == null) return '';
+  try {
+    return renderExpression(expr as never);
+  } catch {
+    const e = expr as { $cstText?: string; $cstNode?: { text?: string } };
+    return (e.$cstText ?? e.$cstNode?.text ?? '').trim();
+  }
 }
 
 /**
