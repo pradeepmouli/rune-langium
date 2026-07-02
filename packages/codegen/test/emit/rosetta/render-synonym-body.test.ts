@@ -315,6 +315,28 @@ describe('renderSynonymBody — fallback', () => {
     };
     expect(() => renderSynonymBody(body)).toThrow(UnsupportedSynonymBodyError);
   });
+
+  it('propagates a genuine renderExpression bug from a mapping primary UNwrapped (P3 warn path)', () => {
+    // A malformed conditional makes renderExpression throw a TypeError — this
+    // must NOT be reclassified as the designed UnsupportedSynonymBodyError,
+    // or render-core's warn path never sees real bugs crossing this boundary.
+    const body = {
+      $type: 'RosettaSynonymBody',
+      values: [{ name: 't' }],
+      mappingLogic: {
+        $type: 'RosettaMapping',
+        instances: [{
+          $type: 'RosettaMappingInstance', default: true,
+          set: { $type: 'RosettaConditionalExpression', if: null, ifthen: null, full: false }
+        }]
+      },
+      hints: [], metaValues: [], removeHtml: false
+    };
+    let thrown: unknown;
+    try { renderSynonymBody(body); } catch (e) { thrown = e; }
+    expect(thrown).toBeInstanceOf(TypeError);
+    expect(thrown).not.toBeInstanceOf(UnsupportedSynonymBodyError);
+  });
 });
 
 // --- render-core delegation (full surfaces) ---------------------------------

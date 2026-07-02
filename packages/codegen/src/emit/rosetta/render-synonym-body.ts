@@ -38,7 +38,7 @@
  * render-* modules, both already browser-safe.
  */
 
-import { renderExpression, escapeId } from './render-expression.js';
+import { renderExpression, escapeId, UnsupportedExpressionError } from './render-expression.js';
 import { escapeString } from './rosetta-render-core.js';
 
 /** Thrown on an unknown/undiscriminable synonym-body shape. */
@@ -94,8 +94,15 @@ function renderMapPrimary(node: AnyNode): string {
   }
   try {
     return renderExpression(node as never);
-  } catch {
-    throw new UnsupportedSynonymBodyError(node.$type ?? 'unknown');
+  } catch (err) {
+    // Only rewrap the DESIGNED unsupported signal — a genuine renderExpression
+    // bug (TypeError etc.) must propagate as-is so render-core's warn path
+    // surfaces it (P3 observability convention) instead of being silently
+    // classified as "unsupported body".
+    if (err instanceof UnsupportedExpressionError) {
+      throw new UnsupportedSynonymBodyError(node.$type ?? 'unknown');
+    }
+    throw err;
   }
 }
 
