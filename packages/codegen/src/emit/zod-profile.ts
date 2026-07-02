@@ -33,6 +33,21 @@ const RUNTIME_SIDECAR_SOURCE = [
   ``,
   `export const runeAttrExists = (v: unknown): boolean =>`,
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
+  ``,
+  `export const runeToDate = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;`,
+  ``,
+  `export const runeToTime = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;`,
+  ``,
+  `export const runeToDateTime = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;`,
+  ``,
+  `export const runeToZonedDateTime = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' &&`,
+  `  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)`,
+  `    ? v`,
+  `    : undefined;`,
   ``
 ].join('\n');
 

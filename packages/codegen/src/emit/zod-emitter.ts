@@ -872,7 +872,10 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       ``,
       `import { z } from 'zod';`,
       ...(this.suppressBoilerplate
-        ? [`import { runeCheckOneOf, runeCount, runeAttrExists } from './runtime.zod.js';`, ``]
+        ? [
+            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime } from './runtime.zod.js';`,
+            ``
+          ]
         : ['', RUNTIME_HELPER_SOURCE, ''])
     ].join('\n');
   }

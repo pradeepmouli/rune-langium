@@ -767,7 +767,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       `// Source namespace: ${this.model.namespace}`,
       ``,
       ...(this.suppressBoilerplate
-        ? [`import { runeCheckOneOf, runeCount, runeAttrExists } from './runtime.js';`, ``]
+        ? [
+            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime } from './runtime.js';`,
+            ``
+          ]
         : [RUNTIME_HELPER_SOURCE, ''])
     ].join('\n');
   }

@@ -2,7 +2,16 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { runeCheckOneOf, runeCount, runeAttrExists, RUNTIME_HELPER_SOURCE } from '../src/helpers.js';
+import {
+  runeCheckOneOf,
+  runeCount,
+  runeAttrExists,
+  runeToDate,
+  runeToTime,
+  runeToDateTime,
+  runeToZonedDateTime,
+  RUNTIME_HELPER_SOURCE
+} from '../src/helpers.js';
 
 describe('runeCheckOneOf', () => {
   it('returns false for all-undefined values', () => {
@@ -90,6 +99,81 @@ describe('runeAttrExists', () => {
   });
 });
 
+describe('runeToDate', () => {
+  it('passes through a valid YYYY-MM-DD string', () => {
+    expect(runeToDate('2026-07-02')).toBe('2026-07-02');
+  });
+
+  it('returns undefined for a non-date-shaped string', () => {
+    expect(runeToDate('not-a-date')).toBeUndefined();
+  });
+
+  it('returns undefined for a datetime string (wrong shape)', () => {
+    expect(runeToDate('2026-07-02T10:00:00')).toBeUndefined();
+  });
+
+  it('returns undefined for a non-string value', () => {
+    expect(runeToDate(42)).toBeUndefined();
+    expect(runeToDate(undefined)).toBeUndefined();
+  });
+});
+
+describe('runeToTime', () => {
+  it('passes through a valid HH:MM:SS string', () => {
+    expect(runeToTime('10:30:00')).toBe('10:30:00');
+  });
+
+  it('passes through a valid HH:MM:SS.sss string (fractional seconds)', () => {
+    expect(runeToTime('10:30:00.123')).toBe('10:30:00.123');
+  });
+
+  it('returns undefined for a non-time-shaped string', () => {
+    expect(runeToTime('not-a-time')).toBeUndefined();
+  });
+
+  it('returns undefined for a non-string value', () => {
+    expect(runeToTime(42)).toBeUndefined();
+  });
+});
+
+describe('runeToDateTime', () => {
+  it('passes through a valid local ISO-8601 datetime', () => {
+    expect(runeToDateTime('2026-07-02T10:30:00')).toBe('2026-07-02T10:30:00');
+  });
+
+  it('passes through fractional seconds', () => {
+    expect(runeToDateTime('2026-07-02T10:30:00.500')).toBe('2026-07-02T10:30:00.500');
+  });
+
+  it('returns undefined when a zone offset is present (wrong operation)', () => {
+    expect(runeToDateTime('2026-07-02T10:30:00Z')).toBeUndefined();
+  });
+
+  it('returns undefined for a bare date', () => {
+    expect(runeToDateTime('2026-07-02')).toBeUndefined();
+  });
+});
+
+describe('runeToZonedDateTime', () => {
+  it('passes through a Z-suffixed ISO-8601 datetime', () => {
+    expect(runeToZonedDateTime('2026-07-02T10:30:00Z')).toBe('2026-07-02T10:30:00Z');
+  });
+
+  it('passes through an explicit offset', () => {
+    expect(runeToZonedDateTime('2026-07-02T10:30:00+05:00')).toBe('2026-07-02T10:30:00+05:00');
+  });
+
+  it('passes through an offset plus IANA zone-id suffix', () => {
+    expect(runeToZonedDateTime('2026-07-02T10:30:00+05:00[Asia/Karachi]')).toBe(
+      '2026-07-02T10:30:00+05:00[Asia/Karachi]'
+    );
+  });
+
+  it('returns undefined for a local datetime with no zone', () => {
+    expect(runeToZonedDateTime('2026-07-02T10:30:00')).toBeUndefined();
+  });
+});
+
 describe('RUNTIME_HELPER_SOURCE', () => {
   it('is a non-empty string', () => {
     expect(typeof RUNTIME_HELPER_SOURCE).toBe('string');
@@ -104,9 +188,13 @@ describe('RUNTIME_HELPER_SOURCE', () => {
     expect(RUNTIME_HELPER_SOURCE).toContain('// --- end runtime helpers ---');
   });
 
-  it('contains all three helper function names', () => {
+  it('contains all seven helper function names', () => {
     expect(RUNTIME_HELPER_SOURCE).toContain('runeCheckOneOf');
     expect(RUNTIME_HELPER_SOURCE).toContain('runeCount');
     expect(RUNTIME_HELPER_SOURCE).toContain('runeAttrExists');
+    expect(RUNTIME_HELPER_SOURCE).toContain('runeToDate');
+    expect(RUNTIME_HELPER_SOURCE).toContain('runeToTime');
+    expect(RUNTIME_HELPER_SOURCE).toContain('runeToDateTime');
+    expect(RUNTIME_HELPER_SOURCE).toContain('runeToZonedDateTime');
   });
 });
