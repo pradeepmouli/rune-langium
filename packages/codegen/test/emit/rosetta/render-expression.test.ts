@@ -124,6 +124,22 @@ describe('renderExpression — RawDsl leaf and unknown types', () => {
   });
 });
 
+describe('RawDsl-as-child guard', () => {
+  const raw = (text: string) => ({ $type: 'RawDsl', text }) as never;
+  it('root RawDsl stays verbatim', () => {
+    expect(renderExpression(raw('a or b'))).toBe('a or b');
+  });
+  it('atomic RawDsl child stays bare (placeholder, identifier, qualified, number, string)', () => {
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('___'), bool(true)))).toBe('___ and True');
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('foo.bar'), bool(true)))).toBe('foo.bar and True');
+    expect(renderExpression(bin('ArithmeticOperation', '+', raw('42'), int(1)))).toBe('42 + 1');
+  });
+  it('non-atomic RawDsl child gets wrapped', () => {
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('a or b'), bool(true)))).toBe('(a or b) and True');
+    expect(renderExpression(bin('ArithmeticOperation', '+', sym('x'), raw('y count')))).toBe('x + (y count)');
+  });
+});
+
 describe('renderExpression — postfix & functional', () => {
   const sym2 = sym; // alias for readability below
   it('renders simple postfix chains', () => {

@@ -116,6 +116,23 @@ function escapeId(name: string): string {
 
 const refText = (r: unknown): string => escapeId((r as { $refText?: string } | undefined)?.$refText ?? '');
 
+/**
+ * `RawDsl` text is a black-box, unparsed lexical fragment — we don't know
+ * its internal precedence, so a child-position `RawDsl` is CONSERVATIVE:
+ * bare only for a single lexical atom that can never need surrounding
+ * parens (an identifier, incl. `^`-escaped/dotted qualified names and the
+ * `___` placeholder; a bare number; or a simple double-quoted string with
+ * no embedded unescaped quote). Anything else gets wrapped — parens are
+ * grammar-legal wherever a bare expression is, so wrapping is always safe,
+ * merely occasionally redundant. When unsure, wrap.
+ */
+function isAtomicRawDsl(text: string): boolean {
+  if (/^[A-Za-z_^][\w.^]*$/.test(text)) return true;
+  if (/^\d[\w.]*$/.test(text)) return true;
+  if (/^"(?:[^"\\]|\\.)*"$/.test(text)) return true;
+  return false;
+}
+
 const PREC_CONDITIONAL = 0;
 const PREC_POSTFIX = 8;
 
@@ -174,8 +191,11 @@ function dispatch(node: AnyNode, atRoot = false): string {
   const p = prec(node);
   switch (node.$type) {
     // --- escape hatch ---
-    case RAW_DSL_TYPE:
-      return String(node['text'] ?? '');
+    case RAW_DSL_TYPE: {
+      const text = String(node['text'] ?? '');
+      if (atRoot || isAtomicRawDsl(text)) return text;
+      return `(${text})`;
+    }
 
     // --- literals ---
     case 'RosettaBooleanLiteral': return node['value'] ? 'True' : 'False';
