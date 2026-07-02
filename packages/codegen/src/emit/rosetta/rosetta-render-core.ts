@@ -408,18 +408,28 @@ function renderEnumSynonym(s: DehydratedNode): string | null {
     sources?: unknown[]; synonymValue?: string; definition?: string;
     patternMatch?: string; patternReplace?: string; removeHtml?: boolean;
   };
-  const sources = synonymSources(es.sources);
+  const sourcesList = es.sources ?? [];
+  const sources = synonymSources(sourcesList);
   return trySynonymRender(() => {
     // synonymValue is a required field on RosettaEnumSynonym (grammar: `'value' synonymValue=STRING`,
     // no `?`) — absence means an undiscriminable/malformed node, so throw to trigger CST fallback.
     if (es.synonymValue === undefined) throw new UnsupportedSynonymBodyError('RosettaEnumSynonym');
-    let out = `[synonym ${sources} value "${escapeString(es.synonymValue)}"`;
+    let out = `value "${escapeString(es.synonymValue)}"`;
     if (es.definition !== undefined) out += ` definition "${escapeString(es.definition)}"`;
     if (es.patternMatch !== undefined && es.patternReplace !== undefined) {
       out += ` pattern "${escapeString(es.patternMatch)}" "${escapeString(es.patternReplace)}"`;
     }
+    // `RosettaExternalEnumSynonym` (the external-block sibling grammar rule —
+    // `'[' 'value' synonymValue=STRING ('definition' ...)? ('pattern' ...)? ']'`,
+    // no `synonym` keyword, no sources) `infers RosettaEnumSynonym`: SAME
+    // `$type` as the normal `[synonym src, ... value "s" ...]` form, structurally
+    // distinguished only by an empty `sources` array (corpus-sweep finding —
+    // 354/532 unique corpus RosettaEnumSynonym nodes are this external shape,
+    // e.g. currency-code enum externals). The external rule also has no
+    // `removeHtml` production, so it never applies here.
+    if (sourcesList.length === 0) return `[${out}]`;
     if (es.removeHtml) out += ' removeHtml';
-    return `${out}]`;
+    return `[synonym ${sources} ${out}]`;
   });
 }
 

@@ -387,4 +387,25 @@ describe('renderNode — RosettaEnumSynonym full surface', () => {
     const s = { $type: 'RosettaEnumSynonym', sources: [{ $refText: 'FIX' }], synonymValue: 's', removeHtml: false };
     expect(renderNode(s as never, regen)).toBe('[synonym FIX value "s"]');
   });
+
+  // P5 corpus-sweep finding: `RosettaExternalEnumSynonym` (grammar: `'[' 'value'
+  // synonymValue=STRING ('definition' ...)? ('pattern' ...)? ']'`, no `synonym`
+  // keyword, no sources, no removeHtml production) `infers RosettaEnumSynonym`
+  // — the SAME $type as the normal `[synonym src value "s"]` form. It is
+  // structurally distinguished only by an empty `sources` array. Rendering it
+  // through the internal-form branch produces `[synonym  value "s"]` (blank
+  // source, invalid Rune DSL) — a real corpus-sweep bug (354/532 unique
+  // RosettaEnumSynonym-typed corpus nodes are this external shape).
+  it('renders the external-synonym form (empty sources) without a synonym keyword', () => {
+    const s = { $type: 'RosettaEnumSynonym', sources: [], synonymValue: 'partyA', removeHtml: false };
+    expect(renderNode(s as never, regen)).toBe('[value "partyA"]');
+  });
+
+  it('renders the external-synonym form with definition + pattern suffixes', () => {
+    const s = {
+      $type: 'RosettaEnumSynonym', sources: [],
+      synonymValue: 'United Arab Emirates Dirham', definition: 'd', patternMatch: 'a', patternReplace: 'b', removeHtml: false
+    };
+    expect(renderNode(s as never, regen)).toBe('[value "United Arab Emirates Dirham" definition "d" pattern "a" "b"]');
+  });
 });
