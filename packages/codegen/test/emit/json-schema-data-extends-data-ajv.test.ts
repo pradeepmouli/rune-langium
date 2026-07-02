@@ -98,6 +98,23 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
     expect(result).toBe(true);
   });
 
+  it('Animal (the ROOT of the chain, also a local supertype of Dog and Sibling) does NOT reject unknown properties when validated standalone — the SAME documented trade-off', async () => {
+    // Animal's own $defs entry is $ref'd into BOTH Dog's and Sibling's
+    // allOf branches (see fixtures/inheritance/input.rune), so it too
+    // must not self-close with additionalProperties: false — identical
+    // reasoning to the Dog case above, pinned separately because Animal
+    // is a plain (non-composed) def, not itself an allOf node, so it
+    // exercises the OTHER branch of emitTypeDef's typesWithLocalSubtype
+    // check (the plain-Data branch, not the allOf/unevaluatedProperties
+    // branch).
+    const schema = await generateJsonSchema('inheritance');
+    const ajv = new Ajv({ strict: false });
+    const validate = ajv.compile({ ...schema, $ref: '#/$defs/Animal' });
+
+    const result = validate({ name: 'Rex', bogus: true });
+    expect(result).toBe(true);
+  });
+
   it('the emitted schema itself is valid JSON Schema 2020-12 (ajv meta-schema check)', async () => {
     const schema = await generateJsonSchema('inheritance');
     const ajv = new Ajv({ strict: false });

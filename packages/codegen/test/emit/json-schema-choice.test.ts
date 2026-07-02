@@ -211,6 +211,43 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const ajv = new Ajv({ strict: false });
     expect(ajv.validateSchema(schema), JSON.stringify(ajv.errors)).toBe(true);
   });
+
+  it('Asset (the Choice, subtype-opened by BasketConstituent) validated STANDALONE still rejects multi-option payloads', async () => {
+    // Asset's own oneOf branches must not self-close with
+    // additionalProperties: false (see emitChoiceDef's doc comment) since
+    // BasketConstituent's allOf composition $ref's them — but the oneOf
+    // discriminator ITSELF (requiring exactly one branch to match) is
+    // untouched by that trade-off: a payload with both option keys still
+    // matches neither branch cleanly and fails oneOf's "exactly one"
+    // requirement, standalone or not.
+    const doc = await parseSource(DATA_EXTENDS_CHOICE);
+    const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
+    const output = emitNamespace(model, {});
+    const schema = JSON.parse(output.content) as Record<string, unknown>;
+    const ajv = new Ajv({ strict: false });
+    const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
+
+    const result = validate({ cash: { amount: 5 }, commodity: { quantity: 1 } });
+    expect(result).toBe(false);
+  });
+
+  it('Asset (the Choice, subtype-opened) validated STANDALONE accepts an unknown key on a single-option payload — the documented trade-off', async () => {
+    // The SAME trade-off as an extended Data (typesWithLocalSubtype): a
+    // Choice with a local Data subtype gives up its own standalone
+    // additionalProperties strictness so the extending Data's composed
+    // unevaluatedProperties: false works correctly — see emitChoiceDef's
+    // doc comment. Pinning this so the standalone-openness of an
+    // opened Choice is a recorded fact, not folklore.
+    const doc = await parseSource(DATA_EXTENDS_CHOICE);
+    const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
+    const output = emitNamespace(model, {});
+    const schema = JSON.parse(output.content) as Record<string, unknown>;
+    const ajv = new Ajv({ strict: false });
+    const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
+
+    const result = validate({ cash: { amount: 5 }, bogus: true });
+    expect(result).toBe(true);
+  });
 });
 
 describe('json-schema-emitter — multi-level Data extends Data extends Choice', () => {
