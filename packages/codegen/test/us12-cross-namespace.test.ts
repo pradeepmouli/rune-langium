@@ -91,34 +91,49 @@ describe('US12: Cross-Namespace Import Resolution', () => {
 });
 
 describe('resolveImportPath unit tests', () => {
+  // Semantics: getTargetRelativePath lays a namespace `a.b` out as the
+  // FILE `a/b.<ext>` — so the relative walk starts from the from-file's
+  // DIRECTORY (`a/`), and the last target segment is always the file.
+  // These expectations were previously off by one `../` across the board
+  // (the walk started from `a/b/` as if the namespace were a directory),
+  // making every emitted cross-namespace import unresolvable on disk —
+  // see resolveImportPath's doc comment and the multi-file compile check
+  // in test/emit/data-extends-choice-crossns.test.ts.
   const emptyRegistry: NamespaceRegistry = { namespaces: new Map() };
 
-  it('sibling namespaces produce single ../', () => {
-    expect(resolveImportPath('a.b', 'a.c', emptyRegistry)).toBe('../c');
+  it('sibling namespaces are files in the same directory', () => {
+    // a/b.ts -> a/c.ts
+    expect(resolveImportPath('a.b', 'a.c', emptyRegistry)).toBe('./c');
   });
 
   it('same parent, deep target', () => {
-    expect(resolveImportPath('a.b', 'a.c.d', emptyRegistry)).toBe('../c/d');
+    // a/b.ts -> a/c/d.ts
+    expect(resolveImportPath('a.b', 'a.c.d', emptyRegistry)).toBe('./c/d');
   });
 
   it('deep to shallow', () => {
-    expect(resolveImportPath('a.b.c', 'a.d', emptyRegistry)).toBe('../../d');
+    // a/b/c.ts -> a/d.ts
+    expect(resolveImportPath('a.b.c', 'a.d', emptyRegistry)).toBe('../d');
   });
 
   it('completely different roots', () => {
-    expect(resolveImportPath('x.y', 'a.b', emptyRegistry)).toBe('../../a/b');
+    // x/y.ts -> a/b.ts
+    expect(resolveImportPath('x.y', 'a.b', emptyRegistry)).toBe('../a/b');
   });
 
-  it('same namespace produces ./', () => {
-    expect(resolveImportPath('a.b', 'a.b', emptyRegistry)).toBe('./');
+  it('same namespace resolves to the file itself', () => {
+    // a/b.ts -> a/b.ts (never emitted in practice — same-ns refs are local)
+    expect(resolveImportPath('a.b', 'a.b', emptyRegistry)).toBe('./b');
   });
 
   it('child namespace', () => {
-    expect(resolveImportPath('a', 'a.b', emptyRegistry)).toBe('./b');
+    // a.ts -> a/b.ts
+    expect(resolveImportPath('a', 'a.b', emptyRegistry)).toBe('./a/b');
   });
 
   it('parent namespace', () => {
-    expect(resolveImportPath('a.b', 'a', emptyRegistry)).toBe('..');
+    // a/b.ts -> a.ts
+    expect(resolveImportPath('a.b', 'a', emptyRegistry)).toBe('../a');
   });
 });
 

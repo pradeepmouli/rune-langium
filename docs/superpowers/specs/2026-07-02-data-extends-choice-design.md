@@ -12,18 +12,29 @@
 
 ### TS type — generic intersection (retains arm narrowing)
 
-**Naming (implemented, post-hoc amendment):** the snippet below names the alias after the Data itself (`BasketConstituent<T> = …`), but the emitted CLASS (see "TS class" below) already owns that bare name — a type alias and a class cannot share an identifier. The collision-free resolution: the generic intersection alias IS the `<Name>Shape` symbol (the same `<Name>Shape` idiom `emitInterface` already uses for every Data, just generic instead of a plain interface for this one case). So the real emitted symbol is `BasketConstituentShape<T extends Observable = Observable> = T & {...}`, not `BasketConstituent<T> = …`:
+**Naming (implemented, post-hoc amendment):** the snippet below names the alias after the Data itself (`BasketConstituent<T> = …`), but the emitted CLASS (see "TS class" below) already owns that bare name — a type alias and a class cannot share an identifier. The collision-free resolution: the generic intersection alias IS the `<Name>Shape` symbol (the same `<Name>Shape` idiom `emitInterface` already uses for every Data, just generic instead of a plain interface for this one case).
+
+**Shape-level Choice union (implemented, user-directed correction — supersedes the snippet's `T extends Observable`):** the generic constraint/default must be the Choice's SHAPE-level union, not the bare Choice union. `export type Observable = { basket: Basket } | ...`'s arms reference bare names — for Data options those are the CLASS types — so `T extends Observable` would intersect the plain-data Shape world with a class-armed union (world-mixing: a `{ basket: {...} }` construction payload is not a `Basket` class instance; it only typechecked via casts). Each Choice therefore ALSO emits a Shape-level union alongside the existing one (which stays byte-identical, W2 non-goal):
+
 ```ts
-export type BasketConstituentShape<T extends Observable = Observable> = T & {
+export type ObservableShape = { basket: BasketShape } | { asset: AssetShape } | ...;
+// arm value type = the option's <Name>Shape when the option is a Data;
+// bare name otherwise (enums/builtins have no Shape form)
+```
+
+So the real emitted symbol is `BasketConstituentShape<T extends ObservableShape = ObservableShape> = T & {...}`:
+```ts
+export type BasketConstituentShape<T extends ObservableShape = ObservableShape> = T & {
   quantity?: NonNegativeQuantitySchedule[];
   // ...child's own attributes, emitted per existing attribute conventions
 };
 ```
-- Default type param = the Choice union → bare `BasketConstituentShape` behaves non-generically; a consumer holding a known arm writes `BasketConstituentShape<{ basket: Basket }>` and keeps narrowing.
+- Default type param = the Shape-level Choice union → bare `BasketConstituentShape` behaves non-generically; a consumer holding a known arm writes `BasketConstituentShape<{ basket: BasketShape }>` and keeps narrowing.
 - Child's Shape becomes a `type` alias (interfaces cannot extend unions) — documented deviation from the Data-emits-interface norm.
 - Referencing sites (attributes typed by the child) use the bare name — unaffected.
-- Multi-level: intermediate Data parents contribute their attributes into the extras block; the generic param binds at the Choice ancestor. Concretely, each intermediate Data-extends-Data link whose OWN chain reaches the Choice ancestor also becomes a generic alias, chaining `<Parent>Shape<T>` (not `extends`, which fails to typecheck once the parent's default resolves to a union) — e.g. `ObservableItemShape<T> = T & {...}` then `BasketConstituentShape<T> = ObservableItemShape<T> & {...}`.
+- Multi-level: intermediate Data parents contribute their attributes into the extras block; the generic param binds at the Choice ancestor. Concretely, each intermediate Data-extends-Data link whose OWN chain reaches the Choice ancestor also becomes a generic alias, chaining `<Parent>Shape<T>` (not `extends`, which fails to typecheck once the parent's default resolves to a union) — e.g. `ObservableItemShape<T> = T & {...}` then `BasketConstituentShape<T> = ObservableItemShape<T> & {...}`, all constrained on `<ChoiceAncestor>Shape`.
 - The CLASS cannot `implements <Name>Shape` once `<Name>Shape` is generic (bare form resolves to a union-rooted intersection, and a class may only implement an object type) — see the "TS class" section's amended snippet.
+- Cross-namespace: a Choice supertype in another namespace imports BOTH `<Choice>` and `<Choice>Shape` (real corpus: `TransferableProduct extends Asset`, `SpecificAsset extends Asset`). Before Choices emitted a Shape-level union, the emitter's ungated supertype tracking already emitted `import { AssetShape }` — a TS2305 broken import; the Shape-level union turns that same tracking into the correct import.
 
 ### TS class — generic child class (AMENDED mid-implementation, user-directed — supersedes the original per-Choice-mixin design below the line)
 
@@ -37,11 +48,13 @@ the type-side `BasketConstituentShape<T> = T & extras` exactly:
 ```ts
 // NOTE (implemented): no `implements BasketConstituentShape` — once
 // BasketConstituentShape is the generic alias, its bare (no-type-argument)
-// form resolves to `Observable & {...}` (union-rooted); a class may only
-// implement an object type, not a union (real tsc --strict: TS2422). The
-// class/alias pairing is enforced by the constructor parameter + emitted-
-// runtime tests instead of a structural `implements` clause.
-export class BasketConstituent<T extends Observable = Observable> {
+// form resolves to `ObservableShape & {...}` (union-rooted); a class may
+// only implement an object type, not a union (real tsc --strict: TS2422).
+// The class/alias pairing is enforced by the constructor parameter +
+// emitted-runtime tests instead of a structural `implements` clause.
+// Constraint = the SHAPE-level Choice union (ObservableShape), matching
+// the type alias — see the "TS type" section's correction.
+export class BasketConstituent<T extends ObservableShape = ObservableShape> {
   quantity?: NonNegativeQuantitySchedule[];
   // ...own attributes, emitted per existing attribute conventions
 

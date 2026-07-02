@@ -129,29 +129,34 @@ describe('Data-extends-Choice — multi-level chain (synthetic fixture, parse-va
     const doc = await parseFixture();
     const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
     const output = emitTs(model, {});
+    // The Choice's SHAPE-level union exists alongside the class-armed one
+    // (user-directed correction: generic constraints bind on the Shape
+    // world, not the class-armed W2 union).
+    expect(output.content).toContain('export type AssetShape = { cash: CashShape } | { commodity: CommodityShape };');
     // ObservableItem extends the Choice (Asset) directly — its Shape is the
-    // generic intersection type alias, not a plain interface.
+    // generic intersection type alias, not a plain interface, constrained
+    // on the SHAPE-level Choice union.
     expect(output.content).toContain(
-      'export type ObservableItemShape<T extends Asset = Asset> = T & {\n  identifier?: string;\n};'
+      'export type ObservableItemShape<T extends AssetShape = AssetShape> = T & {\n  identifier?: string;\n};'
     );
     expect(output.content).not.toContain('export interface ObservableItemShape');
     // BasketConstituent extends a Data (ObservableItem) at the leaf, and
     // ObservableItem's OWN chain reaches the Choice — so a plain `interface
     // … extends ObservableItemShape` would fail to compile (bare
-    // ObservableItemShape defaults T=Asset, a union; TS2312). Instead
+    // ObservableItemShape defaults T=AssetShape, a union; TS2312). Instead
     // BasketConstituentShape is ALSO a generic alias, threading the same T
     // through the parent's generic Shape rather than `extends`.
     expect(output.content).toContain(
-      'export type BasketConstituentShape<T extends Asset = Asset> = ObservableItemShape<T> & {\n  weight?: number;\n};'
+      'export type BasketConstituentShape<T extends AssetShape = AssetShape> = ObservableItemShape<T> & {\n  weight?: number;\n};'
     );
     expect(output.content).not.toContain('export interface BasketConstituentShape');
   });
 
-  it('ts: ObservableItem (the Data-extends-Choice link) is a generic class over Asset — no `implements` (union-typed Shape)', async () => {
+  it('ts: ObservableItem (the Data-extends-Choice link) is a generic class over AssetShape — no `implements` (union-typed Shape)', async () => {
     const doc = await parseFixture();
     const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
     const output = emitTs(model, {});
-    expect(output.content).toContain('export class ObservableItem<T extends Asset = Asset> {');
+    expect(output.content).toContain('export class ObservableItem<T extends AssetShape = AssetShape> {');
     expect(output.content).not.toContain('implements ObservableItemShape');
     expect(output.content).toContain('constructor(data: ObservableItemShape<T>) {');
     expect(output.content).toContain('validateAsset(): { valid: boolean; errors: string[] } {');

@@ -239,9 +239,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * W2: emit a `choice` declaration as a key-presence discriminated union
    * type (no class — a Choice is a type-only union, not an instantiable
    * shape like Data) plus an exactly-one-of type guard.
+   *
+   * Data-extends-Choice (user-directed correction, supersedes the spec
+   * snippet where they differ): ALSO emit a SHAPE-level union
+   * (`<Name>Shape = { cash: CashShape } | ...`) alongside the class-armed
+   * one — see emitChoiceShapeTypeDeclaration's doc comment. The original
+   * `export type <Name> = { cash: Cash } | ...` union is unchanged (W2
+   * surface, non-goal).
    */
   emitChoice(choice: Choice): void {
     this.sections.push(this.emitChoiceTypeDeclaration(choice));
+    this.sections.push('');
+    this.sections.push(this.emitChoiceShapeTypeDeclaration(choice));
     this.sections.push('');
     this.sections.push(this.emitChoiceTypeGuard(choice));
     this.sections.push('');
@@ -331,8 +340,26 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     for (const data of this.ctx.dataByName.values()) {
       const parentRef = data.superType?.ref;
       if (parentRef) {
+        // Deliberately NOT gated on isData: a Choice supertype in another
+        // namespace needs BOTH symbols too — `<Choice>Shape` (the generic
+        // constraint/default on the child's Shape alias and class, per
+        // emitChoiceShapeTypeDeclaration) and the bare `<Choice>` union.
+        // Before Choices emitted a Shape-level union this ungated tracking
+        // emitted a broken `import { AssetShape }` (TS2305, real corpus:
+        // TransferableProduct/SpecificAsset extends Asset cross-namespace);
+        // now the symbol exists and the same tracking is simply correct.
         trackRef(parentRef, `${parentRef.name}Shape`);
         trackRef(parentRef, parentRef.name);
+      }
+      // Multi-level Data-extends-Choice: the child's generic Shape alias
+      // constraint references the Choice ANCESTOR's `<Choice>Shape` even
+      // when the immediate parent is a Data — the ancestor may live in a
+      // third namespace the immediate-parent tracking above never sees.
+      if (parentRef && isData(parentRef)) {
+        const choiceAncestor = TsNamespaceEmitter.findChoiceAncestor(parentRef as Data);
+        if (choiceAncestor) {
+          trackRef(choiceAncestor, `${choiceAncestor.name}Shape`);
+        }
       }
       for (const attr of data.attributes) {
         const attrTypeRef = attr.typeCall?.type?.ref;
@@ -485,23 +512,28 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * this feature.
    *
    * Data-extends-Choice (per docs/superpowers/specs/2026-07-02-
-   * data-extends-choice-design.md "TS type — generic intersection"): when
+   * data-extends-choice-design.md "TS type — generic intersection", plus
+   * the user-directed Shape-constraint correction): when
    * `data.superType.ref` is a `Choice` directly, an `interface … extends`
    * is not expressible (interfaces cannot extend a union) — the spec's own
    * type surface is `T & { ...extras }`, generic over the Choice arm.
    * Since the CLASS is already named `<TypeName>` (T106), the type alias is
    * emitted as `<TypeName>Shape` instead (collision-free naming, recorded
-   * in the spec doc): `export type <TypeName>Shape<T extends <Choice> =
-   * <Choice>> = T & { ...own attrs };`. Bare `<TypeName>Shape` (no type
-   * argument) still typechecks at every existing reference site because the
-   * default type param is the full Choice union.
+   * in the spec doc). The constraint/default is the Choice's SHAPE-level
+   * union (`<Choice>Shape`, per emitChoiceShapeTypeDeclaration), NOT the
+   * bare Choice union — the bare union's arms are the CLASS types, which
+   * would world-mix a plain-data construction payload with class-armed
+   * types: `export type <TypeName>Shape<T extends <Choice>Shape =
+   * <Choice>Shape> = T & { ...own attrs };`. Bare `<TypeName>Shape` (no
+   * type argument) still typechecks at every existing reference site
+   * because the default type param is the full Shape-level union.
    *
    * Multi-level (`Data extends Data extends Choice`): when the IMMEDIATE
    * parent is a Data whose own chain reaches a Choice ancestor further up
    * (`findChoiceAncestor`), this Data's Shape must ALSO become a generic
    * alias threading the same `T` through the parent's generic Shape:
-   * `export type <TypeName>Shape<T extends <ChoiceAncestor> =
-   * <ChoiceAncestor>> = <Parent>Shape<T> & { ...own attrs };` — plain
+   * `export type <TypeName>Shape<T extends <ChoiceAncestor>Shape =
+   * <ChoiceAncestor>Shape> = <Parent>Shape<T> & { ...own attrs };` — plain
    * `interface … extends <Parent>Shape` would fail to compile once
    * `<Parent>Shape` is itself the generic alias (its default resolves to a
    * union).
@@ -527,12 +559,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const body = fields.length === 0 ? '{}' : `{\n${fields.join('\n')}\n}`;
 
     if (choiceParent) {
-      return `export type ${interfaceName}<T extends ${choiceParent.name} = ${choiceParent.name}> = T & ${body};`;
+      const constraint = `${choiceParent.name}Shape`;
+      return `export type ${interfaceName}<T extends ${constraint} = ${constraint}> = T & ${body};`;
     }
 
     if (parentData && inheritedChoiceAncestor) {
-      const choiceName = inheritedChoiceAncestor.name;
-      return `export type ${interfaceName}<T extends ${choiceName} = ${choiceName}> = ${parentData.name}Shape<T> & ${body};`;
+      const constraint = `${inheritedChoiceAncestor.name}Shape`;
+      return `export type ${interfaceName}<T extends ${constraint} = ${constraint}> = ${parentData.name}Shape<T> & ${body};`;
     }
 
     const parentInterfaceName = parentData ? `${parentData.name}Shape` : undefined;
@@ -558,10 +591,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * `data.superType.ref` is a `Choice` (not a `Data`), there is no parent
    * CLASS to `extends` (a Choice is a type-only union, never emitted as a
    * class — see emitChoice's doc comment) — instead the child class itself
-   * becomes generic over the Choice arm: `class <Name><T extends <Choice> =
-   * <Choice>>`. `<Name>Shape` is now the generic intersection type alias
-   * (T105, "TS type — generic intersection") — its DEFAULT instantiation
-   * (`<Name>Shape` with no type argument) is `<Choice> & {...own attrs}`, a
+   * becomes generic over the Choice arm: `class <Name><T extends
+   * <Choice>Shape = <Choice>Shape>` (constrained on the SHAPE-level Choice
+   * union, per the user-directed correction — see
+   * emitChoiceShapeTypeDeclaration's world-mixing rationale). `<Name>Shape`
+   * is now the generic intersection type alias (T105, "TS type — generic
+   * intersection") — its DEFAULT instantiation (`<Name>Shape` with no type
+   * argument) is `<Choice>Shape & {...own attrs}`, a
    * union-rooted intersection, which a class cannot `implements` (classes
    * may only implement object types, not unions). So the class omits
    * `implements` for the Choice-parent case; `<Name>Shape<T>` remains the
@@ -598,7 +634,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const shapeIsGeneric = choiceParent !== undefined || inheritedChoiceAncestor !== undefined;
 
     const classHeader = choiceParent
-      ? `export class ${name}<T extends ${choiceParent.name} = ${choiceParent.name}>`
+      ? `export class ${name}<T extends ${choiceParent.name}Shape = ${choiceParent.name}Shape>`
       : parentName
         ? shapeIsGeneric
           ? `export class ${name} extends ${parentName}`
@@ -832,6 +868,40 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       return `export type ${name} = never;`;
     }
     return `export type ${name} = ${options};`;
+  }
+
+  /**
+   * Emit the SHAPE-level Choice union:
+   * `export type <ChoiceName>Shape = { cash: CashShape } | { commodity: CommodityShape } | ...;`
+   *
+   * Data-extends-Choice (user-directed correction): the generic
+   * intersection Shape alias and the generic child class must constrain
+   * `T` on the Choice's SHAPE-level union, not the bare Choice union —
+   * `emitChoiceTypeDeclaration`'s arms reference bare names, which for
+   * Data options are the CLASS types, so `T extends <Choice>` would
+   * intersect the plain-data (Shape) world with a class-armed union
+   * (world-mixing: a `{ cash: { amount: 5 } }` construction payload is
+   * not a `Cash` class instance). Each arm's value type here is the
+   * option's `<Name>Shape` when the option resolves to a Data (the type
+   * a construction payload actually carries at that key), and the bare
+   * name otherwise (enums/builtins have no Shape form — same convention
+   * as every other Shape-suffix site in this emitter).
+   */
+  private emitChoiceShapeTypeDeclaration(choice: Choice): string {
+    const name = choice.name;
+    const options = choice.attributes
+      .map((option) => {
+        const optionTypeRef = option.typeCall?.type;
+        const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+        const fieldName = choiceOptionFieldName(optionTypeName);
+        const valueType = optionTypeRef?.ref && isData(optionTypeRef.ref) ? `${optionTypeName}Shape` : optionTypeName;
+        return `{ ${fieldName}: ${valueType} }`;
+      })
+      .join(' | ');
+    if (options === '') {
+      return `export type ${name}Shape = never;`;
+    }
+    return `export type ${name}Shape = ${options};`;
   }
 
   /**
