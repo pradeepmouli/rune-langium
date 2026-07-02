@@ -545,8 +545,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     const parentRef = data.superType?.ref;
     const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
-    const parentInNamespace = parentRef && isData(parentRef) && this.ctx.dataByName.has((parentRef as Data).name);
-    const parentData = parentInNamespace ? (parentRef as Data) : undefined;
+    // Item 2 (docs/superpowers/specs/2026-07-02-emitter-crossns-hardening-
+    // design.md): NOT gated on `this.ctx.dataByName.has(...)` — that map
+    // only holds THIS namespace's own Data nodes, so a parent Data in
+    // ANOTHER namespace failed the check and silently lost `extends
+    // <Parent>Shape` even though `collectCrossNamespaceImports` already
+    // tracks and emits the import for exactly this case. `isData(parentRef)`
+    // alone suffices: Langium cross-ns refs are resolved AST nodes, `.name`
+    // and `findChoiceAncestor` both work through them regardless of which
+    // namespace they live in — the same reasoning that already applies to
+    // cross-ns Data-extends-Choice (collectCrossNamespaceImports's own doc
+    // comment).
+    const parentData = parentRef && isData(parentRef) ? (parentRef as Data) : undefined;
     const inheritedChoiceAncestor = parentData ? TsNamespaceEmitter.findChoiceAncestor(parentData) : undefined;
 
     // Own attribute field declarations — identical across all branches.
@@ -617,8 +627,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const name = data.name;
     const interfaceName = `${name}Shape`;
     const parentRef = data.superType?.ref;
-    const parentInNamespace = parentRef && isData(parentRef) && this.ctx.dataByName.has((parentRef as Data).name);
-    const parentData = parentInNamespace ? (parentRef as Data) : undefined;
+    // Item 2: NOT gated on `dataByName.has` — see emitInterface's doc
+    // comment for the full cross-namespace rationale.
+    const parentData = parentRef && isData(parentRef) ? (parentRef as Data) : undefined;
     const parentName = parentData?.name;
     const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
     // Multi-level (Data extends Data extends Choice, per T105's
@@ -816,8 +827,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   private emitTypeGuard(data: Data): string {
     const name = data.name;
     const parentRef = data.superType?.ref;
-    const parentInNamespace = parentRef && isData(parentRef) && this.ctx.dataByName.has((parentRef as Data).name);
-    const parentName = parentInNamespace ? (parentRef as Data).name : undefined;
+    // Item 2: NOT gated on `dataByName.has` — see emitInterface's doc
+    // comment for the full cross-namespace rationale.
+    const parentName = parentRef && isData(parentRef) ? (parentRef as Data).name : undefined;
 
     const checkLines = this.buildTypeGuardChecks(data);
 
