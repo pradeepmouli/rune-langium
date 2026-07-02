@@ -1479,8 +1479,13 @@ function getExprPrecedence(expr: RosettaExpression): number | undefined {
  * these operators must always keep its parens. Arithmetic (+,-,*,/) and
  * logical (and/or → &&/||) chain left-associatively in both Rune and JS,
  * so dropping redundant right-side parens there is semantics-preserving.
+ *
+ * Note: `contains`/`disjoint`/`default` are grammatically same-tier too, but
+ * never reach transpileWithPrecedence as parentOp — their transpile sites use
+ * structural templates (`.includes()`/`.some()`/self-wrapped `??`) that are
+ * immune by construction — so only the six eq/cmp operators are listed here.
  */
-const NON_ASSOCIATIVE_OPERATORS = new Set(['=', '<>', '<', '<=', '>', '>=', 'contains', 'disjoint', 'default']);
+const NON_ASSOCIATIVE_OPERATORS = new Set(['=', '<>', '<', '<=', '>', '>=']);
 
 /**
  * Transpile a sub-expression, wrapping in parentheses if needed for precedence.

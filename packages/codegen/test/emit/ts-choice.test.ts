@@ -7,13 +7,14 @@
  * Choice field-naming decision (no CDM JSON data-instance fixture exists in
  * .resources/ to check against — verified empirically, only build-tooling
  * JSON is present): each ChoiceOption's discriminant key is the
- * camelCase-first-letter form of its type name (`Cash` -> `cash`), mirroring
- * how a Data attribute's field name is emitted verbatim as authored — Data
- * attributes in this corpus are themselves camelCase-first-letter by
- * convention, and a ChoiceOption has no attribute name of its own (only a
- * typeCall), so camelCasing the type name is the closest equivalent.
- * Documented explicitly per spec instruction (ambiguous, no fixture to
- * verify against).
+ * camelCase-first-letter form of its type name (`Cash` -> `cash`). NOTE:
+ * this is a DERIVED name (from the option's type), not the same convention
+ * as Data attributes (whose field names are author-given `attr.name`,
+ * emitted verbatim) — a ChoiceOption has no attribute name of its own (only
+ * a typeCall), so camelCasing the type name is the closest defensible
+ * analogue, chosen deliberately. A JUDGMENT CALL, not a verified wire
+ * format — revisit if a real CDM JSON payload with a Choice-typed field
+ * ever lands in the corpus. Documented per spec instruction.
  */
 
 import { createRuneDslServices, isRosettaModel } from '@rune-langium/core';
