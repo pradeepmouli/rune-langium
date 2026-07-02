@@ -25,6 +25,10 @@ const CORPUS = [
   'if flag then 1 else 0',
   'x + (if flag then 1 else 0)',
   'color switch Red then 1, default 0',
+  // Body-root switch with >=2 cases renders multi-line (P2 pretty-print); the
+  // fixed-point property still holds — reparse of the multi-line form must
+  // re-render identically (r2 === r1), not revert to single-line.
+  'color switch\n    Red then 1,\n    default 0',
   'optional choice dateAdjustments, dateAdjustmentsReference',
   'Trade { quantity: 1, price: 2.5 }',
   'Trade { quantity: 1, ... }',

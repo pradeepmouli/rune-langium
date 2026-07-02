@@ -167,10 +167,10 @@ function r(child: unknown, minPrec: number): string {
 
 /** Render an expression tree to Rune DSL text. */
 export function renderExpression(expr: DehydratedExpression): string {
-  return dispatch(expr as unknown as AnyNode);
+  return dispatch(expr as unknown as AnyNode, true);
 }
 
-function dispatch(node: AnyNode): string {
+function dispatch(node: AnyNode, atRoot = false): string {
   const p = prec(node);
   switch (node.$type) {
     // --- escape hatch ---
@@ -231,7 +231,7 @@ function dispatch(node: AnyNode): string {
       return `${r(node['receiver'], PREC_POSTFIX)} ->> ${refText(node['feature'])}`;
 
     default:
-      return dispatchExtended(node, p);
+      return dispatchExtended(node, p, atRoot);
   }
 }
 
@@ -268,7 +268,7 @@ function renderSwitchCase(c: AnyNode): string {
   return `${guardText} then ${expr}`;
 }
 
-function dispatchExtended(node: AnyNode, _p: number): string {
+function dispatchExtended(node: AnyNode, _p: number, atRoot = false): string {
   const $type = node.$type;
 
   if (SIMPLE_POSTFIX.has($type)) return `${argPrefix(node)}${node['operator']}`;
@@ -303,8 +303,11 @@ function dispatchExtended(node: AnyNode, _p: number): string {
       return `${argPrefix(node)}${node['necessity']} choice ${attrs}`;
     }
     case 'SwitchOperation': {
-      const cases = ((node['cases'] as AnyNode[] | undefined) ?? []).map(renderSwitchCase).join(', ');
-      return `${argPrefix(node)}switch ${cases}`;
+      const rendered = ((node['cases'] as AnyNode[] | undefined) ?? []).map(renderSwitchCase);
+      const joined = atRoot && rendered.length >= 2
+        ? `\n    ${rendered.join(',\n    ')}`
+        : ` ${rendered.join(', ')}`;
+      return `${argPrefix(node)}switch${joined}`;
     }
     case 'WithMetaOperation': {
       const entries = ((node['entries'] as AnyNode[] | undefined) ?? [])

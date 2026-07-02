@@ -165,10 +165,35 @@ describe('renderExpression — postfix & functional', () => {
       { $type: 'SwitchCaseOrDefault', guard: { $type: 'SwitchCaseGuard', referenceGuard: { $refText: 'Red' } }, expression: int(1) },
       { $type: 'SwitchCaseOrDefault', guard: undefined, expression: int(0) }
     ];
-    expect(renderExpression({ $type: 'SwitchOperation', operator: 'switch', argument: sym2('color'), cases } as never)).toBe('color switch Red then 1, default 0');
+    expect(renderExpression({ $type: 'SwitchOperation', operator: 'switch', argument: sym2('color'), cases } as never)).toBe('color switch\n    Red then 1,\n    default 0');
     expect(renderExpression({ $type: 'WithMetaOperation', operator: 'with-meta', argument: sym2('a'), entries: [{ key: { $refText: 'scheme' }, value: str('x') }] } as never)).toBe('a with-meta { scheme: "x" }');
     expect(renderExpression({ $type: 'WithMetaOperation', operator: 'with-meta', argument: sym2('a'), entries: [] } as never)).toBe('a with-meta');
     expect(renderExpression({ $type: 'AsKeyOperation', operator: 'as-key', argument: sym2('ref') } as never)).toBe('ref as-key');
+  });
+
+  it('renders a body-root switch with >=2 cases multi-line', () => {
+    const cases = [
+      { $type: 'SwitchCaseOrDefault', guard: { $type: 'SwitchCaseGuard', referenceGuard: { $refText: 'Red' } }, expression: int(1) },
+      { $type: 'SwitchCaseOrDefault', guard: undefined, expression: int(0) }
+    ];
+    expect(renderExpression({ $type: 'SwitchOperation', operator: 'switch', argument: sym2('color'), cases } as never))
+      .toBe('color switch\n    Red then 1,\n    default 0');
+  });
+
+  it('keeps a NESTED switch single-line (parenthesized)', () => {
+    const cases = [
+      { $type: 'SwitchCaseOrDefault', guard: { $type: 'SwitchCaseGuard', referenceGuard: { $refText: 'Red' } }, expression: int(1) },
+      { $type: 'SwitchCaseOrDefault', guard: undefined, expression: int(0) }
+    ];
+    const sw = { $type: 'SwitchOperation', operator: 'switch', argument: sym2('color'), cases } as never;
+    expect(renderExpression(bin('ArithmeticOperation', '+', sym2('x'), sw)))
+      .toBe('x + (color switch Red then 1, default 0)');
+  });
+
+  it('keeps a single-case root switch single-line', () => {
+    const cases = [{ $type: 'SwitchCaseOrDefault', guard: undefined, expression: int(0) }];
+    expect(renderExpression({ $type: 'SwitchOperation', operator: 'switch', argument: sym2('color'), cases } as never))
+      .toBe('color switch default 0');
   });
 
   it('REGRESSION: switch and choice always parenthesize as a bare-comma-list element (prec 0)', () => {
