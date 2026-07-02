@@ -52,14 +52,26 @@ function definitionLine(def: string | undefined): string | undefined {
   return def === undefined ? undefined : `<"${escapeString(def)}">`;
 }
 
+/** Options threaded through renderNode/renderModel to the expression-body sites. */
+export interface RenderOpts {
+  /**
+   * Override expression-body rendering (called only with a non-null body;
+   * return value used verbatim). The VE cst-reuse layer uses this to slice
+   * unedited bodies from the original source (P2 fidelity design). Default:
+   * structural renderExpression with CST-text fallback.
+   */
+  renderExpr?: (expr: unknown) => string;
+}
+
 /**
  * Render an expression body: structural renderExpression first; on an
  * unknown node type (future grammar additions) fall back to the CST text.
  * Fallback-not-corrupt is the render-core invariant (see PR #357 lesson:
  * a removed CST fallback corrupted non-value synonym bodies).
  */
-function exprText(expr: unknown): string {
+function exprText(expr: unknown, opts?: RenderOpts): string {
   if (expr == null) return '';
+  if (opts?.renderExpr) return opts.renderExpr(expr);
   try {
     return renderExpression(expr as never);
   } catch {
@@ -204,7 +216,7 @@ function renderSegment(seg: unknown): string {
   return out;
 }
 
-function renderOperation(o: DehydratedNode): string {
+function renderOperation(o: DehydratedNode, opts?: RenderOpts): string {
   const op = o as unknown as { add?: boolean; assignRoot?: { $refText?: string }; path?: unknown; definition?: string; expression?: unknown };
   const kw = op.add ? 'add' : 'set';
   const root = op.assignRoot?.$refText;
@@ -217,17 +229,17 @@ function renderOperation(o: DehydratedNode): string {
   const lines = [head];
   const def = definitionLine(op.definition);
   if (def) lines.push(indentBlock(def, 2));
-  const body = exprText(op.expression);
+  const body = exprText(op.expression, opts);
   if (body) lines.push(indentBlock(body, 2));
   return lines.join('\n');
 }
 
-function renderShortcut(s: DehydratedNode): string {
+function renderShortcut(s: DehydratedNode, opts?: RenderOpts): string {
   const sc = s as unknown as { name?: string; definition?: string; expression?: unknown };
   const lines = [`alias ${sc.name ?? ''}:`];
   const def = definitionLine(sc.definition);
   if (def) lines.push(indentBlock(def, 2));
-  const body = exprText(sc.expression);
+  const body = exprText(sc.expression, opts);
   if (body) lines.push(indentBlock(body, 2));
   return lines.join('\n');
 }
@@ -300,7 +312,7 @@ function renderTypeAlias(t: DehydratedNode, renderChild: RenderChild): string {
   return lines.join('\n');
 }
 
-function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
+function renderCondition(c: DehydratedNode, renderChild: RenderChild, opts?: RenderOpts): string {
   const cc = c as unknown as {
     name?: string; definition?: string; postCondition?: boolean; expression?: unknown;
     annotations?: readonly unknown[]; references?: readonly unknown[];
@@ -314,7 +326,7 @@ function renderCondition(c: DehydratedNode, renderChild: RenderChild): string {
   for (const child of childList(cc.annotations, cc.references)) {
     lines.push(indentBlock(renderChild(child)));
   }
-  const body = exprText(cc.expression);
+  const body = exprText(cc.expression, opts);
   if (body) lines.push(indentBlock(body));
   return lines.join('\n');
 }
@@ -389,7 +401,7 @@ function childList(...arrays: Array<ReadonlyArray<unknown> | undefined>): Dehydr
 
 // --- dispatcher -----------------------------------------------------------
 
-export function renderNode(node: DehydratedNode, renderChild: RenderChild): string | null {
+export function renderNode(node: DehydratedNode, renderChild: RenderChild, opts?: RenderOpts): string | null {
   switch ((node as { $type: string }).$type) {
     case 'Data': return renderData(node as Dehydrated<Data>, renderChild);
     case 'Attribute': return renderAttribute(node as Dehydrated<Attribute>, renderChild);
@@ -397,10 +409,10 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild): stri
     case 'ChoiceOption': return renderChoiceOption(node as Dehydrated<ChoiceOption>, renderChild);
     case 'RosettaEnumeration': return renderEnum(node as Dehydrated<RosettaEnumeration>, renderChild);
     case 'RosettaEnumValue': return renderEnumValue(node as Dehydrated<RosettaEnumValue>, renderChild);
-    case 'Condition': return renderCondition(node, renderChild);
+    case 'Condition': return renderCondition(node, renderChild, opts);
     case 'RosettaFunction': return renderFunction(node, renderChild);
-    case 'Operation': return renderOperation(node);
-    case 'ShortcutDeclaration': return renderShortcut(node);
+    case 'Operation': return renderOperation(node, opts);
+    case 'ShortcutDeclaration': return renderShortcut(node, opts);
     case 'RosettaTypeAlias': return renderTypeAlias(node, renderChild);
     case 'TypeParameter': return renderTypeParameter(node);
     case 'AnnotationRef': return renderAnnotationRef(node);
@@ -429,13 +441,13 @@ function modelName(name: unknown): string {
   return String(name ?? '');
 }
 
-export function renderModel(model: { name: unknown; version?: string; elements: unknown[] }): string {
-  const renderChild: RenderChild = (c: DehydratedNode) => renderNode(c, renderChild) ?? '';
+export function renderModel(model: { name: unknown; version?: string; elements: unknown[] }, opts?: RenderOpts): string {
+  const renderChild: RenderChild = (c: DehydratedNode) => renderNode(c, renderChild, opts) ?? '';
   const lines: string[] = [];
   lines.push(`namespace ${modelName(model.name)}`);
   lines.push(`version "${model.version ?? '0.0.0'}"`);
   for (const element of model.elements) {
-    const text = renderNode(element as DehydratedNode, renderChild);
+    const text = renderNode(element as DehydratedNode, renderChild, opts);
     if (text !== null) {
       lines.push('');
       lines.push(text);

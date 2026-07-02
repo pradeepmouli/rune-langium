@@ -208,7 +208,10 @@ describe('expressionNodeToDsl', () => {
           }
         ]
       });
-      expect(expressionNodeToDsl(n)).toBe('x switch Active then 1, default 0');
+      // Body-root switch with >=2 cases renders multi-line: expressionNodeToDsl
+      // calls renderExpression directly (root position), so the switch gets the
+      // multi-line case style; NESTED switches stay single-line + parenthesized.
+      expect(expressionNodeToDsl(n)).toBe('x switch\n    Active then 1,\n    default 0');
     });
   });
 

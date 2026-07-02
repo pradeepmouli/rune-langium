@@ -10,7 +10,10 @@
  * never re-rendered. Replaces serializeModel + mergeSerializedIntoSource.
  */
 
-import { renderNode, type RenderChild, type DehydratedNode } from '@rune-langium/codegen/rosetta';
+import {
+  renderNode, renderExpression, RAW_DSL_TYPE,
+  type RenderChild, type RenderOpts, type DehydratedNode
+} from '@rune-langium/codegen/rosetta';
 import type { TypeGraphNode } from '../types.js';
 import { type DirtyIndex, isSubtreeDirty } from './dirty-paths.js';
 
@@ -65,6 +68,33 @@ function copyGapExcluding(
 export function renderNamespace(args: RenderArgs): string {
   const { nodes, originalSource, dirty, forceDirtyNodeIds } = args;
 
+  // P2 fidelity: an unedited expression body inside an otherwise-dirty node
+  // (e.g. a condition renamed but its body untouched) would otherwise fall
+  // through render-core's default `exprText`, which renders STRUCTURALLY —
+  // dropping comments and collapsing authored multi-line layout. Slice the
+  // ORIGINAL source bytes instead whenever the body still carries a clean
+  // $cstRange, byte-identical to a whole-node CST reuse.
+  //
+  // "Range present ⇒ body unedited" is a STRUCTURAL invariant, not a tracked
+  // dirty flag: every store expression-edit path (condition/operation/
+  // shortcut body) replaces the body wholesale with a rangeless
+  // `{ $type: 'RawDsl', text }` leaf (B1 Task 4 fix — no in-place expression
+  // mutations exist). A range against the immutable original source can
+  // therefore never be "half-updated"; there is no dual-source-of-truth class
+  // to guard against here, so no per-body dirty tracking is added.
+  const renderExpr: RenderOpts['renderExpr'] = (expr) => {
+    const e = expr as { $type?: string; text?: string };
+    if (e.$type === RAW_DSL_TYPE) return String(e.text ?? '');
+    const range = cstRange(expr);
+    // The body is always nested one level inside its owning construct
+    // (condition/operation/shortcut), which wraps the returned text in its own
+    // `indentBlock` call — so, like a whole-node CHILD reuse, the slice must
+    // be normalized to RELATIVE indentation first (see normalizeReusedSlice's
+    // doc) or continuation lines end up over-indented by the wrapper's pad.
+    if (range) return normalizeReusedSlice(originalSource.slice(range.offset, range.end), originalSource, range.offset);
+    return renderExpression(expr as never);
+  };
+
   // Per-node recursive renderer (closes over originalSource + dirty + nodeId).
   function makeRender(nodeId: string) {
     const render = (child: DehydratedNode, dataPath: (string | number)[]): string => {
@@ -87,7 +117,7 @@ export function renderNamespace(args: RenderArgs): string {
         const idx = childIndex(child, c, dataPath);
         return render(c, idx);
       };
-      const generated = renderNode(child, renderChild);
+      const generated = renderNode(child, renderChild, { renderExpr });
       if (generated !== null) return generated;
       if (range) return reuseSlice(originalSource, range, isChild); // unimplemented but had bytes
       // Brand-new node of an unimplemented $type — no bytes to slice and no
