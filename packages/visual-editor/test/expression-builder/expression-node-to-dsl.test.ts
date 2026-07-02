@@ -208,14 +208,12 @@ describe('expressionNodeToDsl', () => {
           }
         ]
       });
-      const result = expressionNodeToDsl(n);
-      expect(result).toContain('switch');
-      expect(result).toContain('Active');
+      expect(expressionNodeToDsl(n)).toBe('x switch Active then 1, default 0');
     });
   });
 
   describe('lambda operations', () => {
-    it('serializes filter with inline function', () => {
+    it('serializes filter with inline function, params BEFORE the bracket (bug fix class 2)', () => {
       const n = node('FilterOperation', {
         operator: 'filter',
         argument: node('RosettaSymbolReference', { symbol: 'items' }, 'a'),
@@ -225,9 +223,56 @@ describe('expressionNodeToDsl', () => {
           parameters: [{ $type: 'ClosureParameter' as const, name: 'item' }]
         }
       });
-      const result = expressionNodeToDsl(n);
-      expect(result).toContain('filter');
-      expect(result).toContain('item');
+      // Old serializer put params inside the bracket ([item True]) — grammar
+      // requires them before it.
+      expect(expressionNodeToDsl(n)).toBe('items filter item [True]');
+    });
+  });
+
+  describe('bug-fix regression coverage (Task 6)', () => {
+    it('class 1: comparison and equality share ONE precedence tier (no mid-chain parens)', () => {
+      // a > b = c — old serializer split = into tier 3 and > into tier 4,
+      // which would have wrapped the left child in parens. Grammar puts
+      // both on the same tier, so a left-associative chain needs none.
+      const n = node('EqualityOperation', {
+        operator: '=',
+        left: node('ComparisonOperation', { operator: '>', left: node('RosettaSymbolReference', { symbol: 'a' }, 'a'), right: node('RosettaSymbolReference', { symbol: 'b' }, 'b') }, 'cmp'),
+        right: node('RosettaSymbolReference', { symbol: 'c' }, 'c')
+      });
+      expect(expressionNodeToDsl(n)).toBe('a > b = c');
+    });
+
+    it('class 3: then renders a BARE body, no brackets', () => {
+      const n = node('ThenOperation', {
+        operator: 'then',
+        argument: node('RosettaSymbolReference', { symbol: 'items' }, 'a'),
+        function: {
+          $type: 'InlineFunction' as const,
+          body: node('ComparisonOperation', { operator: '>', left: { $type: 'RosettaImplicitVariable', id: 'iv', name: 'item' } as unknown as ExpressionNode, right: node('RosettaIntLiteral', { value: 0n }, 'z') }, 'body'),
+          parameters: []
+        }
+      });
+      // Old serializer wrapped the then-body in brackets ([item > 0]) — the
+      // grammar's ImplicitInlineFunction body is bare (a bracketed body would
+      // parse as a ListLiteral).
+      expect(expressionNodeToDsl(n)).toBe('items then item > 0');
+    });
+
+    it('class 4: with-meta entries now render (old serializer silently dropped them)', () => {
+      const n = node('WithMetaOperation', {
+        operator: 'with-meta',
+        argument: node('RosettaSymbolReference', { symbol: 'a' }, 'a'),
+        entries: [{ $type: 'WithMetaEntry' as const, key: 'scheme', value: node('RosettaStringLiteral', { value: 'urn:x' }, 'v') }]
+      } as never);
+      expect(expressionNodeToDsl(n)).toBe('a with-meta { scheme: "urn:x" }');
+    });
+
+    it('class 5: multi-arg only-exists renders (a, b) only exists', () => {
+      const n = node('RosettaOnlyExistsExpression', {
+        operator: 'exists',
+        args: [node('RosettaSymbolReference', { symbol: 'a' }, 'a'), node('RosettaSymbolReference', { symbol: 'b' }, 'b')]
+      } as never);
+      expect(expressionNodeToDsl(n)).toBe('(a, b) only exists');
     });
   });
 
