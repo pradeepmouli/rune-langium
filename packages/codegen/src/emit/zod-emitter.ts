@@ -338,6 +338,35 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       if (parentRef) {
         trackRef(parentRef, `${parentRef.name}Schema`);
       }
+      // Multi-level Data-extends-Choice (buildSuperTypeSchemaExpr's
+      // choice-ancestor branch): the emitted schema is ONE
+      // `runeExtendChoice(<ChoiceAncestor>Schema, {...})` call that (a)
+      // references the Choice ANCESTOR's schema — which sits 2+ links up
+      // the chain, possibly in a namespace the immediate-parent tracking
+      // above never sees — and (b) folds the own attributes of the
+      // immediate Data parent and every further intermediate INLINE into
+      // THIS file (buildRuneExtendChoiceExpr's `[data, superRef,
+      // ...intermediates]` fold), so those attributes' schema refs are
+      // emitted here too and must be imported relative to THIS namespace,
+      // even though the attribute-tracking loop below only ever iterates
+      // this namespace's own data. (The DIRECT Data-extends-Choice case
+      // needs neither: the immediate parentRef IS the Choice, covered by
+      // the unconditional trackRef above, and no foreign attributes are
+      // folded.) Reuses findChoiceAncestor — same walk, same cycle guard.
+      if (parentRef && isData(parentRef)) {
+        const choiceAncestor = ZodNamespaceEmitter.findChoiceAncestor(parentRef);
+        if (choiceAncestor) {
+          trackRef(choiceAncestor.choice, `${choiceAncestor.choice.name}Schema`);
+          for (const link of [parentRef, ...choiceAncestor.intermediates]) {
+            for (const attr of link.attributes) {
+              const attrTypeRef = attr.typeCall?.type?.ref;
+              if (attrTypeRef && (isData(attrTypeRef) || isRosettaEnumeration(attrTypeRef))) {
+                trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+              }
+            }
+          }
+        }
+      }
       // Check attribute types
       for (const attr of data.attributes) {
         const attrTypeRef = attr.typeCall?.type?.ref;

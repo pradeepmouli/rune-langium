@@ -13,9 +13,14 @@
  * the inlined helpers; the size-limit branch is exercised separately.
  */
 
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
+import { z } from 'zod';
 import { generate } from '../../src/index.js';
 
 const SOURCE_A = `namespace foo
@@ -83,6 +88,40 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     expect(runtimeOutput?.content).toContain(`export const runeCheckOneOf`);
     expect(runtimeOutput?.content).toContain(`export const runeCount`);
     expect(runtimeOutput?.content).toContain(`export const runeAttrExists`);
+    // ...including runeExtendChoice, which is the sidecar's ONLY
+    // z-dependent helper — the sidecar header must therefore import z.
+    // (PR-review finding: the header had no `import { z } from 'zod';`,
+    // so every barrel/single-file bundle's runtime.zod.ts failed
+    // typecheck and threw ReferenceError at module-init.)
+    expect(runtimeOutput?.content).toContain(`export const runeExtendChoice`);
+    expect(runtimeOutput?.content).toContain(`import { z } from 'zod';`);
+  });
+
+  it('the runtime.zod.ts sidecar actually executes: runeExtendChoice works when imported (no ReferenceError on z)', async () => {
+    const docs = await parseTwoNamespaces();
+    const outputs = await generate(docs, { target: 'zod', zod: { layout: 'barrel' } });
+    const runtimeOutput = outputs.find((o) => o.relativePath === 'runtime.zod.ts');
+    expect(runtimeOutput).toBeDefined();
+
+    // Write the REAL sidecar to disk and dynamic-import it — module-init
+    // evaluates `export const runeExtendChoice = ...`, and CALLING it
+    // executes `z.union(...)`: both steps threw `ReferenceError: z is not
+    // defined` before the header imported z. Mirrors the emitted-runtime
+    // pattern of zod-data-extends-choice.test.ts.
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-zod-sidecar-'));
+    const sidecarPath = join(tmpDir, 'runtime.zod.ts');
+    await writeFile(sidecarPath, runtimeOutput!.content, 'utf-8');
+    const mod = (await import(/* @vite-ignore */ pathToFileURL(sidecarPath).toString())) as Record<string, unknown>;
+
+    const runeExtendChoice = mod['runeExtendChoice'] as (choice: unknown, shape: unknown) => {
+      safeParse: (v: unknown) => { success: boolean };
+    };
+    expect(typeof runeExtendChoice).toBe('function');
+
+    const choice = z.union([z.strictObject({ cash: z.number() }), z.strictObject({ stock: z.string() })]);
+    const extended = runeExtendChoice(choice, { weight: z.number().optional() });
+    expect(extended.safeParse({ cash: 1, weight: 2 }).success).toBe(true);
+    expect(extended.safeParse({ weight: 2 }).success).toBe(false);
   });
 
   it('single-file layout emits one model.zod.ts (no helpers in the sidecar slot for single-file)', async () => {
