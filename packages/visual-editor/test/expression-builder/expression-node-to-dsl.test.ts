@@ -208,11 +208,9 @@ describe('expressionNodeToDsl', () => {
           }
         ]
       });
-      // Body-root switch with >=2 cases renders multi-line (Task 2 of this
-      // plan, commit 86c32359 — pre-existing stale expectation, not a Task 3
-      // change): renderExpression's atRoot flag is true here (expressionNodeToDsl
-      // calls it directly, not nested), matching the pre-B1 builder serializer's
-      // multi-line case style.
+      // Body-root switch with >=2 cases renders multi-line: expressionNodeToDsl
+      // calls renderExpression directly (root position), so the switch gets the
+      // multi-line case style; NESTED switches stay single-line + parenthesized.
       expect(expressionNodeToDsl(n)).toBe('x switch\n    Active then 1,\n    default 0');
     });
   });

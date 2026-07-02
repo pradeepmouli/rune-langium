@@ -19,12 +19,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parse } from '@rune-langium/core';
+import { parse, parsedAdapter } from '@rune-langium/core';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import { buildSourceForNamespaces } from '../../src/hooks/useModelSourceSync.js';
 import { renderNamespace } from '../../src/serialize/cst-reuse-renderer.js';
 import { buildDirtyIndex } from '../../src/serialize/dirty-paths.js';
-import { parsedAdapter } from '@rune-langium/core';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode } from '../../src/types.js';
 
