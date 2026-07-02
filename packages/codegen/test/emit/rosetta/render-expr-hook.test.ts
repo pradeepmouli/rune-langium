@@ -39,7 +39,7 @@ describe('exprText unexpected-throw observability', () => {
       if: null,
       ifthen: { $type: 'RosettaBooleanLiteral', value: true },
       full: false,
-      $cstText: 'if x then True',
+      $cstText: 'if x then True'
     } as never;
     const sc = { $type: 'ShortcutDeclaration', name: 'a', expression: broken } as never;
     expect(renderNode(sc, regen)).toBe('alias a:\n    if x then True');

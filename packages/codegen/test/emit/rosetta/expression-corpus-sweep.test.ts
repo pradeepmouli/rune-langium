@@ -107,100 +107,104 @@ async function extractCorpusSnippets(): Promise<{ snippets: Set<string>; fileCou
 }
 
 describe.skipIf(!RESOURCES_EXIST)('expression corpus sweep (P1: real-corpus fixed-point)', () => {
-  it(
-    'sweeps every Condition/Operation/ShortcutDeclaration expression body in .resources/ for the fixed-point property',
-    async () => {
-      const start = Date.now();
-      const { snippets, fileCount, skippedCount } = await extractCorpusSnippets();
-      const extractMs = Date.now() - start;
+  it('sweeps every Condition/Operation/ShortcutDeclaration expression body in .resources/ for the fixed-point property', async () => {
+    const start = Date.now();
+    const { snippets, fileCount, skippedCount } = await extractCorpusSnippets();
+    const extractMs = Date.now() - start;
 
-      expect(fileCount).toBeGreaterThan(100);
-      expect(snippets.size).toBeGreaterThan(0);
+    expect(fileCount).toBeGreaterThan(100);
+    expect(snippets.size).toBeGreaterThan(0);
 
-      const parseExpressionFindings: Array<{ snippet: string; errors: unknown }> = [];
-      const reparseFindings: Array<{ snippet: string; r1: string; errors: unknown }> = [];
-      const fixedPointFindings: Array<{ snippet: string; r1: string; r2: string }> = [];
-      const treeShapeFindings: Array<{ snippet: string; r1: string }> = [];
-      let checked = 0;
+    const parseExpressionFindings: Array<{ snippet: string; errors: unknown }> = [];
+    const reparseFindings: Array<{ snippet: string; r1: string; errors: unknown }> = [];
+    const fixedPointFindings: Array<{ snippet: string; r1: string; r2: string }> = [];
+    const treeShapeFindings: Array<{ snippet: string; r1: string }> = [];
+    let checked = 0;
 
-      for (const snippet of snippets) {
-        const p1 = parseExpression(snippet);
-        if (p1.hasErrors) {
-          // The snippet parsed fine in-document but not as a bare
-          // ExpressionWithAsKey rule — a real parseExpression finding, not a
-          // renderer bug. Collect and continue; don't fail silently.
-          parseExpressionFindings.push({ snippet, errors: p1.parserErrors });
-          continue;
-        }
-        checked++;
+    for (const snippet of snippets) {
+      const p1 = parseExpression(snippet);
+      if (p1.hasErrors) {
+        // The snippet parsed fine in-document but not as a bare
+        // ExpressionWithAsKey rule — a real parseExpression finding, not a
+        // renderer bug. Collect and continue; don't fail silently.
+        parseExpressionFindings.push({ snippet, errors: p1.parserErrors });
+        continue;
+      }
+      checked++;
 
-        let r1: string;
-        try {
-          r1 = renderExpression(p1.value);
-        } catch (err) {
-          reparseFindings.push({ snippet, r1: '<render threw>', errors: String(err) });
-          continue;
-        }
-
-        const p2 = parseExpression(r1);
-        if (p2.hasErrors) {
-          reparseFindings.push({ snippet, r1, errors: p2.parserErrors });
-          continue;
-        }
-
-        const r2 = renderExpression(p2.value);
-        if (r2 !== r1) {
-          fixedPointFindings.push({ snippet, r1, r2 });
-          continue;
-        }
-
-        if (!treesEquivalent(p1.value, p2.value)) {
-          treeShapeFindings.push({ snippet, r1 });
-        }
+      let r1: string;
+      try {
+        r1 = renderExpression(p1.value);
+      } catch (err) {
+        reparseFindings.push({ snippet, r1: '<render threw>', errors: String(err) });
+        continue;
       }
 
-      const totalMs = Date.now() - start;
-      // eslint-disable-next-line no-console
-      console.log(
-        `[expression-corpus-sweep] swept ${snippets.size} unique expressions from ${fileCount} files ` +
-          `(${skippedCount} files skipped — parse errors) — ${checked} snippets checked for the fixed-point ` +
-          `and tree-shape properties in ${totalMs}ms (extraction: ${extractMs}ms)`
-      );
-
-      if (
-        parseExpressionFindings.length > 0 ||
-        reparseFindings.length > 0 ||
-        fixedPointFindings.length > 0 ||
-        treeShapeFindings.length > 0
-      ) {
-        const lines: string[] = [];
-        if (parseExpressionFindings.length > 0) {
-          lines.push(`\n${parseExpressionFindings.length} parseExpression finding(s) (parsed in-document, not as a bare rule):`);
-          for (const f of parseExpressionFindings.slice(0, 20)) {
-            lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  errors: ${JSON.stringify(f.errors)}`);
-          }
-        }
-        if (reparseFindings.length > 0) {
-          lines.push(`\n${reparseFindings.length} reparse finding(s) (rendered text failed to reparse):`);
-          for (const f of reparseFindings.slice(0, 20)) {
-            lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}\n  errors: ${JSON.stringify(f.errors)}`);
-          }
-        }
-        if (fixedPointFindings.length > 0) {
-          lines.push(`\n${fixedPointFindings.length} fixed-point finding(s) (r2 !== r1):`);
-          for (const f of fixedPointFindings.slice(0, 20)) {
-            lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}\n  r2: ${JSON.stringify(f.r2)}`);
-          }
-        }
-        if (treeShapeFindings.length > 0) {
-          lines.push(`\n${treeShapeFindings.length} tree-shape finding(s) (r1 is a fixed point but reparses to a DIFFERENT tree shape — silent semantic corruption):`);
-          for (const f of treeShapeFindings.slice(0, 20)) {
-            lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}`);
-          }
-        }
-        expect.fail(lines.join('\n'));
+      const p2 = parseExpression(r1);
+      if (p2.hasErrors) {
+        reparseFindings.push({ snippet, r1, errors: p2.parserErrors });
+        continue;
       }
-    },
-    120_000
-  );
+
+      const r2 = renderExpression(p2.value);
+      if (r2 !== r1) {
+        fixedPointFindings.push({ snippet, r1, r2 });
+        continue;
+      }
+
+      if (!treesEquivalent(p1.value, p2.value)) {
+        treeShapeFindings.push({ snippet, r1 });
+      }
+    }
+
+    const totalMs = Date.now() - start;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[expression-corpus-sweep] swept ${snippets.size} unique expressions from ${fileCount} files ` +
+        `(${skippedCount} files skipped — parse errors) — ${checked} snippets checked for the fixed-point ` +
+        `and tree-shape properties in ${totalMs}ms (extraction: ${extractMs}ms)`
+    );
+
+    if (
+      parseExpressionFindings.length > 0 ||
+      reparseFindings.length > 0 ||
+      fixedPointFindings.length > 0 ||
+      treeShapeFindings.length > 0
+    ) {
+      const lines: string[] = [];
+      if (parseExpressionFindings.length > 0) {
+        lines.push(
+          `\n${parseExpressionFindings.length} parseExpression finding(s) (parsed in-document, not as a bare rule):`
+        );
+        for (const f of parseExpressionFindings.slice(0, 20)) {
+          lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  errors: ${JSON.stringify(f.errors)}`);
+        }
+      }
+      if (reparseFindings.length > 0) {
+        lines.push(`\n${reparseFindings.length} reparse finding(s) (rendered text failed to reparse):`);
+        for (const f of reparseFindings.slice(0, 20)) {
+          lines.push(
+            `  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}\n  errors: ${JSON.stringify(f.errors)}`
+          );
+        }
+      }
+      if (fixedPointFindings.length > 0) {
+        lines.push(`\n${fixedPointFindings.length} fixed-point finding(s) (r2 !== r1):`);
+        for (const f of fixedPointFindings.slice(0, 20)) {
+          lines.push(
+            `  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}\n  r2: ${JSON.stringify(f.r2)}`
+          );
+        }
+      }
+      if (treeShapeFindings.length > 0) {
+        lines.push(
+          `\n${treeShapeFindings.length} tree-shape finding(s) (r1 is a fixed point but reparses to a DIFFERENT tree shape — silent semantic corruption):`
+        );
+        for (const f of treeShapeFindings.slice(0, 20)) {
+          lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}`);
+        }
+      }
+      expect.fail(lines.join('\n'));
+    }
+  }, 120_000);
 });

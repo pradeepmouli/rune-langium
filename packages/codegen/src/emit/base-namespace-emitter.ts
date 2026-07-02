@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { RosettaCardinality, Data, Condition, RosettaRule } from '@rune-langium/core';
-import { isData } from '@rune-langium/core';
+import type { RosettaCardinality, Data, Choice, Condition, RosettaRule } from '@rune-langium/core';
+import { isData, isChoice } from '@rune-langium/core';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
 import type { NamespaceEmitterOptions } from './namespace-emitter.js';
@@ -42,6 +42,19 @@ export function decodeCardinality(card: RosettaCardinality): { lower: number; up
  * `MeasureBase`) must still resolve for `exists`/`is absent` conditions
  * declared on the descendant type. A visited-set guards against a
  * malformed cyclic `extends` chain looping forever.
+ *
+ * Data-extends-Choice (real corpus case: `BasketConstituent extends
+ * Observable`): a Data's `superType` reference is typed `DataOrChoice` —
+ * when the walk reaches a `Choice` ancestor (a Choice cannot itself
+ * `extends`, so the chain necessarily terminates there), the Choice's
+ * option names are contributed as pseudo-attributes (per the design's
+ * Semantics: "the child carries the choice's options ... PLUS its own
+ * attributes"), keyed by the option's Data-type name (the same name a
+ * condition like `Basket is absent` references) — mapped to that same
+ * name as its "type" (an option has no attribute name of its own, only a
+ * typeCall; the option's type name IS the pseudo-attribute name here,
+ * mirroring how transpileCondition's `extractAttrName` resolves a bare
+ * `RosettaSymbolReference` to `expr.symbol.$refText`).
  */
 export function buildAttributeTypesMap(data: Data): Map<string, string> {
   const map = new Map<string, string>();
@@ -53,6 +66,87 @@ export function buildAttributeTypesMap(data: Data): Map<string, string> {
       if (!map.has(attr.name)) map.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
     }
     const parent: unknown = current.superType?.ref;
+    if (parent && isChoice(parent)) {
+      contributeChoiceOptionsAsAttributes(parent as Choice, map, visited);
+      current = undefined;
+      break;
+    }
+    current = parent && isData(parent) ? parent : undefined;
+  }
+  return map;
+}
+
+/**
+ * Contribute a Choice's option names as pseudo-attributes into `map`.
+ * A Choice cannot `extends` anything (it has no `superType`), so this is
+ * a leaf contribution — no further chain walk from here. `visited` is
+ * threaded through for symmetry with the Data walk's cycle guard, though
+ * a Choice can't itself be revisited via `extends` (only via nested option
+ * types, which are NOT walked here — pseudo-attributes are the option
+ * NAMES themselves, not their own attribute sets).
+ */
+function contributeChoiceOptionsAsAttributes(choice: Choice, map: Map<string, string>, visited: Set<string>): void {
+  if (visited.has(choice.name)) return;
+  visited.add(choice.name);
+  for (const option of choice.attributes) {
+    const optionTypeName = option.typeCall?.type?.ref?.name ?? option.typeCall?.type?.$refText;
+    if (!optionTypeName) continue;
+    if (!map.has(optionTypeName)) map.set(optionTypeName, optionTypeName);
+  }
+}
+
+/**
+ * Derive a ChoiceOption's emitted field name from its type name:
+ * camelCase-first-letter (`Cash` -> `cash`). The established W2
+ * option-key naming convention (FIELD-NAMING DECISION, no CDM JSON
+ * data-instance fixture exists to verify a Choice's wire encoding against
+ * — verified empirically, only build-tooling JSON is present in the
+ * corpus) — used identically by ts-emitter's Choice union member keys
+ * (`{ cash: Cash }`) and zod-emitter's Choice arm object keys
+ * (`z.strictObject({ cash: CashSchema })`). Centralized here (was
+ * duplicated privately in both emitters) so `buildAttrAccessorNamesMap`
+ * can share the exact same mapping.
+ */
+export function choiceOptionFieldName(optionTypeName: string): string {
+  return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
+}
+
+/**
+ * Build a map of pseudo-attribute name (the bare option TYPE name, e.g.
+ * `Cash` — matching `buildAttributeTypesMap`'s keys AND the literal text a
+ * Rune condition references, e.g. `Cash is absent`) → the REAL emitted
+ * property-access suffix for that same option (`cash`, per
+ * `choiceOptionFieldName`).
+ *
+ * Only Data-extends-Choice pseudo-attributes need this remap — ordinary
+ * Data attributes are emitted verbatim under `attr.name` (their author-
+ * given name IS their emitted field name; see emitAttribute/emitInterface),
+ * so this map only ever contains entries contributed by a Choice ancestor
+ * walk (mirrors `buildAttributeTypesMap`'s own Choice-ancestor branch —
+ * same chain walk, same cycle guard, kept as a SEPARATE function rather
+ * than folded into `buildAttributeTypesMap` itself so ordinary callers that
+ * only need type-checking, not accessor remapping, don't pay for it).
+ *
+ * Consumed via `ExpressionTranspilerContext.attrAccessorNames` (see
+ * expr/transpiler.ts's `attrAccessExpr`) so a transpiled condition like
+ * `Cash is absent` emits `data.cash` (the real field), not `data.Cash`
+ * (undefined at runtime — a silent false-negative).
+ */
+export function buildAttrAccessorNamesMap(data: Data): Map<string, string> {
+  const map = new Map<string, string>();
+  const visited = new Set<string>();
+  let current: Data | undefined = data;
+  while (current && !visited.has(current.name)) {
+    visited.add(current.name);
+    const parent: unknown = current.superType?.ref;
+    if (parent && isChoice(parent)) {
+      for (const option of (parent as Choice).attributes) {
+        const optionTypeName = option.typeCall?.type?.ref?.name ?? option.typeCall?.type?.$refText;
+        if (!optionTypeName) continue;
+        if (!map.has(optionTypeName)) map.set(optionTypeName, choiceOptionFieldName(optionTypeName));
+      }
+      break;
+    }
     current = parent && isData(parent) ? parent : undefined;
   }
   return map;

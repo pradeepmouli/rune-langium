@@ -1,0 +1,21 @@
+namespace test.dataExtendsChoiceMultilevel
+version "0.0.0"
+
+type Cash:
+    amount number (0..1)
+
+type Commodity:
+    quantity number (0..1)
+
+choice Asset:
+    Cash
+    Commodity
+
+type ObservableItem extends Asset:
+    identifier string (0..1)
+
+type BasketConstituent extends ObservableItem:
+    weight number (0..1)
+
+    condition CashIsAbsent:
+        Cash is absent

@@ -18,15 +18,12 @@
  * in observable-asset-type.rosetta, whose `Observable` choice (options
  * Asset/Basket/Index) is a second, richer Choice-emission case.
  *
- * KNOWN, OUT-OF-SCOPE EXCEPTION (documented — same root cause as Task 3's
- * condition-transpile-corpus gate): `BasketConstituent extends Observable`
- * inherits Observable's option names as pseudo-attributes, which
- * buildAttributeTypesMap (walks Data.superType.ref, always a Data) doesn't
- * model — `BasketConstituent.BasketsOfBaskets`'s `Basket is absent`
- * condition emits a DIAGNOSTIC for the "unknown attribute" `Basket`. This
- * is a DIFFERENT feature (Data-extends-Choice inheritance) from W2's
- * Choice-as-attribute-type support and is excluded from this acceptance
- * check's diagnostic assertion, not silently absorbed into a pass.
+ * Data-extends-Choice (`BasketConstituent extends Observable`) is now
+ * handled by `buildAttributeTypesMap` (see docs/superpowers/specs/
+ * 2026-07-02-data-extends-choice-design.md) — Observable's option names
+ * (`Asset`, `Basket`, `Index`) resolve as pseudo-attributes, so
+ * `BasketConstituent.BasketsOfBaskets`'s `Basket is absent` condition no
+ * longer emits an "unknown attribute" diagnostic.
  *
  * `.resources/`-guarded per CLAUDE.md convention.
  */
@@ -50,22 +47,22 @@ const RELEVANT_FILES = [
 ];
 
 /**
- * KNOWN, OUT-OF-SCOPE exceptions (documented — neither is a Choice-emission
- * bug; both are unrelated to W2 and out of THIS test's intentionally
- * narrow 3-file scope):
- *   1. "unknown attribute 'Basket'" — see file-header note (Data-extends-
- *      Choice inheritance, a different feature from W2).
- *   2. "unresolved enumeration 'CurrencyCodeEnum'" — CurrencyCodeEnum is
- *      declared in base-staticdata-asset-common-enum.rosetta, a fourth file
- *      NOT included in RELEVANT_FILES (this test only needs the Asset/
- *      Observable/PositionBase Choice-resolution path, not the full
- *      transitive closure of base-staticdata-asset-common-type.rosetta —
- *      pulling in the whole CDM corpus to chase every cross-file reference
- *      would be disproportionate for a scoped Choice acceptance check).
- *      This is Task 1's ToEnumOperation cross-file-reference diagnostic,
- *      unrelated to Choice.
+ * KNOWN, OUT-OF-SCOPE exception (documented — not a Choice-emission bug;
+ * unrelated to W2 and out of THIS test's intentionally narrow 3-file
+ * scope): "unresolved enumeration 'CurrencyCodeEnum'" — CurrencyCodeEnum is
+ * declared in base-staticdata-asset-common-enum.rosetta, a fourth file NOT
+ * included in RELEVANT_FILES (this test only needs the Asset/Observable/
+ * PositionBase Choice-resolution path, not the full transitive closure of
+ * base-staticdata-asset-common-type.rosetta — pulling in the whole CDM
+ * corpus to chase every cross-file reference would be disproportionate for
+ * a scoped Choice acceptance check). This is Task 1's ToEnumOperation
+ * cross-file-reference diagnostic, unrelated to Choice.
+ *
+ * The former "unknown attribute 'Basket'" exception (Data-extends-Choice)
+ * is now fixed — see docs/superpowers/specs/2026-07-02-data-extends-choice-
+ * design.md — and no longer needs an entry here.
  */
-const KNOWN_DIAGNOSTIC_EXCEPTIONS = ["unknown attribute 'Basket'", "unresolved enumeration 'CurrencyCodeEnum'"];
+const KNOWN_DIAGNOSTIC_EXCEPTIONS = ["unresolved enumeration 'CurrencyCodeEnum'"];
 
 async function parseRelevantCdmFiles() {
   const { RuneDsl } = createRuneDslServices();
@@ -73,7 +70,10 @@ async function parseRelevantCdmFiles() {
   for (const fileName of RELEVANT_FILES) {
     const path = resolve(CDM_DIR, fileName);
     const content = readFileSync(path, 'utf-8');
-    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(content, URI.parse(pathToFileURL(path).toString()));
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      content,
+      URI.parse(pathToFileURL(path).toString())
+    );
     docs.push(doc);
   }
   await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
@@ -129,9 +129,10 @@ describe.skipIf(!RESOURCES_EXIST)('W2 acceptance — Choice-typed attributes nev
         const errors = output.diagnostics.filter(
           (d) => d.severity === 'error' && !KNOWN_DIAGNOSTIC_EXCEPTIONS.some((known) => d.message.includes(known))
         );
-        expect(errors, `${target}: ${output.relativePath} has error diagnostics: ${JSON.stringify(errors)}`).toHaveLength(
-          0
-        );
+        expect(
+          errors,
+          `${target}: ${output.relativePath} has error diagnostics: ${JSON.stringify(errors)}`
+        ).toHaveLength(0);
       }
     }
   });

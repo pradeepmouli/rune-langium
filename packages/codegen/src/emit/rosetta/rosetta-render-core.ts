@@ -16,11 +16,21 @@
 import type { AstNode } from 'langium';
 import type { Dehydrated } from '@rune-langium/core';
 import type {
-  Data, Attribute, Choice, ChoiceOption,
-  RosettaEnumeration, RosettaEnumValue, RosettaCardinality
+  Data,
+  Attribute,
+  Choice,
+  ChoiceOption,
+  RosettaEnumeration,
+  RosettaEnumValue,
+  RosettaCardinality
 } from '@rune-langium/core';
 import { renderExpression, UnsupportedExpressionError } from './render-expression.js';
-import { renderSynonymBody, renderClassSynonymValue, renderMetaSynonymValue, UnsupportedSynonymBodyError } from './render-synonym-body.js';
+import {
+  renderSynonymBody,
+  renderClassSynonymValue,
+  renderMetaSynonymValue,
+  UnsupportedSynonymBodyError
+} from './render-synonym-body.js';
 
 export type DehydratedNode = Dehydrated<AstNode>;
 export type RenderChild = (child: DehydratedNode) => string;
@@ -79,7 +89,10 @@ function exprText(expr: unknown, opts?: RenderOpts): string {
     if (!(err instanceof UnsupportedExpressionError)) {
       const nodeType = (expr as { $type?: string })?.$type ?? 'unknown';
       // eslint-disable-next-line no-console -- browser-safe observability hook (see module doc); never-corrupt invariant: CST fallback below always still runs.
-      console.warn(`[render-core] unexpected renderExpression failure on $type "${nodeType}" — falling back to CST text`, err);
+      console.warn(
+        `[render-core] unexpected renderExpression failure on $type "${nodeType}" — falling back to CST text`,
+        err
+      );
     }
     const e = expr as { $cstText?: string; $cstNode?: { text?: string } };
     return (e.$cstText ?? e.$cstNode?.text ?? '').trim();
@@ -97,13 +110,8 @@ function exprText(expr: unknown, opts?: RenderOpts): string {
  * no CST to reuse for an expression leaf) are dropped so we never emit a
  * malformed `Type(param: )`. Returns `''` when nothing renders.
  */
-function renderInlineChildren(
-  items: ReadonlyArray<unknown> | undefined,
-  renderChild: RenderChild
-): string {
-  const texts = (items ?? [])
-    .map((c) => renderChild(c as DehydratedNode).trim())
-    .filter(Boolean);
+function renderInlineChildren(items: ReadonlyArray<unknown> | undefined, renderChild: RenderChild): string {
+  const texts = (items ?? []).map((c) => renderChild(c as DehydratedNode).trim()).filter(Boolean);
   return texts.length ? `(${texts.join(', ')})` : '';
 }
 
@@ -117,10 +125,7 @@ function renderAttribute(a: Dehydrated<Attribute>, renderChild: RenderChild): st
   if (type) {
     // Inline type-call args live on the Attribute itself (`name Type(arg) (1..1)`),
     // NOT on typeCall — see grammar `Attribute`. Preserve them when re-rendering.
-    const args = renderInlineChildren(
-      (a as { typeCallArgs?: ReadonlyArray<unknown> }).typeCallArgs,
-      renderChild
-    );
+    const args = renderInlineChildren((a as { typeCallArgs?: ReadonlyArray<unknown> }).typeCallArgs, renderChild);
     head.push(`${type}${args}`);
   }
   head.push(formatCardinality(a.card));
@@ -218,12 +223,22 @@ function renderEnum(e: Dehydrated<RosettaEnumeration>, renderChild: RenderChild)
 function renderSegment(seg: unknown): string {
   let out = '';
   let s = seg as { feature?: { $refText?: string }; next?: unknown } | undefined;
-  while (s) { const f = s.feature?.$refText; if (f) out += ` -> ${f}`; s = s.next as typeof s; }
+  while (s) {
+    const f = s.feature?.$refText;
+    if (f) out += ` -> ${f}`;
+    s = s.next as typeof s;
+  }
   return out;
 }
 
 function renderOperation(o: DehydratedNode, opts?: RenderOpts): string {
-  const op = o as unknown as { add?: boolean; assignRoot?: { $refText?: string }; path?: unknown; definition?: string; expression?: unknown };
+  const op = o as unknown as {
+    add?: boolean;
+    assignRoot?: { $refText?: string };
+    path?: unknown;
+    definition?: string;
+    expression?: unknown;
+  };
   const kw = op.add ? 'add' : 'set';
   const root = op.assignRoot?.$refText;
   if (!root) {
@@ -252,12 +267,19 @@ function renderShortcut(s: DehydratedNode, opts?: RenderOpts): string {
 
 function renderFunction(f: DehydratedNode, renderChild: RenderChild): string {
   const fn = f as unknown as {
-    name?: string; definition?: string; superFunction?: { $refText?: string };
+    name?: string;
+    definition?: string;
+    superFunction?: { $refText?: string };
     dispatchAttribute?: { $refText?: string };
     dispatchValue?: { enumeration?: { $refText?: string }; value?: { $refText?: string } };
-    annotations?: unknown[]; references?: unknown[];
-    inputs?: unknown[]; output?: unknown; shortcuts?: unknown[];
-    conditions?: unknown[]; operations?: unknown[]; postConditions?: unknown[];
+    annotations?: unknown[];
+    references?: unknown[];
+    inputs?: unknown[];
+    output?: unknown;
+    shortcuts?: unknown[];
+    conditions?: unknown[];
+    operations?: unknown[];
+    postConditions?: unknown[];
   };
   let header = `func ${fn.name}`;
   // Optional dispatch selector — `func F(attr: Enum -> Value):` (grammar). This
@@ -284,9 +306,18 @@ function renderFunction(f: DehydratedNode, renderChild: RenderChild): string {
     lines.push(indentBlock(renderChild(fn.output as DehydratedNode), 2));
   }
   for (const sc of fn.shortcuts ?? []) lines.push(indentBlock(renderChild(sc as DehydratedNode)));
-  for (const c of fn.conditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(c as DehydratedNode))); }
-  for (const op of fn.operations ?? []) { lines.push(''); lines.push(indentBlock(renderChild(op as DehydratedNode))); }
-  for (const pc of fn.postConditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(pc as DehydratedNode))); }
+  for (const c of fn.conditions ?? []) {
+    lines.push('');
+    lines.push(indentBlock(renderChild(c as DehydratedNode)));
+  }
+  for (const op of fn.operations ?? []) {
+    lines.push('');
+    lines.push(indentBlock(renderChild(op as DehydratedNode)));
+  }
+  for (const pc of fn.postConditions ?? []) {
+    lines.push('');
+    lines.push(indentBlock(renderChild(pc as DehydratedNode)));
+  }
   return lines.join('\n');
 }
 
@@ -299,7 +330,8 @@ function renderTypeParameter(p: DehydratedNode): string {
 
 function renderTypeAlias(t: DehydratedNode, renderChild: RenderChild): string {
   const ta = t as unknown as {
-    name?: string; definition?: string;
+    name?: string;
+    definition?: string;
     parameters?: ReadonlyArray<unknown>;
     typeCall?: { type?: { $refText?: string }; arguments?: ReadonlyArray<unknown> };
     conditions?: unknown[];
@@ -314,14 +346,21 @@ function renderTypeAlias(t: DehydratedNode, renderChild: RenderChild): string {
   const lines = [`typeAlias ${ta.name}${params}:`];
   if (def) lines.push(indentBlock(def));
   lines.push(indentBlock(wrapped));
-  for (const c of ta.conditions ?? []) { lines.push(''); lines.push(indentBlock(renderChild(c as DehydratedNode))); }
+  for (const c of ta.conditions ?? []) {
+    lines.push('');
+    lines.push(indentBlock(renderChild(c as DehydratedNode)));
+  }
   return lines.join('\n');
 }
 
 function renderCondition(c: DehydratedNode, renderChild: RenderChild, opts?: RenderOpts): string {
   const cc = c as unknown as {
-    name?: string; definition?: string; postCondition?: boolean; expression?: unknown;
-    annotations?: readonly unknown[]; references?: readonly unknown[];
+    name?: string;
+    definition?: string;
+    postCondition?: boolean;
+    expression?: unknown;
+    annotations?: readonly unknown[];
+    references?: readonly unknown[];
   };
   const head = cc.postCondition ? 'post-condition' : 'condition';
   const lines = [cc.name ? `${head} ${cc.name}:` : `${head}:`];
@@ -339,7 +378,8 @@ function renderCondition(c: DehydratedNode, renderChild: RenderChild, opts?: Ren
 
 function renderAnnotationRef(a: DehydratedNode): string {
   const ar = a as unknown as {
-    annotation?: { $refText?: string }; attribute?: { $refText?: string };
+    annotation?: { $refText?: string };
+    attribute?: { $refText?: string };
     qualifiers?: unknown[];
   };
   const parts = [ar.annotation?.$refText ?? ''];
@@ -359,7 +399,10 @@ function renderAnnotationRef(a: DehydratedNode): string {
 }
 
 function synonymSources(sources: unknown[] | undefined): string {
-  return (sources ?? []).map((s) => (s as { $refText?: string }).$refText ?? '').filter(Boolean).join(', ');
+  return (sources ?? [])
+    .map((s) => (s as { $refText?: string }).$refText ?? '')
+    .filter(Boolean)
+    .join(', ');
 }
 
 // Sources are upstream-guaranteed (z2f picker + grammar). The three synonym
@@ -407,8 +450,12 @@ function renderSynonym(s: DehydratedNode): string | null {
 
 function renderEnumSynonym(s: DehydratedNode): string | null {
   const es = s as unknown as {
-    sources?: unknown[]; synonymValue?: string; definition?: string;
-    patternMatch?: string; patternReplace?: string; removeHtml?: boolean;
+    sources?: unknown[];
+    synonymValue?: string;
+    definition?: string;
+    patternMatch?: string;
+    patternReplace?: string;
+    removeHtml?: boolean;
   };
   const sourcesList = es.sources ?? [];
   const sources = synonymSources(sourcesList);
@@ -449,23 +496,40 @@ function childList(...arrays: Array<ReadonlyArray<unknown> | undefined>): Dehydr
 
 export function renderNode(node: DehydratedNode, renderChild: RenderChild, opts?: RenderOpts): string | null {
   switch ((node as { $type: string }).$type) {
-    case 'Data': return renderData(node as Dehydrated<Data>, renderChild);
-    case 'Attribute': return renderAttribute(node as Dehydrated<Attribute>, renderChild);
-    case 'Choice': return renderChoice(node as Dehydrated<Choice>, renderChild);
-    case 'ChoiceOption': return renderChoiceOption(node as Dehydrated<ChoiceOption>, renderChild);
-    case 'RosettaEnumeration': return renderEnum(node as Dehydrated<RosettaEnumeration>, renderChild);
-    case 'RosettaEnumValue': return renderEnumValue(node as Dehydrated<RosettaEnumValue>, renderChild);
-    case 'Condition': return renderCondition(node, renderChild, opts);
-    case 'RosettaFunction': return renderFunction(node, renderChild);
-    case 'Operation': return renderOperation(node, opts);
-    case 'ShortcutDeclaration': return renderShortcut(node, opts);
-    case 'RosettaTypeAlias': return renderTypeAlias(node, renderChild);
-    case 'TypeParameter': return renderTypeParameter(node);
-    case 'AnnotationRef': return renderAnnotationRef(node);
-    case 'RosettaClassSynonym': return renderClassSynonym(node);
-    case 'RosettaSynonym': return renderSynonym(node);
-    case 'RosettaEnumSynonym': return renderEnumSynonym(node);
-    default: return null; // unimplemented → caller uses CST
+    case 'Data':
+      return renderData(node as Dehydrated<Data>, renderChild);
+    case 'Attribute':
+      return renderAttribute(node as Dehydrated<Attribute>, renderChild);
+    case 'Choice':
+      return renderChoice(node as Dehydrated<Choice>, renderChild);
+    case 'ChoiceOption':
+      return renderChoiceOption(node as Dehydrated<ChoiceOption>, renderChild);
+    case 'RosettaEnumeration':
+      return renderEnum(node as Dehydrated<RosettaEnumeration>, renderChild);
+    case 'RosettaEnumValue':
+      return renderEnumValue(node as Dehydrated<RosettaEnumValue>, renderChild);
+    case 'Condition':
+      return renderCondition(node, renderChild, opts);
+    case 'RosettaFunction':
+      return renderFunction(node, renderChild);
+    case 'Operation':
+      return renderOperation(node, opts);
+    case 'ShortcutDeclaration':
+      return renderShortcut(node, opts);
+    case 'RosettaTypeAlias':
+      return renderTypeAlias(node, renderChild);
+    case 'TypeParameter':
+      return renderTypeParameter(node);
+    case 'AnnotationRef':
+      return renderAnnotationRef(node);
+    case 'RosettaClassSynonym':
+      return renderClassSynonym(node);
+    case 'RosettaSynonym':
+      return renderSynonym(node);
+    case 'RosettaEnumSynonym':
+      return renderEnumSynonym(node);
+    default:
+      return null; // unimplemented → caller uses CST
   }
 }
 
@@ -483,11 +547,15 @@ export function renderNode(node: DehydratedNode, renderChild: RenderChild, opts?
  */
 function modelName(name: unknown): string {
   if (typeof name === 'string') return name;
-  if (name && typeof name === 'object' && 'segments' in name) return (name as { segments: string[] }).segments.join('.');
+  if (name && typeof name === 'object' && 'segments' in name)
+    return (name as { segments: string[] }).segments.join('.');
   return String(name ?? '');
 }
 
-export function renderModel(model: { name: unknown; version?: string; elements: unknown[] }, opts?: RenderOpts): string {
+export function renderModel(
+  model: { name: unknown; version?: string; elements: unknown[] },
+  opts?: RenderOpts
+): string {
   const renderChild: RenderChild = (c: DehydratedNode) => renderNode(c, renderChild, opts) ?? '';
   const lines: string[] = [];
   lines.push(`namespace ${modelName(model.name)}`);

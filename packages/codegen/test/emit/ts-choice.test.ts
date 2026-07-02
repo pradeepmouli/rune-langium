@@ -25,7 +25,10 @@ import { emitNamespace } from '../../src/emit/ts-emitter.js';
 
 async function parseSource(source: string) {
   const { RuneDsl } = createRuneDslServices();
-  const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(source, URI.parse('inmemory:///model.rosetta'));
+  const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+    source,
+    URI.parse('inmemory:///model.rosetta')
+  );
   await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
   const model = doc.parseResult?.value;
   if (!model || !isRosettaModel(model)) {
@@ -72,7 +75,7 @@ describe('ts-emitter — Choice emission (W2)', () => {
     const model = walkNamespace([doc], 'test.choice');
     const output = emitNamespace(model, {});
     expect(output.content).toContain(
-      "return runeCheckOneOf([(x as Record<string, unknown>).cash, (x as Record<string, unknown>).commodity]);"
+      'return runeCheckOneOf([(x as Record<string, unknown>).cash, (x as Record<string, unknown>).commodity]);'
     );
   });
 

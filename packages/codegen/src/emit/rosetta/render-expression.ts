@@ -35,7 +35,10 @@ export type DehydratedExpression = Dehydrated<RosettaExpression> | RosettaExpres
 
 /** Generic verbatim escape-hatch leaf (pre-rendered DSL fragment). */
 export const RAW_DSL_TYPE = 'RawDsl';
-export interface RawDslLeaf { $type: 'RawDsl'; text: string }
+export interface RawDslLeaf {
+  $type: 'RawDsl';
+  text: string;
+}
 
 /** Thrown on an unknown `$type` so callers can fall back to CST text. */
 export class UnsupportedExpressionError extends Error {
@@ -81,22 +84,133 @@ type AnyNode = Record<string, unknown> & { $type: string };
 const VALID_ID_EXCEPTIONS = new Set(['condition', 'source', 'value', 'version', 'pattern', 'scope', 'min', 'max']);
 const RESERVED_KEYWORDS = new Set(
   [
-    'structured_provision', 'regulatoryReference', 'to-zoned-date-time', 'rationale_author',
-    'post-condition', 'condition-func', 'condition-path', 'reportedField', 'ruleReference',
-    'only-element', 'to-date-time', 'docReference', 'displayName', 'componentID', 'rosettaPath',
-    'eligibility', 'annotation', 'recordType', 'dateFormat', 'removeHtml', 'definition',
-    'namespace', 'condition', 'basicType', 'typeAlias', 'to-string', 'to-number', 'with-meta',
-    'provision', 'rationale', 'real-time', 'reporting', 'isProduct', 'override', 'function',
-    'metaType', 'contains', 'disjoint', 'distinct', 'multiple', 'optional', 'required',
-    'standard', 'version', 'extends', 'synonym', 'library', 'default', 'flatten', 'reverse',
-    'to-time', 'to-enum', 'to-date', 'extract', 'pattern', 'segment', 'isEvent', 'import',
-    'prefix', 'choice', 'inputs', 'output', 'source', 'as-key', 'exists', 'absent', 'one-of',
-    'to-int', 'switch', 'reduce', 'filter', 'single', 'mapper', 'corpus', 'report', 'scope',
-    'alias', 'count', 'first', 'super', 'empty', 'False', 'value', 'merge', 'enums', 'ASATP',
-    'using', 'label', 'type', 'enum', 'func', 'then', 'join', 'only', 'last', 'sort', 'item',
-    'True', 'else', 'meta', 'path', 'hint', 'maps', 'when', 'body', 'rule', 'from', 'with',
-    'root', 'set', 'add', 'and', 'sum', 'min', 'max', 'any', 'all', 'tag', 'for', 'as', 'or',
-    'is', 'if', 'to', 'in', 'e', 'E'
+    'structured_provision',
+    'regulatoryReference',
+    'to-zoned-date-time',
+    'rationale_author',
+    'post-condition',
+    'condition-func',
+    'condition-path',
+    'reportedField',
+    'ruleReference',
+    'only-element',
+    'to-date-time',
+    'docReference',
+    'displayName',
+    'componentID',
+    'rosettaPath',
+    'eligibility',
+    'annotation',
+    'recordType',
+    'dateFormat',
+    'removeHtml',
+    'definition',
+    'namespace',
+    'condition',
+    'basicType',
+    'typeAlias',
+    'to-string',
+    'to-number',
+    'with-meta',
+    'provision',
+    'rationale',
+    'real-time',
+    'reporting',
+    'isProduct',
+    'override',
+    'function',
+    'metaType',
+    'contains',
+    'disjoint',
+    'distinct',
+    'multiple',
+    'optional',
+    'required',
+    'standard',
+    'version',
+    'extends',
+    'synonym',
+    'library',
+    'default',
+    'flatten',
+    'reverse',
+    'to-time',
+    'to-enum',
+    'to-date',
+    'extract',
+    'pattern',
+    'segment',
+    'isEvent',
+    'import',
+    'prefix',
+    'choice',
+    'inputs',
+    'output',
+    'source',
+    'as-key',
+    'exists',
+    'absent',
+    'one-of',
+    'to-int',
+    'switch',
+    'reduce',
+    'filter',
+    'single',
+    'mapper',
+    'corpus',
+    'report',
+    'scope',
+    'alias',
+    'count',
+    'first',
+    'super',
+    'empty',
+    'False',
+    'value',
+    'merge',
+    'enums',
+    'ASATP',
+    'using',
+    'label',
+    'type',
+    'enum',
+    'func',
+    'then',
+    'join',
+    'only',
+    'last',
+    'sort',
+    'item',
+    'True',
+    'else',
+    'meta',
+    'path',
+    'hint',
+    'maps',
+    'when',
+    'body',
+    'rule',
+    'from',
+    'with',
+    'root',
+    'set',
+    'add',
+    'and',
+    'sum',
+    'min',
+    'max',
+    'any',
+    'all',
+    'tag',
+    'for',
+    'as',
+    'or',
+    'is',
+    'if',
+    'to',
+    'in',
+    'e',
+    'E'
   ].filter((kw) => !VALID_ID_EXCEPTIONS.has(kw))
 );
 
@@ -111,7 +225,10 @@ const RESERVED_KEYWORDS = new Set(
  * segment must be escaped independently and rejoined.
  */
 export function escapeId(name: string): string {
-  return name.split('.').map((segment) => (RESERVED_KEYWORDS.has(segment) ? `^${segment}` : segment)).join('.');
+  return name
+    .split('.')
+    .map((segment) => (RESERVED_KEYWORDS.has(segment) ? `^${segment}` : segment))
+    .join('.');
 }
 
 const refText = (r: unknown): string => escapeId((r as { $refText?: string } | undefined)?.$refText ?? '');
@@ -136,9 +253,7 @@ const ATOM_DECIMAL = /^(?:\.[0-9]+|[0-9]+\.[0-9]*)(?:[eE][+-]?[0-9]+)?$/;
 const ATOM_STRING = /^"(?:\\.|[^"\\])*"$|^'(?:\\.|[^'\\])*'$/;
 
 function isAtomicRawDsl(text: string): boolean {
-  return (
-    ATOM_QUALIFIED_ID.test(text) || ATOM_INT.test(text) || ATOM_DECIMAL.test(text) || ATOM_STRING.test(text)
-  );
+  return ATOM_QUALIFIED_ID.test(text) || ATOM_INT.test(text) || ATOM_DECIMAL.test(text) || ATOM_STRING.test(text);
 }
 
 const PREC_CONDITIONAL = 0;
@@ -169,17 +284,24 @@ function prec(node: AnyNode): number {
     // `r()` mechanism, so no dedicated comma-scanning helper is needed.
     case 'RosettaConditionalExpression':
     case 'SwitchOperation':
-    case 'ChoiceOperation': return PREC_CONDITIONAL;
-    case 'ThenOperation': return 1;
-    case 'LogicalOperation': return node['operator'] === 'or' ? 2 : 3;
+    case 'ChoiceOperation':
+      return PREC_CONDITIONAL;
+    case 'ThenOperation':
+      return 1;
+    case 'LogicalOperation':
+      return node['operator'] === 'or' ? 2 : 3;
     case 'EqualityOperation':
-    case 'ComparisonOperation': return 4;
-    case 'ArithmeticOperation': return node['operator'] === '*' || node['operator'] === '/' ? 6 : 5;
+    case 'ComparisonOperation':
+      return 4;
+    case 'ArithmeticOperation':
+      return node['operator'] === '*' || node['operator'] === '/' ? 6 : 5;
     case 'RosettaContainsExpression':
     case 'RosettaDisjointExpression':
     case 'DefaultOperation':
-    case 'JoinOperation': return 7;
-    default: return PREC_POSTFIX;
+    case 'JoinOperation':
+      return 7;
+    default:
+      return PREC_POSTFIX;
   }
 }
 
@@ -206,10 +328,14 @@ function dispatch(node: AnyNode, atRoot = false): string {
     }
 
     // --- literals ---
-    case 'RosettaBooleanLiteral': return node['value'] ? 'True' : 'False';
-    case 'RosettaIntLiteral': return String(node['value']);
-    case 'RosettaNumberLiteral': return String(node['value']);
-    case 'RosettaStringLiteral': return `"${escapeString(String(node['value'] ?? ''))}"`;
+    case 'RosettaBooleanLiteral':
+      return node['value'] ? 'True' : 'False';
+    case 'RosettaIntLiteral':
+      return String(node['value']);
+    case 'RosettaNumberLiteral':
+      return String(node['value']);
+    case 'RosettaStringLiteral':
+      return `"${escapeString(String(node['value'] ?? ''))}"`;
 
     // --- references / atoms ---
     case 'RosettaSymbolReference':
@@ -219,7 +345,8 @@ function dispatch(node: AnyNode, atRoot = false): string {
       if (node['explicitArguments']) return `${head}(${rawArgs.map((a) => r(a, 1)).join(', ')})`;
       return head;
     }
-    case 'RosettaImplicitVariable': return 'item';
+    case 'RosettaImplicitVariable':
+      return 'item';
     case 'ListLiteral': {
       const elements = (node['elements'] as unknown[] | undefined) ?? [];
       // Grammar: `empty` and `[...]` both infer ListLiteral; an empty list IS `empty`.
@@ -264,14 +391,31 @@ function dispatch(node: AnyNode, atRoot = false): string {
 }
 
 const SIMPLE_POSTFIX = new Set([
-  'RosettaOnlyElement', 'RosettaCountOperation', 'FlattenOperation', 'DistinctOperation',
-  'ReverseOperation', 'FirstOperation', 'LastOperation', 'SumOperation', 'OneOfOperation',
-  'ToStringOperation', 'ToNumberOperation', 'ToIntOperation', 'ToTimeOperation',
-  'ToDateOperation', 'ToDateTimeOperation', 'ToZonedDateTimeOperation'
+  'RosettaOnlyElement',
+  'RosettaCountOperation',
+  'FlattenOperation',
+  'DistinctOperation',
+  'ReverseOperation',
+  'FirstOperation',
+  'LastOperation',
+  'SumOperation',
+  'OneOfOperation',
+  'ToStringOperation',
+  'ToNumberOperation',
+  'ToIntOperation',
+  'ToTimeOperation',
+  'ToDateOperation',
+  'ToDateTimeOperation',
+  'ToZonedDateTimeOperation'
 ]);
 
 const FUNCTIONAL_OPS = new Set([
-  'FilterOperation', 'MapOperation', 'ReduceOperation', 'SortOperation', 'MinOperation', 'MaxOperation'
+  'FilterOperation',
+  'MapOperation',
+  'ReduceOperation',
+  'SortOperation',
+  'MinOperation',
+  'MaxOperation'
 ]);
 
 /** `arg ` prefix for postfix operators (empty when the op is argument-less). */
@@ -332,14 +476,13 @@ function dispatchExtended(node: AnyNode, _p: number, atRoot = false): string {
     }
     case 'SwitchOperation': {
       const rendered = ((node['cases'] as AnyNode[] | undefined) ?? []).map(renderSwitchCase);
-      const joined = atRoot && rendered.length >= 2
-        ? `\n    ${rendered.join(',\n    ')}`
-        : ` ${rendered.join(', ')}`;
+      const joined = atRoot && rendered.length >= 2 ? `\n    ${rendered.join(',\n    ')}` : ` ${rendered.join(', ')}`;
       return `${argPrefix(node)}switch${joined}`;
     }
     case 'WithMetaOperation': {
       const entries = ((node['entries'] as AnyNode[] | undefined) ?? [])
-        .map((e) => `${refText(e['key'])}: ${r(e['value'], 1)}`).join(', ');
+        .map((e) => `${refText(e['key'])}: ${r(e['value'], 1)}`)
+        .join(', ');
       const suffix = entries ? ` { ${entries} }` : '';
       return `${r(node['argument'], PREC_POSTFIX)} with-meta${suffix}`;
     }
@@ -353,10 +496,12 @@ function dispatchExtended(node: AnyNode, _p: number, atRoot = false): string {
     case 'RosettaConstructorExpression': {
       const typeName = dispatch(node['typeRef'] as AnyNode);
       const typeArgs = ((node['constructorTypeArgs'] as AnyNode[] | undefined) ?? [])
-        .map((a) => `${refText(a['parameter'])}: ${r(a['value'], 1)}`).join(', ');
+        .map((a) => `${refText(a['parameter'])}: ${r(a['value'], 1)}`)
+        .join(', ');
       const argsPart = typeArgs ? `(${typeArgs})` : '';
-      const pairs = ((node['values'] as AnyNode[] | undefined) ?? [])
-        .map((v) => `${refText(v['key'])}: ${r(v['value'], 1)}`);
+      const pairs = ((node['values'] as AnyNode[] | undefined) ?? []).map(
+        (v) => `${refText(v['key'])}: ${r(v['value'], 1)}`
+      );
       if (node['implicitEmpty']) pairs.push('...');
       const body = pairs.length > 0 ? `{ ${pairs.join(', ')} }` : '{}';
       return `${typeName}${argsPart} ${body}`;

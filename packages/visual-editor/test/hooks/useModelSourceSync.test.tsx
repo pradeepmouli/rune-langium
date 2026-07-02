@@ -409,7 +409,11 @@ describe('useModelSourceSync', () => {
     const productNode = baselineNodes.find((n) => n.data.name === 'Product')!;
 
     const { rerender } = renderHook(
-      ({ nodes, epoch, patches }: {
+      ({
+        nodes,
+        epoch,
+        patches
+      }: {
         nodes: ReturnType<typeof useEditorStore.getState>['nodes'];
         epoch: number;
         patches: Patches;

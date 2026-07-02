@@ -15,8 +15,8 @@ describe('updateTypeAliasType', () => {
     store.getState().updateTypeAliasType(ta.id, 'int');
     const updated = store.getState().nodesById.get(ta.id)!;
     expect((updated.data as { typeCall: { type: { $refText: string } } }).typeCall.type.$refText).toBe('int');
-    expect(store.getState().pendingEditPatches.some(
-      (p) => Array.isArray(p.path) && p.path.includes('typeCall')
-    )).toBe(true);
+    expect(store.getState().pendingEditPatches.some((p) => Array.isArray(p.path) && p.path.includes('typeCall'))).toBe(
+      true
+    );
   });
 });

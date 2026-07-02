@@ -103,7 +103,7 @@ describe('buildDependencyGraph', () => {
   const curatedDeps = new Map<string, Set<string>>([
     ['cdm.trade', new Set(['cdm.base.datetime'])],
     ['cdm.base.datetime', new Set(['cdm.base.math'])],
-    ['cdm.base.math', new Set()],
+    ['cdm.base.math', new Set()]
   ]);
   const closure = new Set(['cdm.trade', 'cdm.base.datetime', 'cdm.base.math']);
 

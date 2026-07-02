@@ -30,37 +30,49 @@ describe('renderNode — implemented scalars', () => {
           override: false,
           typeCall: { type: { $refText: 'string' } },
           card: { $type: 'RosettaCardinality', inf: 0, sup: 1, unbounded: false },
-          annotations: [], references: [], synonyms: [], labels: [],
-          ruleReferences: [], typeCallArgs: []
+          annotations: [],
+          references: [],
+          synonyms: [],
+          labels: [],
+          ruleReferences: [],
+          typeCallArgs: []
         }
       ]
     } as never;
 
-    expect(renderNode(node, regen)).toBe(
-      'type Foo extends Bar:\n' +
-      '  <"a foo">\n' +
-      '  bar string (0..1)'
-    );
+    expect(renderNode(node, regen)).toBe('type Foo extends Bar:\n' + '  <"a foo">\n' + '  bar string (0..1)');
   });
 
   it('emits an unbounded cardinality as (n..*)', () => {
     const attr = {
-      $type: 'Attribute', name: 'xs', override: false,
+      $type: 'Attribute',
+      name: 'xs',
+      override: false,
       typeCall: { type: { $refText: 'string' } },
       card: { $type: 'RosettaCardinality', inf: 1, sup: undefined, unbounded: true },
-      annotations: [], references: [], synonyms: [], labels: [],
-      ruleReferences: [], typeCallArgs: []
+      annotations: [],
+      references: [],
+      synonyms: [],
+      labels: [],
+      ruleReferences: [],
+      typeCallArgs: []
     } as never;
     expect(renderNode(attr, regen)).toBe('xs string (1..*)');
   });
 
   it('emits override and a missing definition', () => {
     const attr = {
-      $type: 'Attribute', name: 'y', override: true,
+      $type: 'Attribute',
+      name: 'y',
+      override: true,
       typeCall: { type: { $refText: 'int' } },
       card: { $type: 'RosettaCardinality', inf: 0, sup: 0, unbounded: false },
-      annotations: [], references: [], synonyms: [], labels: [],
-      ruleReferences: [], typeCallArgs: []
+      annotations: [],
+      references: [],
+      synonyms: [],
+      labels: [],
+      ruleReferences: [],
+      typeCallArgs: []
     } as never;
     expect(renderNode(attr, regen)).toBe('override y int (0..0)');
   });
@@ -75,10 +87,16 @@ describe('renderNode — implemented scalars', () => {
       return t;
     };
     const attr = {
-      $type: 'Attribute', name: 'amount', override: false,
+      $type: 'Attribute',
+      name: 'amount',
+      override: false,
       typeCall: { type: { $refText: 'number' } },
       card: { $type: 'RosettaCardinality', inf: 1, sup: 1, unbounded: false },
-      annotations: [], references: [], synonyms: [], labels: [], ruleReferences: [],
+      annotations: [],
+      references: [],
+      synonyms: [],
+      labels: [],
+      ruleReferences: [],
       typeCallArgs: [{ $type: 'TypeCallArgument', $cstText: 'digits: 18' }]
     } as never;
     expect(renderNode(attr, slice)).toBe('amount number(digits: 18) (1..1)');
@@ -95,17 +113,40 @@ describe('renderNode — implemented scalars', () => {
     const opt = {
       $type: 'ChoiceOption',
       typeCall: { type: { $refText: 'Money' }, arguments: [{ $type: 'TypeCallArgument', $cstText: 'ccy: "USD"' }] },
-      annotations: [], references: [], synonyms: [], labels: [], ruleReferences: []
+      annotations: [],
+      references: [],
+      synonyms: [],
+      labels: [],
+      ruleReferences: []
     } as never;
     expect(renderNode(opt, slice)).toBe('Money(ccy: "USD")');
   });
 
   it('emits a choice with options', () => {
     const node = {
-      $type: 'Choice', name: 'Pick', annotations: [], synonyms: [],
+      $type: 'Choice',
+      name: 'Pick',
+      annotations: [],
+      synonyms: [],
       attributes: [
-        { $type: 'ChoiceOption', typeCall: { type: { $refText: 'A' } }, annotations: [], references: [], synonyms: [], labels: [], ruleReferences: [] },
-        { $type: 'ChoiceOption', typeCall: { type: { $refText: 'B' } }, annotations: [], references: [], synonyms: [], labels: [], ruleReferences: [] }
+        {
+          $type: 'ChoiceOption',
+          typeCall: { type: { $refText: 'A' } },
+          annotations: [],
+          references: [],
+          synonyms: [],
+          labels: [],
+          ruleReferences: []
+        },
+        {
+          $type: 'ChoiceOption',
+          typeCall: { type: { $refText: 'B' } },
+          annotations: [],
+          references: [],
+          synonyms: [],
+          labels: [],
+          ruleReferences: []
+        }
       ]
     } as never;
     expect(renderNode(node, regen)).toBe('choice Pick:\n  A\n  B');
@@ -113,19 +154,35 @@ describe('renderNode — implemented scalars', () => {
 
   it('emits an enum with extends, displayName and values', () => {
     const node = {
-      $type: 'RosettaEnumeration', name: 'Color',
-      parent: { $refText: 'BaseColor' }, definition: undefined,
-      annotations: [], references: [], synonyms: [],
+      $type: 'RosettaEnumeration',
+      name: 'Color',
+      parent: { $refText: 'BaseColor' },
+      definition: undefined,
+      annotations: [],
+      references: [],
+      synonyms: [],
       enumValues: [
-        { $type: 'RosettaEnumValue', name: 'RED', display: 'Red', definition: undefined, annotations: [], references: [], enumSynonyms: [] },
-        { $type: 'RosettaEnumValue', name: 'GREEN', display: undefined, definition: undefined, annotations: [], references: [], enumSynonyms: [] }
+        {
+          $type: 'RosettaEnumValue',
+          name: 'RED',
+          display: 'Red',
+          definition: undefined,
+          annotations: [],
+          references: [],
+          enumSynonyms: []
+        },
+        {
+          $type: 'RosettaEnumValue',
+          name: 'GREEN',
+          display: undefined,
+          definition: undefined,
+          annotations: [],
+          references: [],
+          enumSynonyms: []
+        }
       ]
     } as never;
-    expect(renderNode(node, regen)).toBe(
-      'enum Color extends BaseColor:\n' +
-      '  RED displayName "Red"\n' +
-      '  GREEN'
-    );
+    expect(renderNode(node, regen)).toBe('enum Color extends BaseColor:\n' + '  RED displayName "Red"\n' + '  GREEN');
   });
 
   it('renders a minimal RosettaFunction with no children', () => {

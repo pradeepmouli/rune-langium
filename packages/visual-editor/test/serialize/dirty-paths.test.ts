@@ -36,9 +36,7 @@ describe('dirty-paths – granular patch (addAttribute/removeAttribute)', () => 
 });
 
 describe('dirty-paths – whole-node replace (renameType Map.set patch shape)', () => {
-  const wholeNodePatches = [
-    { op: 'replace', path: ['nodes', 'test.Foo'], value: {} }
-  ] as unknown as Patches;
+  const wholeNodePatches = [{ op: 'replace', path: ['nodes', 'test.Foo'], value: {} }] as unknown as Patches;
   const idx = buildDirtyIndex(wholeNodePatches);
 
   it('marks the owning node dirty', () => {

@@ -142,6 +142,61 @@ export interface ExpressionTranspilerContext {
    * Used by Phase 8b func body emission to resolve alias references correctly.
    */
   localBindings?: Map<string, string>;
+  /**
+   * Optional map of attribute name → the PROPERTY-ACCESS SUFFIX to use
+   * instead of the bare name (i.e. `${selfName}.${attrAccessorNames.get(name)}`
+   * instead of `${selfName}.${name}`), for attribute names that resolve to
+   * a DIFFERENT emitted field key than the name a Rune condition literally
+   * references.
+   *
+   * Data-extends-Choice is the sole current use: a condition like `Cash is
+   * absent` (real corpus text: `Basket is absent`,
+   * observable-asset-type.rosetta:231) is authored against the Choice
+   * OPTION's Data-type name, capitalized (`Cash`) — that's what
+   * `buildAttributeTypesMap`'s pseudo-attribute keys are, and it MUST stay
+   * that way for `validateAttr` to match the condition's own AST text. But
+   * the REAL emitted field key at that position is camelCase-first-letter
+   * of the same name (`cash`) — `choiceOptionFieldName`'s established W2
+   * convention, used identically by both the TS type alias's union member
+   * keys (`{ cash: Cash }`) and the Zod arm's object key
+   * (`z.strictObject({ cash: CashSchema })`). Without this remap, a
+   * transpiled predicate reads `data.Cash` (undefined at runtime) instead
+   * of `data.cash` (the actual populated field) — a silent false-negative
+   * (the condition never fires because the read is always `undefined`).
+   */
+  attrAccessorNames?: Map<string, string>;
+}
+
+/**
+ * Resolve the emitted property-access expression for an attribute name:
+ * `${ctx.selfName}.${name}` by default, or `${ctx.selfName}.${accessor}`
+ * when `ctx.attrAccessorNames` maps `name` to a different emitted field key
+ * (Data-extends-Choice pseudo-attributes — see `attrAccessorNames`'s doc
+ * comment on `ExpressionTranspilerContext`). Centralizing this resolution
+ * (rather than inlining `${ctx.selfName}.${name}` at each of the many
+ * Phase 4 emit* call sites) is what makes the remap apply uniformly to
+ * every condition kind (exists/absent/one-of/only-exists/choice) without
+ * touching each one's template separately.
+ *
+ * `ts-method` mode ONLY (`ctx.selfName === 'this'`, the class-instance
+ * case): a remapped access (i.e. `name` IS a Choice-derived pseudo-
+ * attribute — `attrAccessorNames` is NEVER populated for ordinary Data
+ * attributes, see its doc comment) is cast through
+ * `(this as unknown as Record<string, unknown>)` — the emitted class does
+ * not statically declare the Choice's option keys as members (per T105/
+ * T106's generic-intersection-alias / generic-child-class design, they
+ * only exist on `this` at runtime via `Object.assign` in the constructor),
+ * so a direct `this.cash` fails real `tsc --strict` (TS2339). The Zod
+ * modes' `selfName` (`data`, a function parameter typed by the actual
+ * `runeExtendChoice`-derived union) already carries the option keys
+ * structurally and need no cast.
+ */
+function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): string {
+  const accessor = ctx.attrAccessorNames?.get(name);
+  if (accessor !== undefined && ctx.emitMode === 'ts-method') {
+    return `(${ctx.selfName} as unknown as Record<string, unknown>).${accessor}`;
+  }
+  return `${ctx.selfName}.${accessor ?? name}`;
 }
 
 /**
@@ -181,8 +236,7 @@ function validateAttr(attrName: string, ctx: ExpressionTranspilerContext): boole
  * T053.
  */
 export function emitOneOf(attrNames: string[], ctx: ExpressionTranspilerContext): string {
-  const dataRef = ctx.selfName;
-  const attrList = attrNames.map((n) => `${dataRef}.${n}`).join(', ');
+  const attrList = attrNames.map((n) => attrAccessExpr(n, ctx)).join(', ');
   const message = `${ctx.conditionName}: exactly one of [${attrNames.join(', ')}] must be present in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
@@ -212,8 +266,7 @@ export function emitOneOf(attrNames: string[], ctx: ExpressionTranspilerContext)
  * T053.
  */
 export function emitChoice(attrNames: string[], ctx: ExpressionTranspilerContext): string {
-  const dataRef = ctx.selfName;
-  const attrList = attrNames.map((n) => `${dataRef}.${n}`).join(', ');
+  const attrList = attrNames.map((n) => attrAccessExpr(n, ctx)).join(', ');
   const message = `${ctx.conditionName}: exactly one of [${attrNames.join(', ')}] must be present in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
@@ -245,20 +298,20 @@ export function emitExists(attrName: string, ctx: ExpressionTranspilerContext): 
     return `/* DIAGNOSTIC: unknown attribute "${attrName}" */`;
   }
 
-  const dataRef = ctx.selfName;
+  const access = attrAccessExpr(attrName, ctx);
   const message = `${ctx.conditionName}: ${attrName} must be present in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
-    return `runeAttrExists(${dataRef}.${attrName})`;
+    return `runeAttrExists(${access})`;
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [`if (!runeAttrExists(${dataRef}.${attrName})) {`, `  errors.push('${message}');`, `}`].join('\n');
+    return [`if (!runeAttrExists(${access})) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
   return [
-    `if (!runeAttrExists(${dataRef}.${attrName})) {`,
+    `if (!runeAttrExists(${access})) {`,
     `  ctx.addIssue({`,
     `    code: 'custom',`,
     `    message: '${message}',`,
@@ -277,20 +330,20 @@ export function emitIsAbsent(attrName: string, ctx: ExpressionTranspilerContext)
     return `/* DIAGNOSTIC: unknown attribute "${attrName}" */`;
   }
 
-  const dataRef = ctx.selfName;
+  const access = attrAccessExpr(attrName, ctx);
   const message = `${ctx.conditionName}: ${attrName} must be absent in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
-    return `!runeAttrExists(${dataRef}.${attrName})`;
+    return `!runeAttrExists(${access})`;
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [`if (runeAttrExists(${dataRef}.${attrName})) {`, `  errors.push('${message}');`, `}`].join('\n');
+    return [`if (runeAttrExists(${access})) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
   return [
-    `if (runeAttrExists(${dataRef}.${attrName})) {`,
+    `if (runeAttrExists(${access})) {`,
     `  ctx.addIssue({`,
     `    code: 'custom',`,
     `    message: '${message}',`,
@@ -314,7 +367,6 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
   // Find all attributes on the type that are NOT in the allowed list
   const forbiddenAttrs = Array.from(ctx.attributeTypes.keys()).filter((name) => !allowedAttrNames.includes(name));
 
-  const dataRef = ctx.selfName;
   const message = `${ctx.conditionName}: only [${allowedAttrNames.join(', ')}] may exist in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
@@ -322,9 +374,9 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
       return 'true';
     }
     if (forbiddenAttrs.length === 1) {
-      return `!runeAttrExists(${dataRef}.${forbiddenAttrs[0]})`;
+      return `!runeAttrExists(${attrAccessExpr(forbiddenAttrs[0]!, ctx)})`;
     }
-    return forbiddenAttrs.map((n) => `!runeAttrExists(${dataRef}.${n})`).join(' && ');
+    return forbiddenAttrs.map((n) => `!runeAttrExists(${attrAccessExpr(n, ctx)})`).join(' && ');
   }
 
   if (ctx.emitMode === 'ts-method') {
@@ -332,7 +384,7 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
       return '// only-exists: no forbidden attributes';
     }
     const checks = forbiddenAttrs.map((n) =>
-      [`if (runeAttrExists(${dataRef}.${n})) {`, `  errors.push('${message}');`, `}`].join('\n')
+      [`if (runeAttrExists(${attrAccessExpr(n, ctx)})) {`, `  errors.push('${message}');`, `}`].join('\n')
     );
     return checks.join('\n');
   }
@@ -343,7 +395,7 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
   }
   const checks = forbiddenAttrs.map((n) =>
     [
-      `if (runeAttrExists(${dataRef}.${n})) {`,
+      `if (runeAttrExists(${attrAccessExpr(n, ctx)})) {`,
       `  ctx.addIssue({`,
       `    code: 'custom',`,
       `    message: '${message}',`,
@@ -1276,7 +1328,7 @@ export function transpileExpression(
     if (ctx.localBindings?.has(name)) {
       return ctx.localBindings.get(name)!;
     }
-    return `${ctx.selfName}.${name}`;
+    return attrAccessExpr(name, ctx);
   }
 
   // Implicit variable (lambda parameter 'item')
@@ -1369,7 +1421,7 @@ export function transpileExpression(
     if (forbiddenAttrs.length === 0) {
       return 'true';
     }
-    const checks = forbiddenAttrs.map((n) => `!runeAttrExists(${ctx.selfName}.${n})`);
+    const checks = forbiddenAttrs.map((n) => `!runeAttrExists(${attrAccessExpr(n, ctx)})`);
     return checks.length === 1 ? checks[0]! : `(${checks.join(' && ')})`;
   }
 

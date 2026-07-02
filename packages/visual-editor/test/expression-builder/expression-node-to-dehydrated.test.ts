@@ -15,7 +15,13 @@ describe('expressionNodeToDehydrated', () => {
   });
 
   it('converts Placeholder to a RawDsl marker leaf in preview mode', () => {
-    const node = { $type: 'LogicalOperation', id, operator: 'and', left: { $type: 'Placeholder', id }, right: { $type: 'RosettaBooleanLiteral', id, value: true } } as never;
+    const node = {
+      $type: 'LogicalOperation',
+      id,
+      operator: 'and',
+      left: { $type: 'Placeholder', id },
+      right: { $type: 'RosettaBooleanLiteral', id, value: true }
+    } as never;
     const out = expressionNodeToDehydrated(node, { allowPlaceholders: true });
     expect(renderExpression(out as never)).toBe('___ and True');
   });
@@ -38,7 +44,9 @@ describe('expressionNodeToDehydrated', () => {
       typeRef: { $type: 'RosettaSymbolReference', id, symbol: 'Trade', explicitArguments: false },
       constructorTypeArgs: [],
       implicitEmpty: false,
-      values: [{ $type: 'ConstructorKeyValuePair', key: 'quantity', value: { $type: 'RosettaIntLiteral', id, value: 1n } }]
+      values: [
+        { $type: 'ConstructorKeyValuePair', key: 'quantity', value: { $type: 'RosettaIntLiteral', id, value: 1n } }
+      ]
     } as never;
     const out = expressionNodeToDehydrated(node, { allowPlaceholders: false });
     expect(renderExpression(out as never)).toBe('Trade { quantity: 1 }');

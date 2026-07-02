@@ -11,13 +11,20 @@
  */
 
 import {
-  renderNode, renderExpression, RAW_DSL_TYPE,
-  type RenderChild, type RenderOpts, type DehydratedNode
+  renderNode,
+  renderExpression,
+  RAW_DSL_TYPE,
+  type RenderChild,
+  type RenderOpts,
+  type DehydratedNode
 } from '@rune-langium/codegen/rosetta';
 import type { TypeGraphNode } from '../types.js';
 import { type DirtyIndex, isSubtreeDirty } from './dirty-paths.js';
 
-interface CstRange { offset: number; end: number }
+interface CstRange {
+  offset: number;
+  end: number;
+}
 
 function cstRange(node: unknown): CstRange | undefined {
   return (node as { $cstRange?: CstRange }).$cstRange;
@@ -150,7 +157,8 @@ export function renderNamespace(args: RenderArgs): string {
     parts.push(render(n.data as unknown as DehydratedNode, []));
     cursor = range.end;
   }
-  if (cursor < originalSource.length) parts.push(copyGapExcluding(originalSource, cursor, originalSource.length, sortedRemoved));
+  if (cursor < originalSource.length)
+    parts.push(copyGapExcluding(originalSource, cursor, originalSource.length, sortedRemoved));
 
   // New top-level nodes (no $cstRange) → append at the namespace tail.
   // Filter out empty strings: a fresh node whose $type is unimplemented returns
@@ -252,10 +260,22 @@ function childIndex(
 }
 
 const CHILD_ARRAY_KEYS = [
-  'attributes', 'conditions', 'annotations', 'references',
-  'synonyms', 'enumSynonyms', 'labels', 'ruleReferences', 'enumValues',
-  'inputs', 'operations', 'shortcuts', 'postConditions', 'parameters',
+  'attributes',
+  'conditions',
+  'annotations',
+  'references',
+  'synonyms',
+  'enumSynonyms',
+  'labels',
+  'ruleReferences',
+  'enumValues',
+  'inputs',
+  'operations',
+  'shortcuts',
+  'postConditions',
+  'parameters',
   // Inline type-call args (`Type(param: value)`): `typeCallArgs` on Attribute,
   // `arguments` on a TypeCall (ChoiceOption / TypeAlias wrapped type).
-  'typeCallArgs', 'arguments'
+  'typeCallArgs',
+  'arguments'
 ];

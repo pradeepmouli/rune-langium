@@ -239,7 +239,15 @@ describe('expressionNodeToDsl', () => {
       // both on the same tier, so a left-associative chain needs none.
       const n = node('EqualityOperation', {
         operator: '=',
-        left: node('ComparisonOperation', { operator: '>', left: node('RosettaSymbolReference', { symbol: 'a' }, 'a'), right: node('RosettaSymbolReference', { symbol: 'b' }, 'b') }, 'cmp'),
+        left: node(
+          'ComparisonOperation',
+          {
+            operator: '>',
+            left: node('RosettaSymbolReference', { symbol: 'a' }, 'a'),
+            right: node('RosettaSymbolReference', { symbol: 'b' }, 'b')
+          },
+          'cmp'
+        ),
         right: node('RosettaSymbolReference', { symbol: 'c' }, 'c')
       });
       expect(expressionNodeToDsl(n)).toBe('a > b = c');
@@ -251,7 +259,15 @@ describe('expressionNodeToDsl', () => {
         argument: node('RosettaSymbolReference', { symbol: 'items' }, 'a'),
         function: {
           $type: 'InlineFunction' as const,
-          body: node('ComparisonOperation', { operator: '>', left: { $type: 'RosettaImplicitVariable', id: 'iv', name: 'item' } as unknown as ExpressionNode, right: node('RosettaIntLiteral', { value: 0n }, 'z') }, 'body'),
+          body: node(
+            'ComparisonOperation',
+            {
+              operator: '>',
+              left: { $type: 'RosettaImplicitVariable', id: 'iv', name: 'item' } as unknown as ExpressionNode,
+              right: node('RosettaIntLiteral', { value: 0n }, 'z')
+            },
+            'body'
+          ),
           parameters: []
         }
       });
@@ -265,7 +281,13 @@ describe('expressionNodeToDsl', () => {
       const n = node('WithMetaOperation', {
         operator: 'with-meta',
         argument: node('RosettaSymbolReference', { symbol: 'a' }, 'a'),
-        entries: [{ $type: 'WithMetaEntry' as const, key: 'scheme', value: node('RosettaStringLiteral', { value: 'urn:x' }, 'v') }]
+        entries: [
+          {
+            $type: 'WithMetaEntry' as const,
+            key: 'scheme',
+            value: node('RosettaStringLiteral', { value: 'urn:x' }, 'v')
+          }
+        ]
       } as never);
       expect(expressionNodeToDsl(n)).toBe('a with-meta { scheme: "urn:x" }');
     });
@@ -273,7 +295,10 @@ describe('expressionNodeToDsl', () => {
     it('class 5: multi-arg only-exists renders (a, b) only exists', () => {
       const n = node('RosettaOnlyExistsExpression', {
         operator: 'exists',
-        args: [node('RosettaSymbolReference', { symbol: 'a' }, 'a'), node('RosettaSymbolReference', { symbol: 'b' }, 'b')]
+        args: [
+          node('RosettaSymbolReference', { symbol: 'a' }, 'a'),
+          node('RosettaSymbolReference', { symbol: 'b' }, 'b')
+        ]
       } as never);
       expect(expressionNodeToDsl(n)).toBe('(a, b) only exists');
     });

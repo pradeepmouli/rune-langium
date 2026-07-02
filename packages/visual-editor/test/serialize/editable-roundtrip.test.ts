@@ -622,9 +622,7 @@ describe('expression-fidelity round-trip (P2 Task 3)', () => {
     // The condition body is untouched by the rename — the RENDER of the body
     // itself must be byte-identical to the original source (comment + line
     // breaks survive).
-    expect(out).toContain(
-      'if bar exists\n      // comment explaining why baz matters here\n      then baz exists'
-    );
+    expect(out).toContain('if bar exists\n      // comment explaining why baz matters here\n      then baz exists');
     // Sibling attributes are byte-intact.
     expect(out).toContain('bar string (1..1)');
     expect(out).toContain('baz int (0..1)');

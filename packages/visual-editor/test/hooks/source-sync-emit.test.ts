@@ -13,12 +13,21 @@ describe('buildSourceForNamespaces', () => {
     const node = {
       id: 'test.Foo',
       meta: { namespace: 'test', deferred: false },
-      data: { $type: 'Data', name: 'Foo', $cstRange: { offset: src.indexOf('type Foo'), end: src.length - 1 },
-              attributes: [], conditions: [], annotations: [], references: [], synonyms: [] }
+      data: {
+        $type: 'Data',
+        name: 'Foo',
+        $cstRange: { offset: src.indexOf('type Foo'), end: src.length - 1 },
+        attributes: [],
+        conditions: [],
+        annotations: [],
+        references: [],
+        synonyms: []
+      }
     } as unknown as TypeGraphNode;
 
     const out = buildSourceForNamespaces({
-      nodes: [node], edges: [],
+      nodes: [node],
+      edges: [],
       originalSourceByNamespace: new Map([['test', src]]),
       patches: [] as unknown as Patches
     });
@@ -34,8 +43,16 @@ describe('useModelSourceSync — deleting the LAST node in the whole graph', () 
     const node = {
       id: 'test.Foo',
       meta: { namespace: 'test', deferred: false },
-      data: { $type: 'Data', name: 'Foo', $cstRange: range,
-              attributes: [], conditions: [], annotations: [], references: [], synonyms: [] }
+      data: {
+        $type: 'Data',
+        name: 'Foo',
+        $cstRange: range,
+        attributes: [],
+        conditions: [],
+        annotations: [],
+        references: [],
+        synonyms: []
+      }
     } as unknown as TypeGraphNode;
     // Inverse patch of `draft.nodes.delete('test.Foo')` — carries the deleted
     // node (with its $cstRange + namespace) so the renderer can drop its range.
@@ -46,8 +63,7 @@ describe('useModelSourceSync — deleting the LAST node in the whole graph', () 
     // Render 1 (mount): the node is present — establishes the serialize baseline
     // (the hook intentionally suppresses the first emission).
     const { rerender } = renderHook(
-      ({ nodes, patches, inverse }) =>
-        useModelSourceSync(nodes, [], onChanged, 0, patches, original, inverse),
+      ({ nodes, patches, inverse }) => useModelSourceSync(nodes, [], onChanged, 0, patches, original, inverse),
       { initialProps: { nodes: [node], patches: [] as unknown as Patches, inverse: [] as unknown as Patches } }
     );
     expect(onChanged).not.toHaveBeenCalled();

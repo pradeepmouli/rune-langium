@@ -63,7 +63,9 @@ describe('W1 Tier 4 — SwitchOperation', () => {
   it('no default case: final else is undefined', () => {
     const expr = parse('a switch 1 then "one", 2 then "two"');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe("((__sw) => (1 === __sw ? 'one' : 2 === __sw ? 'two' : undefined))(data.a)");
+    expect(transpileExpression(expr, ctx)).toBe(
+      "((__sw) => (1 === __sw ? 'one' : 2 === __sw ? 'two' : undefined))(data.a)"
+    );
   });
 
   it('reference guard resolves against the emitted enum member (string value)', () => {

@@ -213,16 +213,10 @@ describe('POST /api/parse — manifest fast-path (v2), manifest required (no v1 
 
     // ── dependencyGraph: transitive closures, manifest-derived (no link) ──
     expect(body.dependencyGraph['cdm.base.math']).toEqual(['cdm.base.math']);
-    expect(body.dependencyGraph['cdm.base.datetime']).toEqual(
-      ['cdm.base.datetime', 'cdm.base.math'].sort()
-    );
-    expect(body.dependencyGraph['cdm.trade']).toEqual(
-      ['cdm.base.datetime', 'cdm.base.math', 'cdm.trade'].sort()
-    );
+    expect(body.dependencyGraph['cdm.base.datetime']).toEqual(['cdm.base.datetime', 'cdm.base.math'].sort());
+    expect(body.dependencyGraph['cdm.trade']).toEqual(['cdm.base.datetime', 'cdm.base.math', 'cdm.trade'].sort());
     // app imports cdm.trade → its closure pulls the whole chain (import-based).
-    expect(body.dependencyGraph['app']).toEqual(
-      ['app', 'cdm.base.datetime', 'cdm.base.math', 'cdm.trade'].sort()
-    );
+    expect(body.dependencyGraph['app']).toEqual(['app', 'cdm.base.datetime', 'cdm.base.math', 'cdm.trade'].sort());
     expect(body.dependencyGraph).not.toHaveProperty('cdm.other');
   });
 

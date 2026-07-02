@@ -1,0 +1,8 @@
+namespace test.declmulti.b
+version "0.0.0"
+
+import test.declmulti.a.*
+
+type ObservableItem extends Asset:
+    identifier string (0..1)
+    holding Cash (0..1)

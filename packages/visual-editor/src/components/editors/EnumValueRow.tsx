@@ -170,10 +170,10 @@ function EnumValueRow({
     const refText = resolveSynonymRefText(opt, editorCtx?.nodeId, pendingSource);
     // Optimistic form-state update for immediate chip display
     const currentSyns: EnumSynonymEntry[] = (getValues(`${prefix}.enumSynonyms`) ?? []) as EnumSynonymEntry[];
-    setValue(
-      `${prefix}.enumSynonyms` as any,
-      [...currentSyns, { $type: 'RosettaEnumSynonym', sources: [{ $refText: refText }], synonymValue: pendingValue }]
-    );
+    setValue(`${prefix}.enumSynonyms` as any, [
+      ...currentSyns,
+      { $type: 'RosettaEnumSynonym', sources: [{ $refText: refText }], synonymValue: pendingValue }
+    ]);
     // Commit to graph
     if (editorCtx) {
       editorCtx.actions.addEnumValueSynonym(editorCtx.nodeId, index, refText, pendingValue);
@@ -185,7 +185,10 @@ function EnumValueRow({
   const handleRemoveEnumSynonym = useCallback(
     (synIndex: number) => {
       const currentSyns: EnumSynonymEntry[] = (getValues(`${prefix}.enumSynonyms`) ?? []) as EnumSynonymEntry[];
-      setValue(`${prefix}.enumSynonyms` as any, currentSyns.filter((_, i) => i !== synIndex));
+      setValue(
+        `${prefix}.enumSynonyms` as any,
+        currentSyns.filter((_, i) => i !== synIndex)
+      );
       if (editorCtx) {
         editorCtx.actions.removeEnumValueSynonym(editorCtx.nodeId, index, synIndex);
       }

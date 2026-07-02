@@ -54,10 +54,12 @@ import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   decodeCardinality,
   buildAttributeTypesMap,
+  buildAttrAccessorNamesMap,
   activeConditions,
   mergeProfileTypeMaps,
   buildReportRulesLines,
-  buildCrossNsImportLines
+  buildCrossNsImportLines,
+  choiceOptionFieldName
 } from './base-namespace-emitter.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
@@ -237,9 +239,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * W2: emit a `choice` declaration as a key-presence discriminated union
    * type (no class — a Choice is a type-only union, not an instantiable
    * shape like Data) plus an exactly-one-of type guard.
+   *
+   * Data-extends-Choice (user-directed correction, supersedes the spec
+   * snippet where they differ): ALSO emit a SHAPE-level union
+   * (`<Name>Shape = { cash: CashShape } | ...`) alongside the class-armed
+   * one — see emitChoiceShapeTypeDeclaration's doc comment. The original
+   * `export type <Name> = { cash: Cash } | ...` union is unchanged (W2
+   * surface, non-goal).
    */
   emitChoice(choice: Choice): void {
     this.sections.push(this.emitChoiceTypeDeclaration(choice));
+    this.sections.push('');
+    this.sections.push(this.emitChoiceShapeTypeDeclaration(choice));
     this.sections.push('');
     this.sections.push(this.emitChoiceTypeGuard(choice));
     this.sections.push('');
@@ -329,8 +340,26 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     for (const data of this.ctx.dataByName.values()) {
       const parentRef = data.superType?.ref;
       if (parentRef) {
+        // Deliberately NOT gated on isData: a Choice supertype in another
+        // namespace needs BOTH symbols too — `<Choice>Shape` (the generic
+        // constraint/default on the child's Shape alias and class, per
+        // emitChoiceShapeTypeDeclaration) and the bare `<Choice>` union.
+        // Before Choices emitted a Shape-level union this ungated tracking
+        // emitted a broken `import { AssetShape }` (TS2305, real corpus:
+        // TransferableProduct/SpecificAsset extends Asset cross-namespace);
+        // now the symbol exists and the same tracking is simply correct.
         trackRef(parentRef, `${parentRef.name}Shape`);
         trackRef(parentRef, parentRef.name);
+      }
+      // Multi-level Data-extends-Choice: the child's generic Shape alias
+      // constraint references the Choice ANCESTOR's `<Choice>Shape` even
+      // when the immediate parent is a Data — the ancestor may live in a
+      // third namespace the immediate-parent tracking above never sees.
+      if (parentRef && isData(parentRef)) {
+        const choiceAncestor = TsNamespaceEmitter.findChoiceAncestor(parentRef as Data);
+        if (choiceAncestor) {
+          trackRef(choiceAncestor, `${choiceAncestor.name}Shape`);
+        }
       }
       for (const attr of data.attributes) {
         const attrTypeRef = attr.typeCall?.type?.ref;
@@ -444,8 +473,70 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Emit `export interface <TypeName>Shape { ... }`.
-   * For types with a parent in the same namespace, emits `extends <Parent>Shape`.
+   * Walk UP a Data's `extends` chain (NOT including `data` itself, mirroring
+   * zod-emitter.ts's `findChoiceAncestor` cycle-guard contract) and report
+   * the Choice it bottoms out at, if any. Needed because `interface X
+   * extends AliasWithUnionDefault` does not typecheck (TS2312: "An
+   * interface can only extend an object type or intersection of object
+   * types with statically known members") — a GENERIC alias whose default
+   * type argument resolves to a union is exactly that shape. So once ANY
+   * ancestor's Shape becomes the generic intersection alias (T105's
+   * Data-extends-Choice case), every DESCENDANT's Shape must also become a
+   * generic alias threading the same `T`, chaining `<Parent>Shape<T>`
+   * rather than `extends <Parent>Shape` — unlike zod's runtime
+   * `runeExtendChoice` (which must flatten to ONE call because a `z.union`
+   * has no `.extend()`), TS type aliases chain naturally
+   * (`type CShape<T> = BShape<T> & {...}` typechecks and still narrows
+   * correctly at any depth — verified empirically), so no flattening is
+   * needed here.
+   */
+  private static findChoiceAncestor(data: Data): Choice | undefined {
+    const visited = new Set<string>([data.name]);
+    let current: unknown = data.superType?.ref;
+    while (current) {
+      if (isChoice(current)) return current;
+      if (!isData(current) || visited.has(current.name)) return undefined;
+      visited.add(current.name);
+      current = current.superType?.ref;
+    }
+    return undefined;
+  }
+
+  /**
+   * Emit the `<TypeName>Shape` TYPE-level artifact.
+   *
+   * Ordinary case (no supertype, and no Choice ancestor anywhere up the
+   * `extends` chain): `export interface <TypeName>Shape { ... }`, extending
+   * `<Parent>Shape` when the parent is a Data in this namespace — own
+   * attributes only, parent's are inherited via `extends`. UNCHANGED for
+   * this feature.
+   *
+   * Data-extends-Choice (per docs/superpowers/specs/2026-07-02-
+   * data-extends-choice-design.md "TS type — generic intersection", plus
+   * the user-directed Shape-constraint correction): when
+   * `data.superType.ref` is a `Choice` directly, an `interface … extends`
+   * is not expressible (interfaces cannot extend a union) — the spec's own
+   * type surface is `T & { ...extras }`, generic over the Choice arm.
+   * Since the CLASS is already named `<TypeName>` (T106), the type alias is
+   * emitted as `<TypeName>Shape` instead (collision-free naming, recorded
+   * in the spec doc). The constraint/default is the Choice's SHAPE-level
+   * union (`<Choice>Shape`, per emitChoiceShapeTypeDeclaration), NOT the
+   * bare Choice union — the bare union's arms are the CLASS types, which
+   * would world-mix a plain-data construction payload with class-armed
+   * types: `export type <TypeName>Shape<T extends <Choice>Shape =
+   * <Choice>Shape> = T & { ...own attrs };`. Bare `<TypeName>Shape` (no
+   * type argument) still typechecks at every existing reference site
+   * because the default type param is the full Shape-level union.
+   *
+   * Multi-level (`Data extends Data extends Choice`): when the IMMEDIATE
+   * parent is a Data whose own chain reaches a Choice ancestor further up
+   * (`findChoiceAncestor`), this Data's Shape must ALSO become a generic
+   * alias threading the same `T` through the parent's generic Shape:
+   * `export type <TypeName>Shape<T extends <ChoiceAncestor>Shape =
+   * <ChoiceAncestor>Shape> = <Parent>Shape<T> & { ...own attrs };` — plain
+   * `interface … extends <Parent>Shape` would fail to compile once
+   * `<Parent>Shape` is itself the generic alias (its default resolves to a
+   * union).
    * T105.
    */
   private emitInterface(data: Data): string {
@@ -453,26 +544,37 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const interfaceName = `${name}Shape`;
 
     const parentRef = data.superType?.ref;
+    const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
     const parentInNamespace = parentRef && isData(parentRef) && this.ctx.dataByName.has((parentRef as Data).name);
-    const parentInterfaceName = parentInNamespace ? `${(parentRef as Data).name}Shape` : undefined;
+    const parentData = parentInNamespace ? (parentRef as Data) : undefined;
+    const inheritedChoiceAncestor = parentData ? TsNamespaceEmitter.findChoiceAncestor(parentData) : undefined;
 
-    const header = parentInterfaceName
-      ? `export interface ${interfaceName} extends ${parentInterfaceName}`
-      : `export interface ${interfaceName}`;
-
-    // Only OWN attributes (parent's are inherited via extends)
+    // Own attribute field declarations — identical across all branches.
     const fields: string[] = [];
     for (const attr of data.attributes) {
       const baseType = this.resolveTypeExprAsTs(attr);
       const fieldDecl = TsNamespaceEmitter.applyCardinalityTs(attr.card, baseType, attr.name);
       fields.push(`  ${fieldDecl};`);
     }
+    const body = fields.length === 0 ? '{}' : `{\n${fields.join('\n')}\n}`;
 
-    if (fields.length === 0) {
-      return `${header} {}`;
+    if (choiceParent) {
+      const constraint = `${choiceParent.name}Shape`;
+      return `export type ${interfaceName}<T extends ${constraint} = ${constraint}> = T & ${body};`;
     }
 
-    return `${header} {\n${fields.join('\n')}\n}`;
+    if (parentData && inheritedChoiceAncestor) {
+      const constraint = `${inheritedChoiceAncestor.name}Shape`;
+      return `export type ${interfaceName}<T extends ${constraint} = ${constraint}> = ${parentData.name}Shape<T> & ${body};`;
+    }
+
+    const parentInterfaceName = parentData ? `${parentData.name}Shape` : undefined;
+
+    const header = parentInterfaceName
+      ? `export interface ${interfaceName} extends ${parentInterfaceName}`
+      : `export interface ${interfaceName}`;
+
+    return `${header} ${body}`;
   }
 
   // ---------------------------------------------------------------------------
@@ -483,6 +585,32 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * Emit `export class <TypeName> implements <TypeName>Shape` (no parent)
    * or `export class <Child> extends <Parent> implements <Child>Shape` (with parent).
    * Includes instance field declarations and constructor.
+   *
+   * Data-extends-Choice (AMENDED per docs/superpowers/specs/2026-07-02-
+   * data-extends-choice-design.md "TS class — generic child class"): when
+   * `data.superType.ref` is a `Choice` (not a `Data`), there is no parent
+   * CLASS to `extends` (a Choice is a type-only union, never emitted as a
+   * class — see emitChoice's doc comment) — instead the child class itself
+   * becomes generic over the Choice arm: `class <Name><T extends
+   * <Choice>Shape = <Choice>Shape>` (constrained on the SHAPE-level Choice
+   * union, per the user-directed correction — see
+   * emitChoiceShapeTypeDeclaration's world-mixing rationale). `<Name>Shape`
+   * is now the generic intersection type alias (T105, "TS type — generic
+   * intersection") — its DEFAULT instantiation (`<Name>Shape` with no type
+   * argument) is `<Choice>Shape & {...own attrs}`, a
+   * union-rooted intersection, which a class cannot `implements` (classes
+   * may only implement object types, not unions). So the class omits
+   * `implements` for the Choice-parent case; `<Name>Shape<T>` remains the
+   * single construction-time type used by the constructor parameter and
+   * `static from`'s cast — the class/alias pairing is still verified by
+   * the emitted-runtime behavior tests (real `tsc` + real execution), just
+   * not via a structural `implements` clause. The constructor threads `T`
+   * through its parameter (`data: <Name>Shape<T>`) and
+   * `Object.assign(this, data)` copies the T-surface onto the instance,
+   * while own attributes are still assigned explicitly afterward (unchanged
+   * convention) so `typeof this.<attr>` narrowing keeps working. `static
+   * from`/`new <Name>(...)` remain the only construction paths (no
+   * competing `of<T>()` factory).
    * T106.
    */
   private emitClass(data: Data): string {
@@ -490,11 +618,28 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const interfaceName = `${name}Shape`;
     const parentRef = data.superType?.ref;
     const parentInNamespace = parentRef && isData(parentRef) && this.ctx.dataByName.has((parentRef as Data).name);
-    const parentName = parentInNamespace ? (parentRef as Data).name : undefined;
+    const parentData = parentInNamespace ? (parentRef as Data) : undefined;
+    const parentName = parentData?.name;
+    const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
+    // Multi-level (Data extends Data extends Choice, per T105's
+    // emitInterface): once the PARENT's own Shape is itself the generic
+    // intersection alias, THIS Data's Shape (bare, default `T`) is also
+    // union-rooted — `implements <Name>Shape` fails the same way it does
+    // for a direct Choice parent (TS2422: a class can only implement an
+    // object type, not a union). The class stays ordinary (`extends
+    // <Parent>` only, no `<T>` on the class itself — the leaf Data doesn't
+    // need its own generic param, `super(data)` structurally accepts the
+    // wider bare Shape), it just drops `implements`.
+    const inheritedChoiceAncestor = parentData ? TsNamespaceEmitter.findChoiceAncestor(parentData) : undefined;
+    const shapeIsGeneric = choiceParent !== undefined || inheritedChoiceAncestor !== undefined;
 
-    const classHeader = parentName
-      ? `export class ${name} extends ${parentName} implements ${interfaceName}`
-      : `export class ${name} implements ${interfaceName}`;
+    const classHeader = choiceParent
+      ? `export class ${name}<T extends ${choiceParent.name}Shape = ${choiceParent.name}Shape>`
+      : parentName
+        ? shapeIsGeneric
+          ? `export class ${name} extends ${parentName}`
+          : `export class ${name} extends ${parentName} implements ${interfaceName}`
+        : `export class ${name} implements ${interfaceName}`;
 
     const lines: string[] = [`${classHeader} {`];
 
@@ -507,7 +652,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     // Constructor body lines
     const ctorBodyLines: string[] = [];
-    if (parentName) {
+    if (choiceParent) {
+      ctorBodyLines.push(`    Object.assign(this, data);`);
+    } else if (parentName) {
       ctorBodyLines.push(`    super(data);`);
     }
     for (const attr of data.attributes) {
@@ -518,10 +665,11 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     if (hasOwnFields) {
       lines.push('');
     }
+    const ctorParamType = choiceParent ? `${interfaceName}<T>` : interfaceName;
     if (ctorBodyLines.length === 0) {
-      lines.push(`  constructor(data: ${interfaceName}) {}`);
+      lines.push(`  constructor(data: ${ctorParamType}) {}`);
     } else {
-      lines.push(`  constructor(data: ${interfaceName}) {`);
+      lines.push(`  constructor(data: ${ctorParamType}) {`);
       for (const bodyLine of ctorBodyLines) {
         lines.push(bodyLine);
       }
@@ -530,7 +678,16 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     // static from factory (T107)
     lines.push('');
-    lines.push(TsNamespaceEmitter.emitFromFactory(data));
+    lines.push(TsNamespaceEmitter.emitFromFactory(data, shapeIsGeneric));
+
+    // Data-extends-Choice: exactly-one-of validator over the inherited
+    // Choice's option names, mirroring emitOneOf's ts-method emission
+    // convention (runeCheckOneOf + errors.push), read off `this` since the
+    // option keys were copied on via Object.assign in the constructor.
+    if (choiceParent) {
+      lines.push('');
+      lines.push(this.emitChoiceParentValidateMethod(choiceParent, name));
+    }
 
     // validate methods (T110)
     if (activeConditions(data).length > 0) {
@@ -540,6 +697,56 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     lines.push('}');
     return lines.join('\n');
+  }
+
+  /**
+   * Data-extends-Choice: emit an exactly-one-of validate method for a
+   * child's inherited Choice supertype — mirrors `emitOneOf`'s ts-method
+   * body shape (`runeCheckOneOf` + `errors.push`) exactly, since this IS
+   * the same exactly-one-of semantics as a `OneOfOperation`/
+   * `ChoiceOperation` condition, just synthesized from the Choice's option
+   * list instead of an authored `Condition` node.
+   *
+   * Reads `this.<choiceOptionFieldName>` — the REAL emitted field key
+   * (camelCase, e.g. `cash`), populated by `Object.assign(this, data)` in
+   * the constructor from the union member key (`{ cash: Cash }`, per
+   * emitChoiceTypeDeclaration) — NOT `this.<OptionTypeName>` (`Cash`,
+   * capitalized). The error MESSAGE still uses the bare option type names
+   * (`optionNames`, matching the DSL-facing option list a reader expects to
+   * see), but the RUNTIME CHECK must read the accessor names — the same
+   * DSL-text-vs-real-field-key distinction the transpiler's
+   * `attrAccessorNames` remap fixes for authored conditions
+   * (base-namespace-emitter.ts's `buildAttrAccessorNamesMap` doc comment
+   * has the full rationale).
+   *
+   * The read is cast via `(this as unknown as Record<string, unknown>)`
+   * (matching `buildTypeGuardChecks`'s existing convention elsewhere in
+   * this file): the class does NOT statically declare the option keys as
+   * members (they only exist on `this` at runtime, via `Object.assign` in
+   * the constructor) — a direct `this.cash` fails real `tsc --strict`
+   * (TS2339, "Property 'cash' does not exist"), since TypeScript classes
+   * cannot declare members from a type parameter (the same documented
+   * limitation the spec's amended TS-class section calls out).
+   */
+  private emitChoiceParentValidateMethod(choice: Choice, childName: string): string {
+    const optionNames = choice.attributes.map((option) => {
+      const optionTypeRef = option.typeCall?.type;
+      return optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+    });
+    const accessors = optionNames
+      .map((n) => `(this as unknown as Record<string, unknown>).${choiceOptionFieldName(n)}`)
+      .join(', ');
+    const message = `${choice.name}: exactly one of [${optionNames.join(', ')}] must be present in ${childName}`;
+
+    return [
+      `  validate${choice.name}(): { valid: boolean; errors: string[] } {`,
+      `    const errors: string[] = [];`,
+      `    if (!runeCheckOneOf([${accessors}])) {`,
+      `      errors.push('${message}');`,
+      `    }`,
+      `    return { valid: errors.length === 0, errors };`,
+      `  }`
+    ].join('\n');
   }
 
   // ---------------------------------------------------------------------------
@@ -642,23 +849,6 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Derive a ChoiceOption's discriminant field name from its type name.
-   *
-   * FIELD-NAMING DECISION (documented per spec instruction — no CDM JSON
-   * data-instance fixture exists in .resources/ to verify a Choice's wire
-   * encoding against; verified empirically, only build-tooling JSON is
-   * present in the corpus). A ChoiceOption has no attribute name of its
-   * own (only a `typeCall` referencing its Data type, e.g. `Cash`) — Data
-   * attributes in this corpus are conventionally camelCase-first-letter
-   * (`emitInterface` emits `attr.name` verbatim, and every corpus attribute
-   * name IS already camelCase-first-letter as authored). Camel-casing the
-   * option's type name is the closest equivalent: `Cash` -> `cash`.
-   */
-  private static choiceOptionFieldName(optionTypeName: string): string {
-    return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
-  }
-
-  /**
    * Emit `export type <ChoiceName> = { option1: Type1 } | { option2: Type2 } | ...;`
    * — a key-presence discriminated union (not `z.discriminatedUnion`-style
    * literal-tag discrimination; CDM Choice instances are encoded as an
@@ -670,7 +860,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       .map((option) => {
         const optionTypeRef = option.typeCall?.type;
         const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
-        const fieldName = TsNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+        const fieldName = choiceOptionFieldName(optionTypeName);
         return `{ ${fieldName}: ${optionTypeName} }`;
       })
       .join(' | ');
@@ -678,6 +868,40 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       return `export type ${name} = never;`;
     }
     return `export type ${name} = ${options};`;
+  }
+
+  /**
+   * Emit the SHAPE-level Choice union:
+   * `export type <ChoiceName>Shape = { cash: CashShape } | { commodity: CommodityShape } | ...;`
+   *
+   * Data-extends-Choice (user-directed correction): the generic
+   * intersection Shape alias and the generic child class must constrain
+   * `T` on the Choice's SHAPE-level union, not the bare Choice union —
+   * `emitChoiceTypeDeclaration`'s arms reference bare names, which for
+   * Data options are the CLASS types, so `T extends <Choice>` would
+   * intersect the plain-data (Shape) world with a class-armed union
+   * (world-mixing: a `{ cash: { amount: 5 } }` construction payload is
+   * not a `Cash` class instance). Each arm's value type here is the
+   * option's `<Name>Shape` when the option resolves to a Data (the type
+   * a construction payload actually carries at that key), and the bare
+   * name otherwise (enums/builtins have no Shape form — same convention
+   * as every other Shape-suffix site in this emitter).
+   */
+  private emitChoiceShapeTypeDeclaration(choice: Choice): string {
+    const name = choice.name;
+    const options = choice.attributes
+      .map((option) => {
+        const optionTypeRef = option.typeCall?.type;
+        const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+        const fieldName = choiceOptionFieldName(optionTypeName);
+        const valueType = optionTypeRef?.ref && isData(optionTypeRef.ref) ? `${optionTypeName}Shape` : optionTypeName;
+        return `{ ${fieldName}: ${valueType} }`;
+      })
+      .join(' | ');
+    if (options === '') {
+      return `export type ${name}Shape = never;`;
+    }
+    return `export type ${name}Shape = ${options};`;
   }
 
   /**
@@ -691,7 +915,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const fieldNames = choice.attributes.map((option) => {
       const optionTypeRef = option.typeCall?.type;
       const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
-      return TsNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+      return choiceOptionFieldName(optionTypeName);
     });
 
     const accessors = fieldNames.map((f) => `(x as Record<string, unknown>).${f}`).join(', ');
@@ -714,13 +938,15 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private buildTsTranspilerContext(data: Data, conditionName: string): ExpressionTranspilerContext {
     const attributeTypes = buildAttributeTypesMap(data);
+    const attrAccessorNames = buildAttrAccessorNamesMap(data);
     return {
       selfName: 'this',
       emitMode: 'ts-method',
       conditionName,
       typeName: data.name,
       attributeTypes,
-      diagnostics: this.ctx.diagnostics
+      diagnostics: this.ctx.diagnostics,
+      attrAccessorNames
     };
   }
 
@@ -1107,15 +1333,28 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Emit the `static from(json: unknown): <TypeName>` factory method.
    * T107.
+   *
+   * @param castThroughUnknown - Data-extends-Choice (direct or inherited via
+   *   a Data parent, per T105's `findChoiceAncestor`): bare `<Name>Shape`
+   *   is `<Choice> & {...}`, a union-rooted intersection. `json` (typed
+   *   `unknown` at this point, after the `is<Name>` guard) does not
+   *   structurally overlap with that union closely enough for a single
+   *   `as` — real `tsc --strict` reports TS2352 ("neither type sufficiently
+   *   overlaps with the other") on a direct `json as <Name>Shape`. An
+   *   `unknown` intermediate cast is the standard, narrower escape hatch
+   *   (still a real assertion, not a semantic change — `is<Name>` already
+   *   validated the runtime shape immediately above). Plain Data-extends-
+   *   Data keeps the direct cast (unchanged, non-goal).
    */
-  private static emitFromFactory(data: Data): string {
+  private static emitFromFactory(data: Data, castThroughUnknown: boolean): string {
     const name = data.name;
+    const castExpr = castThroughUnknown ? `json as unknown as ${name}Shape` : `json as ${name}Shape`;
     return [
       `  static from(json: unknown): ${name} {`,
       `    if (!is${name}(json)) {`,
       `      throw new TypeError('not a ${name}: ' + JSON.stringify(json).slice(0, 100));`,
       `    }`,
-      `    return new ${name}(json as ${name}Shape);`,
+      `    return new ${name}(${castExpr});`,
       `  }`
     ].join('\n');
   }

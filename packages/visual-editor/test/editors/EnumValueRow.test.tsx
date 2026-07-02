@@ -144,13 +144,7 @@ const SAME_NS_OPTIONS: SourceRefOption[] = [{ value: 'ns.FIX', label: 'FIX', nam
 const CROSS_NS_OPTIONS: SourceRefOption[] = [{ value: 'other.FpML', label: 'FpML', namespace: 'other' }];
 
 /** FormProvider seeded with enumSynonyms at the expected AST path. */
-function SynonymWrapper({
-  children,
-  enumSynonyms = []
-}: {
-  children: React.ReactNode;
-  enumSynonyms?: unknown[];
-}) {
+function SynonymWrapper({ children, enumSynonyms = [] }: { children: React.ReactNode; enumSynonyms?: unknown[] }) {
   const form = useForm({
     defaultValues: {
       enumValues: [{ $type: 'RosettaEnumValue', name: 'USD', display: 'US Dollar', enumSynonyms }]
@@ -159,13 +153,15 @@ function SynonymWrapper({
   return <FormProvider {...form}>{children}</FormProvider>;
 }
 
-function renderSynonymRow(opts: {
-  nodeId?: string;
-  enumSynonyms?: unknown[];
-  synonymSourceOptions?: SourceRefOption[];
-  addEnumValueSynonym?: ReturnType<typeof vi.fn>;
-  removeEnumValueSynonym?: ReturnType<typeof vi.fn>;
-} = {}) {
+function renderSynonymRow(
+  opts: {
+    nodeId?: string;
+    enumSynonyms?: unknown[];
+    synonymSourceOptions?: SourceRefOption[];
+    addEnumValueSynonym?: ReturnType<typeof vi.fn>;
+    removeEnumValueSynonym?: ReturnType<typeof vi.fn>;
+  } = {}
+) {
   const {
     nodeId = 'ns.Color',
     enumSynonyms = [],

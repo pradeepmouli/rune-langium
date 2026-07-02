@@ -131,7 +131,7 @@ describe('W1 Tier 3 — conversions', () => {
     const ctx = makeCtx();
     // IIFE-bound once (PR #364 review): a non-trivial arg (switch IIFE, call)
     // must not be evaluated twice.
-    expect(transpileExpression(expr, ctx)).toBe("((__s) => (__s === undefined ? undefined : String(__s)))(data.a)");
+    expect(transpileExpression(expr, ctx)).toBe('((__s) => (__s === undefined ? undefined : String(__s)))(data.a)');
   });
 
   it('ToNumberOperation: Number(arg) with NaN -> undefined', () => {

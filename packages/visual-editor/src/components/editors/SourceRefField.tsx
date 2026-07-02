@@ -46,7 +46,10 @@ export function SourceRefField({
 
   if (readOnly) {
     return (
-      <span data-slot="source-ref" className="inline-flex items-center rounded bg-card px-2 py-0.5 text-xs text-foreground">
+      <span
+        data-slot="source-ref"
+        className="inline-flex items-center rounded bg-card px-2 py-0.5 text-xs text-foreground"
+      >
         {label || placeholder}
       </span>
     );

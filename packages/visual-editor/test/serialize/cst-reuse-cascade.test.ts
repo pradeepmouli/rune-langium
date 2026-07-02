@@ -26,16 +26,21 @@ describe('cst-reuse — cascade + degraded', () => {
     const data = (value as unknown as { elements: unknown[] }).elements[0];
     const d = parsedAdapter.dehydrate(data as Parameters<typeof parsedAdapter.dehydrate>[0]);
     // Cascade: rename Target -> Target2 rewrote the attribute's typeCall ref.
-    (d as unknown as { attributes: Array<{ typeCall: { type: { $refText: string } } }> })
-      .attributes[0].typeCall.type.$refText = 'Target2';
+    (
+      d as unknown as { attributes: Array<{ typeCall: { type: { $refText: string } } }> }
+    ).attributes[0].typeCall.type.$refText = 'Target2';
     const patches = [
-      { op: 'replace',
+      {
+        op: 'replace',
         path: ['nodes', 'test.Uses', 'data', 'attributes', 0, 'typeCall', 'type', '$refText'],
-        value: 'Target2' }
+        value: 'Target2'
+      }
     ] as unknown as Patches;
 
     const out = renderNamespace({
-      nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
+      nodes: [node(d, 'test.Uses')],
+      originalSource: SRC,
+      dirty: buildDirtyIndex(patches)
     });
     expect(out).toContain('field Target2 (0..1)');
     expect(out).not.toContain('field Target (0..1)');
@@ -57,7 +62,9 @@ describe('cst-reuse — cascade + degraded', () => {
     ] as unknown as Patches;
 
     const out = renderNamespace({
-      nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
+      nodes: [node(d, 'test.Uses')],
+      originalSource: SRC,
+      dirty: buildDirtyIndex(patches)
     });
     // The node must be regenerated using the updated dehydrated data (name = Renamed),
     // not sliced from the stale CST (which still has 'type Uses:').
@@ -77,11 +84,11 @@ describe('cst-reuse — cascade + degraded', () => {
     // kind the render-core hasn't learned yet) while keeping the original $cstRange.
     // Use a placeholder type that renderNode provably returns null for.
     (d as { $type: string }).$type = '__UnimplementedFutureNodeKind__';
-    const patches = [
-      { op: 'replace', path: ['nodes', 'test.Uses', 'data', 'name'], value: 'x' }
-    ] as unknown as Patches;
+    const patches = [{ op: 'replace', path: ['nodes', 'test.Uses', 'data', 'name'], value: 'x' }] as unknown as Patches;
     const out = renderNamespace({
-      nodes: [node(d, 'test.Uses')], originalSource: SRC, dirty: buildDirtyIndex(patches)
+      nodes: [node(d, 'test.Uses')],
+      originalSource: SRC,
+      dirty: buildDirtyIndex(patches)
     });
     expect(out).toContain('type Uses:'); // sliced from CST, not dropped
     // T7-Minor-2: the degraded fallback slices the whole element verbatim, so the
