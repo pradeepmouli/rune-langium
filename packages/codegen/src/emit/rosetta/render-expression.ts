@@ -18,6 +18,14 @@
  *   postfix argument minPrec = 8.
  * This preserves explicit right-side grouping (`a or (b or c)`), which a
  * single `<` comparison silently drops.
+ *
+ * Tier 7 is the ONE exception to "left minPrec = myPrec": grammar
+ * `BinaryOperationRule` wraps its alternatives in `(...)?`, not `(...)*`
+ * like every other tier — contains/disjoint/default/join apply AT MOST
+ * ONCE, so there is no left-recursive same-tier chain. A same-tier LEFT
+ * child can therefore only occur via an explicit parenthesized
+ * sub-expression and must always be wrapped: tier 7's left minPrec is
+ * `p + 1`, matching its right minPrec, not `p`.
  */
 
 import type { Dehydrated, RosettaExpression } from '@rune-langium/core';
@@ -112,11 +120,14 @@ function dispatch(node: AnyNode): string {
     case 'RosettaContainsExpression':
     case 'RosettaDisjointExpression':
     case 'DefaultOperation': {
+      // Tier 7 is non-associative (grammar `(...)?`, not `(...)*`) — a
+      // same-tier left child only occurs via explicit parens, so it must
+      // wrap at p + 1 like the right side (see module doc).
       const rhs = `${node['operator']} ${r(node['right'], p + 1)}`;
-      return node['left'] ? `${r(node['left'], p)} ${rhs}` : rhs;
+      return node['left'] ? `${r(node['left'], p + 1)} ${rhs}` : rhs;
     }
     case 'JoinOperation': {
-      const left = node['left'] ? `${r(node['left'], p)} ` : '';
+      const left = node['left'] ? `${r(node['left'], p + 1)} ` : '';
       const right = node['right'] ? ` ${r(node['right'], p + 1)}` : '';
       return `${left}join${right}`;
     }

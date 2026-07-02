@@ -34,7 +34,11 @@ const CORPUS = [
   'reference as-key',
   'value with-meta { scheme: "urn:x" }',
   'Max(a, b)',
-  'item to-string'
+  'item to-string',
+  // Tier 7 (contains/disjoint/default/join) is non-associative — a same-tier
+  // LEFT child only exists via explicit parens and must always reparen.
+  '(a contains b) default c',
+  '(a join ",") contains c'
 ];
 
 describe('expression round-trip (parse → render → reparse → fixed point)', () => {

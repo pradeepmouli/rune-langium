@@ -68,6 +68,16 @@ describe('renderExpression — binary precedence', () => {
     expect(renderExpression({ $type: 'JoinOperation', operator: 'join', left: sym('a'), right: str(',') } as never)).toBe('a join ","');
     expect(renderExpression({ $type: 'JoinOperation', operator: 'join', left: sym('a'), right: undefined } as never)).toBe('a join');
   });
+
+  it('REGRESSION: tier-7 is non-associative — a same-tier LEFT child always wraps', () => {
+    // Grammar `BinaryOperationRule` is `(...)?`, not `(...)*` — contains/
+    // disjoint/default/join apply at most once, so a same-tier left child
+    // can only exist via explicit parens and must always reparen.
+    const containsInDefault = bin('DefaultOperation', 'default', bin('RosettaContainsExpression', 'contains', sym('a'), sym('b')), sym('c'));
+    expect(renderExpression(containsInDefault)).toBe('(a contains b) default c');
+    const joinInContains = { $type: 'RosettaContainsExpression', operator: 'contains', left: { $type: 'JoinOperation', operator: 'join', left: sym('a'), right: str(',') }, right: sym('c') } as never;
+    expect(renderExpression(joinInContains)).toBe('(a join ",") contains c');
+  });
 });
 
 describe('renderExpression — navigation', () => {
