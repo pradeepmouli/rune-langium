@@ -367,6 +367,15 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
           trackRef(attrTypeRef, attrTypeRef.name);
         } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
           trackRef(attrTypeRef, attrTypeRef.name);
+        } else if (attrTypeRef && isChoice(attrTypeRef)) {
+          // Item 3 (docs/superpowers/specs/2026-07-02-emitter-crossns-
+          // hardening-design.md): a Choice-typed attribute resolves to the
+          // BARE `<Choice>` union name via resolveTypeExprAsTs (isChoice
+          // branch, W2) — only the bare name is ever referenced at an
+          // attribute position (unlike the superType.ref tracking above,
+          // which also needs `<Choice>Shape` for the generic Shape
+          // constraint), so only the bare name needs importing here.
+          trackRef(attrTypeRef, attrTypeRef.name);
         }
       }
     }

@@ -1,0 +1,8 @@
+namespace test.ctaxns.holder
+version "0.0.0"
+
+import test.ctaxns.base.*
+
+type Holder:
+    name string (0..1)
+    asset Asset (0..1)
