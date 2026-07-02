@@ -11,16 +11,19 @@
 **Express the inheritance in the emitted artifact — never statically decompose the union.** The child must be visibly *derived from* the Choice's emitted forms, per surface:
 
 ### TS type — generic intersection (retains arm narrowing)
+
+**Naming (implemented, post-hoc amendment):** the snippet below names the alias after the Data itself (`BasketConstituent<T> = …`), but the emitted CLASS (see "TS class" below) already owns that bare name — a type alias and a class cannot share an identifier. The collision-free resolution: the generic intersection alias IS the `<Name>Shape` symbol (the same `<Name>Shape` idiom `emitInterface` already uses for every Data, just generic instead of a plain interface for this one case). So the real emitted symbol is `BasketConstituentShape<T extends Observable = Observable> = T & {...}`, not `BasketConstituent<T> = …`:
 ```ts
-export type BasketConstituent<T extends Observable = Observable> = T & {
+export type BasketConstituentShape<T extends Observable = Observable> = T & {
   quantity?: NonNegativeQuantitySchedule[];
   // ...child's own attributes, emitted per existing attribute conventions
 };
 ```
-- Default type param = the Choice union → bare `BasketConstituent` behaves non-generically; a consumer holding a known arm writes `BasketConstituent<{ basket: Basket }>` and keeps narrowing.
-- Child becomes a `type` alias (interfaces cannot extend unions) — documented deviation from the Data-emits-interface norm.
+- Default type param = the Choice union → bare `BasketConstituentShape` behaves non-generically; a consumer holding a known arm writes `BasketConstituentShape<{ basket: Basket }>` and keeps narrowing.
+- Child's Shape becomes a `type` alias (interfaces cannot extend unions) — documented deviation from the Data-emits-interface norm.
 - Referencing sites (attributes typed by the child) use the bare name — unaffected.
-- Multi-level: intermediate Data parents contribute their attributes into the extras block; the generic param binds at the Choice ancestor.
+- Multi-level: intermediate Data parents contribute their attributes into the extras block; the generic param binds at the Choice ancestor. Concretely, each intermediate Data-extends-Data link whose OWN chain reaches the Choice ancestor also becomes a generic alias, chaining `<Parent>Shape<T>` (not `extends`, which fails to typecheck once the parent's default resolves to a union) — e.g. `ObservableItemShape<T> = T & {...}` then `BasketConstituentShape<T> = ObservableItemShape<T> & {...}`.
+- The CLASS cannot `implements <Name>Shape` once `<Name>Shape` is generic (bare form resolves to a union-rooted intersection, and a class may only implement an object type) — see the "TS class" section's amended snippet.
 
 ### TS class — generic child class (AMENDED mid-implementation, user-directed — supersedes the original per-Choice-mixin design below the line)
 
@@ -29,14 +32,20 @@ is not expressible against a type parameter, and a mixin's `class extends
 Base {}` shape doesn't fit a Choice's *union* schema anyway (a mixin factory
 needs a single base *class* to extend, not a discriminated union of arm
 shapes). Instead, the CHILD CLASS ITSELF is generic over the arm, mirroring
-the type-side `BasketConstituent<T> = T & extras` exactly:
+the type-side `BasketConstituentShape<T> = T & extras` exactly:
 
 ```ts
-export class BasketConstituent<T extends Observable = Observable> implements BasketConstituentShape {
+// NOTE (implemented): no `implements BasketConstituentShape` — once
+// BasketConstituentShape is the generic alias, its bare (no-type-argument)
+// form resolves to `Observable & {...}` (union-rooted); a class may only
+// implement an object type, not a union (real tsc --strict: TS2422). The
+// class/alias pairing is enforced by the constructor parameter + emitted-
+// runtime tests instead of a structural `implements` clause.
+export class BasketConstituent<T extends Observable = Observable> {
   quantity?: NonNegativeQuantitySchedule[];
   // ...own attributes, emitted per existing attribute conventions
 
-  constructor(data: T & BasketConstituentShape) {
+  constructor(data: BasketConstituentShape<T>) {
     Object.assign(this, data);
     this.quantity = data.quantity as typeof this.quantity;
     // ...own-attribute assignments per existing emitClass conventions
@@ -46,10 +55,18 @@ export class BasketConstituent<T extends Observable = Observable> implements Bas
     if (!isBasketConstituent(json)) {
       throw new TypeError('not a BasketConstituent: ' + JSON.stringify(json).slice(0, 100));
     }
-    return new BasketConstituent(json as Observable & BasketConstituentShape);
+    // Cast through `unknown`: `json` (typed `unknown`) does not overlap a
+    // union-rooted intersection closely enough for a direct `as` (TS2352).
+    return new BasketConstituent(json as unknown as BasketConstituentShape);
   }
 
-  validateObservableChoice(): { valid: boolean; errors: string[] } { /* exactly-one-of over option keys, reading `this` */ }
+  validateObservableChoice(): { valid: boolean; errors: string[] } {
+    /* exactly-one-of over option keys, reading `(this as unknown as
+       Record<string, unknown>).<optionKey>` — the class does not statically
+       declare Choice option keys as members (only Object.assign populates
+       them at runtime), so a direct `this.<optionKey>` fails tsc --strict
+       (TS2339). */
+  }
 }
 ```
 

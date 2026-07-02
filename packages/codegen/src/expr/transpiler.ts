@@ -177,10 +177,26 @@ export interface ExpressionTranspilerContext {
  * Phase 4 emit* call sites) is what makes the remap apply uniformly to
  * every condition kind (exists/absent/one-of/only-exists/choice) without
  * touching each one's template separately.
+ *
+ * `ts-method` mode ONLY (`ctx.selfName === 'this'`, the class-instance
+ * case): a remapped access (i.e. `name` IS a Choice-derived pseudo-
+ * attribute — `attrAccessorNames` is NEVER populated for ordinary Data
+ * attributes, see its doc comment) is cast through
+ * `(this as unknown as Record<string, unknown>)` — the emitted class does
+ * not statically declare the Choice's option keys as members (per T105/
+ * T106's generic-intersection-alias / generic-child-class design, they
+ * only exist on `this` at runtime via `Object.assign` in the constructor),
+ * so a direct `this.cash` fails real `tsc --strict` (TS2339). The Zod
+ * modes' `selfName` (`data`, a function parameter typed by the actual
+ * `runeExtendChoice`-derived union) already carries the option keys
+ * structurally and need no cast.
  */
 function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): string {
-  const accessor = ctx.attrAccessorNames?.get(name) ?? name;
-  return `${ctx.selfName}.${accessor}`;
+  const accessor = ctx.attrAccessorNames?.get(name);
+  if (accessor !== undefined && ctx.emitMode === 'ts-method') {
+    return `(${ctx.selfName} as unknown as Record<string, unknown>).${accessor}`;
+  }
+  return `${ctx.selfName}.${accessor ?? name}`;
 }
 
 /**

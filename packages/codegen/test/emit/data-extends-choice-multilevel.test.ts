@@ -32,12 +32,42 @@ import { pathToFileURL } from 'node:url';
 import { createRuneDslServices, isRosettaModel } from '@rune-langium/core';
 import { URI } from 'langium';
 import { describe, it, expect } from 'vitest';
+import ts from 'typescript';
 import { walkNamespace } from '../../src/emit/namespace-walker.js';
 import { emitNamespace as emitTs } from '../../src/emit/ts-emitter.js';
 import { emitNamespace as emitZod } from '../../src/emit/zod-emitter.js';
 import { generate } from '../../src/index.js';
 
 const FIXTURE_DIR = resolve(new URL('.', import.meta.url).pathname, '../fixtures/data-extends-choice-multilevel');
+
+/**
+ * Real `tsc --strict` type-check — mirrors ts-data-extends-choice.test.ts's
+ * `typeCheckFile` helper. Used here to prove the MULTI-LEVEL alias chain
+ * (`BasketConstituentShape<T> = ObservableItemShape<T> & {...}`) actually
+ * typechecks, not just that it string-matches the expected template.
+ */
+function typeCheckFile(filePath: string, source: string): readonly string[] {
+  const compilerOptions: ts.CompilerOptions = {
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    skipLibCheck: true
+  };
+  const host = ts.createCompilerHost(compilerOptions);
+  const originalReadFile = host.readFile.bind(host);
+  const originalGetSourceFile = host.getSourceFile.bind(host);
+  host.readFile = (fileName) => (fileName === filePath ? source : originalReadFile(fileName));
+  host.getSourceFile = (fileName, languageVersion, ...rest) =>
+    fileName === filePath
+      ? ts.createSourceFile(fileName, source, languageVersion, true)
+      : originalGetSourceFile(fileName, languageVersion, ...rest);
+
+  const program = ts.createProgram([filePath], compilerOptions, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  return diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+}
 
 async function parseFixture() {
   const content = await readFile(join(FIXTURE_DIR, 'input.rune'), 'utf-8');
@@ -95,31 +125,53 @@ describe('Data-extends-Choice — multi-level chain (synthetic fixture, parse-va
     expect(output.content).not.toContain('DIAGNOSTIC');
   });
 
-  it('ts: BasketConstituentShape has only BasketConstituent-own attrs; ObservableItemShape has only its own', async () => {
+  it('ts: ObservableItemShape is the generic intersection alias (direct Choice link); BasketConstituentShape threads the SAME T through it (transitive Choice ancestor)', async () => {
     const doc = await parseFixture();
     const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
     const output = emitTs(model, {});
-    expect(output.content).toContain('export interface ObservableItemShape {\n  identifier?: string;\n}');
-    // BasketConstituent extends a Data (ObservableItem) at the leaf, so its
-    // Shape interface DOES extend — ordinary Data-extends-Data emission,
-    // unaffected by this feature.
-    expect(output.content).toContain('export interface BasketConstituentShape extends ObservableItemShape');
+    // ObservableItem extends the Choice (Asset) directly — its Shape is the
+    // generic intersection type alias, not a plain interface.
+    expect(output.content).toContain(
+      'export type ObservableItemShape<T extends Asset = Asset> = T & {\n  identifier?: string;\n};'
+    );
+    expect(output.content).not.toContain('export interface ObservableItemShape');
+    // BasketConstituent extends a Data (ObservableItem) at the leaf, and
+    // ObservableItem's OWN chain reaches the Choice — so a plain `interface
+    // … extends ObservableItemShape` would fail to compile (bare
+    // ObservableItemShape defaults T=Asset, a union; TS2312). Instead
+    // BasketConstituentShape is ALSO a generic alias, threading the same T
+    // through the parent's generic Shape rather than `extends`.
+    expect(output.content).toContain(
+      'export type BasketConstituentShape<T extends Asset = Asset> = ObservableItemShape<T> & {\n  weight?: number;\n};'
+    );
+    expect(output.content).not.toContain('export interface BasketConstituentShape');
   });
 
-  it('ts: ObservableItem (the Data-extends-Choice link) is a generic class over Asset', async () => {
+  it('ts: ObservableItem (the Data-extends-Choice link) is a generic class over Asset — no `implements` (union-typed Shape)', async () => {
     const doc = await parseFixture();
     const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
     const output = emitTs(model, {});
-    expect(output.content).toContain('export class ObservableItem<T extends Asset = Asset> implements ObservableItemShape');
+    expect(output.content).toContain('export class ObservableItem<T extends Asset = Asset> {');
+    expect(output.content).not.toContain('implements ObservableItemShape');
+    expect(output.content).toContain('constructor(data: ObservableItemShape<T>) {');
     expect(output.content).toContain('validateAsset(): { valid: boolean; errors: string[] } {');
   });
 
-  it('ts: BasketConstituent (Data-extends-Data at the leaf) extends ObservableItem ordinarily — no generic param', async () => {
+  it('ts: BasketConstituent (Data-extends-Data at the leaf) extends ObservableItem ordinarily — no generic param, no `implements` (Shape is generic transitively)', async () => {
     const doc = await parseFixture();
     const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
     const output = emitTs(model, {});
-    expect(output.content).toContain('export class BasketConstituent extends ObservableItem implements BasketConstituentShape');
+    expect(output.content).toContain('export class BasketConstituent extends ObservableItem {');
+    expect(output.content).not.toContain('implements BasketConstituentShape');
     expect(output.content).not.toContain('class BasketConstituent<T');
+  });
+
+  it('ts: the full multi-level chain (both the direct-Choice alias and the chained alias) typechecks clean under real tsc --strict', async () => {
+    const doc = await parseFixture();
+    const model = walkNamespace([doc], 'test.dataExtendsChoiceMultilevel');
+    const output = emitTs(model, {});
+    const diagnostics = typeCheckFile('/virtual/multilevel.ts', output.content);
+    expect(diagnostics).toEqual([]);
   });
 });
 
