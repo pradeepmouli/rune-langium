@@ -110,7 +110,7 @@ const RESERVED_KEYWORDS = new Set(
  * therefore never matches (`"foo.type"` isn't itself a keyword) — each
  * segment must be escaped independently and rejoined.
  */
-function escapeId(name: string): string {
+export function escapeId(name: string): string {
   return name.split('.').map((segment) => (RESERVED_KEYWORDS.has(segment) ? `^${segment}` : segment)).join('.');
 }
 

@@ -12,3 +12,4 @@ export { renderNode, renderModel } from './emit/rosetta/rosetta-render-core.js';
 export type { RenderChild, DehydratedNode, RenderOpts } from './emit/rosetta/rosetta-render-core.js';
 export { renderExpression, UnsupportedExpressionError, RAW_DSL_TYPE } from './emit/rosetta/render-expression.js';
 export type { DehydratedExpression, RawDslLeaf } from './emit/rosetta/render-expression.js';
+export { renderSynonymBody, renderClassSynonymValue, UnsupportedSynonymBodyError } from './emit/rosetta/render-synonym-body.js';
