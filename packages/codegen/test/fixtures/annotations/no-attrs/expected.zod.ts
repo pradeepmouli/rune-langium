@@ -28,3 +28,6 @@ const runeToZonedDateTime = (v: unknown): string | undefined =>
     : undefined;
 // --- end runtime helpers ---
 
+const runeExtendChoice = <T extends z.ZodUnion<readonly z.ZodObject[]>>(choice: T, shape: z.ZodRawShape) =>
+  z.union(choice.options.map((arm) => arm.extend(shape)));
+

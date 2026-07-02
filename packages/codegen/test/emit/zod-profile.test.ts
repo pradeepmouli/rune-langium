@@ -69,7 +69,7 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     // import it from the sidecar.
     const fooOutput = outputs.find((o) => o.relativePath === 'foo.zod.ts');
     expect(fooOutput?.content).toContain(
-      `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime } from './runtime.zod.js';`
+      `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, runeExtendChoice } from './runtime.zod.js';`
     );
     expect(fooOutput?.content).not.toContain('// --- rune-codegen runtime helpers (inlined) ---');
 
@@ -99,6 +99,7 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     // One canonical header, one Zod import, one inlined helpers block.
     expect((model?.content.match(/import \{ z \} from 'zod';/g) ?? []).length).toBe(1);
     expect((model?.content.match(/const runeCheckOneOf = \(values:/g) ?? []).length).toBe(1);
+    expect((model?.content.match(/const runeExtendChoice = /g) ?? []).length).toBe(1);
     // Both namespace bodies present, with stripped per-namespace headers.
     expect(model?.content).toContain('TradeSchema');
     expect(model?.content).toContain('PartySchema');

@@ -13,6 +13,7 @@
 import type { GeneratorOutput } from '../types.js';
 import type { LanguageProfile } from './language-profile.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import { RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE } from './zod-runtime-helpers.js';
 
 /**
  * The shared `runtime.zod.ts` sidecar content. Mirrors
@@ -48,6 +49,8 @@ const RUNTIME_SIDECAR_SOURCE = [
   `  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)`,
   `    ? v`,
   `    : undefined;`,
+  ``,
+  RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE,
   ``
 ].join('\n');
 
@@ -97,6 +100,8 @@ function makeSingleFileContent(perNs: ReadonlyArray<GeneratorOutput>): string {
     `import { z } from 'zod';`,
     ``,
     RUNTIME_HELPER_SOURCE,
+    ``,
+    RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE.replace(/^export const/, 'const'),
     ``
   ];
   for (const out of perNs) {

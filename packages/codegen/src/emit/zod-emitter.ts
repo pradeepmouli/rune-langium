@@ -35,6 +35,7 @@ import {
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import { RUNE_EXTEND_CHOICE_HELPER_SOURCE } from './zod-runtime-helpers.js';
 import {
   decodeCardinality,
   buildAttributeTypesMap,
@@ -516,6 +517,58 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   /**
+   * Build the base (pre-condition, pre-lazy) schema expression for a Data
+   * type's superType chain, at a given attribute-line indentation.
+   *
+   * Three cases:
+   *  - No superType: a plain `z.object({...})` body (emitObjectBody).
+   *  - superType is a Data: `${ParentSchema}.extend({...})` — `.extend()`
+   *    is defined on `z.object`/`z.strictObject` results (FR-005).
+   *  - superType is a Choice (Data-extends-Choice — see docs/superpowers/
+   *    specs/2026-07-02-data-extends-choice-design.md): the parent schema
+   *    is a `z.union([...])`, which has NO `.extend()` method — calling
+   *    `.extend()` on it throws at MODULE-INIT time (this was the real,
+   *    previously-unguarded bug: `data.superType?.ref` matched a Choice
+   *    supertype too, since a Choice is also assignable to `DataOrChoice`,
+   *    and the code unconditionally treated it like a Data parent).
+   *    Route through the `runeExtendChoice` runtime helper instead, which
+   *    distributes the child's own attributes across every arm of the
+   *    Choice union — deriving the child from the Choice's emitted schema
+   *    (the design's "derivation, not decomposition" principle) rather
+   *    than re-implementing the Choice's own option set.
+   *
+   * `attrIndent` controls the object-body indentation for own attributes,
+   * matching the two call sites' existing formatting conventions (2-space
+   * for the non-conditions path via emitAttribute's own 2-space prefix,
+   * 4-space reindented for the chained conditions path).
+   */
+  private buildSuperTypeSchemaExpr(data: Data, attrIndent: '' | '  '): string {
+    const superRef = data.superType?.ref;
+
+    if (superRef && isChoice(superRef)) {
+      const choiceSchema = `${superRef.name}Schema`;
+      if (data.attributes.length === 0) {
+        return `runeExtendChoice(${choiceSchema}, {})`;
+      }
+      const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+      const reindented = attrIndent === '' ? attrs.join(',\n') : attrs.map((a) => `${attrIndent}${a}`).join(',\n');
+      return `runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`;
+    }
+
+    if (superRef && isData(superRef)) {
+      const parentSchema = `${superRef.name}Schema`;
+      if (data.attributes.length === 0) {
+        return `${parentSchema}.extend({})`;
+      }
+      const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+      const reindented = attrIndent === '' ? attrs.join(',\n') : attrs.map((a) => `${attrIndent}${a}`).join(',\n');
+      return `${parentSchema}.extend({\n${reindented}\n})`;
+    }
+
+    return this.emitObjectBody(data);
+  }
+
+  /**
    * Emit a full schema declaration for a Data type.
    * Handles: plain object, extends, lazy wrapping for cycles, condition blocks.
    * FR-002 (exports), FR-005 (extends), FR-006 (lazy), FR-008 (empty).
@@ -527,22 +580,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     const isLazy = this.ctx.lazyTypes.has(name);
     const hasConditions = activeConditions(data).length > 0;
 
-    let schemaExpr: string;
-
-    if (data.superType?.ref) {
-      const parentName = data.superType.ref.name;
-      const parentSchema = `${parentName}Schema`;
-
-      if (data.attributes.length === 0) {
-        // Empty child: just re-export parent schema shape
-        schemaExpr = `${parentSchema}.extend({})`;
-      } else {
-        const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
-        schemaExpr = `${parentSchema}.extend({\n${attrs.join(',\n')}\n})`;
-      }
-    } else {
-      schemaExpr = this.emitObjectBody(data);
-    }
+    const schemaExpr = this.buildSuperTypeSchemaExpr(data, '');
 
     if (isLazy) {
       // For cyclic types: add explicit ZodType annotation so TS can infer recursive schemas.
@@ -574,20 +612,11 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       //     .refine(...)
       //
       // Strategy: rebuild the object body with 4-space attr indentation, then chain.
-      let chainedObjectExpr: string;
       if (data.superType?.ref) {
-        // extend chain: ParentSchema.extend({...})
-        // For simplicity, emit as non-chained since extend is on a schema ref, not z
-        const parentName = data.superType.ref.name;
-        const parentSchema = `${parentName}Schema`;
-        if (data.attributes.length === 0) {
-          chainedObjectExpr = `${parentSchema}.extend({})`;
-        } else {
-          const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
-          // Reindent attrs to 4 spaces
-          const reindented = attrs.map((a) => `  ${a}`).join(',\n');
-          chainedObjectExpr = `${parentSchema}.extend({\n${reindented}\n})`;
-        }
+        // extend/runeExtendChoice chain: For simplicity, emit as
+        // non-chained since .extend()/runeExtendChoice() reads on a schema
+        // ref (or the helper call), not the bare `z` namespace.
+        const chainedObjectExpr = this.buildSuperTypeSchemaExpr(data, '  ');
         const condIndented = condBlock
           .split('\n')
           .map((line) => `  ${line}`)
@@ -941,10 +970,10 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       `import { z } from 'zod';`,
       ...(this.suppressBoilerplate
         ? [
-            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime } from './runtime.zod.js';`,
+            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, runeExtendChoice } from './runtime.zod.js';`,
             ``
           ]
-        : ['', RUNTIME_HELPER_SOURCE, ''])
+        : ['', RUNTIME_HELPER_SOURCE, '', RUNE_EXTEND_CHOICE_HELPER_SOURCE, ''])
     ].join('\n');
   }
 
