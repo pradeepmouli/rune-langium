@@ -19,7 +19,7 @@ import type {
   Data, Attribute, Choice, ChoiceOption,
   RosettaEnumeration, RosettaEnumValue, RosettaCardinality
 } from '@rune-langium/core';
-import { renderExpression } from './render-expression.js';
+import { renderExpression, UnsupportedExpressionError } from './render-expression.js';
 
 export type DehydratedNode = Dehydrated<AstNode>;
 export type RenderChild = (child: DehydratedNode) => string;
@@ -74,7 +74,12 @@ function exprText(expr: unknown, opts?: RenderOpts): string {
   if (opts?.renderExpr) return opts.renderExpr(expr);
   try {
     return renderExpression(expr as never);
-  } catch {
+  } catch (err) {
+    if (!(err instanceof UnsupportedExpressionError)) {
+      const nodeType = (expr as { $type?: string })?.$type ?? 'unknown';
+      // eslint-disable-next-line no-console -- browser-safe observability hook (see module doc); never-corrupt invariant: CST fallback below always still runs.
+      console.warn(`[render-core] unexpected renderExpression failure on $type "${nodeType}" — falling back to CST text`, err);
+    }
     const e = expr as { $cstText?: string; $cstNode?: { text?: string } };
     return (e.$cstText ?? e.$cstNode?.text ?? '').trim();
   }

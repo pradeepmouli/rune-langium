@@ -105,6 +105,32 @@ describe('astToExpressionNode', () => {
     }
   });
 
+  it('converts a literalGuard uniformly (synthetic id, preserved $type/value)', () => {
+    const ast = {
+      $type: 'SwitchOperation',
+      operator: 'switch',
+      argument: { $type: 'RosettaSymbolReference', symbol: { $refText: 'code', ref: {} } },
+      cases: [
+        {
+          $type: 'SwitchCaseOrDefault',
+          expression: { $type: 'RosettaIntLiteral', value: 1n },
+          guard: {
+            $type: 'SwitchCaseGuard',
+            literalGuard: { $type: 'RosettaIntLiteral', value: 42n }
+          }
+        }
+      ]
+    };
+    const result = astToExpressionNode(ast as any, 'code switch 42 then 1');
+    if (result.$type === 'SwitchOperation') {
+      const literalGuard = result.cases[0].guard?.literalGuard as ExpressionNode | undefined;
+      expect(literalGuard).toBeDefined();
+      expect((literalGuard as unknown as { id: string }).id).toBeTruthy();
+      expect(literalGuard?.$type).toBe('RosettaIntLiteral');
+      expect((literalGuard as unknown as { value: bigint }).value).toBe(42n);
+    }
+  });
+
   it('handles lambda operations (filter)', () => {
     const ast = {
       $type: 'FilterOperation',
