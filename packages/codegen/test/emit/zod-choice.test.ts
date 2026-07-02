@@ -4,7 +4,7 @@
 /**
  * W2 — zod-emitter Choice emission.
  *
- * `z.union([...])` of per-option `z.object` shapes — key-presence
+ * `z.union([...])` of per-option `z.strictObject` shapes (strict: an object with MULTIPLE option keys must fail every arm — exactly-one-of) — key-presence
  * discrimination, not `z.discriminatedUnion` (CDM Choice instances encode
  * as an object with exactly one option key present, no literal `$type` tag
  * to discriminate on). Same field-naming decision as ts-emitter (see
@@ -53,7 +53,7 @@ describe('zod-emitter — Choice emission (W2)', () => {
     const model = walkNamespace([doc], 'test.choice');
     const output = emitNamespace(model, {});
     expect(output.content).toContain(
-      'export const AssetSchema = z.union([z.object({ cash: CashSchema }), z.object({ commodity: CommoditySchema })]);'
+      'export const AssetSchema = z.union([z.strictObject({ cash: CashSchema }), z.strictObject({ commodity: CommoditySchema })]);'
     );
   });
 

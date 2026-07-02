@@ -129,7 +129,9 @@ describe('W1 Tier 3 — conversions', () => {
   it('ToStringOperation: String(arg), undefined-guarded', () => {
     const expr = parse('a to-string');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe("(data.a === undefined ? undefined : String(data.a))");
+    // IIFE-bound once (PR #364 review): a non-trivial arg (switch IIFE, call)
+    // must not be evaluated twice.
+    expect(transpileExpression(expr, ctx)).toBe("((__s) => (__s === undefined ? undefined : String(__s)))(data.a)");
   });
 
   it('ToNumberOperation: Number(arg) with NaN -> undefined', () => {

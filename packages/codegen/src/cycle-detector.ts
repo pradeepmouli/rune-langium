@@ -39,7 +39,8 @@ function addEdge(from: string, to: string, nodes: string[], edges: Map<string, s
 /**
  * Walks all Data and Choice nodes in the given Langium documents and builds
  * a directed type-reference graph. Edges are added for:
- * - `extends` relationships (superType → parent type)
+ * - `extends` relationships (an edge from the extending type to its parent:
+ *   `typeName → superType.name`, so parents emit first)
  * - `Attribute.typeCall.type` references (type → attribute type), including
  *   attributes typed BY a Choice (mirrors Data's own treatment — W2)
  * - `Choice.attributes[].typeCall.type` references (Choice → each option's

@@ -477,7 +477,10 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
       const fieldName = ZodNamespaceEmitter.choiceOptionFieldName(optionTypeName);
       const optionSchemaExpr = this.ctx.builtinTypeMap[optionTypeName] ?? `${optionTypeName}Schema`;
-      return `z.object({ ${fieldName}: ${optionSchemaExpr} })`;
+      // .strict(): non-strict objects allow unknown keys, so {cash, commodity}
+      // would satisfy the first arm — strict arms make multi-option objects
+      // fail every arm, enforcing the exactly-one-of Choice semantics.
+      return `z.strictObject({ ${fieldName}: ${optionSchemaExpr} })`;
     });
 
     if (optionSchemas.length === 0) {

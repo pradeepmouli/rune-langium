@@ -1096,7 +1096,9 @@ export function transpileToString(expr: RosettaExpression, ctx: ExpressionTransp
     return 'undefined /* not ToStringOperation */';
   }
   const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
-  return `(${arg} === undefined ? undefined : String(${arg}))`;
+  // Bind once via IIFE — matches to-number/to-int; avoids double-evaluating
+  // a non-trivial argument (switch IIFE, function call).
+  return `((__s) => (__s === undefined ? undefined : String(__s)))(${arg})`;
 }
 
 export function transpileToNumber(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
