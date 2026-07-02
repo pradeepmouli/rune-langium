@@ -528,8 +528,15 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
     return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported is-absent';
   }
 
-  // only exists: `[a, b] only exists` → RosettaOnlyExistsExpression
+  // only exists: `[a, b] only exists` or `(a, b) only exists` → RosettaOnlyExistsExpression
   if (isRosettaOnlyExistsExpression(expr)) {
+    // Paren-tuple form: `(a, b, c) only exists` — grammar populates `args`
+    // (NOT `argument`) via the PrimaryExpression multi-arg escape hatch
+    // (`'(' Expression (',' args+=Expression)+ ')' 'only' 'exists'`).
+    if (expr.args.length > 0) {
+      const names = expr.args.map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
+      return emitOnlyExists(names, ctx);
+    }
     const arg = expr.argument;
     if (!arg) {
       ctx.diagnostics.push({
@@ -1343,6 +1350,25 @@ export function transpileExpression(
       return `!runeAttrExists(${argStr})`;
     }
     return `!runeAttrExists(${ctx.selfName})`;
+  }
+
+  // only exists, in a NESTED (non-top-level-Condition) position — e.g. as
+  // the consequent of an if/then. transpileCondition's dispatcher handles
+  // the top-level Condition.expression case (with attribute-name validation
+  // and mode-specific statement-block emission via emitOnlyExists); here we
+  // need a pure boolean expression, so inline the same "every attr NOT
+  // listed must be absent" semantics without the attributeTypes validation
+  // (attribute existence was already checked when this expression's
+  // attributeTypes were built at the top-level dispatch).
+  if (isRosettaOnlyExistsExpression(expr)) {
+    const listedExprs = expr.args.length > 0 ? expr.args : isListLiteral(expr.argument) ? expr.argument.elements : [];
+    const names = (listedExprs ?? []).map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
+    const forbiddenAttrs = Array.from(ctx.attributeTypes.keys()).filter((name) => !names.includes(name));
+    if (forbiddenAttrs.length === 0) {
+      return 'true';
+    }
+    const checks = forbiddenAttrs.map((n) => `!runeAttrExists(${ctx.selfName}.${n})`);
+    return checks.length === 1 ? checks[0]! : `(${checks.join(' && ')})`;
   }
 
   // Conditional if/then/else (T074)

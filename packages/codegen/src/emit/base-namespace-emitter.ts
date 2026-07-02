@@ -34,17 +34,26 @@ export function decodeCardinality(card: RosettaCardinality): { lower: number; up
   return { lower, upper };
 }
 
-/** Build a map of attribute name → type name for a Data node, including one parent level. */
+/**
+ * Build a map of attribute name → type name for a Data node, including
+ * attributes from the FULL `extends` chain (not just the direct parent) —
+ * an attribute declared 2+ levels up (e.g. `QuantitySchedule extends
+ * MeasureSchedule extends MeasureBase`, with `unit` declared on
+ * `MeasureBase`) must still resolve for `exists`/`is absent` conditions
+ * declared on the descendant type. A visited-set guards against a
+ * malformed cyclic `extends` chain looping forever.
+ */
 export function buildAttributeTypesMap(data: Data): Map<string, string> {
   const map = new Map<string, string>();
-  for (const attr of data.attributes) {
-    map.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
-  }
-  const parent = data.superType?.ref;
-  if (parent && isData(parent)) {
-    for (const attr of parent.attributes) {
+  const visited = new Set<string>();
+  let current: Data | undefined = data;
+  while (current && !visited.has(current.name)) {
+    visited.add(current.name);
+    for (const attr of current.attributes) {
       if (!map.has(attr.name)) map.set(attr.name, attr.typeCall?.type?.$refText ?? 'unknown');
     }
+    const parent: unknown = current.superType?.ref;
+    current = parent && isData(parent) ? parent : undefined;
   }
   return map;
 }
