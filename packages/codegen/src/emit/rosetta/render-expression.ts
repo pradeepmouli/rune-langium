@@ -47,10 +47,10 @@ export class UnsupportedExpressionError extends Error {
 type AnyNode = Record<string, unknown> & { $type: string };
 
 /**
- * Reserved keywords of the Rune DSL grammar (every exact-match Chevrotain
- * keyword token in `RuneDsl.parser.Lexer.tokenTypes`, extracted from the
- * live lexer — the authoritative source, not a hand-transcription of the
- * grammar file), MINUS the words the grammar's `ValidID`/`TypeParameterValidID`
+ * Reserved keywords of the Rune DSL grammar. SNAPSHOTTED (a frozen array
+ * literal, not a runtime query) from `RuneDsl.parser.Lexer.definition`'s
+ * exact-match keyword token types — which Langium generates from the
+ * grammar file — MINUS the words the grammar's `ValidID`/`TypeParameterValidID`
  * rules explicitly whitelist as legal bare identifiers in every reference
  * position `refText` renders (`feature`/`attributes`/`key` via `ValidID`;
  * `symbol`/`enumeration`/`referenceGuard` via `QualifiedName = ValidID
@@ -59,6 +59,16 @@ type AnyNode = Record<string, unknown> & { $type: string };
  *   TypeParameterValidID adds:  'min' | 'max'
  * Verified empirically (`a -> value`, `a -> min`, etc. all parse bare —
  * `a -> type` does not, `type` is NOT in `ValidID`'s whitelist).
+ *
+ * REGENERATE this list (re-derive from the live lexer, e.g. a throwaway
+ * `Object.keys(createRuneDslServices().RuneDsl.parser.Lexer.tokenTypes)`
+ * probe) if the grammar's keyword set changes — it is a point-in-time
+ * snapshot, not kept in sync automatically. A runtime import of core's
+ * services was considered and rejected: `render-expression.ts` is part of
+ * the browser-safe `@rune-langium/codegen/rosetta` subpath (no fs/ExcelJS/
+ * generator imports — see `rosetta-render-core.ts`'s module doc), and
+ * pulling in `createRuneDslServices` would drag the full Langium parser
+ * into that bundle for every consumer, not just tests.
  *
  * A name colliding with a REMAINING reserved word can still be a legal
  * identifier (e.g. an attribute literally named `type`), but only when

@@ -44,8 +44,9 @@ const CORPUS = [
   // must round-trip through its `^`-escaped form, or the reference is lost.
   'trade -> ^type -> value',
   // A switch inside a bare comma-separated list (function-call rawArgs,
-  // constructor values, with-meta entries, ListLiteral elements) must
-  // render parenthesized — the switch's own comma-separated case list is
+  // constructor values, with-meta entries, ListLiteral elements,
+  // RosettaOnlyExistsExpression's multi-arg args) must render
+  // parenthesized — the switch's own comma-separated case list is
   // otherwise ambiguous with the outer list's element separator whenever
   // the switch isn't the list's last element. Source here is already
   // correctly parenthesized (the bare, unparenthesized form is invalid
@@ -56,7 +57,8 @@ const CORPUS = [
   'Foo((x switch a then 1, default 0), y)',
   'Trade { q: (x switch a then 1, default 0), y: z }',
   'a with-meta { scheme: (x switch a then 1, default 0), other: y }',
-  '[(x switch a then 1, default 0), y]'
+  '[(x switch a then 1, default 0), y]',
+  '((x switch a then 1, default 0), y) only exists'
 ];
 
 describe('expression round-trip (parse → render → reparse → fixed point)', () => {
