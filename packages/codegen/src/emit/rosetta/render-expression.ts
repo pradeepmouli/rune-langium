@@ -45,14 +45,106 @@ export class UnsupportedExpressionError extends Error {
 }
 
 type AnyNode = Record<string, unknown> & { $type: string };
-const refText = (r: unknown): string => ((r as { $refText?: string } | undefined)?.$refText ?? '');
+
+/**
+ * Reserved keywords of the Rune DSL grammar. SNAPSHOTTED (a frozen array
+ * literal, not a runtime query) from `RuneDsl.parser.Lexer.definition`'s
+ * exact-match keyword token types — which Langium generates from the
+ * grammar file — MINUS the words the grammar's `ValidID`/`TypeParameterValidID`
+ * rules explicitly whitelist as legal bare identifiers in every reference
+ * position `refText` renders (`feature`/`attributes`/`key` via `ValidID`;
+ * `symbol`/`enumeration`/`referenceGuard` via `QualifiedName = ValidID
+ * ('.' ValidID)*`; `parameter` via `TypeParameterValidID = ValidID | 'min' | 'max'`):
+ *   ValidID:            ID | 'condition' | 'source' | 'value' | 'version' | 'pattern' | 'scope'
+ *   TypeParameterValidID adds:  'min' | 'max'
+ * Verified empirically (`a -> value`, `a -> min`, etc. all parse bare —
+ * `a -> type` does not, `type` is NOT in `ValidID`'s whitelist).
+ *
+ * REGENERATE this list (re-derive from the live lexer, e.g. a throwaway
+ * `Object.keys(createRuneDslServices().RuneDsl.parser.Lexer.tokenTypes)`
+ * probe) if the grammar's keyword set changes — it is a point-in-time
+ * snapshot, not kept in sync automatically. A runtime import of core's
+ * services was considered and rejected: `render-expression.ts` is part of
+ * the browser-safe `@rune-langium/codegen/rosetta` subpath (no fs/ExcelJS/
+ * generator imports — see `rosetta-render-core.ts`'s module doc), and
+ * pulling in `createRuneDslServices` would drag the full Langium parser
+ * into that bundle for every consumer, not just tests.
+ *
+ * A name colliding with a REMAINING reserved word can still be a legal
+ * identifier (e.g. an attribute literally named `type`), but only when
+ * escaped with a leading `^` (Langium/Xtext's standard keyword-escape
+ * prefix). `$refText` strips the `^` before the reference reaches us, so
+ * the renderer must independently detect the collision and re-add it —
+ * otherwise `-> type` is emitted where the source had `-> ^type`, and the
+ * rendered text fails to reparse (`P1` corpus sweep finding).
+ */
+const VALID_ID_EXCEPTIONS = new Set(['condition', 'source', 'value', 'version', 'pattern', 'scope', 'min', 'max']);
+const RESERVED_KEYWORDS = new Set(
+  [
+    'structured_provision', 'regulatoryReference', 'to-zoned-date-time', 'rationale_author',
+    'post-condition', 'condition-func', 'condition-path', 'reportedField', 'ruleReference',
+    'only-element', 'to-date-time', 'docReference', 'displayName', 'componentID', 'rosettaPath',
+    'eligibility', 'annotation', 'recordType', 'dateFormat', 'removeHtml', 'definition',
+    'namespace', 'condition', 'basicType', 'typeAlias', 'to-string', 'to-number', 'with-meta',
+    'provision', 'rationale', 'real-time', 'reporting', 'isProduct', 'override', 'function',
+    'metaType', 'contains', 'disjoint', 'distinct', 'multiple', 'optional', 'required',
+    'standard', 'version', 'extends', 'synonym', 'library', 'default', 'flatten', 'reverse',
+    'to-time', 'to-enum', 'to-date', 'extract', 'pattern', 'segment', 'isEvent', 'import',
+    'prefix', 'choice', 'inputs', 'output', 'source', 'as-key', 'exists', 'absent', 'one-of',
+    'to-int', 'switch', 'reduce', 'filter', 'single', 'mapper', 'corpus', 'report', 'scope',
+    'alias', 'count', 'first', 'super', 'empty', 'False', 'value', 'merge', 'enums', 'ASATP',
+    'using', 'label', 'type', 'enum', 'func', 'then', 'join', 'only', 'last', 'sort', 'item',
+    'True', 'else', 'meta', 'path', 'hint', 'maps', 'when', 'body', 'rule', 'from', 'with',
+    'root', 'set', 'add', 'and', 'sum', 'min', 'max', 'any', 'all', 'tag', 'for', 'as', 'or',
+    'is', 'if', 'to', 'in', 'e', 'E'
+  ].filter((kw) => !VALID_ID_EXCEPTIONS.has(kw))
+);
+
+/**
+ * Escape `name` with a leading `^` if it collides with a reserved keyword.
+ * `name` may be a dotted `QualifiedName` (`symbol`/`enumeration`/`referenceGuard`
+ * refs) — the parser's per-segment `^`-strip happens at the ID-token level
+ * (`convertID` runs once per `ValidID` match), so `$refText` for `foo.^type`
+ * arrives as `"foo.type"`, NOT `"foo.^type"` with the caret preserved on the
+ * later segment. Checking the whole dotted string against `RESERVED_KEYWORDS`
+ * therefore never matches (`"foo.type"` isn't itself a keyword) — each
+ * segment must be escaped independently and rejoined.
+ */
+function escapeId(name: string): string {
+  return name.split('.').map((segment) => (RESERVED_KEYWORDS.has(segment) ? `^${segment}` : segment)).join('.');
+}
+
+const refText = (r: unknown): string => escapeId((r as { $refText?: string } | undefined)?.$refText ?? '');
 
 const PREC_CONDITIONAL = 0;
 const PREC_POSTFIX = 8;
 
 function prec(node: AnyNode): number {
   switch (node.$type) {
-    case 'RosettaConditionalExpression': return PREC_CONDITIONAL;
+    // Both always parenthesize as a non-top-level child: RosettaConditionalExpression
+    // for readability (see its dispatch case); SwitchOperation and
+    // ChoiceOperation because their own bodies are BARE comma-separated
+    // lists (`cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*` /
+    // `attributes+=ValidID (',' attributes+=ValidID)*`) — shape-identical to
+    // any bare comma-list position they might sit in: 6 sites total — call
+    // rawArgs, constructor values, constructor constructorTypeArgs,
+    // with-meta entries, ListLiteral elements, and multi-arg only-exists
+    // args. (constructorTypeArgs is defensive only: grammar restricts
+    // TypeCallArgumentExpression to TypeParameterReference | RosettaLiteralRule
+    // (grammar L223-229), so a switch/choice can never legally appear there.)
+    // Unparenthesized, a trailing element of the outer list is silently
+    // absorbed into the switch/choice's own list instead of staying a
+    // separate outer element — confirmed for both constructs via direct
+    // AST-shape inspection (not just a reparse-error check, which passes
+    // even when this happens): `Foo(x switch a then 1, default 0, y)` folds
+    // `y` into the switch; `Foo(optional choice a, b, y)` folds `y` into
+    // `choice`'s `attributes`. Precedence 0 makes every call site in this
+    // file — postfix arguments (minPrec 8), binary operands (minPrec 1+),
+    // and bare list elements (minPrec 1) — wrap them via the ordinary
+    // `r()` mechanism, so no dedicated comma-scanning helper is needed.
+    case 'RosettaConditionalExpression':
+    case 'SwitchOperation':
+    case 'ChoiceOperation': return PREC_CONDITIONAL;
     case 'ThenOperation': return 1;
     case 'LogicalOperation': return node['operator'] === 'or' ? 2 : 3;
     case 'EqualityOperation':
