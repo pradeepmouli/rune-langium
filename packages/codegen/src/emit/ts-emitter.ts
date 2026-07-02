@@ -483,6 +483,19 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * Emit `export class <TypeName> implements <TypeName>Shape` (no parent)
    * or `export class <Child> extends <Parent> implements <Child>Shape` (with parent).
    * Includes instance field declarations and constructor.
+   *
+   * Data-extends-Choice (AMENDED per docs/superpowers/specs/2026-07-02-
+   * data-extends-choice-design.md "TS class — generic child class"): when
+   * `data.superType.ref` is a `Choice` (not a `Data`), there is no parent
+   * CLASS to `extends` (a Choice is a type-only union, never emitted as a
+   * class — see emitChoice's doc comment) — instead the child class itself
+   * becomes generic over the Choice arm: `class <Name><T extends <Choice> =
+   * <Choice>> implements <Name>Shape`. The constructor threads `T` through
+   * its parameter (`data: T & <Name>Shape`) and `Object.assign(this, data)`
+   * copies the T-surface onto the instance, while own attributes are still
+   * assigned explicitly afterward (unchanged convention) so `typeof
+   * this.<attr>` narrowing keeps working. `static from`/`new <Name>(...)`
+   * remain the only construction paths (no competing `of<T>()` factory).
    * T106.
    */
   private emitClass(data: Data): string {
@@ -491,10 +504,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const parentRef = data.superType?.ref;
     const parentInNamespace = parentRef && isData(parentRef) && this.ctx.dataByName.has((parentRef as Data).name);
     const parentName = parentInNamespace ? (parentRef as Data).name : undefined;
+    const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
 
-    const classHeader = parentName
-      ? `export class ${name} extends ${parentName} implements ${interfaceName}`
-      : `export class ${name} implements ${interfaceName}`;
+    const classHeader = choiceParent
+      ? `export class ${name}<T extends ${choiceParent.name} = ${choiceParent.name}> implements ${interfaceName}`
+      : parentName
+        ? `export class ${name} extends ${parentName} implements ${interfaceName}`
+        : `export class ${name} implements ${interfaceName}`;
 
     const lines: string[] = [`${classHeader} {`];
 
@@ -507,7 +523,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     // Constructor body lines
     const ctorBodyLines: string[] = [];
-    if (parentName) {
+    if (choiceParent) {
+      ctorBodyLines.push(`    Object.assign(this, data);`);
+    } else if (parentName) {
       ctorBodyLines.push(`    super(data);`);
     }
     for (const attr of data.attributes) {
@@ -518,10 +536,11 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     if (hasOwnFields) {
       lines.push('');
     }
+    const ctorParamType = choiceParent ? `T & ${interfaceName}` : interfaceName;
     if (ctorBodyLines.length === 0) {
-      lines.push(`  constructor(data: ${interfaceName}) {}`);
+      lines.push(`  constructor(data: ${ctorParamType}) {}`);
     } else {
-      lines.push(`  constructor(data: ${interfaceName}) {`);
+      lines.push(`  constructor(data: ${ctorParamType}) {`);
       for (const bodyLine of ctorBodyLines) {
         lines.push(bodyLine);
       }
@@ -532,6 +551,15 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     lines.push('');
     lines.push(TsNamespaceEmitter.emitFromFactory(data));
 
+    // Data-extends-Choice: exactly-one-of validator over the inherited
+    // Choice's option names, mirroring emitOneOf's ts-method emission
+    // convention (runeCheckOneOf + errors.push), read off `this` since the
+    // option keys were copied on via Object.assign in the constructor.
+    if (choiceParent) {
+      lines.push('');
+      lines.push(this.emitChoiceParentValidateMethod(choiceParent, name));
+    }
+
     // validate methods (T110)
     if (activeConditions(data).length > 0) {
       lines.push('');
@@ -540,6 +568,35 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     lines.push('}');
     return lines.join('\n');
+  }
+
+  /**
+   * Data-extends-Choice: emit an exactly-one-of validate method for a
+   * child's inherited Choice supertype, reading `this.<OptionTypeName>`
+   * (the pseudo-attribute keys `buildAttributeTypesMap`'s Choice-parent
+   * walk contributes — see base-namespace-emitter.ts) — mirrors
+   * `emitOneOf`'s ts-method body shape (`runeCheckOneOf` + `errors.push`)
+   * exactly, since this IS the same exactly-one-of semantics as a
+   * `OneOfOperation`/`ChoiceOperation` condition, just synthesized from the
+   * Choice's option list instead of an authored `Condition` node.
+   */
+  private emitChoiceParentValidateMethod(choice: Choice, childName: string): string {
+    const optionNames = choice.attributes.map((option) => {
+      const optionTypeRef = option.typeCall?.type;
+      return optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+    });
+    const accessors = optionNames.map((n) => `this.${n}`).join(', ');
+    const message = `${choice.name}: exactly one of [${optionNames.join(', ')}] must be present in ${childName}`;
+
+    return [
+      `  validate${choice.name}(): { valid: boolean; errors: string[] } {`,
+      `    const errors: string[] = [];`,
+      `    if (!runeCheckOneOf([${accessors}])) {`,
+      `      errors.push('${message}');`,
+      `    }`,
+      `    return { valid: errors.length === 0, errors };`,
+      `  }`
+    ].join('\n');
   }
 
   // ---------------------------------------------------------------------------
