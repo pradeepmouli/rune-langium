@@ -16,6 +16,11 @@
  *   → r2 = renderExpression(p2.value)
  *   → r2 === r1 (fixed point; NOT byte-identical to the original snippet —
  *     normalization, e.g. `and\n  x` → `and x`, is expected and fine).
+ *   → treesEquivalent(p1.value, p2.value) (tree-shape check — r2 === r1 only
+ *     proves the TEXT is stable under reparse, not that the reparsed tree
+ *     still MEANS the same thing; a nested-switch/choice comma-ambiguity bug
+ *     passed the text check while silently corrupting the tree shape, see
+ *     expression-tree-equivalence.ts).
  *
  * Per CLAUDE.md: tests that depend on `.resources/` are guarded with
  * `describe.skipIf(!RESOURCES_EXIST)` so CI environments without the corpus
@@ -27,6 +32,7 @@ import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { parse, parseExpression } from '@rune-langium/core';
 import { renderExpression } from '../../../src/emit/rosetta/render-expression.js';
+import { treesEquivalent } from './expression-tree-equivalence.js';
 
 const RESOURCES_DIR = resolve(new URL('.', import.meta.url).pathname, '../../../../../.resources');
 const RESOURCES_EXIST = existsSync(RESOURCES_DIR);
@@ -103,6 +109,7 @@ describe.skipIf(!RESOURCES_EXIST)('expression corpus sweep (P1: real-corpus fixe
       const parseExpressionFindings: Array<{ snippet: string; errors: unknown }> = [];
       const reparseFindings: Array<{ snippet: string; r1: string; errors: unknown }> = [];
       const fixedPointFindings: Array<{ snippet: string; r1: string; r2: string }> = [];
+      const treeShapeFindings: Array<{ snippet: string; r1: string }> = [];
       let checked = 0;
 
       for (const snippet of snippets) {
@@ -133,6 +140,11 @@ describe.skipIf(!RESOURCES_EXIST)('expression corpus sweep (P1: real-corpus fixe
         const r2 = renderExpression(p2.value);
         if (r2 !== r1) {
           fixedPointFindings.push({ snippet, r1, r2 });
+          continue;
+        }
+
+        if (!treesEquivalent(p1.value, p2.value)) {
+          treeShapeFindings.push({ snippet, r1 });
         }
       }
 
@@ -141,10 +153,15 @@ describe.skipIf(!RESOURCES_EXIST)('expression corpus sweep (P1: real-corpus fixe
       console.log(
         `[expression-corpus-sweep] swept ${snippets.size} unique expressions from ${fileCount} files ` +
           `(${skippedCount} files skipped — parse errors) — ${checked} snippets checked for the fixed-point ` +
-          `property in ${totalMs}ms (extraction: ${extractMs}ms)`
+          `and tree-shape properties in ${totalMs}ms (extraction: ${extractMs}ms)`
       );
 
-      if (parseExpressionFindings.length > 0 || reparseFindings.length > 0 || fixedPointFindings.length > 0) {
+      if (
+        parseExpressionFindings.length > 0 ||
+        reparseFindings.length > 0 ||
+        fixedPointFindings.length > 0 ||
+        treeShapeFindings.length > 0
+      ) {
         const lines: string[] = [];
         if (parseExpressionFindings.length > 0) {
           lines.push(`\n${parseExpressionFindings.length} parseExpression finding(s) (parsed in-document, not as a bare rule):`);
@@ -162,6 +179,12 @@ describe.skipIf(!RESOURCES_EXIST)('expression corpus sweep (P1: real-corpus fixe
           lines.push(`\n${fixedPointFindings.length} fixed-point finding(s) (r2 !== r1):`);
           for (const f of fixedPointFindings.slice(0, 20)) {
             lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}\n  r2: ${JSON.stringify(f.r2)}`);
+          }
+        }
+        if (treeShapeFindings.length > 0) {
+          lines.push(`\n${treeShapeFindings.length} tree-shape finding(s) (r1 is a fixed point but reparses to a DIFFERENT tree shape — silent semantic corruption):`);
+          for (const f of treeShapeFindings.slice(0, 20)) {
+            lines.push(`  snippet: ${JSON.stringify(f.snippet)}\n  r1: ${JSON.stringify(f.r1)}`);
           }
         }
         expect.fail(lines.join('\n'));

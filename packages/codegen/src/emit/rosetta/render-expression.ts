@@ -100,9 +100,18 @@ const RESERVED_KEYWORDS = new Set(
   ].filter((kw) => !VALID_ID_EXCEPTIONS.has(kw))
 );
 
-/** Escape `name` with a leading `^` if it collides with a reserved keyword. */
+/**
+ * Escape `name` with a leading `^` if it collides with a reserved keyword.
+ * `name` may be a dotted `QualifiedName` (`symbol`/`enumeration`/`referenceGuard`
+ * refs) — the parser's per-segment `^`-strip happens at the ID-token level
+ * (`convertID` runs once per `ValidID` match), so `$refText` for `foo.^type`
+ * arrives as `"foo.type"`, NOT `"foo.^type"` with the caret preserved on the
+ * later segment. Checking the whole dotted string against `RESERVED_KEYWORDS`
+ * therefore never matches (`"foo.type"` isn't itself a keyword) — each
+ * segment must be escaped independently and rejoined.
+ */
 function escapeId(name: string): string {
-  return RESERVED_KEYWORDS.has(name) ? `^${name}` : name;
+  return name.split('.').map((segment) => (RESERVED_KEYWORDS.has(segment) ? `^${segment}` : segment)).join('.');
 }
 
 const refText = (r: unknown): string => escapeId((r as { $refText?: string } | undefined)?.$refText ?? '');
@@ -112,7 +121,26 @@ const PREC_POSTFIX = 8;
 
 function prec(node: AnyNode): number {
   switch (node.$type) {
-    case 'RosettaConditionalExpression': return PREC_CONDITIONAL;
+    // Both always parenthesize as a non-top-level child: RosettaConditionalExpression
+    // for readability (see its dispatch case); SwitchOperation and ChoiceOperation
+    // because their own bodies are BARE comma-separated lists
+    // (`cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*` /
+    // `attributes+=ValidID (',' attributes+=ValidID)*`) — shape-identical to any
+    // bare comma-list position they might sit in (call rawArgs, constructor
+    // values/constructorTypeArgs, with-meta entries, ListLiteral elements,
+    // multi-arg only-exists args). Unparenthesized, a trailing element of the
+    // outer list is silently absorbed into the switch/choice's own list instead
+    // of staying a separate outer element — confirmed for both constructs via
+    // direct AST-shape inspection (not just a reparse-error check, which passes
+    // even when this happens): `Foo(x switch a then 1, default 0, y)` folds `y`
+    // into the switch; `Foo(optional choice a, b, y)` folds `y` into `choice`'s
+    // `attributes`. Precedence 0 makes every call site in this file — postfix
+    // arguments (minPrec 8), binary operands (minPrec 1+), and bare list
+    // elements (minPrec 1) — wrap them via the ordinary `r()` mechanism, so no
+    // dedicated comma-scanning helper is needed.
+    case 'RosettaConditionalExpression':
+    case 'SwitchOperation':
+    case 'ChoiceOperation': return PREC_CONDITIONAL;
     case 'ThenOperation': return 1;
     case 'LogicalOperation': return node['operator'] === 'or' ? 2 : 3;
     case 'EqualityOperation':
@@ -131,28 +159,6 @@ function r(child: unknown, minPrec: number): string {
   const node = child as AnyNode;
   const text = dispatch(node);
   return prec(node) < minPrec ? `(${text})` : text;
-}
-
-/**
- * Render `child` as an element of a BARE, unbracketed comma-separated list
- * (function-call `rawArgs`, constructor `values`/`constructorTypeArgs`,
- * `with-meta` `entries`, `ListLiteral` `elements` — every grammar rule of
- * the shape `X (',' X)*` with no per-element brackets). `SwitchOperation`'s
- * OWN case list (`cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*`)
- * is ALSO a bare comma list, so a switch that isn't the list's last element
- * is ambiguous: the parser cannot tell the switch's own trailing comma from
- * the outer list's next-element separator, and mis-parses (`P1` corpus sweep
- * finding — confirmed empirically: `Foo(x switch a then 1, default 0, y)`
- * fails to reparse, `Foo(x switch a then 1, default 0)` alone does not).
- * Unlike `r()`'s precedence-driven wrapping, this is not about binding
- * strength — a bare switch is fine as a binary-operand or postfix argument —
- * it is a comma-context hazard specific to these 5 list positions, so
- * `SwitchOperation` is always parenthesized here regardless of `prec()`.
- */
-function rComma(child: unknown): string {
-  const node = child as AnyNode;
-  const text = r(child, 1);
-  return node.$type === 'SwitchOperation' ? `(${text})` : text;
 }
 
 /** Render an expression tree to Rune DSL text. */
@@ -178,7 +184,7 @@ function dispatch(node: AnyNode): string {
     case 'RosettaSuperCall': {
       const head = node.$type === 'RosettaSuperCall' ? 'super' : refText(node['symbol']);
       const rawArgs = (node['rawArgs'] as unknown[] | undefined) ?? [];
-      if (node['explicitArguments']) return `${head}(${rawArgs.map(rComma).join(', ')})`;
+      if (node['explicitArguments']) return `${head}(${rawArgs.map((a) => r(a, 1)).join(', ')})`;
       return head;
     }
     case 'RosettaImplicitVariable': return 'item';
@@ -186,7 +192,7 @@ function dispatch(node: AnyNode): string {
       const elements = (node['elements'] as unknown[] | undefined) ?? [];
       // Grammar: `empty` and `[...]` both infer ListLiteral; an empty list IS `empty`.
       if (elements.length === 0) return 'empty';
-      return `[${elements.map(rComma).join(', ')}]`;
+      return `[${elements.map((e) => r(e, 1)).join(', ')}]`;
     }
 
     // --- binary chains (left minPrec = p, right minPrec = p + 1) ---
@@ -277,7 +283,7 @@ function dispatchExtended(node: AnyNode, _p: number): string {
       return `${argPrefix(node)}is absent`;
     case 'RosettaOnlyExistsExpression': {
       const args = (node['args'] as unknown[] | undefined) ?? [];
-      if (args.length > 0) return `(${args.map(rComma).join(', ')}) only exists`;
+      if (args.length > 0) return `(${args.map((a) => r(a, 1)).join(', ')}) only exists`;
       return `${argPrefix(node)}only exists`;
     }
     case 'ToEnumOperation':
@@ -298,7 +304,7 @@ function dispatchExtended(node: AnyNode, _p: number): string {
     }
     case 'WithMetaOperation': {
       const entries = ((node['entries'] as AnyNode[] | undefined) ?? [])
-        .map((e) => `${refText(e['key'])}: ${rComma(e['value'])}`).join(', ');
+        .map((e) => `${refText(e['key'])}: ${r(e['value'], 1)}`).join(', ');
       const suffix = entries ? ` { ${entries} }` : '';
       return `${r(node['argument'], PREC_POSTFIX)} with-meta${suffix}`;
     }
@@ -312,10 +318,10 @@ function dispatchExtended(node: AnyNode, _p: number): string {
     case 'RosettaConstructorExpression': {
       const typeName = dispatch(node['typeRef'] as AnyNode);
       const typeArgs = ((node['constructorTypeArgs'] as AnyNode[] | undefined) ?? [])
-        .map((a) => `${refText(a['parameter'])}: ${rComma(a['value'])}`).join(', ');
+        .map((a) => `${refText(a['parameter'])}: ${r(a['value'], 1)}`).join(', ');
       const argsPart = typeArgs ? `(${typeArgs})` : '';
       const pairs = ((node['values'] as AnyNode[] | undefined) ?? [])
-        .map((v) => `${refText(v['key'])}: ${rComma(v['value'])}`);
+        .map((v) => `${refText(v['key'])}: ${r(v['value'], 1)}`);
       if (node['implicitEmpty']) pairs.push('...');
       const body = pairs.length > 0 ? `{ ${pairs.join(', ')} }` : '{}';
       return `${typeName}${argsPart} ${body}`;

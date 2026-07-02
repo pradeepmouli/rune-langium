@@ -94,6 +94,27 @@ describe('renderExpression — navigation', () => {
   });
 });
 
+describe('renderExpression — keyword-escaped qualified references', () => {
+  it('re-escapes a whole-name keyword collision', () => {
+    const fc = { $type: 'RosettaFeatureCall', receiver: sym('trade'), feature: { $refText: 'type' } } as never;
+    expect(renderExpression(fc)).toBe('trade -> ^type');
+  });
+
+  it('re-escapes only the colliding segment of a dotted QualifiedName ref', () => {
+    expect(renderExpression({ $type: 'ToEnumOperation', operator: 'to-enum', argument: sym('code'), enumeration: { $refText: 'foo.type' } } as never)).toBe('code to-enum foo.^type');
+  });
+
+  it('leaves a plain dotted ref unescaped', () => {
+    expect(renderExpression({ $type: 'ToEnumOperation', operator: 'to-enum', argument: sym('code'), enumeration: { $refText: 'foo.bar' } } as never)).toBe('code to-enum foo.bar');
+  });
+
+  it('leaves a ValidID-whitelisted word bare, whole-name or as a dotted segment', () => {
+    const fc = { $type: 'RosettaFeatureCall', receiver: sym('trade'), feature: { $refText: 'value' } } as never;
+    expect(renderExpression(fc)).toBe('trade -> value');
+    expect(renderExpression({ $type: 'ToEnumOperation', operator: 'to-enum', argument: sym('code'), enumeration: { $refText: 'foo.value' } } as never)).toBe('code to-enum foo.value');
+  });
+});
+
 describe('renderExpression — RawDsl leaf and unknown types', () => {
   it('renders a RawDsl leaf verbatim', () => {
     expect(renderExpression({ $type: 'RawDsl', text: '___' } as never)).toBe('___');
@@ -148,6 +169,33 @@ describe('renderExpression — postfix & functional', () => {
     expect(renderExpression({ $type: 'WithMetaOperation', operator: 'with-meta', argument: sym2('a'), entries: [{ key: { $refText: 'scheme' }, value: str('x') }] } as never)).toBe('a with-meta { scheme: "x" }');
     expect(renderExpression({ $type: 'WithMetaOperation', operator: 'with-meta', argument: sym2('a'), entries: [] } as never)).toBe('a with-meta');
     expect(renderExpression({ $type: 'AsKeyOperation', operator: 'as-key', argument: sym2('ref') } as never)).toBe('ref as-key');
+  });
+
+  it('REGRESSION: switch and choice always parenthesize as a bare-comma-list element (prec 0)', () => {
+    // SwitchOperation's own case list and ChoiceOperation's own attribute
+    // list are BOTH bare comma-separated lists — shape-identical to the
+    // outer comma list they might sit inside (call rawArgs, ListLiteral
+    // elements, etc). Unparenthesized, a trailing outer-list element gets
+    // silently absorbed into the switch/choice's own list instead of
+    // staying separate (confirmed via AST-shape comparison, not just a
+    // reparse-error check). Both get precedence 0, same as
+    // RosettaConditionalExpression, so the ordinary r() mechanism wraps
+    // them — even as the list's SOLE element, where wrapping is safe
+    // (round-trips to an identical tree) even though not strictly required.
+    const cases = [{ $type: 'SwitchCaseOrDefault', guard: { $type: 'SwitchCaseGuard', referenceGuard: { $refText: 'A' } }, expression: int(1) }, { $type: 'SwitchCaseOrDefault', guard: undefined, expression: int(0) }];
+    const sw = { $type: 'SwitchOperation', operator: 'switch', argument: sym2('x'), cases } as never;
+    const choice = { $type: 'ChoiceOperation', operator: 'choice', necessity: 'optional', argument: undefined, attributes: [{ $refText: 'a' }, { $refText: 'b' }] } as never;
+
+    expect(renderExpression({ $type: 'RosettaSymbolReference', symbol: { $refText: 'Foo' }, explicitArguments: true, rawArgs: [sw] } as never)).toBe('Foo((x switch A then 1, default 0))');
+    expect(renderExpression({ $type: 'RosettaSymbolReference', symbol: { $refText: 'Foo' }, explicitArguments: true, rawArgs: [sw, sym2('y')] } as never)).toBe('Foo((x switch A then 1, default 0), y)');
+    expect(renderExpression({ $type: 'RosettaSymbolReference', symbol: { $refText: 'Foo' }, explicitArguments: true, rawArgs: [choice, sym2('y')] } as never)).toBe('Foo((optional choice a, b), y)');
+    expect(renderExpression({ $type: 'ListLiteral', elements: [sw, sym2('y')] } as never)).toBe('[(x switch A then 1, default 0), y]');
+
+    // Nested (not itself the list element): a switch buried inside a binary
+    // operand must still wrap, since r()'s ordinary precedence recursion
+    // parenthesizes the switch at ITS OWN render site regardless of depth.
+    const nested = bin('ArithmeticOperation', '+', sw, sym2('y'));
+    expect(renderExpression({ $type: 'RosettaSymbolReference', symbol: { $refText: 'Foo' }, explicitArguments: true, rawArgs: [nested, sym2('z')] } as never)).toBe('Foo((x switch A then 1, default 0) + y, z)');
   });
 
   it('renders conditionals, always parenthesized as a child', () => {
