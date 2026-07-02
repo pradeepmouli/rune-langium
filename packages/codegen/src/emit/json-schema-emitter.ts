@@ -196,9 +196,15 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
     for (const data of dataByName.values()) {
       const parentRef = data.superType?.ref;
       if (!parentRef) continue;
-      if (isData(parentRef) && dataByName.has(parentRef.name)) {
+      // Identity compare, not name-presence: a cross-namespace parent whose
+      // name collides with an unrelated LOCAL type must not open the local
+      // type. (Unreachable via `extends <name>` today — Rune scoping
+      // resolves a shadowed name to the local declaration, probe-verified —
+      // but identity keeps this correct independent of that scoping
+      // invariant.)
+      if (isData(parentRef) && dataByName.get(parentRef.name) === parentRef) {
         result.add(parentRef.name);
-      } else if (isChoice(parentRef) && choiceByName.has(parentRef.name)) {
+      } else if (isChoice(parentRef) && choiceByName.get(parentRef.name) === parentRef) {
         result.add(parentRef.name);
       }
     }
