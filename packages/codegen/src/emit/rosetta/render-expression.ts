@@ -122,22 +122,26 @@ const PREC_POSTFIX = 8;
 function prec(node: AnyNode): number {
   switch (node.$type) {
     // Both always parenthesize as a non-top-level child: RosettaConditionalExpression
-    // for readability (see its dispatch case); SwitchOperation and ChoiceOperation
-    // because their own bodies are BARE comma-separated lists
-    // (`cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*` /
-    // `attributes+=ValidID (',' attributes+=ValidID)*`) — shape-identical to any
-    // bare comma-list position they might sit in (call rawArgs, constructor
-    // values/constructorTypeArgs, with-meta entries, ListLiteral elements,
-    // multi-arg only-exists args). Unparenthesized, a trailing element of the
-    // outer list is silently absorbed into the switch/choice's own list instead
-    // of staying a separate outer element — confirmed for both constructs via
-    // direct AST-shape inspection (not just a reparse-error check, which passes
-    // even when this happens): `Foo(x switch a then 1, default 0, y)` folds `y`
-    // into the switch; `Foo(optional choice a, b, y)` folds `y` into `choice`'s
-    // `attributes`. Precedence 0 makes every call site in this file — postfix
-    // arguments (minPrec 8), binary operands (minPrec 1+), and bare list
-    // elements (minPrec 1) — wrap them via the ordinary `r()` mechanism, so no
-    // dedicated comma-scanning helper is needed.
+    // for readability (see its dispatch case); SwitchOperation and
+    // ChoiceOperation because their own bodies are BARE comma-separated
+    // lists (`cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*` /
+    // `attributes+=ValidID (',' attributes+=ValidID)*`) — shape-identical to
+    // any bare comma-list position they might sit in: 6 sites total — call
+    // rawArgs, constructor values, constructor constructorTypeArgs,
+    // with-meta entries, ListLiteral elements, and multi-arg only-exists
+    // args. (constructorTypeArgs is defensive only: grammar restricts
+    // TypeCallArgumentExpression to TypeParameterReference | RosettaLiteralRule
+    // (grammar L223-229), so a switch/choice can never legally appear there.)
+    // Unparenthesized, a trailing element of the outer list is silently
+    // absorbed into the switch/choice's own list instead of staying a
+    // separate outer element — confirmed for both constructs via direct
+    // AST-shape inspection (not just a reparse-error check, which passes
+    // even when this happens): `Foo(x switch a then 1, default 0, y)` folds
+    // `y` into the switch; `Foo(optional choice a, b, y)` folds `y` into
+    // `choice`'s `attributes`. Precedence 0 makes every call site in this
+    // file — postfix arguments (minPrec 8), binary operands (minPrec 1+),
+    // and bare list elements (minPrec 1) — wrap them via the ordinary
+    // `r()` mechanism, so no dedicated comma-scanning helper is needed.
     case 'RosettaConditionalExpression':
     case 'SwitchOperation':
     case 'ChoiceOperation': return PREC_CONDITIONAL;

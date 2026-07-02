@@ -28,13 +28,17 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { parse, parseExpression } from '@rune-langium/core';
 import { renderExpression } from '../../../src/emit/rosetta/render-expression.js';
 import { treesEquivalent } from './expression-tree-equivalence.js';
 
-const RESOURCES_DIR = resolve(new URL('.', import.meta.url).pathname, '../../../../../.resources');
+// fileURLToPath (not `new URL(...).pathname`) — on Windows, .pathname keeps
+// a leading `/` before the drive letter (`/C:/...`), which is not a valid
+// filesystem path; fileURLToPath normalizes it correctly on every platform.
+const RESOURCES_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../../.resources');
 const RESOURCES_EXIST = existsSync(RESOURCES_DIR);
 
 /** Recursively collect every `.rosetta` file path under `dir`. */
@@ -79,7 +83,14 @@ async function extractCorpusSnippets(): Promise<{ snippets: Set<string>; fileCou
 
   for (const file of files) {
     const content = readFileSync(file, 'utf-8');
-    const result = await parse(content, `inmemory:///corpus/${file.replace(/\//g, '_')}`);
+    // pathToFileURL (not a naive '/' -> '_' replace) — `file` is an absolute
+    // filesystem path that can contain other URI-unsafe characters (spaces,
+    // `#`, `?`, a Windows drive letter/backslashes); pathToFileURL encodes it
+    // into a well-formed, collision-free, cross-platform URI string. `parse`
+    // only uses this as a document-identity key, not for real disk access
+    // (file content is read separately above), so any unique well-formed URI
+    // works — it does not need to resolve back to `file` on disk.
+    const result = await parse(content, pathToFileURL(file).toString());
     if (result.hasErrors) {
       skippedCount++;
       continue;
