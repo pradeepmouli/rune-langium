@@ -20,6 +20,7 @@ import type {
   RosettaEnumeration, RosettaEnumValue, RosettaCardinality
 } from '@rune-langium/core';
 import { renderExpression, UnsupportedExpressionError } from './render-expression.js';
+import { renderSynonymBody, renderClassSynonymValue, renderMetaSynonymValue, UnsupportedSynonymBodyError } from './render-synonym-body.js';
 
 export type DehydratedNode = Dehydrated<AstNode>;
 export type RenderChild = (child: DehydratedNode) => string;
@@ -361,37 +362,77 @@ function synonymSources(sources: unknown[] | undefined): string {
   return (sources ?? []).map((s) => (s as { $refText?: string }).$refText ?? '').filter(Boolean).join(', ');
 }
 
-// Sources are upstream-guaranteed (z2f picker + grammar); the !sources guard is removed.
-// renderSynonym/renderEnumSynonym still return string|null to fall back to CST for
-// non-value bodies or missing synonymValue (grammar alternatives beyond the value form).
+// Sources are upstream-guaranteed (z2f picker + grammar). The three synonym
+// renderers below render the FULL `RosettaClassSynonym`/`RosettaSynonym`/
+// `RosettaEnumSynonym` grammar surface (P5), delegating body/value rendering
+// to render-synonym-body.ts. They stay `string | null`: a body-render throw
+// (UnsupportedSynonymBodyError for a designed-unsupported shape, anything
+// else via P3's warn-on-unexpected convention) is caught here and mapped to
+// `null` so renderNode falls back to CST — never corrupt, per the P3 posture
+// carried over from exprText.
 
-function renderClassSynonym(s: DehydratedNode): string {
-  const cs = s as unknown as { sources?: unknown[]; value?: { name?: string } };
+/** Catch a body/value-render throw and fall back to `null` (CST). Mirrors `exprText`'s convention. */
+function trySynonymRender(render: () => string): string | null {
+  try {
+    return render();
+  } catch (err) {
+    if (!(err instanceof UnsupportedSynonymBodyError)) {
+      // eslint-disable-next-line no-console -- browser-safe observability hook (see module doc); never-corrupt invariant: CST fallback below always still runs.
+      console.warn('[render-core] unexpected synonym render failure — falling back to CST text', err);
+    }
+    return null;
+  }
+}
+
+function renderClassSynonym(s: DehydratedNode): string | null {
+  const cs = s as unknown as { sources?: unknown[]; value?: unknown; metaValue?: unknown };
   const sources = synonymSources(cs.sources);
-  // `value` is optional (grammar `('value' value=RosettaClassSynonymValue)?`).
-  const name = cs.value?.name;
-  return name !== undefined
-    ? `[synonym ${sources} value "${escapeString(name)}"]`
-    : `[synonym ${sources}]`;
+  return trySynonymRender(() => {
+    const parts: string[] = [];
+    // `value` is optional (grammar `('value' value=RosettaClassSynonymValue)?`).
+    if (cs.value !== undefined) parts.push(`value ${renderClassSynonymValue(cs.value)}`);
+    // metaValue is a RosettaMetaSynonymValue — its grammar rule ALLOWS `maps`
+    // (unlike RosettaClassSynonymValue) — render the full surface.
+    if (cs.metaValue !== undefined) parts.push(`meta ${renderMetaSynonymValue(cs.metaValue)}`);
+    const suffix = parts.length > 0 ? ` ${parts.join(' ')}` : '';
+    return `[synonym ${sources}${suffix}]`;
+  });
 }
 
 function renderSynonym(s: DehydratedNode): string | null {
-  const sy = s as unknown as { sources?: unknown[]; body?: { values?: Array<{ name?: string }> } };
+  const sy = s as unknown as { sources?: unknown[]; body?: unknown };
   const sources = synonymSources(sy.sources);
-  const values = sy.body?.values ?? [];
-  // Non-value bodies (hint/mappingLogic/meta/etc.) have no `values` entries.
-  // Return null so renderNode falls back to CST and preserves the original body.
-  if (values.length === 0) return null;
-  const rendered = values.map((v) => `"${escapeString(v.name ?? '')}"`).join(', ');
-  return `[synonym ${sources} value ${rendered}]`;
+  return trySynonymRender(() => `[synonym ${sources} ${renderSynonymBody(sy.body)}]`);
 }
 
 function renderEnumSynonym(s: DehydratedNode): string | null {
-  const es = s as unknown as { sources?: unknown[]; synonymValue?: string };
-  const sources = synonymSources(es.sources);
-  // synonymValue is absent on non-value-form enum synonyms — fall back to CST.
-  if (es.synonymValue === undefined) return null;
-  return `[synonym ${sources} value "${escapeString(es.synonymValue)}"]`;
+  const es = s as unknown as {
+    sources?: unknown[]; synonymValue?: string; definition?: string;
+    patternMatch?: string; patternReplace?: string; removeHtml?: boolean;
+  };
+  const sourcesList = es.sources ?? [];
+  const sources = synonymSources(sourcesList);
+  return trySynonymRender(() => {
+    // synonymValue is a required field on RosettaEnumSynonym (grammar: `'value' synonymValue=STRING`,
+    // no `?`) — absence means an undiscriminable/malformed node, so throw to trigger CST fallback.
+    if (es.synonymValue === undefined) throw new UnsupportedSynonymBodyError('RosettaEnumSynonym');
+    let out = `value "${escapeString(es.synonymValue)}"`;
+    if (es.definition !== undefined) out += ` definition "${escapeString(es.definition)}"`;
+    if (es.patternMatch !== undefined && es.patternReplace !== undefined) {
+      out += ` pattern "${escapeString(es.patternMatch)}" "${escapeString(es.patternReplace)}"`;
+    }
+    // `RosettaExternalEnumSynonym` (the external-block sibling grammar rule —
+    // `'[' 'value' synonymValue=STRING ('definition' ...)? ('pattern' ...)? ']'`,
+    // no `synonym` keyword, no sources) `infers RosettaEnumSynonym`: SAME
+    // `$type` as the normal `[synonym src, ... value "s" ...]` form, structurally
+    // distinguished only by an empty `sources` array (corpus-sweep finding —
+    // 354/532 unique corpus RosettaEnumSynonym nodes are this external shape,
+    // e.g. currency-code enum externals). The external rule also has no
+    // `removeHtml` production, so it never applies here.
+    if (sourcesList.length === 0) return `[${out}]`;
+    if (es.removeHtml) out += ' removeHtml';
+    return `[synonym ${sources} ${out}]`;
+  });
 }
 
 /** Flatten present child arrays into one ordered list of DehydratedNodes. */
