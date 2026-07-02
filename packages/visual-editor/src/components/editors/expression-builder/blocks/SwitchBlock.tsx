@@ -19,7 +19,7 @@ interface SwitchCase {
   expression: ExpressionNode;
   guard?: {
     $type: string;
-    literalGuard?: unknown;
+    literalGuard?: ExpressionNode;
     referenceGuard?: string;
   };
 }
@@ -40,10 +40,16 @@ export function SwitchBlock({ node, renderChild }: SwitchBlockProps) {
       </span>
       {cases.map((c, i) => {
         const guard = c.guard;
-        const label = guard?.referenceGuard ?? guard?.literalGuard ?? 'default';
+        // literalGuard is a converted ExpressionNode (synthetic id, uniform
+        // handling — see ast-to-expression-node.ts's convertSwitchCase);
+        // render it via renderChild like any other nested expression rather
+        // than stringifying, which would print `[object Object]`.
+        const key = guard?.referenceGuard ?? (c.expression as unknown as { id?: string }).id ?? String(i);
         return (
-          <span key={`${String(label)}-${i}`} className="ml-3 inline-flex items-baseline gap-1">
-            <span className="font-mono text-xs opacity-70">{String(label)}:</span>
+          <span key={`${key}-${i}`} className="ml-3 inline-flex items-baseline gap-1">
+            <span className="font-mono text-xs opacity-70">
+              {guard?.referenceGuard ?? (guard?.literalGuard ? renderChild(guard.literalGuard) : 'default')}:
+            </span>
             {renderChild(c.expression)}
           </span>
         );

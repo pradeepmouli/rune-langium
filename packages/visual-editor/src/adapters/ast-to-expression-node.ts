@@ -142,7 +142,7 @@ function convertSwitchCase(ast: Record<string, unknown>, sourceText: string) {
     guard: guard
       ? {
           $type: 'SwitchCaseGuard' as const,
-          literalGuard: g(guard, 'literalGuard'),
+          literalGuard: convertChild(g(guard, 'literalGuard'), sourceText),
           referenceGuard: resolveRef(g(guard, 'referenceGuard'))
         }
       : undefined

@@ -166,4 +166,21 @@ describe('Expression round-trip (T029)', () => {
       expect(dsl).toBe('Trade(T: 5) { q: 1 }');
     });
   });
+
+  // literalGuard is now routed through convertChild like every other nested
+  // field (gains a synthetic id, uniform handling) — confirm the e2e
+  // switch-with-literal-guard round-trip still renders identically.
+  describe('literalGuard conversion consistency', () => {
+    it('round-trips a switch with an int literal guard', () => {
+      const src = 'x switch 42 then 1, default 0';
+      const p = parseExpression(src);
+      expect(p.hasErrors).toBe(false);
+
+      const exprNode = astToExpressionNode(p.value, src);
+      expect(exprNode.$type).toBe('SwitchOperation');
+
+      const dsl = expressionNodeToDsl(exprNode);
+      expect(dsl).toBe('x switch\n    42 then 1,\n    default 0');
+    });
+  });
 });
