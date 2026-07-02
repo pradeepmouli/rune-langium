@@ -3,6 +3,7 @@
 
 import type {
   Annotation,
+  Choice,
   Data,
   RosettaEnumeration,
   RosettaExternalFunction,
@@ -41,6 +42,8 @@ export interface NamespaceEmitter {
   emitTypeAlias(typeAlias: RosettaTypeAlias): void;
   emitDataPrelude?(): void;
   emitData(data: Data): void;
+  /** W2: emit a `choice` declaration. Optional so non-Data/Choice targets (e.g. Excel) need not implement it. */
+  emitChoice?(choice: Choice): void;
   emitRule?(rule: RosettaRule): void;
   emitReportMetadata?(): void;
   emitExternalFunction?(func: RosettaExternalFunction): void;
@@ -135,16 +138,32 @@ export function emitNamespaceWithContract(
 
   emitter.emitDataPrelude?.();
 
+  // Data and Choice names are interleaved in one topo-sorted emitOrder (a
+  // Choice must emit after its option types; a Data type referencing a
+  // Choice attribute must emit after that Choice) — walk it once, dispatch
+  // each name to whichever map it belongs to.
   const emittedData = new Set<string>();
+  const emittedChoices = new Set<string>();
   for (const typeName of model.emitOrder) {
     const data = model.dataByName.get(typeName);
-    if (!data) continue;
-    emittedData.add(typeName);
-    emitter.emitData(data);
+    if (data) {
+      emittedData.add(typeName);
+      emitter.emitData(data);
+      continue;
+    }
+    const choice = model.choiceByName.get(typeName);
+    if (choice) {
+      emittedChoices.add(typeName);
+      emitter.emitChoice?.(choice);
+    }
   }
 
   for (const typeName of sortedNames(model.dataByName).filter((name) => !emittedData.has(name))) {
     emitter.emitData(model.dataByName.get(typeName)!);
+  }
+
+  for (const typeName of sortedNames(model.choiceByName).filter((name) => !emittedChoices.has(name))) {
+    emitter.emitChoice?.(model.choiceByName.get(typeName)!);
   }
 
   for (const name of sortedNames(model.rulesByName)) {

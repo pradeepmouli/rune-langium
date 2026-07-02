@@ -36,6 +36,7 @@ function fakeWalk(namespace: string): NamespaceWalkResult {
     reportsByName: new Map(),
     annotationsByName: new Map(),
     libraryFuncsByName: new Map(),
+    choiceByName: new Map(),
     emitOrder: [],
     cyclicTypes: new Set(),
     graph: { dependencies: new Map() } as unknown as NamespaceWalkResult['graph']
