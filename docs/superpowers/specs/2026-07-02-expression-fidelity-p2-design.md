@@ -28,7 +28,7 @@ Extend the existing reuse-or-regenerate policy to expression bodies via the same
 - **render-core** (`rosetta-render-core.ts`): `renderNode` gains an optional third argument, `opts?: { renderExpr?: (expr: unknown) => string }`. The three body call sites (`renderCondition`, `renderOperation`, `renderShortcut`) call `opts?.renderExpr ?? exprText`. `exprText` (structural-first, CST-text fallback on throw) is unchanged and remains the default — render-core used standalone (no source available, e.g. programmatic graph → text) behaves exactly as today.
 - **cst-reuse-renderer** (VE serialize layer, which owns `originalSource` + the dirty index): supplies `renderExpr`:
   1. `$type === 'RawDsl'` → `expr.text` verbatim (edited-pending-reparse; unchanged semantics),
-  2. clean `$cstRange` present → `originalSource.slice(range.offset, range.end)` — byte-identical body, comments + layout preserved,
+  2. clean `$cstRange` present → slice `originalSource` by the range, routed through the cst-reuse layer's existing `normalizeReusedSlice` helper (as implemented) — interior bytes (comments, line breaks, content) are byte-identical; only continuation-line *leading indentation* is normalized, exactly as node-level child reuse already does, so indentation doesn't drift across successive edit passes,
   3. otherwise → `renderExpression(expr)` (structural; programmatic/rangeless nodes).
 - The slice is of the **original** document text (same lifecycle as node-level reuse: ranges are valid per render pass; reparse re-stamps). No new staleness class.
 
