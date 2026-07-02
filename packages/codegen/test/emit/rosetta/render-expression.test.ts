@@ -132,11 +132,26 @@ describe('RawDsl-as-child guard', () => {
   it('atomic RawDsl child stays bare (placeholder, identifier, qualified, number, string)', () => {
     expect(renderExpression(bin('LogicalOperation', 'and', raw('___'), bool(true)))).toBe('___ and True');
     expect(renderExpression(bin('LogicalOperation', 'and', raw('foo.bar'), bool(true)))).toBe('foo.bar and True');
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('foo.^type'), bool(true)))).toBe('foo.^type and True');
     expect(renderExpression(bin('ArithmeticOperation', '+', raw('42'), int(1)))).toBe('42 + 1');
+    expect(renderExpression(bin('ArithmeticOperation', '+', raw('1.5'), int(1)))).toBe('1.5 + 1');
+    expect(renderExpression(bin('ArithmeticOperation', '+', raw('1.5e3'), int(1)))).toBe('1.5e3 + 1');
+    expect(renderExpression(bin('LogicalOperation', 'and', raw(`'sq'`), bool(true)))).toBe(`'sq' and True`);
   });
   it('non-atomic RawDsl child gets wrapped', () => {
     expect(renderExpression(bin('LogicalOperation', 'and', raw('a or b'), bool(true)))).toBe('(a or b) and True');
     expect(renderExpression(bin('ArithmeticOperation', '+', sym('x'), raw('y count')))).toBe('x + (y count)');
+  });
+  it('near-atoms that are NOT single grammar tokens get wrapped (mirror terminals)', () => {
+    // INT is digits-only; BigDecimal requires a dot — 1e3/42n are multi-token.
+    expect(renderExpression(bin('ArithmeticOperation', '+', raw('1e3'), int(1)))).toBe('(1e3) + 1');
+    expect(renderExpression(bin('ArithmeticOperation', '+', raw('42n'), int(1)))).toBe('(42n) + 1');
+    // Malformed qualified names: trailing/double dots fail the ID-segment composition.
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('x.'), bool(true)))).toBe('(x.) and True');
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('x..y'), bool(true)))).toBe('(x..y) and True');
+    // Whitespace and empty text always wrap.
+    expect(renderExpression(bin('LogicalOperation', 'and', raw('a '), bool(true)))).toBe('(a ) and True');
+    expect(renderExpression(bin('LogicalOperation', 'and', raw(''), bool(true)))).toBe('() and True');
   });
 });
 

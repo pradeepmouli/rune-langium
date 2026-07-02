@@ -119,18 +119,26 @@ const refText = (r: unknown): string => escapeId((r as { $refText?: string } | u
 /**
  * `RawDsl` text is a black-box, unparsed lexical fragment — we don't know
  * its internal precedence, so a child-position `RawDsl` is CONSERVATIVE:
- * bare only for a single lexical atom that can never need surrounding
- * parens (an identifier, incl. `^`-escaped/dotted qualified names and the
- * `___` placeholder; a bare number; or a simple double-quoted string with
- * no embedded unescaped quote). Anything else gets wrapped — parens are
+ * bare only for a single lexical atom. The atom classes MIRROR the grammar's
+ * terminals exactly (rune-dsl.langium): a QualifiedName of `ID` segments
+ * (terminal ID = optional leading `^`, then `[a-zA-Z_][a-zA-Z_0-9]*` — one
+ * `^` per segment; covers the `___` placeholder and `foo.^type`), a bare `INT`
+ * (digits only — `1e3`/`42n` are NOT single tokens and wrap), an unsigned
+ * `BigDecimal` (requires a dot; optional exponent), or a `STRING` (single- or
+ * double-quoted with escapes, per the terminal). Anything else — including
+ * malformed near-atoms like `x.`/`x..y` — gets wrapped: parens are
  * grammar-legal wherever a bare expression is, so wrapping is always safe,
  * merely occasionally redundant. When unsure, wrap.
  */
+const ATOM_QUALIFIED_ID = /^\^?[a-zA-Z_][a-zA-Z_0-9]*(?:\.\^?[a-zA-Z_][a-zA-Z_0-9]*)*$/;
+const ATOM_INT = /^[0-9]+$/;
+const ATOM_DECIMAL = /^(?:\.[0-9]+|[0-9]+\.[0-9]*)(?:[eE][+-]?[0-9]+)?$/;
+const ATOM_STRING = /^"(?:\\.|[^"\\])*"$|^'(?:\\.|[^'\\])*'$/;
+
 function isAtomicRawDsl(text: string): boolean {
-  if (/^[A-Za-z_^][\w.^]*$/.test(text)) return true;
-  if (/^\d[\w.]*$/.test(text)) return true;
-  if (/^"(?:[^"\\]|\\.)*"$/.test(text)) return true;
-  return false;
+  return (
+    ATOM_QUALIFIED_ID.test(text) || ATOM_INT.test(text) || ATOM_DECIMAL.test(text) || ATOM_STRING.test(text)
+  );
 }
 
 const PREC_CONDITIONAL = 0;
