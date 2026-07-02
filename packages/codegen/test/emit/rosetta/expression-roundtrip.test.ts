@@ -38,7 +38,25 @@ const CORPUS = [
   // Tier 7 (contains/disjoint/default/join) is non-associative — a same-tier
   // LEFT child only exists via explicit parens and must always reparen.
   '(a contains b) default c',
-  '(a join ",") contains c'
+  '(a join ",") contains c',
+  // P1 corpus sweep findings (real-corpus fixed-point sweep over .resources/):
+  // a name colliding with a reserved keyword (`type`, `value`, `source`, ...)
+  // must round-trip through its `^`-escaped form, or the reference is lost.
+  'trade -> ^type -> value',
+  // A switch inside a bare comma-separated list (function-call rawArgs,
+  // constructor values, with-meta entries, ListLiteral elements) must
+  // render parenthesized — the switch's own comma-separated case list is
+  // otherwise ambiguous with the outer list's element separator whenever
+  // the switch isn't the list's last element. Source here is already
+  // correctly parenthesized (the bare, unparenthesized form is invalid
+  // Rune DSL, not just a renderer round-trip case). Note: constructor
+  // `constructorTypeArgs` values are grammar-restricted to a bare
+  // identifier or literal (TypeCallArgumentExpression), so a switch can
+  // never legally appear there — no case needed for that position.
+  'Foo((x switch a then 1, default 0), y)',
+  'Trade { q: (x switch a then 1, default 0), y: z }',
+  'a with-meta { scheme: (x switch a then 1, default 0), other: y }',
+  '[(x switch a then 1, default 0), y]'
 ];
 
 describe('expression round-trip (parse → render → reparse → fixed point)', () => {
