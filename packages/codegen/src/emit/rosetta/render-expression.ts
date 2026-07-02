@@ -45,7 +45,57 @@ export class UnsupportedExpressionError extends Error {
 }
 
 type AnyNode = Record<string, unknown> & { $type: string };
-const refText = (r: unknown): string => ((r as { $refText?: string } | undefined)?.$refText ?? '');
+
+/**
+ * Reserved keywords of the Rune DSL grammar (every exact-match Chevrotain
+ * keyword token in `RuneDsl.parser.Lexer.tokenTypes`, extracted from the
+ * live lexer — the authoritative source, not a hand-transcription of the
+ * grammar file), MINUS the words the grammar's `ValidID`/`TypeParameterValidID`
+ * rules explicitly whitelist as legal bare identifiers in every reference
+ * position `refText` renders (`feature`/`attributes`/`key` via `ValidID`;
+ * `symbol`/`enumeration`/`referenceGuard` via `QualifiedName = ValidID
+ * ('.' ValidID)*`; `parameter` via `TypeParameterValidID = ValidID | 'min' | 'max'`):
+ *   ValidID:            ID | 'condition' | 'source' | 'value' | 'version' | 'pattern' | 'scope'
+ *   TypeParameterValidID adds:  'min' | 'max'
+ * Verified empirically (`a -> value`, `a -> min`, etc. all parse bare —
+ * `a -> type` does not, `type` is NOT in `ValidID`'s whitelist).
+ *
+ * A name colliding with a REMAINING reserved word can still be a legal
+ * identifier (e.g. an attribute literally named `type`), but only when
+ * escaped with a leading `^` (Langium/Xtext's standard keyword-escape
+ * prefix). `$refText` strips the `^` before the reference reaches us, so
+ * the renderer must independently detect the collision and re-add it —
+ * otherwise `-> type` is emitted where the source had `-> ^type`, and the
+ * rendered text fails to reparse (`P1` corpus sweep finding).
+ */
+const VALID_ID_EXCEPTIONS = new Set(['condition', 'source', 'value', 'version', 'pattern', 'scope', 'min', 'max']);
+const RESERVED_KEYWORDS = new Set(
+  [
+    'structured_provision', 'regulatoryReference', 'to-zoned-date-time', 'rationale_author',
+    'post-condition', 'condition-func', 'condition-path', 'reportedField', 'ruleReference',
+    'only-element', 'to-date-time', 'docReference', 'displayName', 'componentID', 'rosettaPath',
+    'eligibility', 'annotation', 'recordType', 'dateFormat', 'removeHtml', 'definition',
+    'namespace', 'condition', 'basicType', 'typeAlias', 'to-string', 'to-number', 'with-meta',
+    'provision', 'rationale', 'real-time', 'reporting', 'isProduct', 'override', 'function',
+    'metaType', 'contains', 'disjoint', 'distinct', 'multiple', 'optional', 'required',
+    'standard', 'version', 'extends', 'synonym', 'library', 'default', 'flatten', 'reverse',
+    'to-time', 'to-enum', 'to-date', 'extract', 'pattern', 'segment', 'isEvent', 'import',
+    'prefix', 'choice', 'inputs', 'output', 'source', 'as-key', 'exists', 'absent', 'one-of',
+    'to-int', 'switch', 'reduce', 'filter', 'single', 'mapper', 'corpus', 'report', 'scope',
+    'alias', 'count', 'first', 'super', 'empty', 'False', 'value', 'merge', 'enums', 'ASATP',
+    'using', 'label', 'type', 'enum', 'func', 'then', 'join', 'only', 'last', 'sort', 'item',
+    'True', 'else', 'meta', 'path', 'hint', 'maps', 'when', 'body', 'rule', 'from', 'with',
+    'root', 'set', 'add', 'and', 'sum', 'min', 'max', 'any', 'all', 'tag', 'for', 'as', 'or',
+    'is', 'if', 'to', 'in', 'e', 'E'
+  ].filter((kw) => !VALID_ID_EXCEPTIONS.has(kw))
+);
+
+/** Escape `name` with a leading `^` if it collides with a reserved keyword. */
+function escapeId(name: string): string {
+  return RESERVED_KEYWORDS.has(name) ? `^${name}` : name;
+}
+
+const refText = (r: unknown): string => escapeId((r as { $refText?: string } | undefined)?.$refText ?? '');
 
 const PREC_CONDITIONAL = 0;
 const PREC_POSTFIX = 8;
@@ -73,6 +123,28 @@ function r(child: unknown, minPrec: number): string {
   return prec(node) < minPrec ? `(${text})` : text;
 }
 
+/**
+ * Render `child` as an element of a BARE, unbracketed comma-separated list
+ * (function-call `rawArgs`, constructor `values`/`constructorTypeArgs`,
+ * `with-meta` `entries`, `ListLiteral` `elements` — every grammar rule of
+ * the shape `X (',' X)*` with no per-element brackets). `SwitchOperation`'s
+ * OWN case list (`cases+=SwitchCaseOrDefault (',' cases+=SwitchCaseOrDefault)*`)
+ * is ALSO a bare comma list, so a switch that isn't the list's last element
+ * is ambiguous: the parser cannot tell the switch's own trailing comma from
+ * the outer list's next-element separator, and mis-parses (`P1` corpus sweep
+ * finding — confirmed empirically: `Foo(x switch a then 1, default 0, y)`
+ * fails to reparse, `Foo(x switch a then 1, default 0)` alone does not).
+ * Unlike `r()`'s precedence-driven wrapping, this is not about binding
+ * strength — a bare switch is fine as a binary-operand or postfix argument —
+ * it is a comma-context hazard specific to these 5 list positions, so
+ * `SwitchOperation` is always parenthesized here regardless of `prec()`.
+ */
+function rComma(child: unknown): string {
+  const node = child as AnyNode;
+  const text = r(child, 1);
+  return node.$type === 'SwitchOperation' ? `(${text})` : text;
+}
+
 /** Render an expression tree to Rune DSL text. */
 export function renderExpression(expr: DehydratedExpression): string {
   return dispatch(expr as unknown as AnyNode);
@@ -96,7 +168,7 @@ function dispatch(node: AnyNode): string {
     case 'RosettaSuperCall': {
       const head = node.$type === 'RosettaSuperCall' ? 'super' : refText(node['symbol']);
       const rawArgs = (node['rawArgs'] as unknown[] | undefined) ?? [];
-      if (node['explicitArguments']) return `${head}(${rawArgs.map((a) => r(a, 1)).join(', ')})`;
+      if (node['explicitArguments']) return `${head}(${rawArgs.map(rComma).join(', ')})`;
       return head;
     }
     case 'RosettaImplicitVariable': return 'item';
@@ -104,7 +176,7 @@ function dispatch(node: AnyNode): string {
       const elements = (node['elements'] as unknown[] | undefined) ?? [];
       // Grammar: `empty` and `[...]` both infer ListLiteral; an empty list IS `empty`.
       if (elements.length === 0) return 'empty';
-      return `[${elements.map((e) => r(e, 1)).join(', ')}]`;
+      return `[${elements.map(rComma).join(', ')}]`;
     }
 
     // --- binary chains (left minPrec = p, right minPrec = p + 1) ---
@@ -195,7 +267,7 @@ function dispatchExtended(node: AnyNode, _p: number): string {
       return `${argPrefix(node)}is absent`;
     case 'RosettaOnlyExistsExpression': {
       const args = (node['args'] as unknown[] | undefined) ?? [];
-      if (args.length > 0) return `(${args.map((a) => r(a, 1)).join(', ')}) only exists`;
+      if (args.length > 0) return `(${args.map(rComma).join(', ')}) only exists`;
       return `${argPrefix(node)}only exists`;
     }
     case 'ToEnumOperation':
@@ -216,7 +288,7 @@ function dispatchExtended(node: AnyNode, _p: number): string {
     }
     case 'WithMetaOperation': {
       const entries = ((node['entries'] as AnyNode[] | undefined) ?? [])
-        .map((e) => `${refText(e['key'])}: ${r(e['value'], 1)}`).join(', ');
+        .map((e) => `${refText(e['key'])}: ${rComma(e['value'])}`).join(', ');
       const suffix = entries ? ` { ${entries} }` : '';
       return `${r(node['argument'], PREC_POSTFIX)} with-meta${suffix}`;
     }
@@ -230,10 +302,10 @@ function dispatchExtended(node: AnyNode, _p: number): string {
     case 'RosettaConstructorExpression': {
       const typeName = dispatch(node['typeRef'] as AnyNode);
       const typeArgs = ((node['constructorTypeArgs'] as AnyNode[] | undefined) ?? [])
-        .map((a) => `${refText(a['parameter'])}: ${r(a['value'], 1)}`).join(', ');
+        .map((a) => `${refText(a['parameter'])}: ${rComma(a['value'])}`).join(', ');
       const argsPart = typeArgs ? `(${typeArgs})` : '';
       const pairs = ((node['values'] as AnyNode[] | undefined) ?? [])
-        .map((v) => `${refText(v['key'])}: ${r(v['value'], 1)}`);
+        .map((v) => `${refText(v['key'])}: ${rComma(v['value'])}`);
       if (node['implicitEmpty']) pairs.push('...');
       const body = pairs.length > 0 ? `{ ${pairs.join(', ')} }` : '{}';
       return `${typeName}${argsPart} ${body}`;
