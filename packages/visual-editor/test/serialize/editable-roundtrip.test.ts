@@ -565,6 +565,77 @@ type Trade:
   notional number (1..1)
 `;
 
+// ---------------------------------------------------------------------------
+// (12) expression-fidelity — sibling-field edit preserves an unedited
+// commented multi-line condition body byte-for-byte (P2 Task 3).
+//
+// Before P2, an untouched expression body inside a dirty node re-rendered
+// structurally: the `//` comment was dropped and the multi-line layout
+// collapsed to one line. `cst-reuse-renderer`'s `renderExpr` hook now slices
+// the body straight from the original source when its $cstRange is clean.
+// ---------------------------------------------------------------------------
+
+const SRC_COMMENTED_CONDITION = `namespace test
+version "1.0.0"
+
+type Foo:
+  bar string (1..1)
+  baz int (0..1)
+
+  condition C1:
+    if bar exists
+      // comment explaining why baz matters here
+      then baz exists
+`;
+
+describe('expression-fidelity round-trip (P2 Task 3)', () => {
+  it('preserves a commented multi-line condition body byte-for-byte across a sibling-field edit', async () => {
+    const { value, hasErrors } = await parse(SRC_COMMENTED_CONDITION);
+    expect(hasErrors).toBe(false);
+    const store = createEditorStore();
+    store.getState().loadModels(value);
+
+    const foo = store.getState().nodes.find((n) => n.data.name === 'Foo');
+    expect(foo).toBeDefined();
+
+    // Sibling-field edit: rename the CONDITION itself (its `name` field), not
+    // its expression. This dirties the condition subtree — so the whole
+    // condition regenerates through renderNode -> renderCondition — while the
+    // `expression` field keeps its original, clean $cstRange. Renaming an
+    // ATTRIBUTE instead would only dirty `attributes.N`, leaving the condition
+    // untouched at the whole-subtree-reuse level and never exercising
+    // renderCondition's `exprText` call at all.
+    store.getState().updateCondition(foo!.id, 0, { name: 'Renamed' });
+
+    const sourceMap = buildSourceForNamespaces({
+      nodes: store.getState().nodes,
+      edges: store.getState().edges,
+      originalSourceByNamespace: new Map([['test', SRC_COMMENTED_CONDITION]]),
+      patches: store.getState().pendingEditPatches,
+      inversePatches: store.getState().pendingInversePatches
+    });
+    const out = sourceMap.get('test');
+    expect(out).toBeTruthy();
+
+    // The rename applied.
+    expect(out).toContain('condition Renamed:');
+    // The condition body is untouched by the rename — the RENDER of the body
+    // itself must be byte-identical to the original source (comment + line
+    // breaks survive).
+    expect(out).toContain(
+      'if bar exists\n      // comment explaining why baz matters here\n      then baz exists'
+    );
+    // Sibling attributes are byte-intact.
+    expect(out).toContain('bar string (1..1)');
+    expect(out).toContain('baz int (0..1)');
+
+    // Re-parse succeeds.
+    const re = await parse(out!);
+    expect(re.hasErrors).toBe(false);
+    expect(elementNames(re.value)).toContain('Foo');
+  });
+});
+
 describe('add-synonym round-trip (Task 7)', () => {
   it('both the original and newly added class synonym survive render + reparse', async () => {
     const { value } = await parse(SRC_ADD_SYNONYM);
