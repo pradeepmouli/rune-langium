@@ -17,6 +17,20 @@ export const RUNTIME_HELPER_SOURCE: string =
   `\n` +
   `const runeAttrExists = (v: unknown): boolean =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
+  `\n` +
+  `const runeToDate = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToTime = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToDateTime = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToZonedDateTime = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)\n` +
+  `    ? v\n` +
+  `    : undefined;\n` +
   `// --- end runtime helpers ---`;
 
 /**
@@ -36,6 +50,20 @@ export const RUNTIME_HELPER_JS_SOURCE: string =
   `\n` +
   `const runeAttrExists = (v) =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
+  `\n` +
+  `const runeToDate = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToTime = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToDateTime = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToZonedDateTime = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)\n` +
+  `    ? v\n` +
+  `    : undefined;\n` +
   `// --- end runtime helpers ---`;
 
 /**
@@ -67,3 +95,38 @@ export const runeCount = (arr: unknown[] | undefined | null): number => arr?.len
  */
 export const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-date`: returns the string
+ * unchanged when it matches `YYYY-MM-DD`, else undefined.
+ *
+ * Runtime representation of `date` is a plain ISO string (see ts-emitter's
+ * builtin type map); Tier 3 `ToDateOperation` semantics per the parity spec.
+ */
+export const runeToDate = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-time`: `HH:MM:SS` with an
+ * optional fractional-seconds suffix.
+ */
+export const runeToTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-date-time`: local ISO-8601
+ * `YYYY-MM-DDTHH:MM:SS` with optional fractional seconds, no zone offset.
+ */
+export const runeToDateTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-zoned-date-time`: ISO-8601
+ * datetime with a required zone offset (`Z` or `+HH:MM`), optional IANA
+ * zone-id suffix (`[Region/City]`).
+ */
+export const runeToZonedDateTime = (v: unknown): string | undefined =>
+  typeof v === 'string' &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})(\[[^\]]+\])?$/.test(v)
+    ? v
+    : undefined;

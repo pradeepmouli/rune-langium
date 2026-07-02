@@ -17,10 +17,12 @@ import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { getElementNamespace } from '@rune-langium/core';
 import {
+  isChoice,
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
   isData as _isData,
+  type Choice,
   type Data,
   type Attribute,
   type RosettaEnumeration,
@@ -67,6 +69,8 @@ interface EmissionContext {
   namespace: string;
   /** All Data nodes keyed by name for lookup. */
   dataByName: ReadonlyMap<string, Data>;
+  /** All Choice nodes keyed by name for lookup (W2). */
+  choiceByName: ReadonlyMap<string, Choice>;
   /** All Enumeration nodes keyed by name for lookup. */
   enumByName: ReadonlyMap<string, RosettaEnumeration>;
   /** All RosettaTypeAlias nodes keyed by name for lookup. */
@@ -175,6 +179,7 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     diagnostics: [],
     namespace: model.namespace,
     dataByName: model.dataByName,
+    choiceByName: model.choiceByName,
     enumByName: model.enumByName,
     typeAliasByName: model.typeAliasByName,
     rulesByName: model.rulesByName,
@@ -250,6 +255,18 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     this.sections.push(this.emitTypeSchema(data));
     const alias = this.emitInferAlias(data);
     if (alias) this.sections.push(alias);
+    this.sections.push('');
+  }
+
+  /**
+   * W2: emit a `choice` declaration as `z.union([...])` of per-option
+   * `z.object` shapes (key-presence discrimination — `z.discriminatedUnion`
+   * doesn't apply, there is no literal tag field), mirroring emitData's
+   * schema + z.infer-alias pairing.
+   */
+  emitChoice(choice: Choice): void {
+    this.sections.push(this.emitChoiceSchema(choice));
+    this.sections.push(`export type ${choice.name} = z.infer<typeof ${choice.name}Schema>;`);
     this.sections.push('');
   }
 
@@ -369,6 +386,10 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         if (this.ctx.dataByName.has(refText)) {
           return `${refText}Schema`;
         }
+        // Check if it's a choice in the current namespace (W2)
+        if (this.ctx.choiceByName.has(refText)) {
+          return `${refText}Schema`;
+        }
         // Unknown but named — emit schema reference optimistically
         this.ctx.diagnostics.push({
           severity: 'warning',
@@ -408,6 +429,12 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       return `${typeRef.name}Schema`;
     }
 
+    if (isChoice(typeRef)) {
+      // W2: reference to a choice → use the choice union schema name
+      // (was falling to z.unknown() — isChoice was never consulted here).
+      return `${typeRef.name}Schema`;
+    }
+
     // Unknown reference type — try $refText fallback
     if (refText) {
       const builtinZod = this.ctx.builtinTypeMap[refText];
@@ -420,6 +447,47 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       message: `Unknown type reference kind for attribute '${attr.name}'; emitting z.unknown()`
     });
     return 'z.unknown()';
+  }
+
+  // ---------------------------------------------------------------------------
+  // W2: Choice emission
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Same field-naming decision as ts-emitter's choiceOptionFieldName (see
+   * that file's doc comment for the full rationale — no CDM JSON
+   * data-instance fixture to verify a Choice's wire encoding against):
+   * camelCase-first-letter of the option's type name.
+   */
+  private static choiceOptionFieldName(optionTypeName: string): string {
+    return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
+  }
+
+  /**
+   * Emit `export const <ChoiceName>Schema = z.union([z.object({ opt: OptSchema }), ...]);`
+   * — key-presence discrimination via z.union of single-key object shapes,
+   * mirroring emitObjectBody's per-attribute z.object conventions.
+   */
+  private emitChoiceSchema(choice: Choice): string {
+    const name = choice.name;
+    const schemaName = `${name}Schema`;
+
+    const optionSchemas = choice.attributes.map((option) => {
+      const optionTypeRef = option.typeCall?.type;
+      const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
+      const fieldName = ZodNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+      const optionSchemaExpr = this.ctx.builtinTypeMap[optionTypeName] ?? `${optionTypeName}Schema`;
+      // .strict(): non-strict objects allow unknown keys, so {cash, commodity}
+      // would satisfy the first arm — strict arms make multi-option objects
+      // fail every arm, enforcing the exactly-one-of Choice semantics.
+      return `z.strictObject({ ${fieldName}: ${optionSchemaExpr} })`;
+    });
+
+    if (optionSchemas.length === 0) {
+      return `export const ${schemaName} = z.never();`;
+    }
+
+    return `export const ${schemaName} = z.union([${optionSchemas.join(', ')}]);`;
   }
 
   /**
@@ -872,7 +940,10 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       ``,
       `import { z } from 'zod';`,
       ...(this.suppressBoilerplate
-        ? [`import { runeCheckOneOf, runeCount, runeAttrExists } from './runtime.zod.js';`, ``]
+        ? [
+            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime } from './runtime.zod.js';`,
+            ``
+          ]
         : ['', RUNTIME_HELPER_SOURCE, ''])
     ].join('\n');
   }

@@ -21,11 +21,13 @@
  */
 
 import {
+  isChoice,
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
   isRosettaTypeAlias,
   isData as _isData,
+  type Choice,
   type Data,
   type Attribute,
   type RosettaEnumeration,
@@ -231,6 +233,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     this.sections.push('');
   }
 
+  /**
+   * W2: emit a `choice` declaration as a key-presence discriminated union
+   * type (no class — a Choice is a type-only union, not an instantiable
+   * shape like Data) plus an exactly-one-of type guard.
+   */
+  emitChoice(choice: Choice): void {
+    this.sections.push(this.emitChoiceTypeDeclaration(choice));
+    this.sections.push('');
+    this.sections.push(this.emitChoiceTypeGuard(choice));
+    this.sections.push('');
+  }
+
   emitRule(rule: RosettaRule): void {
     this.sections.push('');
     this.sections.push(this.emitRuleDeclaration(rule));
@@ -381,6 +395,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     }
     if (isRosettaEnumeration(typeRef)) return typeRef.name;
     if (_isData(typeRef)) return typeRef.name;
+    // W2: a Choice-typed attribute resolves to the emitted Choice union
+    // type name — was previously falling to 'unknown' (isChoice was never
+    // consulted in this mapping).
+    if (isChoice(typeRef)) return typeRef.name;
 
     if (refText) {
       const builtinTs = this.ctx.builtinTypeMap[refText];
@@ -620,6 +638,74 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   // ---------------------------------------------------------------------------
+  // W2: Choice emission
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Derive a ChoiceOption's discriminant field name from its type name.
+   *
+   * FIELD-NAMING DECISION (documented per spec instruction — no CDM JSON
+   * data-instance fixture exists in .resources/ to verify a Choice's wire
+   * encoding against; verified empirically, only build-tooling JSON is
+   * present in the corpus). A ChoiceOption has no attribute name of its
+   * own (only a `typeCall` referencing its Data type, e.g. `Cash`) — Data
+   * attributes in this corpus are conventionally camelCase-first-letter
+   * (`emitInterface` emits `attr.name` verbatim, and every corpus attribute
+   * name IS already camelCase-first-letter as authored). Camel-casing the
+   * option's type name is the closest equivalent: `Cash` -> `cash`.
+   */
+  private static choiceOptionFieldName(optionTypeName: string): string {
+    return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
+  }
+
+  /**
+   * Emit `export type <ChoiceName> = { option1: Type1 } | { option2: Type2 } | ...;`
+   * — a key-presence discriminated union (not `z.discriminatedUnion`-style
+   * literal-tag discrimination; CDM Choice instances are encoded as an
+   * object with exactly ONE option key present, not a `$type` tag).
+   */
+  private emitChoiceTypeDeclaration(choice: Choice): string {
+    const name = choice.name;
+    const options = choice.attributes
+      .map((option) => {
+        const optionTypeRef = option.typeCall?.type;
+        const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+        const fieldName = TsNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+        return `{ ${fieldName}: ${optionTypeName} }`;
+      })
+      .join(' | ');
+    if (options === '') {
+      return `export type ${name} = never;`;
+    }
+    return `export type ${name} = ${options};`;
+  }
+
+  /**
+   * Emit `export function is<ChoiceName>(x: unknown): x is <ChoiceName>` —
+   * an "exactly one of the option keys is present" validator, mirroring
+   * runeCheckOneOf's one-of semantics (same as the ChoiceOperation condition
+   * validator) but as a standalone type guard for the emitted union type.
+   */
+  private emitChoiceTypeGuard(choice: Choice): string {
+    const name = choice.name;
+    const fieldNames = choice.attributes.map((option) => {
+      const optionTypeRef = option.typeCall?.type;
+      const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+      return TsNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+    });
+
+    const accessors = fieldNames.map((f) => `(x as Record<string, unknown>).${f}`).join(', ');
+
+    const lines: string[] = [
+      `export function is${name}(x: unknown): x is ${name} {`,
+      `  if (typeof x !== 'object' || x === null) return false;`,
+      `  return runeCheckOneOf([${accessors}]);`,
+      `}`
+    ];
+    return lines.join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
   // T110: emitValidateMethods
   // ---------------------------------------------------------------------------
 
@@ -767,7 +853,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       `// Source namespace: ${this.model.namespace}`,
       ``,
       ...(this.suppressBoilerplate
-        ? [`import { runeCheckOneOf, runeCount, runeAttrExists } from './runtime.js';`, ``]
+        ? [
+            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime } from './runtime.js';`,
+            ``
+          ]
         : [RUNTIME_HELPER_SOURCE, ''])
     ].join('\n');
   }
