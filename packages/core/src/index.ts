@@ -24,6 +24,8 @@ export * from './generated/domain.js';
 // Parse API
 export { parse, parseWorkspace } from './api/parse.js';
 export type { ParseResult } from './api/parse.js';
+export { parseExpression } from './api/parse-expression.js';
+export type { ExpressionParseResult } from './api/parse-expression.js';
 
 // Services
 export { createRuneDslServices, RuneDslModule, RuneDslSharedModule } from './services/rune-dsl-module.js';

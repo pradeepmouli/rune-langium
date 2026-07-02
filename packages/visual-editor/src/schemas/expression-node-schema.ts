@@ -17,6 +17,8 @@
 import { z } from 'zod';
 import { deriveUiSchema } from './derive-ui-schema.js';
 import {
+  WithMetaEntrySchema,
+  TypeCallArgumentSchema,
   ArithmeticOperationSchema,
   ComparisonOperationSchema,
   EqualityOperationSchema,
@@ -165,7 +167,7 @@ const AbsentNodeSchema = deriveUnary(RosettaAbsentExpressionSchema);
 const OnlyElementNodeSchema = deriveUnary(RosettaOnlyElementSchema);
 const OnlyExistsNodeSchema = deriveUiSchema(RosettaOnlyExistsExpressionSchema, {
   extend: uiFields,
-  overrides: { argument: optExprChild }
+  overrides: { argument: optExprChild, args: z.array(exprChild).optional() }
 });
 const CountNodeSchema = deriveUnary(RosettaCountOperationSchema);
 const FlattenNodeSchema = deriveUnary(FlattenOperationSchema);
@@ -264,6 +266,11 @@ const ExprConstructorKeyValuePairSchema = deriveUiSchema(ConstructorKeyValuePair
   overrides: { key: resolvedRef, value: exprChild }
 });
 
+/** Constructor generic type-call argument with resolved parameter reference. */
+const ExprTypeCallArgumentSchema = deriveUiSchema(TypeCallArgumentSchema, {
+  overrides: { parameter: resolvedRef, value: exprChild }
+});
+
 const ConstructorNodeSchema = deriveUiSchema(RosettaConstructorExpressionSchema, {
   extend: uiFields,
   overrides: {
@@ -275,6 +282,7 @@ const ConstructorNodeSchema = deriveUiSchema(RosettaConstructorExpressionSchema,
         overrides: { symbol: resolvedRef, rawArgs: z.array(exprChild).optional() }
       })
     ]),
+    constructorTypeArgs: z.array(ExprTypeCallArgumentSchema).optional(),
     values: z.array(ExprConstructorKeyValuePairSchema).optional()
   }
 });
@@ -338,9 +346,14 @@ const AsKeyNodeSchema = deriveUiSchema(AsKeyOperationSchema, {
   overrides: { argument: exprChild }
 });
 
+/** with-meta entry with resolved key reference. */
+const ExprWithMetaEntrySchema = deriveUiSchema(WithMetaEntrySchema, {
+  overrides: { key: resolvedRef, value: exprChild }
+});
+
 const WithMetaNodeSchema = deriveUiSchema(WithMetaOperationSchema, {
   extend: uiFields,
-  overrides: { argument: exprChild }
+  overrides: { argument: exprChild, entries: z.array(ExprWithMetaEntrySchema).optional() }
 });
 
 const SuperCallNodeSchema = deriveUiSchema(RosettaSuperCallSchema, {
@@ -447,6 +460,8 @@ export {
   ExprSwitchCaseOrDefaultSchema,
   ExprSwitchCaseGuardSchema,
   ExprConstructorKeyValuePairSchema,
+  ExprTypeCallArgumentSchema,
+  ExprWithMetaEntrySchema,
   ExprInlineFunctionSchema,
   PlaceholderNodeSchema,
   UnsupportedNodeSchema

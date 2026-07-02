@@ -158,12 +158,49 @@ function convertKVP(ast: Record<string, unknown>, sourceText: string) {
   };
 }
 
+/** Convert a constructor generic type-call argument (`Type(param: value)`). */
+function convertTypeCallArgument(ast: Record<string, unknown>, sourceText: string) {
+  return {
+    $type: 'TypeCallArgument' as const,
+    parameter: resolveRef(g(ast, 'parameter')) ?? '',
+    value: convertChildRequired(g(ast, 'value'), sourceText)
+  };
+}
+
+/** Convert a with-meta entry. */
+function convertWithMetaEntry(ast: Record<string, unknown>, sourceText: string) {
+  return {
+    $type: 'WithMetaEntry' as const,
+    key: resolveRef(g(ast, 'key')) ?? '',
+    value: convertChildRequired(g(ast, 'value'), sourceText)
+  };
+}
+
+/**
+ * Extract the best-available source text for an Unsupported leaf: the node's
+ * own CST span when available (a live-parsed AST node carries `$cstNode`),
+ * else the caller's `sourceText` fallback (used for JSON-serialized ASTs,
+ * which don't survive structured clone with a CST attached).
+ *
+ * Using the node's OWN span (not the ancestor `sourceText`) matters for a
+ * NESTED unrecognized subtree: `expressionNodeToDehydrated` renders an
+ * Unsupported node as a RawDsl leaf inlined unwrapped at its parent's
+ * position (precedence 8, an atom) — if it carried the whole top-level
+ * expression's text instead of just its own sub-span, re-parsing the
+ * rendered output would embed that whole text at the child's position,
+ * producing invalid or duplicated DSL.
+ */
+function unsupportedRawText(ast: Record<string, unknown>, sourceText: string): string {
+  const cstNode = g(ast, '$cstNode') as { text?: string } | undefined;
+  return cstNode?.text ?? sourceText;
+}
+
 /** Main conversion function. */
 function convertNode(ast: Record<string, unknown>, sourceText: string): ExpressionNode {
   const $type = g(ast, '$type') as string;
 
   if (!KNOWN_TYPES.has($type)) {
-    return { $type: 'Unsupported', id: uid(), rawText: sourceText } as unknown as ExpressionNode;
+    return { $type: 'Unsupported', id: uid(), rawText: unsupportedRawText(ast, sourceText) } as unknown as ExpressionNode;
   }
 
   const id = uid();
@@ -203,11 +240,20 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         right: convertChild(g(ast, 'right'), sourceText)
       } as unknown as ExpressionNode;
 
-    // Unary postfix
+    // Grammar: exists carries an optional modifier (single/multiple) not
+    // present on any other unary postfix operation.
     case 'RosettaExistsExpression':
+      return {
+        $type,
+        id,
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText),
+        modifier: g(ast, 'modifier')
+      } as unknown as ExpressionNode;
+
+    // Unary postfix
     case 'RosettaAbsentExpression':
     case 'RosettaOnlyElement':
-    case 'RosettaOnlyExistsExpression':
     case 'RosettaCountOperation':
     case 'FlattenOperation':
     case 'DistinctOperation':
@@ -228,6 +274,18 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText)
+      } as unknown as ExpressionNode;
+
+    // Grammar: `argument` XOR `args[]` (multi-arg form: `(a, b) only exists`).
+    case 'RosettaOnlyExistsExpression':
+      return {
+        $type,
+        id,
+        operator: g(ast, 'operator'),
+        argument: convertChild(g(ast, 'argument'), sourceText),
+        args: g(ast, 'args')
+          ? (g(ast, 'args') as unknown[]).map((a) => convertNode(a as Record<string, unknown>, sourceText))
+          : undefined
       } as unknown as ExpressionNode;
 
     case 'ToEnumOperation':
@@ -317,6 +375,9 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
                 : undefined
             }
           : undefined,
+        constructorTypeArgs: ((g(ast, 'constructorTypeArgs') as Record<string, unknown>[]) ?? []).map((a) =>
+          convertTypeCallArgument(a, sourceText)
+        ),
         implicitEmpty: g(ast, 'implicitEmpty'),
         values: ((g(ast, 'values') as Record<string, unknown>[]) ?? []).map((v) => convertKVP(v, sourceText))
       } as unknown as ExpressionNode;
@@ -359,7 +420,8 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
-        attributes: ((g(ast, 'attributes') as unknown[]) ?? []).map((a) => resolveRef(a) ?? '')
+        attributes: ((g(ast, 'attributes') as unknown[]) ?? []).map((a) => resolveRef(a) ?? ''),
+        necessity: g(ast, 'necessity')
       } as unknown as ExpressionNode;
 
     case 'AsKeyOperation':
@@ -375,7 +437,8 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         $type,
         id,
         operator: g(ast, 'operator'),
-        argument: convertChildRequired(g(ast, 'argument'), sourceText)
+        argument: convertChildRequired(g(ast, 'argument'), sourceText),
+        entries: ((g(ast, 'entries') as Record<string, unknown>[]) ?? []).map((e) => convertWithMetaEntry(e, sourceText))
       } as unknown as ExpressionNode;
 
     case 'RosettaSuperCall':
@@ -390,7 +453,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       } as unknown as ExpressionNode;
 
     default:
-      return { $type: 'Unsupported', id: uid(), rawText: sourceText } as unknown as ExpressionNode;
+      return { $type: 'Unsupported', id: uid(), rawText: unsupportedRawText(ast, sourceText) } as unknown as ExpressionNode;
   }
 }
 

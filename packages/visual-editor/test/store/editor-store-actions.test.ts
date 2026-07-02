@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
+import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import {
   COMBINED_MODEL_SOURCE,
@@ -949,7 +950,12 @@ describe('EditorStore — condition and expression operations', () => {
       const conditions = (updated!.data as any).conditions ?? [];
       expect(conditions.length).toBe(1);
       expect(conditions[0].name).toBe('ValidDate');
-      expect(conditions[0].expression.$cstText).toBe('tradeDate exists');
+      // Edited expressions are represented as a RawDsl leaf (B1 task 4b fix —
+      // spreading the stale structural node + overwriting $cstText left the
+      // OLD $type intact, which the structural-first renderer would re-render
+      // instead of the edit).
+      expect(conditions[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(conditions[0].expression.text).toBe('tradeDate exists');
     });
   });
 
@@ -1013,7 +1019,9 @@ describe('EditorStore — condition and expression operations', () => {
       const updated = store.getState().nodes.find((n) => n.id === dataNode!.id);
       const conditions = (updated!.data as any).conditions ?? [];
       expect(conditions[0].name).toBe('C1_Updated');
-      expect(conditions[0].expression.$cstText).toBe('new expression');
+      // RawDsl leaf — see the addCondition test above for rationale.
+      expect(conditions[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(conditions[0].expression.text).toBe('new expression');
     });
   });
 
@@ -1200,7 +1208,9 @@ describe('EditorStore — condition and expression operations', () => {
       expect(postConditions.length).toBe(2);
       expect(postConditions[0].name).toBe('P1');
       expect(postConditions[1].name).toBe('P2_Updated');
-      expect(postConditions[1].expression.$cstText).toBe('p2_new');
+      // RawDsl leaf — see the addCondition test above for rationale.
+      expect(postConditions[1].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(postConditions[1].expression.text).toBe('p2_new');
     });
 
     it('is a no-op (no patch) when index is out of bounds', () => {
@@ -1266,7 +1276,9 @@ describe('EditorStore — condition and expression operations', () => {
       const updated = funcStore.getState().nodes.find((n) => n.id === funcNode!.id);
       const ops = (updated!.data as any).operations ?? [];
       expect(ops.length).toBeGreaterThan(0);
-      expect(ops[0].expression.$cstText).toBe('x * 2');
+      // RawDsl leaf — see the addCondition test above for rationale.
+      expect(ops[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(ops[0].expression.text).toBe('x * 2');
       expect((updated!.data as any).expressionText).toBe('x * 2');
     });
   });
@@ -1930,7 +1942,8 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
   });
 
   // -----------------------------------------------------------------------
-  // updateExpression — nodes-rooted patch covering BOTH operations[0].expression.$cstText AND expressionText
+  // updateExpression — nodes-rooted patch covering BOTH operations[0].expression
+  // (a RawDsl leaf — see the addCondition test above) AND expressionText
   // -----------------------------------------------------------------------
 
   describe('updateExpression — id-rooted patch (Wave D)', () => {
@@ -1951,7 +1964,7 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
       expect(newPatches[0]!.path[1]).toBe(nodeId);
     });
 
-    it('patches BOTH operations[0].expression.$cstText AND expressionText', () => {
+    it('patches BOTH operations[0].expression (RawDsl leaf) AND expressionText', () => {
       const nodes = store.getState().nodes;
       const funcNode = nodes.find((n) => n.data.name === 'Add');
       expect(funcNode).toBeDefined();
@@ -1962,7 +1975,8 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
       const updated = store.getState().nodes.find((n) => n.id === nodeId);
       const data = updated!.data as any;
       // Both fields must be written
-      expect(data.operations?.[0]?.expression?.$cstText).toBe('a * b');
+      expect(data.operations?.[0]?.expression?.$type).toBe(RAW_DSL_TYPE);
+      expect(data.operations?.[0]?.expression?.text).toBe('a * b');
       expect(data.expressionText).toBe('a * b');
     });
   });
