@@ -5,7 +5,11 @@ import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 const CDM_BUTTON = 'CDM (Common Domain Model)';
-const ENUM_NODE_ID = 'cdm.base.datetime.BusinessCenterEnum';
+// Anchors must be corpus-stable: BusinessCenterEnum was migrated upstream to
+// the codelist pattern (cdm.base.staticdata.codelist.BusinessCenter) in the
+// 2026-07-02 curated build. Both anchors below match the single 'Business'
+// search and live in cdm.base.datetime.
+const ENUM_NODE_ID = 'cdm.base.datetime.BusinessDayConventionEnum';
 const DATA_NODE_ID = 'cdm.base.datetime.BusinessCenters';
 // Regression: cdm.base.staticdata.party is never pre-hydrated at load time.
 // First navigation to it must populate Inspector members (resolveNodeFileRef fix).
@@ -47,12 +51,15 @@ test.describe('production checkout smoke', () => {
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
+    // The namespace tree is virtualized — filter narrowly before each click so
+    // the target row is mounted regardless of corpus growth.
     const namespaceSearch = page.getByTestId('namespace-search');
-    await namespaceSearch.fill('BusinessCenter');
+    await namespaceSearch.fill('BusinessDayConvention');
 
     await page.getByTestId(`ns-type-nav-${ENUM_NODE_ID}`).click();
     await expect(page.getByText(ENUM_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
 
+    await namespaceSearch.fill('BusinessCenters');
     await page.getByTestId(`ns-type-nav-${DATA_NODE_ID}`).click();
     await expect(page.getByText(DATA_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
 
