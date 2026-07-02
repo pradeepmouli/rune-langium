@@ -48,6 +48,7 @@ import type {
 // from the single core barrel. Imported as values so the namespace ops resolve.
 import { Data, Choice, RosettaEnumeration, RosettaFunction, Annotation } from '@rune-langium/core';
 import { indexById } from '@rune-langium/core';
+import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
@@ -2019,7 +2020,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               if (!n) return;
               const d = n.data;
               if (d.$type === 'RosettaFunction') {
-                // Function body is in operations[0].expression.$cstText.
+                // Function body is in operations[0].expression, represented as a
+                // RawDsl leaf (edited text pending reparse — see RAW_DSL_TYPE).
                 // Also write expressionText as a display field.
                 const fd = d as { operations?: any[]; expressionText?: string; output?: { name?: string } };
                 if (!fd.operations || fd.operations.length === 0) {
@@ -2028,14 +2030,15 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                       $type: 'Operation',
                       add: false,
                       assignRoot: { $refText: fd.output?.name ?? '' },
-                      expression: { $cstText: expressionText }
+                      expression: { $type: RAW_DSL_TYPE, text: expressionText }
                     }
                   ];
                 } else {
-                  if (!fd.operations[0].expression) {
-                    fd.operations[0].expression = {};
-                  }
-                  fd.operations[0].expression.$cstText = expressionText;
+                  // Replace wholesale — a stale structural node with only
+                  // $cstText overwritten would still carry its OLD $type and
+                  // structural fields, which the structural-first renderer
+                  // would render instead of the edit (silently dropping it).
+                  fd.operations[0].expression = { $type: RAW_DSL_TYPE, text: expressionText };
                 }
                 fd.expressionText = expressionText;
               } else {
@@ -2064,7 +2067,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               $type: 'Condition',
               name: condition.name,
               definition: condition.definition,
-              expression: { $cstText: condition.expressionText },
+              // RawDsl leaf — edited text pending reparse — see RAW_DSL_TYPE.
+              expression: { $type: RAW_DSL_TYPE, text: condition.expressionText },
               postCondition: condition.isPostCondition ?? false
             };
             mutateGraph(set, get, (draft) => {
@@ -2122,8 +2126,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 ...cond,
                 ...(updates.name !== undefined ? { name: updates.name } : {}),
                 ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
+                // Replace wholesale (not spread) — cond.expression carries the
+                // STALE structural $type/fields from the pre-edit parse; spreading
+                // it and only overwriting $cstText left the old $type intact, so
+                // the structural-first renderer re-rendered the OLD expression and
+                // silently dropped the edit. RawDsl leaf — see RAW_DSL_TYPE.
                 ...(updates.expressionText !== undefined
-                  ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
+                  ? { expression: { $type: RAW_DSL_TYPE, text: updates.expressionText } }
                   : {})
               };
               dd.conditions = allConditions.filter((c: any) => !c.postCondition);
