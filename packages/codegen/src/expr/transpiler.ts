@@ -1442,24 +1442,49 @@ function getExprPrecedence(expr: RosettaExpression): number | undefined {
 }
 
 /**
+ * Operators whose JS equivalent is NOT left-associative in a way that
+ * preserves Rune semantics when re-nested without parens — chaining these
+ * at the same tier changes meaning (`a === b === c` is `(a===b)===c` in JS,
+ * comparing a boolean to `c`, not the Rune-intended `a===(b===c)`).
+ * Rune's own grammar only allows same-tier nesting on these via an explicit
+ * parenthesized sub-expression (PrimaryExpression's `'(' Expression ')'`
+ * escape hatch — EqualityOperation.right is otherwise AdditiveOperation,
+ * not another EqualityOperation), so a same-tier RIGHT child of one of
+ * these operators must always keep its parens. Arithmetic (+,-,*,/) and
+ * logical (and/or → &&/||) chain left-associatively in both Rune and JS,
+ * so dropping redundant right-side parens there is semantics-preserving.
+ */
+const NON_ASSOCIATIVE_OPERATORS = new Set(['=', '<>', '<', '<=', '>', '>=', 'contains', 'disjoint', 'default']);
+
+/**
  * Transpile a sub-expression, wrapping in parentheses if needed for precedence.
  * Used by binary operators (T069, T070).
  *
  * @param expr      The sub-expression to transpile.
  * @param parentOp  The operator of the parent expression.
  * @param ctx       Transpiler context.
- * @param side      Whether this is the left or right operand (for future associativity).
+ * @param side      Whether this is the left or right operand. Same-tier
+ *                  RIGHT children of a non-associative parentOp are always
+ *                  parenthesized (see NON_ASSOCIATIVE_OPERATORS); same-tier
+ *                  LEFT children never need parens (JS left-associativity
+ *                  matches evaluation order either way).
  */
 function transpileWithPrecedence(
   expr: RosettaExpression,
   parentOp: string,
   ctx: ExpressionTranspilerContext,
-  _side: 'left' | 'right'
+  side: 'left' | 'right'
 ): string {
   const result = transpileExpression(expr, ctx);
   const myPrec = getExprPrecedence(expr);
   const parentPrec = PRECEDENCE[parentOp];
-  if (myPrec !== undefined && parentPrec !== undefined && myPrec < parentPrec) {
+  if (myPrec === undefined || parentPrec === undefined) {
+    return result;
+  }
+  if (myPrec < parentPrec) {
+    return `(${result})`;
+  }
+  if (side === 'right' && myPrec === parentPrec && NON_ASSOCIATIVE_OPERATORS.has(parentOp)) {
     return `(${result})`;
   }
   return result;
