@@ -96,12 +96,22 @@ describe('zod-emitter — Data extends Choice (emitted source text)', () => {
     expect(output.content).toContain('export type BasketConstituent = z.infer<typeof BasketConstituentSchema>;');
   });
 
-  it('the emitted condition (CashIsAbsent) references the inherited Choice option name, not a DIAGNOSTIC', async () => {
+  it('the emitted condition (CashIsAbsent) reads the REAL emitted field key (data.cash), not the DSL-text name (data.Cash)', async () => {
     const doc = await parseSource(FIXTURE);
     const model = walkNamespace([doc], 'test.dataExtendsChoice');
     const output = emitNamespace(model, {});
     expect(output.content).not.toContain('DIAGNOSTIC');
-    expect(output.content).toContain('runeAttrExists(data.Cash)');
+    // `Cash is absent` is the author-facing condition text (matches the
+    // Choice option's Data-type name, capitalized) — buildAttributeTypesMap
+    // keys its pseudo-attribute map that way so validateAttr's lookup
+    // matches the condition's own AST text. But the REAL emitted Zod field
+    // key at that position is camelCase (choiceOptionFieldName: `Cash` ->
+    // `cash`), matching the arm shape `z.strictObject({ cash: CashSchema })`
+    // — so the transpiled predicate MUST read `data.cash`, not `data.Cash`
+    // (which would always be undefined at runtime — a silent false-negative
+    // this exact assertion caught on first implementation).
+    expect(output.content).toContain('runeAttrExists(data.cash)');
+    expect(output.content).not.toContain('data.Cash');
   });
 });
 
@@ -138,10 +148,19 @@ describe('zod-emitter — Data extends Choice (emitted-runtime behavior, real zo
     return mod;
   }
 
-  it('case 1: single option + own extras -> PASSES', async () => {
+  // NOTE: the FIXTURE's BasketConstituent also carries `condition
+  // CashIsAbsent: Cash is absent` — so a payload with `cash` present is
+  // ALWAYS invalid end-to-end (rejected by CashIsAbsent), even though the
+  // base structural (Choice-derivation) shape alone would accept it. Cases
+  // that want to isolate the pure structural-derivation behavior use
+  // `commodity` (the OTHER option, unaffected by CashIsAbsent); the
+  // dedicated "still enforces" test below isolates CashIsAbsent itself
+  // using `cash`.
+
+  it('case 1: single option (not the one CashIsAbsent forbids) + own extras -> PASSES', async () => {
     const mod = await loadEmittedModule();
     const schema = mod['BasketConstituentSchema'] as { safeParse: (v: unknown) => { success: boolean } };
-    const result = schema.safeParse({ cash: { amount: 5 }, weight: 2 });
+    const result = schema.safeParse({ commodity: { quantity: 1 }, weight: 2 });
     expect(result.success).toBe(true);
   });
 
@@ -162,33 +181,31 @@ describe('zod-emitter — Data extends Choice (emitted-runtime behavior, real zo
   it("case 4: extras validate per their own schema (wrong type) -> FAILS", async () => {
     const mod = await loadEmittedModule();
     const schema = mod['BasketConstituentSchema'] as { safeParse: (v: unknown) => { success: boolean } };
-    const result = schema.safeParse({ cash: { amount: 5 }, weight: 'not-a-number' });
+    const result = schema.safeParse({ commodity: { quantity: 1 }, weight: 'not-a-number' });
     expect(result.success).toBe(false);
   });
 
   it('case 5: unknown key on the distributed arm -> FAILS (strictness preserved through .extend())', async () => {
     const mod = await loadEmittedModule();
     const schema = mod['BasketConstituentSchema'] as { safeParse: (v: unknown) => { success: boolean } };
-    const result = schema.safeParse({ cash: { amount: 5 }, weight: 2, bogus: 'x' });
+    const result = schema.safeParse({ commodity: { quantity: 1 }, weight: 2, bogus: 'x' });
     expect(result.success).toBe(false);
   });
 
-  it("the child's own condition (CashIsAbsent) still enforces after distribution", async () => {
+  it("the child's own condition (CashIsAbsent) enforces after distribution — this is the accessor-naming fix's ground-truth check", async () => {
     const mod = await loadEmittedModule();
-    const schema = mod['BasketConstituentSchema'] as { safeParse: (v: unknown) => { success: boolean } };
-    // Cash IS present -> CashIsAbsent condition must fail even though the
-    // base structural shape (exactly-one-of + extras) is otherwise valid.
-    // NOTE: this only applies if the condition block is chained onto the
-    // runeExtendChoice(...) result — see design note in the implementation
-    // about condition placement.
+    const schema = mod['BasketConstituentSchema'] as {
+      safeParse: (v: unknown) => { success: boolean; error?: { issues: Array<{ message: string }> } };
+    };
+    // Cash IS present -> CashIsAbsent condition must reject this payload
+    // even though the base structural shape (exactly-one-of + extras) is
+    // otherwise valid (case 1's shape, just with `cash` instead of
+    // `commodity`). This is the exact case that silently passed as a
+    // false positive before the attrAccessorNames fix (the condition read
+    // `data.Cash`, always undefined, so `!runeAttrExists(undefined)` was
+    // always true and the condition never fired).
     const result = schema.safeParse({ cash: { amount: 5 }, weight: 2 });
-    // The base Choice-derivation shape already allows this payload (case 1
-    // above) — CashIsAbsent's semantics ("Cash must be absent") are a
-    // POST-hoc business condition; if wired, this payload with `cash`
-    // present must be rejected by CashIsAbsent specifically.
-    if (!result.success) {
-      const zodResult = result as { success: false; error: { issues: Array<{ message: string }> } };
-      expect(zodResult.error.issues.some((i) => i.message.includes('CashIsAbsent'))).toBe(true);
-    }
+    expect(result.success).toBe(false);
+    expect(result.error!.issues.some((i) => i.message.includes('CashIsAbsent'))).toBe(true);
   });
 });

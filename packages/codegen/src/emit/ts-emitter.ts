@@ -54,10 +54,12 @@ import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
 import {
   decodeCardinality,
   buildAttributeTypesMap,
+  buildAttrAccessorNamesMap,
   activeConditions,
   mergeProfileTypeMaps,
   buildReportRulesLines,
-  buildCrossNsImportLines
+  buildCrossNsImportLines,
+  choiceOptionFieldName
 } from './base-namespace-emitter.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
@@ -572,20 +574,30 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
   /**
    * Data-extends-Choice: emit an exactly-one-of validate method for a
-   * child's inherited Choice supertype, reading `this.<OptionTypeName>`
-   * (the pseudo-attribute keys `buildAttributeTypesMap`'s Choice-parent
-   * walk contributes — see base-namespace-emitter.ts) — mirrors
-   * `emitOneOf`'s ts-method body shape (`runeCheckOneOf` + `errors.push`)
-   * exactly, since this IS the same exactly-one-of semantics as a
-   * `OneOfOperation`/`ChoiceOperation` condition, just synthesized from the
-   * Choice's option list instead of an authored `Condition` node.
+   * child's inherited Choice supertype — mirrors `emitOneOf`'s ts-method
+   * body shape (`runeCheckOneOf` + `errors.push`) exactly, since this IS
+   * the same exactly-one-of semantics as a `OneOfOperation`/
+   * `ChoiceOperation` condition, just synthesized from the Choice's option
+   * list instead of an authored `Condition` node.
+   *
+   * Reads `this.<choiceOptionFieldName>` — the REAL emitted field key
+   * (camelCase, e.g. `cash`), populated by `Object.assign(this, data)` in
+   * the constructor from the union member key (`{ cash: Cash }`, per
+   * emitChoiceTypeDeclaration) — NOT `this.<OptionTypeName>` (`Cash`,
+   * capitalized). The error MESSAGE still uses the bare option type names
+   * (`optionNames`, matching the DSL-facing option list a reader expects to
+   * see), but the RUNTIME CHECK must read the accessor names — the same
+   * DSL-text-vs-real-field-key distinction the transpiler's
+   * `attrAccessorNames` remap fixes for authored conditions
+   * (base-namespace-emitter.ts's `buildAttrAccessorNamesMap` doc comment
+   * has the full rationale).
    */
   private emitChoiceParentValidateMethod(choice: Choice, childName: string): string {
     const optionNames = choice.attributes.map((option) => {
       const optionTypeRef = option.typeCall?.type;
       return optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
     });
-    const accessors = optionNames.map((n) => `this.${n}`).join(', ');
+    const accessors = optionNames.map((n) => `this.${choiceOptionFieldName(n)}`).join(', ');
     const message = `${choice.name}: exactly one of [${optionNames.join(', ')}] must be present in ${childName}`;
 
     return [
@@ -699,23 +711,6 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Derive a ChoiceOption's discriminant field name from its type name.
-   *
-   * FIELD-NAMING DECISION (documented per spec instruction — no CDM JSON
-   * data-instance fixture exists in .resources/ to verify a Choice's wire
-   * encoding against; verified empirically, only build-tooling JSON is
-   * present in the corpus). A ChoiceOption has no attribute name of its
-   * own (only a `typeCall` referencing its Data type, e.g. `Cash`) — Data
-   * attributes in this corpus are conventionally camelCase-first-letter
-   * (`emitInterface` emits `attr.name` verbatim, and every corpus attribute
-   * name IS already camelCase-first-letter as authored). Camel-casing the
-   * option's type name is the closest equivalent: `Cash` -> `cash`.
-   */
-  private static choiceOptionFieldName(optionTypeName: string): string {
-    return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
-  }
-
-  /**
    * Emit `export type <ChoiceName> = { option1: Type1 } | { option2: Type2 } | ...;`
    * — a key-presence discriminated union (not `z.discriminatedUnion`-style
    * literal-tag discrimination; CDM Choice instances are encoded as an
@@ -727,7 +722,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       .map((option) => {
         const optionTypeRef = option.typeCall?.type;
         const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
-        const fieldName = TsNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+        const fieldName = choiceOptionFieldName(optionTypeName);
         return `{ ${fieldName}: ${optionTypeName} }`;
       })
       .join(' | ');
@@ -748,7 +743,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const fieldNames = choice.attributes.map((option) => {
       const optionTypeRef = option.typeCall?.type;
       const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
-      return TsNamespaceEmitter.choiceOptionFieldName(optionTypeName);
+      return choiceOptionFieldName(optionTypeName);
     });
 
     const accessors = fieldNames.map((f) => `(x as Record<string, unknown>).${f}`).join(', ');
@@ -771,13 +766,15 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private buildTsTranspilerContext(data: Data, conditionName: string): ExpressionTranspilerContext {
     const attributeTypes = buildAttributeTypesMap(data);
+    const attrAccessorNames = buildAttrAccessorNamesMap(data);
     return {
       selfName: 'this',
       emitMode: 'ts-method',
       conditionName,
       typeName: data.name,
       attributeTypes,
-      diagnostics: this.ctx.diagnostics
+      diagnostics: this.ctx.diagnostics,
+      attrAccessorNames
     };
   }
 

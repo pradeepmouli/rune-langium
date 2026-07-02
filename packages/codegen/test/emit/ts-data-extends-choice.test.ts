@@ -125,12 +125,18 @@ describe('ts-emitter — Data extends Choice: CLASS surface (generic child class
     expect(output.content).toContain('return new BasketConstituent(json as BasketConstituentShape);');
   });
 
-  it('emits an exactly-one-of validate method for the inherited Choice options', async () => {
+  it('emits an exactly-one-of validate method reading the REAL (camelCase) field keys, not the DSL-text option names', async () => {
     const doc = await parseSource(FIXTURE);
     const model = walkNamespace([doc], 'test.tsDataExtendsChoice');
     const output = emitNamespace(model, {});
     expect(output.content).toContain('validateAsset(): { valid: boolean; errors: string[] } {');
-    expect(output.content).toContain('runeCheckOneOf([this.Cash, this.Commodity])');
+    // `this.cash`/`this.commodity` (camelCase) are the REAL populated
+    // fields (Object.assign(this, data) from a `{ cash: Cash }`-shaped
+    // union member) — NOT `this.Cash`/`this.Commodity` (the bare option
+    // type names, which is what the ERROR MESSAGE still uses for
+    // readability, but is never a real property on the instance).
+    expect(output.content).toContain('runeCheckOneOf([this.cash, this.commodity])');
+    expect(output.content).toContain("errors.push('Asset: exactly one of [Cash, Commodity] must be present");
   });
 
   it("the child's own condition (CashIsAbsent) is still emitted", async () => {
@@ -170,20 +176,24 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
     return mod;
   }
 
+  // Payloads use camelCase keys (`cash`/`commodity`) — matching the REAL
+  // emitted union member keys (`export type Asset = { cash: Cash } | {
+  // commodity: Commodity }`), NOT the bare option type names.
+
   it('bare `new BasketConstituent(data)` (non-generic default) constructs and exposes the T-surface + own attrs', async () => {
     const mod = await loadEmittedModule();
     const BasketConstituent = mod['BasketConstituent'] as new (data: unknown) => Record<string, unknown>;
-    const bc = new BasketConstituent({ Cash: { amount: 5 }, weight: 2 });
+    const bc = new BasketConstituent({ cash: { amount: 5 }, weight: 2 });
     expect(bc['weight']).toBe(2);
-    expect(bc['Cash']).toEqual({ amount: 5 });
+    expect(bc['cash']).toEqual({ amount: 5 });
   });
 
-  it('a narrowed generic instantiation `new BasketConstituent<{ Commodity: ... }>(data)` also constructs correctly', async () => {
+  it('a narrowed generic instantiation `new BasketConstituent<{ commodity: ... }>(data)` also constructs correctly', async () => {
     const mod = await loadEmittedModule();
     const BasketConstituent = mod['BasketConstituent'] as new (data: unknown) => Record<string, unknown>;
-    const bc = new BasketConstituent({ Commodity: { quantity: 9 }, weight: 3 });
+    const bc = new BasketConstituent({ commodity: { quantity: 9 }, weight: 3 });
     expect(bc['weight']).toBe(3);
-    expect(bc['Commodity']).toEqual({ quantity: 9 });
+    expect(bc['commodity']).toEqual({ quantity: 9 });
   });
 
   it('validateAsset() passes for exactly one option present', async () => {
@@ -191,7 +201,9 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
     const BasketConstituent = mod['BasketConstituent'] as new (
       data: unknown
     ) => { validateAsset(): { valid: boolean; errors: string[] } };
-    const bc = new BasketConstituent({ Cash: { amount: 5 }, weight: 2 });
+    // Use commodity here (not cash) so this test is independent of
+    // CashIsAbsent's own semantics — see the dedicated test below.
+    const bc = new BasketConstituent({ commodity: { quantity: 1 }, weight: 2 });
     expect(bc.validateAsset()).toEqual({ valid: true, errors: [] });
   });
 
@@ -200,7 +212,7 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
     const BasketConstituent = mod['BasketConstituent'] as new (
       data: unknown
     ) => { validateAsset(): { valid: boolean; errors: string[] } };
-    const bc = new BasketConstituent({ Cash: { amount: 5 }, Commodity: { quantity: 1 }, weight: 2 });
+    const bc = new BasketConstituent({ cash: { amount: 5 }, commodity: { quantity: 1 }, weight: 2 });
     const result = bc.validateAsset();
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain('Asset');
@@ -215,15 +227,20 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
     expect(bc.validateAsset().valid).toBe(false);
   });
 
-  it("the child's own condition (validateCashIsAbsent) still enforces post-construction", async () => {
+  it("the child's own condition (validateCashIsAbsent) still enforces post-construction — this is the accessor-naming fix's ground-truth check", async () => {
     const mod = await loadEmittedModule();
     const BasketConstituent = mod['BasketConstituent'] as new (
       data: unknown
     ) => { validateCashIsAbsent(): { valid: boolean; errors: string[] } };
-    const withCash = new BasketConstituent({ Cash: { amount: 5 }, weight: 2 });
+    // `cash` present -> CashIsAbsent must reject. This is the exact case
+    // that silently passed as a false positive before the
+    // attrAccessorNames/choiceOptionFieldName fix in
+    // emitChoiceParentValidateMethod (the check read `this.Cash`, always
+    // undefined since Object.assign only ever populates `this.cash`).
+    const withCash = new BasketConstituent({ cash: { amount: 5 }, weight: 2 });
     expect(withCash.validateCashIsAbsent().valid).toBe(false);
 
-    const withoutCash = new BasketConstituent({ Commodity: { quantity: 1 }, weight: 2 });
+    const withoutCash = new BasketConstituent({ commodity: { quantity: 1 }, weight: 2 });
     expect(withoutCash.validateCashIsAbsent().valid).toBe(true);
   });
 
@@ -232,7 +249,7 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
     const BasketConstituent = mod['BasketConstituent'] as {
       from(json: unknown): { weight?: number };
     };
-    const bc = BasketConstituent.from({ Cash: { amount: 1 }, weight: 7 });
+    const bc = BasketConstituent.from({ cash: { amount: 1 }, weight: 7 });
     expect(bc.weight).toBe(7);
   });
 });

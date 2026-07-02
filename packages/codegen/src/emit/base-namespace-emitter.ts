@@ -95,6 +95,63 @@ function contributeChoiceOptionsAsAttributes(choice: Choice, map: Map<string, st
   }
 }
 
+/**
+ * Derive a ChoiceOption's emitted field name from its type name:
+ * camelCase-first-letter (`Cash` -> `cash`). The established W2
+ * option-key naming convention (FIELD-NAMING DECISION, no CDM JSON
+ * data-instance fixture exists to verify a Choice's wire encoding against
+ * — verified empirically, only build-tooling JSON is present in the
+ * corpus) — used identically by ts-emitter's Choice union member keys
+ * (`{ cash: Cash }`) and zod-emitter's Choice arm object keys
+ * (`z.strictObject({ cash: CashSchema })`). Centralized here (was
+ * duplicated privately in both emitters) so `buildAttrAccessorNamesMap`
+ * can share the exact same mapping.
+ */
+export function choiceOptionFieldName(optionTypeName: string): string {
+  return optionTypeName.charAt(0).toLowerCase() + optionTypeName.slice(1);
+}
+
+/**
+ * Build a map of pseudo-attribute name (the bare option TYPE name, e.g.
+ * `Cash` — matching `buildAttributeTypesMap`'s keys AND the literal text a
+ * Rune condition references, e.g. `Cash is absent`) → the REAL emitted
+ * property-access suffix for that same option (`cash`, per
+ * `choiceOptionFieldName`).
+ *
+ * Only Data-extends-Choice pseudo-attributes need this remap — ordinary
+ * Data attributes are emitted verbatim under `attr.name` (their author-
+ * given name IS their emitted field name; see emitAttribute/emitInterface),
+ * so this map only ever contains entries contributed by a Choice ancestor
+ * walk (mirrors `buildAttributeTypesMap`'s own Choice-ancestor branch —
+ * same chain walk, same cycle guard, kept as a SEPARATE function rather
+ * than folded into `buildAttributeTypesMap` itself so ordinary callers that
+ * only need type-checking, not accessor remapping, don't pay for it).
+ *
+ * Consumed via `ExpressionTranspilerContext.attrAccessorNames` (see
+ * expr/transpiler.ts's `attrAccessExpr`) so a transpiled condition like
+ * `Cash is absent` emits `data.cash` (the real field), not `data.Cash`
+ * (undefined at runtime — a silent false-negative).
+ */
+export function buildAttrAccessorNamesMap(data: Data): Map<string, string> {
+  const map = new Map<string, string>();
+  const visited = new Set<string>();
+  let current: Data | undefined = data;
+  while (current && !visited.has(current.name)) {
+    visited.add(current.name);
+    const parent: unknown = current.superType?.ref;
+    if (parent && isChoice(parent)) {
+      for (const option of (parent as Choice).attributes) {
+        const optionTypeName = option.typeCall?.type?.ref?.name ?? option.typeCall?.type?.$refText;
+        if (!optionTypeName) continue;
+        if (!map.has(optionTypeName)) map.set(optionTypeName, choiceOptionFieldName(optionTypeName));
+      }
+      break;
+    }
+    current = parent && isData(parent) ? parent : undefined;
+  }
+  return map;
+}
+
 /** Return the conditions on a Data node that have a non-null expression. */
 export function activeConditions(data: Data): Condition[] {
   return (data.conditions ?? []).filter((c) => c.expression != null);
