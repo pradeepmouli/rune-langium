@@ -31,18 +31,13 @@
  * func conditions (per spec: if `super` appears in a real condition, that's
  * a design escalation, not something to route around silently).
  *
- * KNOWN EXCEPTION (documented, not fixed here — genuinely out of this plan's
- * scope): `BasketConstituent.BasketsOfBaskets` (`Basket is absent`) is
- * excluded from the assertion. `BasketConstituent extends Observable`, and
- * `Observable` is a `Choice` (not a `Data` type) whose options are `Asset`,
- * `Basket`, `Index` — Rune's type system treats extending a Choice as
- * inheriting its option names as pseudo-attributes, which
- * `buildAttributeTypesMap` (walks `Data.superType.ref` — only ever a `Data`)
- * has never modeled. This is a DIFFERENT feature from W2's Choice-as-
- * attribute-type support (the spec's Choice section only covers
- * `isChoice(typeRef) → typeRef.name` for attributes TYPED BY a Choice, not
- * `extends`-ing one) — raised here as a corpus finding, not silently
- * special-cased into looking like a pass.
+ * Data-extends-Choice (`BasketConstituent extends Observable`, where
+ * `Observable` is a `Choice`, not a `Data`): `buildAttributeTypesMap`
+ * (packages/codegen/src/emit/base-namespace-emitter.ts) now walks through a
+ * Choice supertype and contributes its option names as pseudo-attributes —
+ * see the design doc at docs/superpowers/specs/2026-07-02-data-extends-
+ * choice-design.md. `BasketConstituent.BasketsOfBaskets` (`Basket is
+ * absent`) resolves cleanly as a result; no exception needed for it anymore.
  *
  * Per CLAUDE.md: `.resources/`-guarded via `describe.skipIf(!RESOURCES_EXIST)`.
  */
@@ -106,12 +101,13 @@ interface Finding {
 }
 
 /**
- * KNOWN, DOCUMENTED exceptions to the Data-condition DIAGNOSTIC assertion —
- * see the file-header "KNOWN EXCEPTION" note. Each entry names exactly one
- * `TypeName.ConditionName` pair; adding to this list is a deliberate,
- * visible act, not a silent catch-all skip.
+ * KNOWN, DOCUMENTED exceptions to the Data-condition DIAGNOSTIC assertion.
+ * Each entry names exactly one `TypeName.ConditionName` pair; adding to this
+ * list is a deliberate, visible act, not a silent catch-all skip. Empty as
+ * of the Data-extends-Choice fix (see file header) — kept as an explicit,
+ * visible extension point rather than removed outright.
  */
-const KNOWN_DATA_CONDITION_EXCEPTIONS = new Set(['BasketConstituent.BasketsOfBaskets']);
+const KNOWN_DATA_CONDITION_EXCEPTIONS = new Set<string>([]);
 
 interface GateResult {
   fileCount: number;
