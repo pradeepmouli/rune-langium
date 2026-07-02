@@ -30,3 +30,30 @@ describe('renderNode renderExpr hook', () => {
     expect(renderExpr).not.toHaveBeenCalled();
   });
 });
+
+describe('exprText unexpected-throw observability', () => {
+  it('warns and falls back to CST text on an unexpected (non-Unsupported) throw', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const broken = {
+      $type: 'RosettaConditionalExpression',
+      if: null,
+      ifthen: { $type: 'RosettaBooleanLiteral', value: true },
+      full: false,
+      $cstText: 'if x then True',
+    } as never;
+    const sc = { $type: 'ShortcutDeclaration', name: 'a', expression: broken } as never;
+    expect(renderNode(sc, regen)).toBe('alias a:\n    if x then True');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain('RosettaConditionalExpression');
+    warn.mockRestore();
+  });
+
+  it('does NOT warn on an unknown $type (designed CST-fallback signal)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const unknown = { $type: 'SomethingBrandNew', $cstText: 'whatever raw text' } as never;
+    const sc = { $type: 'ShortcutDeclaration', name: 'a', expression: unknown } as never;
+    expect(renderNode(sc, regen)).toBe('alias a:\n    whatever raw text');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
