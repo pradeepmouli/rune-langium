@@ -33,7 +33,9 @@ export type DirtyIndex = { readonly [_dirtyIndexBrand]: true };
 
 /** Internal shape kept separate so callers cannot access `.paths`. */
 type DirtyIndexData = { paths: ReadonlyArray<ReadonlyArray<PathSeg>> };
-function _data(idx: DirtyIndex): DirtyIndexData { return idx as unknown as DirtyIndexData; }
+function _data(idx: DirtyIndex): DirtyIndexData {
+  return idx as unknown as DirtyIndexData;
+}
 
 export function buildDirtyIndex(patches: Patches): DirtyIndex {
   const paths: PathSeg[][] = [];

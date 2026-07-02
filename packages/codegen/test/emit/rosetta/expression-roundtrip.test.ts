@@ -98,7 +98,10 @@ describe('expression round-trip (parse → render → reparse → fixed point)',
       // expression-tree-equivalence.ts's doc: this caught a real bug where a
       // candidate fix passed the text check while silently reparsing an
       // ArithmeticOperation into a SwitchOperation).
-      expect(treesEquivalent(p1.value, p2.value), `reparsed tree must be structurally equivalent to the original: ${src}`).toBe(true);
+      expect(
+        treesEquivalent(p1.value, p2.value),
+        `reparsed tree must be structurally equivalent to the original: ${src}`
+      ).toBe(true);
     });
   }
 });

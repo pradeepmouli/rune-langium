@@ -50,7 +50,10 @@ const CORPUS: Case[] = [
   { rule: 'RosettaSynonym', src: '[synonym FpML value "t" set when "c" is absent]' },
   { rule: 'RosettaSynonym', src: '[synonym FpML value "t" set when "c" <> Foo.Bar -> V]' },
   // suffix combos.
-  { rule: 'RosettaSynonym', src: '[synonym FpML value "n" dateFormat "yyyy-MM-dd" pattern "a" "b" removeHtml mapper "someMapper"]' },
+  {
+    rule: 'RosettaSynonym',
+    src: '[synonym FpML value "n" dateFormat "yyyy-MM-dd" pattern "a" "b" removeHtml mapper "someMapper"]'
+  },
   // class synonym.
   { rule: 'RosettaClassSynonym', src: '[synonym FpML value "n" tag 2 meta "m"]' },
   // metaValue is a RosettaMetaSynonymValue — grammar allows maps (unlike the value form).

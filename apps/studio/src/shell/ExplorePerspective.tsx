@@ -1272,7 +1272,15 @@ export function ExplorePerspective() {
   // Previously this subscription lived inside RuneTypeGraph, which is only
   // mounted when the Graph pane is active; Structure-pane edits never reached
   // the source pane (2026-05-21, fix/inspector-source-sync).
-  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch, storePendingEditPatches, originalSourceByNamespace, storePendingInversePatches);
+  useModelSourceSync(
+    storeNodes,
+    storeEdges,
+    handleModelChanged,
+    storeParseEpoch,
+    storePendingEditPatches,
+    originalSourceByNamespace,
+    storePendingInversePatches
+  );
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics } = useDiagnosticsStore();
@@ -1429,8 +1437,10 @@ export function ExplorePerspective() {
       removeEnumValue: (nodeId, name) => s().removeEnumValue(nodeId, name),
       updateEnumValue: (nodeId, oldN, newN, display) => s().updateEnumValue(nodeId, oldN, newN, display),
       reorderEnumValue: (nodeId, from, to) => s().reorderEnumValue(nodeId, from, to),
-      addEnumValueSynonym: (nodeId, valueIndex, source, value) => s().addEnumValueSynonym(nodeId, valueIndex, source, value),
-      removeEnumValueSynonym: (nodeId, valueIndex, synIndex) => s().removeEnumValueSynonym(nodeId, valueIndex, synIndex),
+      addEnumValueSynonym: (nodeId, valueIndex, source, value) =>
+        s().addEnumValueSynonym(nodeId, valueIndex, source, value),
+      removeEnumValueSynonym: (nodeId, valueIndex, synIndex) =>
+        s().removeEnumValueSynonym(nodeId, valueIndex, synIndex),
       setEnumParent: (nodeId, parentId) => s().setEnumParent(nodeId, parentId),
       addChoiceOption: (nodeId, type) => s().addChoiceOption(nodeId, type),
       removeChoiceOption: (nodeId, type) => s().removeChoiceOption(nodeId, type),

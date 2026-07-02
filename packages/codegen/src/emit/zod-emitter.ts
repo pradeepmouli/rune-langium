@@ -663,7 +663,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     if (attrLines.length === 0) {
       return `runeExtendChoice(${choiceSchema}, {})`;
     }
-    const reindented = attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
+    const reindented =
+      attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
     return `runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`;
   }
 

@@ -6,16 +6,33 @@ const regen: RenderChild = (c) => renderNode(c, regen) ?? '';
 
 describe('renderNode — RosettaTypeAlias', () => {
   it('renders typeAlias name: wrappedType', () => {
-    const ta = { $type: 'RosettaTypeAlias', name: 'MyNum', definition: undefined, parameters: [], conditions: [], typeCall: { type: { $refText: 'number' } } } as never;
+    const ta = {
+      $type: 'RosettaTypeAlias',
+      name: 'MyNum',
+      definition: undefined,
+      parameters: [],
+      conditions: [],
+      typeCall: { type: { $refText: 'number' } }
+    } as never;
     expect(renderNode(ta, regen)).toBe('typeAlias MyNum: number');
   });
   it('renders a definition line', () => {
-    const ta = { $type: 'RosettaTypeAlias', name: 'X', definition: 'an alias', parameters: [], conditions: [], typeCall: { type: { $refText: 'string' } } } as never;
+    const ta = {
+      $type: 'RosettaTypeAlias',
+      name: 'X',
+      definition: 'an alias',
+      parameters: [],
+      conditions: [],
+      typeCall: { type: { $refText: 'string' } }
+    } as never;
     expect(renderNode(ta, regen)).toBe('typeAlias X:\n  <"an alias">\n  string');
   });
   it('renders generic type parameters before the colon', () => {
     const ta = {
-      $type: 'RosettaTypeAlias', name: 'Bounded', definition: undefined, conditions: [],
+      $type: 'RosettaTypeAlias',
+      name: 'Bounded',
+      definition: undefined,
+      conditions: [],
       parameters: [
         { $type: 'TypeParameter', name: 'min', typeCall: { type: { $refText: 'int' } } },
         { $type: 'TypeParameter', name: 'max', typeCall: { type: { $refText: 'int' } } }
@@ -31,7 +48,11 @@ describe('renderNode — RosettaTypeAlias', () => {
       return n.$type === 'TypeCallArgument' ? (n.$cstText ?? '') : (renderNode(c, slice) ?? '');
     };
     const ta = {
-      $type: 'RosettaTypeAlias', name: 'Px', definition: undefined, parameters: [], conditions: [],
+      $type: 'RosettaTypeAlias',
+      name: 'Px',
+      definition: undefined,
+      parameters: [],
+      conditions: [],
       typeCall: { type: { $refText: 'number' }, arguments: [{ $type: 'TypeCallArgument', $cstText: 'digits: 18' }] }
     } as never;
     expect(renderNode(ta, slice)).toBe('typeAlias Px: number(digits: 18)');

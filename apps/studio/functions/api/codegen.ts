@@ -269,7 +269,12 @@ async function loadAllDocuments(
           return {
             docs: [],
             curatedError: new Response(
-              JSON.stringify({ ok: false, error: 'curated_manifest_missing', bundleId: bundle.id, version: bundle.version }),
+              JSON.stringify({
+                ok: false,
+                error: 'curated_manifest_missing',
+                bundleId: bundle.id,
+                version: bundle.version
+              }),
               { status: 502, headers: { 'Content-Type': 'application/json' } }
             )
           };

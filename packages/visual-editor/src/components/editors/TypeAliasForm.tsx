@@ -157,8 +157,7 @@ function TypeAliasForm({
       // `nsB.Price`. Mirrors the cross-namespace inheritance qualify in
       // useModelSourceSync (`${targetNs}.${bare}`). A local/bare type keeps its
       // unqualified name.
-      const refText =
-        opt?.namespace && opt.namespace !== nodeMeta.namespace ? `${opt.namespace}.${label}` : label;
+      const refText = opt?.namespace && opt.namespace !== nodeMeta.namespace ? `${opt.namespace}.${label}` : label;
       // Update the form's typeCall.type — RHF tolerates the looseObject
       // extras at the nested `type` key.
       form.setValue('typeCall.type' as never, { $refText: refText } as never, { shouldDirty: true });

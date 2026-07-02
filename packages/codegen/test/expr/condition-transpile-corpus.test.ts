@@ -47,7 +47,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { AstUtils } from 'langium';
-import { parseWorkspace, isData, isRosettaModel, type Condition, type Data, type RosettaModel } from '@rune-langium/core';
+import {
+  parseWorkspace,
+  isData,
+  isRosettaModel,
+  type Condition,
+  type Data,
+  type RosettaModel
+} from '@rune-langium/core';
 import { transpileCondition, type ExpressionTranspilerContext } from '../../src/expr/transpiler.js';
 import { buildAttributeTypesMap } from '../../src/emit/base-namespace-emitter.js';
 import type { GeneratorDiagnostic } from '../../src/types.js';
@@ -236,73 +243,67 @@ async function sweepConditions(): Promise<GateResult> {
 }
 
 describe.skipIf(!RESOURCES_EXIST)('condition transpile corpus gate (W1 parity)', () => {
-  it(
-    'transpiles every Data-attached Condition.expression in .resources/ with zero DIAGNOSTIC fallbacks',
-    async () => {
-      const {
-        fileCount,
-        skippedCount,
-        conditionCount,
-        dataConditionCount,
-        funcConditionCount,
-        dataDiagnosticFindings,
-        funcDiagnosticFindings,
-        knownExceptionFindings,
-        superFindings
-      } = await sweepConditions();
+  it('transpiles every Data-attached Condition.expression in .resources/ with zero DIAGNOSTIC fallbacks', async () => {
+    const {
+      fileCount,
+      skippedCount,
+      conditionCount,
+      dataConditionCount,
+      funcConditionCount,
+      dataDiagnosticFindings,
+      funcDiagnosticFindings,
+      knownExceptionFindings,
+      superFindings
+    } = await sweepConditions();
 
-      expect(fileCount).toBeGreaterThan(100);
-      expect(conditionCount).toBeGreaterThan(0);
+    expect(fileCount).toBeGreaterThan(100);
+    expect(conditionCount).toBeGreaterThan(0);
 
+    // eslint-disable-next-line no-console
+    console.log(
+      `[condition-transpile-corpus] transpiled ${conditionCount} condition expressions from ${fileCount} files ` +
+        `(${skippedCount} files skipped — parse errors): ${dataConditionCount} Data-attached ` +
+        `(${dataDiagnosticFindings.length} DIAGNOSTIC finding(s), gated; ${knownExceptionFindings.length} known ` +
+        `documented exception(s), see file header), ${funcConditionCount} func-attached ` +
+        `(${funcDiagnosticFindings.length} DIAGNOSTIC finding(s), reported/deferred — see file header); ` +
+        `${superFindings.length} super() finding(s) total`
+    );
+
+    if (superFindings.length > 0) {
+      const lines = [
+        `\n${superFindings.length} super() finding(s) in real corpus conditions — this is a design`,
+        `escalation per spec (RosettaSuperCall has no referent in a validation-predicate context;`,
+        `do not guess semantics here):`
+      ];
+      for (const f of superFindings.slice(0, 20)) {
+        lines.push(`  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}`);
+      }
+      expect.fail(lines.join('\n'));
+    }
+
+    if (dataDiagnosticFindings.length > 0) {
+      const lines = [
+        `\n${dataDiagnosticFindings.length} DIAGNOSTIC finding(s) on Data-attached conditions ` +
+          `(unhandled expression $type in the corpus — this IS the W1 emission surface):`
+      ];
+      for (const f of dataDiagnosticFindings.slice(0, 30)) {
+        lines.push(`  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}\n    -> ${f.diagnosticText}`);
+      }
+      expect.fail(lines.join('\n'));
+    }
+
+    // func-attached findings are NOT asserted (see file header) but are
+    // still surfaced in the console log above for visibility; do not
+    // silently drop them.
+    if (funcDiagnosticFindings.length > 0) {
       // eslint-disable-next-line no-console
       console.log(
-        `[condition-transpile-corpus] transpiled ${conditionCount} condition expressions from ${fileCount} files ` +
-          `(${skippedCount} files skipped — parse errors): ${dataConditionCount} Data-attached ` +
-          `(${dataDiagnosticFindings.length} DIAGNOSTIC finding(s), gated; ${knownExceptionFindings.length} known ` +
-          `documented exception(s), see file header), ${funcConditionCount} func-attached ` +
-          `(${funcDiagnosticFindings.length} DIAGNOSTIC finding(s), reported/deferred — see file header); ` +
-          `${superFindings.length} super() finding(s) total`
+        `[condition-transpile-corpus] func-attached DIAGNOSTIC findings (deferred, not gated):\n` +
+          funcDiagnosticFindings
+            .slice(0, 30)
+            .map((f) => `  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}\n    -> ${f.diagnosticText}`)
+            .join('\n')
       );
-
-      if (superFindings.length > 0) {
-        const lines = [
-          `\n${superFindings.length} super() finding(s) in real corpus conditions — this is a design`,
-          `escalation per spec (RosettaSuperCall has no referent in a validation-predicate context;`,
-          `do not guess semantics here):`
-        ];
-        for (const f of superFindings.slice(0, 20)) {
-          lines.push(`  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}`);
-        }
-        expect.fail(lines.join('\n'));
-      }
-
-      if (dataDiagnosticFindings.length > 0) {
-        const lines = [
-          `\n${dataDiagnosticFindings.length} DIAGNOSTIC finding(s) on Data-attached conditions ` +
-            `(unhandled expression $type in the corpus — this IS the W1 emission surface):`
-        ];
-        for (const f of dataDiagnosticFindings.slice(0, 30)) {
-          lines.push(
-            `  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}\n    -> ${f.diagnosticText}`
-          );
-        }
-        expect.fail(lines.join('\n'));
-      }
-
-      // func-attached findings are NOT asserted (see file header) but are
-      // still surfaced in the console log above for visibility; do not
-      // silently drop them.
-      if (funcDiagnosticFindings.length > 0) {
-        // eslint-disable-next-line no-console
-        console.log(
-          `[condition-transpile-corpus] func-attached DIAGNOSTIC findings (deferred, not gated):\n` +
-            funcDiagnosticFindings
-              .slice(0, 30)
-              .map((f) => `  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}\n    -> ${f.diagnosticText}`)
-              .join('\n')
-        );
-      }
-    },
-    120_000
-  );
+    }
+  }, 120_000);
 });

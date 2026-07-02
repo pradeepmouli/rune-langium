@@ -6,19 +6,38 @@ const regen: RenderChild = (c) => renderNode(c, regen) ?? '';
 
 describe('renderNode — annotations & synonyms', () => {
   it('renders an annotation ref (annotation + attribute)', () => {
-    const a = { $type: 'AnnotationRef', annotation: { $refText: 'metadata' }, attribute: { $refText: 'scheme' }, qualifiers: [] } as never;
+    const a = {
+      $type: 'AnnotationRef',
+      annotation: { $refText: 'metadata' },
+      attribute: { $refText: 'scheme' },
+      qualifiers: []
+    } as never;
     expect(renderNode(a, regen)).toBe('[metadata scheme]');
   });
   it('renders an annotation ref (annotation only)', () => {
-    const a = { $type: 'AnnotationRef', annotation: { $refText: 'rootType' }, attribute: undefined, qualifiers: [] } as never;
+    const a = {
+      $type: 'AnnotationRef',
+      annotation: { $refText: 'rootType' },
+      attribute: undefined,
+      qualifiers: []
+    } as never;
     expect(renderNode(a, regen)).toBe('[rootType]');
   });
   it('renders a class synonym (the inspector-produced source shape)', () => {
-    const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'FpML' }], value: undefined, metaValue: undefined } as never;
+    const s = {
+      $type: 'RosettaClassSynonym',
+      sources: [{ $refText: 'FpML' }],
+      value: undefined,
+      metaValue: undefined
+    } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML]');
   });
   it('renders a class synonym with an optional value (escaped)', () => {
-    const s = { $type: 'RosettaClassSynonym', sources: [{ $refText: 'FpML' }], value: { name: 'a "quoted" v' } } as never;
+    const s = {
+      $type: 'RosettaClassSynonym',
+      sources: [{ $refText: 'FpML' }],
+      value: { name: 'a "quoted" v' }
+    } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "a \\"quoted\\" v"]');
   });
   it('renders a cross-namespace qualified class synonym verbatim (plan L15 serialize half)', () => {
@@ -28,7 +47,11 @@ describe('renderNode — annotations & synonyms', () => {
     expect(renderNode(s, regen)).toBe('[synonym other.FIX]');
   });
   it('renders an enum-level RosettaSynonym (source + value body)', () => {
-    const s = { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } } as never;
+    const s = {
+      $type: 'RosettaSynonym',
+      sources: [{ $refText: 'FpML' }],
+      body: { values: [{ name: 'tradeDate' }] }
+    } as never;
     expect(renderNode(s, regen)).toBe('[synonym FpML value "tradeDate"]');
   });
   it('returns null for a non-value-body RosettaSynonym (hint/meta/mappingLogic → CST fallback)', () => {
@@ -44,7 +67,9 @@ describe('renderNode — annotations & synonyms', () => {
   });
   it('quotes and escapes annotation qualifier name/value', () => {
     const a = {
-      $type: 'AnnotationRef', annotation: { $refText: 'metadata' }, attribute: { $refText: 'scheme' },
+      $type: 'AnnotationRef',
+      annotation: { $refText: 'metadata' },
+      attribute: { $refText: 'scheme' },
       qualifiers: [{ qualName: 'k"1', qualValue: 'v\\2' }]
     } as never;
     expect(renderNode(a, regen)).toBe('[metadata scheme "k\\"1"="v\\\\2"]');

@@ -175,7 +175,11 @@ export function MetadataSection({
     // RosettaEnumeration → RosettaSynonym shape (body.values, not value.name).
     const entry: SynonymEntry = isEnumHost
       ? { $type: 'RosettaSynonym', sources: [{ $refText: refText }], body: { values: [{ name: value! }] } }
-      : { $type: 'RosettaClassSynonym', sources: [{ $refText: refText }], ...(value ? { value: { name: value } } : {}) };
+      : {
+          $type: 'RosettaClassSynonym',
+          sources: [{ $refText: refText }],
+          ...(value ? { value: { name: value } } : {})
+        };
     appendSynonym(entry as any);
 
     // Commit to graph

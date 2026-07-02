@@ -25,7 +25,11 @@ import { createRuneDslServices } from '@rune-langium/core';
  * must pick the matching rule NAME (not just the shared `$type`) to reparse
  * correctly — see synonym-corpus-sweep.test.ts's corpus finding.
  */
-export type SynonymRuleName = 'RosettaSynonym' | 'RosettaClassSynonym' | 'RosettaEnumSynonym' | 'RosettaExternalEnumSynonym';
+export type SynonymRuleName =
+  | 'RosettaSynonym'
+  | 'RosettaClassSynonym'
+  | 'RosettaEnumSynonym'
+  | 'RosettaExternalEnumSynonym';
 
 export interface SynonymParseResult<T = unknown> {
   value: T;

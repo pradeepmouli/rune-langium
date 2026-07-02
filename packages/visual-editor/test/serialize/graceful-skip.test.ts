@@ -90,7 +90,9 @@ describe('graceful skip — unemittable new nodes', () => {
     // try/catch) against an UNEXPECTED propagation that Fix #1 doesn't intercept.
     const poisonData: Record<string, unknown> = { $type: 'Condition' };
     Object.defineProperty(poisonData, '$cstRange', {
-      get() { throw new Error('deliberate serializer error for backstop test'); },
+      get() {
+        throw new Error('deliberate serializer error for backstop test');
+      },
       enumerable: true
     });
     const poisonNode = makeNode(poisonData, 'bad.Poison', 'bad');
@@ -98,9 +100,7 @@ describe('graceful skip — unemittable new nodes', () => {
     // A normal parseable node in the 'test' namespace.
     const { value } = await parse(SRC);
     const goodRaw = (value as unknown as { elements: unknown[] }).elements[0];
-    const goodData = parsedAdapter.dehydrate(
-      goodRaw as Parameters<typeof parsedAdapter.dehydrate>[0]
-    );
+    const goodData = parsedAdapter.dehydrate(goodRaw as Parameters<typeof parsedAdapter.dehydrate>[0]);
     const goodNode = makeNode(goodData, 'test.Foo', 'test');
 
     let result: Map<string, string> = new Map();

@@ -29,9 +29,7 @@ import type { SourceRefOption } from '../../src/types.js';
 const OPTIONS: SourceRefOption[] = [{ value: 'ns.FpML', label: 'FpML', namespace: 'ns' }];
 
 // Cross-namespace option — source lives in namespace 'other'
-const CROSS_NS_OPTIONS: SourceRefOption[] = [
-  { value: 'other.FIX', label: 'FIX', namespace: 'other' }
-];
+const CROSS_NS_OPTIONS: SourceRefOption[] = [{ value: 'other.FIX', label: 'FIX', namespace: 'other' }];
 
 // Minimal EditorFormActions stub — only properties used by MetadataSection
 const MINIMAL_ACTIONS = {
@@ -246,7 +244,9 @@ describe('MetadataSection — synonym source control', () => {
     // After reload the store sends body.values (not value.name) for enum-host synonyms.
     renderSection({
       $type: 'RosettaEnumeration',
-      synonyms: [{ $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } }]
+      synonyms: [
+        { $type: 'RosettaSynonym', sources: [{ $refText: 'FpML' }], body: { values: [{ name: 'tradeDate' }] } }
+      ]
     });
     // Chip must show "FpML — tradeDate" by reading body.values[0].name.
     expect(screen.getByText('FpML — tradeDate')).toBeInTheDocument();

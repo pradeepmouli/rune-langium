@@ -82,7 +82,11 @@ function synonymRuleFor(node: { $type?: string; $container?: { $type?: string } 
  * in principle recur under a different rule (defensive; synonym bodies are
  * lexically distinguishable in practice).
  */
-async function extractCorpusSynonyms(): Promise<{ snippets: Map<string, SynonymSnippet>; fileCount: number; skippedCount: number }> {
+async function extractCorpusSynonyms(): Promise<{
+  snippets: Map<string, SynonymSnippet>;
+  fileCount: number;
+  skippedCount: number;
+}> {
   const { AstUtils } = await import('langium');
 
   const files = collectRosettaFiles(RESOURCES_DIR);
@@ -111,107 +115,150 @@ async function extractCorpusSynonyms(): Promise<{ snippets: Map<string, SynonymS
 }
 
 describe.skipIf(!RESOURCES_EXIST)('synonym corpus sweep (P5: real-corpus fixed-point)', () => {
-  it(
-    'sweeps every RosettaSynonym/RosettaClassSynonym/RosettaEnumSynonym in .resources/ for the fixed-point property',
-    async () => {
-      const start = Date.now();
-      const { snippets, fileCount, skippedCount } = await extractCorpusSynonyms();
-      const extractMs = Date.now() - start;
+  it('sweeps every RosettaSynonym/RosettaClassSynonym/RosettaEnumSynonym in .resources/ for the fixed-point property', async () => {
+    const start = Date.now();
+    const { snippets, fileCount, skippedCount } = await extractCorpusSynonyms();
+    const extractMs = Date.now() - start;
 
-      expect(fileCount).toBeGreaterThan(100);
-      expect(snippets.size).toBeGreaterThan(0);
+    expect(fileCount).toBeGreaterThan(100);
+    expect(snippets.size).toBeGreaterThan(0);
 
-      const cstFallbackFindings: Array<{ rule: string; snippet: string }> = [];
-      const parseFindings: Array<{ rule: string; snippet: string; errors: unknown }> = [];
-      const reparseFindings: Array<{ rule: string; snippet: string; r1: string; errors: unknown }> = [];
-      const fixedPointFindings: Array<{ rule: string; snippet: string; r1: string; r2: string }> = [];
-      const treeShapeFindings: Array<{ rule: string; snippet: string; r1: string }> = [];
-      let checked = 0;
+    const cstFallbackFindings: Array<{ rule: string; snippet: string }> = [];
+    const parseFindings: Array<{ rule: string; snippet: string; errors: unknown }> = [];
+    const reparseFindings: Array<{ rule: string; snippet: string; r1: string; errors: unknown }> = [];
+    const fixedPointFindings: Array<{ rule: string; snippet: string; r1: string; r2: string }> = [];
+    const treeShapeFindings: Array<{ rule: string; snippet: string; r1: string }> = [];
+    let checked = 0;
 
-      for (const { rule, text: snippet } of snippets.values()) {
-        const p1 = parseSynonymRule(snippet, rule);
-        if (p1.hasErrors) {
-          // Parsed fine in-document but not as the bare rule -- a real
-          // parseSynonymRule finding, not a renderer bug. Collect & continue.
-          parseFindings.push({ rule, snippet, errors: p1.parserErrors });
-          continue;
-        }
-        checked++;
+    for (const { rule, text: snippet } of snippets.values()) {
+      const p1 = parseSynonymRule(snippet, rule);
+      if (p1.hasErrors) {
+        // Parsed fine in-document but not as the bare rule -- a real
+        // parseSynonymRule finding, not a renderer bug. Collect & continue.
+        parseFindings.push({ rule, snippet, errors: p1.parserErrors });
+        continue;
+      }
+      checked++;
 
-        const r1 = renderNode(p1.value as never, regen);
-        if (r1 === null) {
-          // The renderer fell back to CST for a real-corpus shape -- a P5
-          // coverage gap (the whole point of this sweep).
-          cstFallbackFindings.push({ rule, snippet });
-          continue;
-        }
-
-        const p2 = parseSynonymRule(r1, rule);
-        if (p2.hasErrors) {
-          reparseFindings.push({ rule, snippet, r1, errors: p2.parserErrors });
-          continue;
-        }
-
-        const r2 = renderNode(p2.value as never, regen);
-        if (r2 !== r1) {
-          fixedPointFindings.push({ rule, snippet, r1, r2: r2 ?? '<null>' });
-          continue;
-        }
-
-        if (!treesEquivalent(p1.value, p2.value)) {
-          treeShapeFindings.push({ rule, snippet, r1 });
-        }
+      const r1 = renderNode(p1.value as never, regen);
+      if (r1 === null) {
+        // The renderer fell back to CST for a real-corpus shape -- a P5
+        // coverage gap (the whole point of this sweep).
+        cstFallbackFindings.push({ rule, snippet });
+        continue;
       }
 
-      const totalMs = Date.now() - start;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[synonym-corpus-sweep] swept ' + snippets.size + ' unique synonyms from ' + fileCount + ' files ' +
-          '(' + skippedCount + ' files skipped - parse errors) - ' + checked + ' snippets checked for the fixed-point ' +
-          'and tree-shape properties in ' + totalMs + 'ms (extraction: ' + extractMs + 'ms)'
-      );
-
-      if (
-        cstFallbackFindings.length > 0 ||
-        parseFindings.length > 0 ||
-        reparseFindings.length > 0 ||
-        fixedPointFindings.length > 0 ||
-        treeShapeFindings.length > 0
-      ) {
-        const lines: string[] = [];
-        if (cstFallbackFindings.length > 0) {
-          lines.push('\n' + cstFallbackFindings.length + ' CST-fallback finding(s) (renderNode returned null for a real-corpus shape):');
-          for (const f of cstFallbackFindings.slice(0, 20)) {
-            lines.push('  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet));
-          }
-        }
-        if (parseFindings.length > 0) {
-          lines.push('\n' + parseFindings.length + ' parse finding(s) (parsed in-document, not as a bare rule):');
-          for (const f of parseFindings.slice(0, 20)) {
-            lines.push('  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet) + '\n  errors: ' + JSON.stringify(f.errors));
-          }
-        }
-        if (reparseFindings.length > 0) {
-          lines.push('\n' + reparseFindings.length + ' reparse finding(s) (rendered text failed to reparse):');
-          for (const f of reparseFindings.slice(0, 20)) {
-            lines.push('  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet) + '\n  r1: ' + JSON.stringify(f.r1) + '\n  errors: ' + JSON.stringify(f.errors));
-          }
-        }
-        if (fixedPointFindings.length > 0) {
-          lines.push('\n' + fixedPointFindings.length + ' fixed-point finding(s) (r2 !== r1):');
-          for (const f of fixedPointFindings.slice(0, 20)) {
-            lines.push('  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet) + '\n  r1: ' + JSON.stringify(f.r1) + '\n  r2: ' + JSON.stringify(f.r2));
-          }
-        }
-        if (treeShapeFindings.length > 0) {
-          lines.push('\n' + treeShapeFindings.length + ' tree-shape finding(s) (r1 is a fixed point but reparses to a DIFFERENT tree shape):');
-          for (const f of treeShapeFindings.slice(0, 20)) {
-            lines.push('  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet) + '\n  r1: ' + JSON.stringify(f.r1));
-          }
-        }
-        expect.fail(lines.join('\n'));
+      const p2 = parseSynonymRule(r1, rule);
+      if (p2.hasErrors) {
+        reparseFindings.push({ rule, snippet, r1, errors: p2.parserErrors });
+        continue;
       }
-    },
-    120_000
-  );
+
+      const r2 = renderNode(p2.value as never, regen);
+      if (r2 !== r1) {
+        fixedPointFindings.push({ rule, snippet, r1, r2: r2 ?? '<null>' });
+        continue;
+      }
+
+      if (!treesEquivalent(p1.value, p2.value)) {
+        treeShapeFindings.push({ rule, snippet, r1 });
+      }
+    }
+
+    const totalMs = Date.now() - start;
+    // eslint-disable-next-line no-console
+    console.log(
+      '[synonym-corpus-sweep] swept ' +
+        snippets.size +
+        ' unique synonyms from ' +
+        fileCount +
+        ' files ' +
+        '(' +
+        skippedCount +
+        ' files skipped - parse errors) - ' +
+        checked +
+        ' snippets checked for the fixed-point ' +
+        'and tree-shape properties in ' +
+        totalMs +
+        'ms (extraction: ' +
+        extractMs +
+        'ms)'
+    );
+
+    if (
+      cstFallbackFindings.length > 0 ||
+      parseFindings.length > 0 ||
+      reparseFindings.length > 0 ||
+      fixedPointFindings.length > 0 ||
+      treeShapeFindings.length > 0
+    ) {
+      const lines: string[] = [];
+      if (cstFallbackFindings.length > 0) {
+        lines.push(
+          '\n' +
+            cstFallbackFindings.length +
+            ' CST-fallback finding(s) (renderNode returned null for a real-corpus shape):'
+        );
+        for (const f of cstFallbackFindings.slice(0, 20)) {
+          lines.push('  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet));
+        }
+      }
+      if (parseFindings.length > 0) {
+        lines.push('\n' + parseFindings.length + ' parse finding(s) (parsed in-document, not as a bare rule):');
+        for (const f of parseFindings.slice(0, 20)) {
+          lines.push(
+            '  rule: ' +
+              f.rule +
+              '\n  snippet: ' +
+              JSON.stringify(f.snippet) +
+              '\n  errors: ' +
+              JSON.stringify(f.errors)
+          );
+        }
+      }
+      if (reparseFindings.length > 0) {
+        lines.push('\n' + reparseFindings.length + ' reparse finding(s) (rendered text failed to reparse):');
+        for (const f of reparseFindings.slice(0, 20)) {
+          lines.push(
+            '  rule: ' +
+              f.rule +
+              '\n  snippet: ' +
+              JSON.stringify(f.snippet) +
+              '\n  r1: ' +
+              JSON.stringify(f.r1) +
+              '\n  errors: ' +
+              JSON.stringify(f.errors)
+          );
+        }
+      }
+      if (fixedPointFindings.length > 0) {
+        lines.push('\n' + fixedPointFindings.length + ' fixed-point finding(s) (r2 !== r1):');
+        for (const f of fixedPointFindings.slice(0, 20)) {
+          lines.push(
+            '  rule: ' +
+              f.rule +
+              '\n  snippet: ' +
+              JSON.stringify(f.snippet) +
+              '\n  r1: ' +
+              JSON.stringify(f.r1) +
+              '\n  r2: ' +
+              JSON.stringify(f.r2)
+          );
+        }
+      }
+      if (treeShapeFindings.length > 0) {
+        lines.push(
+          '\n' +
+            treeShapeFindings.length +
+            ' tree-shape finding(s) (r1 is a fixed point but reparses to a DIFFERENT tree shape):'
+        );
+        for (const f of treeShapeFindings.slice(0, 20)) {
+          lines.push(
+            '  rule: ' + f.rule + '\n  snippet: ' + JSON.stringify(f.snippet) + '\n  r1: ' + JSON.stringify(f.r1)
+          );
+        }
+      }
+      expect.fail(lines.join('\n'));
+    }
+  }, 120_000);
 });

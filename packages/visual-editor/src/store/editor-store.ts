@@ -851,7 +851,9 @@ function mutateGraph(
   extra?: GraphMutationExtra
 ): void {
   const { nodesById, edgesById, pendingEditPatches, pendingInversePatches } = get();
-  const [next, patches, inversePatches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
+  const [next, patches, inversePatches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, {
+    enablePatches: true
+  });
   if (patches.length === 0 && !extra) return; // no-op recipe — leave state untouched
   set({
     nodesById: next.nodes,
@@ -859,7 +861,8 @@ function mutateGraph(
     nodes: nodesFromMap(next.nodes), // re-derive array caches from updated Maps
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
-    pendingInversePatches: inversePatches.length > 0 ? [...pendingInversePatches, ...inversePatches] : pendingInversePatches,
+    pendingInversePatches:
+      inversePatches.length > 0 ? [...pendingInversePatches, ...inversePatches] : pendingInversePatches,
     ...extra
   });
 }
@@ -1735,7 +1738,11 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const ev = d.enumValues?.[valueIndex];
               if (!ev) return;
               if (!Array.isArray(ev.enumSynonyms)) ev.enumSynonyms = [];
-              ev.enumSynonyms.push({ $type: 'RosettaEnumSynonym', sources: [{ $refText: source }], synonymValue: value });
+              ev.enumSynonyms.push({
+                $type: 'RosettaEnumSynonym',
+                sources: [{ $refText: source }],
+                synonymValue: value
+              });
             });
           },
 

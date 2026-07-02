@@ -21,7 +21,10 @@ import { walkNamespace } from '../src/emit/namespace-walker.js';
 
 async function parseSource(source: string) {
   const { RuneDsl } = createRuneDslServices();
-  const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(source, URI.parse('inmemory:///model.rosetta'));
+  const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+    source,
+    URI.parse('inmemory:///model.rosetta')
+  );
   await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
   const model = doc.parseResult?.value;
   if (!model || !isRosettaModel(model)) {

@@ -29,11 +29,7 @@ import {
   collectNamespaceDependencies
 } from '@rune-langium/core';
 import { URI, type LangiumDocument, type LangiumSharedCoreServices, type LangiumCoreServices } from 'langium';
-import {
-  fetchCuratedManifest,
-  fetchCuratedNamespace,
-  CuratedBundleUnavailableError
-} from '../lib/curated-fetch.js';
+import { fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import { closeNamespacesFromManifest, buildDependencyGraph, expandWildcard } from '../lib/curated-closure.js';
 import { readSerializedModelMeta } from '../lib/serialized-model-meta.js';
 
@@ -517,4 +513,3 @@ export function collectUserSeedNamespaces(userDocs: ReadonlyArray<{ parseResult?
   }
   return seeds;
 }
-

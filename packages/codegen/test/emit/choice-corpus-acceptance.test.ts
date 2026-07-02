@@ -70,7 +70,10 @@ async function parseRelevantCdmFiles() {
   for (const fileName of RELEVANT_FILES) {
     const path = resolve(CDM_DIR, fileName);
     const content = readFileSync(path, 'utf-8');
-    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(content, URI.parse(pathToFileURL(path).toString()));
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      content,
+      URI.parse(pathToFileURL(path).toString())
+    );
     docs.push(doc);
   }
   await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
@@ -126,9 +129,10 @@ describe.skipIf(!RESOURCES_EXIST)('W2 acceptance — Choice-typed attributes nev
         const errors = output.diagnostics.filter(
           (d) => d.severity === 'error' && !KNOWN_DIAGNOSTIC_EXCEPTIONS.some((known) => d.message.includes(known))
         );
-        expect(errors, `${target}: ${output.relativePath} has error diagnostics: ${JSON.stringify(errors)}`).toHaveLength(
-          0
-        );
+        expect(
+          errors,
+          `${target}: ${output.relativePath} has error diagnostics: ${JSON.stringify(errors)}`
+        ).toHaveLength(0);
       }
     }
   });

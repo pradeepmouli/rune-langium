@@ -290,7 +290,11 @@ export interface FormActionsKindMap {
 }
 
 /** Intersection of all kind-specific actions (every method available). */
-export type AllEditorFormActions = DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions & TypeAliasFormActions;
+export type AllEditorFormActions = DataFormActions &
+  EnumFormActions &
+  ChoiceFormActions &
+  FuncFormActions &
+  TypeAliasFormActions;
 
 /**
  * Kind-aware editor form actions.

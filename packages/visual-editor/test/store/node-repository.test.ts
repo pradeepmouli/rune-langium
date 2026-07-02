@@ -48,14 +48,14 @@ describe('selectNodeRepository — byNamespace / namespaces', () => {
       type: 'data',
       position: { x: 0, y: 0 },
       data: { $type, name, attributes: [] } as unknown as TypeGraphNode['data'],
-      meta: { namespace: ns, errors: [], hasExternalRefs: false },
+      meta: { namespace: ns, errors: [], hasExternalRefs: false }
     }) as TypeGraphNode;
 
   it('byNamespace returns the nodes in that namespace (meta.namespace axis)', () => {
     const map = new Map([
       ['a.Foo', nodeNs('a.Foo', 'Data', 'Foo', 'a')],
       ['a.Bar', nodeNs('a.Bar', 'Data', 'Bar', 'a')],
-      ['b.Baz', nodeNs('b.Baz', 'Data', 'Baz', 'b')],
+      ['b.Baz', nodeNs('b.Baz', 'Data', 'Baz', 'b')]
     ]);
     const repo = selectNodeRepository(map);
     expect(repo.byNamespace('a').map((n) => n.id)).toEqual(['a.Foo', 'a.Bar']);
@@ -71,7 +71,7 @@ describe('selectNodeRepository — byNamespace / namespaces', () => {
     const map = new Map([
       ['a.Foo', nodeNs('a.Foo', 'Data', 'Foo', 'a')],
       ['a.Bar', nodeNs('a.Bar', 'Data', 'Bar', 'a')],
-      ['b.Baz', nodeNs('b.Baz', 'Data', 'Baz', 'b')],
+      ['b.Baz', nodeNs('b.Baz', 'Data', 'Baz', 'b')]
     ]);
     expect([...selectNodeRepository(map).namespaces()].sort()).toEqual(['a', 'b']);
   });

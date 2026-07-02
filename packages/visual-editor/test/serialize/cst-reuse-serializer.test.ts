@@ -25,9 +25,7 @@ type Foo:
 async function fooNode(): Promise<{ node: TypeGraphNode; nodeId: string }> {
   const { value } = await parse(SRC);
   const data = (value as unknown as { elements: unknown[] }).elements[0];
-  const dehydrated = parsedAdapter.dehydrate(
-    data as Parameters<typeof parsedAdapter.dehydrate>[0]
-  );
+  const dehydrated = parsedAdapter.dehydrate(data as Parameters<typeof parsedAdapter.dehydrate>[0]);
   const nodeId = 'test.Foo';
   const node = {
     id: nodeId,
@@ -41,7 +39,9 @@ describe('cst-reuse serializer', () => {
   it('reuses the whole element verbatim when nothing is dirty', async () => {
     const { node } = await fooNode();
     const out = renderNamespace({
-      nodes: [node], originalSource: SRC, dirty: buildDirtyIndex([] as unknown as Patches)
+      nodes: [node],
+      originalSource: SRC,
+      dirty: buildDirtyIndex([] as unknown as Patches)
     });
     expect(out).toBe(SRC); // byte-for-byte
   });
@@ -55,15 +55,17 @@ describe('cst-reuse serializer', () => {
     ] as unknown as Patches;
 
     const out = renderNamespace({
-      nodes: [node], originalSource: SRC, dirty: buildDirtyIndex(patches)
+      nodes: [node],
+      originalSource: SRC,
+      dirty: buildDirtyIndex(patches)
     });
 
     expect(out).toContain('barRenamed string (1..1)');
     // The lossy bug would have dropped these. They must survive:
-    expect(out).toContain('[metadata scheme]');               // attr annotation preserved
-    expect(out).toContain('condition NonEmpty:');             // condition preserved
-    expect(out).toContain('if bar exists then baz exists');   // condition BODY, not `True`
-    expect(out).toContain('baz int (0..1)');                  // sibling attribute untouched
+    expect(out).toContain('[metadata scheme]'); // attr annotation preserved
+    expect(out).toContain('condition NonEmpty:'); // condition preserved
+    expect(out).toContain('if bar exists then baz exists'); // condition BODY, not `True`
+    expect(out).toContain('baz int (0..1)'); // sibling attribute untouched
   });
 
   it('preserves BYTE-EXACT indentation of a reused multi-line condition (no +2 drift)', async () => {
@@ -79,7 +81,9 @@ describe('cst-reuse serializer', () => {
     ] as unknown as Patches;
 
     const out = renderNamespace({
-      nodes: [node], originalSource: SRC, dirty: buildDirtyIndex(patches)
+      nodes: [node],
+      originalSource: SRC,
+      dirty: buildDirtyIndex(patches)
     });
 
     // The ONLY change vs the baseline is the renamed attribute — everything else

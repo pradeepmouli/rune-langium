@@ -200,7 +200,11 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
   const $type = g(ast, '$type') as string;
 
   if (!KNOWN_TYPES.has($type)) {
-    return { $type: 'Unsupported', id: uid(), rawText: unsupportedRawText(ast, sourceText) } as unknown as ExpressionNode;
+    return {
+      $type: 'Unsupported',
+      id: uid(),
+      rawText: unsupportedRawText(ast, sourceText)
+    } as unknown as ExpressionNode;
   }
 
   const id = uid();
@@ -438,7 +442,9 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChildRequired(g(ast, 'argument'), sourceText),
-        entries: ((g(ast, 'entries') as Record<string, unknown>[]) ?? []).map((e) => convertWithMetaEntry(e, sourceText))
+        entries: ((g(ast, 'entries') as Record<string, unknown>[]) ?? []).map((e) =>
+          convertWithMetaEntry(e, sourceText)
+        )
       } as unknown as ExpressionNode;
 
     case 'RosettaSuperCall':
@@ -453,7 +459,11 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       } as unknown as ExpressionNode;
 
     default:
-      return { $type: 'Unsupported', id: uid(), rawText: unsupportedRawText(ast, sourceText) } as unknown as ExpressionNode;
+      return {
+        $type: 'Unsupported',
+        id: uid(),
+        rawText: unsupportedRawText(ast, sourceText)
+      } as unknown as ExpressionNode;
   }
 }
 

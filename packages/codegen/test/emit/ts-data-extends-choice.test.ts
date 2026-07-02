@@ -322,9 +322,9 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
 
   it('validateAsset() passes for exactly one option present', async () => {
     const mod = await loadEmittedModule();
-    const BasketConstituent = mod['BasketConstituent'] as new (
-      data: unknown
-    ) => { validateAsset(): { valid: boolean; errors: string[] } };
+    const BasketConstituent = mod['BasketConstituent'] as new (data: unknown) => {
+      validateAsset(): { valid: boolean; errors: string[] };
+    };
     // Use commodity here (not cash) so this test is independent of
     // CashIsAbsent's own semantics — see the dedicated test below.
     const bc = new BasketConstituent({ commodity: { quantity: 1 }, weight: 2 });
@@ -333,9 +333,9 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
 
   it('validateAsset() fails when multiple option keys are present', async () => {
     const mod = await loadEmittedModule();
-    const BasketConstituent = mod['BasketConstituent'] as new (
-      data: unknown
-    ) => { validateAsset(): { valid: boolean; errors: string[] } };
+    const BasketConstituent = mod['BasketConstituent'] as new (data: unknown) => {
+      validateAsset(): { valid: boolean; errors: string[] };
+    };
     const bc = new BasketConstituent({ cash: { amount: 5 }, commodity: { quantity: 1 }, weight: 2 });
     const result = bc.validateAsset();
     expect(result.valid).toBe(false);
@@ -344,18 +344,18 @@ describe('ts-emitter — Data extends Choice (emitted-runtime behavior, real exe
 
   it('validateAsset() fails when no option key is present', async () => {
     const mod = await loadEmittedModule();
-    const BasketConstituent = mod['BasketConstituent'] as new (
-      data: unknown
-    ) => { validateAsset(): { valid: boolean; errors: string[] } };
+    const BasketConstituent = mod['BasketConstituent'] as new (data: unknown) => {
+      validateAsset(): { valid: boolean; errors: string[] };
+    };
     const bc = new BasketConstituent({ weight: 2 });
     expect(bc.validateAsset().valid).toBe(false);
   });
 
   it("the child's own condition (validateCashIsAbsent) still enforces post-construction — this is the accessor-naming fix's ground-truth check", async () => {
     const mod = await loadEmittedModule();
-    const BasketConstituent = mod['BasketConstituent'] as new (
-      data: unknown
-    ) => { validateCashIsAbsent(): { valid: boolean; errors: string[] } };
+    const BasketConstituent = mod['BasketConstituent'] as new (data: unknown) => {
+      validateCashIsAbsent(): { valid: boolean; errors: string[] };
+    };
     // `cash` present -> CashIsAbsent must reject. This is the exact case
     // that silently passed as a false positive before the
     // attrAccessorNames/choiceOptionFieldName fix in
