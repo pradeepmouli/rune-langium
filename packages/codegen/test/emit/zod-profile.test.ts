@@ -13,9 +13,9 @@
  * the inlined helpers; the size-limit branch is exercised separately.
  */
 
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { mkdtempWithNodeModules } from './emitted-module-dir.js';
 import { pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
@@ -108,12 +108,15 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     // executes `z.union(...)`: both steps threw `ReferenceError: z is not
     // defined` before the header imported z. Mirrors the emitted-runtime
     // pattern of zod-data-extends-choice.test.ts.
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-zod-sidecar-'));
+    const tmpDir = await mkdtempWithNodeModules('rune-codegen-zod-sidecar-');
     const sidecarPath = join(tmpDir, 'runtime.zod.ts');
     await writeFile(sidecarPath, runtimeOutput!.content, 'utf-8');
     const mod = (await import(/* @vite-ignore */ pathToFileURL(sidecarPath).toString())) as Record<string, unknown>;
 
-    const runeExtendChoice = mod['runeExtendChoice'] as (choice: unknown, shape: unknown) => {
+    const runeExtendChoice = mod['runeExtendChoice'] as (
+      choice: unknown,
+      shape: unknown
+    ) => {
       safeParse: (v: unknown) => { success: boolean };
     };
     expect(typeof runeExtendChoice).toBe('function');

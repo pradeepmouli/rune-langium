@@ -25,9 +25,9 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { mkdtempWithNodeModules } from './emitted-module-dir.js';
 import { pathToFileURL } from 'node:url';
 import { createRuneDslServices, isRosettaModel } from '@rune-langium/core';
 import { URI } from 'langium';
@@ -184,7 +184,7 @@ describe('Data-extends-Choice — multi-level chain (emitted-runtime behavior, r
   async function loadEmittedZodModule(): Promise<Record<string, unknown>> {
     const doc = await parseFixture();
     const outputs = await generate(doc, { target: 'zod' });
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-multilevel-zod-'));
+    const tmpDir = await mkdtempWithNodeModules('rune-codegen-multilevel-zod-');
     let modulePath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);
@@ -199,7 +199,7 @@ describe('Data-extends-Choice — multi-level chain (emitted-runtime behavior, r
   async function loadEmittedTsModule(): Promise<Record<string, unknown>> {
     const doc = await parseFixture();
     const outputs = await generate(doc, { target: 'typescript' });
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-multilevel-ts-'));
+    const tmpDir = await mkdtempWithNodeModules('rune-codegen-multilevel-ts-');
     let modulePath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);
@@ -265,9 +265,9 @@ describe('Data-extends-Choice — multi-level chain (emitted-runtime behavior, r
 
   it("ts: ObservableItem's validateAsset() enforces exactly-one-of even when reached through the intermediate link", async () => {
     const mod = await loadEmittedTsModule();
-    const ObservableItem = mod['ObservableItem'] as new (
-      data: unknown
-    ) => { validateAsset(): { valid: boolean; errors: string[] } };
+    const ObservableItem = mod['ObservableItem'] as new (data: unknown) => {
+      validateAsset(): { valid: boolean; errors: string[] };
+    };
     const valid = new ObservableItem({ cash: { amount: 1 }, identifier: 'x1' });
     expect(valid.validateAsset().valid).toBe(true);
 

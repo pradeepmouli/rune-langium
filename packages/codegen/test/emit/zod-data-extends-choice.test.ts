@@ -26,9 +26,9 @@
  *     analogue).
  */
 
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
+import { mkdtempWithNodeModules } from './emitted-module-dir.js';
 import { pathToFileURL } from 'node:url';
 import { createRuneDslServices, isRosettaModel } from '@rune-langium/core';
 import { URI } from 'langium';
@@ -128,7 +128,7 @@ describe('zod-emitter — Data extends Choice (emitted-runtime behavior, real zo
     const outputs = await generate(doc, { target: 'zod' });
     expect(outputs.length).toBeGreaterThan(0);
 
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-data-extends-choice-'));
+    const tmpDir = await mkdtempWithNodeModules('rune-codegen-data-extends-choice-');
     let modulePath = '';
     for (const output of outputs) {
       // Keep the .ts extension (not .mjs) — the emitted file has TS type
@@ -178,7 +178,7 @@ describe('zod-emitter — Data extends Choice (emitted-runtime behavior, real zo
     expect(result.success).toBe(false);
   });
 
-  it("case 4: extras validate per their own schema (wrong type) -> FAILS", async () => {
+  it('case 4: extras validate per their own schema (wrong type) -> FAILS', async () => {
     const mod = await loadEmittedModule();
     const schema = mod['BasketConstituentSchema'] as { safeParse: (v: unknown) => { success: boolean } };
     const result = schema.safeParse({ commodity: { quantity: 1 }, weight: 'not-a-number' });

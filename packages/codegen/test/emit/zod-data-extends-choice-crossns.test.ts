@@ -28,16 +28,19 @@
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
-import { mkdtemp, writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { mkdtempWithNodeModules } from './emitted-module-dir.js';
 import { pathToFileURL } from 'node:url';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { describe, it, expect } from 'vitest';
 import { generate } from '../../src/index.js';
 
-const FIXTURE_DIR = resolve(new URL('.', import.meta.url).pathname, '../fixtures/data-extends-choice-crossns-multilevel');
+const FIXTURE_DIR = resolve(
+  new URL('.', import.meta.url).pathname,
+  '../fixtures/data-extends-choice-crossns-multilevel'
+);
 
 async function parseFixtureFiles() {
   const runeFiles = readdirSync(FIXTURE_DIR)
@@ -91,7 +94,7 @@ describe('zod — Data-extends-Choice, multi-level chain crossing namespaces', (
   it('emitted-runtime: the child module actually imports/executes across all three namespaces', async () => {
     const docs = await parseFixtureFiles();
     const outputs = await generate(docs, { target: 'zod' });
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-dec-crossns-ml-zod-'));
+    const tmpDir = await mkdtempWithNodeModules('rune-codegen-dec-crossns-ml-zod-');
     let childPath = '';
     for (const output of outputs) {
       const outPath = join(tmpDir, output.relativePath);
@@ -113,8 +116,6 @@ describe('zod — Data-extends-Choice, multi-level chain crossing namespaces', (
     // No option key → fails (exactly-one-of preserved through the chain).
     expect(schema.safeParse({ holding: { amount: 5 }, weight: 3 }).success).toBe(false);
     // Two option keys → fails.
-    expect(
-      schema.safeParse({ cash: { amount: 1 }, commodity: { quantity: 2 }, weight: 3 }).success
-    ).toBe(false);
+    expect(schema.safeParse({ cash: { amount: 1 }, commodity: { quantity: 2 }, weight: 3 }).success).toBe(false);
   });
 });
