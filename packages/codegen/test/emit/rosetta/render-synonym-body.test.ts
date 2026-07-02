@@ -297,6 +297,20 @@ describe('renderSynonymBody — suffixes', () => {
 
 // --- unknown / undiscriminable → throw -------------------------------------
 
+describe('class synonym metaValue full surface', () => {
+  // RosettaMetaSynonymValue allows `maps` (grammar L617-619) — unlike
+  // RosettaClassSynonymValue. metaValue must NOT lose it (PR #363 Copilot finding).
+  it('renders metaValue maps (and drops maps only on the value form)', () => {
+    const s = {
+      $type: 'RosettaClassSynonym',
+      sources: [{ $refText: 'FpML' }],
+      value: { name: 'v', maps: 9 },
+      metaValue: { name: 'm', path: 'p', maps: 2 }
+    };
+    expect(renderNode(s as never, regen)).toBe('[synonym FpML value "v" meta "m" path "p" maps 2]');
+  });
+});
+
 describe('renderSynonymBody — fallback', () => {
   it('throws UnsupportedSynonymBodyError on an undiscriminable body', () => {
     const body = { $type: 'RosettaSynonymBody', values: [], hints: [], metaValues: [], removeHtml: false };

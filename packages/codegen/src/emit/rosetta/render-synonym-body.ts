@@ -74,15 +74,25 @@ function renderSynonymValue(v: SynonymValueBase): string {
 }
 
 /**
- * Public: render a `RosettaClassSynonymValue`/`RosettaMetaSynonymValue`
- * (class-synonym `value`/`metaValue`) — grammar rule `RosettaClassSynonymValue`
- * has no `maps` production (unlike `RosettaSynonymValue`), so `maps` is
- * dropped even if present on the input node (defensive; a correctly-parsed
- * node never populates it here).
+ * Public: render a class-synonym `value` — grammar rule
+ * `RosettaClassSynonymValue` has no `maps` production (unlike
+ * `RosettaSynonymValue`/`RosettaMetaSynonymValue`), so `maps` is dropped even
+ * if present on the input node (defensive; a correctly-parsed node never
+ * populates it here). For `metaValue` use `renderMetaSynonymValue` — that
+ * grammar rule DOES allow `maps`.
  */
 export function renderClassSynonymValue(v: unknown): string {
   const { maps: _maps, ...rest } = (v ?? {}) as SynonymValueBase;
   return renderSynonymValue(rest);
+}
+
+/**
+ * Public: render a class-synonym `metaValue` (`RosettaMetaSynonymValue`) —
+ * full value surface INCLUDING `maps` (grammar: `name (refType value)?
+ * (path)? (maps)?`).
+ */
+export function renderMetaSynonymValue(v: unknown): string {
+  return renderSynonymValue((v ?? {}) as SynonymValueBase);
 }
 
 // --- mapping primary (RosettaMapPrimaryExpression) --------------------------

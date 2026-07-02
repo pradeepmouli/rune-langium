@@ -20,7 +20,7 @@ import type {
   RosettaEnumeration, RosettaEnumValue, RosettaCardinality
 } from '@rune-langium/core';
 import { renderExpression, UnsupportedExpressionError } from './render-expression.js';
-import { renderSynonymBody, renderClassSynonymValue, UnsupportedSynonymBodyError } from './render-synonym-body.js';
+import { renderSynonymBody, renderClassSynonymValue, renderMetaSynonymValue, UnsupportedSynonymBodyError } from './render-synonym-body.js';
 
 export type DehydratedNode = Dehydrated<AstNode>;
 export type RenderChild = (child: DehydratedNode) => string;
@@ -391,7 +391,9 @@ function renderClassSynonym(s: DehydratedNode): string | null {
     const parts: string[] = [];
     // `value` is optional (grammar `('value' value=RosettaClassSynonymValue)?`).
     if (cs.value !== undefined) parts.push(`value ${renderClassSynonymValue(cs.value)}`);
-    if (cs.metaValue !== undefined) parts.push(`meta ${renderClassSynonymValue(cs.metaValue)}`);
+    // metaValue is a RosettaMetaSynonymValue — its grammar rule ALLOWS `maps`
+    // (unlike RosettaClassSynonymValue) — render the full surface.
+    if (cs.metaValue !== undefined) parts.push(`meta ${renderMetaSynonymValue(cs.metaValue)}`);
     const suffix = parts.length > 0 ? ` ${parts.join(' ')}` : '';
     return `[synonym ${sources}${suffix}]`;
   });

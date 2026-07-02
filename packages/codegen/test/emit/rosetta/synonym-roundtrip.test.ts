@@ -53,6 +53,8 @@ const CORPUS: Case[] = [
   { rule: 'RosettaSynonym', src: '[synonym FpML value "n" dateFormat "yyyy-MM-dd" pattern "a" "b" removeHtml mapper "someMapper"]' },
   // class synonym.
   { rule: 'RosettaClassSynonym', src: '[synonym FpML value "n" tag 2 meta "m"]' },
+  // metaValue is a RosettaMetaSynonymValue — grammar allows maps (unlike the value form).
+  { rule: 'RosettaClassSynonym', src: '[synonym FpML value "n" meta "m" path "p" maps 2]' },
   { rule: 'RosettaClassSynonym', src: '[synonym FpML]' },
   // enum synonym with all suffixes.
   { rule: 'RosettaEnumSynonym', src: '[synonym FIX value "s" definition "d" pattern "a" "b" removeHtml]' },
