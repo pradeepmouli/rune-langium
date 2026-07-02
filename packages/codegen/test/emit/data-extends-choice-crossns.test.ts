@@ -95,7 +95,7 @@ describe('Data-extends-Choice — cross-namespace Choice supertype', () => {
     expect(outputs.length).toBeGreaterThanOrEqual(2);
 
     // Write the REAL emitted files to disk preserving the relativePath
-    // layout (so the emitted `../base.js` specifier resolves), then run a
+    // layout (so the emitted `./base.js` specifier resolves), then run a
     // real ts.createProgram over the importing file — TS's NodeNext
     // resolution maps the emitted `.js` specifiers back to the on-disk
     // `.ts` sources, so a nonexistent imported symbol (the old TS2305
