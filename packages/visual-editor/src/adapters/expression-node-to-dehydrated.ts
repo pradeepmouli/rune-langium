@@ -13,7 +13,9 @@
  *
  * REF_FIELDS/REF_ARRAY_FIELDS are the inverse of ast-to-expression-node.ts's
  * resolveRef call sites (symbol, feature, enumeration, key, referenceGuard,
- * and the attributes array) — cross-checked field-for-field against that file.
+ * parameter, and the attributes array) — cross-checked field-for-field
+ * against that file (re-verified after the B1 follow-up full-field audit
+ * added constructorTypeArgs/TypeCallArgument.parameter conversion).
  */
 
 import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
@@ -22,7 +24,7 @@ import type { ExpressionNode } from '../schemas/expression-node-schema.js';
 const PLACEHOLDER_MARKER = '___';
 
 /** Fields that hold a string ref in ExpressionNode but {$refText} in the AST. */
-const REF_FIELDS = new Set(['symbol', 'feature', 'enumeration', 'key', 'referenceGuard']);
+const REF_FIELDS = new Set(['symbol', 'feature', 'enumeration', 'key', 'referenceGuard', 'parameter']);
 /** Array fields whose ELEMENTS are string refs. */
 const REF_ARRAY_FIELDS = new Set(['attributes']);
 /** UI-only fields to drop. */
@@ -48,6 +50,14 @@ function convert(value: unknown, opts: ToDehydratedOptions): unknown {
     return { $type: RAW_DSL_TYPE, text: PLACEHOLDER_MARKER };
   }
   if ($type === 'Unsupported') {
+    // Caveat: the RawDsl leaf is inlined UNWRAPPED at its parent's position
+    // (renderExpression's postfix precedence, prec 8 — an atom, never
+    // parenthesized). For a NESTED Unsupported child this is only correct if
+    // `rawText` is the node's OWN sub-span, not an ancestor's whole source
+    // text — ast-to-expression-node.ts's Unsupported construction sites use
+    // the node's `$cstNode.text` when available for exactly this reason
+    // (falling back to the caller's sourceText only when no CST is attached,
+    // e.g. a JSON-serialized AST).
     return { $type: RAW_DSL_TYPE, text: String(obj['rawText'] ?? '') };
   }
 

@@ -168,4 +168,135 @@ describe('astToExpressionNode', () => {
     expect(astToExpressionNode(strAst as any, '"hello"').$type).toBe('RosettaStringLiteral');
     expect(astToExpressionNode(numAst as any, '3.14').$type).toBe('RosettaNumberLiteral');
   });
+
+  it('handles multi-arg only-exists (populates args[])', () => {
+    const ast = {
+      $type: 'RosettaOnlyExistsExpression',
+      operator: 'exists',
+      args: [
+        { $type: 'RosettaSymbolReference', symbol: { $refText: 'a', ref: {} } },
+        { $type: 'RosettaSymbolReference', symbol: { $refText: 'b', ref: {} } }
+      ]
+    };
+    const result = astToExpressionNode(ast as any, '(a, b) only exists');
+    expect(result.$type).toBe('RosettaOnlyExistsExpression');
+    if (result.$type === 'RosettaOnlyExistsExpression') {
+      expect(result.args).toHaveLength(2);
+      expect((result.args?.[0] as ExpressionNode & { symbol: string }).symbol).toBe('a');
+    }
+  });
+
+  it('handles with-meta entries (populates entries[] with resolved keys)', () => {
+    const ast = {
+      $type: 'WithMetaOperation',
+      operator: 'with-meta',
+      argument: { $type: 'RosettaSymbolReference', symbol: { $refText: 'value', ref: {} } },
+      entries: [
+        {
+          $type: 'WithMetaEntry',
+          key: { $refText: 'scheme', ref: {} },
+          value: { $type: 'RosettaStringLiteral', value: 'x' }
+        }
+      ]
+    };
+    const result = astToExpressionNode(ast as any, 'value with-meta { scheme: "x" }');
+    expect(result.$type).toBe('WithMetaOperation');
+    if (result.$type === 'WithMetaOperation') {
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries?.[0].key).toBe('scheme');
+    }
+  });
+
+  it('a nested unrecognized subtree gets its OWN $cstNode span, not the ancestor sourceText (Minor 3)', () => {
+    // Whole-expression sourceText is the top-level call's text; the nested
+    // unknown-$type node carries its own $cstNode.text sub-span — the
+    // Unsupported leaf must use the sub-span, or a RawDsl child inlined at
+    // the child's position would duplicate/corrupt the parent's text.
+    const wholeExpressionText = 'a and someUnknownConstruct(x, y) and b';
+    const ast = {
+      $type: 'LogicalOperation',
+      operator: 'and',
+      left: { $type: 'RosettaSymbolReference', symbol: { $refText: 'a', ref: {} } },
+      right: {
+        $type: 'LogicalOperation',
+        operator: 'and',
+        left: {
+          $type: 'SomeFutureUnknownExpressionType',
+          $cstNode: { text: 'someUnknownConstruct(x, y)' }
+        },
+        right: { $type: 'RosettaSymbolReference', symbol: { $refText: 'b', ref: {} } }
+      }
+    };
+    const result = astToExpressionNode(ast as any, wholeExpressionText);
+    expect(result.$type).toBe('LogicalOperation');
+    if (result.$type === 'LogicalOperation') {
+      const inner = result.right as ExpressionNode & { left: ExpressionNode };
+      expect(inner.left.$type).toBe('Unsupported');
+      expect((inner.left as ExpressionNode & { rawText: string }).rawText).toBe('someUnknownConstruct(x, y)');
+      expect((inner.left as ExpressionNode & { rawText: string }).rawText).not.toBe(wholeExpressionText);
+    }
+  });
+
+  it('falls back to the ancestor sourceText when no $cstNode is attached (JSON-serialized AST)', () => {
+    const ast = { $type: 'SomeFutureUnknownExpressionType' };
+    const result = astToExpressionNode(ast as any, 'fallback text');
+    expect(result.$type).toBe('Unsupported');
+    expect((result as ExpressionNode & { rawText: string }).rawText).toBe('fallback text');
+  });
+
+  // Full-audit findings (B1 follow-up, Codex P2#2 extended): every AST
+  // interface field cross-checked against this converter. necessity/
+  // modifier/constructorTypeArgs were silently dropped, matching the
+  // entries[]/args[] gap already fixed as Minor 2.
+  it('handles choice necessity (was dropped — renderer would emit literal "undefined choice")', () => {
+    const ast = {
+      $type: 'ChoiceOperation',
+      operator: 'choice',
+      necessity: 'optional',
+      attributes: [
+        { $refText: 'a', ref: {} },
+        { $refText: 'b', ref: {} }
+      ]
+    };
+    const result = astToExpressionNode(ast as any, 'optional choice a, b');
+    expect(result.$type).toBe('ChoiceOperation');
+    if (result.$type === 'ChoiceOperation') {
+      expect(result.necessity).toBe('optional');
+    }
+  });
+
+  it('handles exists modifier (single/multiple — was dropped)', () => {
+    const ast = {
+      $type: 'RosettaExistsExpression',
+      operator: 'exists',
+      modifier: 'single',
+      argument: { $type: 'RosettaSymbolReference', symbol: { $refText: 'a', ref: {} } }
+    };
+    const result = astToExpressionNode(ast as any, 'a single exists');
+    expect(result.$type).toBe('RosettaExistsExpression');
+    if (result.$type === 'RosettaExistsExpression') {
+      expect(result.modifier).toBe('single');
+    }
+  });
+
+  it('handles constructor generic type-call args (constructorTypeArgs — was dropped)', () => {
+    const ast = {
+      $type: 'RosettaConstructorExpression',
+      typeRef: { $type: 'RosettaSymbolReference', symbol: { $refText: 'Trade', ref: {} } },
+      constructorTypeArgs: [
+        {
+          $type: 'TypeCallArgument',
+          parameter: { $refText: 'T', ref: {} },
+          value: { $type: 'RosettaIntLiteral', value: 5n }
+        }
+      ],
+      values: []
+    };
+    const result = astToExpressionNode(ast as any, 'Trade(T: 5) {}');
+    expect(result.$type).toBe('RosettaConstructorExpression');
+    if (result.$type === 'RosettaConstructorExpression') {
+      expect(result.constructorTypeArgs).toHaveLength(1);
+      expect(result.constructorTypeArgs?.[0].parameter).toBe('T');
+    }
+  });
 });

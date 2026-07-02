@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parse } from '@rune-langium/core';
+import { parse, parseExpression } from '@rune-langium/core';
 import { astToExpressionNode } from '../../src/adapters/ast-to-expression-node.js';
 import { expressionNodeToDsl } from '../../src/adapters/expression-node-to-dsl.js';
 import { FUNCTION_MODEL_SOURCE } from '../helpers/fixture-loader.js';
@@ -92,5 +92,78 @@ describe('Expression round-trip (T029)', () => {
     expect(dsl).toContain('if');
     expect(dsl).toContain('then');
     expect(dsl).toContain('else');
+  });
+
+  // Acceptance criteria for the reverse-converter gap fix (B1 Minor 2):
+  // ast-to-expression-node.ts now populates WithMetaOperation.entries and
+  // RosettaOnlyExistsExpression.args from the AST, so a real parse of these
+  // forms carries them through the full pipeline: core parseExpression ->
+  // astToExpressionNode -> expressionNodeToDehydrated (inside
+  // expressionNodeToDsl) -> renderExpression.
+  describe('reverse-converter gap fix (Minor 2)', () => {
+    it('round-trips multi-arg only-exists: (a, b) only exists', () => {
+      const src = '(a, b) only exists';
+      const p = parseExpression(src);
+      expect(p.hasErrors).toBe(false);
+
+      const exprNode = astToExpressionNode(p.value, src);
+      expect(exprNode.$type).toBe('RosettaOnlyExistsExpression');
+
+      const dsl = expressionNodeToDsl(exprNode);
+      expect(dsl).toBe('(a, b) only exists');
+    });
+
+    it('round-trips with-meta entries: value with-meta { scheme: "x" }', () => {
+      const src = 'value with-meta { scheme: "x" }';
+      const p = parseExpression(src);
+      expect(p.hasErrors).toBe(false);
+
+      const exprNode = astToExpressionNode(p.value, src);
+      expect(exprNode.$type).toBe('WithMetaOperation');
+
+      const dsl = expressionNodeToDsl(exprNode);
+      expect(dsl).toBe('value with-meta { scheme: "x" }');
+    });
+  });
+
+  // Full-audit findings beyond Minor 2's named fields (B1 follow-up, Codex
+  // P2#2 extended): necessity/modifier/constructorTypeArgs were also
+  // silently dropped by ast-to-expression-node.ts.
+  describe('reverse-converter gap fix — full audit findings', () => {
+    it('round-trips choice necessity: optional choice a, b', () => {
+      const src = 'optional choice a, b';
+      const p = parseExpression(src);
+      expect(p.hasErrors).toBe(false);
+
+      const exprNode = astToExpressionNode(p.value, src);
+      expect(exprNode.$type).toBe('ChoiceOperation');
+
+      const dsl = expressionNodeToDsl(exprNode);
+      expect(dsl).toBe('optional choice a, b');
+    });
+
+    it('round-trips exists modifier: a single exists', () => {
+      const src = 'a single exists';
+      const p = parseExpression(src);
+      expect(p.hasErrors).toBe(false);
+
+      const exprNode = astToExpressionNode(p.value, src);
+      expect(exprNode.$type).toBe('RosettaExistsExpression');
+
+      const dsl = expressionNodeToDsl(exprNode);
+      expect(dsl).toBe('a single exists');
+    });
+
+    it('round-trips constructor generic type-call args: Trade(T: 5) { q: 1 }', () => {
+      const src = 'Trade(T: 5) { q: 1 }';
+      const p = parseExpression(src);
+      expect(p.hasErrors).toBe(false);
+
+      const exprNode = astToExpressionNode(p.value, src);
+      expect(exprNode.$type).toBe('RosettaConstructorExpression');
+
+      const dsl = expressionNodeToDsl(exprNode);
+      expect(dsl).toBe('Trade(T: 5) { q: 1 }');
+    });
   });
 });
