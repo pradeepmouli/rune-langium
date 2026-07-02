@@ -51,12 +51,15 @@ test.describe('production checkout smoke', () => {
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
+    // The namespace tree is virtualized — filter narrowly before each click so
+    // the target row is mounted regardless of corpus growth.
     const namespaceSearch = page.getByTestId('namespace-search');
-    await namespaceSearch.fill('Business');
+    await namespaceSearch.fill('BusinessDayConvention');
 
     await page.getByTestId(`ns-type-nav-${ENUM_NODE_ID}`).click();
     await expect(page.getByText(ENUM_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
 
+    await namespaceSearch.fill('BusinessCenters');
     await page.getByTestId(`ns-type-nav-${DATA_NODE_ID}`).click();
     await expect(page.getByText(DATA_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
 
