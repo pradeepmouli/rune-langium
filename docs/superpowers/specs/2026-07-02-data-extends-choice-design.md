@@ -22,7 +22,73 @@ export type BasketConstituent<T extends Observable = Observable> = T & {
 - Referencing sites (attributes typed by the child) use the bare name — unaffected.
 - Multi-level: intermediate Data parents contribute their attributes into the extras block; the generic param binds at the Choice ancestor.
 
-### TS class — per-Choice mixin
+### TS class — generic child class (AMENDED mid-implementation, user-directed — supersedes the original per-Choice-mixin design below the line)
+
+No `ObservableMixin` / no per-Choice mixin at all — TS's `class X<T> extends T`
+is not expressible against a type parameter, and a mixin's `class extends
+Base {}` shape doesn't fit a Choice's *union* schema anyway (a mixin factory
+needs a single base *class* to extend, not a discriminated union of arm
+shapes). Instead, the CHILD CLASS ITSELF is generic over the arm, mirroring
+the type-side `BasketConstituent<T> = T & extras` exactly:
+
+```ts
+export class BasketConstituent<T extends Observable = Observable> implements BasketConstituentShape {
+  quantity?: NonNegativeQuantitySchedule[];
+  // ...own attributes, emitted per existing attribute conventions
+
+  constructor(data: T & BasketConstituentShape) {
+    Object.assign(this, data);
+    this.quantity = data.quantity as typeof this.quantity;
+    // ...own-attribute assignments per existing emitClass conventions
+  }
+
+  static from(json: unknown): BasketConstituent {
+    if (!isBasketConstituent(json)) {
+      throw new TypeError('not a BasketConstituent: ' + JSON.stringify(json).slice(0, 100));
+    }
+    return new BasketConstituent(json as Observable & BasketConstituentShape);
+  }
+
+  validateObservableChoice(): { valid: boolean; errors: string[] } { /* exactly-one-of over option keys, reading `this` */ }
+}
+```
+
+**Encoding chosen**: constructor-parameter generic + `Object.assign(this, data)`
+for the T-surface, own attributes assigned explicitly afterward exactly like
+`emitClass` does today for a Data parent's fields — NOT a static `of<T>()`
+factory. Rationale: `emitClass`'s real, load-bearing convention is that
+`constructor(data: <Name>Shape)` IS the single construction path (`static
+from` delegates to `new <Name>(...)` after a type-guard check) — introducing
+a second, competing construction path (`static of<T>`) for exactly this one
+supertype-kind would fork the convention instead of extending it. Threading
+the generic through the constructor keeps `static from`/`new` as the only
+entry points for every Data, Choice-extending or not.
+
+- Bare `new BasketConstituent(data)` behaves non-generically (`T` defaults to
+  `Observable`, the full union) — same default-narrowing story as the type
+  alias.
+- A consumer holding a known arm writes `new BasketConstituent<{ basket:
+  Basket }>(data)` and keeps that arm's fields typed precisely on `data`
+  (though NOT on the resulting instance's declared members — TypeScript
+  classes cannot declare members from a type parameter, so arm-specific
+  fields are accessible only via a cast, e.g. `(instance as unknown as {
+  basket: Basket }).basket`; this is a real, documented limitation of the
+  class encoding that the TS **type** alias surface does not share).
+- The exactly-one-of validator (`validateObservableChoice` — one shared
+  method name derived from the Choice's name, not per-child) is emitted
+  ONCE per Choice (same "emit once, reused by every child" principle as the
+  original mixin idea intended) and called from each child's own validate
+  block, OR — simpler, and what `emitClass`'s existing per-condition-method
+  convention favors — inlined as a `runeCheckOneOf([...])` check the same
+  way any other condition method body is built, with no separate shared
+  function needed (implementer's call, grounded in whichever produces less
+  duplication against the real `emitValidateMethods` code path).
+- `Constructor` helper type: NOT NEEDED under this encoding (no mixin
+  factory function exists to type its `Base` parameter).
+
+<details>
+<summary>Original per-Choice-mixin design (SUPERSEDED — kept for history only, do not implement)</summary>
+
 ```ts
 export const ObservableMixin = <TBase extends Constructor>(Base: TBase) =>
   class extends Base {
@@ -37,9 +103,8 @@ export class BasketConstituent extends ObservableMixin(/* today's base — see v
   // ...own attributes + own validate methods per existing conventions
 }
 ```
-- Emitted ONCE per Choice (alongside the Choice's union type), reused by every child of that Choice; the mixin is the class-side analog of the zod helper.
-- Shape precision: a child *holds* an option field (`basket?: Basket`), it is not *a* Basket — the mixin adds the option surface, it does not extend an arm class.
-- `Constructor` helper type: emit once via the existing runtime-helper mechanism if not already present.
+
+</details>
 
 ### Zod — `runeExtendChoice` runtime helper (derivation, not decomposition)
 ```ts
@@ -61,7 +126,7 @@ export const BasketConstituentSchema = runeExtendChoice(ObservableSchema, {
 ## Verification points (ground truth, not assumption — implementer MUST check)
 
 1. **Zod v4 behavior**: `.extend()` preserves `strictObject` strictness; `z.union` accepts mapped options (typing may need the helper-local cast). Verify with **emitted-runtime behavior tests**: evaluate emitted schema text against real zod — `{basket:…, quantity:…}` parses; `{basket:…, asset:…}` fails (multi-option); `{quantity:…}` alone fails (no option); extras validate per their own schemas.
-2. **emitClass conventions**: what children extend today (a base class? nothing?), how validate methods attach, whether classes are emitted for all Data or conditionally — the mixin must slot into the real conventions, not invented ones.
+2. **emitClass conventions**: what children extend today (a base class? nothing?), how validate methods attach, whether classes are emitted for all Data or conditionally — the generic-child-class encoding (see AMENDED TS class section above) must slot into the real conventions, not invented ones.
 3. **Generic-type references**: confirm no emitted reference site needs the type argument (all bare).
 
 ## Acceptance gate
@@ -71,5 +136,5 @@ Delete BOTH allowlist entries — `'BasketConstituent'`-related entries in `KNOW
 ## Non-goals
 
 - No change to plain Data-extends-Data emission, the W2 Choice union itself, or the option-key naming rule.
-- No runtime library beyond the two small helpers (`Constructor` if needed, `runeExtendChoice`).
+- No runtime library beyond `runeExtendChoice` (the AMENDED TS class design needs no `Constructor` helper type — no mixin factory function exists to type).
 - Renderer/VE/display untouched.
