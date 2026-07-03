@@ -481,6 +481,16 @@ html {
     flex-shrink: 0;
   }
 
+  /* Non-Explore perspectives render a plain title in the bar's center slot
+   * instead of the FileTabStrip (AppHeader, shared-perspective-chrome). */
+  .studio-app .studio-topbar__title {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--foreground);
+    flex: 1;
+    text-align: center;
+  }
+
   .studio-app .studio-topbar__ws-btn {
     appearance: none;
     border: var(--hairline) solid color-mix(in srgb, var(--border) 82%, transparent);

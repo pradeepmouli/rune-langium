@@ -19,7 +19,6 @@ import { useModelStore } from './store/model-store.js';
 import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
-import { studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { CuratedModelBinding, WorkspaceRecord } from './workspace/persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
@@ -30,6 +29,7 @@ import { useOutputStore, fmtLine } from './store/output-store.js';
 import { useActivityStore } from './store/activity-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
+import { AppHeader } from './shell/AppHeader.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
@@ -921,11 +921,6 @@ function AppContent() {
   const userFiles = files.filter((f) => !f.readOnly);
   const hasWorkspace = userFiles.length > 0;
   const hasExploreContent = hasWorkspace || loadedModels.size > 0;
-  // Reactive perspective read — the global brand header is shown for every
-  // perspective EXCEPT Explore (which renders its own studio-topbar inside
-  // ExplorePerspective). Other call sites in this file use `.getState()` for
-  // imperative transitions; here we need to re-render on change.
-  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
 
   // Build the WorkspaceActionsContext value from App's handlers so
   // WorkspacesPerspective (and any future perspective) can call them
@@ -985,26 +980,7 @@ function AppContent() {
             {userFiles.length} file(s)
           </span>
         )}
-        {/* Global header — hidden only when the Explore workbench is actually
-         * showing (it renders its own studio-topbar). Gate on `hasWorkspace`
-         * too: PerspectiveHost's requiresWorkspace fallback renders the
-         * Workspaces launcher when the store still says 'explore' but no
-         * workspace is loaded, and that launcher needs the brand header. */}
-        {!(hasExploreContent && activePerspective === 'explore') && (
-          <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
-            <div className="studio-brand">
-              <div className="studio-brand__mark">R</div>
-              <span className="studio-brand__name">Rune Studio</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <nav className="studio-links" aria-label="Studio links">
-                <a href={studioConfig.homeUrl}>Home</a>
-                <a href={studioConfig.docsUrl}>Docs</a>
-                <a href={studioConfig.githubUrl}>GitHub</a>
-              </nav>
-            </div>
-          </header>
-        )}
+        <AppHeader />
 
         <main className="flex-1 overflow-hidden relative">
           {(bootState === 'checking' || bootState === 'restoring') && (
