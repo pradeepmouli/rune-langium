@@ -287,3 +287,69 @@ describe('renameType — cascade', () => {
     expect(freshRefs.length).toBe(399);
   });
 });
+
+describe('edge-driven rename cascade (spec 2026-07-03-edge-ref-index)', () => {
+  it("cross-ns bare collision: renaming alpha.Trade leaves beta's bare Trade ref (binding beta.Trade) untouched", () => {
+    const s = createEditorStore();
+    s.getState().createType('data', 'Trade', 'alpha');
+    s.getState().createType('data', 'Trade', 'beta');
+    s.getState().createType('data', 'Holder', 'beta');
+    const alphaTradeId = s.getState().nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'alpha')!.id;
+    const betaTradeId = s.getState().nodes.find((n) => n.data.name === 'Trade' && n.meta.namespace === 'beta')!.id;
+    const holderId = s.getState().nodes.find((n) => n.data.name === 'Holder')!.id;
+
+    // Holder.local is a BARE ref binding beta.Trade (same-namespace). addAttribute
+    // (unlike updateAttributeType, which always disambiguates on ANY collision
+    // anywhere) resolves bare names preferring the SOURCE node's own namespace
+    // (resolveTargetId) and stores the bare $refText verbatim — this is the
+    // same-scope bare-binding shape the live bug corrupts.
+    s.getState().addAttribute(holderId, 'local', 'Trade', '(1..1)');
+    const bareBefore = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes[0].typeCall.type
+      .$refText;
+    expect(bareBefore).toBe('Trade'); // setup sanity: bare, binds locally
+    const holderEdgeTargetBefore = s
+      .getState()
+      .edges.find((e) => e.source === holderId && e.data?.kind === 'attribute-ref' && e.data.label === 'local')?.target;
+    expect(holderEdgeTargetBefore).toBe(betaTradeId); // setup sanity: edge binds to beta.Trade, not alpha.Trade
+
+    s.getState().renameType(alphaTradeId, 'Execution');
+
+    const bareAfter = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes[0].typeCall.type
+      .$refText;
+    // THE LIVE BUG (spec §The live bug): master's name-matching cascade
+    // rewrites this to 'Execution', silently rebinding Holder.local from
+    // beta.Trade to... nothing. Must stay 'Trade'.
+    expect(bareAfter).toBe('Trade');
+  });
+
+  it("self-reference: renaming Foo rewrites Foo's own Foo-typed attribute", () => {
+    const s = createEditorStore();
+    s.getState().createType('data', 'Foo', 'alpha');
+    const fooId = s.getState().nodes.find((n) => n.data.name === 'Foo')!.id;
+    s.getState().addAttribute(fooId, 'parentFoo', 'Foo', '(0..1)');
+
+    s.getState().renameType(fooId, 'Bar');
+
+    const renamed = s.getState().nodes.find((n) => n.data.name === 'Bar')!;
+    const selfRef = (renamed.data as any).attributes[0].typeCall.type.$refText;
+    // Pre-existing bug (spec §5): master skips the renamed node in its own
+    // cascade (editor-store.ts:1283), leaving this stale as 'Foo'.
+    expect(selfRef).toBe('Bar');
+  });
+
+  it('two attributes on one node both referencing the renamed type are both rewritten', () => {
+    const s = createEditorStore();
+    s.getState().createType('data', 'Target', 'alpha');
+    s.getState().createType('data', 'Holder', 'alpha');
+    const targetId = s.getState().nodes.find((n) => n.data.name === 'Target')!.id;
+    const holderId = s.getState().nodes.find((n) => n.data.name === 'Holder')!.id;
+    s.getState().addAttribute(holderId, 'first', 'Target', '(1..1)');
+    s.getState().addAttribute(holderId, 'second', 'Target', '(0..1)');
+
+    s.getState().renameType(targetId, 'Renamed');
+
+    const attrs = (s.getState().nodes.find((n) => n.id === holderId)!.data as any).attributes;
+    expect(attrs[0].typeCall.type.$refText).toBe('Renamed');
+    expect(attrs[1].typeCall.type.$refText).toBe('Renamed');
+  });
+});
