@@ -210,8 +210,11 @@ describe('FormPreviewSchema generation', () => {
     const kinds = new Set<string>();
     for (const field of trade?.fields ?? []) {
       kinds.add(field.kind);
-      for (const child of field.children ?? []) {
-        kinds.add(child.kind);
+      // Only 'object'/'array' PreviewField variants carry `children`.
+      if (field.kind === 'object' || field.kind === 'array') {
+        for (const child of field.children) {
+          kinds.add(child.kind);
+        }
       }
     }
 
@@ -347,8 +350,8 @@ describe('FormPreviewSchema generation', () => {
     expect(funcSchema!.targetId).toBe('test.funcpreview.AddTwo');
     expect(funcSchema!.status).toBe('ready');
     expect(funcSchema!.fields).toHaveLength(2);
-    expect(funcSchema!.fields[0].label).toBe('A');
-    expect(funcSchema!.fields[1].label).toBe('B');
+    expect(funcSchema!.fields[0]!.label).toBe('A');
+    expect(funcSchema!.fields[1]!.label).toBe('B');
   });
 
   skipIfNodeLt22('generates a choice schema with one field per option', async () => {

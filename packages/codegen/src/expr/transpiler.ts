@@ -192,6 +192,17 @@ export interface ExpressionTranspilerContext {
  * structurally and need no cast.
  */
 function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): string {
+  // Func-scope alias (ctx.localBindings) takes priority over ordinary
+  // attribute access — mirrors transpileExpression's RosettaSymbolReference
+  // branch, which checks localBindings first before falling through to this
+  // function. emitExists/emitIsAbsent/emitOneOf/emitChoice/emitOnlyExists
+  // call this directly with an extracted attribute-name string (bypassing
+  // transpileExpression's dispatch), so they need the same priority here or
+  // an alias reference emits a wrong `${selfName}.${aliasName}` property
+  // access instead of the alias's own local binding.
+  if (ctx.localBindings?.has(name)) {
+    return ctx.localBindings.get(name)!;
+  }
   const accessor = ctx.attrAccessorNames?.get(name);
   if (accessor !== undefined && ctx.emitMode === 'ts-method') {
     return `(${ctx.selfName} as unknown as Record<string, unknown>).${accessor}`;
@@ -214,10 +225,23 @@ function extractAttrName(argument: RosettaExpression | undefined): string | unde
 /**
  * Validate that an attribute name exists in the context.
  * If not, emit a diagnostic and return false.
+ *
+ * A name is valid if it's either a real Data/func-input/output attribute
+ * (`ctx.attributeTypes`) OR a func-scope alias binding (`ctx.localBindings`
+ * — populated for `RosettaFunction.shortcuts` by ts-emitter's
+ * `buildFuncBodyContext`; real corpus case: CDM's `Create_Exercise` func
+ * declares `alias optionPayout: <navigation expr>` then
+ * `condition OptionPayoutExists: optionPayout exists`). `attrAccessExpr`
+ * (used to emit the actual access expression) already checks
+ * `localBindings` first — this function is the validation gate that must
+ * agree with it, or a valid alias reference in `exists`/`is absent`/
+ * `one-of`/`choice`/`only-exists` incorrectly falls through to the
+ * unknown-attribute DIAGNOSTIC even though the emitted access expression
+ * would have resolved correctly.
  * FR-025.
  */
 function validateAttr(attrName: string, ctx: ExpressionTranspilerContext): boolean {
-  if (!ctx.attributeTypes.has(attrName)) {
+  if (!ctx.attributeTypes.has(attrName) && !ctx.localBindings?.has(attrName)) {
     ctx.diagnostics.push({
       severity: 'error',
       code: 'unknown-attribute',

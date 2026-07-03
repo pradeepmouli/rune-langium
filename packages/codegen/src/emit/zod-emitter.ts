@@ -34,7 +34,7 @@ import {
   type RosettaExternalFunction
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
-import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
 import { RUNE_EXTEND_CHOICE_HELPER_SOURCE } from './zod-runtime-helpers.js';
 import {
   decodeCardinality,
@@ -1078,10 +1078,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       ``,
       `import { z } from 'zod';`,
       ...(this.suppressBoilerplate
-        ? [
-            `import { runeCheckOneOf, runeCount, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, runeExtendChoice } from './runtime.zod.js';`,
-            ``
-          ]
+        ? [buildRuntimeHelperImportLine('./runtime.zod.js', ['runeExtendChoice']), ``]
         : ['', RUNTIME_HELPER_SOURCE, '', RUNE_EXTEND_CHOICE_HELPER_SOURCE, ''])
     ].join('\n');
   }

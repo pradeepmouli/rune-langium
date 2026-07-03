@@ -1,0 +1,20 @@
+namespace "test.funcs.preconditionAlias"
+version "1"
+
+type Wrapper:
+    payload string (0..1)
+
+func UsePayload:
+    inputs:
+        wrapper Wrapper (1..1)
+    output:
+        result string (1..1)
+
+    alias payload:
+        wrapper -> payload
+
+    condition PayloadExists:
+        payload exists
+
+    set result:
+        payload

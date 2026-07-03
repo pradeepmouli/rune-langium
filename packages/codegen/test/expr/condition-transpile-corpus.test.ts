@@ -12,20 +12,35 @@
  * dispatcher zod-emitter/ts-emitter call) with a neutral zod-refine
  * context. Counts `/* DIAGNOSTIC` occurrences in the output.
  *
- * SCOPE NOTE: this gate asserts zero DIAGNOSTIC only for conditions whose
- * `$container` is a `Data` type — this is the actual W1 emission surface
- * (`ts-emitter.emitData` / `zod-emitter`'s per-Data condition block).
- * Conditions attached to a `RosettaFunction` (func pre/post-conditions) are
- * SWEPT AND REPORTED but excluded from the pass/fail assertion: their real
- * `attributeTypes` come from `func.inputs`/`func.output`/alias bindings
- * (see `ts-emitter.ts`'s `buildFuncBodyContext`), which requires the same
- * `RuneFunc`/`extractFuncs` machinery as func-body emission itself — not
- * "cheaply reachable" from a corpus sweep without re-implementing that
- * extraction in parallel. Per the plan: "attempt func-body expressions if
- * cheaply reachable; report whether included or deferred and why" — this
- * gate DEFERS full func-condition attribute modeling for that reason and
- * documents it in the parity report rather than asserting on a known-
- * incomplete model (false positives would misrepresent the real W1 gap).
+ * Asserts zero DIAGNOSTIC for BOTH Data-attached conditions (the primary W1
+ * emission surface — `ts-emitter.emitData` / `zod-emitter`'s per-Data
+ * condition block) and func-attached conditions (`RosettaFunction` pre/post-
+ * conditions). Func-attached conditions resolve names against the func's own
+ * scope — `buildFuncAttributeContext` below builds `attributeTypes` from
+ * `func.inputs`/`func.output` and `localBindings` from `func.shortcuts`
+ * (aliases), mirroring `ts-emitter.ts`'s `buildFuncBodyContext` but without
+ * the full `RuneFunc`/`extractFuncs` body-emission machinery (assignments,
+ * call graph, output-accumulator kind) that gate doesn't need — only name
+ * resolution matters for validating `exists`/`is absent`/`one-of`/`choice`/
+ * `only-exists` references. The grammar (`rune-dsl.langium`'s
+ * `RosettaFunction` rule: `shortcuts* conditions* operations*
+ * postConditions*`) guarantees every alias is declared before any condition
+ * that might reference it, so no source-order tracking is needed here.
+ *
+ * Previously (through the transpiler-emitter-parity work) func-attached
+ * conditions were swept and reported but excluded from the pass/fail
+ * assertion, because `validateAttr`/`attrAccessExpr` (src/expr/
+ * transpiler.ts) only consulted `attributeTypes`, never `localBindings` —
+ * a real bug in `ts-emitter.ts`'s emitted func output (not just a gate
+ * limitation): an alias reference inside `exists`/`is absent`/etc. always
+ * fell through to the unknown-attribute DIAGNOSTIC, and `emitFuncBody` also
+ * emitted pre-conditions before aliases (a TDZ `ReferenceError` on the
+ * alias's `const` binding once the DIAGNOSTIC gap was closed). Both are
+ * fixed; the 3 real corpus findings (`Create_Exercise.OptionPayoutExists`,
+ * `Create_OnDemandRateChangePriceChangeInstruction.OneRatePrice`,
+ * `Create_OnDemandInterestPaymentPrimitiveInstruction.
+ * InterestRatePayoutExists` — all `<alias> exists` referencing a func-scope
+ * alias) are gone; this gate now asserts zero for both surfaces.
  *
  * Separately asserts zero RosettaSuperCall occurrences across BOTH Data and
  * func conditions (per spec: if `super` appears in a real condition, that's
@@ -50,14 +65,56 @@ import { AstUtils } from 'langium';
 import {
   parseWorkspace,
   isData,
+  isRosettaFunction,
   isRosettaModel,
   type Condition,
   type Data,
+  type RosettaFunction,
   type RosettaModel
 } from '@rune-langium/core';
 import { transpileCondition, type ExpressionTranspilerContext } from '../../src/expr/transpiler.js';
 import { buildAttributeTypesMap } from '../../src/emit/base-namespace-emitter.js';
 import type { GeneratorDiagnostic } from '../../src/types.js';
+
+/**
+ * Build the func-scope name-resolution context a real
+ * `RosettaFunction`-attached Condition (pre/post-condition) needs: its
+ * `attributeTypes` (inputs + output, mirroring ts-emitter's
+ * `buildFuncBodyContext`) and its `localBindings` (alias/shortcut names —
+ * `RosettaFunction.shortcuts`). The grammar (rune-dsl.langium's
+ * `RosettaFunction` rule: `shortcuts* conditions* operations*
+ * postConditions*`) guarantees aliases are declared before any condition
+ * that might reference them, so every alias is always in scope here
+ * regardless of which condition is being transpiled.
+ *
+ * Deliberately NOT a call into `extractFuncs`/`buildFuncBodyContext`
+ * (ts-emitter.ts) — those build a FULL `RuneFunc` (assignments, call
+ * graph, output-accumulator kind) for real body emission, which this
+ * gate doesn't need; only the name-resolution maps matter for validating
+ * that `exists`/`is absent`/`one-of`/`choice`/`only-exists` references
+ * resolve. Kept minimal and local to this file, matching how
+ * `buildAttributeTypesMap` (imported above) already provides the
+ * Data-side equivalent for this same gate.
+ */
+function buildFuncAttributeContext(func: RosettaFunction): {
+  attributeTypes: Map<string, string>;
+  localBindings: Map<string, string>;
+} {
+  const attributeTypes = new Map<string, string>();
+  for (const input of func.inputs) {
+    attributeTypes.set(input.name, input.typeCall?.type?.$refText ?? 'unknown');
+  }
+  if (func.output) {
+    attributeTypes.set(func.output.name, func.output.typeCall?.type?.$refText ?? 'unknown');
+  }
+
+  const localBindings = new Map<string, string>();
+  for (const shortcut of func.shortcuts) {
+    localBindings.set(shortcut.name, shortcut.name);
+  }
+
+  return { attributeTypes, localBindings };
+}
 
 const RESOURCES_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../.resources');
 const RESOURCES_EXIST = existsSync(RESOURCES_DIR);
@@ -122,9 +179,9 @@ interface GateResult {
   conditionCount: number;
   dataConditionCount: number;
   funcConditionCount: number;
-  /** DIAGNOSTIC findings for Data-attached conditions — the gate's pass/fail surface. */
+  /** DIAGNOSTIC findings for Data-attached conditions — asserted at zero. */
   dataDiagnosticFindings: Finding[];
-  /** DIAGNOSTIC findings for func-attached (pre/post-condition) conditions — reported, not asserted (see file header). */
+  /** DIAGNOSTIC findings for func-attached (pre/post-condition) conditions — asserted at zero. */
   funcDiagnosticFindings: Finding[];
   /** Data-attached findings matched against KNOWN_DATA_CONDITION_EXCEPTIONS — reported, not asserted. */
   knownExceptionFindings: Finding[];
@@ -187,10 +244,21 @@ async function sweepConditions(): Promise<GateResult> {
         const typeName = isDataCondition
           ? (container as Data).name
           : ((container as { name?: string })?.name ?? 'UnknownFunc');
-        const attributeTypes = isDataCondition ? buildAttributeTypesMap(container as Data) : new Map();
         const conditionName = cond.name ?? 'Condition';
         if (isDataCondition) dataConditionCount++;
         else funcConditionCount++;
+
+        // Func-attached conditions resolve names against the func's own
+        // scope (inputs/output/aliases), NOT the Data-centric attribute map
+        // — see buildFuncAttributeContext's doc comment. A Condition's
+        // $container can also be a RosettaTypeAlias (with-condition type
+        // aliases) — neither Data- nor func-scoped; falls back to an empty
+        // context, same as before this fix (unchanged behavior for that case).
+        const { attributeTypes, localBindings } = isDataCondition
+          ? { attributeTypes: buildAttributeTypesMap(container as Data), localBindings: undefined }
+          : isRosettaFunction(container)
+            ? buildFuncAttributeContext(container)
+            : { attributeTypes: new Map<string, string>(), localBindings: undefined };
 
         const diagnostics: GeneratorDiagnostic[] = [];
         const ctx: ExpressionTranspilerContext = {
@@ -199,7 +267,8 @@ async function sweepConditions(): Promise<GateResult> {
           conditionName,
           typeName,
           attributeTypes,
-          diagnostics
+          diagnostics,
+          localBindings
         };
 
         // Use transpileCondition (not transpileExpression directly) — this
@@ -243,7 +312,7 @@ async function sweepConditions(): Promise<GateResult> {
 }
 
 describe.skipIf(!RESOURCES_EXIST)('condition transpile corpus gate (W1 parity)', () => {
-  it('transpiles every Data-attached Condition.expression in .resources/ with zero DIAGNOSTIC fallbacks', async () => {
+  it('transpiles every Data- and func-attached Condition.expression in .resources/ with zero DIAGNOSTIC fallbacks', async () => {
     const {
       fileCount,
       skippedCount,
@@ -265,7 +334,7 @@ describe.skipIf(!RESOURCES_EXIST)('condition transpile corpus gate (W1 parity)',
         `(${skippedCount} files skipped — parse errors): ${dataConditionCount} Data-attached ` +
         `(${dataDiagnosticFindings.length} DIAGNOSTIC finding(s), gated; ${knownExceptionFindings.length} known ` +
         `documented exception(s), see file header), ${funcConditionCount} func-attached ` +
-        `(${funcDiagnosticFindings.length} DIAGNOSTIC finding(s), reported/deferred — see file header); ` +
+        `(${funcDiagnosticFindings.length} DIAGNOSTIC finding(s), gated); ` +
         `${superFindings.length} super() finding(s) total`
     );
 
@@ -292,18 +361,15 @@ describe.skipIf(!RESOURCES_EXIST)('condition transpile corpus gate (W1 parity)',
       expect.fail(lines.join('\n'));
     }
 
-    // func-attached findings are NOT asserted (see file header) but are
-    // still surfaced in the console log above for visibility; do not
-    // silently drop them.
     if (funcDiagnosticFindings.length > 0) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[condition-transpile-corpus] func-attached DIAGNOSTIC findings (deferred, not gated):\n` +
-          funcDiagnosticFindings
-            .slice(0, 30)
-            .map((f) => `  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}\n    -> ${f.diagnosticText}`)
-            .join('\n')
-      );
+      const lines = [
+        `\n${funcDiagnosticFindings.length} DIAGNOSTIC finding(s) on func-attached (pre/post-condition) conditions ` +
+          `(unhandled expression $type or unresolved func-scope alias reference in the corpus):`
+      ];
+      for (const f of funcDiagnosticFindings.slice(0, 30)) {
+        lines.push(`  ${f.typeName}.${f.conditionName}: ${JSON.stringify(f.snippet)}\n    -> ${f.diagnosticText}`);
+      }
+      expect.fail(lines.join('\n'));
     }
   }, 120_000);
 });

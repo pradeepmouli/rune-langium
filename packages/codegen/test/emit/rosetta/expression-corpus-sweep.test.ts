@@ -31,6 +31,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
+import type { AstNode } from 'langium';
 import { parse, parseExpression } from '@rune-langium/core';
 import { renderExpression } from '../../../src/emit/rosetta/render-expression.js';
 import { treesEquivalent } from './expression-tree-equivalence.js';
@@ -56,14 +57,17 @@ function collectRosettaFiles(dir: string): string[] {
 }
 
 /** A node shaped like Condition | Operation | ShortcutDeclaration. */
-interface ExpressionHolder {
-  $type: string;
+interface ExpressionHolder extends AstNode {
   expression?: unknown;
 }
 
-function hasExpressionField(node: unknown): node is ExpressionHolder {
-  const $type = (node as { $type?: string } | undefined)?.$type;
-  return $type === 'Condition' || $type === 'Operation' || $type === 'ShortcutDeclaration';
+// Parameter typed as `AstNode` (not `unknown`) so the guard narrows via
+// subtype refinement — `streamAllContents` always yields `AstNode`, and a
+// guard's declared parameter type must relate to the checked value's static
+// type for TS to intersect rather than replace it (an `unknown`-typed guard
+// discards the caller's static type instead of narrowing it).
+function hasExpressionField(node: AstNode): node is ExpressionHolder {
+  return node.$type === 'Condition' || node.$type === 'Operation' || node.$type === 'ShortcutDeclaration';
 }
 
 /**

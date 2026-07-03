@@ -15,6 +15,7 @@
  * by synonym-roundtrip.test.ts and synonym-corpus-sweep.test.ts.
  */
 
+import type { AstNode } from 'langium';
 import { createRuneDslServices } from '@rune-langium/core';
 
 /**
@@ -31,7 +32,7 @@ export type SynonymRuleName =
   | 'RosettaEnumSynonym'
   | 'RosettaExternalEnumSynonym';
 
-export interface SynonymParseResult<T = unknown> {
+export interface SynonymParseResult<T extends AstNode = AstNode> {
   value: T;
   hasErrors: boolean;
   parserErrors: unknown[];
@@ -46,7 +47,10 @@ function services(): ReturnType<typeof createRuneDslServices> {
 }
 
 /** Parse a bare `[synonym ...]` snippet against one of the three synonym rules. */
-export function parseSynonymRule<T = unknown>(text: string, rule: SynonymRuleName): SynonymParseResult<T> {
+export function parseSynonymRule<T extends AstNode = AstNode>(
+  text: string,
+  rule: SynonymRuleName
+): SynonymParseResult<T> {
   const result = services().RuneDsl.parser.LangiumParser.parse<T>(text, { rule });
   const lexerErrors = result.lexerErrors ?? [];
   const parserErrors = result.parserErrors ?? [];
