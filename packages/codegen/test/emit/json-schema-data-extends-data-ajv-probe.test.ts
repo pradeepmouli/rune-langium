@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import Ajv from 'ajv/dist/2020.js';
+import { Ajv2020 } from './ajv-2020.js';
 
 describe('adjacent suspect: Data-extends-Data allOf + own-branch additionalProperties:false', () => {
   it('rejects an instance carrying inherited parent properties (own-branch additionalProperties is evaluated in isolation)', () => {
@@ -43,7 +43,7 @@ describe('adjacent suspect: Data-extends-Data allOf + own-branch additionalPrope
       $ref: '#/$defs/Child'
     };
 
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile(schema);
 
     // A real parent+child instance: carries BOTH the parent's required `id`

@@ -23,6 +23,7 @@ function collectGraph(entryRel: string): Set<string> {
     let m: RegExpExecArray | null;
     while ((m = importRe.exec(code))) {
       const spec = m[1];
+      if (spec === undefined) continue;
       if (spec.startsWith('.')) {
         const target = resolve(dirname(file), spec.replace(/\.js$/, '.ts'));
         stack.push(target);

@@ -228,7 +228,7 @@ describe('cdm-smoke: json-schema target', () => {
   it('generates JSON Schema for US1 fixture documents and validates against 2020-12 meta-schema (FR-019)', async () => {
     // Inline import so the test file doesn't require ajv at the top level
     // (avoids impacting tests that don't need it)
-    const { default: Ajv } = await import('ajv/dist/2020.js');
+    const { Ajv2020 } = await import('./emit/ajv-2020.js');
 
     const fixtureNames = ['basic-types', 'cardinality', 'enums', 'inheritance', 'circular', 'reserved-words'];
 
@@ -238,7 +238,7 @@ describe('cdm-smoke: json-schema target', () => {
     const outputs = await generate(docs, { target: 'json-schema' });
     expect(outputs.length).toBeGreaterThan(0);
 
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
 
     // Validate every emitted .schema.json against the 2020-12 meta-schema
     for (const output of outputs) {

@@ -167,7 +167,10 @@ describe('fixture determinism (SC-007)', () => {
 function assertDocumentReady(
   doc: {
     parseResult: { parserErrors: { message: string }[] };
-    diagnostics?: { severity?: 1 | 2 | 3 | 4; message: string }[];
+    // `Diagnostic.message` is `string | MarkupContent` in newer LSP types
+    // (see packages/cli/src/validate.ts, apps/studio's parser-worker.ts);
+    // normalized to text via `.value` below.
+    diagnostics?: { severity?: 1 | 2 | 3 | 4; message: string | { value: string } }[];
   },
   label: string
 ): void {
@@ -178,7 +181,9 @@ function assertDocumentReady(
 
   const diagnostics = doc.diagnostics?.filter((diagnostic) => diagnostic.severity === ERROR_DIAGNOSTIC_SEVERITY) ?? [];
   if (diagnostics.length > 0) {
-    const messages = diagnostics.map((diagnostic) => diagnostic.message).join(', ');
+    const messages = diagnostics
+      .map((diagnostic) => (typeof diagnostic.message === 'string' ? diagnostic.message : diagnostic.message.value))
+      .join(', ');
     throw new Error(`Diagnostic errors in ${label}: ${messages}`);
   }
 }

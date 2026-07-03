@@ -20,7 +20,7 @@ import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import Ajv from 'ajv/dist/2020.js';
+import { Ajv2020 } from './ajv-2020.js';
 import { generate } from '../../src/index.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, '../fixtures');
@@ -45,7 +45,7 @@ async function generateJsonSchema(fixtureName: string): Promise<Record<string, u
 describe('JSON Schema Data-extends-Data: parent properties validate on the composed schema', () => {
   it('an instance carrying both the parent property and the child own property is VALID', async () => {
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Dog' });
 
     const result = validate({ name: 'Rex', breed: 'Labrador' });
@@ -54,7 +54,7 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
 
   it('a two-level chain (Poodle extends Dog extends Animal) validates all three levels of properties', async () => {
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Poodle' });
 
     const result = validate({ name: 'Fifi', breed: 'Standard', size: 'small' });
@@ -63,7 +63,7 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
 
   it('missing a required PARENT property still fails (inheritance is not silently dropped)', async () => {
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Dog' });
 
     const result = validate({ breed: 'Labrador' });
@@ -76,7 +76,7 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
     // `unevaluatedProperties: false` (see emitTypeDef's doc comment: only
     // the outermost composed node in a chain may self-close).
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Poodle' });
 
     const result = validate({ name: 'Rex', breed: 'Labrador', size: 'medium', bogus: true });
@@ -91,7 +91,7 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
     // through a subtype. This is the recorded trade-off, not a bug: only
     // LEAF types (no local subtype) get strict standalone validation.
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Dog' });
 
     const result = validate({ name: 'Rex', breed: 'Labrador', bogus: true });
@@ -108,7 +108,7 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
     // check (the plain-Data branch, not the allOf/unevaluatedProperties
     // branch).
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Animal' });
 
     const result = validate({ name: 'Rex', bogus: true });
@@ -117,7 +117,7 @@ describe('JSON Schema Data-extends-Data: parent properties validate on the compo
 
   it('the emitted schema itself is valid JSON Schema 2020-12 (ajv meta-schema check)', async () => {
     const schema = await generateJsonSchema('inheritance');
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const isValid = ajv.validateSchema(schema);
     expect(isValid, JSON.stringify(ajv.errors)).toBe(true);
   });

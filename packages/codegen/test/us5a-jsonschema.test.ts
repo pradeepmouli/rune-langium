@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import Ajv from 'ajv/dist/2020.js';
+import { Ajv2020 } from './emit/ajv-2020.js';
 import { generate } from '../src/index.js';
 import type { GeneratorOutput } from '../src/types.js';
 
@@ -161,7 +161,7 @@ describe('US5A T091: enums fixture — enum shape and ajv meta-schema validation
     const content = await runJsonSchemaFixture('cardinality');
     const schema = parseSchema(content);
 
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     // Validate that the emitted schema itself is valid JSON Schema 2020-12
     const isValid = ajv.validateSchema(schema);
     expect(isValid).toBe(true);
@@ -174,7 +174,7 @@ describe('US5A T091: enums fixture — enum shape and ajv meta-schema validation
     const content = await runJsonSchemaFixture('enums');
     const schema = parseSchema(content);
 
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const isValid = ajv.validateSchema(schema);
     expect(isValid).toBe(true);
     if (!isValid) {

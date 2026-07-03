@@ -84,14 +84,22 @@ function makeStubProfile(overrides: Partial<LanguageProfile> = {}): LanguageProf
   return {
     target: 'zod',
     extension: '.zod.ts',
-    makeBarrel: vi.fn((perNs) => ({
+    // GenericModelEmitter (the unit under test in this file) never reads
+    // the builtin type/library-func maps — only makeBarrel/concatenate/
+    // makeSharedArtifacts/singleFileLimits/target. Empty maps keep this a
+    // real LanguageProfile without misrepresenting the stub's contract.
+    basicTypeMap: {},
+    recordTypeMap: {},
+    typeAliasMap: {},
+    libraryFuncMap: {},
+    makeBarrel: vi.fn((perNs: ReadonlyArray<GeneratorOutput>) => ({
       relativePath: 'index.zod.ts',
       content: `export {${perNs.map((o) => o.relativePath).join(',')}}`,
       sourceMap: [],
       diagnostics: [],
       funcs: []
     })),
-    concatenate: vi.fn((perNs) => ({
+    concatenate: vi.fn((perNs: ReadonlyArray<GeneratorOutput>) => ({
       relativePath: 'model.zod.ts',
       content: perNs.map((o) => o.content).join('\n'),
       sourceMap: [],

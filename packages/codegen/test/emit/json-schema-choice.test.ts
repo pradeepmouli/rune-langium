@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import Ajv from 'ajv/dist/2020.js';
+import { Ajv2020 } from './ajv-2020.js';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { walkNamespace } from '../../src/emit/namespace-walker.js';
@@ -99,7 +99,7 @@ describe('json-schema-emitter — plain Choice emission', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoice');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     expect(ajv.validateSchema(schema), JSON.stringify(ajv.errors)).toBe(true);
   });
 
@@ -108,7 +108,7 @@ describe('json-schema-emitter — plain Choice emission', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoice');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
     expect(validate({ cash: { amount: 5 } }), JSON.stringify(validate.errors)).toBe(true);
   });
@@ -118,7 +118,7 @@ describe('json-schema-emitter — plain Choice emission', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoice');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
     expect(validate({ cash: { amount: 5 }, commodity: { quantity: 1 } })).toBe(false);
   });
@@ -128,7 +128,7 @@ describe('json-schema-emitter — plain Choice emission', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoice');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
     expect(validate({})).toBe(false);
   });
@@ -153,7 +153,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/BasketConstituent' });
     const result = validate({ commodity: { quantity: 1 }, weight: 2 });
     expect(result, JSON.stringify(validate.errors)).toBe(true);
@@ -164,7 +164,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/BasketConstituent' });
     const result = validate({ cash: { amount: 5 }, commodity: { quantity: 1 }, weight: 2 });
     expect(result).toBe(false);
@@ -175,7 +175,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/BasketConstituent' });
     const result = validate({ weight: 2 });
     expect(result).toBe(false);
@@ -186,7 +186,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/BasketConstituent' });
     const result = validate({ commodity: { quantity: 1 }, weight: 'not-a-number' });
     expect(result).toBe(false);
@@ -197,7 +197,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/BasketConstituent' });
     const result = validate({ commodity: { quantity: 1 }, weight: 2, bogus: 'x' });
     expect(result).toBe(false);
@@ -208,7 +208,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     expect(ajv.validateSchema(schema), JSON.stringify(ajv.errors)).toBe(true);
   });
 
@@ -224,7 +224,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
 
     const result = validate({ cash: { amount: 5 }, commodity: { quantity: 1 } });
@@ -242,7 +242,7 @@ describe('json-schema-emitter — Data extends Choice', () => {
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceExtends');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/Asset' });
 
     const result = validate({ cash: { amount: 5 }, bogus: true });
@@ -256,7 +256,7 @@ describe('json-schema-emitter — multi-level Data extends Data extends Choice',
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceMultilevel');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     const validate = ajv.compile({ ...schema, $ref: '#/$defs/BasketConstituent' });
 
     // One option + intermediate's own attr + leaf's own attr -> valid.
@@ -275,7 +275,7 @@ describe('json-schema-emitter — multi-level Data extends Data extends Choice',
     const model = walkNamespace([doc], 'test.jsonSchemaChoiceMultilevel');
     const output = emitNamespace(model, {});
     const schema = JSON.parse(output.content) as Record<string, unknown>;
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
     expect(ajv.validateSchema(schema), JSON.stringify(ajv.errors)).toBe(true);
   });
 });
