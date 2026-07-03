@@ -1,0 +1,12 @@
+namespace test.ctaxns.base
+version "0.0.0"
+
+type Cash:
+    amount number (0..1)
+
+type Commodity:
+    quantity number (0..1)
+
+choice Asset:
+    Cash
+    Commodity

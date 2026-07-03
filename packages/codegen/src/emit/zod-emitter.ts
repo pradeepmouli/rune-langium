@@ -374,6 +374,13 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
           trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
         } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
           trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+        } else if (attrTypeRef && isChoice(attrTypeRef)) {
+          // Item 3 (docs/superpowers/specs/2026-07-02-emitter-crossns-
+          // hardening-design.md): a Choice-typed attribute resolves to
+          // `<Choice>Schema` via resolveTypeExpr (isChoice branch, W2) —
+          // same $import convention as Data/Enum attribute types, was
+          // previously untracked.
+          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
         }
       }
     }
