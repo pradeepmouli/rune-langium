@@ -1532,6 +1532,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const bodyLines: string[] = [];
 
     if (func.isAbstract) {
+      // Same alias-before-precondition ordering as the non-abstract path
+      // below — an abstract func (no set/add body) can still declare
+      // aliases per the grammar, and a pre-condition may reference one.
+      for (const alias of func.aliases) {
+        bodyLines.push(TsNamespaceEmitter.emitFuncAlias(alias, ctx));
+      }
       const preConds = TsNamespaceEmitter.emitFuncPreConditions(func, ctx);
       for (const block of preConds) {
         bodyLines.push(block);
@@ -1552,13 +1558,21 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       bodyLines.push(`  let result: ${outputTs};`);
     }
 
+    // Aliases before pre-conditions: the grammar (rune-dsl.langium's
+    // RosettaFunction rule) fixes source order as shortcuts* conditions*
+    // operations* postConditions* — a pre-condition MAY reference an
+    // earlier alias (real corpus case: CDM's Create_Exercise declares
+    // `alias optionPayout: ...` then `condition OptionPayoutExists:
+    // optionPayout exists`). Emitting pre-conditions first referenced an
+    // alias's `const` binding before its declaration (a TDZ ReferenceError
+    // in the generated output).
+    for (const alias of func.aliases) {
+      bodyLines.push(TsNamespaceEmitter.emitFuncAlias(alias, ctx));
+    }
+
     const preConds = TsNamespaceEmitter.emitFuncPreConditions(func, ctx);
     for (const block of preConds) {
       bodyLines.push(block);
-    }
-
-    for (const alias of func.aliases) {
-      bodyLines.push(TsNamespaceEmitter.emitFuncAlias(alias, ctx));
     }
 
     for (const assignment of func.assignments) {

@@ -126,6 +126,34 @@ describe('US6 funcs: alias-func (T116)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Func pre-condition referencing an alias (real-corpus shape — see
+// docs/superpowers/plans housekeeping item 3: Create_Exercise.
+// OptionPayoutExists in the CDM corpus does `alias optionPayout: <navigation
+// expr>` then `condition OptionPayoutExists: optionPayout exists`).
+// validateAttr() (src/expr/transpiler.ts) only checked ctx.attributeTypes
+// (inputs + output), never ctx.localBindings (alias bindings), so
+// `<alias> exists`/`is absent`/one-of/choice/only-exists on a func-scope
+// alias always fell through to the "unknown attribute" DIAGNOSTIC — a real
+// bug in ts-emitter's emitted func output, not just a test-harness gap.
+// ---------------------------------------------------------------------------
+
+describe('US6 funcs: precondition referencing a func-scope alias', () => {
+  it('emits export function UsePayload with alias-referencing precondition (byte-identical)', async () => {
+    const [actual, expected] = await Promise.all([
+      generateFuncFixture('precondition-alias'),
+      readFile(join(FIXTURES_DIR, 'precondition-alias', 'expected.ts'), 'utf-8')
+    ]);
+    expect(actual).toBe(expected);
+  });
+
+  it('resolves the alias exists check without an unknown-attribute DIAGNOSTIC fallback', async () => {
+    const actual = await generateFuncFixture('precondition-alias');
+    expect(actual).not.toContain('DIAGNOSTIC');
+    expect(actual).toContain('runeAttrExists(payload)');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // T117: Recursive — hoisted function declaration for cyclic call graph
 // ---------------------------------------------------------------------------
 
