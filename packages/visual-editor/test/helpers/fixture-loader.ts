@@ -59,6 +59,23 @@ enum CurrencyEnum:
 `;
 
 /**
+ * Model with an Enumeration extending another Enumeration (`enum-extends`
+ * edge coverage — see e.g. `.resources/cdm/base-staticdata-asset-common-enum.rosetta`
+ * `enum AssetIdTypeEnum extends ProductIdTypeEnum:` for the real-corpus shape).
+ */
+export const ENUM_INHERITANCE_SOURCE = `
+namespace test.enumInheritance
+version "1.0.0"
+
+enum BaseCurrencyEnum:
+  USD
+  EUR
+
+enum CurrencyEnum extends BaseCurrencyEnum:
+  GBP
+`;
+
+/**
  * Combined model with Data + Choice + Enum for integration tests.
  */
 export const COMBINED_MODEL_SOURCE = `
