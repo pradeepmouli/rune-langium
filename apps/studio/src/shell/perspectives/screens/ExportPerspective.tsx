@@ -146,10 +146,6 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
 
   return (
     <section data-testid="export-perspective" className="h-full overflow-auto flex flex-col">
-      <div className="shrink-0 px-6 py-4 border-b border-border/70">
-        <h1 className="text-lg font-semibold">Export</h1>
-      </div>
-
       <div className="flex flex-col flex-1 min-h-0">
         {/* Target selector — always visible */}
         <div data-testid="export-targets-section" className="shrink-0">

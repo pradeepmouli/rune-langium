@@ -15,6 +15,11 @@
  * stub `global.Worker` with a MockWorker continue to observe instances). The
  * LSP transport is supplied directly as a context value — NOT via the real
  * LspProvider — so tests don't open a network connection.
+ *
+ * Mounts `AppHeader` alongside `ExplorePerspective`, mirroring `App.tsx`'s
+ * real composition (shared-perspective-chrome plan, Task 3): the top bar
+ * (brand/switcher, FileTabStrip, Validate/Export/Share/Generate) is no
+ * longer part of ExplorePerspective's own render tree.
  */
 
 import type React from 'react';
@@ -33,6 +38,7 @@ import type { TransportState } from '../../src/services/transport-provider.js';
 import type { WorkspaceKind } from '../../src/workspace/persistence.js';
 import type { DeferredExportEntry } from '../../src/workers/parser-worker.js';
 import { ExplorePerspective } from '../../src/shell/ExplorePerspective.js';
+import { AppHeader } from '../../src/shell/AppHeader.js';
 
 export interface EditorPageHarnessProps {
   models?: RosettaModel[];
@@ -92,11 +98,16 @@ export function EditorPageHarness(props: EditorPageHarnessProps): React.ReactEle
     onSwitchWorkspace: props.onSwitchWorkspace ?? noop
   };
 
+  // The harness always represents a loaded workspace with Explore content —
+  // callers that need the fallback state (no workspace/no content) test
+  // AppHeader/PerspectiveHost directly via resolveEffectivePerspective
+  // rather than through this harness.
   return (
     <WorkspaceActionsContext.Provider value={actions}>
       <WorkspaceStateContext.Provider value={workspaceState}>
         <LspContext.Provider value={lspValue}>
           <CodegenProvider>
+            <AppHeader hasWorkspace hasExploreContent />
             <ExplorePerspective />
           </CodegenProvider>
         </LspContext.Provider>

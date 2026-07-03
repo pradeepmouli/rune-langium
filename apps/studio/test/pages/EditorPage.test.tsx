@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
+import { useExploreFileNavStore } from '../../src/shell/explore-file-nav-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
 const {
@@ -1043,6 +1044,7 @@ describe('EditorPage workspace chrome', () => {
     // EditorPage represents a loaded workspace — Explore must be active so
     // PerspectiveHost renders DockShell (not hidden by display:none).
     usePerspectiveStore.setState({ activePerspective: 'explore' });
+    useExploreFileNavStore.setState({ activeEditorFile: undefined, syncStatus: null });
     editorStoreState.nodes = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
@@ -1077,6 +1079,29 @@ describe('EditorPage workspace chrome', () => {
     expect(screen.getByRole('button', { name: 'Fit View' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Re-layout' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
+  });
+
+  it('opening a file via the tab strip (explore-file-nav-store) is reflected by the source editor — behavior preserved after the useState→store lift', () => {
+    renderEditorPage({
+      models: [],
+      files: [
+        { name: 'alpha.rosetta', path: 'alpha.rosetta', content: 'namespace alpha', dirty: false },
+        { name: 'beta.rosetta', path: 'beta.rosetta', content: 'namespace beta', dirty: false }
+      ]
+    });
+
+    // The files-loaded effect auto-selects the first file as active.
+    expect(sourceEditorMockState.latestProps?.activeFile).toBe('alpha.rosetta');
+
+    // Clicking a different tab calls onSelectFile (bound to openFileInSource),
+    // which now writes explore-file-nav-store instead of local useState.
+    fireEvent.click(screen.getByRole('button', { name: /beta\.rosetta/ }));
+
+    // The store write is observed by an unrelated consumer (SourceEditor's
+    // activeFile prop) exactly as the old local useState flow was — single
+    // source, no duplication.
+    expect(sourceEditorMockState.latestProps?.activeFile).toBe('beta.rosetta');
+    expect(useExploreFileNavStore.getState().activeEditorFile).toBe('beta.rosetta');
   });
 
   it('requests inspector focus when a node is selected', async () => {
