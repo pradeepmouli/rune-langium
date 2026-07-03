@@ -66,15 +66,11 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
-import { SyncStatusBadge } from '../components/SyncStatusBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
-import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
-import { Kbd } from '@rune-langium/design-system/ui/kbd';
-import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -82,31 +78,15 @@ import {
   DialogHeader,
   DialogTitle
 } from '@rune-langium/design-system/ui/dialog';
-import {
-  Maximize2,
-  LayoutGrid,
-  Network,
-  Check,
-  Download,
-  Share2,
-  Zap,
-  Search,
-  ChevronDown,
-  Plus,
-  LogOut
-} from 'lucide-react';
-import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
+import { Maximize2, LayoutGrid, Network } from 'lucide-react';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
-import { usePerspectiveStore } from '../store/perspective-store.js';
-import type { WorkspaceFile } from '../services/workspace.js';
-import { linkDocument, createBlankWorkspaceFile } from '../services/workspace.js';
+import { linkDocument } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
-import { FontScaleButton } from '../components/FontScaleButton.js';
-import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
+import { subscribeToEngine } from '../services/git-sync.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from './panels/FormPreviewPanel.js';
 import { CenterStackPanel } from './panels/CenterStackPanel.js';
@@ -115,7 +95,6 @@ import { useWorkspace } from './providers/workspace-context.js';
 import { useLsp } from './providers/lsp-context.js';
 import { useWorkspaceActions } from './perspectives/workspace-actions-context.js';
 import type { DeferredExportEntry } from '../workers/parser-worker.js';
-import type { LspDiagnostic } from '../store/diagnostics-store.js';
 import { pathToUri } from '../utils/uri.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { combineFileDiagnostics, countDiagnostics } from './explore-diagnostics.js';
@@ -384,27 +363,6 @@ function formatUnknownKind(rawType: string): string {
   return spaced.charAt(0) + spaced.slice(1).toLowerCase();
 }
 
-function getFileKindBadge(name: string): string {
-  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
-  switch (ext) {
-    case 'rosetta':
-      return 'DSL';
-    case 'json':
-      return 'JSON';
-    case 'yaml':
-    case 'yml':
-      return 'YAML';
-    case 'ts':
-      return 'TS';
-    case 'js':
-      return 'JS';
-    case 'md':
-      return 'MD';
-    default:
-      return ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
-  }
-}
-
 function resolveResponsiveLayoutDirection(
   width: number,
   height: number,
@@ -416,87 +374,9 @@ function resolveResponsiveLayoutDirection(
   return previous;
 }
 
-/** Count error (severity 1) and warning (severity 2) diagnostics for a file. */
-function countFileDiagnostics(diagnostics: readonly LspDiagnostic[] | undefined): {
-  errors: number;
-  warnings: number;
-} {
-  let errors = 0;
-  let warnings = 0;
-  if (diagnostics) {
-    for (const d of diagnostics) {
-      if (d.severity === 1) errors += 1;
-      else if (d.severity === 2) warnings += 1;
-    }
-  }
-  return { errors, warnings };
-}
-
-function FileTabStrip({
-  files,
-  activeFile,
-  onSelectFile,
-  onCreateFile,
-  fileDiagnostics
-}: {
-  files: readonly WorkspaceFile[];
-  activeFile: string | undefined;
-  onSelectFile: (path: string) => void;
-  onCreateFile: () => void;
-  fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>;
-}) {
-  const userFiles = files.filter((f) => !f.readOnly);
-
-  return (
-    <div className="studio-topbar__tabs">
-      {userFiles.map((f) => {
-        const { errors, warnings } = countFileDiagnostics(fileDiagnostics.get(f.path));
-        return (
-          <button
-            key={f.path}
-            type="button"
-            className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
-            onClick={() => onSelectFile(f.path)}
-            title={f.path}
-            // Explicit label so screen readers don't read the diagnostics
-            // chiclets as bare numbers (e.g. "a.rosetta 2 1").
-            aria-label={`${f.name}${f.dirty ? ', unsaved' : ''}${
-              errors > 0 ? `, ${errors} error${errors === 1 ? '' : 's'}` : ''
-            }${warnings > 0 ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}`}
-          >
-            <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
-            <span className="studio-topbar__tab-name">{f.name}</span>
-            {errors > 0 && (
-              <span className="studio-topbar__tab-count is-error" title={`${errors} error${errors === 1 ? '' : 's'}`}>
-                {errors}
-              </span>
-            )}
-            {warnings > 0 && (
-              <span
-                className="studio-topbar__tab-count is-warning"
-                title={`${warnings} warning${warnings === 1 ? '' : 's'}`}
-              >
-                {warnings}
-              </span>
-            )}
-            <span className="studio-topbar__tab-badge" aria-hidden="true">
-              {getFileKindBadge(f.name)}
-            </span>
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        className="studio-topbar__tab-new"
-        aria-label="New file"
-        title="New file"
-        onClick={onCreateFile}
-      >
-        <Plus className="size-3.5" />
-      </button>
-    </div>
-  );
-}
+// getFileKindBadge / countFileDiagnostics / FileTabStrip moved verbatim to
+// perspectives/explore-chrome.tsx (ExploreCenterSlot) — shared-perspective-
+// chrome plan, Task 3.
 
 export function ExplorePerspective() {
   // Workspace model data — formerly props, now from WorkspaceProvider.
@@ -506,7 +386,6 @@ export function ExplorePerspective() {
   const parseErrors = workspace.parseErrors ?? EMPTY_PARSE_ERRORS;
   const workspaceId = workspace.workspaceId ?? 'default';
   const workspaceKind = workspace.workspaceKind;
-  const workspaceName = workspace.workspaceName;
   const fileCount = workspace.fileCount;
   const studioVersion = STUDIO_VERSION;
 
@@ -516,7 +395,9 @@ export function ExplorePerspective() {
   const onReconnect = reconnect;
 
   // Workspace actions — formerly props, now from the actions context.
-  const { onFilesChange, onClose, onSwitchWorkspace, onCreateWorkspace } = useWorkspaceActions();
+  // onClose/onSwitchWorkspace/onCreateWorkspace moved to AppHeader's
+  // WorkspaceSwitcherTrigger (shared-perspective-chrome plan, Task 3).
+  const { onFilesChange } = useWorkspaceActions();
 
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -533,30 +414,14 @@ export function ExplorePerspective() {
   // once a workspace is open. A richer bottom-bar multi-selector is deferred
   // to a future task; the modal is the minimal landing.
   const [showCuratedModels, setShowCuratedModels] = useState(false);
-  // Topbar workspace dropdown — populated lazily when the popover opens
-  // so we don't read IDB on every EditorPage mount. Recents list is filtered
-  // to exclude the current workspace (no point switching to where you are).
-  const [workspaceMenuRecents, setWorkspaceMenuRecents] = useState<RecentWorkspaceRecord[]>([]);
-  const handleWorkspaceMenuOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) {
-        void listRecents().then((rows) => {
-          setWorkspaceMenuRecents(rows.filter((r) => r.id !== workspaceId));
-        });
-      }
-    },
-    [workspaceId]
-  );
+  // Topbar workspace dropdown state moved to AppHeader's WorkspaceSwitcherTrigger
+  // (shared-perspective-chrome plan, Task 3).
   const [groupedLayout, setGroupedLayout] = useState(false);
   const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
   const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
-  // File tabs are an Explore-only affordance (moves to perspective-registry's
-  // centerSlot in Task 3 of the shared-chrome plan; runtime-gated until then).
-  // Hide them when the user switches to Git / Export / Settings / Workspaces.
-  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
   // Active file + git-sync status are shared with the header's FileTabStrip
@@ -581,11 +446,12 @@ export function ExplorePerspective() {
   );
   const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-  // Git sync status — only meaningful for git-backed workspaces.
+  // Git sync status — only meaningful for git-backed workspaces. The value
+  // is read by AppHeader's SyncStatusBadge (via the same store); this
+  // component only owns the subscription that keeps it fresh.
   // Uses subscribeToEngine so the subscription survives async engine creation:
   // the badge will receive state even if the engine is created after this effect
   // runs (which is the common case on first boot).
-  const syncStatus = useExploreFileNavStore((s) => s.syncStatus);
   const setSyncStatus = useExploreFileNavStore((s) => s.setSyncStatus);
   useEffect(() => {
     if (workspaceKind !== 'git-backed') return;
@@ -1125,13 +991,8 @@ export function ExplorePerspective() {
   // works unchanged.
   const openFileInSource = storeOpenFileInSource;
 
-  // "+" new-file affordance — mirrors FileLoader's start-page "New" flow:
-  // mint the next available untitled[.rosetta] file, append it, and open it.
-  const handleCreateFile = useCallback(() => {
-    const file = createBlankWorkspaceFile(filesRef.current);
-    onFilesChange?.([...filesRef.current, file]);
-    openFileInSource(file.path);
-  }, [onFilesChange, openFileInSource]);
+  // "+" new-file affordance moved to ExploreCenterSlot (shared-perspective-
+  // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().
 
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
@@ -1975,7 +1836,6 @@ export function ExplorePerspective() {
     ]
   );
 
-  const workspaceFileCount = fileCount;
   const totalProblemCount = useMemo(() => combinedDiagnostics.total, [combinedDiagnostics.total]);
   const panelTabMeta = useMemo(
     () => ({
@@ -2007,141 +1867,6 @@ export function ExplorePerspective() {
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
-      <header className="studio-topbar" aria-label="Studio workspace header">
-        <div className="studio-topbar__left">
-          <div className="studio-brand">
-            <div className="studio-brand__mark">R</div>
-            <span className="studio-brand__name">Rune Studio</span>
-          </div>
-          <span className="studio-topbar__divider" />
-          <Popover onOpenChange={handleWorkspaceMenuOpenChange}>
-            <PopoverTrigger
-              render={
-                <button
-                  type="button"
-                  className="studio-topbar__ws-btn"
-                  aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
-                  title="Switch / create / close workspace"
-                >
-                  <span className="studio-topbar__ws-mark" aria-hidden="true">
-                    {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
-                  </span>
-                  <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
-                  <span className="studio-topbar__ws-sub">
-                    {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-                  </span>
-                  <ChevronDown className="size-3" />
-                </button>
-              }
-            />
-            <PopoverContent align="start" sideOffset={6} className="w-72 p-1.5">
-              {/* Switch-to section — only shown when callback is provided AND
-                  there are recents OTHER than the current workspace. The
-                  dropdown was the user-reported gap (workspace tab had a
-                  ChevronDown that promised a menu but only fired onClose). */}
-              {onSwitchWorkspace && workspaceMenuRecents.length > 0 && (
-                <>
-                  <p className="px-2 py-1 text-3xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Switch to
-                  </p>
-                  <ul className="space-y-0.5" role="menu">
-                    {workspaceMenuRecents.slice(0, 6).map((r) => (
-                      <li key={r.id} role="none">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
-                          onClick={() => onSwitchWorkspace(r.id)}
-                        >
-                          <span className="font-medium truncate flex-1">{r.name}</span>
-                          <span className="shrink-0 text-3xs px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
-                            {r.kind === 'git-backed' ? 'GIT' : r.kind === 'folder-backed' ? 'FOLDER' : 'BROWSER'}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="my-1 border-t border-border" />
-                </>
-              )}
-              {onCreateWorkspace && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
-                  onClick={onCreateWorkspace}
-                >
-                  <Plus className="size-3.5 text-muted-foreground" />
-                  <span>New workspace</span>
-                </button>
-              )}
-              {onClose && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left text-destructive"
-                  onClick={onClose}
-                  aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
-                >
-                  <LogOut className="size-3.5" />
-                  <span>Close workspace</span>
-                </button>
-              )}
-            </PopoverContent>
-          </Popover>
-        </div>
-        {activePerspective === 'explore' && (
-          <FileTabStrip
-            files={files}
-            activeFile={activeEditorFile}
-            onSelectFile={openFileInSource}
-            onCreateFile={handleCreateFile}
-            fileDiagnostics={combinedFileDiagnostics}
-          />
-        )}
-        <div className="studio-topbar__right">
-          <button type="button" className="studio-topbar__cmdk" aria-label="Search">
-            <Search className="size-3.5" />
-            <span>Search types, files, commands…</span>
-            <Kbd>⌘K</Kbd>
-          </button>
-          {workspaceKind === 'git-backed' && syncStatus && (
-            <SyncStatusBadge
-              status={syncStatus}
-              onResolve={(choice) => {
-                resolveConflict(workspaceId, choice);
-              }}
-            />
-          )}
-          <span className="studio-topbar__divider" />
-          <FontScaleButton />
-          <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
-            <Check />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Export code"
-            title="Export code"
-            onClick={() => setShowExportDialog(true)}
-          >
-            <Download />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
-            <Share2 />
-          </Button>
-          <button type="button" className="studio-topbar__generate" onClick={() => setShowExportDialog(true)}>
-            <Zap className="size-3.5" />
-            Generate
-          </button>
-          <span className="studio-topbar__divider" />
-          <Avatar render={<button type="button" aria-label="Account" />} className="size-7 cursor-pointer">
-            <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-2xs font-bold">
-              PM
-            </AvatarFallback>
-          </Avatar>
-        </div>
-      </header>
       <div className="flex flex-1 min-h-0">
         <DockShell
           studioVersion={studioVersion}

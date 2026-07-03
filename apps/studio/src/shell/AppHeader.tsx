@@ -9,25 +9,189 @@
  * Composition: left brand+switcher (degradable), the active perspective's
  * centerSlot or title, its actions slot, then global utilities.
  *
- * The left brand/switcher and the global utilities move here from
- * ExplorePerspective in Task 3 of the shared-chrome plan — this task only
- * mounts the skeleton so AppHeader renders in every perspective.
+ * Left brand/switcher + global utilities (search stub, SyncStatusBadge,
+ * FontScaleButton, Avatar) MOVED VERBATIM from ExplorePerspective's private
+ * header (Task 3 of the shared-chrome plan). Reads workspace state through
+ * the null-tolerant hooks so it renders without throwing when no workspace
+ * is loaded (Settings, or the launcher before a workspace opens).
  */
+import { useCallback, useState } from 'react';
+import { ChevronDown, Plus, LogOut, Search } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
+import { Kbd } from '@rune-langium/design-system/ui/kbd';
+import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { usePerspectiveStore } from '../store/perspective-store.js';
 import { PERSPECTIVES } from './perspectives/perspective-registry.js';
+import { useWorkspaceOptional } from './providers/workspace-context.js';
+import { useWorkspaceActionsOptional } from './perspectives/workspace-actions-context.js';
+import { useExploreFileNavStore } from './explore-file-nav-store.js';
+import { SyncStatusBadge } from '../components/SyncStatusBadge.js';
+import { FontScaleButton } from '../components/FontScaleButton.js';
+import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
+import { resolveConflict } from '../services/git-sync.js';
+
+function WorkspaceSwitcherTrigger({
+  workspaceName,
+  workspaceFileCount,
+  onSwitchWorkspace,
+  onCreateWorkspace,
+  onClose,
+  workspaceId
+}: {
+  workspaceName: string | undefined;
+  workspaceFileCount: number;
+  onSwitchWorkspace: ((workspaceId: string) => void) | undefined;
+  onCreateWorkspace: (() => void) | undefined;
+  onClose: (() => void) | undefined;
+  workspaceId: string;
+}) {
+  const [workspaceMenuRecents, setWorkspaceMenuRecents] = useState<RecentWorkspaceRecord[]>([]);
+  const handleWorkspaceMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        void listRecents().then((rows) => {
+          setWorkspaceMenuRecents(rows.filter((r) => r.id !== workspaceId));
+        });
+      }
+    },
+    [workspaceId]
+  );
+
+  return (
+    <Popover onOpenChange={handleWorkspaceMenuOpenChange}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="studio-topbar__ws-btn"
+            aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
+            title="Switch / create / close workspace"
+          >
+            <span className="studio-topbar__ws-mark" aria-hidden="true">
+              {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
+            </span>
+            <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
+            <span className="studio-topbar__ws-sub">
+              {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
+            </span>
+            <ChevronDown className="size-3" />
+          </button>
+        }
+      />
+      <PopoverContent align="start" sideOffset={6} className="w-72 p-1.5">
+        {/* Switch-to section — only shown when callback is provided AND
+            there are recents OTHER than the current workspace. */}
+        {onSwitchWorkspace && workspaceMenuRecents.length > 0 && (
+          <>
+            <p className="px-2 py-1 text-3xs font-medium text-muted-foreground uppercase tracking-wider">Switch to</p>
+            <ul className="space-y-0.5" role="menu">
+              {workspaceMenuRecents.slice(0, 6).map((r) => (
+                <li key={r.id} role="none">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
+                    onClick={() => onSwitchWorkspace(r.id)}
+                  >
+                    <span className="font-medium truncate flex-1">{r.name}</span>
+                    <span className="shrink-0 text-3xs px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
+                      {r.kind === 'git-backed' ? 'GIT' : r.kind === 'folder-backed' ? 'FOLDER' : 'BROWSER'}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="my-1 border-t border-border" />
+          </>
+        )}
+        {onCreateWorkspace && (
+          <button
+            type="button"
+            role="menuitem"
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
+            onClick={onCreateWorkspace}
+          >
+            <Plus className="size-3.5 text-muted-foreground" />
+            <span>New workspace</span>
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            role="menuitem"
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left text-destructive"
+            onClick={onClose}
+            aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
+          >
+            <LogOut className="size-3.5" />
+            <span>Close workspace</span>
+          </button>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function AppHeader() {
   const activeId = usePerspectiveStore((s) => s.activePerspective);
   const perspective = PERSPECTIVES.find((p) => p.id === activeId);
   const Center = perspective?.centerSlot;
   const Actions = perspective?.actions;
+
+  const workspace = useWorkspaceOptional();
+  const workspaceActions = useWorkspaceActionsOptional();
+  const syncStatus = useExploreFileNavStore((s) => s.syncStatus);
+
+  // Degrade rule: hide the switcher when there's no workspace loaded, or the
+  // active perspective doesn't need one (Settings) — brand + title + global
+  // utilities remain either way.
+  const showSwitcher = workspace !== null && workspaceActions !== null && (perspective?.requiresWorkspace ?? false);
+
   return (
     <header className="studio-topbar" aria-label="Studio workspace header" data-testid="app-header">
-      <div className="studio-topbar__left">{/* brand + switcher moved here in Task 3 */}</div>
+      <div className="studio-topbar__left">
+        <div className="studio-brand">
+          <div className="studio-brand__mark">R</div>
+          <span className="studio-brand__name">Rune Studio</span>
+        </div>
+        {showSwitcher && workspace && workspaceActions && (
+          <>
+            <span className="studio-topbar__divider" />
+            <WorkspaceSwitcherTrigger
+              workspaceName={workspace.workspaceName}
+              workspaceFileCount={workspace.fileCount}
+              onSwitchWorkspace={workspaceActions.onSwitchWorkspace}
+              onCreateWorkspace={workspaceActions.onCreateWorkspace}
+              onClose={workspaceActions.onClose}
+              workspaceId={workspace.workspaceId ?? 'default'}
+            />
+          </>
+        )}
+      </div>
       {Center ? <Center /> : <div className="studio-topbar__title">{perspective?.title ?? perspective?.label}</div>}
       <div className="studio-topbar__right">
         {Actions ? <Actions /> : null}
-        {/* global utilities moved here in Task 3 */}
+        <button type="button" className="studio-topbar__cmdk" aria-label="Search">
+          <Search className="size-3.5" />
+          <span>Search types, files, commands…</span>
+          <Kbd>⌘K</Kbd>
+        </button>
+        {workspace?.workspaceKind === 'git-backed' && syncStatus && (
+          <SyncStatusBadge
+            status={syncStatus}
+            onResolve={(choice) => {
+              resolveConflict(workspace.workspaceId ?? 'default', choice);
+            }}
+          />
+        )}
+        <span className="studio-topbar__divider" />
+        <FontScaleButton />
+        <span className="studio-topbar__divider" />
+        <Avatar render={<button type="button" aria-label="Account" />} className="size-7 cursor-pointer">
+          <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-2xs font-bold">
+            PM
+          </AvatarFallback>
+        </Avatar>
       </div>
     </header>
   );

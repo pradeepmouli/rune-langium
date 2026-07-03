@@ -5,6 +5,59 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { PERSPECTIVES } from '../../src/shell/perspectives/perspective-registry.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
 import { AppHeader } from '../../src/shell/AppHeader.js';
+import { WorkspaceStateContext, type WorkspaceState } from '../../src/shell/providers/workspace-context.js';
+import {
+  WorkspaceActionsContext,
+  type WorkspaceActions
+} from '../../src/shell/perspectives/workspace-actions-context.js';
+import { LspContext, type LspContextValue } from '../../src/shell/providers/lsp-context.js';
+
+const noop = () => {};
+
+function makeWorkspaceState(overrides?: Partial<WorkspaceState>): WorkspaceState {
+  return {
+    workspaceId: 'ws-1',
+    workspaceKind: 'browser-only',
+    workspaceName: 'Test workspace',
+    fileCount: 1,
+    files: [{ path: 'a.rosetta', name: 'a.rosetta', content: 'namespace a', dirty: false }],
+    models: [],
+    parsedModels: [],
+    deferredExports: [],
+    parseErrors: new Map(),
+    ...overrides
+  };
+}
+
+function makeWorkspaceActions(overrides?: Partial<WorkspaceActions>): WorkspaceActions {
+  return {
+    files: [],
+    onFilesLoaded: noop,
+    createGitBackedWorkspace: async () => ({ id: 'ws-1' }),
+    onGitHubWorkspaceCreated: noop,
+    onOpenWorkspace: noop,
+    onCreateWorkspace: noop,
+    onDeleteWorkspace: noop,
+    onFilesChange: noop,
+    onClose: noop,
+    onSwitchWorkspace: noop,
+    ...overrides
+  };
+}
+
+const lspValue: LspContextValue = { lspClient: null, transportState: undefined, reconnect: noop };
+
+function renderAppHeaderWithWorkspace(overrides?: Partial<WorkspaceState>) {
+  return render(
+    <WorkspaceActionsContext.Provider value={makeWorkspaceActions()}>
+      <WorkspaceStateContext.Provider value={makeWorkspaceState(overrides)}>
+        <LspContext.Provider value={lspValue}>
+          <AppHeader />
+        </LspContext.Provider>
+      </WorkspaceStateContext.Provider>
+    </WorkspaceActionsContext.Provider>
+  );
+}
 
 describe('perspective registry chrome contract', () => {
   it('every non-explore perspective declares a bar title', () => {
@@ -35,5 +88,49 @@ describe('AppHeader', () => {
     usePerspectiveStore.getState().setActivePerspective('git');
     render(<AppHeader />);
     expect(screen.getByText('Git / Sync')).toBeTruthy();
+  });
+
+  it('Explore renders the FileTabStrip and the model-actions cluster', () => {
+    usePerspectiveStore.getState().setActivePerspective('explore');
+    renderAppHeaderWithWorkspace();
+    expect(screen.getByRole('button', { name: /a\.rosetta/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Validate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export code' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.getByText('Generate')).toBeInTheDocument();
+  });
+
+  it('non-Explore perspectives render neither the FileTabStrip nor Explore actions', () => {
+    usePerspectiveStore.getState().setActivePerspective('git');
+    renderAppHeaderWithWorkspace();
+    expect(screen.queryByRole('button', { name: /a\.rosetta/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Generate')).not.toBeInTheDocument();
+  });
+
+  it('renders exactly one .studio-topbar for Explore', () => {
+    usePerspectiveStore.getState().setActivePerspective('explore');
+    const { container } = renderAppHeaderWithWorkspace();
+    expect(container.querySelectorAll('.studio-topbar')).toHaveLength(1);
+  });
+
+  it('renders exactly one .studio-topbar for Settings (no workspace)', () => {
+    usePerspectiveStore.getState().setActivePerspective('settings');
+    const { container } = render(<AppHeader />);
+    expect(container.querySelectorAll('.studio-topbar')).toHaveLength(1);
+  });
+
+  it('settings renders with NO workspace and does not throw; switcher hidden', () => {
+    usePerspectiveStore.getState().setActivePerspective('settings');
+    expect(() => render(<AppHeader />)).not.toThrow();
+    expect(screen.queryByLabelText(/Workspace menu/)).not.toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+  });
+
+  it('shows the workspace switcher for a workspace-requiring perspective with a loaded workspace', () => {
+    usePerspectiveStore.getState().setActivePerspective('git');
+    renderAppHeaderWithWorkspace({ workspaceName: 'CDM Workspace' });
+    expect(screen.getByLabelText(/Workspace menu/)).toBeInTheDocument();
+    expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
   });
 });

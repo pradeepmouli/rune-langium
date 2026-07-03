@@ -8,7 +8,7 @@ describe('PERSPECTIVES registry', () => {
     expect(PERSPECTIVES.map((p) => p.id)).toEqual(['explore', 'workspaces', 'git', 'export', 'settings']);
   });
   it('only Explore declares a centerSlot (file tabs)', () => {
-    expect(PERSPECTIVES.filter((p) => p.centerSlot).map((p) => p.id)).toEqual([]);
+    expect(PERSPECTIVES.filter((p) => p.centerSlot).map((p) => p.id)).toEqual(['explore']);
   });
   it('explore/git/export require a workspace; workspaces/settings do not', () => {
     const req = PERSPECTIVES.filter((p) => p.requiresWorkspace)
