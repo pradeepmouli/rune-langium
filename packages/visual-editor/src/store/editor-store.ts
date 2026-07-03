@@ -40,7 +40,7 @@ import type {
   LayoutOptions,
   LayoutEngine,
   VisibilityState,
-  AnyGraphNode,
+  DomainNodeData,
   GraphNodeMeta
 } from '../types.js';
 // Merged type + ops namespaces: `Data` is both the interface type and the
@@ -448,7 +448,7 @@ function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
  * full RosettaModel hasn't been materialized yet. Both `loadModels`
  * (post-replace merge) and `loadDeferredExports` (direct insert) share
  * this — keeps the placeholder shape in one place so a change to
- * `AnyGraphNode`'s required fields only happens once.
+ * `DomainNodeData`'s required fields only happens once.
  *
  * Mutates `existingIds` by adding each newly-emitted node's id so
  * callers can use the same set to track de-duplication across
@@ -631,7 +631,7 @@ function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, count
     id: makeNodeId(namespace, name),
     type: kind,
     position: { x: counter * 50, y: counter * 50 },
-    data: baseData as unknown as AnyGraphNode,
+    data: baseData as unknown as DomainNodeData,
     meta
   };
 }

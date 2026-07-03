@@ -352,4 +352,28 @@ describe('edge-driven rename cascade (spec 2026-07-03-edge-ref-index)', () => {
     expect(attrs[0].typeCall.type.$refText).toBe('Renamed');
     expect(attrs[1].typeCall.type.$refText).toBe('Renamed');
   });
+
+  it('renaming a parent enum cascades into the child enum via its enum-extends edge', () => {
+    // Pins the `enum-extends` switch arm of rewriteEdgeRefInNode end-to-end
+    // (edge-index.test.ts / edge-ref-rewrite.test.ts's invariant loop proves
+    // the slot is LOCATABLE; this proves renameType actually WIRES it).
+    const s = createEditorStore();
+    s.getState().createType('enum', 'BaseCurrency', 'alpha');
+    s.getState().createType('enum', 'Currency', 'alpha');
+    const baseId = s.getState().nodes.find((n) => n.data.name === 'BaseCurrency')!.id;
+    const childId = s.getState().nodes.find((n) => n.data.name === 'Currency')!.id;
+
+    s.getState().setEnumParent(childId, baseId);
+    const parentRefBefore = (s.getState().nodes.find((n) => n.id === childId)!.data as any).parent?.$refText;
+    expect(parentRefBefore).toBe('BaseCurrency'); // setup sanity
+
+    s.getState().renameType(baseId, 'RootCurrency');
+
+    const parentRefAfter = (s.getState().nodes.find((n) => n.id === childId)!.data as any).parent?.$refText;
+    expect(parentRefAfter).toBe('RootCurrency'); // cascaded via the enum-extends edge
+
+    const newBaseId = s.getState().nodes.find((n) => n.data.name === 'RootCurrency')!.id;
+    const extendsEdge = s.getState().edges.find((e) => e.source === childId && e.data?.kind === 'enum-extends');
+    expect(extendsEdge?.target).toBe(newBaseId); // edge re-keyed to the renamed parent
+  });
 });

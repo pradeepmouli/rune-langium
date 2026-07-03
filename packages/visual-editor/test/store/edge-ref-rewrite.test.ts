@@ -6,7 +6,7 @@ import { createEditorStore } from '../../src/store/editor-store.js';
 import { renameRefValue, rewriteEdgeRefInNode } from '../../src/store/edge-ref-rewrite.js';
 import {
   SIMPLE_INHERITANCE_SOURCE,
-  ENUM_MODEL_SOURCE,
+  ENUM_INHERITANCE_SOURCE,
   CHOICE_MODEL_SOURCE,
   COMBINED_MODEL_SOURCE
 } from '../helpers/fixture-loader.js';
@@ -23,22 +23,20 @@ describe('renameRefValue (form-preserving)', () => {
 
 describe('edge → slot invariant (every materialized edge locates a rewritable slot)', () => {
   // Spec §Testing: the loud-drift guard for recipe-created edges (§6).
-  // ENUM_MODEL_SOURCE is a standalone enum (no parent, no other type
-  // references it) — genuinely zero edges by construction, so it is
-  // exempted from the "has edges" sanity check; the per-edge loop below
-  // still runs (vacuously) for it. Enum cross-refs are covered via
-  // COMBINED_MODEL_SOURCE (Trade.currency -> CurrencyEnum).
-  for (const [name, source, expectEdges] of [
-    ['inheritance', SIMPLE_INHERITANCE_SOURCE, true],
-    ['enum', ENUM_MODEL_SOURCE, false],
-    ['choice', CHOICE_MODEL_SOURCE, true],
-    ['combined', COMBINED_MODEL_SOURCE, true]
+  // ENUM_INHERITANCE_SOURCE (enum extends enum) exercises the `enum-extends`
+  // switch arm in rewriteEdgeRefInNode — otherwise untested by this loop,
+  // since no other fixture here produces that edge kind.
+  for (const [name, source] of [
+    ['inheritance', SIMPLE_INHERITANCE_SOURCE],
+    ['enum-inheritance', ENUM_INHERITANCE_SOURCE],
+    ['choice', CHOICE_MODEL_SOURCE],
+    ['combined', COMBINED_MODEL_SOURCE]
   ] as const) {
     it(`${name} fixture: rewriteEdgeRefInNode locates every edge's slot`, async () => {
       const store = createEditorStore();
       store.getState().loadModels((await parse(source)).value);
       const { nodesById, edgesById } = store.getState();
-      if (expectEdges) expect(edgesById.size).toBeGreaterThan(0);
+      expect(edgesById.size).toBeGreaterThan(0);
       for (const edge of edgesById.values()) {
         const src = nodesById.get(edge.source)!;
         const target = nodesById.get(edge.target)!;
