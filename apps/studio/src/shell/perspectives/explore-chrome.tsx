@@ -12,6 +12,7 @@
  * `useWorkspace()`, `useDiagnosticsStore()`, and `explore-file-nav-store.ts`.
  */
 
+import { useMemo } from 'react';
 import { Check, Download, Share2, Zap, Plus } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import type { WorkspaceFile } from '../../services/workspace.js';
@@ -23,6 +24,11 @@ import { combineFileDiagnostics } from '../explore-diagnostics.js';
 import { useExploreFileNavStore } from '../explore-file-nav-store.js';
 import { useExportDialogStore } from '../export-dialog-store.js';
 import type { LspDiagnostic } from '../../store/diagnostics-store.js';
+
+/** Stable module-level reference — same rationale as ExplorePerspective's
+ *  EMPTY_PARSE_ERRORS: avoids a fresh Map() on every render that would
+ *  false-positive the useMemo dep check below when parseErrors is absent. */
+const EMPTY_PARSE_ERRORS: ReadonlyMap<string, string[]> = new Map();
 
 function getFileKindBadge(name: string): string {
   const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
@@ -134,10 +140,10 @@ export function ExploreCenterSlot() {
   const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
   const openFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
 
-  const combinedFileDiagnostics = combineFileDiagnostics(
-    fileDiagnostics,
-    files,
-    parseErrors ?? new Map<string, string[]>()
+  const effectiveParseErrors = parseErrors ?? EMPTY_PARSE_ERRORS;
+  const combinedFileDiagnostics = useMemo(
+    () => combineFileDiagnostics(fileDiagnostics, files, effectiveParseErrors),
+    [fileDiagnostics, files, effectiveParseErrors]
   );
 
   const handleCreateFile = () => {

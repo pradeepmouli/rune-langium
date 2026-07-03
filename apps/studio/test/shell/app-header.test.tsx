@@ -111,16 +111,16 @@ describe('AppHeader', () => {
     expect(screen.queryByText('Generate')).not.toBeInTheDocument();
   });
 
-  it('renders exactly one .studio-topbar for Explore', () => {
-    usePerspectiveStore.getState().setActivePerspective('explore');
-    const { container } = renderAppHeaderWithWorkspace();
-    expect(container.querySelectorAll('.studio-topbar')).toHaveLength(1);
-  });
-
-  it('renders exactly one .studio-topbar for Settings (no workspace)', () => {
-    usePerspectiveStore.getState().setActivePerspective('settings');
-    const { container } = render(<AppHeader />);
-    expect(container.querySelectorAll('.studio-topbar')).toHaveLength(1);
+  it('renders exactly one .studio-topbar in every perspective', () => {
+    for (const p of PERSPECTIVES) {
+      usePerspectiveStore.getState().setActivePerspective(p.id);
+      const { container, unmount } = renderAppHeaderWithWorkspace();
+      expect(
+        container.querySelectorAll('.studio-topbar'),
+        `${p.id} should render exactly one .studio-topbar`
+      ).toHaveLength(1);
+      unmount();
+    }
   });
 
   it('settings renders with NO workspace and does not throw; switcher hidden', () => {
