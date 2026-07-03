@@ -11,6 +11,9 @@ import {
   type WorkspaceActions
 } from '../../src/shell/perspectives/workspace-actions-context.js';
 import { LspContext, type LspContextValue } from '../../src/shell/providers/lsp-context.js';
+import { GitSyncPerspective } from '../../src/shell/perspectives/screens/GitSyncPerspective.js';
+import { ExportPerspective } from '../../src/shell/perspectives/screens/ExportPerspective.js';
+import { SettingsPerspective } from '../../src/shell/perspectives/screens/SettingsPerspective.js';
 
 const noop = () => {};
 
@@ -132,5 +135,24 @@ describe('AppHeader', () => {
     renderAppHeaderWithWorkspace({ workspaceName: 'CDM Workspace' });
     expect(screen.getByLabelText(/Workspace menu/)).toBeInTheDocument();
     expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
+  });
+});
+
+describe('perspective screens no longer render their own h1 (the bar owns the title)', () => {
+  afterEach(cleanup);
+
+  it('GitSyncPerspective has no h1', () => {
+    render(<GitSyncPerspective />);
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+  });
+
+  it('ExportPerspective has no h1', () => {
+    render(<ExportPerspective />);
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+  });
+
+  it('SettingsPerspective has no h1', () => {
+    render(<SettingsPerspective />);
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
   });
 });

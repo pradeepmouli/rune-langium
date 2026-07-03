@@ -17,8 +17,6 @@ import { FontScaleButton } from '../../../components/FontScaleButton.js';
 export function SettingsPerspective(): React.ReactElement {
   return (
     <section data-testid="settings-perspective" className="h-full overflow-auto p-6 space-y-8">
-      <h1 className="text-lg font-semibold">Settings</h1>
-
       {/* ── Appearance ──────────────────────────────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Appearance</h2>
