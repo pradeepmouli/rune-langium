@@ -12,7 +12,7 @@
 
 import type { GeneratorOutput } from '../types.js';
 import type { LanguageProfile } from './language-profile.js';
-import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import { RUNTIME_HELPER_SOURCE, RUNTIME_SIDECAR_HELPER_LINES, RUNE_HELPER_NAMES } from '../helpers.js';
 
 const RUNTIME_SIDECAR_SOURCE = [
   `// SPDX-License-Identifier: MIT`,
@@ -21,28 +21,7 @@ const RUNTIME_SIDECAR_SOURCE = [
   `// imported by per-namespace .ts files in a 'barrel'/'single-file' bundle.`,
   `// Note: record types use Temporal.* — requires a polyfill or 'lib: esnext'.`,
   ``,
-  `export const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>`,
-  `  values.filter((v) => v !== undefined && v !== null).length === 1;`,
-  ``,
-  `export const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;`,
-  ``,
-  `export const runeAttrExists = (v: unknown): boolean =>`,
-  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
-  ``,
-  `export const runeToDate = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;`,
-  ``,
-  `export const runeToTime = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;`,
-  ``,
-  `export const runeToDateTime = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;`,
-  ``,
-  `export const runeToZonedDateTime = (v: unknown): string | undefined =>`,
-  `  typeof v === 'string' &&`,
-  `  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)`,
-  `    ? v`,
-  `    : undefined;`,
+  ...RUNTIME_SIDECAR_HELPER_LINES,
   ``,
   `/**`,
   ` * Returns true if the given year is a leap year (builtin com.rosetta.model`,
@@ -119,7 +98,7 @@ function stripPerNamespaceHeader(content: string): string {
   const lines = content.split('\n');
   let bodyStart = 0;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i]?.startsWith(`import { runeCheckOneOf,`)) {
+    if (lines[i]?.startsWith(`import { ${RUNE_HELPER_NAMES[0]},`)) {
       bodyStart = i + 1;
       if (bodyStart < lines.length && lines[bodyStart] === '') bodyStart += 1;
       break;
