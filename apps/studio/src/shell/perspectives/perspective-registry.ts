@@ -5,23 +5,37 @@ import type { Perspective } from './perspective-types.js';
 
 /** Rail order, top group first; settings pinned to the bottom group. */
 export const PERSPECTIVES: readonly Perspective[] = [
-  { id: 'explore', label: 'Explore', icon: Layers, group: 'main', showsFileTabs: true, requiresWorkspace: true },
+  { id: 'explore', label: 'Explore', icon: Layers, group: 'main', requiresWorkspace: true },
   {
     id: 'workspaces',
     label: 'Workspaces / Models',
     icon: FolderOpen,
     group: 'main',
-    showsFileTabs: false,
-    requiresWorkspace: false
+    requiresWorkspace: false,
+    title: 'Workspaces / Models'
   },
-  { id: 'git', label: 'Git / Sync', icon: GitBranch, group: 'main', showsFileTabs: false, requiresWorkspace: true },
+  {
+    id: 'git',
+    label: 'Git / Sync',
+    icon: GitBranch,
+    group: 'main',
+    requiresWorkspace: true,
+    title: 'Git / Sync'
+  },
   {
     id: 'export',
     label: 'Export / Packaging',
     icon: Package,
     group: 'main',
-    showsFileTabs: false,
-    requiresWorkspace: true
+    requiresWorkspace: true,
+    title: 'Export / Packaging'
   },
-  { id: 'settings', label: 'Settings', icon: Settings, group: 'bottom', showsFileTabs: false, requiresWorkspace: false }
+  {
+    id: 'settings',
+    label: 'Settings',
+    icon: Settings,
+    group: 'bottom',
+    requiresWorkspace: false,
+    title: 'Settings'
+  }
 ];

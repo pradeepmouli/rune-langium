@@ -580,7 +580,8 @@ export function ExplorePerspective() {
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
   const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
-  // File tabs are an Explore-only affordance (perspective-registry.showsFileTabs).
+  // File tabs are an Explore-only affordance (moves to perspective-registry's
+  // centerSlot in Task 3 of the shared-chrome plan; runtime-gated until then).
   // Hide them when the user switches to Git / Export / Settings / Workspaces.
   const activePerspective = usePerspectiveStore((s) => s.activePerspective);
   const focusMode = useEditorStore((s) => s.focusMode);
