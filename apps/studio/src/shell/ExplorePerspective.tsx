@@ -107,7 +107,6 @@ import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
 import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
-import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from './panels/FormPreviewPanel.js';
 import { CenterStackPanel } from './panels/CenterStackPanel.js';
@@ -117,8 +116,11 @@ import { useLsp } from './providers/lsp-context.js';
 import { useWorkspaceActions } from './perspectives/workspace-actions-context.js';
 import type { DeferredExportEntry } from '../workers/parser-worker.js';
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
-import { uriToPath, pathToUri } from '../utils/uri.js';
+import { pathToUri } from '../utils/uri.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { combineFileDiagnostics, countDiagnostics } from './explore-diagnostics.js';
+import { useExploreFileNavStore } from './explore-file-nav-store.js';
+import { useExportDialogStore } from './export-dialog-store.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -140,44 +142,10 @@ const EMPTY_PARSE_ERRORS: ReadonlyMap<string, string[]> = new Map();
  */
 const EMPTY_RANGE_DIAGNOSTICS: readonly RangeDiagnostic[] = Object.freeze([]);
 
-function normalizeDiagnosticFilePath(uri: string, files: readonly WorkspaceFile[]): string {
-  const path = uriToPath(uri);
-  const match = files.find(
-    (file) =>
-      file.path === path || file.name === path || path.endsWith(`/${file.path}`) || path.endsWith(`/${file.name}`)
-  );
-  return match?.path ?? path;
-}
-
-function toParserDiagnostics(messages: readonly string[]): LspDiagnostic[] {
-  return messages.map((message, index) => ({
-    range: {
-      start: { line: index, character: 0 },
-      end: { line: index, character: 0 }
-    },
-    severity: 1,
-    source: 'parser',
-    message
-  }));
-}
-
-function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>): {
-  errors: number;
-  warnings: number;
-  total: number;
-} {
-  let errors = 0;
-  let warnings = 0;
-  let total = 0;
-  for (const diagnostics of fileDiagnostics.values()) {
-    for (const diagnostic of diagnostics) {
-      total += 1;
-      if (diagnostic.severity === 2) warnings += 1;
-      else if (diagnostic.severity === 1) errors += 1;
-    }
-  }
-  return { errors, warnings, total };
-}
+// normalizeDiagnosticFilePath / toParserDiagnostics / countDiagnostics moved to
+// explore-diagnostics.ts (shared-perspective-chrome plan, Task 3 prep) so the
+// future ExploreCenterSlot component can recompute the same combined
+// diagnostics this component's footer uses, without a duplicate copy.
 
 // ---------------------------------------------------------------------------
 // Adapter: TypeGraphNode[] → AdapterDocument
@@ -553,7 +521,12 @@ export function ExplorePerspective() {
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
-  const [showExportDialog, setShowExportDialog] = useState(false);
+  // Export dialog open-state is shared with the header's Export code/Generate
+  // buttons (moving into ExploreActions in Task 3) — lifted to a store rather
+  // than local useState (export-dialog-store.ts; shared-perspective-chrome
+  // plan, Task 3 hazard #2).
+  const showExportDialog = useExportDialogStore((s) => s.open);
+  const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
   // Curated Models modal — wired from the ActivityBar's Database button.
   // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
   // reuse the same component in a Dialog so the affordance stays discoverable
@@ -586,7 +559,13 @@ export function ExplorePerspective() {
   const activePerspective = usePerspectiveStore((s) => s.activePerspective);
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
-  const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
+  // Active file + git-sync status are shared with the header's FileTabStrip
+  // (moving into ExploreCenterSlot in Task 3) — lifted to a store rather than
+  // local useState (explore-file-nav-store.ts; shared-perspective-chrome
+  // plan, Task 3 hazard #3).
+  const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+  const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
+  const storeOpenFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
   const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -606,14 +585,15 @@ export function ExplorePerspective() {
   // Uses subscribeToEngine so the subscription survives async engine creation:
   // the badge will receive state even if the engine is created after this effect
   // runs (which is the common case on first boot).
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const syncStatus = useExploreFileNavStore((s) => s.syncStatus);
+  const setSyncStatus = useExploreFileNavStore((s) => s.setSyncStatus);
   useEffect(() => {
     if (workspaceKind !== 'git-backed') return;
     // Reset to null immediately on workspace switch so the badge never shows
     // the previous workspace's status while the new engine initialises.
     setSyncStatus(null);
     return subscribeToEngine(workspaceId, setSyncStatus);
-  }, [workspaceId, workspaceKind]);
+  }, [workspaceId, workspaceKind, setSyncStatus]);
 
   const storeNodes = useEditorStore((s) => s.nodes);
   const storeNodesById = useEditorStore((s) => s.nodesById);
@@ -1140,9 +1120,10 @@ export function ExplorePerspective() {
   const deferredExportsRef = useRef(deferredExports);
   deferredExportsRef.current = deferredExports;
 
-  const openFileInSource = useCallback((filePath: string) => {
-    setActiveEditorFile(filePath);
-  }, []);
+  // Bound directly to the store action (same identity across renders, like
+  // the old useCallback with an empty dep array) so every call site below
+  // works unchanged.
+  const openFileInSource = storeOpenFileInSource;
 
   // "+" new-file affordance — mirrors FileLoader's start-page "New" flow:
   // mint the next available untitled[.rosetta] file, append it, and open it.
@@ -1285,18 +1266,10 @@ export function ExplorePerspective() {
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics } = useDiagnosticsStore();
-  const combinedFileDiagnostics = useMemo(() => {
-    const merged = new Map<string, LspDiagnostic[]>();
-    for (const [uri, diagnostics] of fileDiagnostics) {
-      merged.set(normalizeDiagnosticFilePath(uri, files), [...diagnostics]);
-    }
-    for (const [filePath, messages] of parseErrors) {
-      if (messages.length === 0) continue;
-      const existing = merged.get(filePath) ?? [];
-      merged.set(filePath, [...toParserDiagnostics(messages), ...existing]);
-    }
-    return merged;
-  }, [fileDiagnostics, files, parseErrors]);
+  const combinedFileDiagnostics = useMemo(
+    () => combineFileDiagnostics(fileDiagnostics, files, parseErrors),
+    [fileDiagnostics, files, parseErrors]
+  );
   const combinedDiagnostics = useMemo(() => countDiagnostics(combinedFileDiagnostics), [combinedFileDiagnostics]);
 
   useEffect(() => {
