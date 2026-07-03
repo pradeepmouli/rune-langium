@@ -65,3 +65,32 @@ describe('rewriteEdgeRefInNode returns null on invariant breach', () => {
     expect(rewriteEdgeRefInNode(bogusEdge, src.data, 'X', 'Y', 'ns')).toBeNull();
   });
 });
+
+describe('choice-option arm rewrites ALL matching options (PR #368 Copilot finding)', () => {
+  // Duplicate options for the same type share ONE edge (identical
+  // source/target/label), so the cascade reaches this arm exactly once —
+  // a first-match rewrite would leave sibling duplicates stale. The store
+  // explicitly tolerates duplicates (removeChoiceOption drains them).
+  it('bare + qualified duplicates are all rewritten in one pass; non-matching options untouched', () => {
+    const choiceData = {
+      $type: 'Choice',
+      name: 'MyChoice',
+      attributes: [
+        { name: 'a', typeCall: { type: { $refText: 'Target' } } },
+        { name: 'b', typeCall: { type: { $refText: 'other.Thing' } } },
+        { name: 'c', typeCall: { type: { $refText: 'ns.Target' } } }
+      ]
+    } as never;
+    const edge = {
+      id: 'e',
+      source: 's',
+      target: 't',
+      data: { kind: 'choice-option', label: 'Target' }
+    } as never;
+    const out = rewriteEdgeRefInNode(edge, choiceData, 'Target', 'Renamed', 'ns') as {
+      attributes: { typeCall: { type: { $refText: string } } }[];
+    } | null;
+    expect(out).not.toBeNull();
+    expect(out!.attributes.map((o) => o.typeCall.type.$refText)).toEqual(['Renamed', 'other.Thing', 'ns.Renamed']);
+  });
+});

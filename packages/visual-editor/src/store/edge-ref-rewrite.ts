@@ -92,18 +92,19 @@ export function rewriteEdgeRefInNode(
       // (ast-to-model.ts:242, editor-store renameType step-3 comment).
       const options = d['attributes'] as MemberWithTypeCall[] | undefined;
       if (!options) return null;
-      const i = options.findIndex((o) => {
-        const t = o.typeCall?.type?.$refText;
-        return t === oldName || t === `${namespace}.${oldName}`;
+      // Rewrite ALL matching options, not just the first: duplicate options
+      // for the same type share ONE edge (identical source/target/label), so
+      // the cascade sees this arm exactly once — and the store explicitly
+      // tolerates duplicates (removeChoiceOption drains them in a loop). A
+      // first-match rewrite would leave sibling duplicates stale at serialize.
+      let matched = false;
+      const updated = options.map((o) => {
+        const next = renameRefValue(o.typeCall?.type?.$refText, oldName, newName, namespace);
+        if (next === null) return o;
+        matched = true;
+        return { ...o, typeCall: { ...o.typeCall, type: { ...o.typeCall!.type, $refText: next } } };
       });
-      if (i === -1) return null;
-      const next = renameRefValue(options[i]?.typeCall?.type?.$refText, oldName, newName, namespace);
-      if (next === null) return null;
-      const updated = [...options];
-      updated[i] = {
-        ...updated[i],
-        typeCall: { ...updated[i]!.typeCall, type: { ...updated[i]!.typeCall!.type, $refText: next } }
-      };
+      if (!matched) return null;
       return { ...sourceData, attributes: updated } as DomainNodeData;
     }
     case 'extends': {
