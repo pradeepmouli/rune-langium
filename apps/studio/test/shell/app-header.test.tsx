@@ -50,15 +50,32 @@ function makeWorkspaceActions(overrides?: Partial<WorkspaceActions>): WorkspaceA
 
 const lspValue: LspContextValue = { lspClient: null, transportState: undefined, reconnect: noop };
 
-function renderAppHeaderWithWorkspace(overrides?: Partial<WorkspaceState>) {
+interface RenderAppHeaderOptions {
+  workspaceStateOverrides?: Partial<WorkspaceState>;
+  /** Default true — the passthrough case (a workspace/explore content is
+   *  present, so resolveEffectivePerspective doesn't fall back). */
+  hasWorkspace?: boolean;
+  hasExploreContent?: boolean;
+}
+
+function renderAppHeaderWithWorkspace(options: RenderAppHeaderOptions = {}) {
+  const { workspaceStateOverrides, hasWorkspace = true, hasExploreContent = true } = options;
   return render(
     <WorkspaceActionsContext.Provider value={makeWorkspaceActions()}>
-      <WorkspaceStateContext.Provider value={makeWorkspaceState(overrides)}>
+      <WorkspaceStateContext.Provider value={makeWorkspaceState(workspaceStateOverrides)}>
         <LspContext.Provider value={lspValue}>
-          <AppHeader />
+          <AppHeader hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
         </LspContext.Provider>
       </WorkspaceStateContext.Provider>
     </WorkspaceActionsContext.Provider>
+  );
+}
+
+/** Passthrough-case AppHeader (no workspace context) — used by tests that
+ *  don't care about workspace/switcher rendering. */
+function renderAppHeader(props: Partial<{ hasWorkspace: boolean; hasExploreContent: boolean }> = {}) {
+  return render(
+    <AppHeader hasWorkspace={props.hasWorkspace ?? true} hasExploreContent={props.hasExploreContent ?? true} />
   );
 }
 
@@ -83,13 +100,13 @@ describe('AppHeader', () => {
 
   it('renders exactly one app-header for a non-explore perspective', () => {
     usePerspectiveStore.getState().setActivePerspective('git');
-    render(<AppHeader />);
+    renderAppHeader();
     expect(screen.getAllByTestId('app-header')).toHaveLength(1);
   });
 
   it('renders the active perspective title for a non-explore perspective', () => {
     usePerspectiveStore.getState().setActivePerspective('git');
-    render(<AppHeader />);
+    renderAppHeader();
     expect(screen.getByText('Git / Sync')).toBeTruthy();
   });
 
@@ -125,16 +142,27 @@ describe('AppHeader', () => {
 
   it('settings renders with NO workspace and does not throw; switcher hidden', () => {
     usePerspectiveStore.getState().setActivePerspective('settings');
-    expect(() => render(<AppHeader />)).not.toThrow();
+    expect(() => renderAppHeader()).not.toThrow();
     expect(screen.queryByLabelText(/Workspace menu/)).not.toBeInTheDocument();
     expect(screen.getByText('Settings')).toBeInTheDocument();
   });
 
   it('shows the workspace switcher for a workspace-requiring perspective with a loaded workspace', () => {
     usePerspectiveStore.getState().setActivePerspective('git');
-    renderAppHeaderWithWorkspace({ workspaceName: 'CDM Workspace' });
+    renderAppHeaderWithWorkspace({ workspaceStateOverrides: { workspaceName: 'CDM Workspace' } });
     expect(screen.getByLabelText(/Workspace menu/)).toBeInTheDocument();
     expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
+  });
+
+  it('drift guard: explore active but no explore content renders the Workspaces chrome in the bar (PR #369)', () => {
+    usePerspectiveStore.getState().setActivePerspective('explore');
+    renderAppHeaderWithWorkspace({ hasWorkspace: false, hasExploreContent: false });
+    // Bar must show the Workspaces title, not Explore's FileTabStrip/actions —
+    // matching what PerspectiveHost renders in the body for this same state.
+    expect(screen.getByText('Workspaces / Models')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /a\.rosetta/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Generate')).not.toBeInTheDocument();
   });
 });
 

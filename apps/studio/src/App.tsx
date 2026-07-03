@@ -980,7 +980,7 @@ function AppContent() {
             {userFiles.length} file(s)
           </span>
         )}
-        <AppHeader />
+        <AppHeader hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
 
         <main className="flex-1 overflow-hidden relative">
           {(bootState === 'checking' || bootState === 'restoring') && (

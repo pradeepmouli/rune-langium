@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-sy
 import { Kbd } from '@rune-langium/design-system/ui/kbd';
 import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
 import { usePerspectiveStore } from '../store/perspective-store.js';
-import { PERSPECTIVES } from './perspectives/perspective-registry.js';
+import { PERSPECTIVES, resolveEffectivePerspective } from './perspectives/perspective-registry.js';
 import { useWorkspaceOptional } from './providers/workspace-context.js';
 import { useWorkspaceActionsOptional } from './perspectives/workspace-actions-context.js';
 import { useExploreFileNavStore } from './explore-file-nav-store.js';
@@ -132,9 +132,18 @@ function WorkspaceSwitcherTrigger({
   );
 }
 
-export function AppHeader() {
+interface AppHeaderProps {
+  /** Forwarded from App.tsx — same values PerspectiveHost receives, so both
+   *  consume `resolveEffectivePerspective` identically and can never
+   *  disagree about which perspective is actually showing (PR #369). */
+  hasWorkspace: boolean;
+  hasExploreContent: boolean;
+}
+
+export function AppHeader({ hasWorkspace, hasExploreContent }: AppHeaderProps) {
   const activeId = usePerspectiveStore((s) => s.activePerspective);
-  const perspective = PERSPECTIVES.find((p) => p.id === activeId);
+  const effectiveId = resolveEffectivePerspective(activeId, { hasWorkspace, hasExploreContent });
+  const perspective = PERSPECTIVES.find((p) => p.id === effectiveId);
   const Center = perspective?.centerSlot;
   const Actions = perspective?.actions;
 

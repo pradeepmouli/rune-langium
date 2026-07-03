@@ -9,7 +9,7 @@
  */
 import type React from 'react';
 import { usePerspectiveStore } from '../../store/perspective-store.js';
-import { PERSPECTIVES } from './perspective-registry.js';
+import { resolveEffectivePerspective } from './perspective-registry.js';
 import { SettingsPerspective } from './screens/SettingsPerspective.js';
 import { WorkspacesPerspective } from './screens/WorkspacesPerspective.js';
 import { GitSyncPerspective } from './screens/GitSyncPerspective.js';
@@ -37,16 +37,9 @@ export function PerspectiveHost({
   files
 }: Props): React.ReactElement {
   const active = usePerspectiveStore((s) => s.activePerspective);
-  // Host-level fallback: a workspace-requiring perspective (explore/git/export)
-  // with no workspace would render a blank pane — and its rail button is
-  // disabled, stranding the user. This happens when `hasWorkspace` drops to
-  // false while the store is still on such a perspective (e.g. the last
-  // editable file is deleted while in Explore; the store isn't normalized on
-  // every such transition). Fall back to the always-available Workspaces
-  // launcher rather than relying on every caller to reset the store.
-  const requiresWorkspace = PERSPECTIVES.find((p) => p.id === active)?.requiresWorkspace ?? false;
-  const missingRequiredContext = active === 'explore' ? !hasExploreContent : requiresWorkspace && !hasWorkspace;
-  const effective = missingRequiredContext ? 'workspaces' : active;
+  // Effective-perspective fallback — shared with AppHeader via
+  // resolveEffectivePerspective so the bar and the body never disagree.
+  const effective = resolveEffectivePerspective(active, { hasWorkspace, hasExploreContent });
   return (
     // `min-w-0` is load-bearing: this is a flex item of the App content row.
     // Without it the item's `min-width: auto` refuses to shrink below its

@@ -98,12 +98,16 @@ export function EditorPageHarness(props: EditorPageHarnessProps): React.ReactEle
     onSwitchWorkspace: props.onSwitchWorkspace ?? noop
   };
 
+  // The harness always represents a loaded workspace with Explore content —
+  // callers that need the fallback state (no workspace/no content) test
+  // AppHeader/PerspectiveHost directly via resolveEffectivePerspective
+  // rather than through this harness.
   return (
     <WorkspaceActionsContext.Provider value={actions}>
       <WorkspaceStateContext.Provider value={workspaceState}>
         <LspContext.Provider value={lspValue}>
           <CodegenProvider>
-            <AppHeader />
+            <AppHeader hasWorkspace hasExploreContent />
             <ExplorePerspective />
           </CodegenProvider>
         </LspContext.Provider>
