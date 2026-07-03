@@ -1582,27 +1582,11 @@ html {
   border-radius: var(--radius-sm);
 }
 
-/* ---------- Hairline border default (single source of truth) ----------
- * Every Tailwind/shadcn `border` utility renders at --hairline (0.5px) instead
- * of the framework's 1px. This is the ONE knob for utility-border weight — it
- * catches every shadcn primitive (button, input, card, dialog, dropdown,
- * select, badge) and every pill/chip without editing 30+ component files, and
- * survives future `shadcn add`. Hand-rolled CSS borders (nodes, panels, dock)
- * reference var(--hairline) directly — see tokens.css.
- *
- * Scope notes:
- *  - `[class~="border"]` matches ONLY the all-sides `border` token, so
- *    `border-2`, `border-t`, etc. (used WITHOUT a bare `border`) keep their
- *    own widths.
- *  - Unlayered + `:where()` (specificity 0) so it beats Tailwind's layered
- *    width utilities. Caveat: if an element carries BOTH `border` and an
- *    explicit width (`border border-2`), this rule still wins and forces
- *    `--hairline` — so don't combine them; pick one.
- *  - Deliberately reinterprets a standard utility — documented here so
- *    `border` ≠ 1px is not a surprise. */
-.studio-app :where([class~='border']) {
-  border-width: var(--hairline);
-}
+/* ---------- Hairline border default ----------
+ * MOVED to @rune-langium/design-system/tokens.css (imported via theme.css
+ * above) so every design-system consumer — not just the studio — renders
+ * `border` at var(--hairline). See the doc comment there for the cascade
+ * mechanics and the border+border-2 caveat. */
 
 /* Dark-theme overrides for visual-editor graph nodes:
  * REMOVED — visual-editor now uses var() tokens from design-system/theme.css.

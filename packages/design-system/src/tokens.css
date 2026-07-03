@@ -222,3 +222,31 @@
   --z-index-modal: 200;
   --z-index-toast: 300;
 }
+
+/* ---------- Hairline border default (single source of truth) ----------
+ * Every Tailwind/shadcn `border` utility renders at --hairline (0.5px) instead
+ * of the framework's 1px. This is the ONE knob for utility-border weight — it
+ * catches every design-system primitive (button, input, card, dialog,
+ * dropdown, select, badge) and every pill/chip without editing 20+ component
+ * files, and survives future `shadcn add`. Hand-rolled CSS borders (nodes,
+ * panels, dock) reference var(--hairline) directly.
+ *
+ * Lives HERE (not in a consuming app) so every design-system consumer gets
+ * the same border weight — previously studio-scoped (`.studio-app`), which
+ * left standalone visual-editor rendering 1px (PR #306 history).
+ *
+ * Scope notes:
+ *  - `[class~="border"]` matches ONLY the all-sides `border` token, so
+ *    `border-2`, `border-t`, etc. (used WITHOUT a bare `border`) keep their
+ *    own widths.
+ *  - UNLAYERED on purpose: Tailwind emits width utilities inside @layer, and
+ *    unlayered author styles beat layered ones regardless of specificity —
+ *    that (not a scoping prefix) is the winning mechanism. `:where()` keeps
+ *    specificity at 0 so any unlayered consumer rule can still override.
+ *    Caveat: an element carrying BOTH `border` and an explicit width
+ *    (`border border-2`) gets --hairline — don't combine them; pick one.
+ *  - Deliberately reinterprets a standard utility — documented here so
+ *    `border` ≠ 1px is not a surprise. */
+:where([class~='border']) {
+  border-width: var(--hairline);
+}
