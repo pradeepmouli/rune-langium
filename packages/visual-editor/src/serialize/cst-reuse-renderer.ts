@@ -20,6 +20,7 @@ import {
 } from '@rune-langium/codegen/rosetta';
 import type { TypeGraphNode } from '../types.js';
 import { type DirtyIndex, isSubtreeDirty } from './dirty-paths.js';
+import { SCHEMA_BY_TYPE } from '../schemas/schema-by-type.js';
 
 interface CstRange {
   offset: number;
@@ -28,6 +29,20 @@ interface CstRange {
 
 function cstRange(node: unknown): CstRange | undefined {
   return (node as { $cstRange?: CstRange }).$cstRange;
+}
+
+/**
+ * True when `node.expression` is a `RawDsl` placeholder (B1 Task 4's
+ * pending-reparse escape hatch — see `renderExpr`'s own `RAW_DSL_TYPE` check
+ * above). `RawDsl` is a VE-synthetic leaf, never produced by the parser, so
+ * it is intentionally ABSENT from the generated `RosettaExpressionSchema`
+ * union — a `Condition`/`Operation`/`ShortcutDeclaration` carrying one is a
+ * legitimate, expected mid-edit shape, not a schema violation. The schema
+ * gate below must not treat it as invalid.
+ */
+function hasRawDslExpression(node: unknown): boolean {
+  const expr = (node as { expression?: { $type?: string } }).expression;
+  return expr?.$type === RAW_DSL_TYPE;
 }
 
 export interface RenderArgs {
@@ -124,6 +139,32 @@ export function renderNamespace(args: RenderArgs): string {
         const idx = childIndex(child, c, dataPath);
         return render(c, idx);
       };
+      // Schema-as-validity-trigger gate: before structural rendering, safeParse
+      // the node against its own $type's generated schema. A node that fails
+      // (e.g. a RosettaSynonymBody with none of its five alternatives populated
+      // — the #363 fallback case, now schema-driven) skips renderNode entirely
+      // and falls straight to the SAME CST/skip fallback below, identical to a
+      // renderNode-returns-null outcome. render-core's own rosetta subpath stays
+      // zod-free; this check lives entirely on the VE side of the seam.
+      const childType = (child as { $type: string }).$type;
+      const schema = SCHEMA_BY_TYPE[childType];
+      if (schema && !hasRawDslExpression(child)) {
+        const result = schema.safeParse(child);
+        if (!result.success) {
+          // Observability parity with render-core's exprText warn (also
+          // unconditional, not dev-gated — this package has no established
+          // dev/prod runtime split to key off).
+          console.warn(
+            `[cst-reuse] schema validation failed for $type "${childType}" — falling back to CST`,
+            result.error.issues.map((i) => ({ path: i.path, message: i.message }))
+          );
+          if (range) return reuseSlice(originalSource, range, isChild);
+          console.warn(
+            `[cst-reuse] skipping new node of unimplemented/invalid $type "${childType}" — schema validation failed and no $cstRange`
+          );
+          return '';
+        }
+      }
       const generated = renderNode(child, renderChild, { renderExpr });
       if (generated !== null) return generated;
       if (range) return reuseSlice(originalSource, range, isChild); // unimplemented but had bytes
