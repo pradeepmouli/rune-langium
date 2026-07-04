@@ -17,6 +17,15 @@
  * on `RosettaEnumValue`).
  */
 
+import type { Dehydrated } from '@rune-langium/core';
+import type {
+  Data,
+  Attribute,
+  RosettaEnumeration,
+  RosettaEnumValue,
+  RosettaCardinality,
+  TypeCall
+} from '@rune-langium/core';
 import { escapeId } from '../emit/rosetta/render-expression.js';
 import type { SourceModel, SourceType, SourceAttribute, SourceEnum, SourceCardinality } from './source-model.js';
 import { translateConstraint, type ConditionNode } from './constraint-translator.js';
@@ -24,63 +33,69 @@ import {
   buildClassSynonym,
   buildAttributeSynonym,
   buildEnumValueSynonym,
-  buildSynonymSourceDeclaration
+  buildSynonymSourceDeclaration,
+  type ClassSynonymNode,
+  type SynonymNode,
+  type EnumSynonymNode
 } from './synonym-builder.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 
-/** A `Data`-shaped plain object (see rosetta-render-core.ts's `renderData`). */
-export interface DataNode {
-  $type: 'Data';
-  name: string;
-  superType?: { $refText: string };
-  definition?: string;
-  annotations: never[];
-  references: never[];
-  synonyms: ReturnType<typeof buildClassSynonym>[];
-  attributes: AttributeNode[];
+/**
+ * `Data`/`Attribute`/`RosettaEnumeration`/`RosettaEnumValue`-shaped plain
+ * objects — the core-generated `Dehydrated<T>` substrate (spec.md's Phase 2
+ * addendum, BINDING: no invented node types), retrofitted from this
+ * module's previously hand-rolled `DataNode`/`AttributeNode`/
+ * `EnumerationNode`/`EnumValueNode` interfaces.
+ *
+ * Every synonym-bearing field (`synonyms`, `enumSynonyms`) is corrected to
+ * synonym-builder.ts's own `ClassSynonymNode`/`SynonymNode`/
+ * `EnumSynonymNode` aliases rather than `Dehydrated<Data>['synonyms']`
+ * directly, and `DataNode.conditions` uses constraint-translator.ts's
+ * `ConditionNode` — both modules document the same root cause (an
+ * `Array<Reference<X>>`-typed field, e.g. `RosettaClassSynonym.sources` /
+ * `ChoiceOperation.attributes`, is not dehydrated by `Dehydrated<T>`'s field
+ * mapper, and a union-typed required field like `Condition.expression`
+ * collapses when `Dehydrated<T>` is applied directly to the union) — see
+ * constraint-translator.ts's and synonym-builder.ts's module docs for the
+ * full explanation. This module does not re-derive the fix; it only
+ * consumes the sibling modules' already-corrected aliases.
+ *
+ * `Dehydrated<T>` also makes every field — including ones optional on the
+ * original interface (`Data.definition?`, `Attribute.definition?`,
+ * `RosettaEnumValue.display?`, etc.) — a REQUIRED key of type `V |
+ * undefined` rather than an optional key (`DehydratedField<F>` maps the
+ * field's own type but the enclosing mapped type adds no `?` modifier). The
+ * conditional-spread idiom this module already used (`...(x !== undefined
+ * && { x })`, which OMITS the key entirely) still produces a valid runtime
+ * value — omitting an optional key is assignable to `V | undefined` — so no
+ * behavior change was needed here, only the type annotations below.
+ */
+export type AttributeNode = Omit<Dehydrated<Attribute>, 'synonyms'> & { synonyms: SynonymNode[] };
+
+export type DataNode = Omit<Dehydrated<Data>, 'conditions' | 'synonyms' | 'attributes'> & {
   conditions: ConditionNode[];
-}
+  synonyms: ClassSynonymNode[];
+  attributes: AttributeNode[];
+};
 
-/** An `Attribute`-shaped plain object (see rosetta-render-core.ts's `renderAttribute`). */
-export interface AttributeNode {
-  $type: 'Attribute';
-  name: string;
-  typeCall: { type: { $refText: string } };
-  card: { inf: number; sup?: number; unbounded?: boolean };
-  definition?: string;
-  annotations: never[];
-  references: never[];
-  synonyms: ReturnType<typeof buildAttributeSynonym>[];
-  labels: never[];
-  ruleReferences: never[];
-}
-
-/** A `RosettaEnumeration`-shaped plain object (see rosetta-render-core.ts's `renderEnum`). */
-export interface EnumerationNode {
-  $type: 'RosettaEnumeration';
-  name: string;
-  definition?: string;
-  annotations: never[];
-  references: never[];
-  synonyms: ReturnType<typeof buildAttributeSynonym>[];
+/** See `DataNode`'s doc. */
+export type EnumerationNode = Omit<Dehydrated<RosettaEnumeration>, 'synonyms' | 'enumValues'> & {
+  synonyms: SynonymNode[];
   enumValues: EnumValueNode[];
-}
+};
 
-/** A `RosettaEnumValue`-shaped plain object (see rosetta-render-core.ts's `renderEnumValue`). */
-export interface EnumValueNode {
-  $type: 'RosettaEnumValue';
-  name: string;
-  display?: string;
-  definition?: string;
-  annotations: never[];
-  references: never[];
-  enumSynonyms: ReturnType<typeof buildEnumValueSynonym>[];
-}
+/** See `DataNode`'s doc. */
+export type EnumValueNode = Omit<Dehydrated<RosettaEnumValue>, 'enumSynonyms'> & { enumSynonyms: EnumSynonymNode[] };
 
 /** Converts a `SourceCardinality` to the grammar's `RosettaCardinality` field shape. */
-function toCardinality(card: SourceCardinality): AttributeNode['card'] {
-  if (card.sup === undefined) return { inf: card.inf, unbounded: true };
-  return { inf: card.inf, sup: card.sup };
+function toCardinality(card: SourceCardinality): Dehydrated<RosettaCardinality> {
+  if (card.sup === undefined) return { $type: 'RosettaCardinality', inf: card.inf, unbounded: true, sup: undefined };
+  return { $type: 'RosettaCardinality', inf: card.inf, sup: card.sup, unbounded: false };
+}
+
+/** Converts a Rune type name to the grammar's `TypeCall` field shape (`Attribute.typeCall: TypeCall`, a required nested node, not the bare `{ type: {$refText} }` this module used pre-retrofit). */
+function toTypeCall(typeName: string): Dehydrated<TypeCall> {
+  return { $type: 'TypeCall', type: { $refText: typeName }, arguments: [] };
 }
 
 /**
@@ -98,9 +113,17 @@ function buildAttribute(
   return {
     $type: 'Attribute',
     name: escapeId(attr.name),
-    typeCall: { type: { $refText: attr.typeName } },
+    // `override`/`typeCallArgs` are both REQUIRED on the real grammar's
+    // `Attribute` (drift finding: the pre-retrofit hand-rolled `AttributeNode`
+    // omitted both, silently). Imported attributes are never `override`
+    // (there is no base-attribute redeclaration in the importer's model) and
+    // never carry type-call arguments (the importer never emits a
+    // parameterized type reference).
+    override: false,
+    typeCall: toTypeCall(attr.typeName),
+    typeCallArgs: [],
     card: toCardinality(attr.cardinality),
-    ...(attr.description !== undefined && { definition: attr.description }),
+    definition: attr.description,
     annotations: [],
     references: [],
     synonyms: emitSynonyms ? [buildAttributeSynonym(sourceName, attr.sourceKey)] : [],
@@ -137,8 +160,8 @@ export function buildDataType(
   return {
     $type: 'Data',
     name: escapeId(type.name),
-    ...(type.extends !== undefined && { superType: { $refText: type.extends } }),
-    ...(type.description !== undefined && { definition: type.description }),
+    superType: type.extends !== undefined ? { $refText: type.extends } : undefined,
+    definition: type.description,
     annotations: [],
     references: [],
     synonyms: emitSynonyms ? [buildClassSynonym(sourceName, type.sourceKey)] : [],
@@ -156,24 +179,38 @@ export function buildEnumeration(
   return {
     $type: 'RosettaEnumeration',
     name: escapeId(sourceEnum.name),
+    // `parent` (enum-inheritance, `enum X extends Y:`) is a REQUIRED key on
+    // `Dehydrated<RosettaEnumeration>` (drift finding: silently missing from
+    // the pre-retrofit hand-rolled `EnumerationNode`) — the importer never
+    // derives an enum parent, so this is always `undefined`.
+    parent: undefined,
+    definition: undefined,
     annotations: [],
     references: [],
     synonyms: emitSynonyms ? [buildAttributeSynonym(sourceName, sourceEnum.sourceKey)] : [],
-    enumValues: sourceEnum.values.map((v) => ({
-      $type: 'RosettaEnumValue' as const,
-      name: escapeId(v.name),
-      ...(v.displayName !== undefined && { display: v.displayName }),
-      ...(v.description !== undefined && { definition: v.description }),
-      annotations: [],
-      references: [],
-      // The synonym records the ORIGINAL SOURCE literal (v.sourceKey), never
-      // v.displayName — displayName is a presentational label (may come from
-      // the outbound emitter's own x-rune-enum-display map) and is not
-      // necessarily the value the source schema actually used (reviewer
-      // finding: emitting displayName here silently recorded the wrong
-      // value whenever a display map was present).
-      enumSynonyms: emitSynonyms ? [buildEnumValueSynonym(sourceName, v.sourceKey)] : []
-    }))
+    enumValues: sourceEnum.values.map(
+      (v): EnumValueNode => ({
+        $type: 'RosettaEnumValue',
+        name: escapeId(v.name),
+        // `display`/`definition` are REQUIRED keys of type `string | undefined`
+        // under `Dehydrated<T>` (same gap constraint-translator.ts documents
+        // for `Condition.definition`/`name` — an optional field on the real
+        // AST interface still needs its key present, just possibly
+        // `undefined`), so these are assigned directly rather than
+        // conditionally spread.
+        display: v.displayName,
+        definition: v.description,
+        annotations: [],
+        references: [],
+        // The synonym records the ORIGINAL SOURCE literal (v.sourceKey), never
+        // v.displayName — displayName is a presentational label (may come from
+        // the outbound emitter's own x-rune-enum-display map) and is not
+        // necessarily the value the source schema actually used (reviewer
+        // finding: emitting displayName here silently recorded the wrong
+        // value whenever a display map was present).
+        enumSynonyms: emitSynonyms ? [buildEnumValueSynonym(sourceName, v.sourceKey)] : []
+      })
+    )
   };
 }
 

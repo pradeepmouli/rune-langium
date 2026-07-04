@@ -35,7 +35,10 @@ async function assertRoundTrips(ir: ConstraintIR): Promise<{ text: string; condi
     );
   }
   expect(result.hasErrors).toBe(false);
-  return { text: text!, conditionName: node.name };
+  // `Condition.name` is optional per the grammar (`ConditionNode['name']` is
+  // `string | undefined`); `translateConstraint` always assigns one.
+  expect(node.name).toBeDefined();
+  return { text: text!, conditionName: node.name! };
 }
 
 describe('constraint-translator — every ConstraintIR kind renders + reparses (parse-first invariant)', () => {
