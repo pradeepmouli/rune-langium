@@ -22,6 +22,7 @@ import { URI } from 'langium';
 import { createRuneDslServices } from '@rune-langium/core';
 import { generate } from '../src/index.js';
 import type { Target, GeneratorDiagnostic, GeneratorOutput } from '../src/types.js';
+import { importModel, type ImportSourceKind } from '../src/import/index.js';
 
 // ---- package version --------------------------------------------------------
 
@@ -293,6 +294,106 @@ async function runWatch(
     process.once('SIGINT', cleanup);
     process.once('SIGTERM', cleanup);
   });
+}
+
+// ---- import (inbound) subcommand --------------------------------------------
+
+/**
+ * `rune-codegen import` — inbound generation (specs/021-codegen-inbound).
+ *
+ * NOT registered as a commander subcommand on the same root `Command` as the
+ * default (outbound) action: verified empirically that once a `Command` has
+ * ANY registered subcommand, commander rejects an unrecognized bare
+ * positional argument to the root program as `error: unknown command
+ * '<path>'` — i.e. adding `import` as a `program.command('import')` sibling
+ * breaks the existing `rune-codegen file.rune -t zod` invocation entirely
+ * (reproduced with a minimal commander-only repro, independent of this
+ * file's own logic). `isDefault: true` doesn't help either — it only makes
+ * one NAMED subcommand the default, it can't fall back to a root-level
+ * inline `.argument()` handler.
+ *
+ * Instead, `import` is dispatched via its OWN standalone `Command` instance,
+ * selected by inspecting `process.argv[2]` before the root program is even
+ * constructed (see `main()` below). This keeps the two invocation forms
+ * fully independent — no shared `Command` tree, no coexistence hazard.
+ */
+function buildImportCommand(): Command {
+  const importProgram = new Command();
+  importProgram
+    .name('rune-codegen import')
+    .description('Import a .rune model from an external source format (Phase 1: json-schema only)')
+    .argument('<input>', 'Path to the source file (e.g. a JSON Schema document)')
+    .requiredOption('--from <source>', "Source format: 'json-schema' (only supported value in Phase 1)")
+    .option('-o, --output <file>', 'Output .rune file path (default: stdout)')
+    .option('--namespace <name>', 'Override namespace derivation')
+    .option('--no-synonyms', 'Suppress synonym annotations')
+    .option('--no-conditions', 'Structural import only — skip expression translation')
+    .option('--on-untranslatable <mode>', "How to handle an untranslatable construct: 'stub' (default)", 'stub')
+    .exitOverride()
+    .action(
+      async (
+        input: string,
+        cmdOpts: {
+          from: string;
+          output?: string;
+          namespace?: string;
+          synonyms: boolean;
+          conditions: boolean;
+          onUntranslatable: string;
+        }
+      ) => {
+        try {
+          const source = await readFile(resolve(input), 'utf-8');
+          const result = importModel(source, {
+            from: cmdOpts.from as ImportSourceKind,
+            ...(cmdOpts.namespace !== undefined && { namespace: cmdOpts.namespace }),
+            synonyms: cmdOpts.synonyms,
+            conditions: cmdOpts.conditions,
+            onUntranslatable: cmdOpts.onUntranslatable as 'stub' | 'skip' | 'error'
+          });
+
+          for (const d of result.diagnostics) {
+            const prefix = d.severity === 'error' ? 'error' : d.severity;
+            process.stderr.write(`rune-codegen import: ${prefix} [${d.code}]\n  ${d.message}\n`);
+          }
+
+          if (cmdOpts.output) {
+            const outPath = resolve(cmdOpts.output);
+            await mkdir(outPath.replace(/[^/\\]+$/, ''), { recursive: true });
+            await writeFile(outPath, result.text, 'utf-8');
+            process.stdout.write(`rune-codegen import: wrote ${outPath}\n`);
+          } else {
+            process.stdout.write(result.text);
+          }
+
+          const hasErrors = result.diagnostics.some((d) => d.severity === 'error');
+          process.exit(hasErrors ? 1 : 0);
+        } catch (err: unknown) {
+          process.stderr.write(`rune-codegen import: error: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.exit(1);
+        }
+      }
+    );
+  return importProgram;
+}
+
+if (process.argv[2] === 'import') {
+  // Standard commander argv shape is [node, script, ...args] — strip the
+  // literal 'import' token (index 2) since the standalone import Command's
+  // own `.argument('<input>', ...)` starts at what would otherwise be index 3.
+  const importArgv = [process.argv[0]!, process.argv[1]!, ...process.argv.slice(3)];
+  await buildImportCommand()
+    .parseAsync(importArgv)
+    .catch((err: unknown) => {
+      if (err && typeof err === 'object' && 'exitCode' in err) {
+        const exitCode = (err as { exitCode: number }).exitCode;
+        process.exit(exitCode === 0 ? 0 : 2);
+      }
+      process.stderr.write(
+        `rune-codegen import: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`
+      );
+      process.exit(1);
+    });
 }
 
 // ---- main -------------------------------------------------------------------

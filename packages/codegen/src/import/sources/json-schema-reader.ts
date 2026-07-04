@@ -74,6 +74,8 @@ const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {
 export interface JsonSchemaImportOptions {
   /** Overrides namespace derivation from `$id` (spec.md CLI `--namespace`). */
   namespace?: string;
+  /** Structural import only — never populate `constraints` arrays (spec.md CLI `--no-conditions`). Default: translate constraints. */
+  skipConditions?: boolean;
 }
 
 /**
@@ -99,7 +101,7 @@ export function readJsonSchema(
       continue;
     }
     if (def.type === 'object' || def.properties !== undefined || def.allOf !== undefined) {
-      types.push(readTypeDef(key, def, defs, diagnostics));
+      types.push(readTypeDef(key, def, defs, diagnostics, options.skipConditions ?? false));
       continue;
     }
     pushDiagnostic(diagnostics, {
@@ -118,10 +120,12 @@ export function readJsonSchema(
 // --- namespace derivation (spec.md open question 2) ------------------------
 
 /**
- * Derives a Rune-safe dotted namespace from `$id` (reverse-DNS-ish:
- * `https://example.com/schemas/trade.json` → `com.example.schemas.trade`),
- * falling back to `options.namespace`. Throws when neither yields at least
- * one valid segment — spec.md: "error if neither yields a valid namespace".
+ * Derives a Rune-safe dotted namespace. `options.namespace` (spec.md's CLI
+ * `--namespace`) is an explicit OVERRIDE and always wins when supplied;
+ * otherwise falls back to `$id` (reverse-DNS-ish:
+ * `https://example.com/schemas/trade.json` → `com.example.schemas.trade`).
+ * Throws when neither yields at least one valid segment — spec.md: "error
+ * if neither yields a valid namespace".
  */
 function deriveNamespace(
   schema: JsonSchemaNode,
@@ -129,13 +133,13 @@ function deriveNamespace(
   diagnostics: ImportDiagnostic[]
 ): string {
   const fromId = schema.$id ? namespaceFromId(schema.$id) : undefined;
-  const namespace = fromId ?? options.namespace;
+  const namespace = options.namespace ?? fromId;
   if (!namespace || !isValidNamespace(namespace)) {
-    if (fromId && options.namespace) {
+    if (fromId === undefined && options.namespace === undefined) {
       pushDiagnostic(diagnostics, {
         severity: 'info',
         code: 'namespace-fallback',
-        message: `$id '${schema.$id}' did not yield a usable namespace; using --namespace '${options.namespace}'`
+        message: `$id '${schema.$id ?? '<absent>'}' did not yield a usable namespace and no --namespace override was supplied`
       });
     }
     throw new Error(
@@ -241,21 +245,22 @@ function readTypeDef(
   key: string,
   def: JsonSchemaNode,
   defs: Record<string, JsonSchemaNode>,
-  diagnostics: ImportDiagnostic[]
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
 ): SourceType {
   // allOf composing [{$ref: base}, {own properties}] → extends (spec.md scenario 4).
   if (def.allOf && def.allOf.length > 0) {
-    return readAllOfType(key, def, defs, diagnostics);
+    return readAllOfType(key, def, defs, diagnostics, skipConditions);
   }
 
   const required = new Set(def.required ?? []);
   const attributes: SourceAttribute[] = [];
   for (const [propName, propDef] of Object.entries(def.properties ?? {})) {
-    attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics));
+    attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
   }
 
   const constraints: ConstraintIR[] = [];
-  if (def.oneOf && def.oneOf.length > 0 && def.discriminator) {
+  if (!skipConditions && def.oneOf && def.oneOf.length > 0 && def.discriminator) {
     constraints.push(readOneOfConstraint(def));
   }
 
@@ -266,7 +271,8 @@ function readAllOfType(
   key: string,
   def: JsonSchemaNode,
   defs: Record<string, JsonSchemaNode>,
-  diagnostics: ImportDiagnostic[]
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
 ): SourceType {
   const branches = def.allOf ?? [];
   const baseBranch = branches.find((b) => b.$ref !== undefined);
@@ -289,7 +295,7 @@ function readAllOfType(
   const required = new Set(ownBranch?.required ?? []);
   const attributes: SourceAttribute[] = [];
   for (const [propName, propDef] of Object.entries(ownBranch?.properties ?? {})) {
-    attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics));
+    attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
   }
 
   return {
@@ -306,7 +312,8 @@ function readAttribute(
   propDef: JsonSchemaNode,
   isRequired: boolean,
   defs: Record<string, JsonSchemaNode>,
-  diagnostics: ImportDiagnostic[]
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
 ): SourceAttribute {
   const constraints: ConstraintIR[] = [];
   const isArray = propDef.type === 'array';
@@ -318,16 +325,18 @@ function readAttribute(
     ? { inf: propDef.minItems ?? 0, ...(propDef.maxItems !== undefined && { sup: propDef.maxItems }) }
     : { inf: isRequired ? 1 : 0, sup: 1 };
 
-  const constraintTarget = isArray ? itemDef : propDef;
-  pushRangeConstraint(constraintTarget, propName, constraints);
-  pushLengthConstraint(propDef, propName, constraints, isArray);
-  if (constraintTarget.pattern !== undefined) {
-    constraints.push({ kind: 'pattern', path: propName, regex: constraintTarget.pattern });
-    pushDiagnostic(diagnostics, {
-      severity: 'warning',
-      code: 'untranslatable-construct',
-      message: `property '${propName}': 'pattern' has no Rune expression-level equivalent — will emit a stub condition`
-    });
+  if (!skipConditions) {
+    const constraintTarget = isArray ? itemDef : propDef;
+    pushRangeConstraint(constraintTarget, propName, constraints);
+    pushLengthConstraint(propDef, propName, constraints, isArray);
+    if (constraintTarget.pattern !== undefined) {
+      constraints.push({ kind: 'pattern', path: propName, regex: constraintTarget.pattern });
+      pushDiagnostic(diagnostics, {
+        severity: 'warning',
+        code: 'untranslatable-construct',
+        message: `property '${propName}': 'pattern' has no Rune expression-level equivalent — will emit a stub condition`
+      });
+    }
   }
 
   return {
