@@ -110,7 +110,8 @@ function TypeAliasForm({
     // between the AnyGraphNode runtime shape and z2f's parameterised
     // `Partial<output<Schema>>` constraint.
     defaultValues: formValuesProjection<typeof RosettaTypeAliasSchema>(data, nodeMeta),
-    mode: 'onChange'
+    mode: 'onChange',
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different node

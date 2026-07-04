@@ -118,7 +118,8 @@ function DataTypeForm({
   const { form } = useZodForm(DataSchema, {
     defaultValues: formValuesProjection<typeof DataSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry
+    formRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different node
