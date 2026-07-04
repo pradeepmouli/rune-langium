@@ -2,16 +2,20 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * CLI integration tests for `rune-codegen import` (specs/021-codegen-inbound
- * Phase 1 T4/T6). No prior CLI test convention exists in this package
- * (`bin/rune-codegen.ts` has no existing test file) — this file spawns the
- * BUILT CLI (`dist/bin/rune-codegen.js`) via `execFile`, mirroring
- * `cdm-smoke.test.ts`'s `runTscNoEmit` child-process pattern. Requires
- * `pnpm --filter @rune-langium/codegen run build` to have run first; skips
- * cleanly (via a `beforeAll` existence check) rather than failing hard when
- * `dist/` is stale/absent, matching this suite's "skip when a prerequisite
- * artifact is absent" convention (see cdm-smoke.test.ts's CDM-fixture
- * `it.todo`s).
+ * Tests for `rune-codegen import` (specs/021-codegen-inbound Phase 1 T4/T6).
+ *
+ * Convention: mirrors `packages/cli/test/cli-parse.test.ts` — the action
+ * body is exported (`runImport`) and unit-tested directly, no process
+ * spawning, no built `dist/` dependency. A couple of thin process-spawn
+ * smoke tests are kept separately (see the second `describe` below) purely
+ * to prove the actual commander wiring in `bin/rune-codegen.ts` — most
+ * notably the `--out-file` (not `--output`/`-o`) naming, which exists
+ * because of a real commander gotcha: a subcommand option colliding with a
+ * PARENT option on either the short flag OR the long name silently drops
+ * its own value (see the comment in `bin/rune-codegen.ts` above the
+ * `import` subcommand's `.option('--out-file ...)` line) — that class of
+ * bug can only be caught by actually invoking commander's parser, not by
+ * calling `runImport` directly.
  */
 
 import { execFile } from 'node:child_process';
@@ -19,22 +23,11 @@ import { promisify } from 'node:util';
 import { mkdtemp, writeFile, readFile, access } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
 import { parse } from '@rune-langium/core';
+import { runImport } from '../../src/import/cli.js';
 
 const execFileAsync = promisify(execFile);
-
-const PKG_DIR = resolve(new URL('.', import.meta.url).pathname, '../..');
-const CLI_PATH = join(PKG_DIR, 'dist/bin/rune-codegen.js');
-
-let cliBuilt = true;
-beforeAll(async () => {
-  try {
-    await access(CLI_PATH);
-  } catch {
-    cliBuilt = false;
-  }
-});
 
 const PARTY_SCHEMA = JSON.stringify({
   $id: 'https://example.com/schemas/party.json',
@@ -50,6 +43,140 @@ const PARTY_SCHEMA = JSON.stringify({
   }
 });
 
+function baseOpts(): Parameters<typeof runImport>[1] {
+  return { from: 'json-schema', synonyms: true, conditions: true, onUntranslatable: 'stub' };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('runImport (direct — no process spawn)', () => {
+  it('imports a JSON Schema file to stdout and the output parses with zero errors', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const schemaPath = join(tmpDir, 'party.json');
+    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(schemaPath, baseOpts());
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('type Party:');
+    expect(stdout).toContain('condition ValueRange:');
+
+    const result = await parse(stdout);
+    expect(result.hasErrors).toBe(false);
+  });
+
+  it('writes to outFile and the file parses with zero errors', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const schemaPath = join(tmpDir, 'party.json');
+    const outPath = join(tmpDir, 'party.rune');
+    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
+
+    const exitCode = await runImport(schemaPath, { ...baseOpts(), outFile: outPath });
+    expect(exitCode).toBe(0);
+
+    const written = await readFile(outPath, 'utf-8');
+    const result = await parse(written);
+    expect(result.hasErrors).toBe(false);
+  });
+
+  it('rejects an unsupported --from value with exit code 1', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const schemaPath = join(tmpDir, 'party.json');
+    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
+
+    let stderr = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      stderr += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(schemaPath, { ...baseOpts(), from: 'typescript' });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('not yet supported');
+  });
+
+  it('--namespace overrides $id-derived namespace', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const schemaPath = join(tmpDir, 'party.json');
+    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(schemaPath, { ...baseOpts(), namespace: 'my.override' });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('namespace my.override');
+  });
+
+  it('synonyms: false suppresses synonym annotations', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const schemaPath = join(tmpDir, 'party.json');
+    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(schemaPath, { ...baseOpts(), synonyms: false });
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain('synonym');
+  });
+
+  it('conditions: false performs a structural-only import', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const schemaPath = join(tmpDir, 'party.json');
+    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(schemaPath, { ...baseOpts(), conditions: false });
+    expect(exitCode).toBe(0);
+    expect(stdout).not.toContain('condition ');
+  });
+
+  it('a nonexistent input file returns exit code 1 with a clear error, not a throw', async () => {
+    let stderr = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      stderr += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport('/nonexistent/path/schema.json', baseOpts());
+    expect(exitCode).toBe(1);
+    expect(stderr.length).toBeGreaterThan(0);
+  });
+});
+
+// ---- thin process-spawn smoke tests: prove the actual commander wiring ----
+
+const PKG_DIR = resolve(new URL('.', import.meta.url).pathname, '../..');
+const CLI_PATH = join(PKG_DIR, 'dist/bin/rune-codegen.js');
+
+let cliBuilt = true;
+beforeAll(async () => {
+  try {
+    await access(CLI_PATH);
+  } catch {
+    cliBuilt = false;
+  }
+});
+
 async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
     const { stdout, stderr } = await execFileAsync('node', [CLI_PATH, ...args]);
@@ -60,28 +187,14 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
   }
 }
 
-describe.skipIf(!cliBuilt)('rune-codegen import CLI', () => {
-  it('imports a JSON Schema file to stdout and the output parses with zero errors', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-cli-'));
-    const schemaPath = join(tmpDir, 'party.json');
-    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
-
-    const { stdout, exitCode } = await runCli(['import', schemaPath, '--from', 'json-schema']);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain('type Party:');
-    expect(stdout).toContain('condition ValueRange:');
-
-    const result = await parse(stdout);
-    expect(result.hasErrors).toBe(false);
-  });
-
-  it('writes to -o <file> and the file parses with zero errors', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-cli-'));
+describe.skipIf(!cliBuilt)('rune-codegen CLI wiring (process spawn — commander integration only)', () => {
+  it('import subcommand dispatches and --out-file writes a file (proves the -o/--output collision fix)', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
     const schemaPath = join(tmpDir, 'party.json');
     const outPath = join(tmpDir, 'party.rune');
     await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
 
-    const { exitCode, stdout } = await runCli(['import', schemaPath, '--from', 'json-schema', '-o', outPath]);
+    const { exitCode, stdout } = await runCli(['import', schemaPath, '--from', 'json-schema', '--out-file', outPath]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain(outPath);
 
@@ -90,18 +203,8 @@ describe.skipIf(!cliBuilt)('rune-codegen import CLI', () => {
     expect(result.hasErrors).toBe(false);
   });
 
-  it('rejects an unsupported --from value with exit code 1', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-cli-'));
-    const schemaPath = join(tmpDir, 'party.json');
-    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
-
-    const { exitCode, stderr } = await runCli(['import', schemaPath, '--from', 'typescript']);
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain('not yet supported');
-  });
-
-  it('the existing default (outbound) invocation is unaffected by the import subcommand', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-cli-'));
+  it('the existing default (outbound) invocation is unaffected by the import subcommand registration', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
     const runeSource = 'namespace test.clicheck\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n';
     const runePath = join(tmpDir, 'sample.rune');
     await writeFile(runePath, runeSource, 'utf-8');
@@ -110,32 +213,5 @@ describe.skipIf(!cliBuilt)('rune-codegen import CLI', () => {
     const { exitCode, stdout } = await runCli([runePath, '-t', 'zod', '-o', outDir]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain('done');
-  });
-
-  it('--namespace overrides $id-derived namespace end to end', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-cli-'));
-    const schemaPath = join(tmpDir, 'party.json');
-    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
-
-    const { stdout, exitCode } = await runCli([
-      'import',
-      schemaPath,
-      '--from',
-      'json-schema',
-      '--namespace',
-      'my.override'
-    ]);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain('namespace my.override');
-  });
-
-  it('--no-synonyms suppresses synonym annotations end to end', async () => {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-cli-'));
-    const schemaPath = join(tmpDir, 'party.json');
-    await writeFile(schemaPath, PARTY_SCHEMA, 'utf-8');
-
-    const { stdout, exitCode } = await runCli(['import', schemaPath, '--from', 'json-schema', '--no-synonyms']);
-    expect(exitCode).toBe(0);
-    expect(stdout).not.toContain('synonym');
   });
 });
