@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate, GeneratorError, IMPLEMENTED_TARGETS } from '../src/index.js';
+import { generate, GeneratorError, IMPLEMENTED_TARGETS } from '../src/export.js';
 
 const RUNE_SOURCE = `namespace cdm.base.math
 

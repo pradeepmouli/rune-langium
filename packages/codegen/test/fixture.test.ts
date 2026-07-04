@@ -22,7 +22,7 @@ import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate } from '../src/index.js';
+import { generate } from '../src/export.js';
 import type { Target } from '../src/types.js';
 
 // chevrotain@12 uses Object.groupBy which requires Node ≥ 22.

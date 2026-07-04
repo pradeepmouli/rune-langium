@@ -35,7 +35,7 @@ import { URI } from 'langium';
 import { describe, it, expect } from 'vitest';
 import { walkNamespace } from '../../src/emit/namespace-walker.js';
 import { emitNamespace } from '../../src/emit/zod-emitter.js';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 
 async function parseSource(source: string) {
   const { RuneDsl } = createRuneDslServices();

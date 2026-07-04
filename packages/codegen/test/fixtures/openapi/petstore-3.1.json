@@ -1,0 +1,64 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Petstore Demo 3.1",
+    "version": "1.0.0",
+    "description": "A hand-trimmed OAS 3.1 (2020-12 dialect) counterpart to petstore-3.0.yaml — nullable expressed as a type union (no 'nullable' keyword), otherwise the same shapes (discriminator + mapping, allOf-extends, enums with unsafe values, range/length constraints)."
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Category": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": ["string", "null"] }
+        }
+      },
+      "Pet": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Category" },
+          {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "age": { "type": "integer", "minimum": 0 },
+              "status": { "$ref": "#/components/schemas/PetStatus" }
+            }
+          }
+        ]
+      },
+      "PetStatus": {
+        "type": "string",
+        "enum": ["available", "out-of-stock", "pending"]
+      },
+      "DogPayment": {
+        "type": "object",
+        "required": ["amount"],
+        "properties": {
+          "amount": { "type": "number", "exclusiveMinimum": 0 }
+        }
+      },
+      "CatPayment": {
+        "type": "object",
+        "required": ["deposit"],
+        "properties": {
+          "deposit": { "type": "number", "minimum": 0 }
+        }
+      },
+      "PaymentMethod": {
+        "type": "object",
+        "oneOf": [{ "$ref": "#/components/schemas/DogPayment" }, { "$ref": "#/components/schemas/CatPayment" }],
+        "discriminator": {
+          "propertyName": "species",
+          "mapping": {
+            "dog": "DogPayment",
+            "cat": "CatPayment"
+          }
+        }
+      }
+    }
+  }
+}

@@ -58,7 +58,7 @@ import { describe, it, expect } from 'vitest';
 import ts from 'typescript';
 import { walkNamespace } from '../../src/emit/namespace-walker.js';
 import { emitNamespace } from '../../src/emit/ts-emitter.js';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 
 /**
  * Real `tsc --strict` type-check of an emitted `.ts` file — no shortcuts

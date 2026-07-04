@@ -162,6 +162,45 @@ describe('runImport (direct — no process spawn)', () => {
     expect(exitCode).toBe(1);
     expect(stderr.length).toBeGreaterThan(0);
   });
+
+  it('--from openapi imports a YAML OpenAPI document and produces zero-parse-error .rune output (T4)', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const specPath = join(tmpDir, 'petstore.yaml');
+    await writeFile(
+      specPath,
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: CLI Openapi Demo',
+        '  version: 1.0.0',
+        'paths: {}',
+        'components:',
+        '  schemas:',
+        '    Party:',
+        '      type: object',
+        '      required: [partyId]',
+        '      properties:',
+        '        partyId: { type: string }',
+        '        value: { type: integer, minimum: 0 }',
+        ''
+      ].join('\n'),
+      'utf-8'
+    );
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(specPath, { ...baseOpts(), from: 'openapi' });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('type Party:');
+    expect(stdout).toContain('synonym source OpenApi');
+
+    const result = await parse(stdout);
+    expect(result.hasErrors).toBe(false);
+  });
 });
 
 // ---- thin process-spawn smoke tests: prove the actual commander wiring ----
@@ -211,5 +250,38 @@ describe.skipIf(!cliBuilt)('rune-codegen CLI wiring (process spawn — commander
     const { exitCode, stdout } = await runCli([runePath, '-t', 'zod', '-o', outDir]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain('done');
+  });
+
+  it('--from openapi dispatches through the real CLI process and writes a zero-parse-error .rune file (T4)', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
+    const specPath = join(tmpDir, 'petstore.yaml');
+    const outPath = join(tmpDir, 'petstore.rune');
+    await writeFile(
+      specPath,
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: Wiring Openapi Demo',
+        '  version: 1.0.0',
+        'paths: {}',
+        'components:',
+        '  schemas:',
+        '    Party:',
+        '      type: object',
+        '      required: [partyId]',
+        '      properties:',
+        '        partyId: { type: string }',
+        ''
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const { exitCode, stdout } = await runCli(['import', specPath, '--from', 'openapi', '--out-file', outPath]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(outPath);
+
+    const written = await readFile(outPath, 'utf-8');
+    const result = await parse(written);
+    expect(result.hasErrors).toBe(false);
   });
 });

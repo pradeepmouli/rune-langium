@@ -17,7 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices, parse } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 import { importModel } from '../../src/import/index.js';
 
 const SOURCE_RUNE = `namespace test.roundtrip

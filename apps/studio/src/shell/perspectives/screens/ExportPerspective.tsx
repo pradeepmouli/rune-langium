@@ -22,7 +22,7 @@
 
 import type { ReactElement } from 'react';
 import { useCallback, useMemo, useState } from 'react';
-import type { Target } from '@rune-langium/codegen';
+import type { Target } from '@rune-langium/codegen/export';
 import { CodegenTargetsTable } from '../../../components/CodegenTargetsTable.js';
 import { DownloadConfigModal, type DownloadConfig } from '../../../components/DownloadConfigModal.js';
 import { ExcelOptionsFormAdapter } from '../../../codegen-forms/ExcelOptionsFormAdapter.js';

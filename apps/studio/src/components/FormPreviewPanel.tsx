@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import { z } from 'zod';
-import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen';
+import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Input } from '@rune-langium/design-system/ui/input';

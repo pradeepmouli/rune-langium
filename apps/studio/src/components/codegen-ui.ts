@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
+import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
 
 export const CODE_PREVIEW_PANEL_ID = 'code-preview-panel';
 export const FORM_PREVIEW_PANEL_ID = 'form-preview-panel';

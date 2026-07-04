@@ -423,3 +423,32 @@ Emitting native synonyms (rather than a bespoke mapping sidecar) means the impor
 ### Licensing
 
 Inbound generation lives in the MIT-licensed `@rune-langium/codegen` package, consistent with the outbound emitters. It strengthens the same funnel: lower the cost of getting *into* Rune, and more users reach the studio.
+
+---
+
+## Phase 2 Addendum (adopted 2026-07-04, user directives)
+
+**Reader architecture (BINDING for all readers from Phase 2 on):**
+
+1. **The intermediate IS `Dehydrated<T>`** — no invented node types. `ast-builder`/`constraint-translator` output is typed as core's `Dehydrated<Data>`/`Dehydrated<Attribute>`/`Dehydrated<RosettaEnumeration>`/etc. (type-only imports; zero runtime weight). Phase 1's local `DataNode`/`AttributeNode`/`EnumerationNode`/`EnumValueNode`/`ConditionNode` interfaces are RETROFITTED away — any type error the swap surfaces is a drift finding, not friction.
+2. **Tree-sitter across the board for language sources** (TypeScript/SQL/Python readers): `web-tree-sitter` WASM runtime + per-language grammars. `ts-morph` REJECTED (drags the full TS compiler as a runtime dep). Consequence: companion-Zod extraction is SYNTACTIC (same-file / explicitly-listed schema files; no cross-file import resolution). `node-sql-parser` superseded by `tree-sitter-sql` (dialect-coverage check at that reader's design time).
+3. **Typed schema libraries for document sources**: `@types/json-schema` (retrofit the shipped reader's hand-rolled shapes) and `openapi-types` — both types-only, zero runtime bytes.
+4. **Subpath restructure — CLEAN FLIP** (package unpublished, zero external consumers, all migration in-repo):
+   - `@rune-langium/codegen/export` — the outbound emitters (generate(), all emitters, namespace walker)
+   - `@rune-langium/codegen/import` — the inbound surface (readers, SourceModel/ConstraintIR, builders, importModel)
+   - `@rune-langium/codegen/rosetta` — UNCHANGED (the shared Rune-text writer, consumed by both directions)
+   - The main barrel `.` empties to shared types only (or is removed if nothing genuinely shared remains); every in-repo consumer migrates in the same PR.
+5. **Phase 2 order REORDERED: OpenAPI reader FIRST** (TypeScript/SQL move later). OpenAPI `components.schemas` ARE JSON Schema: OAS 3.1 ≈ direct delegation to the shipped json-schema machinery; OAS 3.0 dialect normalization layer (nullable: true → optionality; `discriminator` OBJECT {propertyName, mapping} → choice/oneOf IR incl. mapping-driven branch resolution; allOf composition). Synonym source name: `OpenApi`. **YAML: in scope** via the `yaml` package (MIT, browser-safe) — OpenAPI documents in the wild are predominantly YAML; a JSON-only OpenAPI importer would miss the point. This is the import subpath's first (and only, so far) runtime dependency, isolated behind `/import`.
+
+**Phase 2 (OpenAPI) task order:** (1) Dehydrated<T> retrofit → (2) subpath clean flip (/import + /export; consumer migration same PR) → (3) @types/json-schema retrofit → (4) openapi-reader (3.0 normalization + 3.1 passthrough + YAML) with fixtures for both OAS versions → (5) oracles: round-trip a Rune model through outbound JSON Schema wrapped as an OAS component set; petstore-class public fixture; inbound hard invariant throughout.
+
+---
+
+## Phase 2b (recorded 2026-07-04, user-directed — NOT in the Phase 2 PR)
+
+Two paired follow-ups forming the next OpenAPI increment:
+
+1. **Outbound OpenAPI emitter** (`Rune → OpenAPI`): wrap the JSON Schema emitter's per-type output into `components.schemas`; absorb the recorded constraint-keywords follow-up (real `minimum`/`maximum`/`minLength`/`oneOf` for translatable conditions — an OpenAPI emitter without them would repeat the opaque-metadata round-trip gap); OAS 3.1 dialect; **YAML output required** (not just JSON — the `yaml` package is already a runtime dep of this package, so `/export` reuses it; emit format follows the requested output extension or an explicit flag).
+2. **Functions ↔ operations mapping (both directions)**: Rune `func` ↔ OpenAPI path operation. Inbound: `paths.*.{method}` → `RosettaFunction` (`operationId` → sanitized func name; parameters + requestBody schema → inputs with required→cardinality; 2xx response schema → output; summary/description → definition; parameter constraints → conditions). Outbound: the inverse. **Plus CRUD generation as an EMITTER OPTION (user, 2026-07-04)**: the outbound emitter gains an opt-in option to generate the standard CRUD operation set (`GET /xs`, `GET /xs/{id}`, `POST /xs`, `PUT|PATCH /xs/{id}`, `DELETE /xs/{id}`) for selected types — an emitter option, not default behavior, and not an inbound requirement. (Inbound CRUD-shape recognition mapping to conventionally-named funcs like CDM's `Create_*` idiom is a possible later refinement, not Phase 2b scope.) DESIGN-TIME VERIFICATION: whether the grammar permits synonym annotations on funcs — if not, the operation↔func correspondence needs a different carrier (definition text or naming convention); settle in the Phase 2b brainstorm.
+
+Together these make the OpenAPI pair a true two-way target: schemas ↔ types AND operations ↔ funcs, with the outbound emitter serving as the inbound reader's single-artifact round-trip oracle (the oracle the JSON Schema pair couldn't have).

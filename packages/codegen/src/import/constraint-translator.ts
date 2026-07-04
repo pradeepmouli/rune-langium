@@ -38,25 +38,146 @@
  *    purpose.
  */
 
+import type { AstNode } from 'langium';
 import { escapeId } from '../emit/rosetta/render-expression.js';
 import type { ConstraintIR } from './source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from './diagnostics.js';
+import type { Dehydrated } from '@rune-langium/core';
+import type {
+  RosettaExpression,
+  Condition,
+  RosettaSymbolReference,
+  RosettaIntLiteral,
+  RosettaNumberLiteral,
+  RosettaStringLiteral,
+  RosettaBooleanLiteral,
+  ComparisonOperation,
+  EqualityOperation,
+  RosettaCountOperation,
+  RosettaExistsExpression,
+  RosettaAbsentExpression,
+  LogicalOperation,
+  RosettaConditionalExpression,
+  ChoiceOperation
+} from '@rune-langium/core';
 
-/** A `RosettaExpression`-shaped plain object (see render-expression.ts's `DehydratedExpression`). */
-export type ExpressionNode = Record<string, unknown> & { $type: string };
+/**
+ * `Dehydrated<T>` (core's `serializer/dehydrated.ts`) has two gaps that a
+ * naked `Dehydrated<RosettaExpression>` instantiation surfaces — both
+ * genuine drift findings from the T1 retrofit (spec.md Phase 2 Addendum: "any
+ * type error the swap surfaces is a drift finding, not friction"), reported
+ * here rather than silently reshaped:
+ *
+ *  1. **Non-distributive over a union type parameter.** `Dehydrated<T
+ *     extends AstNode>`'s mapped-type body reads `keyof T` — applying it
+ *     directly to a union (e.g. `RosettaExpression`, 48 members) does not
+ *     distribute member-wise (`Dehydrated<X> | Dehydrated<Y>`); it collapses
+ *     to the fields common to EVERY member (`$type`/`$namespace`/
+ *     `$cstRange` only), silently dropping every field the branches don't
+ *     share (`left`, `right`, `value`, `operator`, ...). This is not
+ *     hypothetical: `render-expression.ts`'s own `DehydratedExpression =
+ *     Dehydrated<RosettaExpression> | RosettaExpression` has the identical
+ *     collapse — it happens to work there only because `renderExpression`
+ *     immediately casts to an internal `AnyNode` shape and never relies on
+ *     the collapsed type's fields.
+ *  2. **`Array<Reference<X>>` fields are not dehydrated at all.**
+ *     `DehydratedField<F>`'s reference-shape branch only matches a BARE
+ *     `Reference<X>`; its array branch only matches `Array<AstNode>`. A
+ *     field typed `Array<Reference<X>>` (e.g. `ChoiceOperation.attributes`,
+ *     and 7 other fields across the grammar — `sources` on every synonym
+ *     node, `corpusList`, `eligibilityRules`, `superSources`) matches
+ *     neither and falls through to `F` unchanged, i.e. stays
+ *     `Array<Reference<X>>` (a REAL resolved reference, not `{$refText}`) —
+ *     even though every other reference-shaped field on the same node IS
+ *     correctly dehydrated to `{$refText}`.
+ *
+ * `RosettaExpr` below is a local, minimal fix for both gaps, scoped to
+ * exactly the `RosettaExpression` members this module actually builds (not
+ * a general-purpose replacement for `Dehydrated<T>`).
+ */
+type DistributedDehydrated<T extends AstNode> = T extends AstNode ? Dehydrated<T> : never;
 
-/** A `Condition`-shaped plain object (see rosetta-render-core.ts's `renderNode` dispatch). */
-export interface ConditionNode {
-  $type: 'Condition';
-  name: string;
-  postCondition: false;
-  definition?: string;
-  expression: ExpressionNode;
-  annotations: never[];
-  references: never[];
-}
+/** `Dehydrated<ChoiceOperation>` with `attributes` corrected to `{$refText}[]` (see the module doc's gap 2) and its nested `argument`/nothing-else operand replaced by `RosettaExpr` (gap 1 — irrelevant here since `ChoiceOperation` never nests a translated argument, but kept for shape symmetry with its `Dehydrated<T>` sibling). */
+type DehydratedChoiceOperation = Omit<Dehydrated<ChoiceOperation>, 'attributes' | 'argument'> & {
+  attributes: Array<{ $refText: string }>;
+  argument?: RosettaExpr;
+};
+type DehydratedComparison = Omit<Dehydrated<ComparisonOperation>, 'left' | 'right'> & {
+  left?: RosettaExpr;
+  right: RosettaExpr;
+};
+type DehydratedEquality = Omit<Dehydrated<EqualityOperation>, 'left' | 'right'> & {
+  left?: RosettaExpr;
+  right: RosettaExpr;
+};
+type DehydratedCount = Omit<Dehydrated<RosettaCountOperation>, 'argument'> & { argument?: RosettaExpr };
+type DehydratedExists = Omit<Dehydrated<RosettaExistsExpression>, 'argument'> & { argument?: RosettaExpr };
+type DehydratedAbsent = Omit<Dehydrated<RosettaAbsentExpression>, 'argument'> & { argument?: RosettaExpr };
+type DehydratedLogical = Omit<Dehydrated<LogicalOperation>, 'left' | 'right'> & {
+  left: RosettaExpr;
+  right: RosettaExpr;
+};
+type DehydratedConditional = Omit<Dehydrated<RosettaConditionalExpression>, 'if' | 'ifthen'> & {
+  if?: RosettaExpr;
+  ifthen?: RosettaExpr;
+};
 
-function symbolRef(path: string): ExpressionNode {
+/**
+ * The corrected, distributed `RosettaExpression` dehydrated union — see the
+ * two-gap doc above. Every branch this module actually constructs is
+ * substituted with its `Dehydrated*` correction; branches this module never
+ * builds (the other ~35 `RosettaExpression` members) keep the plain
+ * (uncorrected, but also unused) `Dehydrated<T>` shape from
+ * `DistributedDehydrated`.
+ */
+type RosettaExpr =
+  | Exclude<
+      DistributedDehydrated<RosettaExpression>,
+      | Dehydrated<ChoiceOperation>
+      | Dehydrated<ComparisonOperation>
+      | Dehydrated<EqualityOperation>
+      | Dehydrated<RosettaCountOperation>
+      | Dehydrated<RosettaExistsExpression>
+      | Dehydrated<RosettaAbsentExpression>
+      | Dehydrated<LogicalOperation>
+      | Dehydrated<RosettaConditionalExpression>
+    >
+  | DehydratedChoiceOperation
+  | DehydratedComparison
+  | DehydratedEquality
+  | DehydratedCount
+  | DehydratedExists
+  | DehydratedAbsent
+  | DehydratedLogical
+  | DehydratedConditional;
+
+/** A `RosettaExpression`-shaped plain object — the core-generated `Dehydrated<T>` substrate (corrected; see the module doc above), per spec.md's Phase 2 addendum (BINDING: no invented node types). */
+export type ExpressionNode = RosettaExpr;
+
+/**
+ * A `Condition`-shaped plain object — `Dehydrated<Condition>`, with two
+ * fields corrected:
+ *  - `expression` → `RosettaExpr` (gap 1 again: `Condition.expression:
+ *    RosettaExpression` is required, and `Dehydrated<Condition>`'s own
+ *    mapping resolves it through the uncorrected, collapsed
+ *    `Dehydrated<RosettaExpression>`).
+ *  - `name` → `string | undefined` (a THIRD `Dehydrated<T>` gap found while
+ *    wiring this type: `Condition.name?: ValidID`, and `ValidID = 'condition'
+ *    | 'pattern' | ... | string` is itself a union of literal-string members
+ *    plus a bare `string`. Passed through `DehydratedField<F>` as a naked
+ *    conditional-type parameter, this union distributes internally the same
+ *    way gap 1 describes for `RosettaExpression` — empirically verified
+ *    (`Dehydrated<Condition>['name']` resolves to `string | Dehydrated<
+ *    never> | undefined`, not `string | undefined`) — so ANY optional field
+ *    whose type is itself a union (not just a union of `AstNode`s) can hit
+ *    this, not only `RosettaExpression`-shaped fields.
+ */
+export type ConditionNode = Omit<Dehydrated<Condition>, 'expression' | 'name'> & {
+  expression: RosettaExpr;
+  name: string | undefined;
+};
+
+function symbolRef(path: string): Dehydrated<RosettaSymbolReference> {
   return {
     $type: 'RosettaSymbolReference',
     symbol: { $refText: escapeId(path) },
@@ -65,54 +186,82 @@ function symbolRef(path: string): ExpressionNode {
   };
 }
 
-function intLiteral(n: number): ExpressionNode {
+function intLiteral(n: number): Dehydrated<RosettaIntLiteral> {
   return { $type: 'RosettaIntLiteral', value: BigInt(Math.trunc(n)) };
 }
 
-function numberLiteral(n: number): ExpressionNode {
+function numberLiteral(n: number): Dehydrated<RosettaNumberLiteral> {
   return { $type: 'RosettaNumberLiteral', value: String(n) };
 }
 
 /** Emits an int literal for an integer value, a number literal otherwise — narrower is more idiomatic Rune. */
-function numericLiteral(n: number): ExpressionNode {
+function numericLiteral(n: number): Dehydrated<RosettaIntLiteral> | Dehydrated<RosettaNumberLiteral> {
   return Number.isInteger(n) ? intLiteral(n) : numberLiteral(n);
 }
 
-function stringLiteral(s: string): ExpressionNode {
+function stringLiteral(s: string): Dehydrated<RosettaStringLiteral> {
   return { $type: 'RosettaStringLiteral', value: s };
 }
 
-function booleanLiteral(v: boolean): ExpressionNode {
+function booleanLiteral(v: boolean): Dehydrated<RosettaBooleanLiteral> {
   return { $type: 'RosettaBooleanLiteral', value: v };
 }
 
-function comparison(op: string, left: ExpressionNode, right: ExpressionNode): ExpressionNode {
-  const $type = op === '=' || op === '<>' ? 'EqualityOperation' : 'ComparisonOperation';
-  return { $type, operator: op, left, right };
+function comparison(
+  op: string,
+  left: ExpressionNode,
+  right: ExpressionNode
+): DehydratedComparison | DehydratedEquality {
+  if (op === '=' || op === '<>') {
+    return { $type: 'EqualityOperation', operator: op, left, right, cardMod: undefined };
+  }
+  return {
+    $type: 'ComparisonOperation',
+    operator: op as '<' | '<=' | '>' | '>=',
+    left,
+    right,
+    cardMod: undefined
+  };
 }
 
-function countOf(argument: ExpressionNode): ExpressionNode {
+function countOf(argument: ExpressionNode): DehydratedCount {
   return { $type: 'RosettaCountOperation', operator: 'count', argument };
 }
 
-function existsOf(argument: ExpressionNode): ExpressionNode {
+function existsOf(argument: ExpressionNode): DehydratedExists {
   return { $type: 'RosettaExistsExpression', operator: 'exists', argument, modifier: undefined };
 }
 
-function absentOf(argument: ExpressionNode): ExpressionNode {
+function absentOf(argument: ExpressionNode): DehydratedAbsent {
   return { $type: 'RosettaAbsentExpression', operator: 'absent', argument };
 }
 
-function logical(op: 'and' | 'or', left: ExpressionNode, right: ExpressionNode): ExpressionNode {
+function logical(op: 'and' | 'or', left: ExpressionNode, right: ExpressionNode): DehydratedLogical {
   return { $type: 'LogicalOperation', operator: op, left, right };
 }
 
-function conditionalOf(ifExpr: ExpressionNode, thenExpr: ExpressionNode): ExpressionNode {
+function conditionalOf(ifExpr: ExpressionNode, thenExpr: ExpressionNode): DehydratedConditional {
   return { $type: 'RosettaConditionalExpression', if: ifExpr, ifthen: thenExpr, full: false, elsethen: undefined };
 }
 
-/** `optional|required choice p1, p2, ...` — the grammar's actual multi-attribute-presence construct. */
-function choiceOf(necessity: 'required' | 'optional', paths: readonly string[]): ExpressionNode {
+/**
+ * `optional|required choice p1, p2, ...` — the grammar's actual
+ * multi-attribute-presence construct.
+ *
+ * DRIFT FINDING (T1): `ChoiceOperation.attributes` is `Array<Reference<
+ * Attribute>>` in the real grammar — an ARRAY OF references, not a
+ * reference or an array of `AstNode`s. `Dehydrated<T>`'s field mapper
+ * (`DehydratedField<F>`) only dehydrates a bare `Reference` (via the
+ * `ReferenceShape` branch) or an `Array<AstNode>` (via the array branch);
+ * `Array<Reference<X>>` matches neither, so it falls through to plain `F`
+ * unchanged — meaning `Dehydrated<ChoiceOperation>['attributes']` stays
+ * `Array<Reference<Attribute>>` (requiring a real, resolved `.ref`), not the
+ * `{ $refText: string }[]` shape every real fixture (and the renderer's own
+ * dispatch) actually uses. Typed locally to the correct dehydrated shape
+ * rather than silently reshaping the emitted value — the runtime object is
+ * unchanged from pre-retrofit code.
+ */
+function choiceOf(necessity: 'required' | 'optional', paths: readonly string[]): DehydratedChoiceOperation {
   return {
     $type: 'ChoiceOperation',
     operator: 'choice',
@@ -308,7 +457,14 @@ export function translateConstraint(
     $type: 'Condition',
     name,
     postCondition: false,
-    ...(definition !== undefined && { definition }),
+    // DRIFT FINDING (T1): `Dehydrated<T>` makes every field (including ones
+    // optional on the original AST interface, like `Condition.definition`)
+    // a REQUIRED key of type `V | undefined` rather than an optional key —
+    // `DehydratedField<F>` maps the field's own type, but the enclosing
+    // mapped type never adds a `?` modifier. A conditional spread (the
+    // pre-retrofit idiom, which OMITS the key when undefined) no longer
+    // satisfies the type; every key must be present explicitly.
+    definition,
     expression,
     annotations: [],
     references: []

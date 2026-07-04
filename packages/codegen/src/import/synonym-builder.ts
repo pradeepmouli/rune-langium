@@ -46,28 +46,44 @@
 
 import { escapeString } from '../emit/rosetta/rosetta-render-core.js';
 import type { SourceKind } from './source-model.js';
+import type { Dehydrated } from '@rune-langium/core';
+import type {
+  RosettaClassSynonym,
+  RosettaSynonym,
+  RosettaEnumSynonym,
+  RosettaSynonymValueBase
+} from '@rune-langium/core';
+
+/**
+ * `RosettaClassSynonym`/`RosettaSynonym`/`RosettaEnumSynonym`-shaped plain
+ * objects — the core-generated `Dehydrated<T>` substrate (spec.md's Phase 2
+ * addendum, BINDING: no invented node types), retrofitted from this
+ * module's previously hand-rolled `ClassSynonymNode`/`SynonymNode`/
+ * `EnumSynonymNode` interfaces.
+ *
+ * DRIFT FINDING (T1): `RosettaClassSynonym.sources` / `RosettaSynonym.sources`
+ * / `RosettaEnumSynonym.sources` are all `Array<Reference<
+ * RosettaSynonymSource>>` — an ARRAY OF references. Same gap
+ * constraint-translator.ts documents for `ChoiceOperation.attributes`:
+ * `Dehydrated<T>`'s field mapper dehydrates a BARE `Reference` (to
+ * `{$refText}`) or an `Array<AstNode>`, but not `Array<Reference<X>>` —
+ * that shape falls through unchanged, staying a real (resolved) `Reference`
+ * array rather than `{$refText}[]`. Each node type below corrects its own
+ * `sources` field the same way `constraint-translator.ts`'s
+ * `DehydratedChoiceOperation` corrects `ChoiceOperation.attributes`.
+ */
+type WithDehydratedSources<T extends { sources: unknown }> = Omit<T, 'sources'> & {
+  sources: Array<{ $refText: string }>;
+};
 
 /** A `RosettaClassSynonym`-shaped plain object (Data/type-level). */
-export interface ClassSynonymNode {
-  $type: 'RosettaClassSynonym';
-  sources: Array<{ $refText: string }>;
-  value?: { name: string };
-  metaValue?: undefined;
-}
+export type ClassSynonymNode = WithDehydratedSources<Dehydrated<RosettaClassSynonym>>;
 
 /** A `RosettaSynonym`-shaped plain object (Attribute/Enumeration-level). */
-export interface SynonymNode {
-  $type: 'RosettaSynonym';
-  sources: Array<{ $refText: string }>;
-  body: { values: Array<{ name: string }> };
-}
+export type SynonymNode = WithDehydratedSources<Dehydrated<RosettaSynonym>>;
 
 /** A `RosettaEnumSynonym`-shaped plain object (per-enum-value). */
-export interface EnumSynonymNode {
-  $type: 'RosettaEnumSynonym';
-  sources: Array<{ $refText: string }>;
-  synonymValue: string;
-}
+export type EnumSynonymNode = WithDehydratedSources<Dehydrated<RosettaEnumSynonym>>;
 
 function sourceRef(source: SourceKind): { $refText: string } {
   return { $refText: source };
@@ -78,16 +94,44 @@ export function buildClassSynonym(source: SourceKind, sourceKey: string): ClassS
   return {
     $type: 'RosettaClassSynonym',
     sources: [sourceRef(source)],
-    value: { name: sourceKey }
+    value: {
+      $type: 'RosettaSynonymValueBase',
+      name: sourceKey,
+      maps: undefined,
+      path: undefined,
+      refType: undefined,
+      value: undefined
+    },
+    metaValue: undefined
   };
 }
 
 /** `[synonym <Source> value "<sourceKey>"]` on an `Attribute` or `Enumeration` (grammar's shared `RosettaSynonym`). */
 export function buildAttributeSynonym(source: SourceKind, sourceKey: string): SynonymNode {
+  const value: Dehydrated<RosettaSynonymValueBase> = {
+    $type: 'RosettaSynonymValueBase',
+    name: sourceKey,
+    maps: undefined,
+    path: undefined,
+    refType: undefined,
+    value: undefined
+  };
   return {
     $type: 'RosettaSynonym',
     sources: [sourceRef(source)],
-    body: { values: [{ name: sourceKey }] }
+    body: {
+      $type: 'RosettaSynonymBody',
+      values: [value],
+      hints: [],
+      metaValues: [],
+      format: undefined,
+      mapper: undefined,
+      mappingLogic: undefined,
+      merge: undefined,
+      patternMatch: undefined,
+      patternReplace: undefined,
+      removeHtml: false
+    }
   };
 }
 
@@ -96,7 +140,11 @@ export function buildEnumValueSynonym(source: SourceKind, sourceValue: string): 
   return {
     $type: 'RosettaEnumSynonym',
     sources: [sourceRef(source)],
-    synonymValue: sourceValue
+    synonymValue: sourceValue,
+    definition: undefined,
+    patternMatch: undefined,
+    patternReplace: undefined,
+    removeHtml: false
   };
 }
 

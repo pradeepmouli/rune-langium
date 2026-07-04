@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { TARGET_DESCRIPTORS } from '../src/index.js';
+import { TARGET_DESCRIPTORS } from '../src/export.js';
 
 describe('TARGET_DESCRIPTORS', () => {
   it('has all seven target entries', () => {
