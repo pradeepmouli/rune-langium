@@ -1241,7 +1241,7 @@ export interface TypeCallArgumentSchemaRefs {
 }
 
 export function createTypeCallArgumentSchema(refs: TypeCallArgumentSchemaRefs = {}) {
-  return TypeCallArgumentSchema.extend({
+  return TypeCallArgumentSchema.safeExtend({
     parameter: ReferenceSchema.extend({ $refText: zRef(() => refs.TypeParameter ?? []) })
   });
 }
@@ -1251,7 +1251,7 @@ export interface TypeCallSchemaRefs {
 }
 
 export function createTypeCallSchema(refs: TypeCallSchemaRefs = {}) {
-  return TypeCallSchema.extend({
+  return TypeCallSchema.safeExtend({
     type: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaType ?? []) })
   });
 }
@@ -1261,7 +1261,7 @@ export interface AnnotationDeepPathSchemaRefs {
 }
 
 export function createAnnotationDeepPathSchema(refs: AnnotationDeepPathSchemaRefs = {}) {
-  return AnnotationDeepPathSchema.extend({
+  return AnnotationDeepPathSchema.safeExtend({
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
@@ -1271,7 +1271,7 @@ export interface AnnotationPathSchemaRefs {
 }
 
 export function createAnnotationPathSchema(refs: AnnotationPathSchemaRefs = {}) {
-  return AnnotationPathSchema.extend({
+  return AnnotationPathSchema.safeExtend({
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
@@ -1281,7 +1281,7 @@ export interface AnnotationPathAttributeReferenceSchemaRefs {
 }
 
 export function createAnnotationPathAttributeReferenceSchema(refs: AnnotationPathAttributeReferenceSchemaRefs = {}) {
-  return AnnotationPathAttributeReferenceSchema.extend({
+  return AnnotationPathAttributeReferenceSchema.safeExtend({
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
@@ -1291,7 +1291,7 @@ export interface RosettaDataReferenceSchemaRefs {
 }
 
 export function createRosettaDataReferenceSchema(refs: RosettaDataReferenceSchemaRefs = {}) {
-  return RosettaDataReferenceSchema.extend({
+  return RosettaDataReferenceSchema.safeExtend({
     data: ReferenceSchema.extend({ $refText: zRef(() => refs.DataOrChoice ?? []) })
   });
 }
@@ -1301,7 +1301,7 @@ export interface RosettaAttributeReferenceSchemaRefs {
 }
 
 export function createRosettaAttributeReferenceSchema(refs: RosettaAttributeReferenceSchemaRefs = {}) {
-  return RosettaAttributeReferenceSchema.extend({
+  return RosettaAttributeReferenceSchema.safeExtend({
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.AttributeOrChoiceOption ?? []) })
   });
 }
@@ -1312,7 +1312,7 @@ export interface AnnotationRefSchemaRefs {
 }
 
 export function createAnnotationRefSchema(refs: AnnotationRefSchemaRefs = {}) {
-  return AnnotationRefSchema.extend({
+  return AnnotationRefSchema.safeExtend({
     annotation: ReferenceSchema.extend({ $refText: zRef(() => refs.Annotation ?? []) }),
     attribute: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) }).optional()
   });
@@ -1323,7 +1323,7 @@ export interface RosettaSegmentRefSchemaRefs {
 }
 
 export function createRosettaSegmentRefSchema(refs: RosettaSegmentRefSchemaRefs = {}) {
-  return RosettaSegmentRefSchema.extend({
+  return RosettaSegmentRefSchema.safeExtend({
     segment: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSegment ?? []) })
   });
 }
@@ -1334,7 +1334,7 @@ export interface RegulatoryDocumentReferenceSchemaRefs {
 }
 
 export function createRegulatoryDocumentReferenceSchema(refs: RegulatoryDocumentReferenceSchemaRefs = {}) {
-  return RegulatoryDocumentReferenceSchema.extend({
+  return RegulatoryDocumentReferenceSchema.safeExtend({
     body: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaBody ?? []) }),
     corpusList: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaCorpus ?? []) })).min(1)
   });
@@ -1345,7 +1345,7 @@ export interface RosettaSynonymSchemaRefs {
 }
 
 export function createRosettaSynonymSchema(refs: RosettaSynonymSchemaRefs = {}) {
-  return RosettaSynonymSchema.extend({
+  return RosettaSynonymSchema.safeExtend({
     sources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })).min(1)
   });
 }
@@ -1355,7 +1355,7 @@ export interface RuleReferenceAnnotationSchemaRefs {
 }
 
 export function createRuleReferenceAnnotationSchema(refs: RuleReferenceAnnotationSchemaRefs = {}) {
-  return RuleReferenceAnnotationSchema.extend({
+  return RuleReferenceAnnotationSchema.safeExtend({
     reportingRule: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaRule ?? []) }).optional()
   });
 }
@@ -1365,7 +1365,7 @@ export interface ChoiceOperationSchemaRefs {
 }
 
 export function createChoiceOperationSchema(refs: ChoiceOperationSchemaRefs = {}) {
-  return ChoiceOperationSchema.extend({
+  return ChoiceOperationSchema.safeExtend({
     attributes: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) }))
   });
 }
@@ -1375,7 +1375,7 @@ export interface ConstructorKeyValuePairSchemaRefs {
 }
 
 export function createConstructorKeyValuePairSchema(refs: ConstructorKeyValuePairSchemaRefs = {}) {
-  return ConstructorKeyValuePairSchema.extend({
+  return ConstructorKeyValuePairSchema.safeExtend({
     key: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaFeature ?? []) })
   });
 }
@@ -1385,7 +1385,7 @@ export interface DataSchemaRefs {
 }
 
 export function createDataSchema(refs: DataSchemaRefs = {}) {
-  return DataSchema.extend({
+  return DataSchema.safeExtend({
     superType: ReferenceSchema.extend({ $refText: zRef(() => refs.DataOrChoice ?? []) }).optional()
   });
 }
@@ -1395,7 +1395,7 @@ export interface SegmentSchemaRefs {
 }
 
 export function createSegmentSchema(refs: SegmentSchemaRefs = {}) {
-  return SegmentSchema.extend({
+  return SegmentSchema.safeExtend({
     feature: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaTypedFeature ?? []) })
   });
 }
@@ -1405,7 +1405,7 @@ export interface OperationSchemaRefs {
 }
 
 export function createOperationSchema(refs: OperationSchemaRefs = {}) {
-  return OperationSchema.extend({
+  return OperationSchema.safeExtend({
     assignRoot: ReferenceSchema.extend({ $refText: zRef(() => refs.AssignPathRoot ?? []) })
   });
 }
@@ -1415,7 +1415,7 @@ export interface RosettaClassSynonymSchemaRefs {
 }
 
 export function createRosettaClassSynonymSchema(refs: RosettaClassSynonymSchemaRefs = {}) {
-  return RosettaClassSynonymSchema.extend({
+  return RosettaClassSynonymSchema.safeExtend({
     sources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })).min(1)
   });
 }
@@ -1425,7 +1425,7 @@ export interface RosettaSymbolReferenceSchemaRefs {
 }
 
 export function createRosettaSymbolReferenceSchema(refs: RosettaSymbolReferenceSchemaRefs = {}) {
-  return RosettaSymbolReferenceSchema.extend({
+  return RosettaSymbolReferenceSchema.safeExtend({
     symbol: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSymbol ?? []) })
   });
 }
@@ -1435,7 +1435,7 @@ export interface RosettaCorpusSchemaRefs {
 }
 
 export function createRosettaCorpusSchema(refs: RosettaCorpusSchemaRefs = {}) {
-  return RosettaCorpusSchema.extend({
+  return RosettaCorpusSchema.safeExtend({
     body: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaBody ?? []) }).optional()
   });
 }
@@ -1445,7 +1445,7 @@ export interface RosettaDeepFeatureCallSchemaRefs {
 }
 
 export function createRosettaDeepFeatureCallSchema(refs: RosettaDeepFeatureCallSchemaRefs = {}) {
-  return RosettaDeepFeatureCallSchema.extend({
+  return RosettaDeepFeatureCallSchema.safeExtend({
     feature: ReferenceSchema.extend({ $refText: zRef(() => refs.Attribute ?? []) }).optional()
   });
 }
@@ -1455,7 +1455,7 @@ export interface RosettaEnumSynonymSchemaRefs {
 }
 
 export function createRosettaEnumSynonymSchema(refs: RosettaEnumSynonymSchemaRefs = {}) {
-  return RosettaEnumSynonymSchema.extend({
+  return RosettaEnumSynonymSchema.safeExtend({
     sources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) })).min(1)
   });
 }
@@ -1465,7 +1465,7 @@ export interface RosettaEnumerationSchemaRefs {
 }
 
 export function createRosettaEnumerationSchema(refs: RosettaEnumerationSchemaRefs = {}) {
-  return RosettaEnumerationSchema.extend({
+  return RosettaEnumerationSchema.safeExtend({
     parent: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumeration ?? []) }).optional()
   });
 }
@@ -1476,7 +1476,7 @@ export interface RosettaEnumValueReferenceSchemaRefs {
 }
 
 export function createRosettaEnumValueReferenceSchema(refs: RosettaEnumValueReferenceSchemaRefs = {}) {
-  return RosettaEnumValueReferenceSchema.extend({
+  return RosettaEnumValueReferenceSchema.safeExtend({
     enumeration: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumeration ?? []) }),
     value: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumValue ?? []) })
   });
@@ -1487,7 +1487,7 @@ export interface RosettaExternalRegularAttributeSchemaRefs {
 }
 
 export function createRosettaExternalRegularAttributeSchema(refs: RosettaExternalRegularAttributeSchemaRefs = {}) {
-  return RosettaExternalRegularAttributeSchema.extend({
+  return RosettaExternalRegularAttributeSchema.safeExtend({
     attributeRef: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaFeature ?? []) })
   });
 }
@@ -1497,7 +1497,7 @@ export interface RosettaExternalClassSchemaRefs {
 }
 
 export function createRosettaExternalClassSchema(refs: RosettaExternalClassSchemaRefs = {}) {
-  return RosettaExternalClassSchema.extend({
+  return RosettaExternalClassSchema.safeExtend({
     data: ReferenceSchema.extend({ $refText: zRef(() => refs.DataOrChoice ?? []) })
   });
 }
@@ -1507,7 +1507,7 @@ export interface RosettaExternalEnumValueSchemaRefs {
 }
 
 export function createRosettaExternalEnumValueSchema(refs: RosettaExternalEnumValueSchemaRefs = {}) {
-  return RosettaExternalEnumValueSchema.extend({
+  return RosettaExternalEnumValueSchema.safeExtend({
     enumRef: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumValue ?? []) })
   });
 }
@@ -1517,7 +1517,7 @@ export interface RosettaExternalEnumSchemaRefs {
 }
 
 export function createRosettaExternalEnumSchema(refs: RosettaExternalEnumSchemaRefs = {}) {
-  return RosettaExternalEnumSchema.extend({
+  return RosettaExternalEnumSchema.safeExtend({
     enumeration: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumeration ?? []) })
   });
 }
@@ -1527,7 +1527,7 @@ export interface RosettaExternalRuleSourceSchemaRefs {
 }
 
 export function createRosettaExternalRuleSourceSchema(refs: RosettaExternalRuleSourceSchemaRefs = {}) {
-  return RosettaExternalRuleSourceSchema.extend({
+  return RosettaExternalRuleSourceSchema.safeExtend({
     superSources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaExternalRuleSource ?? []) }))
   });
 }
@@ -1537,7 +1537,7 @@ export interface RosettaFeatureCallSchemaRefs {
 }
 
 export function createRosettaFeatureCallSchema(refs: RosettaFeatureCallSchemaRefs = {}) {
-  return RosettaFeatureCallSchema.extend({
+  return RosettaFeatureCallSchema.safeExtend({
     feature: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaFeature ?? []) }).optional()
   });
 }
@@ -1547,7 +1547,7 @@ export interface RosettaMapTestFuncSchemaRefs {
 }
 
 export function createRosettaMapTestFuncSchema(refs: RosettaMapTestFuncSchemaRefs = {}) {
-  return RosettaMapTestFuncSchema.extend({
+  return RosettaMapTestFuncSchema.safeExtend({
     func: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaCallableWithArgs ?? []) })
   });
 }
@@ -1557,7 +1557,7 @@ export interface RosettaQualifiableConfigurationSchemaRefs {
 }
 
 export function createRosettaQualifiableConfigurationSchema(refs: RosettaQualifiableConfigurationSchemaRefs = {}) {
-  return RosettaQualifiableConfigurationSchema.extend({
+  return RosettaQualifiableConfigurationSchema.safeExtend({
     rosettaClass: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) })
   });
 }
@@ -1570,7 +1570,7 @@ export interface RosettaReportSchemaRefs {
 }
 
 export function createRosettaReportSchema(refs: RosettaReportSchemaRefs = {}) {
-  return RosettaReportSchema.extend({
+  return RosettaReportSchema.safeExtend({
     eligibilityRules: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaRule ?? []) })).min(1),
     reportingStandard: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaCorpus ?? []) }).optional(),
     reportType: ReferenceSchema.extend({ $refText: zRef(() => refs.Data ?? []) }),
@@ -1583,7 +1583,7 @@ export interface RosettaSynonymSourceSchemaRefs {
 }
 
 export function createRosettaSynonymSourceSchema(refs: RosettaSynonymSourceSchemaRefs = {}) {
-  return RosettaSynonymSourceSchema.extend({
+  return RosettaSynonymSourceSchema.safeExtend({
     superSources: z.array(ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaSynonymSource ?? []) }))
   });
 }
@@ -1593,7 +1593,7 @@ export interface SwitchCaseGuardSchemaRefs {
 }
 
 export function createSwitchCaseGuardSchema(refs: SwitchCaseGuardSchemaRefs = {}) {
-  return SwitchCaseGuardSchema.extend({
+  return SwitchCaseGuardSchema.safeExtend({
     referenceGuard: ReferenceSchema.extend({ $refText: zRef(() => refs.SwitchCaseTarget ?? []) }).optional()
   });
 }
@@ -1603,7 +1603,7 @@ export interface ToEnumOperationSchemaRefs {
 }
 
 export function createToEnumOperationSchema(refs: ToEnumOperationSchemaRefs = {}) {
-  return ToEnumOperationSchema.extend({
+  return ToEnumOperationSchema.safeExtend({
     enumeration: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaEnumeration ?? []) })
   });
 }
@@ -1613,7 +1613,7 @@ export interface WithMetaEntrySchemaRefs {
 }
 
 export function createWithMetaEntrySchema(refs: WithMetaEntrySchemaRefs = {}) {
-  return WithMetaEntrySchema.extend({
+  return WithMetaEntrySchema.safeExtend({
     key: ReferenceSchema.extend({ $refText: zRef(() => refs.RosettaFeature ?? []) })
   });
 }
