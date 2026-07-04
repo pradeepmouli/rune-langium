@@ -107,10 +107,42 @@ export interface SourceEnum {
   sourceKey: string;
 }
 
+/** One input or output parameter of a source-format operation (spec.md Phase 2b Implementation Addendum decision 4's inbound half). */
+export interface SourceFuncParam {
+  /** Rune-safe camelCase identifier. */
+  name: string;
+  /** Resolved Rune type / enum / builtin name. */
+  typeName: string;
+  cardinality: SourceCardinality;
+}
+
+/**
+ * A source-format operation, normalized toward a Rune `func` (`RosettaFunction`).
+ * Currently populated only by the OpenAPI reader's `paths` consumption
+ * (T4) — the other (follow-up) sources have no operation concept.
+ */
+export interface SourceFunc {
+  /** Rune-safe func name (from `operationId`, sanitized). */
+  name: string;
+  inputs: SourceFuncParam[];
+  output: SourceFuncParam;
+  /** `summary`/`description` → Rune `func`'s `definition` doc string. */
+  description?: string;
+  /**
+   * The "METHOD /path" operation string this func corresponds to — the
+   * SAME string the outbound emitter's `operationStringForFunc` derives
+   * and T2's `operation-carrier.ts` attaches via
+   * `[openApi op "value"="METHOD /path"]`, so the round trip closes.
+   */
+  operation: string;
+}
+
 export interface SourceModel {
   /** Derived (e.g. from a JSON Schema `$id`) or supplied via `--namespace`. */
   namespace: string;
   sourceName: SourceKind;
   types: SourceType[];
   enums: SourceEnum[];
+  /** Operations reconstructed as funcs (currently OpenAPI `paths` only — spec.md Phase 2b decision 4). */
+  funcs: SourceFunc[];
 }

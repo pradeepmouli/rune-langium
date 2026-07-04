@@ -160,7 +160,10 @@ export function readJsonSchema(
   }
 
   return {
-    model: { namespace, sourceName: 'JsonSchema', types, enums },
+    // JSON Schema has no operation/paths concept — funcs is always empty
+    // for this reader (T4's `paths` consumption is OpenAPI-only; see
+    // openapi-reader.ts).
+    model: { namespace, sourceName: 'JsonSchema', types, enums, funcs: [] },
     diagnostics
   };
 }

@@ -13,12 +13,13 @@ import { describe, it, expect } from 'vitest';
 import { TARGET_DESCRIPTORS } from '../src/export.js';
 
 describe('TARGET_DESCRIPTORS', () => {
-  it('has all seven target entries', () => {
+  it('has all eight target entries', () => {
     expect(Object.keys(TARGET_DESCRIPTORS).sort()).toEqual([
       'excel',
       'graphql',
       'json-schema',
       'markdown',
+      'openapi',
       'sql',
       'typescript',
       'zod'
@@ -31,7 +32,7 @@ describe('TARGET_DESCRIPTORS', () => {
   });
 
   it('marks the others as namespace contract', () => {
-    for (const t of ['zod', 'typescript', 'json-schema', 'sql', 'markdown'] as const) {
+    for (const t of ['zod', 'typescript', 'json-schema', 'sql', 'markdown', 'openapi'] as const) {
       expect(TARGET_DESCRIPTORS[t].contract).toBe('namespace');
     }
   });
@@ -47,6 +48,7 @@ describe('TARGET_DESCRIPTORS', () => {
     expect(TARGET_DESCRIPTORS['json-schema'].mimeType).toBeUndefined();
     expect(TARGET_DESCRIPTORS.sql.mimeType).toBeUndefined();
     expect(TARGET_DESCRIPTORS.markdown.mimeType).toBeUndefined();
+    expect(TARGET_DESCRIPTORS.openapi.mimeType).toBeUndefined();
   });
 
   it('extensions match the spec', () => {
@@ -57,6 +59,7 @@ describe('TARGET_DESCRIPTORS', () => {
     expect(TARGET_DESCRIPTORS.markdown.extension).toBe('.md');
     expect(TARGET_DESCRIPTORS.excel.extension).toBe('.xlsx');
     expect(TARGET_DESCRIPTORS.graphql.extension).toBe('.graphql');
+    expect(TARGET_DESCRIPTORS.openapi.extension).toBe('.openapi.json');
   });
 
   it('every entry has a non-empty label + desc (UI rendering invariants)', () => {

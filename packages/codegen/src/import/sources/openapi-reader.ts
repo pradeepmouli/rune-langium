@@ -63,7 +63,7 @@
 
 import { parse as parseYaml } from 'yaml';
 import type { OpenAPIV3, OpenAPIV3_1 } from 'openapi-types';
-import type { SourceModel } from '../source-model.js';
+import type { SourceFunc, SourceFuncParam, SourceModel } from '../source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
 import { readJsonSchema, type JsonSchemaImportOptions } from './json-schema-reader.js';
 
@@ -124,14 +124,191 @@ export function readOpenApi(
     ...(options.skipConditions !== undefined && { skipConditions: options.skipConditions })
   });
 
+  const funcs = readOperations((document.paths ?? {}) as unknown as Record<string, LooseSchema>, diagnostics);
+
   // readJsonSchema always stamps sourceName: 'JsonSchema' (it has no
   // awareness this document originated from OpenAPI) — corrected here to
   // the source-specific synonym-source name spec.md requires ('OpenApi'),
   // exactly as `import/index.ts` already does for the JSON Schema path's
   // own `sourceName` field (a plain object property, not re-derived logic).
-  const openApiModel: SourceModel = { ...model, sourceName: 'OpenApi' };
+  const openApiModel: SourceModel = { ...model, sourceName: 'OpenApi', funcs };
 
   return { model: openApiModel, diagnostics: [...diagnostics, ...readerDiagnostics] };
+}
+
+const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {
+  string: 'string',
+  integer: 'int',
+  number: 'number',
+  boolean: 'boolean'
+};
+
+/**
+ * Resolves a func-parameter schema's Rune type name — the same
+ * builtin/$ref-to-components-schema shapes `json-schema-reader.ts`'s own
+ * (private) `resolveTypeName` handles, reimplemented locally and scoped to
+ * what an OpenAPI operation's requestBody/response schema can reference
+ * (no inline-object promotion, no enum/oneOf handling — a func parameter
+ * schema this reader builds is always either a builtin scalar or a `$ref`
+ * to a named `components.schemas` entry, since T3's own emitter never
+ * emits anything richer for a func input/output). `$ref` here is ALREADY
+ * `#/components/schemas/X` form (this reader's own `rewriteComponentRefs`
+ * only runs over `components.schemas` entries, not `paths` — so a `$ref`
+ * inside a path operation's schema is read directly, not rewritten first).
+ */
+function resolveParamTypeName(schema: LooseSchema, diagnostics: ImportDiagnostic[], where: string): string {
+  const ref = schema['$ref'];
+  if (typeof ref === 'string') {
+    const match = /^#\/components\/schemas\/([^/]+)$/.exec(ref);
+    if (match) return match[1]!;
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'external-ref',
+      message: `${where}: $ref '${ref}' is not an internal components/schemas reference — using 'string'`
+    });
+    return 'string';
+  }
+  const type = schema['type'];
+  const resolvedType = Array.isArray(type) ? (type[0] as string | undefined) : (type as string | undefined);
+  return (resolvedType && BUILTIN_TYPE_MAP[resolvedType]) ?? 'string';
+}
+
+/** Builds `SourceFuncParam[]` from a requestBody's `application/json` object schema (each property → one input). */
+function readInputsFromRequestBody(
+  requestBody: LooseSchema | undefined,
+  operationLabel: string,
+  diagnostics: ImportDiagnostic[]
+): SourceFuncParam[] {
+  const schema = (requestBody?.['content'] as Record<string, LooseSchema> | undefined)?.['application/json']?.[
+    'schema'
+  ] as LooseSchema | undefined;
+  if (!schema || typeof schema !== 'object') return [];
+  const properties = (schema['properties'] as Record<string, LooseSchema> | undefined) ?? {};
+  const required = new Set((schema['required'] as string[] | undefined) ?? []);
+  return Object.entries(properties).map(([name, propSchema]) => ({
+    name,
+    typeName: resolveParamTypeName(propSchema, diagnostics, `${operationLabel} input '${name}'`),
+    cardinality: required.has(name) ? { inf: 1, sup: 1 } : { inf: 0, sup: 1 }
+  }));
+}
+
+/** Builds the single `SourceFuncParam` output from the FIRST 2xx response's `application/json` schema. */
+function readOutputFromResponses(
+  responses: Record<string, LooseSchema> | undefined,
+  operationLabel: string,
+  diagnostics: ImportDiagnostic[]
+): SourceFuncParam {
+  const twoXxKey = Object.keys(responses ?? {}).find((code) => /^2\d\d$/.test(code));
+  const schema = twoXxKey
+    ? ((responses![twoXxKey]!['content'] as Record<string, LooseSchema> | undefined)?.['application/json']?.[
+        'schema'
+      ] as LooseSchema | undefined)
+    : undefined;
+
+  if (!schema) {
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'func-no-2xx-response',
+      message: `${operationLabel}: no 2xx response with an 'application/json' schema — output typed 'unknown'`
+    });
+    return { name: 'result', typeName: 'unknown', cardinality: { inf: 1, sup: 1 } };
+  }
+  return {
+    name: 'result',
+    typeName: resolveParamTypeName(schema, diagnostics, `${operationLabel} output`),
+    cardinality: { inf: 1, sup: 1 }
+  };
+}
+
+const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const;
+
+/**
+ * Sanitizes an `operationId` into a Rune-safe (`ValidID`-shaped) func name —
+ * REGRESSION FIX (review finding): `SourceFunc.name`'s own doc comment
+ * ("Rune-safe func name (from `operationId`, sanitized)") already promised
+ * this, but the code stored the raw `operationId` unsanitized. This is the
+ * same class of bug PR #373 fixed for hyphenated `$defs` keys — matches
+ * `json-schema-reader.ts`'s own (private) `sanitizeEnumValue` convention
+ * exactly (strip everything outside `[A-Za-z0-9_]`, collapse to `_`, trim
+ * leading/trailing `_`, prefix a leading digit or empty result), reproduced
+ * locally rather than importing that private helper.
+ */
+function sanitizeFuncName(operationId: string): string {
+  let cleaned = operationId.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (cleaned.length === 0) cleaned = 'Operation';
+  if (/^[0-9]/.test(cleaned)) cleaned = `_${cleaned}`;
+  return cleaned;
+}
+
+/**
+ * Reads every `paths.*.{method}` operation into a `SourceFunc` (spec.md
+ * Phase 2b Implementation Addendum decision 4's inbound half):
+ * `operationId` → sanitized func name; `requestBody` → inputs;
+ * the first 2xx response → output; `summary`/`description` → definition;
+ * `x-rune-operation` (T3's own emitter-attached carrier field) → the
+ * operation string when present, else derived from `METHOD /path`
+ * (so a HAND-WRITTEN OpenAPI document — one that never went through T3's
+ * emitter — still round-trips: the operation string is always
+ * independently reconstructible from the path+method alone, matching
+ * `operationStringForFunc`'s own `POST /functions/{name}` convention for
+ * an RPC-style path, and falling back to the literal `METHOD /path` for
+ * any other path shape).
+ */
+function readOperations(paths: Record<string, Record<string, unknown>>, diagnostics: ImportDiagnostic[]): SourceFunc[] {
+  const funcs: SourceFunc[] = [];
+  // OpenAPI guarantees `operationId` uniqueness on the RAW string; two
+  // distinct ids that sanitize to the same Rune name (e.g. `get-trade` and
+  // `get.trade`, both -> `get_trade`) are deduped with a numeric suffix —
+  // the same collision-handling convention `json-schema-reader.ts`'s own
+  // `dedupeIdentifier` applies to sanitized `$defs` keys.
+  const usedNames = new Set<string>();
+  for (const [path, methods] of Object.entries(paths)) {
+    if (!methods || typeof methods !== 'object') continue;
+    for (const method of HTTP_METHODS) {
+      const op = (methods as Record<string, unknown>)[method] as LooseSchema | undefined;
+      if (!op || typeof op !== 'object') continue;
+
+      const operationId = op['operationId'];
+      if (typeof operationId !== 'string' || operationId.length === 0) {
+        pushDiagnostic(diagnostics, {
+          severity: 'warning',
+          code: 'operation-no-id',
+          message: `${method.toUpperCase()} ${path}: no 'operationId' — operation skipped (a func needs a name)`
+        });
+        continue;
+      }
+
+      const operationLabel = `${method.toUpperCase()} ${path}`;
+      const explicitOperation = op['x-rune-operation'];
+      const operation = typeof explicitOperation === 'string' ? explicitOperation : operationLabel;
+
+      const description =
+        (typeof op['summary'] === 'string' && op['summary']) ||
+        (typeof op['description'] === 'string' && op['description']) ||
+        undefined;
+
+      let name = sanitizeFuncName(operationId);
+      if (usedNames.has(name)) {
+        let suffix = 2;
+        while (usedNames.has(`${name}_${suffix}`)) suffix += 1;
+        name = `${name}_${suffix}`;
+      }
+      usedNames.add(name);
+
+      funcs.push({
+        name,
+        inputs: readInputsFromRequestBody(op['requestBody'] as LooseSchema | undefined, operationLabel, diagnostics),
+        output: readOutputFromResponses(
+          op['responses'] as Record<string, LooseSchema> | undefined,
+          operationLabel,
+          diagnostics
+        ),
+        description,
+        operation
+      });
+    }
+  }
+  return funcs;
 }
 
 /**
