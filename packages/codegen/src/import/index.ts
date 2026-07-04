@@ -2,13 +2,21 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Public API for inbound code generation: `importModel(source, options)`.
- * Phase 1 supports only `from: 'json-schema'`; the other sources named in
+ * Public API for inbound code generation — `@rune-langium/codegen/import`
+ * (spec 021 Phase 2 Addendum's subpath restructure).
+ *
+ * `importModel(source, options)` is the primary entry point. Phase 1
+ * supports only `from: 'json-schema'`; the other sources named in
  * spec.md's CLI surface (`typescript` | `sql` | `python`) are follow-up
  * work (US2-US4) and are rejected here with a clear "not yet supported"
  * error, matching the CLI's own error contract (spec.md's CLI Surface
  * section: "Phase 1 implements only `--from json-schema`; the other values
  * error with 'not yet supported'").
+ *
+ * Also re-exports the `SourceModel`/`ConstraintIR` type vocabulary
+ * (source-model.ts), import diagnostics (diagnostics.ts), and the CLI's
+ * `runImport` action body (cli.ts) — the full inbound public surface the
+ * `/import` subpath is required to carry.
  */
 
 import { renderModel } from '../emit/rosetta/rosetta-render-core.js';
@@ -16,6 +24,22 @@ import { buildModel } from './ast-builder.js';
 import { readJsonSchema } from './sources/json-schema-reader.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 import type { SourceModel } from './source-model.js';
+
+export { runImport } from './cli.js';
+export type { ImportCommandOptions } from './cli.js';
+export type { ImportDiagnostic, ImportDiagnosticOpts } from './diagnostics.js';
+export { pushDiagnostic, hasFatalImportDiagnostics } from './diagnostics.js';
+export type {
+  SourceKind,
+  SourceCardinality,
+  Literal,
+  ConstraintIR,
+  SourceAttribute,
+  SourceType,
+  SourceEnumValue,
+  SourceEnum,
+  SourceModel
+} from './source-model.js';
 
 export type ImportSourceKind = 'json-schema' | 'typescript' | 'sql' | 'python';
 

@@ -21,7 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { z } from 'zod';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 
 const SOURCE_A = `namespace foo
 

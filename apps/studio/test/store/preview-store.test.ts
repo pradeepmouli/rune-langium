@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { FormPreviewSchema } from '@rune-langium/codegen';
+import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 
 function schema(targetId: string, title = targetId.split('.').at(-1) ?? targetId): FormPreviewSchema {

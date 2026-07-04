@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { Ajv2020 } from './emit/ajv-2020.js';
-import { generate } from '../src/index.js';
+import { generate } from '../src/export.js';
 import type { GeneratorOutput } from '../src/types.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures');

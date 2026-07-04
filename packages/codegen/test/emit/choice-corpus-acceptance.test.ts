@@ -34,7 +34,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 
 const RESOURCES_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../.resources');
 const CDM_DIR = resolve(RESOURCES_DIR, 'cdm');

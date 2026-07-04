@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { create } from 'zustand';
-import type { SourceMapEntry, Target } from '@rune-langium/codegen';
+import type { SourceMapEntry, Target } from '@rune-langium/codegen/export';
 
 export interface CodePreviewFile {
   relativePath: string;

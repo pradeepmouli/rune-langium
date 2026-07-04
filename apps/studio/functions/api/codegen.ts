@@ -31,7 +31,7 @@ import {
   type GeneratorDiagnostic,
   type GeneratorOutput,
   type Target
-} from '@rune-langium/codegen';
+} from '@rune-langium/codegen/export';
 import { fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import { closeNamespacesFromManifest } from '../lib/curated-closure.js';
 
@@ -502,7 +502,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     // target (019 Phase 0.5.5) — the studio's Download flow delegates
     // its layout choice to the server, so `body.options.<target>.layout`
     // is only set when a caller wants to override the server's choice.
-    const { generate } = await import('@rune-langium/codegen');
+    const { generate } = await import('@rune-langium/codegen/export');
     const generatorOptions = applyPagesFunctionDefaults(body);
     const outputs = await generate(documents, generatorOptions);
 

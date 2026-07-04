@@ -20,7 +20,7 @@ import process from 'node:process';
 import { Command } from 'commander';
 import { URI } from 'langium';
 import { createRuneDslServices } from '@rune-langium/core';
-import { generate } from '../src/index.js';
+import { generate } from '../src/export.js';
 import type { Target, GeneratorDiagnostic, GeneratorOutput } from '../src/types.js';
 import { runImport } from '../src/import/cli.js';
 

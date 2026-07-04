@@ -25,8 +25,8 @@
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import { createRuneDslServices, hydrateModelDocument } from '@rune-langium/core';
-import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen';
-import type { Target } from '@rune-langium/codegen';
+import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
+import type { Target } from '@rune-langium/codegen/export';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 import { isWorkerGlobalScope } from './runtime-guards.js';
 

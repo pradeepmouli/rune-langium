@@ -21,7 +21,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen';
+import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';

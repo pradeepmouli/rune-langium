@@ -36,7 +36,7 @@ import ts from 'typescript';
 import { walkNamespace } from '../../src/emit/namespace-walker.js';
 import { emitNamespace as emitTs } from '../../src/emit/ts-emitter.js';
 import { emitNamespace as emitZod } from '../../src/emit/zod-emitter.js';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 
 const FIXTURE_DIR = resolve(new URL('.', import.meta.url).pathname, '../fixtures/data-extends-choice-multilevel');
 

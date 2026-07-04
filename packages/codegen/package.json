@@ -11,6 +11,14 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
+    "./export": {
+      "types": "./dist/src/export.d.ts",
+      "default": "./dist/src/export.js"
+    },
+    "./import": {
+      "types": "./dist/src/import/index.d.ts",
+      "default": "./dist/src/import/index.js"
+    },
     "./rosetta": {
       "types": "./dist/src/rosetta.d.ts",
       "default": "./dist/src/rosetta.js"

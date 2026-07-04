@@ -63,7 +63,7 @@ vi.mock('@rune-langium/core', () => ({
   }
 }));
 
-vi.mock('@rune-langium/codegen', () => ({
+vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
   generatePreviewSchemas: generatePreviewSchemasMock
 }));

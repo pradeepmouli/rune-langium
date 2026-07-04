@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generatePreviewSchemas } from '../src/index.js';
+import { generatePreviewSchemas } from '../src/export.js';
 
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
 const REAL_CDM_ADJUSTABLE_DATE_FIXTURES = [

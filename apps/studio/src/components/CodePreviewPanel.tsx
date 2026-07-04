@@ -17,7 +17,7 @@ import { EditorState } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
-import type { Target } from '@rune-langium/codegen';
+import type { Target } from '@rune-langium/codegen/export';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { studioEditorExtensions } from '../lang/editor-theme.js';
 import {

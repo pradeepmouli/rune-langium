@@ -18,7 +18,7 @@
  */
 
 import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
-import type { FormPreviewSchema } from '@rune-langium/codegen';
+import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import type {
   CodeGenerationRequest,
   CodeGenerationResult,

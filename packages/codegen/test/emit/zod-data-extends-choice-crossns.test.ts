@@ -35,7 +35,7 @@ import { pathToFileURL } from 'node:url';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { describe, it, expect } from 'vitest';
-import { generate } from '../../src/index.js';
+import { generate } from '../../src/export.js';
 
 const FIXTURE_DIR = resolve(
   new URL('.', import.meta.url).pathname,

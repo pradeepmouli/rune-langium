@@ -25,7 +25,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { ExportPerspective } from '../../src/shell/perspectives/screens/ExportPerspective.js';
 import { useCodegenStore } from '../../src/store/codegen-store.js';
-import type { Target } from '@rune-langium/codegen';
+import type { Target } from '@rune-langium/codegen/export';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks (vi.hoisted avoids the TDZ issue with module factory hoisting)

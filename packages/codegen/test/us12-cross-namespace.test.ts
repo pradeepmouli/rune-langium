@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
-import { generate } from '../src/index.js';
+import { generate } from '../src/export.js';
 import { resolveImportPath, type NamespaceRegistry } from '../src/emit/namespace-registry.js';
 
 const FIXTURES_DIR = resolve(new URL('.', import.meta.url).pathname, 'fixtures/cross-namespace');
