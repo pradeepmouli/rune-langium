@@ -33,37 +33,80 @@
  * `constraint-translator.ts` do the Rune-specific work.
  */
 
+import type { JSONSchema7, JSONSchema7Definition } from 'json-schema';
 import type { ConstraintIR, SourceEnum, SourceModel, SourceType, SourceAttribute } from '../source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
 
-// --- JSON Schema shape (loosely typed — we only read the keywords we translate) ---
-
-interface JsonSchemaNode {
-  $id?: string;
-  $ref?: string;
-  type?: string | string[];
-  properties?: Record<string, JsonSchemaNode>;
-  required?: string[];
-  items?: JsonSchemaNode;
-  minItems?: number;
-  maxItems?: number;
-  enum?: unknown[];
-  const?: unknown;
-  allOf?: JsonSchemaNode[];
-  oneOf?: JsonSchemaNode[];
-  discriminator?: { propertyName?: string };
-  minimum?: number;
-  maximum?: number;
+// --- JSON Schema shape ---------------------------------------------------
+//
+// T3 retrofit (spec 021 Phase 2 Addendum): replaces this module's own
+// hand-rolled `JsonSchemaNode` shape with `@types/json-schema`'s
+// `JSONSchema7`, extended LOCALLY (`JsonSchemaNode` below) with the
+// keywords the real Draft 7 spec — and therefore `@types/json-schema` —
+// does not carry, but this reader legitimately reads:
+//
+//  - `exclusiveMinimum`/`exclusiveMaximum` as `boolean` — Draft 7's OWN
+//    keyword is number-only (the boolean-modifier form is Draft 4/6:
+//    `minimum: 5, exclusiveMinimum: true`). This reader intentionally
+//    accepts BOTH forms (a real Phase 1 review fix, "Important 1+2" —
+//    real-world JSON Schema documents mix drafts loosely, and CDM/hand-
+//    authored schemas are not guaranteed to be draft-pure), so the local
+//    extension widens these two fields to `number | boolean` rather than
+//    narrowing the reader to reject the boolean form as a type error.
+//  - `discriminator: { propertyName?: string }` — an OpenAPI-specific
+//    keyword (not part of any JSON Schema draft at all; carried here
+//    because the SAME reader is reused for the OpenAPI 3.0 dialect
+//    normalization layer, spec.md Phase 2 Addendum item 5), used for the
+//    sibling-property "discriminated oneOf" shape (scenario 6).
+//  - `'x-rune-enum-display'?: Record<string, string>` — this project's own
+//    `x-` extension keyword (the outbound JSON Schema emitter's enum
+//    display-name side-map), not part of any JSON Schema draft.
+//
+// Every OTHER field this reader touches (`$id`/`$ref`/`type`/`properties`/
+// `required`/`items`/`minItems`/`maxItems`/`enum`/`const`/`allOf`/`oneOf`/
+// `minimum`/`maximum`/`minLength`/`maxLength`/`pattern`/`description`/
+// `title`/`$defs`/`definitions`) comes from `JSONSchema7` unchanged.
+type JsonSchemaNode = Omit<JSONSchema7, 'exclusiveMinimum' | 'exclusiveMaximum'> & {
   exclusiveMinimum?: number | boolean;
   exclusiveMaximum?: number | boolean;
-  minLength?: number;
-  maxLength?: number;
-  pattern?: string;
-  description?: string;
-  title?: string;
+  discriminator?: { propertyName?: string };
   'x-rune-enum-display'?: Record<string, string>;
-  $defs?: Record<string, JsonSchemaNode>;
-  definitions?: Record<string, JsonSchemaNode>;
+};
+
+/**
+ * `JSONSchema7Definition = JSONSchema7 | boolean` — every sub-schema slot
+ * (`properties[x]`, `items`, `allOf[i]`, `oneOf[i]`, `$defs[x]`,
+ * `definitions[x]`, etc.) is legally a bare `boolean` in real JSON Schema
+ * (`true` = "any value valid", `false` = "no value valid"), a shape this
+ * reader's pre-retrofit hand-rolled `JsonSchemaNode` type could not
+ * express at all (every nested schema field was typed as a bare object).
+ * `asNode` normalizes a `JSONSchema7Definition`-shaped value (or this
+ * reader's own extended `JsonSchemaNode`) down to a `JsonSchemaNode`,
+ * treating a bare `boolean` as the schema-shorthand-equivalent empty
+ * object (`{}` for `true`, permits everything this reader can represent;
+ * `false` is diagnosed and ALSO treated as `{}` — this reader has no
+ * "impossible value" representation to fall back to, so it degrades to
+ * "no constraint" rather than silently miscompiling — narrower behavior
+ * than a validator would need, but this is a STRUCTURAL importer, not a
+ * validator).
+ */
+function asNode(
+  def: JSONSchema7Definition | JsonSchemaNode | undefined,
+  diagnostics: ImportDiagnostic[],
+  where: string
+): JsonSchemaNode {
+  if (def === undefined) return {};
+  if (typeof def === 'boolean') {
+    if (def === false) {
+      pushDiagnostic(diagnostics, {
+        severity: 'warning',
+        code: 'unsupported-boolean-schema',
+        message: `${where}: a bare 'false' sub-schema (matches no value) has no Rune equivalent — treated as an unconstrained schema`
+      });
+    }
+    return {};
+  }
+  return def as JsonSchemaNode;
 }
 
 const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {
@@ -92,14 +135,17 @@ export function readJsonSchema(
 ): { model: SourceModel; diagnostics: ImportDiagnostic[] } {
   const diagnostics: ImportDiagnostic[] = [];
   const namespace = deriveNamespace(schema, options, diagnostics);
-  const defs = { ...schema.$defs, ...schema.definitions };
+  const rawDefs: Record<string, JSONSchema7Definition> = { ...schema.$defs, ...schema.definitions };
+  const defs: Record<string, JsonSchemaNode> = Object.fromEntries(
+    Object.entries(rawDefs).map(([k, v]) => [k, asNode(v, diagnostics, `$defs/${k}`)])
+  );
 
   const types: SourceType[] = [];
   const enums: SourceEnum[] = [];
 
   for (const [key, def] of Object.entries(defs)) {
     if (isEnumDef(def)) {
-      enums.push(readEnumDef(key, def));
+      enums.push(readEnumDef(key, def, diagnostics));
       continue;
     }
     if (def.type === 'object' || def.properties !== undefined || def.allOf !== undefined) {
@@ -192,18 +238,20 @@ function isValidNamespace(ns: string): boolean {
 
 // --- enum / const-union detection ------------------------------------------
 
-/** A def is an enum def when it has a bare `enum` array, OR is a `oneOf` of single-`const` branches (no `discriminator` — that shape is the sibling-presence oneOf, handled by `readOneOfConstraint`). */
+/** A def is an enum def when it has a bare `enum` array, OR is a `oneOf` of single-`const` branches (no `discriminator` — that shape is the sibling-presence oneOf, handled by `readOneOfConstraint`). A bare `boolean` branch never carries `const`, so it always disqualifies the `oneOf` from being an enum def (correctly falls through to the structural/`oneOf`+`discriminator` path instead). */
 function isEnumDef(def: JsonSchemaNode): boolean {
   if (Array.isArray(def.enum)) return true;
   if (Array.isArray(def.oneOf) && def.oneOf.length > 0 && !def.discriminator) {
-    return def.oneOf.every((branch) => branch.const !== undefined);
+    return def.oneOf.every((branch) => typeof branch !== 'boolean' && branch.const !== undefined);
   }
   return false;
 }
 
-function readEnumDef(key: string, def: JsonSchemaNode): SourceEnum {
+function readEnumDef(key: string, def: JsonSchemaNode, diagnostics: ImportDiagnostic[]): SourceEnum {
   const displayMap = def['x-rune-enum-display'];
-  const rawValues: unknown[] = Array.isArray(def.enum) ? def.enum : (def.oneOf ?? []).map((b) => b.const);
+  const rawValues: unknown[] = Array.isArray(def.enum)
+    ? def.enum
+    : (def.oneOf ?? []).map((b) => asNode(b, diagnostics, `$defs/${key}.oneOf`).const);
 
   const used = new Set<string>();
   const values = rawValues.map((raw) => {
@@ -282,7 +330,8 @@ function readTypeDef(
 
   const required = new Set(def.required ?? []);
   const attributes: SourceAttribute[] = [];
-  for (const [propName, propDef] of Object.entries(def.properties ?? {})) {
+  for (const [propName, rawPropDef] of Object.entries(def.properties ?? {})) {
+    const propDef = asNode(rawPropDef, diagnostics, `$defs/${key}.properties.${propName}`);
     attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
   }
 
@@ -300,7 +349,7 @@ function readTypeDef(
     // needs to reference real attributes, and matches "exactly one of these
     // optional siblings is present" semantics.
     mergeOneOfBranchAttributes(def, key, attributes, defs, diagnostics, skipConditions);
-    if (!skipConditions) constraints.push(readOneOfConstraint(def));
+    if (!skipConditions) constraints.push(readOneOfConstraint(def, diagnostics));
   }
 
   return { name: toTypeName(key), sourceKey: key, attributes, constraints };
@@ -333,9 +382,11 @@ function mergeOneOfBranchAttributes(
   // ourselves too would double any diagnostic it pushes (e.g. an
   // external-ref warning) for the same property.
   const occurrencesByProp = new Map<string, JsonSchemaNode[]>();
-  for (const branch of def.oneOf ?? []) {
-    for (const [propName, propDef] of Object.entries(branch.properties ?? {})) {
+  for (const rawBranch of def.oneOf ?? []) {
+    const branch = asNode(rawBranch, diagnostics, `$defs/${key}.oneOf`);
+    for (const [propName, rawPropDef] of Object.entries(branch.properties ?? {})) {
       if (propName === discriminatorProp || existingNames.has(propName)) continue;
+      const propDef = asNode(rawPropDef, diagnostics, `$defs/${key}.oneOf.properties.${propName}`);
       const list = occurrencesByProp.get(propName);
       if (list) list.push(propDef);
       else occurrencesByProp.set(propName, [propDef]);
@@ -369,7 +420,7 @@ function readAllOfType(
   diagnostics: ImportDiagnostic[],
   skipConditions: boolean
 ): SourceType {
-  const branches = def.allOf ?? [];
+  const branches = (def.allOf ?? []).map((b) => asNode(b, diagnostics, `$defs/${key}.allOf`));
   const baseBranch = branches.find((b) => b.$ref !== undefined);
   const ownBranch = branches.find((b) => b.properties !== undefined) ?? branches.find((b) => b !== baseBranch);
 
@@ -389,7 +440,8 @@ function readAllOfType(
 
   const required = new Set(ownBranch?.required ?? []);
   const attributes: SourceAttribute[] = [];
-  for (const [propName, propDef] of Object.entries(ownBranch?.properties ?? {})) {
+  for (const [propName, rawPropDef] of Object.entries(ownBranch?.properties ?? {})) {
+    const propDef = asNode(rawPropDef, diagnostics, `$defs/${key}.allOf.properties.${propName}`);
     attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
   }
 
@@ -402,7 +454,7 @@ function readAllOfType(
   const constraints: ConstraintIR[] = [];
   if (def.oneOf && def.oneOf.length > 0 && def.discriminator) {
     mergeOneOfBranchAttributes(def, key, attributes, defs, diagnostics, skipConditions);
-    if (!skipConditions) constraints.push(readOneOfConstraint(def));
+    if (!skipConditions) constraints.push(readOneOfConstraint(def, diagnostics));
   }
 
   return {
@@ -424,7 +476,28 @@ function readAttribute(
 ): SourceAttribute {
   const constraints: ConstraintIR[] = [];
   const isArray = propDef.type === 'array';
-  const itemDef = isArray ? (propDef.items ?? {}) : propDef;
+  // `items` is `JSONSchema7Definition | JSONSchema7Definition[] | undefined`
+  // — the ARRAY form ("tuple typing": a fixed per-position schema list) is a
+  // real Draft 7 shape this reader's pre-retrofit hand-rolled type never
+  // modeled (it only ever declared `items?: JsonSchemaNode`, a bare single
+  // schema). Tuple typing has no single-element-type Rune equivalent to
+  // derive a cardinality attribute's `typeName` from — diagnosed and
+  // treated as an untyped ('string') single-element array rather than
+  // silently reading only the first tuple slot (which would misrepresent
+  // the other positions' types).
+  let itemDef: JsonSchemaNode;
+  if (!isArray) {
+    itemDef = propDef;
+  } else if (Array.isArray(propDef.items)) {
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'unsupported-tuple-items',
+      message: `property '${propName}': array 'items' is a tuple (fixed per-position schema list) — Rune has no per-position array-element type; using 'string'`
+    });
+    itemDef = {};
+  } else {
+    itemDef = asNode(propDef.items, diagnostics, `${propName}.items`);
+  }
 
   const typeName = resolveTypeName(itemDef, defs, diagnostics, propName);
 
@@ -504,10 +577,10 @@ function pushLengthConstraint(node: JsonSchemaNode, path: string, constraints: C
 }
 
 /** `oneOf` + `discriminator` → `oneOf` ConstraintIR over the union member property names (scenario 6). */
-function readOneOfConstraint(def: JsonSchemaNode): ConstraintIR {
+function readOneOfConstraint(def: JsonSchemaNode, diagnostics: ImportDiagnostic[]): ConstraintIR {
   const propertyName = def.discriminator?.propertyName;
   const paths = (def.oneOf ?? [])
-    .flatMap((branch) => Object.keys(branch.properties ?? {}))
+    .flatMap((branch) => Object.keys(asNode(branch, diagnostics, 'oneOf').properties ?? {}))
     .filter((p) => p !== propertyName);
   return { kind: 'oneOf', paths: [...new Set(paths)] };
 }
