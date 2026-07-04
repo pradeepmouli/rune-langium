@@ -32,6 +32,27 @@ function cstRange(node: unknown): CstRange | undefined {
 }
 
 /**
+ * Dev-only observability switch for the schema gate's fallback warning
+ * (see below). This package has no established dev/prod runtime split to
+ * key off: `import.meta.env.DEV` doesn't type-check here (no `vite/client`
+ * types referenced — VE is a library resolved as source by its Vite-based
+ * consumers, not a Vite entry point itself; adding that reference would be
+ * new infra for one warn line) and `process.env.NODE_ENV` has the same gap
+ * (no `@types/node`). Defaults `false` so the schema gate stays silent in
+ * production by default — flip to `true` locally (or have a consumer call
+ * `setSchemaGateDebug(true)`) to see fallback diagnostics while debugging.
+ * Under live-apply forms, intermediate invalid states are the NORMAL
+ * editing case — an unconditional warn here would spam production consoles
+ * on every serialize of a half-built node.
+ */
+let schemaGateDebug = false;
+
+/** Enable/disable the schema gate's fallback console.warn (see {@link schemaGateDebug}). */
+export function setSchemaGateDebug(enabled: boolean): void {
+  schemaGateDebug = enabled;
+}
+
+/**
  * True when `node.expression` is a `RawDsl` placeholder (B1 Task 4's
  * pending-reparse escape hatch — see `renderExpr`'s own `RAW_DSL_TYPE` check
  * above). `RawDsl` is a VE-synthetic leaf, never produced by the parser, so
@@ -151,17 +172,24 @@ export function renderNamespace(args: RenderArgs): string {
       if (schema && !hasRawDslExpression(child)) {
         const result = schema.safeParse(child);
         if (!result.success) {
-          // Observability parity with render-core's exprText warn (also
-          // unconditional, not dev-gated — this package has no established
-          // dev/prod runtime split to key off).
-          console.warn(
-            `[cst-reuse] schema validation failed for $type "${childType}" — falling back to CST`,
-            result.error.issues.map((i) => ({ path: i.path, message: i.message }))
-          );
+          // Dev-only: under live-apply forms, an intermediate invalid node
+          // (mid-edit, not yet complete) is the NORMAL editing case, not an
+          // error — an unconditional warn here would spam production
+          // consoles on every serialize of a half-built node. See
+          // schemaGateDebug's doc for why this is a flag, not
+          // import.meta.env.DEV.
+          if (schemaGateDebug) {
+            console.warn(
+              `[cst-reuse] schema validation failed for $type "${childType}" — falling back to CST`,
+              result.error.issues.map((i) => ({ path: i.path, message: i.message }))
+            );
+          }
           if (range) return reuseSlice(originalSource, range, isChild);
-          console.warn(
-            `[cst-reuse] skipping new node of unimplemented/invalid $type "${childType}" — schema validation failed and no $cstRange`
-          );
+          if (schemaGateDebug) {
+            console.warn(
+              `[cst-reuse] skipping new node of unimplemented/invalid $type "${childType}" — schema validation failed and no $cstRange`
+            );
+          }
           return '';
         }
       }

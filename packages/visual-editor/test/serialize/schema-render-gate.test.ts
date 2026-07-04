@@ -22,13 +22,18 @@
  * a redundant second check on cases already caught.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { parsedAdapter } from '@rune-langium/core';
-import { renderNamespace } from '../../src/serialize/cst-reuse-renderer.js';
+import { renderNamespace, setSchemaGateDebug } from '../../src/serialize/cst-reuse-renderer.js';
 import { buildDirtyIndex } from '../../src/serialize/dirty-paths.js';
 import type { Patches } from 'mutative';
 import type { TypeGraphNode } from '../../src/types.js';
+
+afterEach(() => {
+  setSchemaGateDebug(false); // restore the production default after debug-flag tests
+  vi.restoreAllMocks();
+});
 
 const SRC_WITH_SYNONYM = `namespace test
 version "1.0.0"
@@ -127,6 +132,43 @@ describe('schema-driven render gate', () => {
 
     const re = await parse(out);
     expect(re.hasErrors).toBe(false);
+  });
+
+  it('the fallback warn is silent by default (production) and only logs when setSchemaGateDebug(true) is set', async () => {
+    const { value, hasErrors } = await parse(SRC_WITH_SYNONYM);
+    expect(hasErrors).toBe(false);
+    const raw = (value as unknown as { elements: unknown[] }).elements[1];
+
+    function renderWithEmptySources(): void {
+      const dehydrated = parsedAdapter.dehydrate(raw as Parameters<typeof parsedAdapter.dehydrate>[0]);
+      const dd = dehydrated as unknown as { attributes: Array<{ synonyms: Array<{ sources: unknown[] }> }> };
+      dd.attributes[0]!.synonyms[0]!.sources = [];
+      const nodeId = 'test.Trade';
+      const node = makeNode(dehydrated, nodeId);
+      const patches = [
+        { op: 'replace', path: ['nodes', nodeId, 'data', 'attributes', 0, 'synonyms', 0, 'sources'], value: [] }
+      ] as unknown as Patches;
+      renderNamespace({ nodes: [node], originalSource: SRC_WITH_SYNONYM, dirty: buildDirtyIndex(patches) });
+    }
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Default (production) state: the schema failure still triggers the CST
+    // fallback (proven by the sibling test above), but logs NOTHING — the
+    // Copilot-flagged concern (PR #371): under live-apply forms, an
+    // intermediate invalid node is the NORMAL editing case, and an
+    // unconditional warn would spam production consoles on every serialize
+    // of a half-built node.
+    renderWithEmptySources();
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    // Flipping the debug flag surfaces the same diagnostic for local debugging.
+    setSchemaGateDebug(true);
+    renderWithEmptySources();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[cst-reuse] schema validation failed for $type "RosettaSynonym"'),
+      expect.anything()
+    );
   });
 
   it('a valid populated synonym renders structurally unchanged when the attribute is dirtied', async () => {
