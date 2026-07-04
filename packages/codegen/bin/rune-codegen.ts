@@ -385,9 +385,9 @@ program
 
 program
   .command('import')
-  .description('Import a .rune model from an external source format (Phase 1: json-schema only)')
-  .argument('<input>', 'Path to the source file (e.g. a JSON Schema document)')
-  .requiredOption('--from <source>', "Source format: 'json-schema' (only supported value in Phase 1)")
+  .description('Import a .rune model from an external source format (json-schema, openapi)')
+  .argument('<input>', 'Path to the source file (e.g. a JSON Schema or OpenAPI document)')
+  .requiredOption('--from <source>', "Source format: 'json-schema' or 'openapi' (JSON or YAML)")
   // NOTE: deliberately NOT `-o`/`--output` (spec.md's example CLI syntax
   // uses `-o <output.rune>`) — the root program ALSO declares
   // `-o, --output <dir>` (a directory, for the outbound multi-file case).

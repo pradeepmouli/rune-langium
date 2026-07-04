@@ -1,0 +1,75 @@
+openapi: 3.0.3
+info:
+  title: Petstore Demo
+  version: 1.0.0
+  description: >-
+    A hand-trimmed, petstore-class public-shape OpenAPI 3.0 fixture
+    (spec 021 Phase 2 Addendum T4) exercising nullable, discriminator +
+    mapping, allOf-extends, enums with unsafe values, and range/length
+    constraints through the shared json-schema-reader machinery.
+paths: {}
+components:
+  schemas:
+    Category:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+
+    Pet:
+      allOf:
+        - $ref: '#/components/schemas/Category'
+        - type: object
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 100
+            age:
+              type: integer
+              minimum: 0
+            status:
+              $ref: '#/components/schemas/PetStatus'
+
+    PetStatus:
+      type: string
+      enum:
+        - available
+        - out-of-stock
+        - pending
+
+    DogPayment:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          minimum: 0
+
+    CatPayment:
+      type: object
+      required:
+        - deposit
+      properties:
+        deposit:
+          type: number
+          minimum: 0
+
+    PaymentMethod:
+      type: object
+      oneOf:
+        - $ref: '#/components/schemas/DogPayment'
+        - $ref: '#/components/schemas/CatPayment'
+      discriminator:
+        propertyName: species
+        mapping:
+          dog: '#/components/schemas/DogPayment'
+          cat: '#/components/schemas/CatPayment'

@@ -14,8 +14,8 @@
  * Types only — no logic in this module.
  */
 
-/** The four inbound sources this feature eventually supports (spec CLI surface). */
-export type SourceKind = 'JsonSchema' | 'TypeScript' | 'Sql' | 'Pydantic';
+/** The inbound sources this feature supports (spec CLI surface + Phase 2's OpenAPI reader). */
+export type SourceKind = 'JsonSchema' | 'OpenApi' | 'TypeScript' | 'Sql' | 'Pydantic';
 
 /** A Rune cardinality, pre-rendered form: `(inf..sup)` or `(inf..*)` when `sup` is undefined. */
 export interface SourceCardinality {
