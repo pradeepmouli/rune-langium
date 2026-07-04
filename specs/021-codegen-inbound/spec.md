@@ -2,7 +2,7 @@
 
 **Feature Branch**: `021-codegen-inbound` (renumbered at adoption 2026-07-04; the draft's provisional "019" collided with the additional-codegen-targets work)
 **Created**: 2026-05-29
-**Revised**: 2026-07-04 (against HEAD `720f8c6`)
+**Revised**: 2026-07-04 (against HEAD `720f8c6`); amended again 2026-07-04 during Phase 1 execution — split-oracle round-trip (US1 Independent Test, Phase 1 item 7, "Round-Trip as a Test Oracle"), `oneOf`/`choice` grammar-shape correction (`ChoiceOperation`, not `OneOfOperation`), `--out-file` CLI flag rename (commander parent/subcommand option-name collision).
 **Adopted**: 2026-07-04 — decisions: classic synonyms (open question 1 RESOLVED); pattern constraints emit stub + diagnostic (open question 3 RESOLVED, see below); execution scope = Phase 1 MVP only (US1 + shared translation core); Phases 2–4 recorded as follow-up efforts.
 **Status**: Adopted (Phase 1 in execution)
 **Input**: Add inbound (reverse) code generation to `@rune-langium/codegen`: import Rune models *from* JSON Schema, TypeScript, SQL DDL, and Python (Pydantic). Use Rune's native mapping concept (synonyms / mapping logic) to capture the source→Rune correspondence so the import is reproducible and round-trippable. MVP centers on **real expression translation** — converting source-language constraints and validation logic into Rune `condition` expressions, not just structural shape.
@@ -54,11 +54,15 @@ The grammar models the full surface: `set when`, `default to`, `set to ... when`
 
 ### User Story 1 — Import a Rune model from JSON Schema (Priority: P1)
 
-A developer has an existing JSON Schema describing their firm's trade data (hand-written, or exported from another tool). They run `pnpm rune-codegen import --from json-schema schema.json -o model.rune` and receive a `.rune` file with Rune types for each schema object, enums for each `enum`/`const` union, cardinality derived from `required` + `minItems`/`maxItems`, inheritance derived from `allOf`, and synonym annotations recording the original JSON property names. JSON Schema validation keywords that express invariants (`minimum`, `maximum`, `minLength`, `oneOf` discriminators) translate into Rune `condition` blocks; `pattern` emits a stub condition + diagnostic (see amendment in scenario 5).
+A developer has an existing JSON Schema describing their firm's trade data (hand-written, or exported from another tool). They run `pnpm rune-codegen import --from json-schema schema.json --out-file model.rune` and receive a `.rune` file with Rune types for each schema object, enums for each `enum`/`const` union, cardinality derived from `required` + `minItems`/`maxItems`, inheritance derived from `allOf`, and synonym annotations recording the original JSON property names. JSON Schema validation keywords that express invariants (`minimum`, `maximum`, `minLength`, `oneOf` discriminators) translate into Rune `condition` blocks; `pattern` emits a stub condition + diagnostic (see amendment in scenario 5). (The `import` subcommand's output flag is `--out-file`, not `-o`/`--output` — the root `rune-codegen` command already reserves `-o`/`--output` for the outbound output directory, and a commander subcommand redeclaring the same short flag OR long name as a parent option silently drops its own value; see the CLI Surface section.)
 
-**Why this priority**: JSON Schema is the richest *inbound* source because it is itself a validation format — it carries the constraint information that the other sources lack. It is also the closest structural analog to the existing JSON Schema *outbound* emitter, so the round-trip is testable against our own output (emit Rune→JSON Schema, then import JSON Schema→Rune, and compare). This is the MVP that proves the inbound architecture end-to-end including expression translation.
+**Why this priority**: JSON Schema is the richest *inbound* source because it is itself a validation format — it carries the constraint information that the other sources lack. It is also the closest structural analog to the existing JSON Schema *outbound* emitter, so the STRUCTURAL half of the round-trip is testable against our own output (emit Rune→JSON Schema, then import JSON Schema→Rune, and compare). This is the MVP that proves the inbound architecture end-to-end including expression translation.
 
-**Independent Test**: Take a hand-written `.rune` model with types, enums, an inheritance chain, cardinality variants, and 3 conditions (a `one-of`, a numeric `>=`, and a length constraint). Emit it to JSON Schema with the existing outbound emitter. Import the resulting JSON Schema back to Rune. Verify the re-imported model is structurally equivalent to the original (same types, attributes, cardinalities, enums, inheritance) and that the three conditions survive the round-trip as Rune `condition` blocks with equivalent expressions.
+**Independent Test** (AMENDED 2026-07-04 — split-oracle, see "Round-Trip as a Test Oracle" below for why): Take a hand-written `.rune` model with types, enums, an inheritance chain, cardinality variants, and 3 conditions (a `one-of`, a numeric `>=`, and a length constraint).
+1. **Structural half**: Emit it to JSON Schema with the existing outbound emitter. Import the resulting JSON Schema back to Rune. Verify the re-imported model is structurally equivalent to the original (same types, attributes, cardinalities, enums, inheritance).
+2. **Condition half**: Import a SEPARATE, hand-written JSON Schema fixture carrying real constraint keywords (`minimum`/`maximum`/`minLength`/`oneOf`+`discriminator` — the same shapes acceptance scenarios 5-6 exercise). Verify the imported conditions parse with zero errors and are tree-equivalent (see `expression-tree-equivalence.ts`) to a hand-written `.rune` expectation.
+
+The two halves are not run through one shared artifact: the outbound JSON Schema emitter's own `x-rune-conditions` metadata is intentionally opaque (see "Round-Trip as a Test Oracle"), so there is no single emitted file that carries both structural shape and real condition content to round-trip through.
 
 **Acceptance Scenarios**:
 
@@ -86,7 +90,7 @@ A developer has an existing JSON Schema describing their firm's trade data (hand
 
 ### User Story 2 — Import a Rune model from TypeScript (Priority: P2) — FOLLOW-UP (not in Phase 1)
 
-A platform team has domain types defined as TypeScript `interface`s and `type`s (optionally with Zod schemas). They run `pnpm rune-codegen import --from typescript types.ts -o model.rune` and receive a Rune model. Interfaces become Rune types, union string literals become enums, optional members (`?:`) become `(0..1)`, arrays become `(0..*)`, and `extends` clauses become Rune inheritance. When a companion Zod schema is present, its `.min()`, `.max()`, `.refine()`, and `.regex()` calls translate into Rune conditions (`.regex()` → stub per the pattern amendment).
+A platform team has domain types defined as TypeScript `interface`s and `type`s (optionally with Zod schemas). They run `pnpm rune-codegen import --from typescript types.ts --out-file model.rune` and receive a Rune model. Interfaces become Rune types, union string literals become enums, optional members (`?:`) become `(0..1)`, arrays become `(0..*)`, and `extends` clauses become Rune inheritance. When a companion Zod schema is present, its `.min()`, `.max()`, `.refine()`, and `.regex()` calls translate into Rune conditions (`.regex()` → stub per the pattern amendment).
 
 **Independent Test**: Take the Zod output produced by the existing Rune→Zod emitter for a known model. Run the TypeScript importer over it. Verify the resulting Rune model recovers the cardinalities (from `.optional()`, `.array().min()`), the enums (from `z.enum()`), the inheritance (from `.extend()`), and the conditions (from `.refine()`/`.superRefine()`).
 
@@ -267,18 +271,25 @@ length { path: 'partyId', min: 1 }
     → condition PartyIdLength: partyId count >= 1
 
 oneOf { paths: ['currency','capacityUnit','financialUnit'] }
-    → condition OneOf: [currency, capacityUnit, financialUnit] one-of   (exact one-of surface per grammar — implementer grounds in the grammar's OneOfOperation/ChoiceOperation shape)
+    → condition OneOf: required choice currency, capacityUnit, financialUnit
+
+choice { paths: ['currency','capacityUnit'] }
+    → condition Choice: optional choice currency, capacityUnit
 
 pattern { path: 'code', regex: '^[A-Z]{3}$' }
     → condition CodePattern:
-          // TODO: manual translation required — source pattern: ^[A-Z]{3}$
-          <stub>                + diagnostic
+          <"TODO: manual translation required — source pattern: ^[A-Z]{3}$">
+          True                  + diagnostic
 
 custom { expressionText: '...', translatable: false }
     → condition <Name>:
-          // TODO: manual translation required — source: <expressionText>
-          <stub>                + diagnostic
+          <"TODO: manual translation required — source: <expressionText>">
+          True                  + diagnostic
 ```
+
+**CORRECTION (2026-07-04, grounding)**: the draft above originally showed `oneOf`/`choice` rendering as `[...] one-of` — this is WRONG. The grammar's `OneOfOperation` is a UNARY postfix operator (`{infer OneOfOperation.argument=current} operator='one-of'`, rune-dsl.langium — renders `someAttr one-of`, meaning "exactly one child of someAttr's own collection," not "exactly one of N sibling attributes"). The construct that actually expresses "exactly one / at most one of N named sibling attributes present" is `ChoiceOperation`, discriminated by its `necessity` field (`'required'` = exactly one, matching this spec's `oneOf` IR kind; `'optional'` = at most one, matching this spec's `choice` IR kind) — confirmed against the grammar's `Necessity` rule and CDM/Rosetta domain usage. `ChoiceOperation.attributes` are `[Attribute:ValidID]` references (simple sibling-attribute names), so `oneOf`/`choice` IR `paths` must be simple identifiers local to the same type; a multi-segment path is not representable and falls back to the `custom` stub.
+
+Also corrected: `Condition.expression` is NOT optional in the grammar (an empty body is a parse error), so the `pattern`/`custom` stub body is a real minimal expression (`RosettaBooleanLiteral{value: true}`, renders `True`) rather than a bare comment — the grammar has no comment-bearing node in the expression slot. The TODO text instead goes in `Condition.definition` (a `RosettaDefinable` fragment, renders as a `<"...">` doc string immediately after the condition's name line, shown above).
 
 Condition names are generated deterministically: `<AttributeName><ConstraintKind>` (e.g. `ValueRange`, `CodePattern`), de-duplicated with numeric suffixes.
 
@@ -320,13 +331,15 @@ All run in Node and (with bundling) in the browser, preserving the no-JVM, brows
 ### CLI Surface
 
 ```
-rune-codegen import --from <json-schema|typescript|sql|python> <input> -o <output.rune>
+rune-codegen import --from <json-schema|typescript|sql|python> <input> --out-file <output.rune>
     [--namespace <name>]        # override derived namespace
     [--no-synonyms]             # suppress synonym annotations
     [--no-conditions]           # structural import only, skip expression translation
     [--sql-dialect <d>]         # for SQL source, match outbound dialect flags
     [--on-untranslatable <stub|skip|error>]   # default: stub + diagnostic
 ```
+
+**AMENDED (2026-07-04, implementation grounding)**: the output flag is `--out-file`, not `-o`/`--output` as originally drafted. `rune-codegen`'s ROOT command (the existing outbound path) already declares `-o, --output <dir>` (an output directory, for the multi-file outbound case). Verified with an isolated commander repro that a subcommand redeclaring the SAME short flag character OR the SAME long option name as a parent-declared option — either one alone is sufficient — silently drops its own option value from that subcommand's own parsed options, even though the subcommand redeclares the option itself; this reproduces independent of this codebase's own logic and appears to be an interaction with commander's documented "`.command()` automatically copies the inherited settings from the parent command" behavior. `--out-file` (distinct long name, no short flag) avoids the collision; `-o` remains reserved for the root's own `--output <dir>`.
 
 `import` is a new subcommand alongside the existing default (outbound) behavior, registered in the commander program in `bin/rune-codegen.ts`. Phase 1 implements only `--from json-schema`; the other values error with "not yet supported".
 
@@ -350,7 +363,7 @@ Expression translation is in-scope for the MVP, not deferred. A structural-only 
 4. Implement `synonym-builder.ts` — attach synonym annotations
 5. Implement `json-schema-reader.ts` — JSON Schema → `SourceModel` + `ConstraintIR`
 6. Wire `import` subcommand into the CLI
-7. Round-trip tests: `.rune` → (outbound JSON Schema) → (inbound) → `.rune`, assert structural + condition equivalence
+7. Round-trip tests (AMENDED 2026-07-04 — split-oracle): (a) structural half — `.rune` → (outbound JSON Schema) → (inbound) → `.rune`, assert structural equivalence (types/attrs/cardinalities/enums/inheritance); (b) condition half — a hand-written JSON Schema fixture with real constraint keywords → (inbound) → `.rune`, parse-first validate, assert condition-expression tree-equivalence against a hand-written `.rune` expectation. See "Round-Trip as a Test Oracle" for why these are two suites, not one.
 8. CDM smoke test: import the FINOS CDM JSON Schema distribution (skipIf-guarded on a local copy), verify it parses and serializes to valid `.rune`
 
 ### Phase 2: TypeScript + SQL importers (P2) — follow-up
@@ -374,7 +387,13 @@ Every outbound target answers "I have a Rune model, give me X." Inbound answers 
 
 ### Round-Trip as a Test Oracle
 
-Because the inbound and outbound sides share the same model, every outbound emitter doubles as a test oracle for its inbound counterpart. `Rune → JSON Schema → Rune` should be an identity (modulo synonyms); `Rune → Zod → Rune` likewise. This gives the inbound side a correctness signal that most code generators never have, and it is the reason to build inbound *after* the outbound emitters rather than in isolation.
+Because the inbound and outbound sides share the same model, every outbound emitter doubles as a test oracle for its inbound counterpart — for STRUCTURE. `Rune → JSON Schema → Rune` is an identity for types/attributes/cardinalities/enums/inheritance (modulo synonyms); `Rune → Zod → Rune` likewise. This gives the inbound side a correctness signal that most code generators never have, and it is the reason to build inbound *after* the outbound emitters rather than in isolation.
+
+**AMENDED (2026-07-04) — split oracle for conditions.** The identity does NOT extend to condition *content*: the outbound JSON Schema emitter (`json-schema-emitter.ts`) deliberately encodes a Rune `condition` as opaque `x-rune-conditions: [{ name, kind: 'condition' }]` metadata — no `minimum`/`maximum`/`minLength`/`pattern`/`oneOf` keyword, no expression payload at all. This was an intentional decision from spec 015/017 (the module's own header comment: "conditions are not promised in JSON Schema output... This design is intentional"), not an oversight, and is out of scope for THIS effort to change (the outbound emitters are shipped, corpus-validated machinery). Consequently `Rune → JSON Schema → Rune` cannot round-trip a condition's expression through the SAME emitted file — the information needed to reconstruct `value >= 0` from `{name: "ValueRange", kind: "condition"}` simply isn't present.
+
+The round-trip suite (Phase 1 item 7) therefore splits into two independent halves: the STRUCTURAL half still uses the real outbound emitter as its oracle (exactly as originally designed); the CONDITION half uses a hand-written JSON Schema fixture carrying real constraint keywords (the same shape acceptance scenarios 5-6 already require) as its oracle, since that's what a hand-authored/CDM-style JSON Schema — the importer's actual target audience — legitimately has.
+
+**Recorded follow-up (not this effort):** teaching the outbound JSON Schema emitter to ALSO emit real constraint keywords for translatable condition kinds (`range`→`minimum`/`maximum`, `length`→`minLength`/`maxLength`, `oneOf`(`required choice`)→`oneOf`+`discriminator`) alongside (or instead of) the opaque `x-rune-conditions` metadata would restore a single-artifact round-trip AND independently improve the outbound JSON Schema target for non-Rune consumers who want real validation, not just structure. Worth its own effort; not bundled into inbound Phase 1.
 
 ### Mapping as a First-Class Artifact
 
