@@ -23,11 +23,21 @@ import type {
   Attribute,
   RosettaEnumeration,
   RosettaEnumValue,
+  RosettaFunction,
   RosettaCardinality,
   TypeCall
 } from '@rune-langium/core';
 import { escapeId } from '../emit/rosetta/render-expression.js';
-import type { SourceModel, SourceType, SourceAttribute, SourceEnum, SourceCardinality } from './source-model.js';
+import { renderNode } from '../emit/rosetta/rosetta-render-core.js';
+import type {
+  SourceModel,
+  SourceType,
+  SourceAttribute,
+  SourceEnum,
+  SourceFunc,
+  SourceFuncParam,
+  SourceCardinality
+} from './source-model.js';
 import { translateConstraint, type ConditionNode } from './constraint-translator.js';
 import {
   buildClassSynonym,
@@ -38,6 +48,11 @@ import {
   type SynonymNode,
   type EnumSynonymNode
 } from './synonym-builder.js';
+import {
+  buildOperationAnnotationDecl,
+  buildOperationAnnotationRef,
+  renderOperationAnnotationDecl
+} from './operation-carrier.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 
 /**
@@ -86,6 +101,33 @@ export type EnumerationNode = Omit<Dehydrated<RosettaEnumeration>, 'synonyms' | 
 
 /** See `DataNode`'s doc. */
 export type EnumValueNode = Omit<Dehydrated<RosettaEnumValue>, 'enumSynonyms'> & { enumSynonyms: EnumSynonymNode[] };
+
+/**
+ * A `RosettaFunction`-shaped plain object (spec.md Phase 2b Implementation
+ * Addendum decision 4's inbound half — the OpenAPI reader's `paths`
+ * consumption). `annotations` carries the func↔operation carrier
+ * (`operation-carrier.ts`'s `buildOperationAnnotationRef`), never
+ * `synonyms` — `RosettaFunction` has no `Synonyms` fragment (T2's
+ * grammar-verification finding). `inputs`/`output` reuse `AttributeNode`
+ * (the same `Dehydrated<Attribute>` correction `DataNode`'s attributes
+ * use) since a func's inputs/output ARE `Attribute` nodes in the grammar.
+ * `conditions`/`operations`/`postConditions`/`shortcuts` are always empty —
+ * a reconstructed func from an OpenAPI operation has no Rune expression
+ * body to derive (it is legally an ABSTRACT func, `operations+=Operation*`
+ * permits zero — verified via a real parse in
+ * test/import/openapi-operations.test.ts).
+ */
+export type FunctionNode = Omit<
+  Dehydrated<RosettaFunction>,
+  'inputs' | 'output' | 'shortcuts' | 'conditions' | 'operations' | 'postConditions'
+> & {
+  inputs: AttributeNode[];
+  output: AttributeNode;
+  shortcuts: never[];
+  conditions: never[];
+  operations: never[];
+  postConditions: never[];
+};
 
 /** Converts a `SourceCardinality` to the grammar's `RosettaCardinality` field shape. */
 function toCardinality(card: SourceCardinality): Dehydrated<RosettaCardinality> {
@@ -214,6 +256,57 @@ export function buildEnumeration(
   };
 }
 
+/**
+ * Builds one func input/output `Attribute` node from a `SourceFuncParam` —
+ * distinct from `buildAttribute` (which takes a `SourceAttribute`: a
+ * type's own attribute, carrying `sourceKey`/synonyms neither of which a
+ * func parameter has, since `RosettaFunction` has no `Synonyms` fragment,
+ * T2's grammar-verification finding).
+ */
+function buildFuncParam(param: SourceFuncParam): AttributeNode {
+  return {
+    $type: 'Attribute',
+    override: false,
+    name: escapeId(param.name),
+    typeCall: toTypeCall(param.typeName),
+    typeCallArgs: [],
+    card: toCardinality(param.cardinality),
+    definition: undefined,
+    annotations: [],
+    references: [],
+    synonyms: [],
+    labels: [],
+    ruleReferences: []
+  };
+}
+
+/**
+ * Builds one `RosettaFunction` node from a `SourceFunc` (spec.md Phase 2b
+ * Implementation Addendum decision 4's inbound half). Always abstract (no
+ * `operations`/body) — see `FunctionNode`'s doc. Attaches the
+ * func↔operation carrier annotation (T2's `operation-carrier.ts`) so the
+ * emitted `.rune` records the exact "METHOD /path" string this func was
+ * reconstructed from, closing the round trip.
+ */
+export function buildFunc(sourceFunc: SourceFunc): FunctionNode {
+  return {
+    $type: 'RosettaFunction',
+    name: escapeId(sourceFunc.name),
+    dispatchAttribute: undefined,
+    dispatchValue: undefined,
+    superFunction: undefined,
+    definition: sourceFunc.description,
+    annotations: [buildOperationAnnotationRef(sourceFunc.operation)],
+    references: [],
+    inputs: sourceFunc.inputs.map(buildFuncParam),
+    output: buildFuncParam(sourceFunc.output),
+    shortcuts: [],
+    conditions: [],
+    operations: [],
+    postConditions: []
+  };
+}
+
 export interface BuildModelOptions {
   /** Suppress synonym annotations entirely (`--no-synonyms`). Default: emit (spec.md MVP default). */
   emitSynonyms?: boolean;
@@ -221,24 +314,37 @@ export interface BuildModelOptions {
 
 export interface BuiltModel {
   /** Ready for `renderModel({ name: model.namespace, version: '0.0.0', elements })`. */
-  elements: Array<DataNode | EnumerationNode>;
+  elements: Array<DataNode | EnumerationNode | FunctionNode>;
   /** The `synonym source <Name>` declaration text, or `undefined` when synonyms are suppressed — see synonym-builder.ts's module doc for why this is spliced in as literal text rather than an `elements` member. */
   synonymSourceDeclaration?: string;
+  /** The `annotation openApi: ...` declaration text, present only when `model.funcs` is non-empty — see operation-carrier.ts's module doc for why this is spliced in as literal text (no `renderNode` case exists for `Annotation`) rather than an `elements` member. */
+  operationAnnotationDeclaration?: string;
   diagnostics: ImportDiagnostic[];
 }
 
-/** Builds every `Data`/`RosettaEnumeration` node for a `SourceModel`. */
+/** Builds every `Data`/`RosettaEnumeration`/`RosettaFunction` node for a `SourceModel`. */
 export function buildModel(model: SourceModel, options: BuildModelOptions = {}): BuiltModel {
   const emitSynonyms = options.emitSynonyms ?? true;
   const diagnostics: ImportDiagnostic[] = [];
 
-  const elements: Array<DataNode | EnumerationNode> = [
+  const elements: Array<DataNode | EnumerationNode | FunctionNode> = [
     ...model.enums.map((e) => buildEnumeration(e, model.sourceName, emitSynonyms)),
-    ...model.types.map((t) => buildDataType(t, model.sourceName, emitSynonyms, diagnostics))
+    ...model.types.map((t) => buildDataType(t, model.sourceName, emitSynonyms, diagnostics)),
+    ...model.funcs.map((f) => buildFunc(f))
   ];
+
+  const operationAnnotationDecl = buildOperationAnnotationDecl();
+  const operationAttrText = renderNode(
+    operationAnnotationDecl.attributes[0] as never,
+    (c) => renderNode(c, () => '') ?? ''
+  );
 
   return {
     elements,
+    ...(model.funcs.length > 0 &&
+      operationAttrText !== null && {
+        operationAnnotationDeclaration: renderOperationAnnotationDecl(operationAnnotationDecl, operationAttrText)
+      }),
     ...(emitSynonyms && { synonymSourceDeclaration: buildSynonymSourceDeclaration(model.sourceName) }),
     diagnostics
   };

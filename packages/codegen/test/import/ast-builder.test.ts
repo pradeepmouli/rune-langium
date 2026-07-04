@@ -48,7 +48,13 @@ const PARTY_TYPE: SourceType = {
 
 describe('ast-builder — buildDataType', () => {
   it('renders + reparses a type with cardinality variants and synonyms', async () => {
-    const built = buildModel({ namespace: 'test.inbound', sourceName: 'JsonSchema', types: [PARTY_TYPE], enums: [] });
+    const built = buildModel({
+      namespace: 'test.inbound',
+      sourceName: 'JsonSchema',
+      types: [PARTY_TYPE],
+      enums: [],
+      funcs: []
+    });
     const text = assemble('test.inbound', built);
     expect(text).toContain('type Party:');
     expect(text).toContain('[synonym JsonSchema value "party"]');
@@ -62,7 +68,7 @@ describe('ast-builder — buildDataType', () => {
 
   it('--no-synonyms suppresses every synonym annotation and the source declaration', async () => {
     const built = buildModel(
-      { namespace: 'test.inbound', sourceName: 'JsonSchema', types: [PARTY_TYPE], enums: [] },
+      { namespace: 'test.inbound', sourceName: 'JsonSchema', types: [PARTY_TYPE], enums: [], funcs: [] },
       { emitSynonyms: false }
     );
     expect(built.synonymSourceDeclaration).toBeUndefined();
@@ -86,7 +92,8 @@ describe('ast-builder — buildDataType', () => {
       namespace: 'test.inbound',
       sourceName: 'JsonSchema',
       types: [PARTY_TYPE, child],
-      enums: []
+      enums: [],
+      funcs: []
     });
     const text = assemble('test.inbound', built);
     expect(text).toContain('type Employee extends Party:');
@@ -215,7 +222,8 @@ describe('ast-builder — buildModel end to end', () => {
       namespace: 'test.inbound',
       sourceName: 'JsonSchema',
       types: [trade],
-      enums: [currencyEnum]
+      enums: [currencyEnum],
+      funcs: []
     };
     const built = buildModel(model);
     const text = assemble(model.namespace, built);
