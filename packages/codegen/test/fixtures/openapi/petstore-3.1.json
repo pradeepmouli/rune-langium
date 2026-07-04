@@ -50,10 +50,7 @@
       },
       "PaymentMethod": {
         "type": "object",
-        "oneOf": [
-          { "$ref": "#/components/schemas/DogPayment" },
-          { "$ref": "#/components/schemas/CatPayment" }
-        ],
+        "oneOf": [{ "$ref": "#/components/schemas/DogPayment" }, { "$ref": "#/components/schemas/CatPayment" }],
         "discriminator": {
           "propertyName": "species",
           "mapping": {
