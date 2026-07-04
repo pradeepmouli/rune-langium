@@ -183,6 +183,74 @@ describe('json-schema-reader — acceptance scenario 5 (AMENDED): minimum/maximu
     await assertParses(text);
   });
 
+  it('REGRESSION: mixed exclusivity — exclusiveMinimum does not corrupt an inclusive maximum', async () => {
+    // Reviewer probe: {exclusiveMinimum: 0, maximum: 10} previously rendered
+    // `v > 0 and v < 10` — the INCLUSIVE maximum:10 was silently made
+    // exclusive, rejecting v=10 even though the source schema permits it.
+    const schema = {
+      $id: 'https://example.com/schemas/mixedexclusive.json',
+      $defs: {
+        MixedExclusive: {
+          type: 'object',
+          properties: { value: { type: 'integer', exclusiveMinimum: 0, maximum: 10 } },
+          required: ['value']
+        }
+      }
+    };
+    const { text } = importToRune(schema);
+    expect(text).toContain('value > 0');
+    expect(text).toContain('value <= 10');
+    expect(text).not.toContain('value < 10');
+    await assertParses(text);
+  });
+
+  it('REGRESSION: Draft-7 boolean exclusiveMinimum/exclusiveMaximum modifier form is honored', async () => {
+    // Reviewer probe: {minimum: 5, exclusiveMinimum: true} previously
+    // imported as `v >= 5` (should be `v > 5`) — the boolean modifier form
+    // (Draft 7) was declared in the reader's own type union but never
+    // actually read; only the 2020-12 numeric form was handled.
+    const schema = {
+      $id: 'https://example.com/schemas/draft7exclusive.json',
+      $defs: {
+        Draft7Exclusive: {
+          type: 'object',
+          properties: {
+            value: { type: 'integer', minimum: 5, exclusiveMinimum: true, maximum: 20, exclusiveMaximum: true }
+          },
+          required: ['value']
+        }
+      }
+    };
+    const { text } = importToRune(schema);
+    expect(text).toContain('value > 5');
+    expect(text).toContain('value < 20');
+    expect(text).not.toContain('value >= 5');
+    expect(text).not.toContain('value <= 20');
+    await assertParses(text);
+  });
+
+  it('REGRESSION: both bounds independently exclusive/inclusive render the exact operators (min exclusive, max inclusive; and the reverse)', async () => {
+    const bothMixed = {
+      $id: 'https://example.com/schemas/bothmixed.json',
+      $defs: {
+        BothMixed: {
+          type: 'object',
+          properties: {
+            a: { type: 'integer', exclusiveMinimum: 0, maximum: 10 },
+            b: { type: 'integer', minimum: 0, exclusiveMaximum: 10 }
+          },
+          required: ['a', 'b']
+        }
+      }
+    };
+    const { text } = importToRune(bothMixed);
+    expect(text).toContain('a > 0');
+    expect(text).toContain('a <= 10');
+    expect(text).toContain('b >= 0');
+    expect(text).toContain('b < 10');
+    await assertParses(text);
+  });
+
   it('minLength → length condition', async () => {
     const schema = {
       $id: 'https://example.com/schemas/lengthcheck.json',
@@ -215,7 +283,8 @@ describe('json-schema-reader — acceptance scenario 5 (AMENDED): minimum/maximu
     expect(text).toContain('condition CodePattern:');
     expect(text).toContain('TODO: manual translation required — source pattern: ^[A-Z]{3}$');
     expect(text).toContain('True');
-    expect(diagnostics.some((d) => (d as { code: string }).code === 'untranslatable-construct')).toBe(true);
+    const untranslatable = diagnostics.filter((d) => (d as { code: string }).code === 'untranslatable-construct');
+    expect(untranslatable.length).toBe(1); // REGRESSION: previously double-diagnosed (reader + translator both pushed one for the same pattern constraint).
     await assertParses(text);
   });
 });
@@ -239,6 +308,108 @@ describe('json-schema-reader — acceptance scenario 6: oneOf + discriminator', 
     expect(text).toContain('condition OneOf:');
     expect(text).toContain('required choice currency, capacityUnit');
     await assertParses(text);
+  });
+
+  it("REGRESSION: the union branches' properties are merged onto the type as real (0..1) attributes, not dropped", async () => {
+    // Reviewer probe: previously the emitted type had ZERO attributes yet a
+    // `required choice currency, capacityUnit` condition referencing
+    // property names that did not exist anywhere on the type — parseable
+    // (unresolved refs don't fail parse) but silently wrong, with the
+    // branch property TYPES lost entirely and no diagnostic.
+    const schema = {
+      $id: 'https://example.com/schemas/priceable2.json',
+      $defs: {
+        PriceableAmount: {
+          type: 'object',
+          oneOf: [
+            { type: 'object', properties: { currency: { type: 'string' } }, required: ['currency'] },
+            { type: 'object', properties: { capacityUnit: { type: 'integer' } }, required: ['capacityUnit'] }
+          ],
+          discriminator: { propertyName: 'unitType' }
+        }
+      }
+    };
+    const { model, text } = { ...importToRune(schema), model: readJsonSchema(schema as never).model };
+    const priceable = model.types.find((t) => t.name === 'PriceableAmount')!;
+    expect(priceable.attributes.map((a) => a.name).sort()).toEqual(['capacityUnit', 'currency']);
+    const currency = priceable.attributes.find((a) => a.name === 'currency')!;
+    expect(currency.typeName).toBe('string');
+    expect(currency.cardinality).toEqual({ inf: 0, sup: 1 });
+    const capacityUnit = priceable.attributes.find((a) => a.name === 'capacityUnit')!;
+    expect(capacityUnit.typeName).toBe('int');
+    expect(text).toContain('currency string (0..1)');
+    expect(text).toContain('capacityUnit int (0..1)');
+    expect(text).toContain('required choice currency, capacityUnit');
+    await assertParses(text);
+  });
+
+  it('REGRESSION: a property declared with conflicting types across branches is diagnosed and skipped, not silently merged', async () => {
+    const schema = {
+      $id: 'https://example.com/schemas/priceable3.json',
+      $defs: {
+        PriceableAmount: {
+          type: 'object',
+          oneOf: [
+            { type: 'object', properties: { amount: { type: 'string' } }, required: ['amount'] },
+            { type: 'object', properties: { amount: { type: 'integer' } }, required: ['amount'] }
+          ],
+          discriminator: { propertyName: 'unitType' }
+        }
+      }
+    };
+    const { model, diagnostics } = readJsonSchema(schema as never);
+    const priceable = model.types.find((t) => t.name === 'PriceableAmount')!;
+    expect(priceable.attributes.find((a) => a.name === 'amount')).toBeUndefined();
+    expect(diagnostics.some((d) => d.code === 'untranslatable-construct')).toBe(true);
+  });
+});
+
+describe('json-schema-reader — allOf combined with a top-level oneOf+discriminator (Minor)', () => {
+  it('REGRESSION: an allOf type that ALSO carries oneOf+discriminator keeps the choice condition (previously dropped silently)', async () => {
+    const schema = {
+      $id: 'https://example.com/schemas/allofoneof.json',
+      $defs: {
+        Base: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+        Extended: {
+          allOf: [{ $ref: '#/$defs/Base' }, { type: 'object', properties: { note: { type: 'string' } } }],
+          oneOf: [
+            { type: 'object', properties: { currency: { type: 'string' } }, required: ['currency'] },
+            { type: 'object', properties: { capacityUnit: { type: 'string' } }, required: ['capacityUnit'] }
+          ],
+          discriminator: { propertyName: 'unitType' }
+        }
+      }
+    };
+    const { model, text } = { ...importToRune(schema), model: readJsonSchema(schema as never).model };
+    const extended = model.types.find((t) => t.name === 'Extended')!;
+    expect(extended.extends).toBe('Base');
+    expect(extended.attributes.map((a) => a.name).sort()).toEqual(['capacityUnit', 'currency', 'note']);
+    expect(extended.constraints).toEqual([{ kind: 'oneOf', paths: ['currency', 'capacityUnit'] }]);
+    expect(text).toContain('type Extended extends Base:');
+    expect(text).toContain('required choice currency, capacityUnit');
+    await assertParses(text);
+  });
+});
+
+describe('json-schema-reader — inline nested object property (Minor)', () => {
+  it('REGRESSION: an inline nested object property emits a diagnostic instead of silently becoming string', async () => {
+    const schema = {
+      $id: 'https://example.com/schemas/nestedobj.json',
+      $defs: {
+        Outer: {
+          type: 'object',
+          properties: {
+            nested: { type: 'object', properties: { inner: { type: 'string' } } }
+          },
+          required: []
+        }
+      }
+    };
+    const { model, diagnostics } = readJsonSchema(schema as never);
+    const outer = model.types.find((t) => t.name === 'Outer')!;
+    const nested = outer.attributes.find((a) => a.name === 'nested')!;
+    expect(nested.typeName).toBe('string'); // still the MVP fallback — the point is the diagnostic, not a new type
+    expect(diagnostics.some((d) => d.code === 'unsupported-inline-object')).toBe(true);
   });
 });
 

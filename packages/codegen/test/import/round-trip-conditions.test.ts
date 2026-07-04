@@ -130,6 +130,14 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
       'namespace test.expect\nversion "0.0.0"\n\ntype PriceableAmount:\n  currency string (0..1)\n  capacityUnit string (0..1)\n\n  condition OneOf:\n    required choice currency, capacityUnit\n'
     );
     expect(treesEquivalent(importedExpr, expectedExpr)).toBe(true);
+
+    // STRUCTURAL assertion (reviewer finding): the condition-tree comparison
+    // alone does not prove the `currency`/`capacityUnit` attributes the
+    // condition references actually EXIST on the imported type — a prior
+    // version emitted this exact condition text over a type with ZERO
+    // attributes. Assert the attributes are real, matching the hand-written
+    // expectation's own declared shape.
+    expect(imported.model.types[0]!.attributes.map((a) => a.name).sort()).toEqual(['capacityUnit', 'currency']);
   });
 
   it('combined fixture: minimum + minLength + oneOf together produce three tree-equivalent conditions', async () => {
@@ -164,6 +172,16 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
     for (const name of Object.keys(expectedConds)) {
       expect(treesEquivalent(importedConds[name], expectedConds[name])).toBe(true);
     }
+
+    // STRUCTURAL assertion (reviewer finding, same as the standalone oneOf
+    // test above): confirm currency/capacityUnit are real attributes, not
+    // just referenced by the condition text.
+    expect(imported.model.types[0]!.attributes.map((a) => a.name).sort()).toEqual([
+      'capacityUnit',
+      'code',
+      'currency',
+      'value'
+    ]);
   });
 
   it('pattern still emits a stub (True) even inside a fixture with other real conditions', async () => {

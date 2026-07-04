@@ -260,11 +260,79 @@ function readTypeDef(
   }
 
   const constraints: ConstraintIR[] = [];
-  if (!skipConditions && def.oneOf && def.oneOf.length > 0 && def.discriminator) {
-    constraints.push(readOneOfConstraint(def));
+  const isDiscriminatedOneOf = def.oneOf && def.oneOf.length > 0 && def.discriminator;
+  if (isDiscriminatedOneOf) {
+    // Scenario 6: a discriminated oneOf's member properties live on the
+    // BRANCHES, not on `def.properties` (often absent entirely, as here) —
+    // without this merge the emitted type had ZERO attributes yet a
+    // `required choice ...` condition referencing property names that don't
+    // exist on it (reviewer finding: silent data loss + a dangling
+    // reference, parseable only because unresolved `$refText`s don't fail
+    // parse). Each branch property becomes an OPTIONAL attribute on the
+    // parent type — exactly the shape the `required choice` condition
+    // needs to reference real attributes, and matches "exactly one of these
+    // optional siblings is present" semantics.
+    mergeOneOfBranchAttributes(def, key, attributes, defs, diagnostics, skipConditions);
+    if (!skipConditions) constraints.push(readOneOfConstraint(def));
   }
 
   return { name: toTypeName(key), sourceKey: key, attributes, constraints };
+}
+
+/**
+ * Merges every `oneOf` branch's own properties into `attributes` as
+ * `(0..1)` (optional) attributes, skipping any property already present
+ * (from `def.properties` or an earlier branch) and skipping the
+ * discriminator property itself. A property name declared with a
+ * DIFFERENT type across branches is untranslatable as a single merged
+ * attribute — diagnose and skip that property (`--on-untranslatable`
+ * still only implements `stub`, per `import/index.ts`; the diagnostic is
+ * the visible signal here since there is no per-property condition to stub).
+ */
+function mergeOneOfBranchAttributes(
+  def: JsonSchemaNode,
+  key: string,
+  attributes: SourceAttribute[],
+  defs: Record<string, JsonSchemaNode>,
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
+): void {
+  const discriminatorProp = def.discriminator?.propertyName;
+  const existingNames = new Set(attributes.map((a) => a.sourceKey));
+
+  // Group every branch occurrence by property name FIRST (no resolution
+  // yet) so each property's type is resolved exactly once — `readAttribute`
+  // resolves the type again internally, and calling `resolveTypeName`
+  // ourselves too would double any diagnostic it pushes (e.g. an
+  // external-ref warning) for the same property.
+  const occurrencesByProp = new Map<string, JsonSchemaNode[]>();
+  for (const branch of def.oneOf ?? []) {
+    for (const [propName, propDef] of Object.entries(branch.properties ?? {})) {
+      if (propName === discriminatorProp || existingNames.has(propName)) continue;
+      const list = occurrencesByProp.get(propName);
+      if (list) list.push(propDef);
+      else occurrencesByProp.set(propName, [propDef]);
+    }
+  }
+
+  for (const [propName, propDefs] of occurrencesByProp) {
+    const firstPropDef = propDefs[0]!;
+    const firstTypeName = resolveTypeName(firstPropDef, defs, diagnostics, propName);
+    const conflicting = propDefs
+      .slice(1)
+      .some((d) => resolveTypeName(d, defs, diagnostics, propName) !== firstTypeName);
+    if (conflicting) {
+      pushDiagnostic(diagnostics, {
+        severity: 'warning',
+        code: 'untranslatable-construct',
+        message:
+          `$defs/${key}: oneOf branches declare property '${propName}' with conflicting types — ` +
+          `property skipped, cannot merge into one attribute`
+      });
+      continue;
+    }
+    attributes.push(readAttribute(propName, firstPropDef, false, defs, diagnostics, skipConditions));
+  }
 }
 
 function readAllOfType(
@@ -298,12 +366,24 @@ function readAllOfType(
     attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
   }
 
+  // A def can carry `allOf` (composing a base type) AND its own top-level
+  // `oneOf`+`discriminator` (a discriminated union ALSO extending a base
+  // type) — `readTypeDef` dispatches `allOf` defs here before ever checking
+  // `oneOf`, so without this the combination silently dropped the choice
+  // condition entirely (reviewer Minor finding). Same merge as the
+  // non-allOf path in `readTypeDef`.
+  const constraints: ConstraintIR[] = [];
+  if (def.oneOf && def.oneOf.length > 0 && def.discriminator) {
+    mergeOneOfBranchAttributes(def, key, attributes, defs, diagnostics, skipConditions);
+    if (!skipConditions) constraints.push(readOneOfConstraint(def));
+  }
+
   return {
     name: toTypeName(key),
     sourceKey: key,
     ...(extendsName !== undefined && { extends: extendsName }),
     attributes,
-    constraints: []
+    constraints
   };
 }
 
@@ -330,12 +410,12 @@ function readAttribute(
     pushRangeConstraint(constraintTarget, propName, constraints);
     pushLengthConstraint(propDef, propName, constraints, isArray);
     if (constraintTarget.pattern !== undefined) {
+      // Diagnostic intentionally NOT pushed here — constraint-translator.ts's
+      // `translateConstraintExpression` already pushes one `untranslatable-
+      // construct` warning for every `pattern` IR when it emits the stub;
+      // pushing a second one here double-diagnosed the identical constraint
+      // (reviewer finding).
       constraints.push({ kind: 'pattern', path: propName, regex: constraintTarget.pattern });
-      pushDiagnostic(diagnostics, {
-        severity: 'warning',
-        code: 'untranslatable-construct',
-        message: `property '${propName}': 'pattern' has no Rune expression-level equivalent — will emit a stub condition`
-      });
     }
   }
 
@@ -349,18 +429,34 @@ function readAttribute(
   };
 }
 
+/**
+ * Emits ONE `range` IR PER BOUND (never one IR carrying both), so each
+ * bound's exclusivity is independent — a single shared `exclusive` flag on
+ * one IR would force `exclusiveMinimum` to also make an inclusive `maximum`
+ * exclusive (reviewer finding: `{exclusiveMinimum:0, maximum:10}` silently
+ * rendered `v < 10` instead of `v <= 10`, rejecting the boundary value the
+ * source schema permits).
+ *
+ * Handles BOTH exclusivity forms the module doc claims ("Draft 7 /
+ * 2020-12"): the 2020-12 numeric form (`exclusiveMinimum: 0` — the bound
+ * value itself, `minimum` absent) and the Draft-7 boolean-modifier form
+ * (`minimum: 5, exclusiveMinimum: true` — `minimum` carries the bound,
+ * `exclusiveMinimum` only toggles inclusivity). The reader's own
+ * `JsonSchemaNode` type already declares `exclusiveMinimum?: number |
+ * boolean`, but only the numeric form was actually read (reviewer finding:
+ * `{minimum: 5, exclusiveMinimum: true}` silently imported as `v >= 5`).
+ */
 function pushRangeConstraint(node: JsonSchemaNode, path: string, constraints: ConstraintIR[]): void {
+  const minExclusive = typeof node.exclusiveMinimum === 'number' || node.exclusiveMinimum === true;
+  const maxExclusive = typeof node.exclusiveMaximum === 'number' || node.exclusiveMaximum === true;
   const min = typeof node.exclusiveMinimum === 'number' ? node.exclusiveMinimum : node.minimum;
   const max = typeof node.exclusiveMaximum === 'number' ? node.exclusiveMaximum : node.maximum;
-  const exclusive = typeof node.exclusiveMinimum === 'number' || typeof node.exclusiveMaximum === 'number';
-  if (min !== undefined || max !== undefined) {
-    constraints.push({
-      kind: 'range',
-      path,
-      ...(min !== undefined && { min }),
-      ...(max !== undefined && { max }),
-      ...(exclusive && { exclusive: true })
-    });
+
+  if (min !== undefined) {
+    constraints.push({ kind: 'range', path, min, ...(minExclusive && { exclusive: true }) });
+  }
+  if (max !== undefined) {
+    constraints.push({ kind: 'range', path, max, ...(maxExclusive && { exclusive: true }) });
   }
 }
 
@@ -408,6 +504,21 @@ function resolveTypeName(
     return 'string';
   }
   const type = Array.isArray(node.type) ? node.type[0] : node.type;
+  if (type === 'object' && node.properties !== undefined) {
+    // An INLINE nested object (not a $ref to a $defs/definitions entry) has
+    // no named Rune type to reference — MVP rule (spec.md open question 4)
+    // only promotes a $ref reused across ≥2 sites to a named type; a single
+    // inline object has no such reuse site to hoist to. Falling back to
+    // `string` unconditionally is silent, indistinguishable-from-a-real-
+    // string data loss (reviewer finding) — diagnose it so the gap is
+    // visible rather than swallowed.
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'unsupported-inline-object',
+      message: `property '${propName}': inline nested object schema has no named Rune type to reference — using 'string'; extract it to '$defs'/'definitions' and reference it via '$ref' to import it as a real type`
+    });
+    return 'string';
+  }
   return (type && BUILTIN_TYPE_MAP[type]) ?? 'string';
 }
 
