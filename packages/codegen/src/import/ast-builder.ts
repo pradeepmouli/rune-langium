@@ -166,8 +166,13 @@ export function buildEnumeration(
       ...(v.description !== undefined && { definition: v.description }),
       annotations: [],
       references: [],
-      enumSynonyms:
-        emitSynonyms && v.displayName !== undefined ? [buildEnumValueSynonym(sourceName, v.displayName)] : []
+      // The synonym records the ORIGINAL SOURCE literal (v.sourceKey), never
+      // v.displayName — displayName is a presentational label (may come from
+      // the outbound emitter's own x-rune-enum-display map) and is not
+      // necessarily the value the source schema actually used (reviewer
+      // finding: emitting displayName here silently recorded the wrong
+      // value whenever a display map was present).
+      enumSynonyms: emitSynonyms ? [buildEnumValueSynonym(sourceName, v.sourceKey)] : []
     }))
   };
 }

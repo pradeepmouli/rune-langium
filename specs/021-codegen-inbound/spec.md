@@ -212,10 +212,31 @@ interface SourceAttribute {
 
 interface SourceEnum {
   name: string;
-  values: { name: string; displayName?: string; description?: string }[];
+  values: SourceEnumValue[];
   sourceKey: string;
 }
+
+interface SourceEnumValue {
+  name: string;                   // Rune-safe identifier
+  sourceKey: string;               // AMENDED 2026-07-04 (implementation review): the ORIGINAL source enum literal — required for the per-value synonym annotation, which must record the round-trippable source value, never a display label (see amendment note below)
+  displayName?: string;            // presentational only (e.g. from an outbound emitter's own enum-display extension); may differ from BOTH name and sourceKey
+  description?: string;
+}
 ```
+
+**AMENDED (2026-07-04, implementation review)**: the draft's inline `values`
+shape above omitted a per-value `sourceKey`, conflating it with
+`displayName` — a real spec bug, not just an implementation gap. The two
+are semantically distinct: `displayName` is a presentational label (which
+may come from a source-specific display-name extension, e.g. the outbound
+JSON Schema emitter's own `x-rune-enum-display`) and is NOT necessarily the
+literal value the source schema used; `sourceKey` is that original literal,
+and it is what the per-value `[synonym <Source> value "..."]` annotation
+must record for the mapping to be round-trippable. An importer that emits
+the synonym from `displayName` instead of `sourceKey` silently records the
+WRONG value whenever a display-name map is present — caught during Phase 1
+implementation review as a hard-invariant-adjacent mistranslation (the
+output still parses; the synonym value is simply factually wrong).
 
 ### The ConstraintIR — MVP Core
 

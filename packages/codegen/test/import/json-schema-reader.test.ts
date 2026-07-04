@@ -447,6 +447,58 @@ describe('json-schema-reader — $ref resolution', () => {
     expect(attr.typeName).toBe('string');
     expect(diagnostics.some((d) => d.code === 'external-ref')).toBe(true);
   });
+
+  it('REGRESSION: a hyphenated $defs key (a legal JSON Schema key, illegal Rune identifier) is sanitized for BOTH a type and an enum definition (hard invariant)', async () => {
+    // Reviewer finding: $defs keys were used VERBATIM as SourceType.name /
+    // SourceEnum.name; escapeId only escapes reserved keywords, not invalid
+    // identifier characters, so a legal key like "day-count" previously
+    // emitted `enum day-count:` / `type day-count:` — an unparseable
+    // hard-invariant breach (a hyphen is not in ValidID).
+    const schema = {
+      $id: 'https://example.com/schemas/hyphenated.json',
+      $defs: {
+        'day-count': { type: 'string', enum: ['ACT_360', 'ACT_365'] },
+        'trade-details': {
+          type: 'object',
+          properties: { name: { type: 'string' } },
+          required: []
+        }
+      }
+    };
+    const { model, text } = { ...importToRune(schema), model: readJsonSchema(schema as never).model };
+    const enumNode = model.enums.find((e) => e.sourceKey === 'day-count')!;
+    expect(enumNode.name).not.toBe('day-count');
+    expect(enumNode.name).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
+    const typeNode = model.types.find((t) => t.sourceKey === 'trade-details')!;
+    expect(typeNode.name).not.toBe('trade-details');
+    expect(typeNode.name).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
+    expect(text).not.toContain('enum day-count:');
+    expect(text).not.toContain('type trade-details:');
+    await assertParses(text);
+  });
+
+  it('REGRESSION: an internal $ref to a hyphenated enum key resolves to the SAME sanitized name as the declaration (DRY, not two conversions)', async () => {
+    const schema = {
+      $id: 'https://example.com/schemas/hyphenated2.json',
+      $defs: {
+        'day-count': { type: 'string', enum: ['ACT_360', 'ACT_365'] },
+        Trade: {
+          type: 'object',
+          properties: { dayCount: { $ref: '#/$defs/day-count' } },
+          required: ['dayCount']
+        }
+      }
+    };
+    const { model, text } = { ...importToRune(schema), model: readJsonSchema(schema as never).model };
+    const enumNode = model.enums.find((e) => e.sourceKey === 'day-count')!;
+    const trade = model.types.find((t) => t.name === 'Trade')!;
+    const dayCountAttr = trade.attributes.find((a) => a.name === 'dayCount')!;
+    // The attribute's resolved type name MUST equal the enum's own
+    // (sanitized) declaration name, or the reference is dangling.
+    expect(dayCountAttr.typeName).toBe(enumNode.name);
+    expect(text).toContain(`dayCount ${enumNode.name} (1..1)`);
+    await assertParses(text);
+  });
 });
 
 describe('json-schema-reader — namespace derivation ($id → reverse-DNS-ish; --namespace fallback; error)', () => {
@@ -462,6 +514,18 @@ describe('json-schema-reader — namespace derivation ($id → reverse-DNS-ish; 
 
   it('throws when neither $id nor --namespace yields a valid namespace', () => {
     expect(() => readJsonSchema({ $defs: {} } as never)).toThrow(/Unable to derive a Rune namespace/);
+  });
+
+  it('REGRESSION: an INVALID --namespace override is blamed by name, not misreported as "no override supplied"', () => {
+    // Reviewer finding: the error previously always said "no --namespace
+    // override was supplied" even when an invalid one WAS supplied.
+    expect(() => readJsonSchema({ $defs: {} } as never, { namespace: '1-not-valid!' })).toThrow(
+      /supplied --namespace override \('1-not-valid!'\) is not a valid Rune namespace/
+    );
+  });
+
+  it('an absent $id with no --namespace still reports the original "no override was supplied" message', () => {
+    expect(() => readJsonSchema({ $defs: {} } as never)).toThrow(/no --namespace override was supplied/);
   });
 });
 

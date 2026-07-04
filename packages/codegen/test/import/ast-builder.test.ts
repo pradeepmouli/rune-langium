@@ -141,7 +141,10 @@ describe('ast-builder — buildEnumeration', () => {
   const DAY_COUNT_ENUM: SourceEnum = {
     name: 'DayCountFractionEnum',
     sourceKey: 'dayCountFraction',
-    values: [{ name: 'ACT_360', displayName: 'ACT/360' }, { name: 'ACT_365' }]
+    values: [
+      { name: 'ACT_360', sourceKey: 'ACT/360', displayName: 'ACT/360' },
+      { name: 'ACT_365', sourceKey: 'ACT/365' }
+    ]
   };
 
   it('renders + reparses enum values with displayName + enum-value synonym for non-safe originals', async () => {
@@ -158,6 +161,30 @@ describe('ast-builder — buildEnumeration', () => {
     const result = await parse(lines.join('\n'));
     expect(result.hasErrors).toBe(false);
   });
+
+  it('REGRESSION: the enum-value synonym records sourceKey (the original source literal), NOT displayName (a presentational label)', async () => {
+    // Reviewer finding: a prior version emitted the synonym from
+    // v.displayName, which is the human-readable label (e.g. from the
+    // outbound emitter's own x-rune-enum-display map) — NOT necessarily the
+    // original source literal. Fixture where the safe name, the source
+    // literal, and the display label all differ from each other, so the
+    // three cannot be confused for one another.
+    const enumWithDivergentFields: SourceEnum = {
+      name: 'StatusEnum',
+      sourceKey: 'status',
+      values: [{ name: 'Active_Status', sourceKey: 'ACTIVE', displayName: 'Currently Active' }]
+    };
+    const node = buildEnumeration(enumWithDivergentFields, 'JsonSchema', true);
+    const rendered = renderModel({ name: 'test.inbound', version: '0.0.0', elements: [node as never] });
+    expect(rendered).toContain('Active_Status displayName "Currently Active"');
+    expect(rendered).toContain('[synonym JsonSchema value "ACTIVE"]');
+    expect(rendered).not.toContain('[synonym JsonSchema value "Currently Active"]');
+    const lines = rendered.split('\n');
+    const versionIdx = lines.findIndex((l) => l.startsWith('version '));
+    lines.splice(versionIdx + 1, 0, '', 'synonym source JsonSchema');
+    const result = await parse(lines.join('\n'));
+    expect(result.hasErrors).toBe(false);
+  });
 });
 
 describe('ast-builder — buildModel end to end', () => {
@@ -165,7 +192,10 @@ describe('ast-builder — buildModel end to end', () => {
     const currencyEnum: SourceEnum = {
       name: 'CurrencyEnum',
       sourceKey: 'currency',
-      values: [{ name: 'USD' }, { name: 'EUR' }]
+      values: [
+        { name: 'USD', sourceKey: 'USD' },
+        { name: 'EUR', sourceKey: 'EUR' }
+      ]
     };
     const trade: SourceType = {
       name: 'Trade',

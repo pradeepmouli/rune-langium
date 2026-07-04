@@ -86,7 +86,16 @@ export interface SourceType {
 export interface SourceEnumValue {
   /** Rune-safe identifier (sanitized + deduped when the source value isn't ValidID-safe). */
   name: string;
-  /** Original source value, when it differs from `name` (e.g. `"ACT/360"` → `ACT_360`). */
+  /**
+   * The ORIGINAL source enum literal (e.g. `"ACT/360"`, or `"Active"` when a
+   * display map maps it to a human-readable string) — used for the
+   * per-value `[synonym <Source> value "..."]` annotation, which must
+   * record the round-trippable source value, NOT a display label.
+   * Always populated by every reader; distinct from `displayName`, which
+   * is purely presentational and may differ from both `name` and `sourceKey`.
+   */
+  sourceKey: string;
+  /** Human-readable display label (e.g. from the outbound emitter's own `x-rune-enum-display`, or the original literal when sanitization changed `name` and no display map entry exists). Rendered as Rune's `displayName "..."`. */
   displayName?: string;
   description?: string;
 }

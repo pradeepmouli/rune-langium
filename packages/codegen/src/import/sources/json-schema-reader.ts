@@ -20,8 +20,10 @@
  *  - internal `$defs`/`definitions` `$ref` resolution only (hand-rolled,
  *    per spec.md's Source Parser Dependencies table); an external ref
  *    (anything without a `#/$defs/...` or `#/definitions/...` shape)
- *    produces an `external-ref` diagnostic and the referencing
- *    property/type is skipped rather than guessed at.
+ *    produces an `external-ref` diagnostic and falls back to `string`
+ *    (a property type) or omits `extends` (an `allOf` base) — never
+ *    guessed at, but not "skipped" either (the property/type itself is
+ *    still emitted, just without the unresolvable reference).
  *  - `$id` → namespace derivation (reverse-DNS-ish host+path), falling back
  *    to the caller-supplied `--namespace` option; an error when neither
  *    yields a valid Rune namespace segment sequence (spec.md open question 2).
@@ -135,7 +137,17 @@ function deriveNamespace(
   const fromId = schema.$id ? namespaceFromId(schema.$id) : undefined;
   const namespace = options.namespace ?? fromId;
   if (!namespace || !isValidNamespace(namespace)) {
-    if (fromId === undefined && options.namespace === undefined) {
+    // The error message must distinguish "an override WAS supplied but was
+    // itself invalid" from "no override was supplied at all" — a prior
+    // version always blamed the latter even when an invalid --namespace had
+    // been given, which is misleading (reviewer finding).
+    if (options.namespace !== undefined) {
+      throw new Error(
+        `Unable to derive a Rune namespace: the supplied --namespace override ('${options.namespace}') is not a ` +
+          `valid Rune namespace (expected dot-separated identifiers, e.g. 'com.example.trade').`
+      );
+    }
+    if (fromId === undefined) {
       pushDiagnostic(diagnostics, {
         severity: 'info',
         code: 'namespace-fallback',
@@ -200,6 +212,13 @@ function readEnumDef(key: string, def: JsonSchemaNode): SourceEnum {
     const name = dedupeIdentifier(sanitizeEnumValue(original), used);
     return {
       name,
+      // sourceKey is ALWAYS the original literal — the enum-value synonym
+      // must record the round-trippable source value, not a display label
+      // (a prior version conflated the two by emitting `displayName` as the
+      // synonym value, which silently recorded the WRONG string whenever
+      // x-rune-enum-display was present, since that map's values are
+      // human-readable labels, not source literals — reviewer finding).
+      sourceKey: original,
       // Prefer the outbound emitter's own x-rune-enum-display map; otherwise
       // fall back to the original literal when sanitization changed it
       // (scenario 3: "ACT/360" → ACT_360 retains the original as displayName).
@@ -209,7 +228,15 @@ function readEnumDef(key: string, def: JsonSchemaNode): SourceEnum {
     };
   });
 
-  return { name: key, sourceKey: key, values };
+  // The $defs/definitions KEY is used verbatim as `name` only when it is
+  // ALREADY ValidID-safe — `toTypeName` sanitizes it deterministically
+  // otherwise (same conversion `readTypeDef`/`readAllOfType` already apply
+  // to a Data type's name). A legal JSON Schema key like `"day-count"` is
+  // NOT a legal Rune identifier (hyphens aren't in ValidID) — using it
+  // verbatim previously emitted `enum day-count:`, an unparseable
+  // hard-invariant breach (reviewer finding). The original key survives via
+  // `sourceKey` (the enum-level synonym), so nothing is lost by sanitizing.
+  return { name: toTypeName(key), sourceKey: key, values };
 }
 
 /** Sanitizes a non-ValidID-safe enum literal into a Rune-safe identifier (scenario 3: `"ACT/360"` → `ACT_360`). */
@@ -494,7 +521,13 @@ function resolveTypeName(
   if (node.$ref) {
     const refKey = resolveInternalRef(node.$ref);
     if (refKey && refKey in defs) {
-      return isEnumDef(defs[refKey]!) ? refKey : toTypeName(refKey);
+      // Both branches must apply the SAME sanitization `readEnumDef`/
+      // `readTypeDef` apply to the declaration itself (`toTypeName`) — a
+      // prior version returned the RAW refKey for an enum reference, which
+      // both breaks parse (an unsanitized name used as a type reference)
+      // AND, even where it happened to be ValidID-safe, could never match a
+      // sanitized declaration name for a key that wasn't (reviewer finding).
+      return toTypeName(refKey);
     }
     pushDiagnostic(diagnostics, {
       severity: 'warning',
