@@ -12,10 +12,10 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import type { Target, GeneratorOutput } from '../src/types.js';
 
-describe('Target union (018 Task 0.1)', () => {
-  it('includes all seven target identifiers', () => {
+describe('Target union (018 Task 0.1; 021 Phase 2b added openapi)', () => {
+  it('includes all eight target identifiers', () => {
     expectTypeOf<Target>().toEqualTypeOf<
-      'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql'
+      'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql' | 'openapi'
     >();
   });
 });

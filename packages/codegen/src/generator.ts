@@ -15,6 +15,7 @@ import { ZodNamespaceEmitter } from './emit/zod-emitter.js';
 import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
 import { TsNamespaceEmitter } from './emit/ts-emitter.js';
 import { SqlNamespaceEmitter } from './emit/sql-emitter.js';
+import { OpenApiNamespaceEmitter } from './emit/openapi-emitter.js';
 import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker.js';
 import type { LanguageProfile } from './emit/language-profile.js';
@@ -46,7 +47,8 @@ const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> =
   zod: ZodNamespaceEmitter,
   'json-schema': JsonSchemaNamespaceEmitter,
   typescript: TsNamespaceEmitter,
-  sql: SqlNamespaceEmitter
+  sql: SqlNamespaceEmitter,
+  openapi: OpenApiNamespaceEmitter
 };
 
 const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
@@ -100,7 +102,8 @@ const LIBRARY_DEFAULT_LAYOUT: Record<Target, string> = {
   sql: 'per-namespace',
   markdown: 'per-namespace',
   excel: 'single-file', // no per-namespace meaning; this default is decorative
-  graphql: 'single-file' // ditto
+  graphql: 'single-file', // ditto
+  openapi: 'per-namespace'
 };
 
 function resolveLayout(target: Target, options: GeneratorOptions): string {

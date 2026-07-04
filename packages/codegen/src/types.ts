@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { ExcelOptions } from './options/excel-options.js';
+import type { OpenApiOptions } from './options/openapi-options.js';
 
 /**
  * Supported generator targets.
@@ -12,6 +13,9 @@ import type { ExcelOptions } from './options/excel-options.js';
  * - `markdown`    — 018 Phase 2 (per-namespace docs emitter)
  * - `excel`       — 018 Phase 1 (whole-model binary emitter, .xlsx)
  * - `graphql`     — 018 Phase 3 (whole-model SDL emitter)
+ * - `openapi`     — 021 Phase 2b (per-namespace; OAS 3.1, composes the
+ *                   JSON Schema emitter's own output + adds constraint
+ *                   keywords, funcs→operations, optional CRUD paths)
  *
  * The authoritative contract for each target is `TARGET_DESCRIPTORS[target].contract`;
  * Copilot review on PR #165 caught that this header comment originally listed
@@ -23,7 +27,7 @@ import type { ExcelOptions } from './options/excel-options.js';
  *
  * Task 0.4 wires the dispatch.
  */
-export type Target = 'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql';
+export type Target = 'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql' | 'openapi';
 
 /**
  * Per-target option blocks (019 spec §3.1). Each block carries
@@ -124,6 +128,10 @@ export interface GeneratorOptions {
   // renders it via @zod-to-form). `ExcelOptions` is inferred from
   // `ExcelOptionsSchema` in ./options/excel-options.ts.
   excel?: ExcelOptions;
+  // 021 Phase 2b — OpenAPI emitter options (format + opt-in CRUD
+  // generation). `OpenApiOptions` is inferred from `OpenApiOptionsSchema`
+  // in ./options/openapi-options.ts, same Zod-schema-as-SSoT pattern as Excel.
+  openapi?: OpenApiOptions;
 }
 
 /**
@@ -374,6 +382,15 @@ export const TARGET_DESCRIPTORS: Record<Target, TargetDescriptor> = {
     desc: 'Schema definition language',
     extension: '.graphql',
     mimeType: 'application/graphql'
+  },
+  openapi: {
+    label: 'OpenAPI',
+    contract: 'namespace',
+    desc: 'OAS 3.1 document (schemas + func operations)',
+    // Default extension; the emitter overrides per-output relativePath
+    // when `options.openapi.format === 'yaml'` (or the caller requests a
+    // `.yaml`/`.yml` output path directly) — see openapi-emitter.ts.
+    extension: '.openapi.json'
   }
 };
 
