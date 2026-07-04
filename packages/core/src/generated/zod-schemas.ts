@@ -1030,6 +1030,10 @@ export const RosettaExpressionSchema = z.discriminatedUnion('$type', [
   RosettaConstructorExpressionSchema,
   ListLiteralSchema,
   RosettaImplicitVariableSchema,
+  RosettaBooleanLiteralSchema,
+  RosettaStringLiteralSchema,
+  RosettaNumberLiteralSchema,
+  RosettaIntLiteralSchema,
   RosettaConditionalExpressionSchema
 ]);
 
@@ -1051,11 +1055,24 @@ export const RosettaLiteralSchema = z.discriminatedUnion('$type', [
 export const RosettaMapTestSchema = z.discriminatedUnion('$type', [
   RosettaMapPathSchema,
   RosettaMapRosettaPathSchema,
+  RosettaEnumValueReferenceSchema,
+  RosettaBooleanLiteralSchema,
+  RosettaStringLiteralSchema,
+  RosettaNumberLiteralSchema,
+  RosettaIntLiteralSchema,
+  RosettaMapTestExistsExpressionSchema,
+  RosettaMapTestAbsentExpressionSchema,
+  RosettaMapTestEqualityOperationSchema,
+  RosettaMapPathValueSchema,
   RosettaMapTestFuncSchema
 ]);
 
 export const RosettaMapTestExpressionSchema = z.discriminatedUnion('$type', [
   RosettaEnumValueReferenceSchema,
+  RosettaBooleanLiteralSchema,
+  RosettaStringLiteralSchema,
+  RosettaNumberLiteralSchema,
+  RosettaIntLiteralSchema,
   RosettaMapTestExistsExpressionSchema,
   RosettaMapTestAbsentExpressionSchema,
   RosettaMapTestEqualityOperationSchema,

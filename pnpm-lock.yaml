@@ -7,7 +7,7 @@ settings:
 overrides:
   react: 19.2.7
   react-dom: 19.2.7
-  langium-zod: 0.11.0
+  langium-zod: 0.11.1
   x-to-zod: ^0.8.0
   '@zod-to-form/core': 0.11.1
   '@zod-to-form/react': 0.11.0
@@ -542,8 +542,8 @@ importers:
         specifier: ^4.3.0
         version: 4.3.0
       langium-zod:
-        specifier: 0.11.0
-        version: 0.11.0
+        specifier: 0.11.1
+        version: 0.11.1
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -744,8 +744,8 @@ importers:
         specifier: ^29.1.1
         version: 29.1.1
       langium-zod:
-        specifier: 0.11.0
-        version: 0.11.0
+        specifier: 0.11.1
+        version: 0.11.1
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -4250,8 +4250,8 @@ packages:
   langium-railroad@4.3.0:
     resolution: {integrity: sha512-dbuv149MQe8XcgM48FagH22JBaqN0MvN9RRJKBdRQWDeHUYAASliiOtLdMfgOl3kV+nLx7idSc+LLdcBSduvHw==}
 
-  langium-zod@0.11.0:
-    resolution: {integrity: sha512-KRgg0pKAc9rwoJRQyRJA1SOA0+VmXkuDEiTeEMoXpdMADNc6cTGY06zwvnVAfHMWXERYQcu3XWdj0EstXrjvrA==}
+  langium-zod@0.11.1:
+    resolution: {integrity: sha512-MJP3xjR4NbjIQXpm6quFrgjKc0/NCaJDVvHC2/PwiB8NKT0MbCPaNYeaQsoJWl4kETGEJrX0pLWFVcaAQH9ONg==}
     hasBin: true
 
   langium@4.3.0:
@@ -9271,10 +9271,10 @@ snapshots:
 
   langium-railroad@4.3.0:
     dependencies:
-      langium: 4.3.0
+      langium: 4.3.1
       railroad-diagrams: 1.0.0
 
-  langium-zod@0.11.0:
+  langium-zod@0.11.1:
     dependencies:
       humanize-string: 3.1.0
       langium: 4.3.1
