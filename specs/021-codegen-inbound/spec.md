@@ -441,3 +441,14 @@ Inbound generation lives in the MIT-licensed `@rune-langium/codegen` package, co
 5. **Phase 2 order REORDERED: OpenAPI reader FIRST** (TypeScript/SQL move later). OpenAPI `components.schemas` ARE JSON Schema: OAS 3.1 ≈ direct delegation to the shipped json-schema machinery; OAS 3.0 dialect normalization layer (nullable: true → optionality; `discriminator` OBJECT {propertyName, mapping} → choice/oneOf IR incl. mapping-driven branch resolution; allOf composition). Synonym source name: `OpenApi`. **YAML: in scope** via the `yaml` package (MIT, browser-safe) — OpenAPI documents in the wild are predominantly YAML; a JSON-only OpenAPI importer would miss the point. This is the import subpath's first (and only, so far) runtime dependency, isolated behind `/import`.
 
 **Phase 2 (OpenAPI) task order:** (1) Dehydrated<T> retrofit → (2) subpath clean flip (/import + /export; consumer migration same PR) → (3) @types/json-schema retrofit → (4) openapi-reader (3.0 normalization + 3.1 passthrough + YAML) with fixtures for both OAS versions → (5) oracles: round-trip a Rune model through outbound JSON Schema wrapped as an OAS component set; petstore-class public fixture; inbound hard invariant throughout.
+
+---
+
+## Phase 2b (recorded 2026-07-04, user-directed — NOT in the Phase 2 PR)
+
+Two paired follow-ups forming the next OpenAPI increment:
+
+1. **Outbound OpenAPI emitter** (`Rune → OpenAPI`): wrap the JSON Schema emitter's per-type output into `components.schemas`; absorb the recorded constraint-keywords follow-up (real `minimum`/`maximum`/`minLength`/`oneOf` for translatable conditions — an OpenAPI emitter without them would repeat the opaque-metadata round-trip gap); OAS 3.1 dialect.
+2. **Functions ↔ operations mapping (both directions)**: Rune `func` ↔ OpenAPI path operation. Inbound: `paths.*.{method}` → `RosettaFunction` (`operationId` → sanitized func name; parameters + requestBody schema → inputs with required→cardinality; 2xx response schema → output; summary/description → definition; parameter constraints → conditions). Outbound: the inverse. DESIGN-TIME VERIFICATION: whether the grammar permits synonym annotations on funcs — if not, the operation↔func correspondence needs a different carrier (definition text or naming convention); settle in the Phase 2b brainstorm.
+
+Together these make the OpenAPI pair a true two-way target: schemas ↔ types AND operations ↔ funcs, with the outbound emitter serving as the inbound reader's single-artifact round-trip oracle (the oracle the JSON Schema pair couldn't have).
