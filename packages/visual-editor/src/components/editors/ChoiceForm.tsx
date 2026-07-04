@@ -113,7 +113,8 @@ function ChoiceForm({
   const { form } = useZodForm(ChoiceSchema, {
     defaultValues: formValuesProjection<typeof ChoiceSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry
+    formRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different node.

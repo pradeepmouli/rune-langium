@@ -78,13 +78,16 @@ export function deriveUiSchema<T extends LooseObjectSchema>(
   }
 
   // Step 3: Apply overrides (relaxation, validation, reference resolution)
+  // Use safeExtend: generated schemas may carry a `.superRefine()` (e.g.
+  // at-least-one-of constraints), and plain `.extend()` throws when
+  // overriding a key that already exists on a refined schema.
   if (overrides) {
-    schema = schema.extend(overrides) as any;
+    schema = schema.safeExtend(overrides) as any;
   }
 
   // Step 4: Extend with UI-only fields
   if (extend) {
-    schema = schema.extend(extend) as any;
+    schema = schema.safeExtend(extend) as any;
   }
 
   return schema;

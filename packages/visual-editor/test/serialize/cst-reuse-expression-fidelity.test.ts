@@ -122,8 +122,10 @@ describe('cst-reuse expression fidelity (P2 Task 3)', () => {
     dd.conditions[0]!.expression = {
       $type: 'LogicalOperation',
       operator: 'and',
-      left: { $type: 'RosettaSymbolReference', symbol: { $refText: 'bar' } },
-      right: { $type: 'RosettaSymbolReference', symbol: { $refText: 'baz' } }
+      // rawArgs: [] — []-canonical convention (parser always materializes an
+      // array, never omits it); required by RosettaSymbolReferenceSchema.
+      left: { $type: 'RosettaSymbolReference', symbol: { $refText: 'bar' }, rawArgs: [] },
+      right: { $type: 'RosettaSymbolReference', symbol: { $refText: 'baz' }, rawArgs: [] }
       // no $cstRange
     };
 

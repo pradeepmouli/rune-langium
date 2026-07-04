@@ -144,7 +144,8 @@ function FunctionForm({
   const { form } = useZodForm(RosettaFunctionSchema, {
     defaultValues: formValuesProjection<typeof RosettaFunctionSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry: functionFormRegistry
+    formRegistry: functionFormRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different

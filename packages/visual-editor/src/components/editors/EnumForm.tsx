@@ -122,7 +122,8 @@ function EnumForm({
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
     defaultValues: formValuesProjection<typeof RosettaEnumerationSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry
+    formRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different node

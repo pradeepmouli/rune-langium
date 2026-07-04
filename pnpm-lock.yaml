@@ -7,10 +7,10 @@ settings:
 overrides:
   react: 19.2.7
   react-dom: 19.2.7
-  langium-zod: 0.10.1
+  langium-zod: 0.11.1
   x-to-zod: ^0.8.0
   '@zod-to-form/core': 0.11.1
-  '@zod-to-form/react': 0.10.2
+  '@zod-to-form/react': 0.11.0
   '@zod-to-form/vite': 0.4.4
   codemirror: 6.0.2
   '@radix-ui/react-compose-refs': 1.1.2
@@ -542,8 +542,8 @@ importers:
         specifier: ^4.3.0
         version: 4.3.0
       langium-zod:
-        specifier: 0.10.1
-        version: 0.10.1
+        specifier: 0.11.1
+        version: 0.11.1
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -701,8 +701,8 @@ importers:
         specifier: 0.11.1
         version: 0.11.1(jiti@2.7.0)(zod@4.4.3)
       '@zod-to-form/react':
-        specifier: 0.10.2
-        version: 0.10.2(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+        specifier: 0.11.0
+        version: 0.11.0(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(zod@4.4.3)
       elkjs:
         specifier: ^0.11.1
         version: 0.11.1
@@ -744,8 +744,8 @@ importers:
         specifier: ^29.1.1
         version: 29.1.1
       langium-zod:
-        specifier: 0.10.1
-        version: 0.10.1
+        specifier: 0.11.1
+        version: 0.11.1
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -2893,8 +2893,8 @@ packages:
       jiti:
         optional: true
 
-  '@zod-to-form/react@0.10.2':
-    resolution: {integrity: sha512-w23SwOk2Hd7qa0wEkB3L3KiafMvn8Y2AggeotdwYSds/NrYgopZSDZMcuK7lC+vWX6Ad91fgERkVGqKZ082ypg==}
+  '@zod-to-form/react@0.11.0':
+    resolution: {integrity: sha512-PAU907j0uwihIQDhSWOJIxZFotq2xqCl2/ZqEiCujhZA6TqSMar9p9BoQ+3h46J3Jxhf82LeUnBrqAr2CTNe4g==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       react: 19.2.7
@@ -4250,12 +4250,16 @@ packages:
   langium-railroad@4.3.0:
     resolution: {integrity: sha512-dbuv149MQe8XcgM48FagH22JBaqN0MvN9RRJKBdRQWDeHUYAASliiOtLdMfgOl3kV+nLx7idSc+LLdcBSduvHw==}
 
-  langium-zod@0.10.1:
-    resolution: {integrity: sha512-0VdDa6Yd6ZQ2s80d46/HEkHcPDi8Yrmx5gk7QBzoa/V2kk6ZELheuQUjOJYFXU8Zo2D1p5uKJZaHwgaLCfy/pg==}
+  langium-zod@0.11.1:
+    resolution: {integrity: sha512-MJP3xjR4NbjIQXpm6quFrgjKc0/NCaJDVvHC2/PwiB8NKT0MbCPaNYeaQsoJWl4kETGEJrX0pLWFVcaAQH9ONg==}
     hasBin: true
 
   langium@4.3.0:
     resolution: {integrity: sha512-ehV704taQKTYTuNdKRNjv1sD8huezTW8uTlDuQN6FFK5Cu7qR29vbA1JAibXxLznQXZCAliGO342jH58OzywZA==}
+    engines: {node: '>=20.10.0', npm: '>=10.2.3'}
+
+  langium@4.3.1:
+    resolution: {integrity: sha512-4lmkLHytLXD5pvyL0PKUj1LCNpgzv9s8luH+GbWXHG45QLmO6PlFXrCUghDN5BfcFTlaQyXpXiaSl8A28Xep8w==}
     engines: {node: '>=20.10.0', npm: '>=10.2.3'}
 
   lazystream@1.0.1:
@@ -7924,7 +7928,7 @@ snapshots:
     optionalDependencies:
       jiti: 2.7.0
 
-  '@zod-to-form/react@0.10.2(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
+  '@zod-to-form/react@0.11.0(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(zod@4.4.3)':
     dependencies:
       '@hookform/resolvers': 5.4.0(react-hook-form@7.80.0(react@19.2.7))
       '@zod-to-form/core': 0.11.1(jiti@2.7.0)(zod@4.4.3)
@@ -9267,17 +9271,28 @@ snapshots:
 
   langium-railroad@4.3.0:
     dependencies:
-      langium: 4.3.0
+      langium: 4.3.1
       railroad-diagrams: 1.0.0
 
-  langium-zod@0.10.1:
+  langium-zod@0.11.1:
     dependencies:
       humanize-string: 3.1.0
-      langium: 4.3.0
+      langium: 4.3.1
       x-to-zod: 0.8.0
       zod: 4.4.3
 
   langium@4.3.0:
+    dependencies:
+      '@chevrotain/regexp-to-ast': 12.0.0
+      chevrotain: 12.0.0
+      chevrotain-allstar: 0.4.3(chevrotain@12.0.0)
+      vscode-languageserver: 10.0.1
+      vscode-languageserver-protocol: 3.18.1
+      vscode-languageserver-textdocument: 1.0.13
+      vscode-languageserver-types: 3.18.0
+      vscode-uri: 3.1.0
+
+  langium@4.3.1:
     dependencies:
       '@chevrotain/regexp-to-ast': 12.0.0
       chevrotain: 12.0.0
