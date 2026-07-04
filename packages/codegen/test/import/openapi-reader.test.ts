@@ -85,6 +85,36 @@ describe('openapi-reader — OAS 3.0 basics', () => {
     expect(text).toContain('synonym source OpenApi');
     await assertParses(text);
   });
+
+  it('REGRESSION: nullable:true on a REQUIRED property emits an info diagnostic (the floor to (0..1) erases a real distinction)', () => {
+    const doc = {
+      openapi: '3.0.3',
+      info: { title: 'Nullable Required Demo', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Party: {
+            type: 'object',
+            required: ['partyId', 'partyName'],
+            properties: {
+              partyId: { type: 'string' },
+              partyName: { type: 'string', nullable: true }
+            }
+          }
+        }
+      }
+    };
+    const { diagnostics } = readOpenApi(doc as never);
+    const floored = diagnostics.find((d: any) => d.code === 'nullable-required-floored');
+    expect(floored).toBeDefined();
+    expect((floored as any).severity).toBe('info');
+    expect((floored as any).message).toContain('partyName');
+  });
+
+  it('nullable:true on an OPTIONAL (non-required) property does NOT emit the floored diagnostic (both sides are already (0..1))', () => {
+    const { diagnostics } = readOpenApi(OAS30_PARTY as never);
+    expect(diagnostics.some((d: any) => d.code === 'nullable-required-floored')).toBe(false);
+  });
 });
 
 describe('openapi-reader — allOf extends (scenario 4 analog)', () => {
@@ -175,6 +205,77 @@ describe('openapi-reader — discriminated oneOf with mapping', () => {
     };
     const { diagnostics } = readOpenApi(doc as never);
     expect(diagnostics.some((d: any) => d.code === 'unmapped-discriminator-branch')).toBe(true);
+  });
+
+  it('REGRESSION: a bare-name discriminator.mapping value (a schema NAME, not a full $ref) does NOT trigger a false unmapped-discriminator-branch warning', () => {
+    // discriminator.mapping values are legal in two forms per the OpenAPI
+    // spec: a full $ref-style path OR a bare schema name. A prior version
+    // only recognized the full-$ref form, so `mapping: { KIND_A: 'A' }`
+    // (bare name) was treated as unmapped even though it correctly
+    // identifies the branch (review finding).
+    const doc = {
+      openapi: '3.0.3',
+      info: { title: 'Bare Mapping Demo', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          A: { type: 'object', properties: { a: { type: 'string' } } },
+          B: { type: 'object', properties: { b: { type: 'string' } } },
+          Union: {
+            type: 'object',
+            oneOf: [{ $ref: '#/components/schemas/A' }, { $ref: '#/components/schemas/B' }],
+            discriminator: { propertyName: 'kind', mapping: { KIND_A: 'A', KIND_B: 'B' } }
+          }
+        }
+      }
+    };
+    const { diagnostics } = readOpenApi(doc as never);
+    expect(diagnostics.some((d: any) => d.code === 'unmapped-discriminator-branch')).toBe(false);
+  });
+
+  it('REGRESSION: a PURE oneOf+discriminator schema (no type/properties/allOf of its own) is NOT silently dropped', async () => {
+    // The dominant real-world OpenAPI discriminated-union idiom writes the
+    // union schema as bare { oneOf: [...], discriminator: {...} } with no
+    // "type": "object" of its own (the actual Petstore polymorphism spec
+    // does exactly this) — every OTHER test/fixture in this suite added an
+    // explicit `type: 'object'` to the union schema, which masked a real
+    // bug: readJsonSchema's own classification gate (`def.type === 'object'
+    // || def.properties !== undefined || def.allOf !== undefined`) never
+    // matches a schema that is ONLY `oneOf`+`discriminator`, so the whole
+    // type — attributes, choice condition, everything — silently vanished
+    // (falling to the generic 'unrecognized-def' diagnostic, output still
+    // parsed, but the union was gone). Fixed in normalizeSchema: a
+    // discriminated oneOf schema now gets `type: 'object'` stamped onto it
+    // before delegation when it doesn't already declare one.
+    const doc = {
+      openapi: '3.0.3',
+      info: { title: 'Bare Discriminator Demo', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Dog: { type: 'object', required: ['bark'], properties: { bark: { type: 'string' } } },
+          Cat: { type: 'object', required: ['meow'], properties: { meow: { type: 'string' } } },
+          Pet: {
+            oneOf: [{ $ref: '#/components/schemas/Dog' }, { $ref: '#/components/schemas/Cat' }],
+            discriminator: {
+              propertyName: 'petType',
+              mapping: { dog: '#/components/schemas/Dog', cat: '#/components/schemas/Cat' }
+            }
+          }
+        }
+      }
+    };
+    const { model, diagnostics } = readOpenApi(doc as never);
+    expect(diagnostics.some((d: any) => d.code === 'unrecognized-def')).toBe(false);
+    const pet = model.types.find((t) => t.name === 'Pet');
+    expect(pet).toBeDefined();
+    expect(pet!.attributes.map((a) => a.name).sort()).toEqual(['bark', 'meow']);
+
+    const { text } = importToRune(doc);
+    expect(text).toContain('type Pet:');
+    expect(text).toContain('condition OneOf:');
+    expect(text).toContain('required choice bark, meow');
+    await assertParses(text);
   });
 });
 

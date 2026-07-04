@@ -63,8 +63,14 @@ components:
           type: number
           minimum: 0
 
+    # Deliberately BARE (no `type: object` of its own) — the dominant
+    # real-world OpenAPI discriminated-union idiom (the actual Petstore
+    # polymorphism example in the OpenAPI spec writes it exactly this way).
+    # A prior bug silently dropped the whole type when a discriminated
+    # oneOf schema had no type/properties/allOf; regression-tested in
+    # openapi-reader.test.ts and exercised here through the real fixture
+    # pipeline too, per review feedback.
     PaymentMethod:
-      type: object
       oneOf:
         - $ref: '#/components/schemas/DogPayment'
         - $ref: '#/components/schemas/CatPayment'

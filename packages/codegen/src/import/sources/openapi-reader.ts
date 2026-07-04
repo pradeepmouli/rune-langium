@@ -144,11 +144,30 @@ function normalizeSchema(
   let result: LooseSchema = schema;
 
   if (!is31 && result['properties'] !== undefined) {
-    result = normalizeNullableProperties(result);
+    result = normalizeNullableProperties(result, ownName, diagnostics);
   }
 
   if (Array.isArray(result['oneOf']) && result['discriminator'] !== undefined) {
     result = inlineDiscriminatedOneOfBranches(result, ownName, allSchemas, diagnostics);
+    // IMPORTANT FIX (review finding): the dominant real-world OpenAPI
+    // discriminated-union idiom writes the union schema as BARE `{ oneOf:
+    // [...], discriminator: {...} }` — no `type: 'object'` of its own (the
+    // actual Petstore polymorphism example in the OpenAPI spec does exactly
+    // this). `readJsonSchema`'s own type-vs-enum classification gate
+    // (`readJsonSchema`'s top-level loop: `def.type === 'object' ||
+    // def.properties !== undefined || def.allOf !== undefined`) never
+    // matches such a schema, so the ENTIRE union type — attributes, choice
+    // condition, everything — was silently dropped (fell through to the
+    // generic 'unrecognized-def' diagnostic; every committed fixture/test
+    // masked this by always adding an explicit `type: 'object'`). Stamping
+    // `type: 'object'` here (only when the schema doesn't already declare
+    // one of the three gate-satisfying shapes) is the normalization-layer
+    // fix: it makes the ALREADY-CORRECT downstream machinery (readTypeDef's
+    // discriminated-oneOf branch, which this reader's inlining feeds)
+    // actually run, without touching the shared, untouched json-schema-reader.ts.
+    if (result['type'] === undefined && result['properties'] === undefined && result['allOf'] === undefined) {
+      result = { ...result, type: 'object' };
+    }
   }
 
   // allOf composition needs no OAS-specific normalization for the
@@ -225,8 +244,20 @@ function rewriteComponentRefs(node: unknown): unknown {
  * Operates on the PARENT object schema (not a single nested property in
  * isolation) because both `required` and `properties` must be visible
  * together to compute the corrected `required` array.
+ *
+ * When the floored property WAS in `required`, an info-level
+ * `nullable-required-floored` diagnostic is pushed (review Minor 2): this
+ * is the one case where the floor actually ERASES a real distinction the
+ * source schema drew (present-and-maybe-null vs. present-and-non-null) —
+ * a nullable property that was already optional loses nothing observable
+ * (both floor to the identical `(0..1)`), so no diagnostic fires for that
+ * case.
  */
-function normalizeNullableProperties(schema: LooseSchema): LooseSchema {
+function normalizeNullableProperties(
+  schema: LooseSchema,
+  ownName: string,
+  diagnostics: ImportDiagnostic[]
+): LooseSchema {
   const properties = schema['properties'] as Record<string, unknown> | undefined;
   if (properties === undefined) return schema;
 
@@ -237,7 +268,14 @@ function normalizeNullableProperties(schema: LooseSchema): LooseSchema {
   for (const [propName, propSchema] of Object.entries(properties)) {
     if (typeof propSchema === 'object' && propSchema !== null && (propSchema as LooseSchema)['nullable'] === true) {
       changed = true;
-      required.delete(propName);
+      const wasRequired = required.delete(propName);
+      if (wasRequired) {
+        pushDiagnostic(diagnostics, {
+          severity: 'info',
+          code: 'nullable-required-floored',
+          message: `components/schemas/${ownName}.${propName}: 'nullable: true' on a required property floors the imported cardinality to (0..1) — the source schema's "present, possibly null" distinction from Rune's (1..1) "present, never absent" is not representable and is lost on import`
+        });
+      }
       const { nullable: _nullable, ...rest } = propSchema as LooseSchema;
       newProperties[propName] = rest;
     } else {
@@ -305,7 +343,20 @@ function inlineDiscriminatedOneOfBranches(
       });
       return {};
     }
-    if (mapping !== undefined && !mappedRefs.has(ref) && !mappedRefs.has(`#/components/schemas/${refKey}`)) {
+    // `discriminator.mapping` values are legal in TWO forms per the OpenAPI
+    // spec: a full `$ref`-style path (`#/components/schemas/Dog`) OR a bare
+    // schema NAME (`Dog`) — "an internal or external schema, or a name of
+    // an internal schema". A prior version only checked the full-`$ref`
+    // form (plus the reconstructed `#/components/schemas/<refKey>` form),
+    // so a bare-name mapping value produced a FALSE `unmapped-discriminator-
+    // branch` diagnostic even though the mapping correctly identifies the
+    // branch (review finding) — `mappedRefs.has(refKey)` closes the gap.
+    if (
+      mapping !== undefined &&
+      !mappedRefs.has(ref) &&
+      !mappedRefs.has(`#/components/schemas/${refKey}`) &&
+      !mappedRefs.has(refKey)
+    ) {
       pushDiagnostic(diagnostics, {
         severity: 'warning',
         code: 'unmapped-discriminator-branch',

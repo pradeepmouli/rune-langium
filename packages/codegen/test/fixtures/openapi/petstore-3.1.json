@@ -54,8 +54,8 @@
         "discriminator": {
           "propertyName": "species",
           "mapping": {
-            "dog": "#/components/schemas/DogPayment",
-            "cat": "#/components/schemas/CatPayment"
+            "dog": "DogPayment",
+            "cat": "CatPayment"
           }
         }
       }
