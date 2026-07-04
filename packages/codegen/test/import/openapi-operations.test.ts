@@ -180,4 +180,38 @@ describe('OpenAPI paths → RosettaFunction', () => {
     expect(model.funcs).toHaveLength(1);
     expect(diagnostics.some((d) => d.code === 'func-no-2xx-response')).toBe(true);
   });
+
+  it('REGRESSION: a non-ValidID-safe operationId (hyphens/dots) is sanitized to a valid Rune func name, not stored raw — the imported .rune parses with zero errors end to end', async () => {
+    const doc = {
+      openapi: '3.1.0',
+      info: { title: 'Hyphenated', version: '1.0.0' },
+      paths: {
+        '/functions/get-trade.by-id': {
+          post: {
+            operationId: 'get-trade.by-id',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } }
+                }
+              }
+            },
+            responses: {
+              '200': { description: 'ok', content: { 'application/json': { schema: { type: 'string' } } } }
+            }
+          }
+        }
+      },
+      components: { schemas: {} }
+    };
+    const { model } = readOpenApi(doc as never);
+    expect(model.funcs).toHaveLength(1);
+    // The name must be ValidID-safe (matches the grammar's identifier
+    // shape) — the raw operationId `get-trade.by-id` is NOT.
+    expect(model.funcs[0]!.name).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
+
+    const { text } = importToRune(doc);
+    await assertParses(text);
+    expect(text).not.toContain('func get-trade');
+  });
 });

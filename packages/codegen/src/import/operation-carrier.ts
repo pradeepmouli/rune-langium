@@ -24,7 +24,7 @@
  *     op string (0..1)
  *
  * func GetTrade:
- *     [openApi op "GET /trades/{id}"]
+ *     [openApi op "value"="GET /trades/{id}"]
  *     ...
  * ```
  *
@@ -127,7 +127,7 @@ export function renderOperationAnnotationDecl(decl: AnnotationDeclNode, renderAt
 
 /**
  * Builds one `AnnotationRef`-shaped node attaching the operation string to
- * a func: `[openApi op "METHOD /path"]`. Renders via the EXISTING
+ * a func: `[openApi op "value"="METHOD /path"]`. Renders via the EXISTING
  * `renderNode` `AnnotationRef` case (`rosetta-render-core.ts`'s
  * `renderAnnotationRef`) — no hand-assembly needed here, unlike the
  * declaration above.
@@ -150,9 +150,9 @@ export function buildOperationAnnotationRef(operation: string): Dehydrated<Annot
 
 /**
  * Reads the operation string back off a func node (the inbound half of the
- * carrier, T4). Returns `undefined` when no `[openApi op "..."]` annotation
- * ref is present — a func with no carrier is not an error (T4 treats it as
- * "no correspondence recorded", not a translation failure).
+ * carrier, T4). Returns `undefined` when no `[openApi op "value"="..."]`
+ * annotation ref is present — a func with no carrier is not an error (T4
+ * treats it as "no correspondence recorded", not a translation failure).
  */
 export function readOperationCarrier(func: { annotations?: readonly unknown[] }): string | undefined {
   for (const raw of func.annotations ?? []) {

@@ -223,6 +223,24 @@ function readOutputFromResponses(
 const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const;
 
 /**
+ * Sanitizes an `operationId` into a Rune-safe (`ValidID`-shaped) func name —
+ * REGRESSION FIX (review finding): `SourceFunc.name`'s own doc comment
+ * ("Rune-safe func name (from `operationId`, sanitized)") already promised
+ * this, but the code stored the raw `operationId` unsanitized. This is the
+ * same class of bug PR #373 fixed for hyphenated `$defs` keys — matches
+ * `json-schema-reader.ts`'s own (private) `sanitizeEnumValue` convention
+ * exactly (strip everything outside `[A-Za-z0-9_]`, collapse to `_`, trim
+ * leading/trailing `_`, prefix a leading digit or empty result), reproduced
+ * locally rather than importing that private helper.
+ */
+function sanitizeFuncName(operationId: string): string {
+  let cleaned = operationId.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (cleaned.length === 0) cleaned = 'Operation';
+  if (/^[0-9]/.test(cleaned)) cleaned = `_${cleaned}`;
+  return cleaned;
+}
+
+/**
  * Reads every `paths.*.{method}` operation into a `SourceFunc` (spec.md
  * Phase 2b Implementation Addendum decision 4's inbound half):
  * `operationId` → sanitized func name; `requestBody` → inputs;
@@ -238,6 +256,12 @@ const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch'
  */
 function readOperations(paths: Record<string, Record<string, unknown>>, diagnostics: ImportDiagnostic[]): SourceFunc[] {
   const funcs: SourceFunc[] = [];
+  // OpenAPI guarantees `operationId` uniqueness on the RAW string; two
+  // distinct ids that sanitize to the same Rune name (e.g. `get-trade` and
+  // `get.trade`, both -> `get_trade`) are deduped with a numeric suffix —
+  // the same collision-handling convention `json-schema-reader.ts`'s own
+  // `dedupeIdentifier` applies to sanitized `$defs` keys.
+  const usedNames = new Set<string>();
   for (const [path, methods] of Object.entries(paths)) {
     if (!methods || typeof methods !== 'object') continue;
     for (const method of HTTP_METHODS) {
@@ -263,8 +287,16 @@ function readOperations(paths: Record<string, Record<string, unknown>>, diagnost
         (typeof op['description'] === 'string' && op['description']) ||
         undefined;
 
+      let name = sanitizeFuncName(operationId);
+      if (usedNames.has(name)) {
+        let suffix = 2;
+        while (usedNames.has(`${name}_${suffix}`)) suffix += 1;
+        name = `${name}_${suffix}`;
+      }
+      usedNames.add(name);
+
       funcs.push({
-        name: operationId,
+        name,
         inputs: readInputsFromRequestBody(op['requestBody'] as LooseSchema | undefined, operationLabel, diagnostics),
         output: readOutputFromResponses(
           op['responses'] as Record<string, LooseSchema> | undefined,

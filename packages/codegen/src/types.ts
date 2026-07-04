@@ -388,8 +388,11 @@ export const TARGET_DESCRIPTORS: Record<Target, TargetDescriptor> = {
     contract: 'namespace',
     desc: 'OAS 3.1 document (schemas + func operations)',
     // Default extension; the emitter overrides per-output relativePath
-    // when `options.openapi.format === 'yaml'` (or the caller requests a
-    // `.yaml`/`.yml` output path directly) — see openapi-emitter.ts.
+    // to `.openapi.yaml` ONLY when `options.openapi.format === 'yaml'` —
+    // CORRECTED (review finding): there is no output-path override in the
+    // generator API to derive a format from an explicit `.yaml`/`.yml`
+    // request; `options.openapi.format` is the sole selector. See
+    // openapi-emitter.ts's `resolveFormat`.
     extension: '.openapi.json'
   }
 };

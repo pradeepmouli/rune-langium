@@ -38,10 +38,14 @@
  *     `[openApi op "value"="..."]` — the emitter and the reader (T4) must
  *     independently derive/consume the identical string for the round
  *     trip to close.
- *  3. YAML output: `options.openapi.format === 'yaml'` (or an explicit
- *     `.yaml`/`.yml` extension request) emits YAML via the `yaml` package
- *     (already a runtime dep of this package, from Phase 2's inbound
- *     OpenAPI reader) instead of JSON.
+ *  3. YAML output: `options.openapi.format === 'yaml'` emits YAML via the
+ *     `yaml` package (already a runtime dep of this package, from Phase
+ *     2's inbound OpenAPI reader) instead of JSON — CORRECTED (review
+ *     finding): this is the ONLY selector; the generator API has no
+ *     output-path override to derive a format from an explicit
+ *     `.yaml`/`.yml` extension request (a prior version of this doc
+ *     claimed otherwise; extension-driven selection would be a real
+ *     feature, recorded as a follow-up, not built here).
  *  4. CRUD generation (decision 5): an OPT-IN emitter option
  *     (`options.openapi.crud`) generating the standard
  *     `GET /xs`, `POST /xs`, `GET /xs/{id}`, `PUT /xs/{id}`,

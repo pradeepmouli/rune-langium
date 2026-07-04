@@ -8,11 +8,15 @@
  * generated from it via `@zod-to-form`, same as Excel's, though wiring that
  * up is a studio-side follow-up, not part of this effort).
  *
- * `format` selects JSON vs YAML output (decision 3: "YAML output required
- * ... emit YAML or JSON per the output file extension or an explicit format
- * option"). `crud` is the opt-in CRUD-generation option (decision 5): a
- * bare `true` generates the standard operation set for every `Data` type in
- * the namespace; `{ types: [...] }` scopes it to a named subset. NOT
+ * `format` selects JSON vs YAML output. CORRECTED (review finding): decision
+ * 3 mentions "per the output file extension or an explicit format option",
+ * but the generator API (`GeneratorOptions`) has no output-path override to
+ * derive a format from — `options.openapi.format` is the ONLY selector
+ * implemented (default `'json'` when absent); extension-driven selection
+ * would be a real feature, recorded as a follow-up, not built here.
+ * `crud` is the opt-in CRUD-generation option (decision 5): a bare `true`
+ * generates the standard operation set for every `Data` type in the
+ * namespace; `{ types: [...] }` scopes it to a named subset. NOT
  * default — a bare `{ target: 'openapi' }` request generates zero CRUD
  * paths (only the funcs → RPC-operations translation, decision 4, which is
  * not opt-in).
@@ -21,7 +25,7 @@
 import { z } from 'zod';
 
 export const OpenApiOptionsSchema = z.object({
-  format: z.enum(['json', 'yaml']).optional().describe('Output format (default: derived from the file extension)'),
+  format: z.enum(['json', 'yaml']).optional().describe("Output format (default: 'json')"),
   crud: z
     .union([z.boolean(), z.object({ types: z.array(z.string()).describe('Type names to generate CRUD paths for') })])
     .optional()

@@ -161,6 +161,32 @@ type Trade:
     const trade = schemas['Trade'] as { 'x-rune-conditions'?: unknown[] };
     expect(trade['x-rune-conditions']).toEqual([{ name: 'Weird', kind: 'condition' }]);
   });
+
+  it('REGRESSION (review verify-first): a RECOGNIZED oneOf/choice condition is NOT silently lost — it still survives in x-rune-conditions exactly like an unrecognized condition (no additional schema-level rendering exists yet; recording that as a follow-up, not a data-loss bug)', async () => {
+    const out = await gen(`namespace test.constraints4
+
+type Trade:
+  currency string (0..1)
+  capacityUnit string (0..1)
+
+  condition OneOf:
+    required choice currency, capacityUnit
+`);
+    const doc = JSON.parse(out[0]!.content) as Record<string, unknown>;
+    const schemas = (doc['components'] as { schemas: Record<string, unknown> }).schemas;
+    const trade = schemas['Trade'] as {
+      'x-rune-conditions'?: unknown[];
+      properties: Record<string, unknown>;
+    };
+    // Retained, not lost — the JSON Schema base document (composed
+    // unmodified from json-schema-emitter.ts) collects EVERY condition
+    // into x-rune-conditions unconditionally, before this recognizer runs.
+    expect(trade['x-rune-conditions']).toEqual([{ name: 'OneOf', kind: 'condition' }]);
+    // No stray keyword leaked onto either sibling property from the
+    // (currently inert) oneOf/choice recognition path.
+    expect(trade.properties['currency']).toEqual({ type: 'string' });
+    expect(trade.properties['capacityUnit']).toEqual({ type: 'string' });
+  });
 });
 
 describe('OpenApiNamespaceEmitter — funcs → RPC-style operations', () => {

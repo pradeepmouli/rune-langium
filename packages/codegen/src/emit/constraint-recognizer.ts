@@ -256,11 +256,27 @@ export function recognizeCondition(expression: unknown): ConstraintIR | undefine
  * `exclusiveMinimum`/`exclusiveMaximum` for `range`; `minLength`/`maxLength`
  * for `length`). Type-level constructs (`oneOf`/`choice` — a multi-attribute
  * presence condition, not a single property's own keyword set) and every
- * other kind return `undefined`; the emitter (T3) handles `oneOf`/`choice`
- * separately as a schema-level `required`-group rendering, matching how
- * `json-schema-emitter.ts` already treats "required" as attribute-level
- * (this recognizer's job stops at "is this representable as keywords on
- * ONE property's own schema object").
+ * other kind return `undefined`.
+ *
+ * CORRECTED (review finding): `oneOf`/`choice` is recognized by
+ * `recognizeCondition` (via `readChoice`) but the emitter (T3,
+ * `openapi-emitter.ts`) does NOT currently render it as any additional
+ * schema-level construct (no `oneOf`-of-single-required-key branches, no
+ * `required`-group) — a prior version of this doc claimed otherwise. This
+ * is NOT data loss: `json-schema-emitter.ts`'s own `emitTypeDef`/
+ * `emitChoiceDef` collect EVERY condition (recognized or not) into the
+ * opaque `x-rune-conditions` metadata unconditionally, before this
+ * recognizer ever runs — verified directly (a `required choice a, b`
+ * condition survives in `x-rune-conditions: [{name, kind: 'condition'}]`
+ * in the emitted OpenAPI document exactly as it would for an unrecognized
+ * condition). Recognizing `oneOf`/`choice` here is therefore currently
+ * inert from the emitter's perspective (harmless, but also not yet
+ * useful) — a real schema-level rendering (e.g. `oneOf` of
+ * single-required-key branches, matching json-schema-emitter's own
+ * Choice-declaration encoding, WHICH THE INBOUND READER CAN ALSO
+ * RECONSTRUCT — see `readOneOfConstraint`/`mergeOneOfBranchAttributes` in
+ * json-schema-reader.ts, the exact shape this would need to round-trip)
+ * is a real, recorded follow-up, not implemented in this effort.
  */
 export function constraintIRToJsonSchemaKeywords(ir: ConstraintIR): Record<string, number> | undefined {
   switch (ir.kind) {
