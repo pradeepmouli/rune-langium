@@ -1,0 +1,568 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * json-schema-reader — JSON Schema (Draft 7 / 2020-12) → `SourceModel`
+ * (spec.md User Story 1, Phase 1's only active importer).
+ *
+ * Scope (per spec.md's Phase 1 item 5 + acceptance scenarios 1-6):
+ *  - `object` + `properties` + `required` → `SourceType` + cardinality
+ *  - `array` + `minItems`/`maxItems` → cardinality
+ *  - `enum` / `oneOf` of `const` → `SourceEnum`, with `x-rune-enum-display`
+ *    (our own outbound emitter's extension) preferred over guessing a
+ *    display name from a non-identifier-safe enum literal
+ *  - `allOf` composing a base `$ref` + extra `properties` → `extends`
+ *  - `minimum`/`maximum`/`exclusiveMinimum`/`exclusiveMaximum` → `range`
+ *  - `minLength`/`maxLength` → `length`
+ *  - `pattern` → `pattern` (always stub, per the amended scenario 5)
+ *  - `oneOf` + `discriminator` → `oneOf` (sibling-property presence, NOT
+ *    the enum/const form above — disambiguated by shape, see `isEnumOneOf`)
+ *  - internal `$defs`/`definitions` `$ref` resolution only (hand-rolled,
+ *    per spec.md's Source Parser Dependencies table); an external ref
+ *    (anything without a `#/$defs/...` or `#/definitions/...` shape)
+ *    produces an `external-ref` diagnostic and falls back to `string`
+ *    (a property type) or omits `extends` (an `allOf` base) — never
+ *    guessed at, but not "skipped" either (the property/type itself is
+ *    still emitted, just without the unresolvable reference).
+ *  - `$id` → namespace derivation (reverse-DNS-ish host+path), falling back
+ *    to the caller-supplied `--namespace` option; an error when neither
+ *    yields a valid Rune namespace segment sequence (spec.md open question 2).
+ *
+ * This module has ZERO Rune-AST awareness — its only job is
+ * `JSON Schema document → SourceModel`. `ast-builder.ts` /
+ * `constraint-translator.ts` do the Rune-specific work.
+ */
+
+import type { ConstraintIR, SourceEnum, SourceModel, SourceType, SourceAttribute } from '../source-model.js';
+import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
+
+// --- JSON Schema shape (loosely typed — we only read the keywords we translate) ---
+
+interface JsonSchemaNode {
+  $id?: string;
+  $ref?: string;
+  type?: string | string[];
+  properties?: Record<string, JsonSchemaNode>;
+  required?: string[];
+  items?: JsonSchemaNode;
+  minItems?: number;
+  maxItems?: number;
+  enum?: unknown[];
+  const?: unknown;
+  allOf?: JsonSchemaNode[];
+  oneOf?: JsonSchemaNode[];
+  discriminator?: { propertyName?: string };
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number | boolean;
+  exclusiveMaximum?: number | boolean;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  description?: string;
+  title?: string;
+  'x-rune-enum-display'?: Record<string, string>;
+  $defs?: Record<string, JsonSchemaNode>;
+  definitions?: Record<string, JsonSchemaNode>;
+}
+
+const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {
+  string: 'string',
+  integer: 'int',
+  number: 'number',
+  boolean: 'boolean'
+};
+
+export interface JsonSchemaImportOptions {
+  /** Overrides namespace derivation from `$id` (spec.md CLI `--namespace`). */
+  namespace?: string;
+  /** Structural import only — never populate `constraints` arrays (spec.md CLI `--no-conditions`). Default: translate constraints. */
+  skipConditions?: boolean;
+}
+
+/**
+ * Reads a top-level JSON Schema document (with `$defs`/`definitions`) into a
+ * `SourceModel`. Every `$defs`/`definitions` entry becomes either a
+ * `SourceType` (object) or a `SourceEnum` (enum/const-union), in declaration
+ * order.
+ */
+export function readJsonSchema(
+  schema: JsonSchemaNode,
+  options: JsonSchemaImportOptions = {}
+): { model: SourceModel; diagnostics: ImportDiagnostic[] } {
+  const diagnostics: ImportDiagnostic[] = [];
+  const namespace = deriveNamespace(schema, options, diagnostics);
+  const defs = { ...schema.$defs, ...schema.definitions };
+
+  const types: SourceType[] = [];
+  const enums: SourceEnum[] = [];
+
+  for (const [key, def] of Object.entries(defs)) {
+    if (isEnumDef(def)) {
+      enums.push(readEnumDef(key, def));
+      continue;
+    }
+    if (def.type === 'object' || def.properties !== undefined || def.allOf !== undefined) {
+      types.push(readTypeDef(key, def, defs, diagnostics, options.skipConditions ?? false));
+      continue;
+    }
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'unrecognized-def',
+      message: `$defs/${key} is neither an object nor an enum/const definition — skipped`
+    });
+  }
+
+  return {
+    model: { namespace, sourceName: 'JsonSchema', types, enums },
+    diagnostics
+  };
+}
+
+// --- namespace derivation (spec.md open question 2) ------------------------
+
+/**
+ * Derives a Rune-safe dotted namespace. `options.namespace` (spec.md's CLI
+ * `--namespace`) is an explicit OVERRIDE and always wins when supplied;
+ * otherwise falls back to `$id` (reverse-DNS-ish:
+ * `https://example.com/schemas/trade.json` → `com.example.schemas.trade`).
+ * Throws when neither yields at least one valid segment — spec.md: "error
+ * if neither yields a valid namespace".
+ */
+function deriveNamespace(
+  schema: JsonSchemaNode,
+  options: JsonSchemaImportOptions,
+  diagnostics: ImportDiagnostic[]
+): string {
+  const fromId = schema.$id ? namespaceFromId(schema.$id) : undefined;
+  const namespace = options.namespace ?? fromId;
+  if (!namespace || !isValidNamespace(namespace)) {
+    // The error message must distinguish "an override WAS supplied but was
+    // itself invalid" from "no override was supplied at all" — a prior
+    // version always blamed the latter even when an invalid --namespace had
+    // been given, which is misleading (reviewer finding).
+    if (options.namespace !== undefined) {
+      throw new Error(
+        `Unable to derive a Rune namespace: the supplied --namespace override ('${options.namespace}') is not a ` +
+          `valid Rune namespace (expected dot-separated identifiers, e.g. 'com.example.trade').`
+      );
+    }
+    if (fromId === undefined) {
+      pushDiagnostic(diagnostics, {
+        severity: 'info',
+        code: 'namespace-fallback',
+        message: `$id '${schema.$id ?? '<absent>'}' did not yield a usable namespace and no --namespace override was supplied`
+      });
+    }
+    throw new Error(
+      `Unable to derive a Rune namespace: '$id' ('${schema.$id ?? '<absent>'}') did not yield a valid ` +
+        `namespace and no --namespace override was supplied.`
+    );
+  }
+  return namespace;
+}
+
+function namespaceFromId(id: string): string | undefined {
+  try {
+    const url = new URL(id);
+    const hostSegments = url.hostname.split('.').filter(Boolean).reverse();
+    const pathSegments = url.pathname
+      .replace(/\.(json|schema\.json)$/i, '')
+      .split('/')
+      .filter(Boolean);
+    const segments = [...hostSegments, ...pathSegments].map(sanitizeSegment).filter(Boolean);
+    return segments.length > 0 ? segments.join('.') : undefined;
+  } catch {
+    // Not a URL — treat the whole $id as a single dotted path candidate.
+    const segments = id.split(/[./]/).map(sanitizeSegment).filter(Boolean);
+    return segments.length > 0 ? segments.join('.') : undefined;
+  }
+}
+
+function sanitizeSegment(s: string): string {
+  const cleaned = s.replace(/[^A-Za-z0-9_]/g, '');
+  return /^[A-Za-z_]/.test(cleaned) ? cleaned : '';
+}
+
+const NAMESPACE_RE = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+function isValidNamespace(ns: string): boolean {
+  return NAMESPACE_RE.test(ns);
+}
+
+// --- enum / const-union detection ------------------------------------------
+
+/** A def is an enum def when it has a bare `enum` array, OR is a `oneOf` of single-`const` branches (no `discriminator` — that shape is the sibling-presence oneOf, handled by `readOneOfConstraint`). */
+function isEnumDef(def: JsonSchemaNode): boolean {
+  if (Array.isArray(def.enum)) return true;
+  if (Array.isArray(def.oneOf) && def.oneOf.length > 0 && !def.discriminator) {
+    return def.oneOf.every((branch) => branch.const !== undefined);
+  }
+  return false;
+}
+
+function readEnumDef(key: string, def: JsonSchemaNode): SourceEnum {
+  const displayMap = def['x-rune-enum-display'];
+  const rawValues: unknown[] = Array.isArray(def.enum) ? def.enum : (def.oneOf ?? []).map((b) => b.const);
+
+  const used = new Set<string>();
+  const values = rawValues.map((raw) => {
+    const original = String(raw);
+    const displayName = displayMap?.[original];
+    const name = dedupeIdentifier(sanitizeEnumValue(original), used);
+    return {
+      name,
+      // sourceKey is ALWAYS the original literal — the enum-value synonym
+      // must record the round-trippable source value, not a display label
+      // (a prior version conflated the two by emitting `displayName` as the
+      // synonym value, which silently recorded the WRONG string whenever
+      // x-rune-enum-display was present, since that map's values are
+      // human-readable labels, not source literals — reviewer finding).
+      sourceKey: original,
+      // Prefer the outbound emitter's own x-rune-enum-display map; otherwise
+      // fall back to the original literal when sanitization changed it
+      // (scenario 3: "ACT/360" → ACT_360 retains the original as displayName).
+      ...((displayName ?? (name !== original ? original : undefined)) !== undefined && {
+        displayName: displayName ?? original
+      })
+    };
+  });
+
+  // The $defs/definitions KEY is used verbatim as `name` only when it is
+  // ALREADY ValidID-safe — `toTypeName` sanitizes it deterministically
+  // otherwise (same conversion `readTypeDef`/`readAllOfType` already apply
+  // to a Data type's name). A legal JSON Schema key like `"day-count"` is
+  // NOT a legal Rune identifier (hyphens aren't in ValidID) — using it
+  // verbatim previously emitted `enum day-count:`, an unparseable
+  // hard-invariant breach (reviewer finding). The original key survives via
+  // `sourceKey` (the enum-level synonym), so nothing is lost by sanitizing.
+  return { name: toTypeName(key), sourceKey: key, values };
+}
+
+/** Sanitizes a non-ValidID-safe enum literal into a Rune-safe identifier (scenario 3: `"ACT/360"` → `ACT_360`). */
+function sanitizeEnumValue(raw: string): string {
+  let cleaned = raw.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (cleaned.length === 0) cleaned = 'VALUE';
+  if (/^[0-9]/.test(cleaned)) cleaned = `_${cleaned}`;
+  return cleaned;
+}
+
+function dedupeIdentifier(base: string, used: Set<string>): string {
+  let candidate = base;
+  let suffix = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+// --- $ref resolution (internal $defs/definitions only) ---------------------
+
+/** Resolves `#/$defs/<Name>` or `#/definitions/<Name>` to the def's key; anything else is an external ref (diagnostic, caller skips). */
+function resolveInternalRef(ref: string): string | undefined {
+  const match = /^#\/(?:\$defs|definitions)\/([^/]+)$/.exec(ref);
+  return match?.[1];
+}
+
+// --- object (type) definitions ----------------------------------------------
+
+function readTypeDef(
+  key: string,
+  def: JsonSchemaNode,
+  defs: Record<string, JsonSchemaNode>,
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
+): SourceType {
+  // allOf composing [{$ref: base}, {own properties}] → extends (spec.md scenario 4).
+  if (def.allOf && def.allOf.length > 0) {
+    return readAllOfType(key, def, defs, diagnostics, skipConditions);
+  }
+
+  const required = new Set(def.required ?? []);
+  const attributes: SourceAttribute[] = [];
+  for (const [propName, propDef] of Object.entries(def.properties ?? {})) {
+    attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
+  }
+
+  const constraints: ConstraintIR[] = [];
+  const isDiscriminatedOneOf = def.oneOf && def.oneOf.length > 0 && def.discriminator;
+  if (isDiscriminatedOneOf) {
+    // Scenario 6: a discriminated oneOf's member properties live on the
+    // BRANCHES, not on `def.properties` (often absent entirely, as here) —
+    // without this merge the emitted type had ZERO attributes yet a
+    // `required choice ...` condition referencing property names that don't
+    // exist on it (reviewer finding: silent data loss + a dangling
+    // reference, parseable only because unresolved `$refText`s don't fail
+    // parse). Each branch property becomes an OPTIONAL attribute on the
+    // parent type — exactly the shape the `required choice` condition
+    // needs to reference real attributes, and matches "exactly one of these
+    // optional siblings is present" semantics.
+    mergeOneOfBranchAttributes(def, key, attributes, defs, diagnostics, skipConditions);
+    if (!skipConditions) constraints.push(readOneOfConstraint(def));
+  }
+
+  return { name: toTypeName(key), sourceKey: key, attributes, constraints };
+}
+
+/**
+ * Merges every `oneOf` branch's own properties into `attributes` as
+ * `(0..1)` (optional) attributes, skipping any property already present
+ * (from `def.properties` or an earlier branch) and skipping the
+ * discriminator property itself. A property name declared with a
+ * DIFFERENT type across branches is untranslatable as a single merged
+ * attribute — diagnose and skip that property (`--on-untranslatable`
+ * still only implements `stub`, per `import/index.ts`; the diagnostic is
+ * the visible signal here since there is no per-property condition to stub).
+ */
+function mergeOneOfBranchAttributes(
+  def: JsonSchemaNode,
+  key: string,
+  attributes: SourceAttribute[],
+  defs: Record<string, JsonSchemaNode>,
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
+): void {
+  const discriminatorProp = def.discriminator?.propertyName;
+  const existingNames = new Set(attributes.map((a) => a.sourceKey));
+
+  // Group every branch occurrence by property name FIRST (no resolution
+  // yet) so each property's type is resolved exactly once — `readAttribute`
+  // resolves the type again internally, and calling `resolveTypeName`
+  // ourselves too would double any diagnostic it pushes (e.g. an
+  // external-ref warning) for the same property.
+  const occurrencesByProp = new Map<string, JsonSchemaNode[]>();
+  for (const branch of def.oneOf ?? []) {
+    for (const [propName, propDef] of Object.entries(branch.properties ?? {})) {
+      if (propName === discriminatorProp || existingNames.has(propName)) continue;
+      const list = occurrencesByProp.get(propName);
+      if (list) list.push(propDef);
+      else occurrencesByProp.set(propName, [propDef]);
+    }
+  }
+
+  for (const [propName, propDefs] of occurrencesByProp) {
+    const firstPropDef = propDefs[0]!;
+    const firstTypeName = resolveTypeName(firstPropDef, defs, diagnostics, propName);
+    const conflicting = propDefs
+      .slice(1)
+      .some((d) => resolveTypeName(d, defs, diagnostics, propName) !== firstTypeName);
+    if (conflicting) {
+      pushDiagnostic(diagnostics, {
+        severity: 'warning',
+        code: 'untranslatable-construct',
+        message:
+          `$defs/${key}: oneOf branches declare property '${propName}' with conflicting types — ` +
+          `property skipped, cannot merge into one attribute`
+      });
+      continue;
+    }
+    attributes.push(readAttribute(propName, firstPropDef, false, defs, diagnostics, skipConditions));
+  }
+}
+
+function readAllOfType(
+  key: string,
+  def: JsonSchemaNode,
+  defs: Record<string, JsonSchemaNode>,
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
+): SourceType {
+  const branches = def.allOf ?? [];
+  const baseBranch = branches.find((b) => b.$ref !== undefined);
+  const ownBranch = branches.find((b) => b.properties !== undefined) ?? branches.find((b) => b !== baseBranch);
+
+  let extendsName: string | undefined;
+  if (baseBranch?.$ref) {
+    const refKey = resolveInternalRef(baseBranch.$ref);
+    if (refKey) {
+      extendsName = toTypeName(refKey);
+    } else {
+      pushDiagnostic(diagnostics, {
+        severity: 'warning',
+        code: 'external-ref',
+        message: `$defs/${key}: allOf base $ref '${baseBranch.$ref}' is not an internal $defs/definitions reference — extends omitted`
+      });
+    }
+  }
+
+  const required = new Set(ownBranch?.required ?? []);
+  const attributes: SourceAttribute[] = [];
+  for (const [propName, propDef] of Object.entries(ownBranch?.properties ?? {})) {
+    attributes.push(readAttribute(propName, propDef, required.has(propName), defs, diagnostics, skipConditions));
+  }
+
+  // A def can carry `allOf` (composing a base type) AND its own top-level
+  // `oneOf`+`discriminator` (a discriminated union ALSO extending a base
+  // type) — `readTypeDef` dispatches `allOf` defs here before ever checking
+  // `oneOf`, so without this the combination silently dropped the choice
+  // condition entirely (reviewer Minor finding). Same merge as the
+  // non-allOf path in `readTypeDef`.
+  const constraints: ConstraintIR[] = [];
+  if (def.oneOf && def.oneOf.length > 0 && def.discriminator) {
+    mergeOneOfBranchAttributes(def, key, attributes, defs, diagnostics, skipConditions);
+    if (!skipConditions) constraints.push(readOneOfConstraint(def));
+  }
+
+  return {
+    name: toTypeName(key),
+    sourceKey: key,
+    ...(extendsName !== undefined && { extends: extendsName }),
+    attributes,
+    constraints
+  };
+}
+
+function readAttribute(
+  propName: string,
+  propDef: JsonSchemaNode,
+  isRequired: boolean,
+  defs: Record<string, JsonSchemaNode>,
+  diagnostics: ImportDiagnostic[],
+  skipConditions: boolean
+): SourceAttribute {
+  const constraints: ConstraintIR[] = [];
+  const isArray = propDef.type === 'array';
+  const itemDef = isArray ? (propDef.items ?? {}) : propDef;
+
+  const typeName = resolveTypeName(itemDef, defs, diagnostics, propName);
+
+  const cardinality = isArray
+    ? { inf: propDef.minItems ?? 0, ...(propDef.maxItems !== undefined && { sup: propDef.maxItems }) }
+    : { inf: isRequired ? 1 : 0, sup: 1 };
+
+  if (!skipConditions) {
+    const constraintTarget = isArray ? itemDef : propDef;
+    pushRangeConstraint(constraintTarget, propName, constraints);
+    pushLengthConstraint(propDef, propName, constraints, isArray);
+    if (constraintTarget.pattern !== undefined) {
+      // Diagnostic intentionally NOT pushed here — constraint-translator.ts's
+      // `translateConstraintExpression` already pushes one `untranslatable-
+      // construct` warning for every `pattern` IR when it emits the stub;
+      // pushing a second one here double-diagnosed the identical constraint
+      // (reviewer finding).
+      constraints.push({ kind: 'pattern', path: propName, regex: constraintTarget.pattern });
+    }
+  }
+
+  return {
+    name: toAttributeName(propName),
+    typeName,
+    cardinality,
+    ...(propDef.description !== undefined && { description: propDef.description }),
+    sourceKey: propName,
+    constraints
+  };
+}
+
+/**
+ * Emits ONE `range` IR PER BOUND (never one IR carrying both), so each
+ * bound's exclusivity is independent — a single shared `exclusive` flag on
+ * one IR would force `exclusiveMinimum` to also make an inclusive `maximum`
+ * exclusive (reviewer finding: `{exclusiveMinimum:0, maximum:10}` silently
+ * rendered `v < 10` instead of `v <= 10`, rejecting the boundary value the
+ * source schema permits).
+ *
+ * Handles BOTH exclusivity forms the module doc claims ("Draft 7 /
+ * 2020-12"): the 2020-12 numeric form (`exclusiveMinimum: 0` — the bound
+ * value itself, `minimum` absent) and the Draft-7 boolean-modifier form
+ * (`minimum: 5, exclusiveMinimum: true` — `minimum` carries the bound,
+ * `exclusiveMinimum` only toggles inclusivity). The reader's own
+ * `JsonSchemaNode` type already declares `exclusiveMinimum?: number |
+ * boolean`, but only the numeric form was actually read (reviewer finding:
+ * `{minimum: 5, exclusiveMinimum: true}` silently imported as `v >= 5`).
+ */
+function pushRangeConstraint(node: JsonSchemaNode, path: string, constraints: ConstraintIR[]): void {
+  const minExclusive = typeof node.exclusiveMinimum === 'number' || node.exclusiveMinimum === true;
+  const maxExclusive = typeof node.exclusiveMaximum === 'number' || node.exclusiveMaximum === true;
+  const min = typeof node.exclusiveMinimum === 'number' ? node.exclusiveMinimum : node.minimum;
+  const max = typeof node.exclusiveMaximum === 'number' ? node.exclusiveMaximum : node.maximum;
+
+  if (min !== undefined) {
+    constraints.push({ kind: 'range', path, min, ...(minExclusive && { exclusive: true }) });
+  }
+  if (max !== undefined) {
+    constraints.push({ kind: 'range', path, max, ...(maxExclusive && { exclusive: true }) });
+  }
+}
+
+function pushLengthConstraint(node: JsonSchemaNode, path: string, constraints: ConstraintIR[], isArray: boolean): void {
+  // For a scalar string, minLength/maxLength map to `length` on the attribute
+  // itself; for an array, minItems/maxItems ALREADY encode cardinality (not a
+  // condition) — see readAttribute's cardinality derivation — so only the
+  // scalar string form emits a length constraint here.
+  if (isArray) return;
+  if (node.minLength !== undefined || node.maxLength !== undefined) {
+    constraints.push({
+      kind: 'length',
+      path,
+      ...(node.minLength !== undefined && { min: node.minLength }),
+      ...(node.maxLength !== undefined && { max: node.maxLength })
+    });
+  }
+}
+
+/** `oneOf` + `discriminator` → `oneOf` ConstraintIR over the union member property names (scenario 6). */
+function readOneOfConstraint(def: JsonSchemaNode): ConstraintIR {
+  const propertyName = def.discriminator?.propertyName;
+  const paths = (def.oneOf ?? [])
+    .flatMap((branch) => Object.keys(branch.properties ?? {}))
+    .filter((p) => p !== propertyName);
+  return { kind: 'oneOf', paths: [...new Set(paths)] };
+}
+
+function resolveTypeName(
+  node: JsonSchemaNode,
+  defs: Record<string, JsonSchemaNode>,
+  diagnostics: ImportDiagnostic[],
+  propName: string
+): string {
+  if (node.$ref) {
+    const refKey = resolveInternalRef(node.$ref);
+    if (refKey && refKey in defs) {
+      // Both branches must apply the SAME sanitization `readEnumDef`/
+      // `readTypeDef` apply to the declaration itself (`toTypeName`) — a
+      // prior version returned the RAW refKey for an enum reference, which
+      // both breaks parse (an unsanitized name used as a type reference)
+      // AND, even where it happened to be ValidID-safe, could never match a
+      // sanitized declaration name for a key that wasn't (reviewer finding).
+      return toTypeName(refKey);
+    }
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'external-ref',
+      message: `property '${propName}': $ref '${node.$ref}' is not an internal $defs/definitions reference — using 'string'`
+    });
+    return 'string';
+  }
+  const type = Array.isArray(node.type) ? node.type[0] : node.type;
+  if (type === 'object' && node.properties !== undefined) {
+    // An INLINE nested object (not a $ref to a $defs/definitions entry) has
+    // no named Rune type to reference — MVP rule (spec.md open question 4)
+    // only promotes a $ref reused across ≥2 sites to a named type; a single
+    // inline object has no such reuse site to hoist to. Falling back to
+    // `string` unconditionally is silent, indistinguishable-from-a-real-
+    // string data loss (reviewer finding) — diagnose it so the gap is
+    // visible rather than swallowed.
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'unsupported-inline-object',
+      message: `property '${propName}': inline nested object schema has no named Rune type to reference — using 'string'; extract it to '$defs'/'definitions' and reference it via '$ref' to import it as a real type`
+    });
+    return 'string';
+  }
+  return (type && BUILTIN_TYPE_MAP[type]) ?? 'string';
+}
+
+// --- naming -----------------------------------------------------------------
+
+/** JSON Schema def keys are used verbatim as Rune type/enum names when already ValidID-safe (the common case); sanitized otherwise. */
+function toTypeName(key: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? key : sanitizeEnumValue(key);
+}
+
+/** JSON property names are used verbatim when already ValidID-safe camelCase-ish identifiers; sanitized otherwise. */
+function toAttributeName(propName: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(propName) ? propName : sanitizeEnumValue(propName);
+}

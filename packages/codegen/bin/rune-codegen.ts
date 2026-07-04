@@ -22,6 +22,7 @@ import { URI } from 'langium';
 import { createRuneDslServices } from '@rune-langium/core';
 import { generate } from '../src/index.js';
 import type { Target, GeneratorDiagnostic, GeneratorOutput } from '../src/types.js';
+import { runImport } from '../src/import/cli.js';
 
 // ---- package version --------------------------------------------------------
 
@@ -297,6 +298,76 @@ async function runWatch(
 
 // ---- main -------------------------------------------------------------------
 
+/**
+ * The root program's default (outbound) action body. Extracted to a plain
+ * `.action(...)` handler (rather than driving everything from a `.then()`
+ * after a bare `.parseAsync()`) specifically so that registering the
+ * `import` subcommand below does not break it: verified empirically that a
+ * commander `Command` with a registered subcommand REJECTS an unrecognized
+ * bare positional to the root as `error: unknown command '<path>'` UNLESS
+ * the root itself has its own `.action(...)` registered — a bare
+ * `.then()`-only root (no `.action()`) has no such fallback and commander
+ * treats every invocation as "must name a subcommand". With `.action(...)`
+ * present, both `rune-codegen file.rune -t zod` (root default) and
+ * `rune-codegen import ...` (named subcommand) dispatch correctly side by
+ * side (confirmed with an isolated commander-only repro before this change).
+ */
+async function runDefault(
+  args: string[],
+  options: { target: string; output: string; watch?: boolean; strict?: boolean; json?: boolean }
+): Promise<void> {
+  // Validate target
+  const validTargets: Target[] = ['zod', 'json-schema', 'typescript'];
+  if (!validTargets.includes(options.target as Target)) {
+    process.stderr.write(
+      `rune-codegen: error: unknown target '${options.target}'. Expected: ${validTargets.join(', ')}.\n`
+    );
+    process.exit(2);
+  }
+
+  const target = options.target as Target;
+  const outputDir = resolve(options.output);
+
+  // Collect input files
+  let files: string[];
+  try {
+    const allFiles = await Promise.all(args.map((a) => findRuneFiles(resolve(a))));
+    files = allFiles.flat();
+  } catch (err: unknown) {
+    process.stderr.write(`rune-codegen: error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  }
+
+  if (files.length === 0) {
+    process.stderr.write('rune-codegen: error: no .rune files found in the given input paths.\n');
+    process.exit(1);
+  }
+
+  const opts: RunOptions = {
+    target,
+    outputDir,
+    strict: options.strict ?? false,
+    json: options.json ?? false
+  };
+
+  const services = createRuneDslServices();
+
+  if (options.watch) {
+    await runWatch(files, services, opts);
+    process.exit(0);
+  }
+
+  const result = await runOnce(files, services, opts);
+
+  if (opts.json) {
+    printJsonOutput(result, opts);
+  } else {
+    printHumanProgress(result, opts);
+  }
+
+  process.exit(result.success ? 0 : 1);
+}
+
 const program = new Command();
 
 program
@@ -309,79 +380,45 @@ program
   .option('-w, --watch', 'Watch mode: re-generate on file changes')
   .option('--strict', 'Treat any generator error diagnostic as fatal')
   .option('--json', 'Emit machine-readable JSON to stdout instead of human-readable progress')
-  .exitOverride(); // Prevent commander from calling process.exit() directly
+  .exitOverride() // Prevent commander from calling process.exit() directly
+  .action(runDefault);
 
 program
-  .parseAsync(process.argv)
-  .then(async () => {
-    const args = program.args;
-    const options = program.opts<{
-      target: string;
-      output: string;
-      watch?: boolean;
-      strict?: boolean;
-      json?: boolean;
-    }>();
-
-    // Validate target
-    const validTargets: Target[] = ['zod', 'json-schema', 'typescript'];
-    if (!validTargets.includes(options.target as Target)) {
-      process.stderr.write(
-        `rune-codegen: error: unknown target '${options.target}'. Expected: ${validTargets.join(', ')}.\n`
-      );
-      process.exit(2);
-    }
-
-    const target = options.target as Target;
-    const outputDir = resolve(options.output);
-
-    // Collect input files
-    let files: string[];
-    try {
-      const allFiles = await Promise.all(args.map((a) => findRuneFiles(resolve(a))));
-      files = allFiles.flat();
-    } catch (err: unknown) {
-      process.stderr.write(`rune-codegen: error: ${err instanceof Error ? err.message : String(err)}\n`);
-      process.exit(1);
-    }
-
-    if (files.length === 0) {
-      process.stderr.write('rune-codegen: error: no .rune files found in the given input paths.\n');
-      process.exit(1);
-    }
-
-    const opts: RunOptions = {
-      target,
-      outputDir,
-      strict: options.strict ?? false,
-      json: options.json ?? false
-    };
-
-    const services = createRuneDslServices();
-
-    if (options.watch) {
-      await runWatch(files, services, opts);
-      process.exit(0);
-    }
-
-    const result = await runOnce(files, services, opts);
-
-    if (opts.json) {
-      printJsonOutput(result, opts);
-    } else {
-      printHumanProgress(result, opts);
-    }
-
-    process.exit(result.success ? 0 : 1);
-  })
-  .catch((err: unknown) => {
-    // commander exitOverride throws CommanderError for --help/--version/usage errors
-    if (err && typeof err === 'object' && 'exitCode' in err) {
-      const exitCode = (err as { exitCode: number }).exitCode;
-      // exitCode 0 = --help or --version (already printed)
-      // exitCode non-zero = usage error
-      process.exit(exitCode === 0 ? 0 : 2);
-    }
-    process.stderr.write(`rune-codegen: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
-    process.exit(1);
+  .command('import')
+  .description('Import a .rune model from an external source format (Phase 1: json-schema only)')
+  .argument('<input>', 'Path to the source file (e.g. a JSON Schema document)')
+  .requiredOption('--from <source>', "Source format: 'json-schema' (only supported value in Phase 1)")
+  // NOTE: deliberately NOT `-o`/`--output` (spec.md's example CLI syntax
+  // uses `-o <output.rune>`) — the root program ALSO declares
+  // `-o, --output <dir>` (a directory, for the outbound multi-file case).
+  // Verified with an isolated commander-only repro that a subcommand
+  // colliding with a PARENT option on EITHER the short flag character OR
+  // the long option name (independently — either one alone is enough)
+  // silently loses its own option value in its own action's `opts()`, even
+  // though the subcommand redeclares the option itself. Neither `-o,
+  // --out-file` (same short, different long) nor plain `--output`
+  // (different/no short, same long) worked; only a fully distinct pair
+  // (`--out-file`, no short flag) does. This appears to be commander's
+  // documented "`.command()` automatically copies the inherited settings
+  // from the parent command" behavior interacting badly with a same-letter/
+  // same-name redeclaration — a real gotcha, not a typo in this file.
+  .option('--out-file <file>', 'Output .rune file path (default: stdout)')
+  .option('--namespace <name>', 'Override namespace derivation')
+  .option('--no-synonyms', 'Suppress synonym annotations')
+  .option('--no-conditions', 'Structural import only — skip expression translation')
+  .option('--on-untranslatable <mode>', "How to handle an untranslatable construct: 'stub' (default)", 'stub')
+  .action(async (input: string, cmdOpts: Parameters<typeof runImport>[1]) => {
+    process.exit(await runImport(input, cmdOpts));
   });
+
+program.parseAsync(process.argv).catch((err: unknown) => {
+  // commander exitOverride throws CommanderError for --help/--version/usage errors
+  if (err && typeof err === 'object' && 'exitCode' in err) {
+    const exitCode = (err as { exitCode: number }).exitCode;
+    // exitCode 0 = --help or --version (already printed)
+    // exitCode non-zero = usage error
+    process.exit(exitCode === 0 ? 0 : 2);
+  }
+  process.stderr.write(`rune-codegen: unexpected error: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
+});
