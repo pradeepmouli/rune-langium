@@ -120,6 +120,41 @@ describe('deriveUiSchema', () => {
     });
   });
 
+  describe('refined source schemas', () => {
+    // Regression: langium-zod 0.11.0 emits `.superRefine()` at-least-one-of
+    // constraints on some generated schemas (e.g. SwitchCaseGuard). Zod v4's
+    // plain `.extend()` throws when overriding fields on a schema carrying
+    // refinements ("Use `.safeExtend()` instead."); deriveUiSchema must not
+    // break on those schemas.
+    const RefinedSchema = z
+      .looseObject({
+        $type: z.literal('RefinedType'),
+        a: z.string().optional(),
+        b: z.number().optional()
+      })
+      .superRefine((val, ctx) => {
+        if (val.a === undefined && val.b === undefined) {
+          ctx.addIssue({ code: 'custom', message: 'At least one of a, b is required' });
+        }
+      });
+
+    it('overrides fields on a superRefine-bearing source schema', () => {
+      const derived = deriveUiSchema(RefinedSchema, {
+        overrides: { a: z.string().min(1) }
+      });
+      const result = derived.safeParse({ $type: 'RefinedType', a: 'x' });
+      expect(result.success).toBe(true);
+    });
+
+    it('extends a superRefine-bearing source schema with UI-only fields', () => {
+      const derived = deriveUiSchema(RefinedSchema, {
+        extend: { id: z.string().min(1) }
+      });
+      const result = derived.safeParse({ $type: 'RefinedType', a: 'x', id: 'n1' });
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe('combined options', () => {
     it('applies pick + overrides + extend + omitType in correct order', () => {
       const derived = deriveUiSchema(TestSchema, {
