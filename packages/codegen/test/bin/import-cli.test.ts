@@ -20,10 +20,11 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, writeFile, readFile, access } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { parse } from '@rune-langium/core';
 import { runImport } from '../../src/import/cli.js';
 
@@ -168,14 +169,11 @@ describe('runImport (direct — no process spawn)', () => {
 const PKG_DIR = resolve(new URL('.', import.meta.url).pathname, '../..');
 const CLI_PATH = join(PKG_DIR, 'dist/bin/rune-codegen.js');
 
-let cliBuilt = true;
-beforeAll(async () => {
-  try {
-    await access(CLI_PATH);
-  } catch {
-    cliBuilt = false;
-  }
-});
+// `describe.skipIf` evaluates its condition at COLLECTION time, before any
+// `beforeAll` hook runs — an async `access()` check inside `beforeAll` never
+// resolves in time to gate it (verified empirically). `existsSync` at
+// module scope is synchronous and actually gates correctly.
+const cliBuilt = existsSync(CLI_PATH);
 
 async function runCli(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
