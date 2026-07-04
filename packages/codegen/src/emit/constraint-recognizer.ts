@@ -146,13 +146,26 @@ function readRangeOrLength(node: unknown): ConstraintIR | undefined {
     const right = readBoundClause(n['right']);
     if (!left || !right) return undefined;
     if (left.path !== right.path || left.countBased !== right.countBased) return undefined;
-    // `rangeExpression` only ever pairs a min-clause with a max-clause (never
-    // min+min or max+max), and both share one `exclusive` flag when built —
-    // reject anything else as unrecognized rather than guessing.
     const min = left.bound.min ?? right.bound.min;
     const max = left.bound.max ?? right.bound.max;
     if (min === undefined || max === undefined) return undefined;
-    const exclusive = left.bound.exclusive ?? right.bound.exclusive;
+    // `rangeExpression` only ever pairs a min-clause with a max-clause (never
+    // min+min or max+max), and both share ONE `exclusive` flag when BUILT by
+    // the translator. A `range` IR itself carries only a single `exclusive`
+    // flag for the whole constraint, so a genuinely MIXED pair (e.g.
+    // hand-written `v > 0 and v <= 10`) is not representable as one `range`
+    // IR at all — REGRESSION FIX (review finding): compare the two clauses'
+    // exclusivity rather than coalescing with `??`. The prior `left.bound.
+    // exclusive ?? right.bound.exclusive` silently guessed one clause's flag
+    // for both, mistranslating an inclusive `v <= 10` into `exclusiveMaximum:
+    // 10` — one emit→import cycle then silently TIGHTENED the model (the
+    // source's legal `v = 10` becomes illegal). Reject mismatched pairs to
+    // unrecognized (the caller keeps the opaque `x-rune-conditions`
+    // metadata — nothing lost, per the addendum's "additive" rule).
+    const leftExclusive = left.bound.exclusive ?? false;
+    const rightExclusive = right.bound.exclusive ?? false;
+    if (leftExclusive !== rightExclusive) return undefined;
+    const exclusive = leftExclusive;
     if (left.countBased) {
       return { kind: 'length', path: left.path, min, max };
     }

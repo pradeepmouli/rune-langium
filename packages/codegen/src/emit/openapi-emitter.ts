@@ -61,7 +61,7 @@ import { emitNamespace as emitJsonSchemaNamespace } from './json-schema-emitter.
 import { jsonSchemaProfile } from './json-schema-profile.js';
 import { extractFuncs, type RuneFunc, type RuneFuncParam } from '../types/func.js';
 import { recognizeCondition, constraintIRToJsonSchemaKeywords } from './constraint-recognizer.js';
-import { resolveCrudTypeNames, type OpenApiOptions } from '../options/openapi-options.js';
+import { OpenApiOptionsSchema, resolveCrudTypeNames, type OpenApiOptions } from '../options/openapi-options.js';
 
 const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = mergeProfileTypeMaps(jsonSchemaProfile) as Record<
   string,
@@ -169,8 +169,34 @@ export class OpenApiNamespaceEmitter extends BaseNamespaceEmitter {
       /\.schema\.json$/,
       '.openapi.json'
     );
-    this.openApiOptions = options.openapi ?? {};
+    this.openApiOptions = this.validateOpenApiOptions(options.openapi);
     this.generatorOptions = options;
+  }
+
+  /**
+   * Enforces `OpenApiOptionsSchema` (the Zod SSoT — review Minor finding:
+   * the schema existed but was never enforced at the boundary, so a
+   * malformed shape like `crud: { types: 'all' }` — a bare string where
+   * `string[]` is required — silently no-op'd instead of failing loudly).
+   * On failure: pushes an `error`-severity `invalid-openapi-options`
+   * diagnostic (naming the bad key, via Zod's own issue path) and falls
+   * back to the all-defaults options object, so nothing from the
+   * malformed input (e.g. a bogus `crud`) is ever applied — matching this
+   * package's own oracle discipline (`strict: true` callers get a thrown
+   * `GeneratorError`, exactly like every other error diagnostic in this
+   * generator, via `runGenerate`'s existing strict-mode check).
+   */
+  private validateOpenApiOptions(raw: unknown): OpenApiOptions {
+    if (raw === undefined) return {};
+    const result = OpenApiOptionsSchema.safeParse(raw);
+    if (result.success) return result.data;
+    const badPaths = result.error.issues.map((issue) => issue.path.join('.') || '(root)').join(', ');
+    this.diagnostics.push({
+      severity: 'error',
+      code: 'invalid-openapi-options',
+      message: `options.openapi is malformed (invalid: ${badPaths}) — ${result.error.issues.map((i) => i.message).join('; ')}`
+    });
+    return {};
   }
 
   // NamespaceEmitter contract methods — no-ops. This emitter builds its

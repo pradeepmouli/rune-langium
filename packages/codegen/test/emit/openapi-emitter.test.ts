@@ -294,4 +294,50 @@ type Trade:
     expect(paths['/parties']).toBeDefined();
     expect(paths['/trades']).toBeUndefined();
   });
+
+  it("REGRESSION: a malformed options.openapi shape (crud.types as a string, not an array) is REJECTED with a clear error diagnostic, not silently no-op'd", async () => {
+    const out = await gen(
+      `namespace test.crud4
+
+type Party:
+  partyId string (1..1)
+`,
+      // Deliberately malformed: `types` must be `string[]` per
+      // OpenApiOptionsSchema; a bare string previously iterated as a
+      // char array with no error at all (review finding).
+      { openapi: { crud: { types: 'all' } } }
+    );
+    const doc = JSON.parse(out[0]!.content) as Record<string, unknown>;
+    const paths = doc['paths'] as Record<string, unknown>;
+    // No CRUD paths silently generated from the malformed shape.
+    expect(paths['/parties']).toBeUndefined();
+    const errorDiags = out[0]!.diagnostics.filter((d) => d.severity === 'error');
+    expect(errorDiags).toHaveLength(1);
+    expect(errorDiags[0]!.code).toBe('invalid-openapi-options');
+    expect(errorDiags[0]!.message).toContain('crud');
+  });
+
+  it('REGRESSION: strict mode escalates the malformed-options diagnostic to a thrown GeneratorError', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      `namespace test.crud5\n\ntype Party:\n  partyId string (1..1)\n`,
+      URI.parse('inmemory:///strict.rosetta')
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build([doc], { validation: false });
+    await expect(
+      generate(doc, { target: 'openapi', strict: true, openapi: { crud: { types: 'all' } } } as never)
+    ).rejects.toThrow();
+  });
+
+  it('a well-formed options.openapi shape produces no error diagnostics', async () => {
+    const out = await gen(
+      `namespace test.crud6
+
+type Party:
+  partyId string (1..1)
+`,
+      { openapi: { crud: true, format: 'json' } }
+    );
+    expect(out[0]!.diagnostics.filter((d) => d.severity === 'error')).toHaveLength(0);
+  });
 });

@@ -114,6 +114,45 @@ describe('constraint-recognizer — condition expression → ConstraintIR (mini 
     expect(recognizeCondition(expr)).toBeUndefined();
   });
 
+  it('REGRESSION (mixed exclusivity): `v > 0 and v <= 10` is NOT coalesced into one range IR — a range IR has only one shared `exclusive` flag, so a genuinely mixed clause pair must be rejected to unrecognized rather than guessed', () => {
+    // Hand-built (not via translateConstraintExpression, which never emits
+    // mixed exclusivity — this is the reviewer's own probe shape, exactly
+    // the hand-written-Rune-condition case the recognizer must handle
+    // since it is exposed to real, hand-authored conditions, not only
+    // translator output).
+    const symbolRef = (name: string) => ({
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: name },
+      explicitArguments: false,
+      rawArgs: []
+    });
+    const intLit = (n: number) => ({ $type: 'RosettaIntLiteral', value: BigInt(n) });
+    const mixedExclusivity = {
+      $type: 'LogicalOperation',
+      operator: 'and',
+      left: { $type: 'ComparisonOperation', operator: '>', left: symbolRef('v'), right: intLit(0) },
+      right: { $type: 'ComparisonOperation', operator: '<=', left: symbolRef('v'), right: intLit(10) }
+    };
+    expect(recognizeCondition(mixedExclusivity as never)).toBeUndefined();
+  });
+
+  it('mixed exclusivity: the reverse pairing (`v >= 0 and v < 10`) is also rejected', () => {
+    const symbolRef = (name: string) => ({
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: name },
+      explicitArguments: false,
+      rawArgs: []
+    });
+    const intLit = (n: number) => ({ $type: 'RosettaIntLiteral', value: BigInt(n) });
+    const mixedExclusivity = {
+      $type: 'LogicalOperation',
+      operator: 'and',
+      left: { $type: 'ComparisonOperation', operator: '>=', left: symbolRef('v'), right: intLit(0) },
+      right: { $type: 'ComparisonOperation', operator: '<', left: symbolRef('v'), right: intLit(10) }
+    };
+    expect(recognizeCondition(mixedExclusivity as never)).toBeUndefined();
+  });
+
   it('an arbitrary unrecognized expression shape returns undefined, not throw', () => {
     expect(recognizeCondition({ $type: 'SomeUnknownExpression' } as never)).toBeUndefined();
   });
