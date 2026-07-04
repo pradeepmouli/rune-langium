@@ -98,6 +98,14 @@ export function readOpenApi(
   options: OpenApiImportOptions = {}
 ): { model: SourceModel; diagnostics: ImportDiagnostic[] } {
   const diagnostics: ImportDiagnostic[] = [];
+  // A YAML/JSON parse can legally yield null (empty document, literal
+  // `null`) or a non-object scalar — fail with a clear import error rather
+  // than a TypeError on the property accesses below.
+  if (doc === null || doc === undefined || typeof doc !== 'object' || Array.isArray(doc)) {
+    throw new Error(
+      `not an OpenAPI document: expected a top-level object, got ${doc === null ? 'null' : Array.isArray(doc) ? 'an array' : typeof doc}`
+    );
+  }
   const document = doc as Partial<OpenAPIV3.Document> & Partial<OpenAPIV3_1.Document>;
 
   const is31 = typeof document.openapi === 'string' && document.openapi.startsWith('3.1');

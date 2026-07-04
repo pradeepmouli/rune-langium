@@ -426,3 +426,22 @@ describe('openapi-reader — external ref handling', () => {
     expect(diagnostics.some((d: any) => d.code === 'external-ref')).toBe(true);
   });
 });
+
+describe('readOpenApi input guard (PR #374 Copilot finding)', () => {
+  // A YAML parse legally yields null for an empty document or a literal
+  // `null` body; scalars and arrays are equally possible. Pre-fix these
+  // crashed with an unhelpful TypeError on document.openapi access.
+  it.each([
+    ['null (empty YAML)', null],
+    ['a scalar', 42],
+    ['a string', 'openapi: 3.1'],
+    ['an array', []]
+  ])('fails with a clear import error for %s, not a TypeError', (_label, doc) => {
+    expect(() => readOpenApi(doc as never)).toThrowError(/not an OpenAPI document: expected a top-level object/);
+  });
+
+  it('parseOpenApiDocument of an empty YAML source flows into the clear error end-to-end', () => {
+    const parsed = parseOpenApiDocument('');
+    expect(() => readOpenApi(parsed)).toThrowError(/not an OpenAPI document/);
+  });
+});
