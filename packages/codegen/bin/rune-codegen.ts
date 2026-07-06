@@ -20,7 +20,7 @@ import process from 'node:process';
 import { Command } from 'commander';
 import { URI } from 'langium';
 import { createRuneDslServices } from '@rune-langium/core';
-import { generate } from '../src/export.js';
+import { generate, IMPLEMENTED_TARGETS } from '../src/export.js';
 import type { Target, GeneratorDiagnostic, GeneratorOutput } from '../src/types.js';
 import { runImport } from '../src/import/cli.js';
 
@@ -316,11 +316,15 @@ async function runDefault(
   args: string[],
   options: { target: string; output: string; watch?: boolean; strict?: boolean; json?: boolean }
 ): Promise<void> {
-  // Validate target
-  const validTargets: Target[] = ['zod', 'json-schema', 'typescript'];
-  if (!validTargets.includes(options.target as Target)) {
+  // Validate target — derived from IMPLEMENTED_TARGETS (generator.ts's own
+  // registry of targets with a real emitter registered), not a hand-maintained
+  // list: a prior hardcoded ['zod', 'json-schema', 'typescript'] silently
+  // predated (and was never updated for) sql/excel/openapi/xsd, so the CLI
+  // rejected valid, already-shipped targets before they ever reached the
+  // generator.
+  if (!IMPLEMENTED_TARGETS.includes(options.target as Target)) {
     process.stderr.write(
-      `rune-codegen: error: unknown target '${options.target}'. Expected: ${validTargets.join(', ')}.\n`
+      `rune-codegen: error: unknown target '${options.target}'. Expected: ${IMPLEMENTED_TARGETS.join(', ')}.\n`
     );
     process.exit(2);
   }

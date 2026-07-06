@@ -321,6 +321,41 @@ describe.skipIf(!cliBuilt)('rune-codegen CLI wiring (process spawn — commander
     expect(stdout).toContain('done');
   });
 
+  it('-t sql (and other already-shipped, previously CLI-rejected targets) is accepted, not "unknown target"', async () => {
+    // Real bug found via review: runDefault's target validation used a
+    // hand-maintained ['zod', 'json-schema', 'typescript'] list that was
+    // never updated when sql/excel/openapi/xsd shipped their own real
+    // emitters — the CLI's own front door rejected them with "unknown
+    // target" before ever reaching the generator, even though `generate()`
+    // itself fully supported them. Fixed by deriving from
+    // IMPLEMENTED_TARGETS (generator.ts's own emitter-registry-derived
+    // list) instead. This test exercises the REAL commander-parsed CLI
+    // process, not just runGenerate() directly, since the bug lived
+    // entirely in bin/rune-codegen.ts's own pre-generate validation.
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
+    const runeSource = 'namespace test.clicheck.sql\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n';
+    const runePath = join(tmpDir, 'sample.rune');
+    await writeFile(runePath, runeSource, 'utf-8');
+    const outDir = join(tmpDir, 'out');
+
+    const { exitCode, stdout, stderr } = await runCli([runePath, '-t', 'sql', '-o', outDir]);
+    expect(stderr).not.toContain('unknown target');
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('done');
+  });
+
+  it('a genuinely unknown target is still rejected with a clear error and exit code 2', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
+    const runeSource = 'namespace test.clicheck.bogus\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n';
+    const runePath = join(tmpDir, 'sample.rune');
+    await writeFile(runePath, runeSource, 'utf-8');
+    const outDir = join(tmpDir, 'out');
+
+    const { exitCode, stderr } = await runCli([runePath, '-t', 'bogus-target', '-o', outDir]);
+    expect(exitCode).toBe(2);
+    expect(stderr).toContain("unknown target 'bogus-target'");
+  });
+
   it('--from openapi dispatches through the real CLI process and writes a zero-parse-error .rune file (T4)', async () => {
     const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
     const specPath = join(tmpDir, 'petstore.yaml');
