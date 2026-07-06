@@ -16,6 +16,10 @@ import type { OpenApiOptions } from './options/openapi-options.js';
  * - `openapi`     — 021 Phase 2b (per-namespace; OAS 3.1, composes the
  *                   JSON Schema emitter's own output + adds constraint
  *                   keywords, funcs→operations, optional CRUD paths)
+ * - `xsd`         — 021 Phase 3 (per-namespace; W3C XML Schema documents,
+ *                   a from-scratch emitter symmetric to the inbound XSD
+ *                   reader — no func/operation emission, XSD has no RPC
+ *                   verb model)
  *
  * The authoritative contract for each target is `TARGET_DESCRIPTORS[target].contract`;
  * Copilot review on PR #165 caught that this header comment originally listed
@@ -27,7 +31,16 @@ import type { OpenApiOptions } from './options/openapi-options.js';
  *
  * Task 0.4 wires the dispatch.
  */
-export type Target = 'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql' | 'openapi';
+export type Target =
+  | 'zod'
+  | 'json-schema'
+  | 'typescript'
+  | 'sql'
+  | 'markdown'
+  | 'excel'
+  | 'graphql'
+  | 'openapi'
+  | 'xsd';
 
 /**
  * Per-target option blocks (019 spec §3.1). Each block carries
@@ -132,6 +145,8 @@ export interface GeneratorOptions {
   // generation). `OpenApiOptions` is inferred from `OpenApiOptionsSchema`
   // in ./options/openapi-options.ts, same Zod-schema-as-SSoT pattern as Excel.
   openapi?: OpenApiOptions;
+  // 021 Phase 3 — no per-target option block yet; the XSD emitter has no
+  // configurable knobs (unlike Excel/OpenAPI's Zod-schema option blocks).
 }
 
 /**
@@ -394,6 +409,12 @@ export const TARGET_DESCRIPTORS: Record<Target, TargetDescriptor> = {
     // request; `options.openapi.format` is the sole selector. See
     // openapi-emitter.ts's `resolveFormat`.
     extension: '.openapi.json'
+  },
+  xsd: {
+    label: 'XSD',
+    contract: 'namespace',
+    desc: 'W3C XML Schema document (types, enums, constraints)',
+    extension: '.xsd'
   }
 };
 

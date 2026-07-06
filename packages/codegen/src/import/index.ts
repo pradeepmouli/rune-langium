@@ -8,7 +8,8 @@
  * `importModel(source, options)` is the primary entry point. Phase 1
  * implements `from: 'json-schema'`; Phase 2 adds `from: 'openapi'` (OAS
  * 3.0.x / 3.1, JSON or YAML); Phase 2c adds `from: 'sql'` (tree-sitter,
- * `sql-reader.ts`). The remaining sources named in spec.md's CLI surface
+ * `sql-reader.ts`); Phase 3 adds `from: 'xsd'` (`fast-xml-parser`,
+ * `xsd-reader.ts`). The remaining sources named in spec.md's CLI surface
  * (`typescript` | `python`) are follow-up work (US2/US4) and are rejected
  * here with a clear "not yet supported" error, matching the CLI's own
  * error contract (spec.md's CLI Surface section: "the other values error
@@ -16,9 +17,10 @@
  *
  * `importModel` is `async` — `sql-reader.ts`'s `readSql` loads the
  * `web-tree-sitter` WASM grammar (`sql-grammar-loader.ts`), an inherently
- * asynchronous operation; the JSON Schema/OpenAPI readers remain
- * synchronous internally but are awaited here uniformly so every source
- * shares one entry-point signature.
+ * asynchronous operation; the JSON Schema/OpenAPI/XSD readers remain
+ * synchronous internally (`fast-xml-parser` has no async loading step) but
+ * are awaited here uniformly so every source shares one entry-point
+ * signature.
  *
  * Also re-exports the `SourceModel`/`ConstraintIR` type vocabulary
  * (source-model.ts), import diagnostics (diagnostics.ts), and the CLI's
@@ -31,6 +33,7 @@ import { buildModel } from './ast-builder.js';
 import { readJsonSchema } from './sources/json-schema-reader.js';
 import { readOpenApi, parseOpenApiDocument } from './sources/openapi-reader.js';
 import { readSql } from './sources/sql-reader.js';
+import { readXsd } from './sources/xsd-reader.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 import type { SourceModel } from './source-model.js';
 
@@ -50,7 +53,7 @@ export type {
   SourceModel
 } from './source-model.js';
 
-export type ImportSourceKind = 'json-schema' | 'openapi' | 'typescript' | 'sql' | 'python';
+export type ImportSourceKind = 'json-schema' | 'openapi' | 'typescript' | 'sql' | 'python' | 'xsd';
 
 export interface ImportOptions {
   from: ImportSourceKind;
@@ -80,7 +83,7 @@ export interface ImportResult {
   diagnostics: ImportDiagnostic[];
 }
 
-const SUPPORTED_SOURCES: ReadonlySet<ImportSourceKind> = new Set(['json-schema', 'openapi', 'sql']);
+const SUPPORTED_SOURCES: ReadonlySet<ImportSourceKind> = new Set(['json-schema', 'openapi', 'sql', 'xsd']);
 
 /**
  * Imports a source-format document into a `.rune` model.
@@ -88,16 +91,17 @@ const SUPPORTED_SOURCES: ReadonlySet<ImportSourceKind> = new Set(['json-schema',
  * @param source - The raw source text: JSON Schema document text for
  *   `from: 'json-schema'`; OpenAPI 3.0.x/3.1 document text (JSON or YAML,
  *   auto-detected) for `from: 'openapi'`; SQL DDL (`CREATE TABLE`
- *   statements) for `from: 'sql'`.
+ *   statements) for `from: 'sql'`; an XSD document (a single `xs:schema`
+ *   root) for `from: 'xsd'`.
  * @param options - Import options; `from` selects the source reader.
  *   `from: 'sql'` requires `namespace` (SQL DDL has no namespace concept
- *   of its own to derive one from, unlike the other two sources' `$id`/
- *   `info.title` fallback).
+ *   of its own to derive one from, unlike the other sources' `$id`/
+ *   `info.title`/`targetNamespace` fallback).
  */
 export async function importModel(source: string, options: ImportOptions): Promise<ImportResult> {
   if (!SUPPORTED_SOURCES.has(options.from)) {
     throw new Error(
-      `rune-codegen import: --from '${options.from}' is not yet supported (implemented: 'json-schema', 'openapi', 'sql'; ` +
+      `rune-codegen import: --from '${options.from}' is not yet supported (implemented: 'json-schema', 'openapi', 'sql', 'xsd'; ` +
         `'typescript'/'python' are follow-up work).`
     );
   }
@@ -127,7 +131,9 @@ export async function importModel(source: string, options: ImportOptions): Promi
     ? readSql(source, { namespace: options.namespace!, dialect: options.sqlDialect ?? 'postgres', ...readerOptions })
     : options.from === 'openapi'
       ? Promise.resolve(readOpenApi(parseOpenApiDocument(source), readerOptions))
-      : Promise.resolve(readJsonSchema(parseJsonSchemaSource(source) as never, readerOptions)));
+      : options.from === 'xsd'
+        ? Promise.resolve(readXsd(source, readerOptions))
+        : Promise.resolve(readJsonSchema(parseJsonSchemaSource(source) as never, readerOptions)));
 
   const built = buildModel(model, { emitSynonyms: options.synonyms ?? true });
   const rendered = renderModel({ name: model.namespace, version: '0.0.0', elements: built.elements as never[] });
