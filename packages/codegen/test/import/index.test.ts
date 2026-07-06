@@ -88,4 +88,22 @@ describe('importModel — public API', () => {
   it('rejects malformed JSON input with a clear error', async () => {
     await expect(importModel('{ not valid json', { from: 'json-schema' })).rejects.toThrow(/not valid JSON/);
   });
+
+  it("--from 'xsd' is supported (Phase 3) and produces zero-error-parsing .rune text (the hard invariant)", async () => {
+    const xsd = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:complexType name="Party">
+    <xs:sequence>
+      <xs:element name="partyId" type="xs:string" minOccurs="1" maxOccurs="1"/>
+      <xs:element name="value" type="xs:integer" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const result = await importModel(xsd, { from: 'xsd', namespace: 'test.xsd' });
+    expect(result.text).toContain('type Party:');
+    expect(result.text).toContain('partyId string (1..1)');
+    expect(result.model.namespace).toBe('test.xsd');
+    const parseResult = await parse(result.text);
+    expect(parseResult.hasErrors).toBe(false);
+  });
 });
