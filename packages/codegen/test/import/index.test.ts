@@ -60,6 +60,16 @@ describe('importModel — public API', () => {
     await expect(importModel('CREATE TABLE t (id INT)', { from: 'sql' })).rejects.toThrow(/requires --namespace/);
   });
 
+  it('rejects an unsupported --sql-dialect value with a clear error (found via PR review — the CLI cast it unchecked)', async () => {
+    await expect(
+      importModel('CREATE TABLE t (id INT)', {
+        from: 'sql',
+        namespace: 'test.sql',
+        sqlDialect: 'mysql' as never
+      })
+    ).rejects.toThrow(/--sql-dialect 'mysql' is not supported/);
+  });
+
   it('rejects an unimplemented --on-untranslatable value', async () => {
     await expect(importModel(PARTY_SCHEMA, { from: 'json-schema', onUntranslatable: 'skip' })).rejects.toThrow(
       /not yet supported/

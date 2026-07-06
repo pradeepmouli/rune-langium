@@ -387,3 +387,77 @@ describe('sql-reader constraints — table-level CHECK referencing one column', 
     expect(text).toContain('condition AgeRange:');
   });
 });
+
+describe('sql-reader constraints — named table-level constraints (CONSTRAINT <name> CHECK/FOREIGN KEY)', () => {
+  // A prior version's TABLE_CONSTRAINT_ITEM_RE only recognized bare
+  // `FOREIGN KEY`/`CHECK`, not the `CONSTRAINT <name> ...` prefix (a very
+  // common real DDL idiom) — misclassifying the item as a bare COLUMN,
+  // which silently produced a garbage `CONSTRAINT`-named string attribute
+  // with a MISATTRIBUTED constraint instead of recognizing the real one
+  // (found via PR review).
+  it('CONSTRAINT <name> CHECK (...) translates the real constraint, not a garbage column', async () => {
+    const { text, model } = await importToRune(`CREATE TABLE t (age INT, CONSTRAINT chk_age CHECK (age >= 0))`);
+    const t = model.types[0]!;
+    expect(t.attributes.map((a) => a.sourceKey)).toEqual(['age']);
+    expect(t.constraints).toEqual([{ kind: 'range', path: 'age', min: 0 }]);
+    await assertParses(text);
+  });
+
+  it('CONSTRAINT <name> FOREIGN KEY (...) REFERENCES ... translates to a typed attribute', async () => {
+    const sql = `CREATE TABLE party (id INT PRIMARY KEY);
+CREATE TABLE trade (id INT PRIMARY KEY, party_id INT, CONSTRAINT fk_party FOREIGN KEY (party_id) REFERENCES party(id))`;
+    const { text, model, diagnostics } = await importToRune(sql);
+    const trade = model.types.find((t) => t.name === 'Trade')!;
+    expect(trade.attributes.map((a) => a.sourceKey)).toEqual(['party_id']);
+    expect(trade.attributes.find((a) => a.sourceKey === 'party_id')!.typeName).toBe('Party');
+    expect((diagnostics as Array<{ code: string }>).some((d) => d.code === 'sql-parse-error')).toBe(false);
+    await assertParses(text);
+  });
+});
+
+describe('sql-reader constraints — enum-ish column names never collide across tables', () => {
+  // A prior version derived an enum's declaration name from the column
+  // name ALONE (`status` -> `StatusEnum`), with no dedup against other
+  // tables' identically-named columns — two tables each with their own
+  // `status` CHECK (... IN (...)) column produced TWO `enum StatusEnum:`
+  // declarations in the same namespace (parses, but silently ambiguous —
+  // found via PR review).
+  it('two tables with the same enum-ish column name get distinct enum names', async () => {
+    const sql = `CREATE TABLE orders (id INT PRIMARY KEY, status TEXT CHECK (status IN ('NEW','DONE')));
+CREATE TABLE tickets (id INT PRIMARY KEY, status TEXT CHECK (status IN ('OPEN','CLOSED')))`;
+    const { text, model } = await importToRune(sql);
+    const names = model.enums.map((e) => e.name);
+    expect(names).toHaveLength(2);
+    expect(new Set(names).size).toBe(2);
+    const orders = model.types.find((t) => t.name === 'Orders')!;
+    const tickets = model.types.find((t) => t.name === 'Tickets')!;
+    const ordersEnum = model.enums.find(
+      (e) => e.name === orders.attributes.find((a) => a.sourceKey === 'status')!.typeName
+    )!;
+    const ticketsEnum = model.enums.find(
+      (e) => e.name === tickets.attributes.find((a) => a.sourceKey === 'status')!.typeName
+    )!;
+    expect(ordersEnum.values.map((v) => v.sourceKey).sort()).toEqual(['DONE', 'NEW']);
+    expect(ticketsEnum.values.map((v) => v.sourceKey).sort()).toEqual(['CLOSED', 'OPEN']);
+    await assertParses(text);
+  });
+});
+
+describe('sql-reader constraints — referenced-table names always use the deduped type name', () => {
+  // A prior version computed `extends`/FK-typed-attribute/join-table-owner
+  // type names by independently recomputing `toPascalCase(refTable)`,
+  // rather than looking up the SAME deduped name `buildType` assigned to
+  // the referenced table — if two table names collided under PascalCase
+  // (the second one built gets suffixed unique by `dedupeIdentifier`), a
+  // reference TO that second table still emitted the un-suffixed, WRONG
+  // name (a dangling/ambiguous reference) (found via PR review).
+  it('extends resolves to the actually-assigned (deduped) type name, not a recomputed collision', async () => {
+    const sql = `CREATE TABLE party (id INT PRIMARY KEY, name TEXT);
+CREATE TABLE Party (id INT PRIMARY KEY, extra TEXT);
+CREATE TABLE employee (id INT PRIMARY KEY, FOREIGN KEY (id) REFERENCES Party(id))`;
+    const { text, model } = await importToRune(sql);
+    const employee = model.types.find((t) => t.name === 'Employee')!;
+    expect(model.types.some((t) => t.name === employee.extends)).toBe(true);
+    await assertParses(text);
+  });
+});

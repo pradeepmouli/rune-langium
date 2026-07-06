@@ -112,6 +112,11 @@ export async function importModel(source: string, options: ImportOptions): Promi
       `rune-codegen import: --from 'sql' requires --namespace (SQL DDL has no namespace concept of its own to derive one from).`
     );
   }
+  if (options.sqlDialect !== undefined && options.sqlDialect !== 'postgres' && options.sqlDialect !== 'sqlserver') {
+    throw new Error(
+      `rune-codegen import: --sql-dialect '${options.sqlDialect}' is not supported (implemented: 'postgres', 'sqlserver').`
+    );
+  }
 
   const readerOptions = {
     ...(options.namespace !== undefined && { namespace: options.namespace }),
