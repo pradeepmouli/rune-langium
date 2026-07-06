@@ -74,7 +74,7 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
         }
       }
     };
-    const imported = importModel(JSON.stringify(schema), { from: 'json-schema' });
+    const imported = await importModel(JSON.stringify(schema), { from: 'json-schema' });
     const parseResult = await parse(imported.text);
     expect(parseResult.hasErrors).toBe(false);
 
@@ -96,7 +96,7 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
         }
       }
     };
-    const imported = importModel(JSON.stringify(schema), { from: 'json-schema' });
+    const imported = await importModel(JSON.stringify(schema), { from: 'json-schema' });
     const parseResult = await parse(imported.text);
     expect(parseResult.hasErrors).toBe(false);
 
@@ -121,7 +121,7 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
         }
       }
     };
-    const imported = importModel(JSON.stringify(schema), { from: 'json-schema' });
+    const imported = await importModel(JSON.stringify(schema), { from: 'json-schema' });
     const parseResult = await parse(imported.text);
     expect(parseResult.hasErrors).toBe(false);
 
@@ -159,7 +159,7 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
         }
       }
     };
-    const imported = importModel(JSON.stringify(schema), { from: 'json-schema' });
+    const imported = await importModel(JSON.stringify(schema), { from: 'json-schema' });
     const parseResult = await parse(imported.text);
     expect(parseResult.hasErrors).toBe(false);
 
@@ -198,7 +198,7 @@ describe('round-trip (condition half) — hand-written JSON Schema -> inbound ->
         }
       }
     };
-    const imported = importModel(JSON.stringify(schema), { from: 'json-schema' });
+    const imported = await importModel(JSON.stringify(schema), { from: 'json-schema' });
     const parseResult = await parse(imported.text);
     expect(parseResult.hasErrors).toBe(false);
 

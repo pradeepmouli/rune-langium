@@ -12,11 +12,18 @@ packages:
 #   - workerd: its binary is fetched on demand by wrangler/miniflare.
 #   - msw: the postinstall is a no-op (worker is set up via `msw init`).
 #   - simple-git-hooks: hooks are installed by the root `prepare` script.
+#   - @l1xnan/tree-sitter-sql / tree-sitter: the SQL reader (spec 021 Phase 2c)
+#     only consumes @l1xnan/tree-sitter-sql's prebuilt tree-sitter-sql.wasm
+#     file via web-tree-sitter — it never imports the package's native N-API
+#     binding (bindings/node), so `tree-sitter`'s own node-gyp/binding.gyp
+#     build (pulled in transitively as a peer dependency) is unnecessary.
 allowBuilds:
+  '@l1xnan/tree-sitter-sql': false
   esbuild: false
   msw: false
   sharp: false
   simple-git-hooks: false
+  tree-sitter: false
   workerd: false
 
 minimumReleaseAgeExclude:

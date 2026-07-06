@@ -39,10 +39,12 @@
     "type-check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
+    "@l1xnan/tree-sitter-sql": "^0.4.7",
     "@rune-langium/core": "workspace:*",
     "commander": "^15.0.0",
     "exceljs": "^4.4.0",
     "langium": "^4.3.0",
+    "web-tree-sitter": "^0.26.10",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

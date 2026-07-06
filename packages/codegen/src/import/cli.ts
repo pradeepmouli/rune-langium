@@ -26,17 +26,20 @@ export interface ImportCommandOptions {
   synonyms: boolean;
   conditions: boolean;
   onUntranslatable: string;
+  /** `--from sql` only (spec.md `--sql-dialect`). */
+  sqlDialect?: string;
 }
 
 export async function runImport(input: string, cmdOpts: ImportCommandOptions): Promise<number> {
   try {
     const source = await readFile(resolve(input), 'utf-8');
-    const result = importModel(source, {
+    const result = await importModel(source, {
       from: cmdOpts.from as ImportSourceKind,
       ...(cmdOpts.namespace !== undefined && { namespace: cmdOpts.namespace }),
       synonyms: cmdOpts.synonyms,
       conditions: cmdOpts.conditions,
-      onUntranslatable: cmdOpts.onUntranslatable as 'stub' | 'skip' | 'error'
+      onUntranslatable: cmdOpts.onUntranslatable as 'stub' | 'skip' | 'error',
+      ...(cmdOpts.sqlDialect !== undefined && { sqlDialect: cmdOpts.sqlDialect as 'postgres' | 'sqlserver' })
     });
 
     for (const d of result.diagnostics) {

@@ -201,6 +201,75 @@ describe('runImport (direct — no process spawn)', () => {
     const result = await parse(stdout);
     expect(result.hasErrors).toBe(false);
   });
+
+  it('--from sql imports a CREATE TABLE script and produces zero-parse-error .rune output (T3, Phase 2c)', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const ddlPath = join(tmpDir, 'party.sql');
+    await writeFile(
+      ddlPath,
+      `CREATE TABLE party (id INT PRIMARY KEY, party_id TEXT NOT NULL, value NUMERIC CHECK (value >= 0))`,
+      'utf-8'
+    );
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(ddlPath, { ...baseOpts(), from: 'sql', namespace: 'test.sql.cli' });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('type Party:');
+    expect(stdout).toContain('synonym source Sql');
+    expect(stdout).toContain('condition ValueRange:');
+
+    const result = await parse(stdout);
+    expect(result.hasErrors).toBe(false);
+  });
+
+  it('--from sql without --namespace fails with a clear error (exit code 1, not a throw)', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const ddlPath = join(tmpDir, 'party.sql');
+    await writeFile(ddlPath, `CREATE TABLE party (id INT PRIMARY KEY)`, 'utf-8');
+
+    let stderr = '';
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
+      stderr += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(ddlPath, { ...baseOpts(), from: 'sql' });
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain('requires --namespace');
+  });
+
+  it('--from sql --sql-dialect sqlserver imports NVARCHAR/DECIMAL DDL cleanly', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-'));
+    const ddlPath = join(tmpDir, 'party.sql');
+    await writeFile(
+      ddlPath,
+      `CREATE TABLE party (id INT PRIMARY KEY, name NVARCHAR(100) NOT NULL, amount DECIMAL(18,4))`,
+      'utf-8'
+    );
+
+    let stdout = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+
+    const exitCode = await runImport(ddlPath, {
+      ...baseOpts(),
+      from: 'sql',
+      namespace: 'test.sql.dialect',
+      sqlDialect: 'sqlserver'
+    });
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('name string (1..1)');
+
+    const result = await parse(stdout);
+    expect(result.hasErrors).toBe(false);
+  });
 });
 
 // ---- thin process-spawn smoke tests: prove the actual commander wiring ----
@@ -283,5 +352,32 @@ describe.skipIf(!cliBuilt)('rune-codegen CLI wiring (process spawn — commander
     const written = await readFile(outPath, 'utf-8');
     const result = await parse(written);
     expect(result.hasErrors).toBe(false);
+  });
+
+  it('--from sql --sql-dialect dispatches through the real CLI process and writes a zero-parse-error .rune file (T3, Phase 2c)', async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), 'rune-codegen-import-wiring-'));
+    const ddlPath = join(tmpDir, 'party.sql');
+    const outPath = join(tmpDir, 'party.rune');
+    await writeFile(ddlPath, `CREATE TABLE party (id INT PRIMARY KEY, name TEXT NOT NULL)`, 'utf-8');
+
+    const { exitCode, stdout } = await runCli([
+      'import',
+      ddlPath,
+      '--from',
+      'sql',
+      '--namespace',
+      'test.sql.wiring',
+      '--sql-dialect',
+      'postgres',
+      '--out-file',
+      outPath
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(outPath);
+
+    const written = await readFile(outPath, 'utf-8');
+    const result = await parse(written);
+    expect(result.hasErrors).toBe(false);
+    expect(written).toContain('type Party:');
   });
 });

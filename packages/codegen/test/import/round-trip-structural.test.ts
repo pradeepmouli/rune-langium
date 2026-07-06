@@ -55,7 +55,7 @@ async function emitJsonSchema(source: string): Promise<string> {
 describe('round-trip (structural half) — .rune -> outbound JSON Schema -> inbound -> .rune', () => {
   it('recovers the same types, attributes, and cardinalities', async () => {
     const schemaText = await emitJsonSchema(SOURCE_RUNE);
-    const result = importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
+    const result = await importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
 
     const parseResult = await parse(result.text);
     expect(parseResult.hasErrors).toBe(false);
@@ -72,7 +72,7 @@ describe('round-trip (structural half) — .rune -> outbound JSON Schema -> inbo
 
   it('recovers the inheritance relationship (Employee extends Party)', async () => {
     const schemaText = await emitJsonSchema(SOURCE_RUNE);
-    const result = importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
+    const result = await importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
 
     const employee = result.model.types.find((t) => t.name === 'Employee')!;
     expect(employee.extends).toBe('Party');
@@ -85,7 +85,7 @@ describe('round-trip (structural half) — .rune -> outbound JSON Schema -> inbo
 
   it('recovers the enum and its values', async () => {
     const schemaText = await emitJsonSchema(SOURCE_RUNE);
-    const result = importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
+    const result = await importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
 
     const currencyEnum = result.model.enums.find((e) => e.name === 'CurrencyEnum');
     expect(currencyEnum).toBeDefined();
@@ -94,7 +94,7 @@ describe('round-trip (structural half) — .rune -> outbound JSON Schema -> inbo
 
   it('the re-imported .rune text parses with zero errors end to end (hard invariant)', async () => {
     const schemaText = await emitJsonSchema(SOURCE_RUNE);
-    const result = importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
+    const result = await importModel(schemaText, { from: 'json-schema', namespace: 'test.roundtrip' });
     const parseResult = await parse(result.text);
     expect(parseResult.hasErrors).toBe(false);
     expect(result.text).toContain('type Party:');
