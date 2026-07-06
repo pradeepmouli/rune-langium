@@ -537,6 +537,22 @@ describe('xsd-reader — out-of-MVP-scope constructs (diagnostic, never silently
     await assertParses(text);
   });
 
+  it('a top-level abstract xs:element (distinct from an abstract complexType) -> unsupported-abstract-element diagnostic', async () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:complexType name="T">
+    <xs:sequence>
+      <xs:element name="a" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="topLevel" type="T" abstract="true"/>
+</xs:schema>`;
+    const { text, model, diagnostics } = importToRune(xml);
+    expect(model.types).toHaveLength(1);
+    expect(diagnostics.some((d) => (d as { code: string }).code === 'unsupported-abstract-element')).toBe(true);
+    await assertParses(text);
+  });
+
   it('xs:group / xs:attributeGroup references -> diagnostic + skip, does not crash', async () => {
     const xml = `<?xml version="1.0"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
@@ -638,6 +654,44 @@ describe('xsd-reader — namespace-prefix resolution (design decision 2)', () =>
     const { text, model } = importToRune(xml);
     expect(model.types).toHaveLength(1);
     expect(model.types[0]!.attributes[0]!.typeName).toBe('string');
+    await assertParses(text);
+  });
+
+  it('a default-namespace document resolves LOCAL type references (enum + extends), not just builtins', async () => {
+    // Real bug found via PR review: resolveTypeRef treated EVERY unprefixed
+    // reference in a default-namespace document as an XSD builtin (deciding
+    // isBuiltin purely from xsdPrefix === ''), silently dropping references
+    // to locally-declared complexTypes/simpleTypes — the prior test above
+    // only exercised a builtin reference, which masked this entirely.
+    const xml = `<?xml version="1.0"?>
+<schema xmlns="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <simpleType name="StatusEnum">
+    <restriction base="string">
+      <enumeration value="NEW"/>
+      <enumeration value="DONE"/>
+    </restriction>
+  </simpleType>
+  <complexType name="Base">
+    <sequence>
+      <element name="id" type="string"/>
+    </sequence>
+  </complexType>
+  <complexType name="Party">
+    <complexContent>
+      <extension base="Base">
+        <sequence>
+          <element name="status" type="StatusEnum"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+</schema>`;
+    const { text, model } = importToRune(xml);
+    expect(model.enums).toHaveLength(1);
+    const statusEnum = model.enums[0]!;
+    const party = model.types.find((t) => t.name === 'Party')!;
+    expect(party.extends).toBe('Base');
+    expect(party.attributes.find((a) => a.sourceKey === 'status')!.typeName).toBe(statusEnum.name);
     await assertParses(text);
   });
 });

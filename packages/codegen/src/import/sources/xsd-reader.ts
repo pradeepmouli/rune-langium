@@ -180,10 +180,23 @@ function resolveTypeRef(
 ): { local: string; isBuiltin: boolean } {
   const idx = raw.indexOf(':');
   if (idx === -1) {
-    // No prefix at all — either a default-namespace builtin (rare) or (far
-    // more commonly for a document that always prefixes xs: types) a local
-    // reference within the target namespace.
-    return { local: raw, isBuiltin: xsdPrefix === '' };
+    // No prefix at all. In a document that always prefixes xs: types
+    // (xsdPrefix !== ''), an unprefixed reference is always a local
+    // same-document reference (never a builtin — a properly authored such
+    // document always writes e.g. `xs:string` explicitly). In a
+    // DEFAULT-namespace document (xsdPrefix === ''), an unprefixed
+    // reference could be EITHER a genuine builtin (`type="string"`) OR a
+    // same-document reference to a locally-declared complexType/simpleType
+    // that is equally unprefixed under a default namespace — the prefix
+    // style alone can't distinguish them. A prior version treated EVERY
+    // unprefixed reference in a default-namespace document as a builtin,
+    // silently dropping every local-type reference (`extends`, an enum
+    // reference, a cross-type reference) — a real, critical bug found via
+    // PR review, invisible to the test suite's only no-prefix test (which
+    // happened to reference just a builtin). Resolve by checking whether
+    // `raw` is actually a KNOWN XSD builtin keyword, not by prefix style.
+    const isBuiltin = xsdPrefix === '' && raw in BUILTIN_TYPE_MAP;
+    return { local: raw, isBuiltin };
   }
   const prefix = raw.slice(0, idx);
   const local = raw.slice(idx + 1);
