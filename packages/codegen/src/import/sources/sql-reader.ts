@@ -59,6 +59,27 @@ import type { Node, Parser } from 'web-tree-sitter';
 import type { ConstraintIR, Literal, SourceAttribute, SourceEnum, SourceModel, SourceType } from '../source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
 import { createSqlParser, type WasmSource } from './sql-grammar-loader.js';
+import type { SqlNodeKind, SqlNodeFields } from './generated/sql-node-types.js';
+
+// --- typed field access (spec 021 Phase 2c Addendum 2) --------------------
+
+/**
+ * Typed wrapper around `Node#childForFieldName`, constrained to the field
+ * names the grammar actually declares for a given node kind (per the
+ * GENERATED `sql-node-types.ts`, derived from the grammar's own
+ * `node-types.json`). Replaces positional/`.find()`-based child access —
+ * the root cause of several real bugs (the anonymous-operator-token
+ * confusion, the `char_length(col) <= n` backwards bound-selection bug,
+ * the BETWEEN low/high-by-position assumption) — with a direct,
+ * grammar-declared lookup wherever the grammar exposes a field. Node kinds
+ * with no declared fields (`column_definitions`, `constraints`,
+ * `create_table`, `ordered_columns`, `list`, `program`, ...) still need
+ * children-scanning; that isn't a gap here, the grammar genuinely exposes
+ * no fields there.
+ */
+function typedField<K extends SqlNodeKind>(node: Node, _kind: K, field: SqlNodeFields<K> & string): Node | null {
+  return node.childForFieldName(field);
+}
 
 // --- naming ------------------------------------------------------------
 
@@ -553,7 +574,7 @@ function readColumnDefinition(
   diagnostics: ImportDiagnostic[],
   extraErrorSibling?: Node
 ): RawColumn | undefined {
-  const identNode = node.namedChildren.find((n) => n?.type === 'identifier' || n?.type === 'literal');
+  const identNode = typedField(node, 'column_definition', 'name');
   if (!identNode) return undefined;
   const name = stripQuotes(identNode.text);
 
@@ -967,7 +988,7 @@ function operandColumnName(node: Node): string | undefined {
 }
 
 function fieldColumnName(field: Node): string | undefined {
-  const ident = field.namedChildren.find((n) => n?.type === 'identifier');
+  const ident = typedField(field, 'field', 'name');
   return ident ? stripQuotes(ident.text) : undefined;
 }
 
@@ -1040,14 +1061,16 @@ function translateCheckNode(node: Node, path: string | undefined, diagnostics: I
 }
 
 function translateBetween(node: Node, path: string | undefined, diagnostics: ImportDiagnostic[]): ConstraintIR {
-  const columnNode = node.namedChildren.find((n) => n?.type === 'field' || n?.type === 'literal');
+  // `between_expression` declares real `left`/`low`/`high` fields — direct,
+  // unambiguous access to the column and both bounds, rather than the
+  // prior position-in-namedChildren assumption (excluding whichever
+  // literal happened to match the column node).
+  const columnNode = typedField(node, 'between_expression', 'left');
   const resolvedPath = path ?? (columnNode ? operandColumnName(columnNode) : undefined);
-  // A quoted-identifier column node is itself a `literal` (see
-  // `operandColumnName`'s doc) — excluded here so it never gets mistaken
-  // for one of the two NUMERIC bounds below.
-  const literals = node.namedChildren.filter((n): n is Node => n?.type === 'literal' && n !== columnNode);
-  const min = literals[0] ? Number(literals[0].text) : undefined;
-  const max = literals[1] ? Number(literals[1].text) : undefined;
+  const lowNode = typedField(node, 'between_expression', 'low');
+  const highNode = typedField(node, 'between_expression', 'high');
+  const min = lowNode ? Number(lowNode.text) : undefined;
+  const max = highNode ? Number(highNode.text) : undefined;
   if (!resolvedPath || min === undefined || max === undefined || Number.isNaN(min) || Number.isNaN(max)) {
     pushDiagnostic(diagnostics, {
       severity: 'warning',
@@ -1065,28 +1088,25 @@ function translateBinaryExpression(
   path: string | undefined,
   diagnostics: ImportDiagnostic[]
 ): ConstraintIR | undefined {
-  // The comparison-operator token (`>=`, `<>`, `<`, etc.) is an ANONYMOUS
-  // node (`isNamed: false`) in this grammar — it is present in `node.
-  // children` (ALL children) but never in `node.namedChildren`, which only
-  // ever surfaces the two named operand nodes (`field`/`literal`/
-  // `invocation`). `LIKE`/`IN` ARE named (`keyword_like`/`keyword_in`), so
-  // the search must cover both children arrays.
-  const allChildren = [...Array(node.childCount).keys()].map((i) => node.child(i)).filter((n): n is Node => n !== null);
-  const children = node.namedChildren.filter((n): n is Node => n !== null);
-  const opNode = allChildren.find(
-    (n) => n.type in COMPARISON_OPS || n.type === 'keyword_like' || n.type === 'keyword_in'
-  );
+  // `binary_expression` declares real `left`/`operator`/`right` fields —
+  // `childForFieldName` resolves the operator DIRECTLY via the field API
+  // even though the comparison-operator tokens (`>=`, `<>`, `<`, etc.) are
+  // themselves anonymous (`isNamed: false`); fields are a separate lookup
+  // mechanism from the named/unnamed distinction, so this sidesteps the
+  // whole "operator isn't in namedChildren" class of confusion entirely.
+  const opNode = typedField(node, 'binary_expression', 'operator');
   if (!opNode) return undefined;
+  const lhs = typedField(node, 'binary_expression', 'left');
+  const rhs = typedField(node, 'binary_expression', 'right');
+  if (!lhs || !rhs) return undefined;
 
   if (opNode.type === 'keyword_like') {
-    const columnNode = children.find(
-      (n) => n.type === 'field' || (n.type === 'literal' && isQuotedIdentifierLiteral(n.text))
-    );
-    const resolvedPath = path ?? (columnNode ? operandColumnName(columnNode) : undefined);
+    const columnNode = [lhs, rhs].find((n) => operandColumnName(n) !== undefined);
     // The pattern VALUE is a `literal` too, but a real (single-quoted)
     // string — distinct from `columnNode`, which (when it's a quoted
     // identifier) is ALSO a `literal` node, just double-quoted.
-    const literal = children.find((n) => n.type === 'literal' && n !== columnNode);
+    const resolvedPath = path ?? (columnNode ? operandColumnName(columnNode) : undefined);
+    const literal = [lhs, rhs].find((n) => n !== columnNode);
     pushDiagnostic(diagnostics, {
       severity: 'warning',
       code: 'untranslatable-construct',
@@ -1104,14 +1124,10 @@ function translateBinaryExpression(
   const op = COMPARISON_OPS[opNode.type];
   if (!op) return undefined;
 
-  const lhs = children[0];
-  const rhs = children[children.length - 1];
-  if (!lhs || !rhs) return undefined;
-
   // `char_length(col) >= n` / `LEN(col) >= n` -> a length constraint;
   // `col >= n` -> a range constraint. Disambiguated by whether either side
   // is an `invocation` (a dialect length function).
-  const invocation = children.find((n) => n.type === 'invocation');
+  const invocation = lhs.type === 'invocation' ? lhs : rhs.type === 'invocation' ? rhs : undefined;
   if (invocation && isLengthFunction(invocation)) {
     const resolvedPath = path ?? fieldNameFromInvocation(invocation);
     // The bound is whichever side ISN'T the invocation itself — a prior
@@ -1180,13 +1196,13 @@ function isLengthFunction(invocation: Node): boolean {
 }
 
 function fieldNameFromInvocation(invocation: Node): string | undefined {
-  const field = [...walkNamed(invocation, 'field')][0];
-  if (field) return fieldColumnName(field);
-  // A quoted-identifier argument (`char_length("name")`) parses as a bare
-  // `literal` node (wrapped in an intermediate `term`), never a `field` —
-  // same root cause `operandColumnName`'s doc explains.
-  const quotedIdentLiteral = [...walkNamed(invocation, 'literal')].find((n) => isQuotedIdentifierLiteral(n.text));
-  return quotedIdentLiteral ? stripQuotes(quotedIdentLiteral.text) : undefined;
+  // `invocation.parameter` is always wrapped in a `term` node; `term.value`
+  // is the real operand — either a `field` (unquoted identifier) or a
+  // quoted-identifier `literal` (`operandColumnName` handles both).
+  const param = typedField(invocation, 'invocation', 'parameter');
+  if (!param) return undefined;
+  const operand = typedField(param, 'term', 'value');
+  return operand ? operandColumnName(operand) : undefined;
 }
 
 function literalValue(literalNode: Node): Literal {

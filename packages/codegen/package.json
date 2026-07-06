@@ -34,12 +34,13 @@
   "scripts": {
     "build": "tsgo -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "generate:sql-node-types": "node scripts/generate-tree-sitter-node-types.mjs --input node_modules/@l1xnan/tree-sitter-sql/src/node-types.json --output src/import/sources/generated/sql-node-types.ts --prefix Sql && oxfmt src/import/sources/generated/sql-node-types.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@l1xnan/tree-sitter-sql": "^0.4.7",
+    "@l1xnan/tree-sitter-sql": "0.4.7",
     "@rune-langium/core": "workspace:*",
     "commander": "^15.0.0",
     "exceljs": "^4.4.0",

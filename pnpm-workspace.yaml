@@ -34,6 +34,13 @@ minimumReleaseAgeExclude:
 # `pnpm` field, which they ignore). Migrated from package.json so the
 # lockfile's overrides match the running config under pnpm@11.x.
 overrides:
+  # Exact-pinned (not a caret range) like langium-zod/@zod-to-form below:
+  # codegen's sql-node-types.ts is GENERATED from this exact version's
+  # shipped src/node-types.json (spec 021 Phase 2c Addendum 2) — a silent
+  # version drift would desync the generated file from the installed
+  # grammar's real shape. Bump deliberately + regenerate
+  # (`pnpm --filter @rune-langium/codegen run generate:sql-node-types`).
+  '@l1xnan/tree-sitter-sql': 0.4.7
   # Pin react + react-dom to the SAME exact version. design-system and
   # visual-editor declare react-dom as a floating peer (`react-dom: ">=18.0.0"`),
   # which let react-dom drift to a newer patch (19.2.7) than react (19.2.6).
