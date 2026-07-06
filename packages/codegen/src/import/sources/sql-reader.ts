@@ -1042,14 +1042,26 @@ function translateBinaryExpression(
   if (!lhs || !rhs) return undefined;
 
   // `char_length(col) >= n` / `LEN(col) >= n` -> a length constraint;
-  // `col >= n` -> a range constraint. Disambiguated by whether the LHS is
-  // an `invocation` (a dialect length function) or a bare `field`.
+  // `col >= n` -> a range constraint. Disambiguated by whether either side
+  // is an `invocation` (a dialect length function).
   const invocation = children.find((n) => n.type === 'invocation');
   if (invocation && isLengthFunction(invocation)) {
     const resolvedPath = path ?? fieldNameFromInvocation(invocation);
-    const bound = Number((op === '>=' || op === '>' ? rhs : lhs).text);
-    if (resolvedPath && Number.isFinite(bound)) {
-      return op === '>=' || op === '>'
+    // The bound is whichever side ISN'T the invocation itself — a prior
+    // version assumed the bound is always `rhs` for `>=`/`>` and always
+    // `lhs` for `<=`/`<`, which only holds for `invocation OP n` written
+    // with `>=`/`>` (e.g. `char_length(col) >= n`, the only shape any
+    // existing test used); it silently mistranslated the equally common
+    // `char_length(col) <= n` form (invocation on the left, `<=`) into a
+    // NaN bound, falling back to a `custom` stub. Normalize the operator
+    // the same way the plain-comparison branch below does when the
+    // literal/column sides are swapped.
+    const boundNode = lhs === invocation ? rhs : lhs;
+    const bound = Number(boundNode.text);
+    const isRangeOp = op === '>=' || op === '>' || op === '<=' || op === '<';
+    if (resolvedPath && Number.isFinite(bound) && isRangeOp) {
+      const normalizedOp = boundNode === rhs ? op : flipComparisonOp(op);
+      return normalizedOp === '>=' || normalizedOp === '>'
         ? { kind: 'length', path: resolvedPath, min: bound }
         : { kind: 'length', path: resolvedPath, max: bound };
     }

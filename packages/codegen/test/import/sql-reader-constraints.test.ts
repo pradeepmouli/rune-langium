@@ -183,24 +183,31 @@ describe('sql-reader constraints — quoted-identifier regression coverage (oper
     await assertParses(text);
   });
 
-  it('a char_length CHECK on a quoted column (postgres) resolves the correct attribute for the length constraint', async () => {
+  it('a table-level char_length CHECK on a quoted column (postgres) resolves the correct attribute for the length constraint', async () => {
+    // Table-level (not column-inline) so `path` starts undefined and the
+    // char_length argument's own quoted-identifier resolution is load-bearing
+    // — a column-inline CHECK would already have `path` set from the column
+    // definition, masking a regression in fieldNameFromInvocation's fallback.
+    // The column is TEXT (no inherent length constraint of its own) so the
+    // only possible source of a length constraint is the CHECK itself —
+    // VARCHAR(n) would independently emit an identical-looking length
+    // constraint from the column type alone, masking whether the CHECK's
+    // quoted-identifier resolution ran at all.
     const { text, model } = await importToRune(
-      `CREATE TABLE t ("description" VARCHAR(200) CHECK (char_length("description") <= 200))`
+      `CREATE TABLE t ("description" TEXT, CHECK (char_length("description") <= 200))`
     );
     const t = model.types[0]!;
-    const attr = t.attributes.find((a) => a.sourceKey === 'description')!;
-    expect(attr.constraints).toEqual(expect.arrayContaining([{ kind: 'length', path: 'description', max: 200 }]));
+    expect(t.constraints).toEqual([{ kind: 'length', path: 'description', max: 200 }]);
     await assertParses(text);
   });
 
-  it('a LEN CHECK on a quoted column (sqlserver) resolves the correct attribute for the length constraint', async () => {
+  it('a table-level LEN CHECK on a quoted column (sqlserver) resolves the correct attribute for the length constraint', async () => {
     const { text, model } = await importToRune(
-      `CREATE TABLE t ("description" VARCHAR(200) CHECK (LEN("description") <= 200))`,
+      `CREATE TABLE t ("description" TEXT, CHECK (LEN("description") <= 200))`,
       { dialect: 'sqlserver' }
     );
     const t = model.types[0]!;
-    const attr = t.attributes.find((a) => a.sourceKey === 'description')!;
-    expect(attr.constraints).toEqual(expect.arrayContaining([{ kind: 'length', path: 'description', max: 200 }]));
+    expect(t.constraints).toEqual([{ kind: 'length', path: 'description', max: 200 }]);
     await assertParses(text);
   });
 });
@@ -266,6 +273,28 @@ describe('sql-reader constraints — char_length(col) >= n / LEN(col) >= n (dial
       'namespace test.expect\nversion "0.0.0"\n\ntype T:\n  name string (0..1)\n\n  condition NameLength:\n    name count >= 1\n'
     );
     expect(treesEquivalent(Object.values(imported)[0], Object.values(expected)[0])).toBe(true);
+    await assertParses(text);
+  });
+
+  it('char_length(col) <= n -> length max (the invocation-on-the-left, upper-bound orientation)', async () => {
+    // The `>=` tests above are the only shape any prior test exercised —
+    // invocation on the LEFT, `>=` operator, bound on the right. This is
+    // the OTHER common natural writing order (`char_length(col) <= n`,
+    // also invocation-left) with `<=` instead: a real, previously-latent
+    // bug picked `lhs` (the invocation node's own text) as the bound,
+    // producing NaN and silently falling back to a `custom` stub.
+    const { text, model } = await importToRune(`CREATE TABLE t (name TEXT CHECK (char_length(name) <= 200))`);
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'name')!;
+    expect(attr.constraints).toEqual([{ kind: 'length', path: 'name', max: 200 }]);
+    await assertParses(text);
+  });
+
+  it('n >= char_length(col) -> length max (the invocation-on-the-right orientation, operator normalized)', async () => {
+    const { text, model } = await importToRune(`CREATE TABLE t (name TEXT CHECK (200 >= char_length(name)))`);
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'name')!;
+    expect(attr.constraints).toEqual([{ kind: 'length', path: 'name', max: 200 }]);
     await assertParses(text);
   });
 });
