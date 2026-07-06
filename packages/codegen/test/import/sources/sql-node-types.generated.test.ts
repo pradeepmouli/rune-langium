@@ -12,6 +12,7 @@
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { SQL_NODE_TYPES } from '../../../src/import/sources/generated/sql-node-types.js';
 
@@ -19,7 +20,7 @@ describe('sql-node-types.generated — drift guard', () => {
   it('matches the actually-installed @l1xnan/tree-sitter-sql node-types.json exactly', () => {
     const require = createRequire(import.meta.url);
     const pkgJsonPath = require.resolve('@l1xnan/tree-sitter-sql/package.json');
-    const nodeTypesPath = pkgJsonPath.replace(/package\.json$/, 'src/node-types.json');
+    const nodeTypesPath = join(dirname(pkgJsonPath), 'src', 'node-types.json');
     const installed = JSON.parse(readFileSync(nodeTypesPath, 'utf8'));
 
     expect(SQL_NODE_TYPES).toEqual(installed);
