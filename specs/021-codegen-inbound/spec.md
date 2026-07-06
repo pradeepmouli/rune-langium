@@ -467,3 +467,25 @@ Together these make the OpenAPI pair a true two-way target: schemas ↔ types AN
 4. **Funcs → operations (MVP shape)**: RPC-style — each func becomes `POST /functions/{FuncName}` (or the OAS-conventional equivalent the implementer grounds), `operationId` = func name, inputs → requestBody schema (an inline object of the func's inputs, respecting cardinality), output → the 200 response schema, definition → summary/description, recognizable pre-conditions → parameter/requestBody constraints where they map. Inbound (the Phase 2 reader) gains the matching `paths` consumption so the round trip closes: reader maps operations back to funcs via the correspondence carrier.
 5. **CRUD generation as an opt-in EMITTER OPTION** (per the user scoping): option (CLI flag + programmatic option, mirroring existing per-target option conventions like excel-options) that generates the standard CRUD operation set (`GET /xs`, `GET /xs/{id}`, `POST /xs`, `PUT /xs/{id}`, `DELETE /xs/{id}`) for selected (or all) Data types, schemas referencing `components.schemas`. NOT default. Inbound recognition of CRUD shapes is OUT of Phase 2b.
 6. **THE ORACLE (acceptance centerpiece)**: the single-artifact round trip the JSON Schema pair couldn't have — `Rune → OpenAPI emitter → OpenAPI reader → Rune` as an identity for: types/attributes/cardinality/enums/inheritance, RECOGNIZABLE conditions (through keywords), and funcs (through operations + the carrier). Structural + tree-equivalence comparison, parse-first throughout, inbound hard invariant unchanged.
+
+---
+
+## Phase 2c Addendum (adopted 2026-07-05, user-directed): SQL reader, tree-sitter, constraint-gap closure
+
+**Order change**: SQL reader precedes the TypeScript reader (user, 2026-07-05).
+
+1. **Parser: tree-sitter** per the Phase 2 Addendum directive — `web-tree-sitter` (WASM runtime) + a SQL grammar shipping PREBUILT wasm (candidate: DerekStride's tree-sitter-sql; building grammar wasm from source requires emscripten and is OUT — a viability spike gates the effort: if no installable prebuilt-wasm SQL grammar exists, STOP and report options rather than compromising the toolchain). WASM loading must work in Node now and be browser-loadable in principle (the /import subpath's isolation point); abstract the wasm source location.
+2. **Naming (user-explicit)**: `snake_case` tables → **PascalCase** Rune types; `snake_case` columns → camelCase attributes; enum-ish CHECK values → safe enum member names. Originals ALWAYS retained via `[synonym Sql value "<original>"]` (types, attributes, enum values) — the established converters and collision-dedup rules apply.
+3. **Constraint-gap closure (user-directed — the reader translates every ConstraintIR-expressible SQL construct, not a token subset):**
+   - `NOT NULL` / nullable → cardinality (1..1)/(0..1) — never a condition
+   - `CHECK (col >= n)` and all comparison operators → `comparison`/`range` IR (per-bound exclusivity rules as established)
+   - `CHECK (col BETWEEN a AND b)` → `range` (inclusive both bounds per SQL semantics)
+   - `CHECK (col IN ('A','B',...))` → Rune enum + attribute retyped to it (not a condition)
+   - `VARCHAR(n)`/`CHAR(n)`/`NVARCHAR(n)` → `length { max: n }`; `CHECK (char_length(col) >= n)` / `LEN(col)` (dialect fns) → `length`
+   - `CHECK (col LIKE ...)` / regex operators → `pattern` → stub + diagnostic (the established rule; no expression-level regex in Rune)
+   - `FOREIGN KEY` → attribute typed as the referenced Rune type; the emitter's inheritance-FK convention (`FOREIGN KEY (id) REFERENCES Parent(id)`) → `extends`
+   - Join table `{parent}_{attr}` with parent FK + element FK (+ optional position column) → parent gains a `(0..*)` attribute of the element type; the join table itself is not emitted as a type
+   - `PRIMARY KEY`/`UNIQUE`/`DEFAULT` → recorded as diagnostics-level notes (no Rune equivalent in scope), never silently dropped
+   - Unsupported CHECK expressions → `custom` stub + diagnostic (`--on-untranslatable` honored)
+4. **Dialects**: postgres + sqlserver (matching the outbound emitter's `SqlDialectName` surface) are the tested matrix; `--sql-dialect` CLI flag per the spec's original surface. The tree-sitter grammar's dialect tolerance is part of the T0 spike report.
+5. **Oracles (split, per the Phase 1 precedent)**: STRUCTURAL round trip through the real outbound SQL emitter (both dialects): types, cardinality, enum CHECKs → enums, reference FKs → typed attributes, inheritance FK → extends. CONSTRAINT round trip through hand-written DDL fixtures (the emitter does not emit comparison CHECKs), tree-equivalence against hand-written `.rune` expectations. Inbound hard invariant throughout.
