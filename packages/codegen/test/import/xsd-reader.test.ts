@@ -295,6 +295,55 @@ describe('xsd-reader — xs:choice', () => {
     const rate = model.types[0]!;
     expect(rate.attributes.every((a) => a.cardinality.inf === 0 && a.cardinality.sup === 1)).toBe(true);
   });
+
+  it('an xs:choice with minOccurs="0" (a legitimately OPTIONAL group) -> {kind: "choice"} (optional), NOT a mandatory oneOf', async () => {
+    // Real gap: the reader used to ALWAYS emit a mandatory oneOf regardless
+    // of the xs:choice element's own minOccurs — an optional choice group
+    // (zero or one branch may be present) was misimported as MANDATORY,
+    // rejecting real documents the source XSD schema legitimately allowed
+    // to omit the whole group.
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:complexType name="Rate">
+    <xs:sequence>
+      <xs:choice minOccurs="0">
+        <xs:element name="fixedRate" type="xs:decimal"/>
+        <xs:element name="floatingRate" type="xs:decimal"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const { text, model } = importToRune(xml);
+    expect(model.types[0]!.constraints).toEqual([{ kind: 'choice', paths: ['fixedRate', 'floatingRate'] }]);
+    expect(text).toContain('optional choice fixedRate, floatingRate');
+    expect(text).not.toContain('required choice');
+    await assertParses(text);
+  });
+
+  it('the existing default (minOccurs absent, or explicit "1") still produces the mandatory oneOf — no regression', async () => {
+    const xmlAbsent = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:complexType name="Rate">
+    <xs:sequence>
+      <xs:choice>
+        <xs:element name="fixedRate" type="xs:decimal"/>
+        <xs:element name="floatingRate" type="xs:decimal"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const xmlExplicit1 = xmlAbsent.replace('<xs:choice>', '<xs:choice minOccurs="1">');
+
+    const { text: textAbsent, model: modelAbsent } = importToRune(xmlAbsent);
+    expect(modelAbsent.types[0]!.constraints).toEqual([{ kind: 'oneOf', paths: ['fixedRate', 'floatingRate'] }]);
+    expect(textAbsent).toContain('required choice fixedRate, floatingRate');
+    await assertParses(textAbsent);
+
+    const { text: textExplicit1, model: modelExplicit1 } = importToRune(xmlExplicit1);
+    expect(modelExplicit1.types[0]!.constraints).toEqual([{ kind: 'oneOf', paths: ['fixedRate', 'floatingRate'] }]);
+    expect(textExplicit1).toContain('required choice fixedRate, floatingRate');
+    await assertParses(textExplicit1);
+  });
 });
 
 describe('xsd-reader — xs:extension via xs:complexContent', () => {
@@ -593,6 +642,65 @@ describe('xsd-reader — out-of-MVP-scope constructs (diagnostic, never silently
 </xs:schema>`;
     const { text, diagnostics } = importToRune(xml);
     expect(diagnostics.some((d) => (d as { code: string }).code === 'unsupported-mixed-content')).toBe(true);
+    await assertParses(text);
+  });
+});
+
+describe('xsd-reader — xs:element ref= (same-document top-level-element reference)', () => {
+  it('resolves ref= against an already-declared top-level xs:element, using ITS name and type (not a garbage empty-name fallback)', async () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:element name="trade" type="xs:string"/>
+  <xs:complexType name="Envelope">
+    <xs:sequence>
+      <xs:element ref="trade"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const { text, model, diagnostics } = importToRune(xml);
+    const envelope = model.types[0]!;
+    const attr = envelope.attributes[0]!;
+    // The real, corrected shape: name/type/sourceKey all resolved from the
+    // REFERENCED top-level element, not the sanitizer's empty-name fallback
+    // ('value') this bug used to silently produce.
+    expect(attr.name).toBe('trade');
+    expect(attr.sourceKey).toBe('trade');
+    expect(attr.typeName).toBe('string');
+    expect(diagnostics.some((d) => (d as { code: string }).code === 'unresolved-element-ref')).toBe(false);
+    expect(text).toContain('trade string');
+    await assertParses(text);
+  });
+
+  it("the referencing site's own minOccurs/maxOccurs still applies to a ref= element (only name/type come from the referenced declaration)", async () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:element name="trade" type="xs:string"/>
+  <xs:complexType name="Envelope">
+    <xs:sequence>
+      <xs:element ref="trade" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const { model } = importToRune(xml);
+    expect(model.types[0]!.attributes[0]!.cardinality).toEqual({ inf: 0, sup: 1 });
+  });
+
+  it('an unresolvable ref= (no such top-level element anywhere in the document) -> diagnostic + the field is skipped, never a fabricated garbage attribute', async () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:complexType name="Envelope">
+    <xs:sequence>
+      <xs:element ref="doesNotExist"/>
+      <xs:element name="ok" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const { text, model, diagnostics } = importToRune(xml);
+    expect(model.types).toHaveLength(1);
+    // Only the resolvable sibling element survives; the unresolvable ref= is
+    // skipped, NOT fabricated as an empty-name/empty-type garbage attribute.
+    expect(model.types[0]!.attributes.map((a) => a.name)).toEqual(['ok']);
+    expect(diagnostics.some((d) => (d as { code: string }).code === 'unresolved-element-ref')).toBe(true);
     await assertParses(text);
   });
 });

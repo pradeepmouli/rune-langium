@@ -86,6 +86,21 @@ describe('THE ORACLE — .rune -> outbound `-t xsd` emitter -> inbound readXsd -
     expect(content).toContain('<xs:extension base="Party">');
   });
 
+  it('binds the target namespace as the schema DEFAULT namespace (xmlns=), not just targetNamespace with no prefix bound to it', async () => {
+    const { content } = await emitXsd(SOURCE_RUNE);
+    // Real bug found via PR review: type=/base= attribute VALUES are QNames
+    // resolved via in-scope namespace BINDINGS, not implicitly inherited
+    // from targetNamespace the way local element names are under
+    // elementFormDefault="qualified". Without xmlns= bound to the same URI
+    // as targetNamespace, every bare `type="Party"` is an unqualified,
+    // no-namespace reference that a standards-compliant XSD validator
+    // cannot resolve against the namespace-qualified top-level `Party`
+    // declaration (this codebase's own reader is lenient and tolerates it,
+    // masking the bug from the round-trip oracle alone).
+    expect(content).toMatch(/<xs:schema\b[^>]*\bxmlns="urn:rune:test\.xsdroundtrip"/);
+    expect(content).toMatch(/<xs:schema\b[^>]*\btargetNamespace="urn:rune:test\.xsdroundtrip"/);
+  });
+
   it('recovers the same types, attributes, and cardinalities', async () => {
     const { content } = await emitXsd(SOURCE_RUNE);
     const { model } = importXsdToRune(content);
@@ -152,6 +167,19 @@ describe('THE ORACLE — .rune -> outbound `-t xsd` emitter -> inbound readXsd -
     expect(trade.constraints).toEqual(
       expect.arrayContaining([{ kind: 'oneOf', paths: expect.arrayContaining(['fixedRate', 'floatingRate']) }])
     );
+  });
+
+  it('NEITHER choice member gets its own minOccurs in the emitted XML (real bug: carrying over each (0..1) member cardinality let the whole required-choice group be satisfied with zero members present)', async () => {
+    const { content } = await emitXsd(SOURCE_RUNE);
+    const choiceBlock = content.slice(content.indexOf('<xs:choice>'), content.indexOf('</xs:choice>'));
+    expect(choiceBlock).toContain('<xs:element name="fixedRate"');
+    expect(choiceBlock).toContain('<xs:element name="floatingRate"');
+    expect(choiceBlock).not.toContain('minOccurs');
+    expect(choiceBlock).not.toContain('maxOccurs');
+    // The wrapping <xs:choice> itself also has no minOccurs/maxOccurs (a
+    // required choice defaults to exactly-one-occurrence-of-the-group).
+    expect(content).toContain('<xs:choice>');
+    expect(content).not.toContain('<xs:choice minOccurs="0">');
   });
 
   it('the re-imported .rune text parses with zero errors end to end (hard invariant)', async () => {

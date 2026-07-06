@@ -56,19 +56,23 @@
  *    `necessity: 'required'`, recognized via `constraint-recognizer.ts`'s
  *    `recognizeCondition` → `{kind: 'oneOf', paths}`) → the named attributes
  *    are pulled OUT of the plain `xs:sequence` and re-grouped as a single
- *    `xs:choice` nested inside the sequence — the EXACT inverse of the
- *    reader's own `xs:choice → (0..1) attributes + oneOf constraint`
- *    mapping (`xsd-reader.ts`'s `buildType`: "every choice member becomes a
- *    (0..1) attribute regardless of its own minOccurs/maxOccurs, PLUS a
- *    type-level `{kind: 'oneOf', paths}`"). A Rune `choice`/`optional
- *    choice` (`{kind: 'choice', paths}`) has no XSD `minOccurs="0"`-choice-
- *    group equivalent the reader consumes identically (the reader always
- *    emits a REQUIRED `oneOf`, never `choice`, from `xs:choice` — there is
- *    no XSD shape it derives an optional `choice` constraint from), so only
- *    `oneOf` conditions are rendered as `xs:choice`; an `optional choice`
- *    condition is left unrepresented in the XSD output (same "recognized
- *    but not literally round-tripped structurally" posture as every other
- *    condition kind below).
+ *    bare `xs:choice` (no `minOccurs` of its own, defaulting to exactly-one-
+ *    occurrence) nested inside the sequence. An `optional choice`
+ *    (`necessity: 'optional'` → `{kind: 'choice', paths}`) is ALSO
+ *    recognized and rendered the same way, but as `<xs:choice
+ *    minOccurs="0">` — the reader (`xsd-reader.ts`'s `buildType`) reads the
+ *    `xs:choice` element's own `@_minOccurs` attribute (default, when
+ *    absent, `"1"`): `minOccurs="0"` → `{kind: 'choice', paths}` (optional),
+ *    absent/`"1"` → `{kind: 'oneOf', paths}` (required) — this emitter's
+ *    handling is the EXACT inverse of that, for both cases. Neither variant
+ *    puts `minOccurs`/`maxOccurs` on the choice MEMBERS themselves (every
+ *    `<xs:element>` inside `<xs:choice>` gets none at all, letting XSD's own
+ *    defaults, `minOccurs="1" maxOccurs="1"`, apply) — carrying over each
+ *    member attribute's own Rune cardinality (normally `(0..1)` for a choice
+ *    member) would let the WHOLE group be satisfied with zero members
+ *    present, contradicting `required choice`/`choice` semantics; only the
+ *    WRAPPING `<xs:choice>` element's own occurrence marker expresses
+ *    "exactly one" vs. "at most one, possibly none".
  *
  *  - A genuine Rune `choice` TYPE DECLARATION (`Choice`, a distinct Rune
  *    construct from the `required choice` CONDITION above) has no XSD
@@ -306,9 +310,22 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
 
   finalize(): GeneratorOutput {
     const body = [...this.simpleTypeBlocks, ...this.complexTypeBlocks].join('\n\n');
+    // Bind the target namespace as the schema's DEFAULT namespace (xmlns=),
+    // not just as targetNamespace with no prefix bound to it. In XSD,
+    // type=/base= attribute VALUES are QNames resolved via in-scope
+    // namespace bindings — they do NOT automatically inherit targetNamespace
+    // the way local element names do under elementFormDefault="qualified".
+    // Without a default-namespace binding, every bare `type="Party"` is an
+    // UNQUALIFIED, no-namespace reference that cannot resolve against the
+    // real (namespace-qualified) top-level `Party` declaration under any
+    // standards-compliant XSD validator — this reader's own default-
+    // namespace resolution path is lenient and tolerates it, but the
+    // document is not valid XSD without this binding. Binding xmlns= to the
+    // SAME URI as targetNamespace makes the default namespace equal the
+    // target namespace, so bare type="Party" now correctly resolves.
     const content =
       `<?xml version="1.0" encoding="UTF-8"?>\n` +
-      `<xs:schema xmlns:xs="${XSD_NS}" targetNamespace="urn:rune:${this.model.namespace}" elementFormDefault="qualified">\n\n` +
+      `<xs:schema xmlns:xs="${XSD_NS}" xmlns="urn:rune:${this.model.namespace}" targetNamespace="urn:rune:${this.model.namespace}" elementFormDefault="qualified">\n\n` +
       (body.length > 0 ? `${body}\n\n` : '') +
       `</xs:schema>\n`;
 
@@ -372,36 +389,55 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
     return 'xs:string';
   }
 
-  /** Recognizes every condition on `data` via `constraint-recognizer.ts`, splitting into per-attribute facet maps (`range`/`length`) and the set of attribute names participating in a `required choice` (`oneOf`) group, if any (spec.md Phase 3: at most a SINGLE `xs:choice` group per complexType is representable — the reader itself only ever produces one `oneOf` constraint per type, from one `xs:choice`). */
+  /**
+   * Recognizes every condition on `data` via `constraint-recognizer.ts`,
+   * splitting into per-attribute facet maps (`range`/`length`) and the set
+   * of attribute names participating in an `xs:choice` group, if any
+   * (spec.md Phase 3: at most a SINGLE `xs:choice` group per complexType is
+   * representable — the reader itself only ever produces one `oneOf`/
+   * `choice` constraint per type, from one `xs:choice`). Recognizes BOTH a
+   * `required choice` (`{kind: 'oneOf', paths}` — a MANDATORY group, the
+   * wrapping `xs:choice` gets no `minOccurs` of its own, defaulting to
+   * exactly-one-occurrence) and an `optional choice`/`choice`
+   * (`{kind: 'choice', paths}` — an OPTIONAL group, `xs:choice
+   * minOccurs="0"`) — the inverse of `xsd-reader.ts`'s own reading of the
+   * `xs:choice` element's `@_minOccurs` attribute (Finding 5's coupled
+   * reader-side fix: `minOccurs="0"` → `choice`, absent/`"1"` → `oneOf`).
+   */
   private recognizeAttributeFacets(conditions: readonly Condition[]): {
     facetsByPath: Map<string, Record<string, number>>;
-    oneOfPaths?: string[];
+    choicePaths?: string[];
+    choiceRequired: boolean;
   } {
     const facetsByPath = new Map<string, Record<string, number>>();
-    let oneOfPaths: string[] | undefined;
+    let choicePaths: string[] | undefined;
+    let choiceRequired = true;
 
     for (const condition of conditions) {
       if (condition.expression == null) continue;
       const ir = recognizeCondition(condition.expression);
       if (!ir) continue;
 
-      if (ir.kind === 'oneOf') {
-        // Only the FIRST recognized oneOf becomes an xs:choice group — a
-        // second one has no representable second choice-group slot in this
-        // MVP mapping (documented limitation, mirrors the reader's own
-        // single-oneOf-per-xs:choice production).
-        if (!oneOfPaths) oneOfPaths = ir.paths;
+      if (ir.kind === 'oneOf' || ir.kind === 'choice') {
+        // Only the FIRST recognized choice-shaped condition becomes an
+        // xs:choice group — a second one has no representable second
+        // choice-group slot in this MVP mapping (documented limitation,
+        // mirrors the reader's own single-choice-per-xs:choice production).
+        if (!choicePaths) {
+          choicePaths = ir.paths;
+          choiceRequired = ir.kind === 'oneOf';
+        }
         continue;
       }
 
-      if (!('path' in ir)) continue; // choice/conditional/etc — not a per-attribute facet shape
+      if (!('path' in ir)) continue; // conditional/etc — not a per-attribute facet shape
       const facets = constraintIRToXsdFacets(ir);
       if (!facets) continue;
       const existing = facetsByPath.get(ir.path);
       facetsByPath.set(ir.path, existing ? { ...existing, ...facets } : facets);
     }
 
-    return { facetsByPath, oneOfPaths };
+    return { facetsByPath, choicePaths, choiceRequired };
   }
 
   /**
@@ -409,16 +445,30 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
    * `extends` puts only the child's new attributes in its own
    * `xs:extension`/`xs:sequence`, matching the reader's `buildType` which
    * never re-attaches a base type's attributes to the extending type) into
-   * `ResolvedElement`s, honoring a recognized `oneOf` group by splitting
-   * them into (plain sequence members, choice members). A facet-bearing
-   * attribute's `type="..."` is redirected to a freshly synthesized named
-   * restricted-simpleType (pushed onto `this.simpleTypeBlocks` as a
-   * top-level sibling) rather than an inline nested restriction — see this
-   * module's doc comment for why.
+   * `ResolvedElement`s, honoring a recognized `oneOf`/`choice` group by
+   * splitting them into (plain sequence members, choice members). A
+   * facet-bearing attribute's `type="..."` is redirected to a freshly
+   * synthesized named restricted-simpleType (pushed onto
+   * `this.simpleTypeBlocks` as a top-level sibling) rather than an inline
+   * nested restriction — see this module's doc comment for why.
+   *
+   * Choice members deliberately carry NO `minOccurs`/`maxOccurs` of their
+   * own (Finding 4: carrying over the Rune attribute's own `(0..1)`
+   * cardinality onto each `<xs:element>` inside `<xs:choice>` would let XSD
+   * accept the group with ZERO members present, contradicting `required
+   * choice` semantics) — XSD's own defaults (`minOccurs="1"
+   * maxOccurs="1"`) combined with the wrapping `<xs:choice>`'s own
+   * (possibly `minOccurs="0"`, for an optional choice) occurrence marker
+   * correctly express "exactly one of these, if the group is present at
+   * all" / "at most one, and possibly none".
    */
-  private resolveElements(data: Data): { plain: ResolvedElement[]; choiceMembers: ResolvedElement[] } {
-    const { facetsByPath, oneOfPaths } = this.recognizeAttributeFacets(data.conditions ?? []);
-    const choiceNameSet = new Set(oneOfPaths ?? []);
+  private resolveElements(data: Data): {
+    plain: ResolvedElement[];
+    choiceMembers: ResolvedElement[];
+    choiceRequired: boolean;
+  } {
+    const { facetsByPath, choicePaths, choiceRequired } = this.recognizeAttributeFacets(data.conditions ?? []);
+    const choiceNameSet = new Set(choicePaths ?? []);
 
     const plain: ResolvedElement[] = [];
     const choiceMembers: ResolvedElement[] = [];
@@ -427,19 +477,23 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
       const baseTypeName = this.resolveAttributeType(attr);
       const facets = facetsByPath.get(attr.name);
       const typeName = facets ? this.synthesizeRestrictedSimpleType(attr.name, baseTypeName, facets) : baseTypeName;
+      const isChoiceMember = choiceNameSet.has(attr.name);
       const element: ResolvedElement = {
         name: attr.name,
         typeName,
-        ...cardinalityAttrs(attr.card)
+        // Choice members omit cardinalityAttrs entirely (Finding 4, see
+        // this method's own doc comment); plain sequence members keep
+        // their real cardinality.
+        ...(isChoiceMember ? {} : cardinalityAttrs(attr.card))
       };
-      if (choiceNameSet.has(attr.name)) {
+      if (isChoiceMember) {
         choiceMembers.push(element);
       } else {
         plain.push(element);
       }
     }
 
-    return { plain, choiceMembers };
+    return { plain, choiceMembers, choiceRequired };
   }
 
   /** Synthesizes a uniquely-named top-level restricted `xs:simpleType` (`<AttributeName>Type`, de-duplicated against every prior simpleType name in this namespace — enum names included, since both share the same top-level simpleType name space) for a facet-bearing attribute, pushes its rendering onto `this.simpleTypeBlocks`, and returns the synthesized name for the owning element's `type="..."` attribute. */
@@ -458,11 +512,16 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
 
   /** Renders one `Data` node as a top-level named `xs:complexType`. */
   private renderDataComplexType(data: Data): string {
-    const { plain, choiceMembers } = this.resolveElements(data);
+    const { plain, choiceMembers, choiceRequired } = this.resolveElements(data);
     const bodyLines: string[] = [];
     for (const el of plain) bodyLines.push(...renderElement(el, 0));
     if (choiceMembers.length > 0) {
-      bodyLines.push('<xs:choice>');
+      // A required choice (oneOf) -> a bare <xs:choice> (no minOccurs of its
+      // own, defaulting to exactly-one-occurrence-of-the-group); an optional
+      // choice -> <xs:choice minOccurs="0"> marking the WHOLE group
+      // optional (Finding 5, emitter side) — the members themselves never
+      // carry their own minOccurs/maxOccurs either way (Finding 4).
+      bodyLines.push(choiceRequired ? '<xs:choice>' : '<xs:choice minOccurs="0">');
       for (const el of choiceMembers) bodyLines.push(...renderElement(el, 1));
       bodyLines.push('</xs:choice>');
     }

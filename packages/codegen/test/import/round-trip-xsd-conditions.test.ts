@@ -206,3 +206,65 @@ describe('THE ORACLE — .rune (range/length conditions) -> outbound xsd emitter
     expect(text).toContain('type Trade:');
   });
 });
+
+// --- Finding 5 (coupled reader+emitter fix): optional choice round trip -----
+
+const OPTIONAL_CHOICE_SOURCE_RUNE = `namespace test.xsdoptionalchoice
+version "1.0.0"
+
+type Rate:
+    fixedRate number (0..1)
+    floatingRate number (0..1)
+
+    condition RateChoice:
+        optional choice fixedRate, floatingRate
+`;
+
+async function emitXsdOptionalChoice(source: string): Promise<string> {
+  const { RuneDsl } = createRuneDslServices();
+  const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+    source,
+    URI.parse('inmemory:///xsdoptionalchoice.rosetta')
+  );
+  await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
+  expect(doc.parseResult.parserErrors).toHaveLength(0);
+
+  const outputs = await generate(doc, { target: 'xsd' } as never);
+  expect(outputs.length).toBeGreaterThan(0);
+  return outputs[0]!.content;
+}
+
+describe('THE ORACLE — optional choice (Finding 5 coupled fix): .rune -> outbound xsd emitter -> inbound readXsd -> .rune', () => {
+  it('emits <xs:choice minOccurs="0"> (the whole group optional), with NEITHER member carrying its own minOccurs', async () => {
+    const xml = await emitXsdOptionalChoice(OPTIONAL_CHOICE_SOURCE_RUNE);
+    expect(xml).toContain('<xs:choice minOccurs="0">');
+    const choiceBlock = xml.slice(xml.indexOf('<xs:choice minOccurs="0">'), xml.indexOf('</xs:choice>'));
+    // The wrapping tag itself is the only minOccurs occurrence in the block
+    // — neither <xs:element> member gets its own (Finding 4's fix applies
+    // identically to an optional choice group).
+    expect(choiceBlock.match(/minOccurs/g)?.length ?? 0).toBe(1);
+  });
+
+  it('recovers an OPTIONAL choice constraint ({kind: "choice"}), not a mandatory oneOf', async () => {
+    const xml = await emitXsdOptionalChoice(OPTIONAL_CHOICE_SOURCE_RUNE);
+    const { model, diagnostics } = importXsdToRune(xml);
+    expect(diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+
+    const rate = model.types.find((t) => t.name === 'Rate')!;
+    expect(rate.constraints).toEqual(
+      expect.arrayContaining([{ kind: 'choice', paths: expect.arrayContaining(['fixedRate', 'floatingRate']) }])
+    );
+  });
+
+  it('the re-imported .rune text renders "optional choice" (not "required choice") and parses with zero errors', async () => {
+    const xml = await emitXsdOptionalChoice(OPTIONAL_CHOICE_SOURCE_RUNE);
+    const { text, diagnostics } = importXsdToRune(xml);
+    expect(diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+
+    expect(text).toContain('optional choice fixedRate, floatingRate');
+    expect(text).not.toContain('required choice');
+
+    const parseResult = await parse(text);
+    expect(parseResult.hasErrors).toBe(false);
+  });
+});

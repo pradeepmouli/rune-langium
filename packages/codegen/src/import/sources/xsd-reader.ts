@@ -2,9 +2,12 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * xsd-reader — W3C XML Schema (XSD) → `SourceModel` (spec.md Phase 3, this
- * effort's inbound-only reader; the outbound `-t xsd` emitter is a separate
- * follow-up task).
+ * xsd-reader — W3C XML Schema (XSD) → `SourceModel` (spec.md Phase 3). This
+ * module is the INBOUND half; the outbound `-t xsd` emitter
+ * (`../../emit/xsd-emitter.ts`) shipped in a later commit on this same
+ * effort — both directions now exist, forming the single-artifact
+ * Rune → XSD → Rune round-trip oracle (see the `round-trip-xsd-*.test.ts`
+ * files).
  *
  * Parser: `fast-xml-parser@^5.9.3` (spec.md Phase 3: NOT tree-sitter — XSD
  * is a document format like JSON Schema/OpenAPI, not a language with real
@@ -58,8 +61,13 @@
  *  - `minOccurs`/`maxOccurs` → `SourceCardinality` (absent/`"1"` → `1`;
  *    `"0"` → `0`; `"unbounded"` or `> 1` → `sup` absent).
  *  - `xs:choice` → every member becomes a `(0..1)` attribute PLUS a
- *    type-level `{ kind: 'oneOf', paths }` ConstraintIR — mirrors
- *    `json-schema-reader.ts`'s own discriminated-`oneOf` handling.
+ *    type-level ConstraintIR: the `xs:choice` element's OWN `@_minOccurs`
+ *    (default, when absent, `"1"` per XSD semantics) decides which —
+ *    `minOccurs="0"` (a legitimately OPTIONAL group) → `{ kind: 'choice',
+ *    paths }`; absent/`"1"` (the mandatory default) → `{ kind: 'oneOf',
+ *    paths }` — mirrors `json-schema-reader.ts`'s own discriminated-`oneOf`
+ *    handling for the mandatory case, plus the `choice` variant for the
+ *    optional one.
  *  - `xs:extension` (nested in `xs:complexContent`) → `SourceType.extends`,
  *    resolved via the namespace map to the LOCAL base type name. The base
  *    type's own attributes are NOT re-emitted on the extending type.
@@ -473,6 +481,8 @@ interface ElementLike {
   cardinality: SourceCardinality;
   abstract: boolean;
   substitutionGroup?: string;
+  /** `@_ref` — a same-document reference to an already-declared top-level `xs:element` (name + type resolved via `topLevelElements`, see `resolveElementRef`). Mutually exclusive with `name`/`rawType` being independently meaningful: a `ref=` element has NO `@_name`/`@_type` of its own per the XSD spec. */
+  ref?: string;
 }
 
 /**
@@ -494,8 +504,30 @@ function readElementLike(node: XmlNode, isAttribute: boolean): ElementLike {
     rawType: node['@_type'] as string | undefined,
     cardinality: isAttribute ? readAttributeUseCardinality(node) : readCardinality(node),
     abstract: node['@_abstract'] === 'true' || node['@_abstract'] === true,
-    substitutionGroup: node['@_substitutionGroup'] as string | undefined
+    substitutionGroup: node['@_substitutionGroup'] as string | undefined,
+    ref: node['@_ref'] as string | undefined
   };
+}
+
+/**
+ * Resolves an `xs:element ref="..."` against the document's OWN
+ * already-collected top-level `xs:element` declarations (`topLevelElements`,
+ * keyed by LOCAL name — same-document resolution only, per XSD's `ref=`
+ * semantics; multi-file `xs:import`/`xs:include` resolution is out of MVP
+ * scope, handled separately). Returns the resolved `{name, rawType}` pair
+ * when found; `undefined` (with a diagnostic already pushed by the caller)
+ * when the reference cannot be resolved in this document — NEVER fabricates
+ * a placeholder attribute, since a silent empty-name/empty-type fallback is
+ * data corruption, not graceful degradation.
+ */
+function resolveElementRef(
+  ref: string,
+  nsMap: ReadonlyMap<string, string>,
+  xsdPrefix: string,
+  topLevelElements: ReadonlyMap<string, ElementLike>
+): ElementLike | undefined {
+  const { local } = resolveTypeRef(ref, nsMap, xsdPrefix);
+  return topLevelElements.get(local);
 }
 
 function buildAttributeFromElementLike(
@@ -505,8 +537,25 @@ function buildAttributeFromElementLike(
   simpleTypes: ReadonlyMap<string, NamedSimpleType>,
   diagnostics: ImportDiagnostic[],
   skipConditions: boolean,
+  topLevelElements: ReadonlyMap<string, ElementLike>,
   cardinalityOverride?: SourceCardinality
-): SourceAttribute {
+): SourceAttribute | undefined {
+  if (el.ref) {
+    const resolved = resolveElementRef(el.ref, nsMap, xsdPrefix, topLevelElements);
+    if (!resolved) {
+      pushDiagnostic(diagnostics, {
+        severity: 'warning',
+        code: 'unresolved-element-ref',
+        message: `xs:element ref="${el.ref}" could not be resolved against any top-level xs:element declaration in this document — skipped (multi-file resolution is out of scope)`
+      });
+      return undefined;
+    }
+    // The referencing site's OWN minOccurs/maxOccurs (cardinality) still
+    // applies — only name/type come from the referenced top-level element
+    // (an xs:element with ref= has no @_name/@_type of its own per the XSD
+    // spec, so el.name/el.rawType are always empty here).
+    el = { ...resolved, cardinality: el.cardinality };
+  }
   if (el.substitutionGroup) {
     pushDiagnostic(diagnostics, {
       severity: 'warning',
@@ -518,7 +567,13 @@ function buildAttributeFromElementLike(
   const resolved = el.rawType ? resolveElementType(el.rawType, nsMap, xsdPrefix, simpleTypes) : { typeName: 'string' };
   const constraints: ConstraintIR[] = [];
   if (!skipConditions && resolved.scalarFacets) {
-    constraints.push(...facetsToConstraints(resolved.scalarFacets, el.name, diagnostics));
+    // Use the SANITIZED attribute name (attrName), not the original XML
+    // element name (el.name), as the ConstraintIR's path — the emitted
+    // condition references the actual Rune attribute, which is always
+    // attrName. Passing el.name here would break the grammar outright for
+    // any XSD element name needing sanitization (e.g. a hyphenated name),
+    // since the rendered condition would reference a nonexistent path.
+    constraints.push(...facetsToConstraints(resolved.scalarFacets, attrName, diagnostics));
   }
   return {
     name: attrName,
@@ -537,6 +592,8 @@ interface ComplexTypeShape {
   memberElements: ElementLike[];
   /** xs:choice member elements, if a top-level (non-nested) xs:choice is present. */
   choiceElements: ElementLike[];
+  /** The xs:choice element's OWN `@_minOccurs` ('0' -> optional; default/absent/'1' -> mandatory), per XSD's own minOccurs default semantics — read only when `choiceElements` is non-empty. */
+  choiceMinOccurs?: string;
   /** xs:attribute children (complexType's own, or the xs:extension's own). */
   attributeElements: ElementLike[];
   hasMixedContent: boolean;
@@ -573,6 +630,7 @@ function readComplexType(ct: XmlNode, xsdPrefix: string): ComplexTypeShape {
   const choiceElements = asArray<XmlNode>(effectiveChoice?.[q('element')] as XmlNode[] | undefined).map((n) =>
     readElementLike(n, false)
   );
+  const choiceMinOccurs = effectiveChoice?.['@_minOccurs'] as string | undefined;
 
   const attributeElements = asArray<XmlNode>(body[q('attribute')] as XmlNode[] | undefined).map((n) =>
     readElementLike(n, true)
@@ -587,6 +645,7 @@ function readComplexType(ct: XmlNode, xsdPrefix: string): ComplexTypeShape {
     extendsRaw,
     memberElements,
     choiceElements,
+    choiceMinOccurs,
     attributeElements,
     hasMixedContent: bodyMixed,
     hasGroupRef,
@@ -601,7 +660,8 @@ function buildType(
   xsdPrefix: string,
   simpleTypes: ReadonlyMap<string, NamedSimpleType>,
   diagnostics: ImportDiagnostic[],
-  skipConditions: boolean
+  skipConditions: boolean,
+  topLevelElements: ReadonlyMap<string, ElementLike>
 ): SourceType {
   const typeName = toTypeName(shape.name);
 
@@ -648,23 +708,49 @@ function buildType(
     }
   }
 
-  const attributes: SourceAttribute[] = [
-    ...shape.memberElements.map((el) =>
-      buildAttributeFromElementLike(el, nsMap, xsdPrefix, simpleTypes, diagnostics, skipConditions)
-    ),
-    ...shape.choiceElements.map((el) =>
+  // buildAttributeFromElementLike returns undefined for an unresolvable
+  // xs:element ref= (diagnostic already pushed there) — filtered out here
+  // rather than fabricated as a garbage attribute.
+  const memberAttributes = shape.memberElements
+    .map((el) =>
+      buildAttributeFromElementLike(el, nsMap, xsdPrefix, simpleTypes, diagnostics, skipConditions, topLevelElements)
+    )
+    .filter((a): a is SourceAttribute => a !== undefined);
+  const choiceAttributes = shape.choiceElements
+    .map((el) =>
       // Every choice member becomes a (0..1) attribute regardless of its own
       // minOccurs/maxOccurs (spec.md Phase 3's exact rule).
-      buildAttributeFromElementLike(el, nsMap, xsdPrefix, simpleTypes, diagnostics, skipConditions, { inf: 0, sup: 1 })
-    ),
-    ...shape.attributeElements.map((el) =>
-      buildAttributeFromElementLike(el, nsMap, xsdPrefix, simpleTypes, diagnostics, skipConditions)
+      buildAttributeFromElementLike(el, nsMap, xsdPrefix, simpleTypes, diagnostics, skipConditions, topLevelElements, {
+        inf: 0,
+        sup: 1
+      })
     )
-  ];
+    .filter((a): a is SourceAttribute => a !== undefined);
+  const attributeAttributes = shape.attributeElements
+    .map((el) =>
+      buildAttributeFromElementLike(el, nsMap, xsdPrefix, simpleTypes, diagnostics, skipConditions, topLevelElements)
+    )
+    .filter((a): a is SourceAttribute => a !== undefined);
+
+  const attributes: SourceAttribute[] = [...memberAttributes, ...choiceAttributes, ...attributeAttributes];
 
   const constraints: ConstraintIR[] = [];
-  if (!skipConditions && shape.choiceElements.length > 0) {
-    constraints.push({ kind: 'oneOf', paths: shape.choiceElements.map((el) => el.name) });
+  if (!skipConditions && choiceAttributes.length > 0) {
+    // Use the RESOLVED attribute names (post ref= resolution + sanitization),
+    // not shape.choiceElements' own raw el.name — a ref= choice member has an
+    // empty el.name (an xs:element with ref= carries no @_name of its own),
+    // so deriving paths from choiceAttributes keeps this correct for both
+    // plain and ref= choice members.
+    const paths = choiceAttributes.map((a) => a.name);
+    // The xs:choice element's OWN @_minOccurs decides mandatory vs optional
+    // (XSD default, when absent, is "1" — a bare <xs:choice> is mandatory):
+    // minOccurs="0" -> a legitimately OPTIONAL group -> {kind: 'choice'}
+    // (Rune's "at most one, optional" idiom); absent/"1" -> the established
+    // MANDATORY {kind: 'oneOf'} default. Never inferred from the members'
+    // own occurrence markers — those are independently normalized to
+    // (0..1) regardless (see buildAttributeFromElementLike's cardinality
+    // override above).
+    constraints.push(shape.choiceMinOccurs === '0' ? { kind: 'choice', paths } : { kind: 'oneOf', paths });
   }
 
   return {
@@ -801,6 +887,17 @@ export function readXsd(
     }
   }
 
+  // Top-level xs:element declarations, collected BEFORE buildType runs so
+  // `ref=` resolution (Finding 2: same-document `xs:element ref="..."`
+  // resolution) can look them up — reused for both that purpose AND the
+  // pre-existing abstract/substitutionGroup diagnostics below (a single
+  // collection, not two — the diagnostics loop previously built its own
+  // separate list after buildType had already run).
+  const topLevelElementList = asArray<XmlNode>(schema[q('element')] as XmlNode | XmlNode[] | undefined)
+    .map((n) => readElementLike(n, false))
+    .filter((el) => el.name.length > 0);
+  const topLevelElementsByName = new Map(topLevelElementList.map((el) => [el.name, el]));
+
   const complexTypes = asArray<XmlNode>(schema[q('complexType')] as XmlNode | XmlNode[] | undefined).filter(
     (ct) => typeof ct['@_name'] === 'string' && (ct['@_name'] as string).length > 0
   );
@@ -811,18 +908,12 @@ export function readXsd(
       xsdPrefix,
       simpleTypesByName,
       diagnostics,
-      options.skipConditions ?? false
+      options.skipConditions ?? false,
+      topLevelElementsByName
     )
   );
 
-  // Top-level xs:element declarations (abstract/substitutionGroup are the
-  // only ones with any MVP-relevant signal — see spec.md Phase 3's scope
-  // list; a top-level element otherwise carries no additional structure
-  // this reader represents beyond its referenced complexType/simpleType).
-  const topLevelElements = asArray<XmlNode>(schema[q('element')] as XmlNode | XmlNode[] | undefined)
-    .map((n) => readElementLike(n, false))
-    .filter((el) => el.name.length > 0);
-  for (const el of topLevelElements) {
+  for (const el of topLevelElementList) {
     if (el.abstract) {
       pushDiagnostic(diagnostics, {
         severity: 'info',

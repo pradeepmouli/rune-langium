@@ -238,6 +238,39 @@ describe('xsd-reader constraints — xs:choice -> required choice condition', ()
   });
 });
 
+describe('xsd-reader constraints — facet path uses the SANITIZED attribute name, not the raw XML element name', () => {
+  it('a hyphenated element name (e.g. "trade-id") produces a condition referencing the sanitized attribute ("trade_id"), and the rendered text parses with zero errors', async () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:test">
+  <xs:simpleType name="TradeIdType">
+    <xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction>
+  </xs:simpleType>
+  <xs:complexType name="Trade">
+    <xs:sequence><xs:element name="trade-id" type="TradeIdType"/></xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const { text, model } = await importToRune(xml);
+    const attr = model.types[0]!.attributes[0]!;
+    // The Rune attribute itself is sanitized...
+    expect(attr.name).toBe('trade_id');
+    // ...and the constraint's `path` MUST match that sanitized name, not the
+    // original unsanitized XML element name ('trade-id') — a real PR-review
+    // finding: passing el.name (the raw XML name) here produced a condition
+    // like `trade-id count <= 10`, which is not a valid Rune identifier and
+    // fails the real parser with a hard syntax error.
+    expect(attr.constraints).toEqual([{ kind: 'length', path: 'trade_id', max: 10 }]);
+    expect(text).toContain('trade_id count <= 10');
+    // The original unsanitized name legitimately appears ONLY inside the
+    // quoted synonym annotation (`[synonym Xsd value "trade-id"]`) — never
+    // as a bare (unquoted) identifier anywhere else in the rendered text,
+    // which is what the condition body would have contained pre-fix.
+    expect(text).toContain('[synonym Xsd value "trade-id"]');
+    const conditionBlock = text.slice(text.indexOf('condition '));
+    expect(conditionBlock).not.toContain('trade-id');
+    await assertParses(text);
+  });
+});
+
 describe('xsd-reader constraints — skipConditions suppresses every restriction-derived constraint', () => {
   it('no conditions are emitted, though the attribute retypes/cardinalities are unaffected', async () => {
     const xml = scalarRestrictionXml('<xs:minInclusive value="0"/><xs:maxInclusive value="100"/>');
