@@ -46,7 +46,7 @@ const fixturePresent = existsSync(CDM_JSON_SCHEMA_PATH);
 describe.skipIf(!fixturePresent)('CDM smoke — JSON Schema importer', () => {
   it(`imports the FINOS CDM JSON Schema distribution at ${CDM_JSON_SCHEMA_PATH} and produces zero-parse-error .rune output`, async () => {
     const schemaText = await readFile(CDM_JSON_SCHEMA_PATH, 'utf-8');
-    const result = importModel(schemaText, { from: 'json-schema' });
+    const result = await importModel(schemaText, { from: 'json-schema' });
 
     expect(result.model.types.length + result.model.enums.length).toBeGreaterThan(0);
 

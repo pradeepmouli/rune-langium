@@ -385,9 +385,9 @@ program
 
 program
   .command('import')
-  .description('Import a .rune model from an external source format (json-schema, openapi)')
-  .argument('<input>', 'Path to the source file (e.g. a JSON Schema or OpenAPI document)')
-  .requiredOption('--from <source>', "Source format: 'json-schema' or 'openapi' (JSON or YAML)")
+  .description('Import a .rune model from an external source format (json-schema, openapi, sql)')
+  .argument('<input>', 'Path to the source file (e.g. a JSON Schema, OpenAPI, or SQL DDL document)')
+  .requiredOption('--from <source>', "Source format: 'json-schema', 'openapi' (JSON or YAML), or 'sql'")
   // NOTE: deliberately NOT `-o`/`--output` (spec.md's example CLI syntax
   // uses `-o <output.rune>`) — the root program ALSO declares
   // `-o, --output <dir>` (a directory, for the outbound multi-file case).
@@ -403,10 +403,11 @@ program
   // from the parent command" behavior interacting badly with a same-letter/
   // same-name redeclaration — a real gotcha, not a typo in this file.
   .option('--out-file <file>', 'Output .rune file path (default: stdout)')
-  .option('--namespace <name>', 'Override namespace derivation')
+  .option('--namespace <name>', 'Override namespace derivation (required for --from sql)')
   .option('--no-synonyms', 'Suppress synonym annotations')
   .option('--no-conditions', 'Structural import only — skip expression translation')
   .option('--on-untranslatable <mode>', "How to handle an untranslatable construct: 'stub' (default)", 'stub')
+  .option('--sql-dialect <dialect>', "--from sql only: 'postgres' (default) or 'sqlserver'", 'postgres')
   .action(async (input: string, cmdOpts: Parameters<typeof runImport>[1]) => {
     process.exit(await runImport(input, cmdOpts));
   });

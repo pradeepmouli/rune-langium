@@ -142,6 +142,18 @@ const COLUMN_TYPE_MAP: Readonly<Record<string, string>> = {
 export interface SqlImportOptions {
   /** Rune namespace (SQL DDL has no namespace concept of its own — always required, unlike the JSON Schema/OpenAPI readers' `$id`-derived fallback). */
   namespace: string;
+  /**
+   * Matches the outbound SQL emitter's `SqlDialectName` surface
+   * (`sql-dialect.ts`), spec.md's `--sql-dialect` CLI flag. The
+   * `web-tree-sitter` grammar itself is dialect-tolerant (both dialects'
+   * DDL shapes parse without a mode switch — confirmed by the T0 spike's
+   * dialect-matrix probes), so this is currently informational/reserved
+   * for future dialect-specific reader behavior (e.g. a diagnostic that
+   * only makes sense for one dialect's own conventions) rather than a
+   * parsing-mode switch. Default: `'postgres'` (matches the outbound
+   * emitter's own default).
+   */
+  dialect?: 'postgres' | 'sqlserver';
   /** Structural import only — never populate `constraints` arrays (spec.md CLI `--no-conditions`). Default: translate constraints. */
   skipConditions?: boolean;
   /** Overrides the default `web-tree-sitter` wasm loading (see `sql-grammar-loader.ts`'s `WasmSource`) — primarily for browser callers. */
@@ -183,6 +195,16 @@ export async function readSql(
   if (tree === null) {
     throw new Error('rune-codegen import: the SQL parser returned no tree (empty input?)');
   }
+  // NOTE: the FULL script's own top-level `tree.rootNode.hasError` is
+  // deliberately NOT checked here — a BETWEEN-CHECK column followed by
+  // another item always leaves that top-level parse `hasError: true` (the
+  // grammar's own recovery artifact, T2's finding), even though per-item
+  // isolation (`parseIsolatedItem`, below) fully and correctly recovers
+  // it. Checking the top-level tree would falsely flag every such
+  // (correctly-handled) case as broken. Genuine, UNRECOVERABLE syntax
+  // problems (bracket-quoted identifiers, `NVARCHAR(MAX)`) are instead
+  // surfaced per-item, from each isolated re-parse's OWN `hasError` —
+  // see `parseIsolatedItem`'s `sql-parse-error` diagnostic below.
 
   const rawTables = collectTables(tree.rootNode, parser, diagnostics);
   const { joinTables, ownerAttributes } = classifyJoinTables(rawTables);
@@ -272,7 +294,7 @@ function readCreateTable(node: Node, parser: Parser, diagnostics: ImportDiagnost
   // a merged, ambiguous subtree.
   const itemTexts = columnDefs ? splitTopLevelItems(columnDefs.text) : [];
   for (const itemText of itemTexts) {
-    const isolated = parseIsolatedItem(parser, name, itemText);
+    const isolated = parseIsolatedItem(parser, name, itemText, diagnostics);
     if (!isolated) continue;
     if (isolated.kind === 'column') {
       const col = readColumnDefinition(isolated.node, name, diagnostics, isolated.extraErrorSibling);
@@ -355,9 +377,20 @@ const TABLE_CONSTRAINT_ITEM_RE = /^\s*(FOREIGN\s+KEY|CHECK)\b/i;
  * `column_definitions` (NOT nested inside it, despite how it renders in a
  * naive recursive tree dump) — this ERROR sibling carries the
  * `between_expression` `readColumnDefinition` needs; it is threaded back
- * as `extraErrorSibling` for the caller to fold in.
+ * as `extraErrorSibling` for the caller to fold in. That specific shape is
+ * the FULLY-RECOVERED case (every field is still recoverable) and must
+ * NOT itself trigger a diagnostic — only when the isolated re-parse still
+ * has an error AND no `between_expression` is recoverable from it (a
+ * genuinely unrecoverable shape — e.g. a bracket-quoted identifier or
+ * `NVARCHAR(MAX)`, T0's documented grammar-tolerance gaps) does this push
+ * `sql-parse-error`.
  */
-function parseIsolatedItem(parser: Parser, ownerTable: string, itemText: string): IsolatedItem | undefined {
+function parseIsolatedItem(
+  parser: Parser,
+  ownerTable: string,
+  itemText: string,
+  diagnostics: ImportDiagnostic[]
+): IsolatedItem | undefined {
   const isConstraint = TABLE_CONSTRAINT_ITEM_RE.test(itemText);
   const isolatedSql = isConstraint
     ? `CREATE TABLE ${ownerTable}_iso (__rune_iso_dummy__ INT, ${itemText})`
@@ -371,12 +404,31 @@ function parseIsolatedItem(parser: Parser, ownerTable: string, itemText: string)
     const child = siblings[i]!;
     if (child.type === 'column_definition' && !isConstraint) {
       const next = siblings[i + 1];
-      return { kind: 'column', node: child, ...(next?.type === 'ERROR' && { extraErrorSibling: next }) };
+      const extraErrorSibling = next?.type === 'ERROR' ? next : undefined;
+      const recoveredBetween = extraErrorSibling && [...walkNamed(extraErrorSibling, 'between_expression')][0];
+      if (tree.rootNode.hasError && !recoveredBetween) {
+        pushDiagnostic(diagnostics, {
+          severity: 'warning',
+          code: 'sql-parse-error',
+          message:
+            `${ownerTable}: the column item '${itemText}' did not parse cleanly — the imported column may be ` +
+            `incomplete or missing; common causes: a bracket-quoted identifier ([name]) or NVARCHAR(MAX), ` +
+            `neither tolerated by this reader's grammar (use a double-quoted identifier / a concrete NVARCHAR size instead)`
+        });
+      }
+      return { kind: 'column', node: child, ...(extraErrorSibling && { extraErrorSibling }) };
     }
     if (child.type === 'constraints') {
       const constraint = child.namedChildren.find((n) => n?.type === 'constraint');
       if (constraint) return { kind: 'constraint', node: constraint };
     }
+  }
+  if (tree.rootNode.hasError) {
+    pushDiagnostic(diagnostics, {
+      severity: 'warning',
+      code: 'sql-parse-error',
+      message: `${ownerTable}: the item '${itemText}' did not parse cleanly and was skipped entirely`
+    });
   }
   return undefined;
 }

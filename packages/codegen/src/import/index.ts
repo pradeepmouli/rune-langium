@@ -7,11 +7,18 @@
  *
  * `importModel(source, options)` is the primary entry point. Phase 1
  * implements `from: 'json-schema'`; Phase 2 adds `from: 'openapi'` (OAS
- * 3.0.x / 3.1, JSON or YAML). The remaining sources named in spec.md's CLI
- * surface (`typescript` | `sql` | `python`) are follow-up work (US2-US4)
- * and are rejected here with a clear "not yet supported" error, matching
- * the CLI's own error contract (spec.md's CLI Surface section: "the other
- * values error with 'not yet supported'").
+ * 3.0.x / 3.1, JSON or YAML); Phase 2c adds `from: 'sql'` (tree-sitter,
+ * `sql-reader.ts`). The remaining sources named in spec.md's CLI surface
+ * (`typescript` | `python`) are follow-up work (US2/US4) and are rejected
+ * here with a clear "not yet supported" error, matching the CLI's own
+ * error contract (spec.md's CLI Surface section: "the other values error
+ * with 'not yet supported'").
+ *
+ * `importModel` is `async` — `sql-reader.ts`'s `readSql` loads the
+ * `web-tree-sitter` WASM grammar (`sql-grammar-loader.ts`), an inherently
+ * asynchronous operation; the JSON Schema/OpenAPI readers remain
+ * synchronous internally but are awaited here uniformly so every source
+ * shares one entry-point signature.
  *
  * Also re-exports the `SourceModel`/`ConstraintIR` type vocabulary
  * (source-model.ts), import diagnostics (diagnostics.ts), and the CLI's
@@ -23,6 +30,7 @@ import { renderModel } from '../emit/rosetta/rosetta-render-core.js';
 import { buildModel } from './ast-builder.js';
 import { readJsonSchema } from './sources/json-schema-reader.js';
 import { readOpenApi, parseOpenApiDocument } from './sources/openapi-reader.js';
+import { readSql } from './sources/sql-reader.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 import type { SourceModel } from './source-model.js';
 
@@ -46,7 +54,7 @@ export type ImportSourceKind = 'json-schema' | 'openapi' | 'typescript' | 'sql' 
 
 export interface ImportOptions {
   from: ImportSourceKind;
-  /** Overrides namespace derivation (e.g. from a JSON Schema `$id`). */
+  /** Overrides namespace derivation (e.g. from a JSON Schema `$id`). Required for `from: 'sql'` — SQL DDL has no namespace concept of its own to derive from. */
   namespace?: string;
   /** Suppress synonym annotations entirely. Default: emit (MVP round-trip-fidelity default). */
   synonyms?: boolean;
@@ -61,6 +69,8 @@ export interface ImportOptions {
    * behaving like `'stub'`.
    */
   onUntranslatable?: 'stub' | 'skip' | 'error';
+  /** `from: 'sql'` only (spec.md CLI `--sql-dialect`, matching the outbound SQL emitter's `SqlDialectName`). Default: `'postgres'`. */
+  sqlDialect?: 'postgres' | 'sqlserver';
 }
 
 export interface ImportResult {
@@ -70,21 +80,25 @@ export interface ImportResult {
   diagnostics: ImportDiagnostic[];
 }
 
-const SUPPORTED_SOURCES: ReadonlySet<ImportSourceKind> = new Set(['json-schema', 'openapi']);
+const SUPPORTED_SOURCES: ReadonlySet<ImportSourceKind> = new Set(['json-schema', 'openapi', 'sql']);
 
 /**
  * Imports a source-format document into a `.rune` model.
  *
  * @param source - The raw source text: JSON Schema document text for
  *   `from: 'json-schema'`; OpenAPI 3.0.x/3.1 document text (JSON or YAML,
- *   auto-detected) for `from: 'openapi'`.
+ *   auto-detected) for `from: 'openapi'`; SQL DDL (`CREATE TABLE`
+ *   statements) for `from: 'sql'`.
  * @param options - Import options; `from` selects the source reader.
+ *   `from: 'sql'` requires `namespace` (SQL DDL has no namespace concept
+ *   of its own to derive one from, unlike the other two sources' `$id`/
+ *   `info.title` fallback).
  */
-export function importModel(source: string, options: ImportOptions): ImportResult {
+export async function importModel(source: string, options: ImportOptions): Promise<ImportResult> {
   if (!SUPPORTED_SOURCES.has(options.from)) {
     throw new Error(
-      `rune-codegen import: --from '${options.from}' is not yet supported (implemented: 'json-schema', 'openapi'; ` +
-        `'typescript'/'sql'/'python' are follow-up work).`
+      `rune-codegen import: --from '${options.from}' is not yet supported (implemented: 'json-schema', 'openapi', 'sql'; ` +
+        `'typescript'/'python' are follow-up work).`
     );
   }
   if (options.onUntranslatable !== undefined && options.onUntranslatable !== 'stub') {
@@ -93,16 +107,22 @@ export function importModel(source: string, options: ImportOptions): ImportResul
         `(Phase 1 always stubs an untranslatable construct + emits a diagnostic).`
     );
   }
+  if (options.from === 'sql' && options.namespace === undefined) {
+    throw new Error(
+      `rune-codegen import: --from 'sql' requires --namespace (SQL DDL has no namespace concept of its own to derive one from).`
+    );
+  }
 
   const readerOptions = {
     ...(options.namespace !== undefined && { namespace: options.namespace }),
     ...(options.conditions === false && { skipConditions: true })
   };
 
-  const { model, diagnostics: readerDiagnostics } =
-    options.from === 'openapi'
-      ? readOpenApi(parseOpenApiDocument(source), readerOptions)
-      : readJsonSchema(parseJsonSchemaSource(source) as never, readerOptions);
+  const { model, diagnostics: readerDiagnostics } = await (options.from === 'sql'
+    ? readSql(source, { namespace: options.namespace!, dialect: options.sqlDialect ?? 'postgres', ...readerOptions })
+    : options.from === 'openapi'
+      ? Promise.resolve(readOpenApi(parseOpenApiDocument(source), readerOptions))
+      : Promise.resolve(readJsonSchema(parseJsonSchemaSource(source) as never, readerOptions)));
 
   const built = buildModel(model, { emitSynonyms: options.synonyms ?? true });
   const rendered = renderModel({ name: model.namespace, version: '0.0.0', elements: built.elements as never[] });
