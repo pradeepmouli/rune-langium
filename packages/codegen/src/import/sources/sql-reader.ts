@@ -55,7 +55,7 @@
  * do the Rune-specific work, exactly as for every other reader.
  */
 
-import type { Node } from 'web-tree-sitter';
+import type { Node, Parser } from 'web-tree-sitter';
 import type { ConstraintIR, Literal, SourceAttribute, SourceEnum, SourceModel, SourceType } from '../source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
 import { createSqlParser, type WasmSource } from './sql-grammar-loader.js';
@@ -184,7 +184,7 @@ export async function readSql(
     throw new Error('rune-codegen import: the SQL parser returned no tree (empty input?)');
   }
 
-  const rawTables = collectTables(tree.rootNode, diagnostics);
+  const rawTables = collectTables(tree.rootNode, parser, diagnostics);
   const { joinTables, ownerAttributes } = classifyJoinTables(rawTables);
 
   const enums: SourceEnum[] = [];
@@ -229,12 +229,12 @@ export async function readSql(
 
 // --- statement / table collection ----------------------------------------
 
-function collectTables(root: Node, diagnostics: ImportDiagnostic[]): RawTable[] {
+function collectTables(root: Node, parser: Parser, diagnostics: ImportDiagnostic[]): RawTable[] {
   const tables: RawTable[] = [];
   for (const statement of walkNamed(root, 'statement')) {
     const createTable = statement.namedChildren.find((n) => n?.type === 'create_table');
     if (!createTable) continue;
-    const table = readCreateTable(createTable, diagnostics);
+    const table = readCreateTable(createTable, parser, diagnostics);
     if (table) tables.push(table);
   }
   return tables;
@@ -248,7 +248,7 @@ function* walkNamed(node: Node, type: string): Generator<Node> {
   }
 }
 
-function readCreateTable(node: Node, diagnostics: ImportDiagnostic[]): RawTable | undefined {
+function readCreateTable(node: Node, parser: Parser, diagnostics: ImportDiagnostic[]): RawTable | undefined {
   const objectRef = node.namedChildren.find((n) => n?.type === 'object_reference');
   if (!objectRef) return undefined;
   const name = lastIdentifierSegment(objectRef);
@@ -258,20 +258,127 @@ function readCreateTable(node: Node, diagnostics: ImportDiagnostic[]): RawTable 
   const foreignKeys: RawForeignKey[] = [];
   const tableChecks: Node[] = [];
 
-  for (const child of columnDefs?.namedChildren ?? []) {
-    if (!child) continue;
-    if (child.type === 'column_definition') {
-      const col = readColumnDefinition(child, name, diagnostics);
+  // T0/T2 finding: when a column-level `CHECK (... BETWEEN ...)` is
+  // followed by ANY further column or table-level constraint item, the
+  // grammar's error recovery merges everything after it into a SINGLE
+  // malformed `column_definition` node — the following item's own
+  // identifier is unrecoverable from that merged subtree (its type token
+  // may survive as a stray sibling, but with no attached name; confirmed
+  // via isolated probes in `.superpowers/sdd/sql-reader-report.md`'s T2
+  // notes). Rather than special-case detection, every table's column-list
+  // is ALWAYS split at the text level (respecting paren/quote nesting) and
+  // each item is re-parsed as its own isolated single-item table — this
+  // sidesteps the recovery bug entirely instead of trying to reconstruct
+  // a merged, ambiguous subtree.
+  const itemTexts = columnDefs ? splitTopLevelItems(columnDefs.text) : [];
+  for (const itemText of itemTexts) {
+    const isolated = parseIsolatedItem(parser, name, itemText);
+    if (!isolated) continue;
+    if (isolated.kind === 'column') {
+      const col = readColumnDefinition(isolated.node, name, diagnostics, isolated.extraErrorSibling);
       if (col) columns.push(col);
-    } else if (child.type === 'constraints') {
-      for (const constraint of child.namedChildren) {
-        if (constraint?.type !== 'constraint') continue;
-        readTableConstraint(constraint, name, foreignKeys, tableChecks, diagnostics);
-      }
+    } else {
+      readTableConstraint(isolated.node, name, foreignKeys, tableChecks, diagnostics);
     }
   }
 
   return { name, columns, foreignKeys, tableChecks };
+}
+
+/**
+ * Splits a `column_definitions` node's own text (including its outer
+ * parens) into individual top-level item texts (one per column definition
+ * or table-level constraint), respecting nested parens and single-quoted
+ * string literals (which may themselves contain commas or parens, e.g.
+ * `DEFAULT 'a, b'` or `CHECK (code LIKE '(%')`).
+ */
+function splitTopLevelItems(columnDefsText: string): string[] {
+  // Strip the outer `(` ... `)` — `columnDefsText` is the FULL
+  // `column_definitions` node text, which includes them.
+  const inner = columnDefsText.replace(/^\s*\(/, '').replace(/\)\s*$/, '');
+  const items: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let current = '';
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!;
+    if (inString) {
+      current += ch;
+      if (ch === "'" && inner[i + 1] === "'") {
+        current += inner[++i]!; // escaped '' inside a string literal — not the closing quote
+      } else if (ch === "'") {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "'") {
+      inString = true;
+      current += ch;
+      continue;
+    }
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ',' && depth === 0) {
+      items.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim().length > 0) items.push(current.trim());
+  return items;
+}
+
+type IsolatedItem = { kind: 'column'; node: Node; extraErrorSibling?: Node } | { kind: 'constraint'; node: Node };
+
+/** A table-level-constraint item starts with `FOREIGN KEY` or a bare `CHECK` (not a column name followed by a type). */
+const TABLE_CONSTRAINT_ITEM_RE = /^\s*(FOREIGN\s+KEY|CHECK)\b/i;
+
+/**
+ * Re-parses one column-definition or table-constraint item text in
+ * isolation, sidestepping the BETWEEN error-recovery merge (see
+ * `readCreateTable`'s doc). A separate, made-up table name (`<owner>_iso`)
+ * avoids any accidental self-reference collision with the real table name
+ * inside a FK item's own text.
+ *
+ * A bare table-level constraint item (`FOREIGN KEY (...)`/`CHECK (...)`)
+ * does not parse standalone at all — the grammar's `constraints` rule
+ * requires at least one real `column_definition` before it (confirmed via
+ * an isolated probe: `CREATE TABLE t (FOREIGN KEY (a) REFERENCES b(c))`
+ * alone produces `hasError: true`) — so a constraint item is parsed with a
+ * harmless dummy leading column prepended, and the SECOND top-level item
+ * (past the dummy) is extracted instead of the first.
+ *
+ * A column item whose own `CHECK (... BETWEEN ...)` clause doesn't attach
+ * cleanly to the `column_definition` node still produces a TRAILING
+ * `ERROR` node as a SIBLING of `column_definition` under
+ * `column_definitions` (NOT nested inside it, despite how it renders in a
+ * naive recursive tree dump) — this ERROR sibling carries the
+ * `between_expression` `readColumnDefinition` needs; it is threaded back
+ * as `extraErrorSibling` for the caller to fold in.
+ */
+function parseIsolatedItem(parser: Parser, ownerTable: string, itemText: string): IsolatedItem | undefined {
+  const isConstraint = TABLE_CONSTRAINT_ITEM_RE.test(itemText);
+  const isolatedSql = isConstraint
+    ? `CREATE TABLE ${ownerTable}_iso (__rune_iso_dummy__ INT, ${itemText})`
+    : `CREATE TABLE ${ownerTable}_iso (${itemText})`;
+  const tree = parser.parse(isolatedSql);
+  if (!tree) return undefined;
+  const createTable = [...walkNamed(tree.rootNode, 'create_table')][0];
+  const columnDefs = createTable?.namedChildren.find((n) => n?.type === 'column_definitions');
+  const siblings = columnDefs?.namedChildren.filter((n): n is Node => n !== null) ?? [];
+  for (let i = 0; i < siblings.length; i++) {
+    const child = siblings[i]!;
+    if (child.type === 'column_definition' && !isConstraint) {
+      const next = siblings[i + 1];
+      return { kind: 'column', node: child, ...(next?.type === 'ERROR' && { extraErrorSibling: next }) };
+    }
+    if (child.type === 'constraints') {
+      const constraint = child.namedChildren.find((n) => n?.type === 'constraint');
+      if (constraint) return { kind: 'constraint', node: constraint };
+    }
+  }
+  return undefined;
 }
 
 /** `dbo.trade_event` -> `trade_event` (schema-qualification is not modeled — the schema segment is dropped, matching the outbound emitter's own single-schema-per-namespace assumption). Bracket-quoted segments are not tolerated by the grammar at all (T0 spike finding) so never appear here; double-quoted segments have their quotes stripped. */
@@ -286,7 +393,12 @@ function stripQuotes(text: string): string {
   return text;
 }
 
-function readColumnDefinition(node: Node, tableName: string, diagnostics: ImportDiagnostic[]): RawColumn | undefined {
+function readColumnDefinition(
+  node: Node,
+  tableName: string,
+  diagnostics: ImportDiagnostic[],
+  extraErrorSibling?: Node
+): RawColumn | undefined {
   const identNode = node.namedChildren.find((n) => n?.type === 'identifier' || n?.type === 'literal');
   if (!identNode) return undefined;
   const name = stripQuotes(identNode.text);
@@ -324,15 +436,24 @@ function readColumnDefinition(node: Node, tableName: string, diagnostics: Import
       const exprNode = children[i + 1]?.type === '(' ? children[i + 2] : children[i + 1];
       if (exprNode) checkNodes.push(exprNode);
     }
-    // T0 spike finding: a column-level `CHECK (... BETWEEN ...)` parses into
-    // an ERROR node wrapping a valid `between_expression` (the grammar has
-    // no column_definition rule path for BETWEEN specifically) — recover it
-    // by searching the ERROR node's own subtree for a between_expression
-    // rather than treating the whole column as unparseable.
+    // T0/T2 finding: a column-level `CHECK (... BETWEEN ...)` parses into an
+    // `ERROR` node wrapping a valid `between_expression` (the grammar has no
+    // `column_definition` rule path for BETWEEN specifically) — recover it
+    // by searching the ERROR node's own subtree for a `between_expression`
+    // rather than treating the whole column as unparseable. This ERROR node
+    // is a SIBLING of `column_definition` at the `column_definitions` level
+    // (not nested inside it, despite how a naive recursive dump renders it),
+    // so it's threaded in here as `extraErrorSibling` by the caller
+    // (`parseIsolatedItem`/`readCreateTable`) rather than found among
+    // `node.namedChildren` directly.
     if (c.type === 'ERROR') {
       const between = [...walkNamed(c, 'between_expression')][0];
       if (between) checkNodes.push(between);
     }
+  }
+  if (extraErrorSibling) {
+    const between = [...walkNamed(extraErrorSibling, 'between_expression')][0];
+    if (between) checkNodes.push(between);
   }
 
   return { name, typeNode: typeNode ?? node, notNull, isPrimaryKey, isUnique, hasDefault, checkNodes };
@@ -749,8 +870,17 @@ function translateBinaryExpression(
   path: string | undefined,
   diagnostics: ImportDiagnostic[]
 ): ConstraintIR | undefined {
+  // The comparison-operator token (`>=`, `<>`, `<`, etc.) is an ANONYMOUS
+  // node (`isNamed: false`) in this grammar — it is present in `node.
+  // children` (ALL children) but never in `node.namedChildren`, which only
+  // ever surfaces the two named operand nodes (`field`/`literal`/
+  // `invocation`). `LIKE`/`IN` ARE named (`keyword_like`/`keyword_in`), so
+  // the search must cover both children arrays.
+  const allChildren = [...Array(node.childCount).keys()].map((i) => node.child(i)).filter((n): n is Node => n !== null);
   const children = node.namedChildren.filter((n): n is Node => n !== null);
-  const opNode = children.find((n) => n.type in COMPARISON_OPS || n.type === 'keyword_like' || n.type === 'keyword_in');
+  const opNode = allChildren.find(
+    (n) => n.type in COMPARISON_OPS || n.type === 'keyword_like' || n.type === 'keyword_in'
+  );
   if (!opNode) return undefined;
 
   if (opNode.type === 'keyword_like') {
