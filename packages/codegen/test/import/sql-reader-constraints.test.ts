@@ -141,7 +141,7 @@ describe('sql-reader constraints — CHECK (col BETWEEN a AND b) -> range (inclu
   });
 
   it('BETWEEN followed by another column with its own CHECK (the T0 spike ERROR-node-recovery case)', async () => {
-    const { text, model } = await importToRune(
+    const { text, model, diagnostics } = await importToRune(
       `CREATE TABLE t (age INT CHECK (age BETWEEN 0 AND 150), code TEXT CHECK (code LIKE 'A%'))`
     );
     const t = model.types[0]!;
@@ -149,6 +149,58 @@ describe('sql-reader constraints — CHECK (col BETWEEN a AND b) -> range (inclu
     const codeAttr = t.attributes.find((a) => a.sourceKey === 'code')!;
     expect(ageAttr.constraints).toEqual([{ kind: 'range', path: 'age', min: 0, max: 150 }]);
     expect(codeAttr.constraints).toEqual([{ kind: 'pattern', path: 'code', regex: 'A%' }]);
+    // The fully-recovered ERROR-sibling shape (`parseIsolatedItem`'s doc)
+    // must NOT itself surface a spurious sql-parse-error diagnostic.
+    expect((diagnostics as Array<{ code: string }>).filter((d) => d.code === 'sql-parse-error')).toEqual([]);
+    await assertParses(text);
+  });
+});
+
+describe('sql-reader constraints — quoted-identifier regression coverage (operandColumnName / isQuotedIdentifierLiteral)', () => {
+  it('a CHECK using BETWEEN on a quoted column resolves the real column, not a custom stub', async () => {
+    const { text, model } = await importToRune(
+      `CREATE TABLE t ("order_amount" NUMERIC(10,2) CHECK ("order_amount" BETWEEN 0 AND 10000))`
+    );
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'order_amount')!;
+    expect(attr.constraints).toEqual([{ kind: 'range', path: 'order_amount', min: 0, max: 10000 }]);
+    await assertParses(text);
+  });
+
+  it('a CHECK using LIKE on a quoted column resolves the column (not the pattern value) as the referenced attribute', async () => {
+    const { text, model } = await importToRune(`CREATE TABLE t ("product_code" TEXT CHECK ("product_code" LIKE 'A%'))`);
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'product_code')!;
+    expect(attr.constraints).toEqual([{ kind: 'pattern', path: 'product_code', regex: 'A%' }]);
+    await assertParses(text);
+  });
+
+  it('a plain comparison CHECK on a quoted column translates to range, not a custom fallback', async () => {
+    const { text, model } = await importToRune(`CREATE TABLE t ("quantity" INT CHECK ("quantity" > 0))`);
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'quantity')!;
+    expect(attr.constraints).toEqual([{ kind: 'range', path: 'quantity', min: 0, exclusive: true }]);
+    await assertParses(text);
+  });
+
+  it('a char_length CHECK on a quoted column (postgres) resolves the correct attribute for the length constraint', async () => {
+    const { text, model } = await importToRune(
+      `CREATE TABLE t ("description" VARCHAR(200) CHECK (char_length("description") <= 200))`
+    );
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'description')!;
+    expect(attr.constraints).toEqual(expect.arrayContaining([{ kind: 'length', path: 'description', max: 200 }]));
+    await assertParses(text);
+  });
+
+  it('a LEN CHECK on a quoted column (sqlserver) resolves the correct attribute for the length constraint', async () => {
+    const { text, model } = await importToRune(
+      `CREATE TABLE t ("description" VARCHAR(200) CHECK (LEN("description") <= 200))`,
+      { dialect: 'sqlserver' }
+    );
+    const t = model.types[0]!;
+    const attr = t.attributes.find((a) => a.sourceKey === 'description')!;
+    expect(attr.constraints).toEqual(expect.arrayContaining([{ kind: 'length', path: 'description', max: 200 }]));
     await assertParses(text);
   });
 });
