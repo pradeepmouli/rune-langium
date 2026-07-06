@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@l1xnan/tree-sitter-sql': 0.4.7
   react: 19.2.7
   react-dom: 19.2.7
   langium-zod: 0.11.2
@@ -486,7 +487,7 @@ importers:
   packages/codegen:
     dependencies:
       '@l1xnan/tree-sitter-sql':
-        specifier: ^0.4.7
+        specifier: 0.4.7
         version: 0.4.7(tree-sitter@0.25.0)
       '@rune-langium/core':
         specifier: workspace:*
