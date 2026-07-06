@@ -16,6 +16,7 @@ import { JsonSchemaNamespaceEmitter } from './emit/json-schema-emitter.js';
 import { TsNamespaceEmitter } from './emit/ts-emitter.js';
 import { SqlNamespaceEmitter } from './emit/sql-emitter.js';
 import { OpenApiNamespaceEmitter } from './emit/openapi-emitter.js';
+import { XsdNamespaceEmitter } from './emit/xsd-emitter.js';
 import { buildNamespaceRegistry, type NamespaceRegistry } from './emit/namespace-registry.js';
 import { walkNamespace, type NamespaceWalkResult } from './emit/namespace-walker.js';
 import type { LanguageProfile } from './emit/language-profile.js';
@@ -48,7 +49,8 @@ const NAMESPACE_EMITTERS: Partial<Record<Target, NamespaceEmitterConstructor>> =
   'json-schema': JsonSchemaNamespaceEmitter,
   typescript: TsNamespaceEmitter,
   sql: SqlNamespaceEmitter,
-  openapi: OpenApiNamespaceEmitter
+  openapi: OpenApiNamespaceEmitter,
+  xsd: XsdNamespaceEmitter
 };
 
 const WHOLE_MODEL_EMITTERS: Partial<Record<Target, WholeModelEmitterConstructor>> = {
@@ -103,7 +105,8 @@ const LIBRARY_DEFAULT_LAYOUT: Record<Target, string> = {
   markdown: 'per-namespace',
   excel: 'single-file', // no per-namespace meaning; this default is decorative
   graphql: 'single-file', // ditto
-  openapi: 'per-namespace'
+  openapi: 'per-namespace',
+  xsd: 'per-namespace'
 };
 
 function resolveLayout(target: Target, options: GeneratorOptions): string {

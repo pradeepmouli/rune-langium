@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { TARGET_DESCRIPTORS } from '../src/export.js';
 
 describe('TARGET_DESCRIPTORS', () => {
-  it('has all eight target entries', () => {
+  it('has all nine target entries', () => {
     expect(Object.keys(TARGET_DESCRIPTORS).sort()).toEqual([
       'excel',
       'graphql',
@@ -22,6 +22,7 @@ describe('TARGET_DESCRIPTORS', () => {
       'openapi',
       'sql',
       'typescript',
+      'xsd',
       'zod'
     ]);
   });
