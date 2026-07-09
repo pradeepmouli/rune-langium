@@ -32,12 +32,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsgo -b",
+    "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "generate:sql-node-types": "node scripts/generate-tree-sitter-node-types.mjs --input node_modules/@l1xnan/tree-sitter-sql/src/node-types.json --output src/import/sources/generated/sql-node-types.ts --prefix Sql && oxfmt src/import/sources/generated/sql-node-types.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit && tsgo --noEmit -p tsconfig.test.json"
+    "type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@l1xnan/tree-sitter-sql": "0.4.7",
@@ -56,7 +56,8 @@
     "ajv-formats": "^3.0.1",
     "node-sql-parser": "^5.4.0",
     "openapi-types": "^12.1.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
+    "typescript-classic": "npm:typescript@6.0.3",
     "vitest": "^4.1.9",
     "zod": "^4.4.3"
   },

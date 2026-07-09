@@ -19,15 +19,15 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsgo -b",
+    "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "predev": "lsof -ti:3001 2>/dev/null | xargs kill -9 2>/dev/null; exit 0",
-    "dev": "tsgo -b && node --watch-path=dist dist/cli.js",
+    "dev": "tsc -b && node --watch-path=dist dist/cli.js",
     "lint": "oxlint .",
     "start": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@lspeasy/core": "^2.3.0",
@@ -40,7 +40,7 @@
   "devDependencies": {
     "@lspeasy/client": "^3.1.2",
     "@types/ws": "^8.18.1",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.9"
   },
   "engines": {

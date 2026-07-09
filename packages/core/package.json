@@ -22,16 +22,16 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsgo -b",
+    "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "dev": "tsgo -b --watch",
+    "dev": "tsc -b --watch",
     "generate": "langium generate && langium-zod generate && oxfmt src/generated/zod-schemas.ts",
     "generate:zod": "langium-zod generate && oxfmt src/generated/zod-schemas.ts",
     "generate:domain": "langium-zod generate --namespace-ops --namespace-ops-out src/generated/domain.ts --domain-surface-config domain-surface.config.json && oxfmt src/generated/domain.ts",
     "lint": "oxlint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "langium": "^4.3.0",
@@ -41,7 +41,7 @@
     "langium-cli": "^4.3.0",
     "langium-zod": "0.11.2",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=22.13.0"

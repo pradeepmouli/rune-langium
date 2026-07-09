@@ -20,16 +20,16 @@
     "*.css"
   ],
   "scripts": {
-    "build": "tsgo -b && cp src/styles.css dist/styles.css",
+    "build": "tsc -b && cp src/styles.css dist/styles.css",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "dev": "tsgo -b --watch",
+    "dev": "tsc -b --watch",
     "lint": "pnpm run lint:js && pnpm run lint:css",
     "lint:js": "oxlint .",
     "lint:css": "stylelint 'src/**/*.css'",
     "generate:schemas": "langium-zod generate --config ../core/langium-config.json --out src/generated/zod-schemas.ts --strip-internals --projection form-surfaces.json --cross-ref-validation --conformance --ast-types ../core/src/generated/ast.ts --conformance-out src/generated/zod-schemas.conformance.ts && oxfmt src/generated/zod-schemas.ts src/generated/zod-schemas.conformance.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
@@ -65,7 +65,7 @@
     "react-dom": "19.2.7",
     "stylelint": "^17.13.0",
     "stylelint-config-standard": "^40.0.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=22.13.0"
