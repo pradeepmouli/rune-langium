@@ -25,6 +25,7 @@
     "./ui/form": "./src/ui/form.tsx",
     "./ui/heading": "./src/ui/heading.tsx",
     "./ui/icon-button-group": "./src/ui/icon-button-group.tsx",
+    "./ui/interactive-dialog": "./src/ui/interactive-dialog.tsx",
     "./ui/input": "./src/ui/input.tsx",
     "./ui/kbd": "./src/ui/kbd.tsx",
     "./ui/label": "./src/ui/label.tsx",
