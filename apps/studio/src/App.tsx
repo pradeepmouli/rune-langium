@@ -163,7 +163,7 @@ function AppContent() {
   // preserve them without calling useModelStore.getState() (which is not
   // available in the test mock of useModelStore).
   const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
-  const { showToast } = useStudioToast();
+  const { showToast, showLoadingToast, dismissToast } = useStudioToast();
 
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
     console.warn(`[App] ${message}:`, error);
@@ -244,6 +244,12 @@ function AppContent() {
     let cancelled = false;
     const hydratedSoFar = useEditorStore.getState().hydratedNamespaces;
     const requested = [...new Set([...hydratedSoFar, ...pendingHydration])];
+    // Background process with no natural "done" UI state of its own (unlike
+    // e.g. ExportDialog's own generating phase) — surface it as a toast so
+    // it's visible even if the user has navigated away from the node/panel
+    // that triggered it.
+    const label = pendingHydration.length === 1 ? pendingHydration[0] : `${pendingHydration.length} namespaces`;
+    const toastId = showLoadingToast({ description: `Loading ${label}…` });
     void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
       .then((result) => {
         if (cancelled) return;
@@ -258,14 +264,18 @@ function AppContent() {
         // can retry by re-selecting/re-expanding them; keep the last valid graph.
         useEditorStore.getState().dequeuePendingHydration(pendingHydration);
         reportWorkspaceError('Failed to hydrate the selected namespace; keeping the last valid graph', err);
+      })
+      .finally(() => {
+        if (!cancelled) dismissToast(toastId);
       });
     return () => {
       cancelled = true;
+      dismissToast(toastId);
     };
     // `files` in deps: an edit during an in-flight hydration re-fires this and
     // issues a second round-trip; the `cancelled` flag discards the stale result,
     // so it's a wasted request but correctness-safe.
-  }, [pendingHydration, files, applyParseResult, reportWorkspaceError]);
+  }, [pendingHydration, files, applyParseResult, reportWorkspaceError, showLoadingToast, dismissToast]);
 
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {

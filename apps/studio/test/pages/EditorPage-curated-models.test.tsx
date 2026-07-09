@@ -146,7 +146,7 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
 vi.mock('../../src/components/StudioToastProvider.js', () => ({
   StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, {}, children),
-  useStudioToast: () => ({ showToast: vi.fn() })
+  useStudioToast: () => ({ showToast: vi.fn(), showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
 }));
 
 import { renderEditorPage } from './editor-page-harness.js';

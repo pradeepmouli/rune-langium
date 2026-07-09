@@ -185,7 +185,7 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
 vi.mock('../../src/components/StudioToastProvider.js', () => ({
   StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, {}, children),
-  useStudioToast: () => ({ showToast: showToastSpy })
+  useStudioToast: () => ({ showToast: showToastSpy, showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
 }));
 
 vi.mock('../../src/utils/uri.js', () => ({
