@@ -629,6 +629,18 @@ export function ExplorePerspective() {
   const selectedNodeDataRef = useRef<AnyGraphNode | null>(selectedNodeData);
   selectedNodeDataRef.current = selectedNodeData;
 
+  // On-demand curated hydration (docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md,
+  // trigger B): a selected deferred placeholder node's `data` is a stub
+  // ({$type, name} only) until its namespace's server round-trip resolves.
+  // Surface that as a loading state in the inspector rather than silently
+  // dispatching the stub into a form with no fields — see EditorFormPanel's
+  // `isHydrating` prop.
+  const pendingHydrationNamespaces = useEditorStore((s) => s.pendingHydrationNamespaces);
+  const selectedNodeIsHydrating = useMemo(
+    () => Boolean(selectedNodeMeta?.deferred && pendingHydrationNamespaces.includes(selectedNodeMeta.namespace)),
+    [selectedNodeMeta, pendingHydrationNamespaces]
+  );
+
   const previewTargets: FormPreviewTarget[] = useMemo(() => {
     const sourceByTargetId = new Map<string, Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>>();
     for (const entry of resolvedModelFiles) {
@@ -1570,6 +1582,7 @@ export function ExplorePerspective() {
           meta={selectedNodeMeta}
           nodeId={selectedNodeId}
           refOnly={selectedNodeIsRefOnly}
+          isHydrating={selectedNodeIsHydrating}
           availableTypes={availableTypes}
           synonymSourceOptions={synonymSourceOptions}
           actions={editorActions}
@@ -1588,6 +1601,7 @@ export function ExplorePerspective() {
       selectedNodeMeta,
       selectedNodeId,
       selectedNodeIsRefOnly,
+      selectedNodeIsHydrating,
       availableTypes,
       synonymSourceOptions,
       editorActions,
