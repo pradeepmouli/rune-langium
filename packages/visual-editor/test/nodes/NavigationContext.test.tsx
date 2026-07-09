@@ -56,7 +56,9 @@ describe('NavigationContext', () => {
       const allNodeIds = new Set(['cdm.base.math.Quantity', 'cdm.product.Trade']);
 
       render(
-        <NavigationContext.Provider value={{ onNavigateToType, allNodeIds, layoutDirection: 'LR' }}>
+        <NavigationContext.Provider
+          value={{ onNavigateToType, allNodeIds, layoutDirection: 'LR', pendingHydrationNamespaces: [] }}
+        >
           <ContextReader />
         </NavigationContext.Provider>
       );

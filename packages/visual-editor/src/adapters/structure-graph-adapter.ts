@@ -35,6 +35,14 @@ export interface AdapterNode {
   readonly $type: 'Data' | 'Choice' | 'Enum' | 'Record' | 'TypeAlias' | 'Function';
   readonly name: string;
   readonly namespace: string;
+  /**
+   * Forwarded from `GraphNodeMeta.deferred` by `graphNodesToAdapterDocument`.
+   * True when this node is a deferred curated placeholder whose namespace
+   * hasn't been on-demand hydrated yet. Propagated onto the built
+   * StructureDataNode/Choice/Enum/Function so structure-view nodes can show
+   * the same hydrating-spinner treatment as the main graph canvas.
+   */
+  readonly deferred?: boolean;
   readonly extends?: string;
   /**
    * Data nodes carry their attributes here. Array entries may be `null`
@@ -344,6 +352,7 @@ function buildChoiceNode(
     kind: 'choice',
     name: node.name,
     namespaceUri: node.namespace,
+    deferred: node.deferred,
     // Phase A — forward type metadata from the AdapterNode (projected by the
     // studio). Defensive defaults keep fallback/hydration nodes from throwing.
     definition: node.definition,
@@ -365,6 +374,7 @@ function buildEnumNode(node: AdapterNode, instanceId: string): StructureEnumNode
     kind: 'enum',
     name: node.name,
     namespaceUri: node.namespace,
+    deferred: node.deferred,
     values: (node.values ?? []).map((v) => v.name)
   };
 }
@@ -389,6 +399,7 @@ function buildFunctionNode(node: AdapterNode, doc: AdapterDocument, instanceId: 
     kind: 'function',
     name: node.name,
     namespaceUri: node.namespace,
+    deferred: node.deferred,
     inputRows,
     outputRow,
     // Phase A — forward type metadata from the AdapterNode (projected by the
@@ -505,6 +516,7 @@ function walkAndExpand(
     kind: 'data',
     name: node.name,
     namespaceUri: node.namespace,
+    deferred: node.deferred,
     extendsName: node.extends,
     extendsNodeId: node.extends ? findNodeByName(node.extends, doc, node.namespace)?.id : undefined,
     // Phase A — forward type metadata from the AdapterNode (projected by the
