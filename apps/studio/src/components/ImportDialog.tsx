@@ -88,8 +88,15 @@ export function ImportDialog({
       if (matchedPath) {
         const existing = files.find((f) => f.path === matchedPath);
         if (existing) {
-          const merge = await mergeImportedText(existing.content, result.text);
-          setPhase({ kind: 'previewed', result, matchedPath, merge });
+          try {
+            const merge = await mergeImportedText(existing.content, result.text);
+            setPhase({ kind: 'previewed', result, matchedPath, merge });
+          } catch (mergeErr) {
+            setPhase({
+              kind: 'internal-error',
+              message: mergeErr instanceof Error ? mergeErr.message : String(mergeErr)
+            });
+          }
           return;
         }
       }

@@ -110,6 +110,61 @@ describe('ImportDialog', () => {
     expect(screen.getByTestId('import-dialog__confirm')).toBeDisabled();
   });
 
+  it('shows an internal-error state when the new-file hard-invariant re-parse fails', async () => {
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    (parse as any).mockResolvedValue({ hasErrors: true });
+
+    render(<ImportDialog {...baseProps()} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(screen.getByTestId('import-dialog__internal-error')).toBeInTheDocument());
+    expect(screen.getByTestId('import-dialog__confirm')).toBeDisabled();
+  });
+
+  it('shows an internal-error state (not a user-facing error) when mergeImportedText fails', async () => {
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    (mergeImportedText as any).mockRejectedValue(new Error('mergeImportedText: merged output failed to re-parse.'));
+
+    const files: WorkspaceFile[] = [{ name: 'demo.rosetta', path: 'demo.rosetta', content: 'ORIGINAL', dirty: false }];
+    const props = baseProps({ files, namespaceToFile: new Map([['demo', 'demo.rosetta']]) });
+    render(<ImportDialog {...props} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('import-dialog__internal-error')).toHaveTextContent(
+        'mergeImportedText: merged output failed to re-parse.'
+      )
+    );
+    expect(screen.queryByTestId('import-dialog__error')).not.toBeInTheDocument();
+    expect(screen.getByTestId('import-dialog__confirm')).toBeDisabled();
+  });
+
+  it('disables confirm and shows the empty-state alert when there is nothing to import', async () => {
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\nversion "0.0.0"\n',
+      model: { namespace: 'demo', types: [], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    (parse as any).mockResolvedValue({ hasErrors: false });
+
+    render(<ImportDialog {...baseProps()} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(screen.getByTestId('import-dialog__empty')).toBeInTheDocument());
+    expect(screen.getByTestId('import-dialog__confirm')).toBeDisabled();
+  });
+
   it('resets the preview when the format is switched', async () => {
     (importModel as any).mockResolvedValue({
       text: 'namespace demo\nversion "0.0.0"\n',
