@@ -266,4 +266,31 @@ describe('ImportDialog', () => {
     expect(screen.getByTestId('import-dialog__confirm')).toBeDisabled();
     expect(screen.queryByTestId('import-dialog__preview')).not.toBeInTheDocument();
   });
+
+  it('shows an "Importing…" status while the preview round-trip is in flight', async () => {
+    let resolveImportModel!: (value: unknown) => void;
+    (importModel as any).mockReturnValue(
+      new Promise((resolve) => {
+        resolveImportModel = resolve;
+      })
+    );
+
+    render(<ImportDialog {...baseProps()} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    // While importModel()'s promise is still pending, the dialog must show
+    // visible status — not just disabled controls with no feedback.
+    expect(screen.getByTestId('import-dialog__previewing')).toHaveTextContent('Importing…');
+
+    resolveImportModel({
+      text: 'namespace demo\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    (parse as any).mockResolvedValue({ hasErrors: false });
+
+    await waitFor(() => expect(screen.queryByTestId('import-dialog__previewing')).not.toBeInTheDocument());
+    expect(screen.getByTestId('import-dialog__confirm')).not.toBeDisabled();
+  });
 });

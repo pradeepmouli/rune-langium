@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
+import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 import { parse } from '@rune-langium/core';
 import type { ImportResult, ImportSourceKind } from '@rune-langium/codegen/import';
@@ -220,6 +221,14 @@ export function ImportDialog({
           Preview
         </Button>
       </div>
+
+      {/* Previewing state */}
+      {phase.kind === 'previewing' && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="import-dialog__previewing">
+          <Spinner className="size-4" />
+          Importing…
+        </div>
+      )}
 
       {phase.kind === 'error' && (
         <Alert variant="destructive" data-testid="import-dialog__error">
