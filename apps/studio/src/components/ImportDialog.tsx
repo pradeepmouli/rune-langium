@@ -102,7 +102,7 @@ export function ImportDialog({
       }
       // New-file path: importModel() already guarantees result.text parses
       // cleanly, but we re-verify explicitly rather than trusting that blindly.
-      const check = await parse(result.text);
+      const check = await parse(result.text, 'inmemory:///import-check.rosetta');
       if (check.hasErrors) {
         setPhase({ kind: 'internal-error', message: 'Imported text failed re-parse — please file a bug.' });
         return;

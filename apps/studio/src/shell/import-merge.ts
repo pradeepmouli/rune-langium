@@ -56,7 +56,7 @@ export async function mergeImportedText(existingText: string, importedText: stri
 
   const mergedText = spans.length === 0 ? existingText : `${existingText}\n\n${spans.join('\n\n')}`;
 
-  const mergedParse = await parse(mergedText);
+  const mergedParse = await parse(mergedText, 'inmemory:///merged.rosetta');
   if (mergedParse.hasErrors) {
     throw new Error('mergeImportedText: merged output failed to re-parse.');
   }
