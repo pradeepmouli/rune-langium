@@ -3,7 +3,7 @@
 
 /**
  * Adapter that wraps the ?z2f-generated ExcelOptionsForm with the controlled
- * `{ value, onChange }` contract expected by DownloadConfigModal.optionsForm.
+ * `{ value, onChange }` contract expected by DownloadConfigDialog.optionsForm.
  *
  * The generated form (auto-save mode) calls `onSubmit` on every field change.
  * This adapter bridges that into `onChange(newValue)` so the modal can store

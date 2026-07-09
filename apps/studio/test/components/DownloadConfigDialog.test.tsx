@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Tests for DownloadConfigModal (spec 2026-05-14 §5.1 / §5.2).
+ * Tests for DownloadConfigDialog (spec 2026-05-14 §5.1 / §5.2).
  *
  * Two layers:
  *   1. `computeNamespaceSelection` — the pure cascade math, exercised
@@ -15,10 +15,10 @@ import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import {
-  DownloadConfigModal,
+  DownloadConfigDialog,
   computeNamespaceSelection,
   type DownloadConfig
-} from '../../src/components/DownloadConfigModal.js';
+} from '../../src/components/DownloadConfigDialog.js';
 
 afterEach(() => cleanup());
 
@@ -74,11 +74,11 @@ const NS = ['app', 'cdm', 'base'];
 // produces them: app → cdm → base, so app's closure includes base too.
 const GRAPH = { app: ['app', 'cdm', 'base'], cdm: ['cdm', 'base'], base: ['base'] };
 
-function renderModal(overrides: Partial<ComponentProps<typeof DownloadConfigModal>> = {}) {
+function renderModal(overrides: Partial<ComponentProps<typeof DownloadConfigDialog>> = {}) {
   const onGenerate = vi.fn();
   const onClose = vi.fn();
   render(
-    <DownloadConfigModal
+    <DownloadConfigDialog
       open
       target="zod"
       namespaces={NS}
@@ -91,7 +91,7 @@ function renderModal(overrides: Partial<ComponentProps<typeof DownloadConfigModa
   return { onGenerate, onClose };
 }
 
-describe('DownloadConfigModal', () => {
+describe('DownloadConfigDialog', () => {
   it('renders the target label in the title', () => {
     renderModal();
     expect(screen.getByText('Generate Zod')).toBeTruthy();
@@ -99,22 +99,22 @@ describe('DownloadConfigModal', () => {
 
   it('renders layout choices for a layout-aware target', () => {
     renderModal({ target: 'zod' });
-    expect(screen.getByTestId('download-config-modal__layout-per-namespace')).toBeTruthy();
-    expect(screen.getByTestId('download-config-modal__layout-barrel')).toBeTruthy();
-    expect(screen.getByTestId('download-config-modal__layout-single-file')).toBeTruthy();
+    expect(screen.getByTestId('download-config-dialog__layout-per-namespace')).toBeTruthy();
+    expect(screen.getByTestId('download-config-dialog__layout-barrel')).toBeTruthy();
+    expect(screen.getByTestId('download-config-dialog__layout-single-file')).toBeTruthy();
   });
 
   it('defaults to all namespaces selected', () => {
     renderModal();
     for (const ns of NS) {
-      const row = screen.getByTestId(`download-config-modal__ns-row-${ns}`);
+      const row = screen.getByTestId(`download-config-dialog__ns-row-${ns}`);
       expect(row.getAttribute('data-state')).toBe('selected');
     }
   });
 
   it('emits the full namespace set + default layout on Generate', () => {
     const { onGenerate } = renderModal({ target: 'zod' });
-    fireEvent.click(screen.getByTestId('download-config-modal__generate'));
+    fireEvent.click(screen.getByTestId('download-config-dialog__generate'));
     expect(onGenerate).toHaveBeenCalledTimes(1);
     const config = onGenerate.mock.calls[0][0] as DownloadConfig;
     expect(config.target).toBe('zod');
@@ -126,14 +126,14 @@ describe('DownloadConfigModal', () => {
     renderModal();
     // Deselect cdm and base so only app's pull keeps cdm in; cdm in turn
     // keeps base. Both should flip to "pulled" (auto, read-only).
-    fireEvent.click(screen.getByTestId('download-config-modal__ns-cdm'));
-    fireEvent.click(screen.getByTestId('download-config-modal__ns-base'));
-    const cdmRow = screen.getByTestId('download-config-modal__ns-row-cdm');
-    const baseRow = screen.getByTestId('download-config-modal__ns-row-base');
+    fireEvent.click(screen.getByTestId('download-config-dialog__ns-cdm'));
+    fireEvent.click(screen.getByTestId('download-config-dialog__ns-base'));
+    const cdmRow = screen.getByTestId('download-config-dialog__ns-row-cdm');
+    const baseRow = screen.getByTestId('download-config-dialog__ns-row-base');
     expect(cdmRow.getAttribute('data-state')).toBe('pulled');
     expect(baseRow.getAttribute('data-state')).toBe('pulled');
     // The pulled checkboxes are disabled — can't deselect a dependency directly.
-    expect((screen.getByTestId('download-config-modal__ns-cdm') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('download-config-dialog__ns-cdm') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('drops dependencies from the emit set once their only puller is deselected', () => {
@@ -141,36 +141,36 @@ describe('DownloadConfigModal', () => {
     // cdm + base start selected. Deselect them → they flip to pulled (app
     // still pulls them). Then deselect app → nothing pulls them anymore, so
     // all three rows fall back to unselected.
-    fireEvent.click(screen.getByTestId('download-config-modal__ns-cdm'));
-    fireEvent.click(screen.getByTestId('download-config-modal__ns-base'));
-    expect(screen.getByTestId('download-config-modal__ns-row-cdm').getAttribute('data-state')).toBe('pulled');
-    fireEvent.click(screen.getByTestId('download-config-modal__ns-app'));
+    fireEvent.click(screen.getByTestId('download-config-dialog__ns-cdm'));
+    fireEvent.click(screen.getByTestId('download-config-dialog__ns-base'));
+    expect(screen.getByTestId('download-config-dialog__ns-row-cdm').getAttribute('data-state')).toBe('pulled');
+    fireEvent.click(screen.getByTestId('download-config-dialog__ns-app'));
     for (const ns of NS) {
-      expect(screen.getByTestId(`download-config-modal__ns-row-${ns}`).getAttribute('data-state')).toBe('unselected');
+      expect(screen.getByTestId(`download-config-dialog__ns-row-${ns}`).getAttribute('data-state')).toBe('unselected');
     }
   });
 
   it('disables Generate when the emit set is empty', () => {
     renderModal();
     for (const ns of NS) {
-      const box = screen.getByTestId(`download-config-modal__ns-${ns}`) as HTMLButtonElement;
+      const box = screen.getByTestId(`download-config-dialog__ns-${ns}`) as HTMLButtonElement;
       if (!box.disabled) fireEvent.click(box);
     }
-    expect((screen.getByTestId('download-config-modal__generate') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId('download-config-dialog__generate') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('omits the layout section for a target with no layout choices', () => {
     // graphql is whole-model with no TARGET_PANELS entry → no layout block.
     renderModal({ target: 'graphql' });
-    expect(screen.queryByTestId('download-config-modal__layout')).toBeNull();
+    expect(screen.queryByTestId('download-config-dialog__layout')).toBeNull();
   });
 
   it('hides the namespace section + still allows Generate when the dep graph is empty', () => {
     // No namespaces to narrow (dep graph not populated). The section is
     // hidden and Generate emits an empty list = "no filter" (server emits all).
     const { onGenerate } = renderModal({ namespaces: [], dependencyGraph: {} });
-    expect(screen.queryByTestId('download-config-modal__namespaces')).toBeNull();
-    const generate = screen.getByTestId('download-config-modal__generate') as HTMLButtonElement;
+    expect(screen.queryByTestId('download-config-dialog__namespaces')).toBeNull();
+    const generate = screen.getByTestId('download-config-dialog__generate') as HTMLButtonElement;
     expect(generate.disabled).toBe(false);
     fireEvent.click(generate);
     const config = onGenerate.mock.calls[0][0] as DownloadConfig;
@@ -195,7 +195,7 @@ describe('DownloadConfigModal', () => {
     const { onGenerate } = renderModal({ target: 'excel', optionsForm: StubOptionsForm });
     expect(screen.getByTestId('stub-set-opts')).toBeTruthy();
     fireEvent.click(screen.getByTestId('stub-set-opts'));
-    fireEvent.click(screen.getByTestId('download-config-modal__generate'));
+    fireEvent.click(screen.getByTestId('download-config-dialog__generate'));
     const config = onGenerate.mock.calls[0][0] as DownloadConfig;
     expect(config.options).toEqual({ excel: { sheets: { types: false } } });
   });

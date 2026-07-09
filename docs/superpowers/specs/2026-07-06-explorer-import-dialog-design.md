@@ -90,6 +90,88 @@ A `parse()` failure at this point is a bug in this dialog's own logic, not a use
 - `ImportDialog.test.tsx` — component test covering the state machine: format switch resets preview state, preview success/error, new-file vs. merge-detected banner switching, confirm wiring (mocked `createWorkspaceFile`/`updateFileContent` calls).
 - `import-dialog-store.test.ts` — trivial store test, mirroring the existing `export-dialog-store.test.ts`.
 
+## Addendum (2026-07-09): Shared `InteractiveDialog` shell
+
+Studio already has three dialogs that duplicate the same shell markup:
+`ExportDialog` and `DownloadConfigModal` both wrap `Dialog`/`DialogContent`
+with a fixed `max-w-[92vw] max-h-[80vh]` sizing, a `DialogHeader` +
+`DialogTitle` + `sr-only` `DialogDescription`, a `Separator`, a scrollable
+body `div`, and (for `DownloadConfigModal`) a trailing `Separator` + a
+`flex justify-end gap-2 px-4 py-3` Cancel/Confirm footer bar.
+`GitHubConnectDialog`/`GitHubWorkspaceFlow` are architecturally different
+(a multi-screen wizard that swaps whole screens, not a single-screen
+confirm/cancel dialog) and are explicitly NOT part of this consolidation.
+
+Rather than have `ImportDialog` duplicate this shell a fourth time, this
+work extracts it into `packages/design-system/src/ui/interactive-dialog.tsx`
+(`InteractiveDialog`) — a thin, shell-only wrapper over the existing
+`Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle`/`DialogDescription`/
+`Separator` primitives. It does **not** generalize the phase-state-machine
+or error-banner pattern each dialog uses internally
+(`ExportDialog`'s `idle/validating/generating/done/error`,
+`GitHubConnectDialog`'s `init/pending/expired/access_denied/error`, and
+`ImportDialog`'s `idle → previewing → previewed | error` are three
+different shapes; forcing them into one generic shape would be a leaky
+abstraction) — each dialog keeps its own body content, phase state, and
+error rendering exactly as today.
+
+**Location:** `packages/design-system` (MIT), alongside the primitives it
+composes, not `apps/studio` — matches the existing pattern of composable
+UI living in the shared design-system package, and keeps it available if
+`@rune-langium/visual-editor` ever needs a dialog (no VE dialog exists
+today).
+
+**Scope:** this plan retrofits all three current consumers —
+`ExportDialog`, `DownloadConfigModal`, and the new `ImportDialog` — onto
+`InteractiveDialog`, so the duplication is removed immediately rather than
+left for a future cleanup.
+
+**API** (shell-only, no phase/loading semantics):
+
+```ts
+export interface InteractiveDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: React.ReactNode;
+  /** Rendered as a visually-hidden DialogDescription (a11y only, matches every current consumer). */
+  description: React.ReactNode;
+  /** Tailwind width class, e.g. "w-[720px]" or "w-[480px]" — combined with the shared max-w-[92vw] max-h-[80vh] sizing. */
+  width: string;
+  /** data-testid on the rendered DialogContent. */
+  testId: string;
+  /** Forwarded to DialogContent's overlayProps, e.g. { 'data-testid': 'export-dialog-overlay' }. */
+  overlayProps?: React.ComponentProps<typeof DialogOverlay>;
+  /** Extra classes merged onto the scrollable body div (default: 'flex-1 min-h-0 flex flex-col'). */
+  bodyClassName?: string;
+  /** Footer content, rendered after a Separator in a standard 'flex justify-end gap-2 px-4 py-3' bar. Omit for dialogs whose actions live inline in the body (ExportDialog's Generate/Cancel row). */
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+}
+```
+
+`ExportDialog` retrofit: `width="w-[720px]"`, `testId="export-dialog"`,
+`overlayProps={{ 'data-testid': 'export-dialog-overlay' }}`, no `footer`
+(its Generate/Cancel row stays inline in the body, unchanged), body
+retains its existing `flex flex-col gap-4 overflow-hidden` via
+`bodyClassName`.
+
+`DownloadConfigModal` retrofit: `width="w-[480px]"`, `testId="download-config-modal"`,
+body retains `studio-scroll ... overflow-auto gap-5` via `bodyClassName`,
+`footer` carries the existing Cancel (`download-config-modal__cancel`) /
+Generate (`download-config-modal__generate`) buttons unchanged.
+
+Both retrofits are pure structural extraction — no behavior, prop, or
+test-id changes; existing tests (`DownloadConfigModal.test.tsx`, the e2e
+specs touching `export-dialog`/`export-dialog-overlay`) must pass
+unmodified.
+
+No dedicated `InteractiveDialog` unit test is added: `packages/design-system`
+has no test harness today (no `test` script, no jsdom/testing-library
+setup, zero existing test files), and the component has no logic of its
+own to test in isolation — it's exercised transitively through
+`DownloadConfigModal.test.tsx` and the new `ImportDialog.test.tsx`, both of
+which already run under `apps/studio`'s jsdom vitest environment.
+
 ## Explicitly Out of Scope (v1)
 
 - Editing the generated `.rune` text before commit (beyond the namespace field) — the preview is read-only; further edits happen in the editor after commit, like any other file.

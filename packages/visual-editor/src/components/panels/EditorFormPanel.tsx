@@ -26,6 +26,7 @@
 
 import { useEffect, useCallback, useRef, useMemo, Component, memo } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
+import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
@@ -126,6 +127,14 @@ export interface EditorFormPanelProps {
    * understands why edits are disabled.
    */
   refOnly?: boolean;
+  /**
+   * True while the selected node's namespace is a deferred curated
+   * placeholder currently being hydrated on-demand (server round-trip in
+   * flight — see docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md).
+   * Renders a loading state instead of dispatching the placeholder's stub
+   * data ({@link GraphNodeMeta.deferred}) into a form with no fields.
+   */
+  isHydrating?: boolean;
   /** Available type options for type selectors. */
   availableTypes: TypeOption[];
   /** Available synonym source options for the source-ref picker. */
@@ -157,6 +166,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
   nodeId,
   isReadOnly = false,
   refOnly = false,
+  isHydrating = false,
   availableTypes,
   synonymSourceOptions = [],
   actions,
@@ -211,6 +221,27 @@ const EditorFormPanel = memo(function EditorFormPanel({
         tabIndex={-1}
       >
         Select a node to edit
+      </aside>
+    );
+  }
+
+  // ---- Hydrating -> loading state -------------------------------------------
+  // A deferred curated placeholder's `data` is a minimal stub ({$type, name}
+  // only, see buildDeferredPlaceholderNodes) -- dispatching it into a real
+  // form would render fields with nothing in them. Show a loading state
+  // instead while the on-demand hydration round-trip is in flight.
+
+  if (isHydrating) {
+    return (
+      <aside
+        ref={panelRef}
+        data-slot="editor-form-panel"
+        aria-label="Loading namespace"
+        className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground"
+        tabIndex={-1}
+      >
+        <Spinner className="size-5" />
+        <span>Loading {nodeMeta.namespace || 'namespace'}…</span>
       </aside>
     );
   }

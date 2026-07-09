@@ -79,7 +79,7 @@ vi.mock('../../src/hooks/useLspDiagnosticsBridge.js', () => ({
 vi.mock('../../src/components/StudioToastProvider.js', () => ({
   StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, {}, children),
-  useStudioToast: () => ({ showToast: vi.fn() })
+  useStudioToast: () => ({ showToast: vi.fn(), showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
 }));
 
 // ---------------------------------------------------------------------------

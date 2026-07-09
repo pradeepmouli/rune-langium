@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * DownloadConfigModal — config dialog opened by the targets-table Download
+ * DownloadConfigDialog — config dialog opened by the targets-table Download
  * button (spec 2026-05-14 §5.1). Collects, before the /api/codegen request
  * fires:
  *   - layout (for layout-aware targets: per-namespace / barrel / single-file)
@@ -26,14 +26,7 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@rune-langium/design-system/ui/radio-group';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@rune-langium/design-system/ui/dialog';
-import { Separator } from '@rune-langium/design-system/ui/separator';
+import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 
 /** One layout choice rendered as a radio option. */
@@ -84,7 +77,7 @@ export interface DownloadConfig {
   options?: Record<string, unknown>;
 }
 
-export interface DownloadConfigModalProps {
+export interface DownloadConfigDialogProps {
   open: boolean;
   target: Target;
   /** All loaded namespaces, in display order. */
@@ -163,7 +156,7 @@ export function computeNamespaceSelection(
   return { emitted, pulled, pulledBy };
 }
 
-export function DownloadConfigModal({
+export function DownloadConfigDialog({
   open,
   target,
   namespaces,
@@ -171,7 +164,7 @@ export function DownloadConfigModal({
   onClose,
   onGenerate,
   optionsForm: OptionsForm
-}: DownloadConfigModalProps) {
+}: DownloadConfigDialogProps) {
   const descriptor = TARGET_DESCRIPTORS[target];
   const panel = TARGET_PANELS[target];
 
@@ -234,132 +227,125 @@ export function DownloadConfigModal({
   const generateDisabled = hasNamespaces && selection.emitted.size === 0;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        className="w-[480px] max-w-[92vw] max-h-[80vh] flex flex-col gap-0 p-0"
-        data-testid="download-config-modal"
-      >
-        <DialogHeader className="px-4 py-3">
-          <DialogTitle>Generate {descriptor.label}</DialogTitle>
-          <DialogDescription className="sr-only">
-            Choose layout and namespace subset, then generate {descriptor.label} output.
-          </DialogDescription>
-        </DialogHeader>
-        <Separator />
-
-        <div className="studio-scroll flex-1 min-h-0 overflow-auto p-4 flex flex-col gap-5">
-          {/* Layout — only for layout-aware targets */}
-          {hasLayouts && (
-            <div className="flex flex-col gap-2" data-testid="download-config-modal__layout">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Layout</span>
-              <RadioGroup value={layout} onValueChange={setLayout}>
-                {panel!.layouts.map((choice) => {
-                  const id = `download-layout-${choice.value}`;
-                  return (
-                    <div key={choice.value} className="flex items-center gap-2 text-sm">
-                      <RadioGroupItem
-                        id={id}
-                        value={choice.value}
-                        data-testid={`download-config-modal__layout-${choice.value}`}
-                      />
-                      <label htmlFor={id} className="flex items-center gap-2">
-                        <span className="font-medium text-foreground">{choice.label}</span>
-                        {choice.hint && <span className="text-muted-foreground">({choice.hint})</span>}
-                      </label>
-                    </div>
-                  );
-                })}
-              </RadioGroup>
-            </div>
-          )}
-
-          {/* Per-target options — rendered only when an OptionsForm is
-              injected by the wiring site (e.g. ExcelOptionsForm for excel).
-              The form calls onChange on every field change (auto-save mode)
-              and we store the result as opaque options for the Generate
-              payload. */}
-          {OptionsForm !== undefined && (
-            <div className="flex flex-col gap-2" data-testid="download-config-modal__options">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options</span>
-              <OptionsForm value={targetOptions} onChange={setTargetOptions} />
-            </div>
-          )}
-
-          {/* Namespaces with auto-select cascade. Hidden when there's
-              nothing to narrow (dep graph not populated) — Generate then
-              emits everything. */}
-          {hasNamespaces && (
-            <div className="flex flex-col gap-2" data-testid="download-config-modal__namespaces">
-              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
-              </span>
-              <TooltipProvider>
-                <div className="flex flex-col gap-1.5">
-                  {namespaces.map((ns) => {
-                    const isSelected = selected.has(ns);
-                    const isPulled = selection.pulled.has(ns);
-                    const sources = selection.pulledBy.get(ns);
-                    const id = `download-ns-${ns}`;
-                    const row = (
-                      <div
-                        className={
-                          'flex items-center gap-2 text-sm ' + (isPulled ? 'text-muted-foreground' : 'text-foreground')
-                        }
-                        data-testid={`download-config-modal__ns-row-${ns}`}
-                        data-state={isSelected ? 'selected' : isPulled ? 'pulled' : 'unselected'}
-                      >
-                        <Checkbox
-                          id={id}
-                          // A pulled dependency is read-only: the user can only
-                          // remove it by deselecting whatever pulled it in
-                          // (§5.2 prevents partial-graph emit).
-                          checked={isSelected || isPulled}
-                          disabled={isPulled}
-                          onCheckedChange={() => toggleNamespace(ns)}
-                          data-testid={`download-config-modal__ns-${ns}`}
-                        />
-                        <label htmlFor={id} className="font-mono">
-                          {ns}
-                        </label>
-                        {isPulled && (
-                          <Badge variant="secondary" className="ml-auto text-3xs">
-                            auto
-                          </Badge>
-                        )}
-                      </div>
-                    );
-                    // Wrap pulled rows in a tooltip explaining provenance.
-                    if (isPulled && sources && sources.length > 0) {
-                      return (
-                        <Tooltip key={ns}>
-                          <TooltipTrigger render={row} />
-                          <TooltipContent>pulled by {sources.join(', ')}</TooltipContent>
-                        </Tooltip>
-                      );
-                    }
-                    return <div key={ns}>{row}</div>;
-                  })}
-                </div>
-              </TooltipProvider>
-            </div>
-          )}
-        </div>
-
-        <Separator />
-        <div className="flex justify-end gap-2 px-4 py-3">
-          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-modal__cancel">
+    <InteractiveDialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title={`Generate ${descriptor.label}`}
+      description={`Choose layout and namespace subset, then generate ${descriptor.label} output.`}
+      width="w-[480px]"
+      testId="download-config-dialog"
+      bodyClassName="studio-scroll overflow-auto p-4 gap-5"
+      footer={
+        <>
+          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-dialog__cancel">
             Cancel
           </Button>
           <Button
             size="sm"
             onClick={handleGenerate}
             disabled={generateDisabled}
-            data-testid="download-config-modal__generate"
+            data-testid="download-config-dialog__generate"
           >
             Generate
           </Button>
+        </>
+      }
+    >
+      {/* Layout — only for layout-aware targets */}
+      {hasLayouts && (
+        <div className="flex flex-col gap-2" data-testid="download-config-dialog__layout">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Layout</span>
+          <RadioGroup value={layout} onValueChange={setLayout}>
+            {panel!.layouts.map((choice) => {
+              const id = `download-layout-${choice.value}`;
+              return (
+                <div key={choice.value} className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem
+                    id={id}
+                    value={choice.value}
+                    data-testid={`download-config-dialog__layout-${choice.value}`}
+                  />
+                  <label htmlFor={id} className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">{choice.label}</span>
+                    {choice.hint && <span className="text-muted-foreground">({choice.hint})</span>}
+                  </label>
+                </div>
+              );
+            })}
+          </RadioGroup>
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+
+      {/* Per-target options — rendered only when an OptionsForm is
+          injected by the wiring site (e.g. ExcelOptionsForm for excel).
+          The form calls onChange on every field change (auto-save mode)
+          and we store the result as opaque options for the Generate
+          payload. */}
+      {OptionsForm !== undefined && (
+        <div className="flex flex-col gap-2" data-testid="download-config-dialog__options">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options</span>
+          <OptionsForm value={targetOptions} onChange={setTargetOptions} />
+        </div>
+      )}
+
+      {/* Namespaces with auto-select cascade. Hidden when there's
+          nothing to narrow (dep graph not populated) — Generate then
+          emits everything. */}
+      {hasNamespaces && (
+        <div className="flex flex-col gap-2" data-testid="download-config-dialog__namespaces">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
+          </span>
+          <TooltipProvider>
+            <div className="flex flex-col gap-1.5">
+              {namespaces.map((ns) => {
+                const isSelected = selected.has(ns);
+                const isPulled = selection.pulled.has(ns);
+                const sources = selection.pulledBy.get(ns);
+                const id = `download-ns-${ns}`;
+                const row = (
+                  <div
+                    className={
+                      'flex items-center gap-2 text-sm ' + (isPulled ? 'text-muted-foreground' : 'text-foreground')
+                    }
+                    data-testid={`download-config-dialog__ns-row-${ns}`}
+                    data-state={isSelected ? 'selected' : isPulled ? 'pulled' : 'unselected'}
+                  >
+                    <Checkbox
+                      id={id}
+                      // A pulled dependency is read-only: the user can only
+                      // remove it by deselecting whatever pulled it in
+                      // (§5.2 prevents partial-graph emit).
+                      checked={isSelected || isPulled}
+                      disabled={isPulled}
+                      onCheckedChange={() => toggleNamespace(ns)}
+                      data-testid={`download-config-dialog__ns-${ns}`}
+                    />
+                    <label htmlFor={id} className="font-mono">
+                      {ns}
+                    </label>
+                    {isPulled && (
+                      <Badge variant="secondary" className="ml-auto text-3xs">
+                        auto
+                      </Badge>
+                    )}
+                  </div>
+                );
+                // Wrap pulled rows in a tooltip explaining provenance.
+                if (isPulled && sources && sources.length > 0) {
+                  return (
+                    <Tooltip key={ns}>
+                      <TooltipTrigger render={row} />
+                      <TooltipContent>pulled by {sources.join(', ')}</TooltipContent>
+                    </Tooltip>
+                  );
+                }
+                return <div key={ns}>{row}</div>;
+              })}
+            </div>
+          </TooltipProvider>
+        </div>
+      )}
+    </InteractiveDialog>
   );
 }

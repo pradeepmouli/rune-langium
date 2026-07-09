@@ -369,7 +369,7 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
 vi.mock('../../src/components/StudioToastProvider.js', () => ({
   StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, {}, children),
-  useStudioToast: () => ({ showToast: showToastSpy })
+  useStudioToast: () => ({ showToast: showToastSpy, showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
 }));
 
 vi.mock('lucide-react', () => ({
@@ -383,7 +383,7 @@ vi.mock('lucide-react', () => ({
   Check: () => React.createElement('span'),
   Download: () => React.createElement('span'),
   Share2: () => React.createElement('span'),
-  Zap: () => React.createElement('span'),
+  Wand2: () => React.createElement('span'),
   Search: () => React.createElement('span'),
   ChevronDown: () => React.createElement('span'),
   ChevronUp: () => React.createElement('span'),
@@ -1072,7 +1072,7 @@ describe('EditorPage workspace chrome', () => {
     expect(screen.getByText('Rune Studio')).toBeInTheDocument();
     expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
     expect(screen.getByText('1 file')).toBeInTheDocument();
-    expect(screen.getByText('Generate')).toBeInTheDocument();
+    expect(screen.getByText('Import')).toBeInTheDocument();
 
     const graphToolbar = screen.getByLabelText('Graph toolbar');
     expect(graphToolbar).toBeInTheDocument();

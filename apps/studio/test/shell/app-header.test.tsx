@@ -117,7 +117,7 @@ describe('AppHeader', () => {
     expect(screen.getByRole('button', { name: 'Validate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export code' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
-    expect(screen.getByText('Generate')).toBeInTheDocument();
+    expect(screen.getByText('Import')).toBeInTheDocument();
   });
 
   it('non-Explore perspectives render neither the FileTabStrip nor Explore actions', () => {
@@ -125,7 +125,7 @@ describe('AppHeader', () => {
     renderAppHeaderWithWorkspace();
     expect(screen.queryByRole('button', { name: /a\.rosetta/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Generate')).not.toBeInTheDocument();
+    expect(screen.queryByText('Import')).not.toBeInTheDocument();
   });
 
   it('renders exactly one .studio-topbar in every perspective', () => {
@@ -162,7 +162,7 @@ describe('AppHeader', () => {
     expect(screen.getByText('Workspaces / Models')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /a\.rosetta/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Generate')).not.toBeInTheDocument();
+    expect(screen.queryByText('Import')).not.toBeInTheDocument();
   });
 });
 
