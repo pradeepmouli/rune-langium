@@ -53,3 +53,8 @@ apps/docs/.vitepress/cache/
 # functions is apps/studio/functions/.
 /functions/
 /wrangler.toml
+reference-design/build-daikonic-mark.py
+reference-design/daikonic-mark-geometric.svg
+reference-design/daikonic-mark.svg
+reference-design/uploads/Image 1.png.2026_06_04_12_57_53.0.svg
+reference-design/ux-functionality-differential-2026-06-05.md
