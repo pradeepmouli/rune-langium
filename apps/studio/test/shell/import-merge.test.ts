@@ -51,4 +51,22 @@ describe('mergeImportedText', () => {
     const reparsed = await parse(result.mergedText);
     expect(reparsed.hasErrors).toBe(false);
   });
+
+  it('throws when existingText fails to parse', async () => {
+    const INVALID = 'not valid rune syntax at all !!!';
+    const { parse } = await import('@rune-langium/core');
+    const check = await parse(INVALID, 'inmemory:///check-existing.rosetta');
+    expect(check.hasErrors).toBe(true);
+
+    await expect(mergeImportedText(INVALID, IMPORTED_NO_COLLISION)).rejects.toThrow(/existingText failed to parse/);
+  });
+
+  it('throws when importedText fails to parse', async () => {
+    const INVALID = 'not valid rune syntax at all !!!';
+    const { parse } = await import('@rune-langium/core');
+    const check = await parse(INVALID, 'inmemory:///check-imported.rosetta');
+    expect(check.hasErrors).toBe(true);
+
+    await expect(mergeImportedText(EXISTING, INVALID)).rejects.toThrow(/importedText failed to parse/);
+  });
 });

@@ -26,7 +26,10 @@ export interface MergeResult {
  * a failure here means a bug in this splice logic, not a user input error).
  */
 export async function mergeImportedText(existingText: string, importedText: string): Promise<MergeResult> {
-  const [existingParse, importedParse] = await Promise.all([parse(existingText), parse(importedText)]);
+  const [existingParse, importedParse] = await Promise.all([
+    parse(existingText, 'inmemory:///existing.rosetta'),
+    parse(importedText, 'inmemory:///imported.rosetta')
+  ]);
   if (existingParse.hasErrors) {
     throw new Error('mergeImportedText: existingText failed to parse.');
   }
