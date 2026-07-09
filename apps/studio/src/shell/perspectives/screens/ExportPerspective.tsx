@@ -15,7 +15,7 @@
  *     observes to trigger generation.
  *   - Read-only preview — displays the generated output from `useCodegenStore`
  *     (the `snapshot` populated by `receiveCodePreviewResult`).
- *   - Download — opens `DownloadConfigModal` and calls `downloadTargetViaRouter`
+ *   - Download — opens `DownloadConfigDialog` and calls `downloadTargetViaRouter`
  *     (the same client-side /api/codegen route used by CodePreviewPanel).
  *   - Empty state — shown when no snapshot is available yet.
  */
@@ -24,7 +24,7 @@ import type { ReactElement } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import type { Target } from '@rune-langium/codegen/export';
 import { CodegenTargetsTable } from '../../../components/CodegenTargetsTable.js';
-import { DownloadConfigModal, type DownloadConfig } from '../../../components/DownloadConfigModal.js';
+import { DownloadConfigDialog, type DownloadConfig } from '../../../components/DownloadConfigDialog.js';
 import { ExcelOptionsFormAdapter } from '../../../codegen-forms/ExcelOptionsFormAdapter.js';
 import {
   downloadTargetViaRouter,
@@ -230,7 +230,7 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
       </div>
 
       {downloadModalTarget !== undefined ? (
-        <DownloadConfigModal
+        <DownloadConfigDialog
           open
           target={downloadModalTarget}
           namespaces={namespaceList}

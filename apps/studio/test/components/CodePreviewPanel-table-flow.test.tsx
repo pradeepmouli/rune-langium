@@ -162,7 +162,7 @@ describe('CodePreviewPanel table-as-landing flow', () => {
       fireEvent.click(screen.getByTestId('codegen-targets-table__download-zod'));
     });
     await act(async () => {
-      fireEvent.click(screen.getByTestId('download-config-modal__generate'));
+      fireEvent.click(screen.getByTestId('download-config-dialog__generate'));
     });
 
     // Spinner appears on the zod row while the fetch is pending.

@@ -28,7 +28,7 @@ import {
   type WorkspaceFile
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
-import { DownloadConfigModal, type DownloadConfig } from './DownloadConfigModal.js';
+import { DownloadConfigDialog, type DownloadConfig } from './DownloadConfigDialog.js';
 import { ExcelOptionsFormAdapter } from '../codegen-forms/ExcelOptionsFormAdapter.js';
 import { useCodegenStore, type CodePreviewFile, type CodePreviewSnapshot } from '../store/codegen-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
@@ -375,7 +375,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
         </>
       ) : null}
       {downloadModalTarget !== undefined ? (
-        <DownloadConfigModal
+        <DownloadConfigDialog
           open
           target={downloadModalTarget}
           namespaces={namespaceList}

@@ -3,7 +3,7 @@
 
 /**
  * InteractiveDialog — shared shell for Studio's single-screen confirm/cancel
- * dialogs (ExportDialog, DownloadConfigModal, ImportDialog). Standardizes
+ * dialogs (ExportDialog, DownloadConfigDialog, ImportDialog). Standardizes
  * sizing, header, scrollable body, and an optional footer bar; each
  * consumer keeps its own phase state machine and error rendering — see
  * docs/superpowers/specs/2026-07-06-explorer-import-dialog-design.md's
