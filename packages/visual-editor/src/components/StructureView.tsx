@@ -25,6 +25,7 @@ import type { AdapterDocument } from '../adapters/structure-graph-adapter.js';
 import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph, STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
+import { NavigationContext } from './nodes/NavigationContext.js';
 import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
 import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
 
@@ -332,9 +333,18 @@ export interface StructureViewProps {
    * production until the upstream threading lands (deferred follow-up).
    */
   readonly structureDiagnostics?: readonly RangeDiagnostic[];
+  /**
+   * Namespaces currently being on-demand hydrated (see
+   * `useEditorStore.pendingHydrationNamespaces`). Threaded into a
+   * `NavigationContext.Provider` so structure-view nodes for deferred
+   * placeholders show the same hydrating spinner as the main graph canvas.
+   */
+  readonly pendingHydrationNamespaces?: ReadonlyArray<string>;
 }
 
 const EMPTY_EXPANSION_MAP: ReadonlyMap<string, boolean> = new Map();
+const EMPTY_PENDING_HYDRATION: ReadonlyArray<string> = [];
+const EMPTY_ALL_NODE_IDS: Set<string> = new Set();
 
 interface StructureFlowInnerProps {
   readonly focusedTypeId: string;
@@ -345,6 +355,7 @@ interface StructureFlowInnerProps {
   readonly onNodeSelect?: (canonicalTypeId: string) => void;
   readonly onNavigateToEnumType?: (typeId: string) => void;
   readonly structureDiagnostics?: readonly RangeDiagnostic[];
+  readonly pendingHydrationNamespaces: ReadonlyArray<string>;
 }
 
 /**
@@ -359,7 +370,8 @@ function StructureFlowInner({
   onToggleExpansion,
   onNodeSelect,
   onNavigateToEnumType,
-  structureDiagnostics
+  structureDiagnostics,
+  pendingHydrationNamespaces
 }: StructureFlowInnerProps): React.ReactElement {
   // Phase 14c (Approach B): keep the previous useMemo result so we can
   // identity-preserve unchanged nodes across re-renders. React Flow shallow-
@@ -497,46 +509,57 @@ function StructureFlowInner({
     return () => cancelAnimationFrame(id);
   }, [focusedTypeId, expansionSignature, nodes.length, rf]);
 
+  const navigationCtx = useMemo(
+    () => ({
+      allNodeIds: EMPTY_ALL_NODE_IDS,
+      layoutDirection: 'TB' as const,
+      pendingHydrationNamespaces
+    }),
+    [pendingHydrationNamespaces]
+  );
+
   return (
-    <div
-      data-testid="structure-view-flow"
-      style={{ width: '100%', height: '100%', minHeight: 320, ...STRUCTURE_LAYOUT_CSS_VARS }}
-    >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        fitView
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        onlyRenderVisibleElements
-        proOptions={{ hideAttribution: true }}
-        // e2e-batch fix #3: selection sync — clicking any node in the
-        // Structure tree writes the OWNER type's canonical id to the shared
-        // selection slice. We extract `node.data.id` (the canonical type id
-        // stamped by the adapter, e.g. `cdm.trade.Trade`) rather than the
-        // React Flow `node.id` (which carries the per-instance suffix like
-        // `Trade::buyer::Party` and would not match the explorer / inspector
-        // selection contract). Falls back to `node.id` when `data.id` is
-        // missing so the click still produces a write.
-        //
-        // Codex P1 review: skip clicks on synthetic wrapper nodes
-        // (`structureBase` — the GroupContainerNode renderer for base-type
-        // wraps). Their `data.id` is the synthetic wrapper key like
-        // `cdm.trade.Trade::__base::cdm.trade.TradeBase`, not a real
-        // graph node id — writing it to selectedNodeId would put the cross-
-        // pane sync into a no-such-node state. The base's actual selectable
-        // contents (header → base type, child → derived type) are accessed
-        // via clicking either of those nodes directly; the wrapper itself
-        // doesn't represent a navigable selection target.
-        onNodeClick={(_, node) => {
-          if (node.type === 'structureBase') return;
-          const canonicalId = (node.data as { id?: string } | undefined)?.id ?? node.id;
-          onNodeSelect?.(canonicalId);
-        }}
-      />
-    </div>
+    <NavigationContext.Provider value={navigationCtx}>
+      <div
+        data-testid="structure-view-flow"
+        style={{ width: '100%', height: '100%', minHeight: 320, ...STRUCTURE_LAYOUT_CSS_VARS }}
+      >
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          onlyRenderVisibleElements
+          proOptions={{ hideAttribution: true }}
+          // e2e-batch fix #3: selection sync — clicking any node in the
+          // Structure tree writes the OWNER type's canonical id to the shared
+          // selection slice. We extract `node.data.id` (the canonical type id
+          // stamped by the adapter, e.g. `cdm.trade.Trade`) rather than the
+          // React Flow `node.id` (which carries the per-instance suffix like
+          // `Trade::buyer::Party` and would not match the explorer / inspector
+          // selection contract). Falls back to `node.id` when `data.id` is
+          // missing so the click still produces a write.
+          //
+          // Codex P1 review: skip clicks on synthetic wrapper nodes
+          // (`structureBase` — the GroupContainerNode renderer for base-type
+          // wraps). Their `data.id` is the synthetic wrapper key like
+          // `cdm.trade.Trade::__base::cdm.trade.TradeBase`, not a real
+          // graph node id — writing it to selectedNodeId would put the cross-
+          // pane sync into a no-such-node state. The base's actual selectable
+          // contents (header → base type, child → derived type) are accessed
+          // via clicking either of those nodes directly; the wrapper itself
+          // doesn't represent a navigable selection target.
+          onNodeClick={(_, node) => {
+            if (node.type === 'structureBase') return;
+            const canonicalId = (node.data as { id?: string } | undefined)?.id ?? node.id;
+            onNodeSelect?.(canonicalId);
+          }}
+        />
+      </div>
+    </NavigationContext.Provider>
   );
 }
 
@@ -562,7 +585,8 @@ export function StructureView({
   unsupportedSelectedType,
   onNodeSelect,
   onNavigateToEnumType,
-  structureDiagnostics
+  structureDiagnostics,
+  pendingHydrationNamespaces
 }: StructureViewProps): React.ReactElement {
   if (!focusedTypeId || !adapterDoc) {
     // e2e-batch fix (#10): distinguish "nothing selected" from "selected an
@@ -613,6 +637,7 @@ export function StructureView({
         onNodeSelect={onNodeSelect}
         onNavigateToEnumType={onNavigateToEnumType}
         structureDiagnostics={structureDiagnostics}
+        pendingHydrationNamespaces={pendingHydrationNamespaces ?? EMPTY_PENDING_HYDRATION}
       />
     </ReactFlowProvider>
   );

@@ -274,6 +274,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const selectNode = useEditorStore((s) => s.selectNode);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const focusMode = useEditorStore((s) => s.focusMode);
+  const pendingHydrationNamespaces = useEditorStore((s) => s.pendingHydrationNamespaces);
 
   // Derive visible nodes/edges from store, respecting namespace, kind, and individual visibility
   const { visibleNodes, visibleEdges } = useMemo(() => {
@@ -749,9 +750,10 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     return {
       onNavigateToType: callbacks?.onNavigateToType,
       allNodeIds,
-      layoutDirection: activeLayout.direction ?? 'TB'
+      layoutDirection: activeLayout.direction ?? 'TB',
+      pendingHydrationNamespaces
     };
-  }, [activeLayout.direction, storeNodes, callbacks?.onNavigateToType]);
+  }, [activeLayout.direction, storeNodes, callbacks?.onNavigateToType, pendingHydrationNamespaces]);
 
   // Node double-click handler
   const handleNodeDoubleClick = useCallback(

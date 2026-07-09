@@ -182,6 +182,13 @@ export interface StructureDataNode {
   readonly kind: 'data';
   readonly name: string;
   readonly namespaceUri: string;
+  /**
+   * True when this node is a deferred curated placeholder whose namespace
+   * hasn't been on-demand hydrated yet (forwarded from `GraphNodeMeta.deferred`
+   * via `AdapterNode`). Drives the same hydrating-spinner treatment as the
+   * main graph canvas.
+   */
+  readonly deferred?: boolean;
   readonly extendsName?: string;
   readonly extendsNodeId?: string;
   /**
@@ -233,6 +240,8 @@ export interface StructureChoiceNode {
   readonly kind: 'choice';
   readonly name: string;
   readonly namespaceUri: string;
+  /** See `StructureDataNode.deferred`. */
+  readonly deferred?: boolean;
   /** Phase A — type-level documentation; see `StructureDataNode.definition`. */
   readonly definition?: string;
   /** Phase A — annotation display strings; see `StructureDataNode.annotations`. */
@@ -268,6 +277,8 @@ export interface StructureEnumNode {
   readonly kind: 'enum';
   readonly name: string;
   readonly namespaceUri: string;
+  /** See `StructureDataNode.deferred`. */
+  readonly deferred?: boolean;
   /** Enum value names in source order. */
   readonly values: ReadonlyArray<string>;
 }
@@ -314,6 +325,8 @@ export interface StructureFunctionNode {
   readonly kind: 'function';
   readonly name: string;
   readonly namespaceUri: string;
+  /** See `StructureDataNode.deferred`. */
+  readonly deferred?: boolean;
   /** Input parameters as stacked Data-style rows (reuses `StructureRow`). */
   readonly inputRows: ReadonlyArray<StructureRow>;
   /** Output as a single Data-style row; undefined when the function has no output. */

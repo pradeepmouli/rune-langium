@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { DataNode } from '../../../src/components/nodes/DataNode.js';
+import { NavigationContext } from '../../../src/components/nodes/NavigationContext.js';
 import type { StructureExpansionKey, StructureRow } from '../../../src/types/structure-view.js';
 import { expansionKey } from '../../../src/types/structure-view.js';
 
@@ -72,6 +73,36 @@ describe('DataNode — structure variant', () => {
     const cells = screen.getAllByTestId('custom-cell');
     expect(cells.length).toBeGreaterThan(0);
     expect(cells[0]).toHaveTextContent('tradeDate');
+  });
+});
+
+describe('DataNode — structure variant — hydrating indicator', () => {
+  function renderWithPending(deferred: boolean, pendingHydrationNamespaces: string[]) {
+    const deferredData = { ...data, deferred };
+    return render(
+      <ReactFlowProvider>
+        <NavigationContext.Provider
+          value={{ allNodeIds: new Set(), layoutDirection: 'TB', pendingHydrationNamespaces }}
+        >
+          <DataNode data={deferredData as any} selected={false} id="Trade" type="data" />
+        </NavigationContext.Provider>
+      </ReactFlowProvider>
+    );
+  }
+
+  it('shows the hydrating spinner when deferred and its namespace is pending', () => {
+    renderWithPending(true, ['test.ns']);
+    expect(screen.getByTestId('rune-node-hydrating-spinner')).toBeInTheDocument();
+  });
+
+  it('does not show the spinner when not deferred', () => {
+    renderWithPending(false, ['test.ns']);
+    expect(screen.queryByTestId('rune-node-hydrating-spinner')).toBeNull();
+  });
+
+  it('does not show the spinner when deferred but the namespace is not pending', () => {
+    renderWithPending(true, ['other.ns']);
+    expect(screen.queryByTestId('rune-node-hydrating-spinner')).toBeNull();
   });
 });
 

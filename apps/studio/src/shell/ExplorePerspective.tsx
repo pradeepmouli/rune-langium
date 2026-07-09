@@ -232,6 +232,7 @@ function graphNodesToAdapterDocument(
         $type: 'Data',
         name: dd.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         extends: dd.superType?.$refText,
         // `attributes` on Dehydrated<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
@@ -256,6 +257,7 @@ function graphNodesToAdapterDocument(
         $type: 'Choice',
         name: dc.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>,
         // Phase A — type metadata. Choice declarations carry doc + annotations
         // (and may carry conditions in the grammar); project all via the shared
@@ -269,6 +271,7 @@ function graphNodesToAdapterDocument(
         $type: 'Enum',
         name: de.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         values: (de.enumValues ?? []) as Array<{ name: string }>
       });
     } else if (effectiveType === 'RosettaRecordType') {
@@ -297,6 +300,7 @@ function graphNodesToAdapterDocument(
         $type: 'Function',
         name: df.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         inputs: (df.inputs ?? []) as AdapterNode['inputs'],
         output: (df.output ?? null) as AdapterNode['output'],
         // Phase A — type metadata (doc / annotations / conditions). Functions
@@ -1803,6 +1807,7 @@ export function ExplorePerspective() {
         onNodeSelect={(canonicalId) => storeSelectNode(canonicalId, { reapplyFocusMode: false })}
         onNavigateToEnumType={handleStructureNavigateToEnumType}
         structureDiagnostics={structureDiagnostics}
+        pendingHydrationNamespaces={pendingHydrationNamespaces}
       />
     ),
     [
@@ -1814,7 +1819,8 @@ export function ExplorePerspective() {
       structureUnsupportedSelectedType,
       storeSelectNode,
       handleStructureNavigateToEnumType,
-      structureDiagnostics
+      structureDiagnostics,
+      pendingHydrationNamespaces
     ]
   );
 

@@ -1,6 +1,13 @@
 .claude/settings.local.json
 .claude/worktrees/
 .claire/
+.cursor/
+.kiro/
+.windsurf/
+
+# Infigraph local index/cache (regenerated per-machine; docs.kuzu, embeddings,
+# graph, session logs, and watch state all churn on every reindex)
+.infigraph/
 node_modules/
 dist/
 .wrangler/
