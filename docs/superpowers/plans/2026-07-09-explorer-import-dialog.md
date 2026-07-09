@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Explore's dead `Generate` topbar button with an `Import` action that opens a dialog for bringing an external schema (JSON Schema / OpenAPI / SQL DDL / XSD) into the workspace — as a new `.rune` file, or merged into an already-open file whose namespace matches — and extract the shell markup `ImportDialog` would otherwise duplicate into a shared `InteractiveDialog` component, retrofitting the two existing dialogs (`ExportDialog`, `DownloadConfigModal`) onto it in the same pass.
+**Goal:** Replace Explore's dead `Generate` topbar button with an `Import` action that opens a dialog for bringing an external schema (JSON Schema / OpenAPI / SQL DDL / XSD) into the workspace — as a new `.rune` file, or merged into an already-open file whose namespace matches — and extract the shell markup `ImportDialog` would otherwise duplicate into a shared `InteractiveDialog` component, retrofitting the two existing dialogs (`ExportDialog`, `DownloadConfigModal` — renamed to `DownloadConfigDialog` in the same pass, for naming consistency with every other single-screen dialog in the codebase) onto it in the same pass.
 
 **Architecture:** `InteractiveDialog` (new, `packages/design-system`) is a thin, shell-only wrapper over the existing `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle`/`DialogDescription`/`Separator` primitives — standard sizing, header, scrollable body, and an optional Cancel/Confirm footer bar. `ImportDialog` (new, `apps/studio`) is built on it: a `phase` state machine (`idle → previewing → previewed | error | internal-error`) drives format select → source input → `importModel()` preview → namespace-match check (`namespaceToFile`, already computed in `ExplorePerspective`) → either "Add to workspace" (`createWorkspaceFile`) or "Merge into `<path>`" (`mergeImportedText`, new pure text+CST splice helper using `@rune-langium/core`'s `parse()`). Everything runs client-side; no new server endpoint.
 
@@ -13,9 +13,9 @@
 - **No new server endpoint.** Everything runs client-side, same as the existing Code tab (see `feedback_code_tab_vs_export_button`). `ImportDialog` dynamically `import()`s `@rune-langium/codegen/import` on first Preview click — do not add it as a static top-level import.
 - **`InteractiveDialog` is shell-only.** It does not generalize the phase-state-machine or error-banner pattern — each dialog keeps its own body content, phase state, and error rendering. See the design doc addendum for why (three different phase shapes across the three dialogs).
 - **SPDX headers:** `packages/design-system/**` = MIT (`// SPDX-License-Identifier: MIT`); `apps/studio/**` = FSL-1.1-ALv2 (`// SPDX-License-Identifier: FSL-1.1-ALv2`). Every new file needs the correct header (copyright line: `// Copyright (c) 2026 Pradeep Mouli`).
-- **Retrofits must be pure structural extraction** — no behavior, prop, or `data-testid` changes to `ExportDialog` or `DownloadConfigModal`. Existing tests (`DownloadConfigModal.test.tsx`, `app-header.test.tsx`, the e2e specs touching `export-dialog`/`export-dialog-overlay`) must pass with only the one deliberate `Generate` → `Import` text change called out in Task 7.
+- **Retrofits must be pure structural extraction** — no behavior, prop, or `data-testid` changes beyond what's deliberately called out. `ExportDialog`'s retrofit (Task 2) changes nothing observable. `DownloadConfigModal`'s retrofit (Task 3) also renames it to `DownloadConfigDialog` (component, file, props type, every `data-testid` string) and updates its 4 consumers — the ONLY deliberate exception to "no observable changes," done in the same task so nothing is left half-renamed. `app-header.test.tsx` and the e2e specs touching `export-dialog`/`export-dialog-overlay` must pass with only the one deliberate `Generate` → `Import` text change called out in Task 7.
 - **DRY reuse, not re-derivation:** `ImportDialog` must receive `ExplorePerspective`'s already-memoized `namespaceToFile: Map<namespace, filePath>` (line ~902) as a prop rather than recomputing it from scratch, and use `updateFileContent`/`createWorkspaceFile` from `apps/studio/src/services/workspace.ts` (both already exist, unmodified).
-- **No dedicated `InteractiveDialog` unit test.** `packages/design-system` has no test harness today (no `test` script, no jsdom setup, zero test files) and the component has no logic of its own — it is exercised transitively through `DownloadConfigModal.test.tsx` and the new `ImportDialog.test.tsx`, both under `apps/studio`'s jsdom vitest environment. Do not add test infrastructure to `design-system` as part of this plan.
+- **No dedicated `InteractiveDialog` unit test.** `packages/design-system` has no test harness today (no `test` script, no jsdom setup, zero test files) and the component has no logic of its own — it is exercised transitively through `DownloadConfigDialog.test.tsx` (post-Task-3 name) and the new `ImportDialog.test.tsx`, both under `apps/studio`'s jsdom vitest environment. Do not add test infrastructure to `design-system` as part of this plan.
 - **Design doc:** `docs/superpowers/specs/2026-07-06-explorer-import-dialog-design.md` (including its 2026-07-09 addendum) is the source of truth for the dialog flow, the merge algorithm, and the `InteractiveDialog` API. Read it before Task 6.
 
 ## File Structure
@@ -24,7 +24,8 @@
 - **`packages/design-system/package.json`** (modify) — add `./ui/interactive-dialog` export.
 - **`packages/design-system/src/ui/index.tsx`** (modify) — barrel re-export.
 - **`apps/studio/src/components/ExportDialog.tsx`** (modify) — retrofit onto `InteractiveDialog`.
-- **`apps/studio/src/components/DownloadConfigModal.tsx`** (modify) — retrofit onto `InteractiveDialog`.
+- **`apps/studio/src/components/DownloadConfigModal.tsx` → `DownloadConfigDialog.tsx`** (rename + modify) — retrofit onto `InteractiveDialog`, rename for consistency with `ExportDialog`/`ImportDialog`/`GitHubConnectDialog`.
+- **`apps/studio/test/components/DownloadConfigModal.test.tsx` → `DownloadConfigDialog.test.tsx`** (rename), **`apps/studio/src/components/CodePreviewPanel.tsx`**, **`apps/studio/src/shell/perspectives/screens/ExportPerspective.tsx`**, **`apps/studio/test/shell/ExportPerspective.test.tsx`**, **`apps/studio/test/components/CodePreviewPanel-table-flow.test.tsx`**, **`apps/studio/src/codegen-forms/ExcelOptionsFormAdapter.tsx`** (all modify) — update references to the renamed component/test-ids.
 - **`apps/studio/src/shell/import-merge.ts`** (new, FSL) — `mergeImportedText` pure function.
 - **`apps/studio/src/shell/import-dialog-store.ts`** (new, FSL) — Zustand open-state store.
 - **`apps/studio/src/components/ImportDialog.tsx`** (new, FSL) — the dialog.
@@ -62,7 +63,7 @@
  */
 
 import * as React from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogOverlay, DialogTitle } from './dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './dialog';
 import { Separator } from './separator';
 import { cn } from '../utils';
 
@@ -77,7 +78,7 @@ export interface InteractiveDialogProps {
   /** data-testid on the rendered DialogContent. */
   testId: string;
   /** Forwarded to DialogContent's overlayProps, e.g. { 'data-testid': 'export-dialog-overlay' }. */
-  overlayProps?: React.ComponentProps<typeof DialogOverlay>;
+  overlayProps?: React.ComponentProps<typeof DialogContent>['overlayProps'];
   /** Extra classes merged onto the scrollable body div (default: 'flex-1 min-h-0 flex flex-col'). */
   bodyClassName?: string;
   /** Footer content, rendered after a Separator in a standard button-bar. Omit for dialogs whose actions live inline in the body. */
@@ -252,15 +253,38 @@ git commit -m "refactor(studio): retrofit ExportDialog onto InteractiveDialog"
 
 ---
 
-### Task 3: Retrofit `DownloadConfigModal` onto `InteractiveDialog`
+### Task 3: Rename `DownloadConfigModal` → `DownloadConfigDialog` and retrofit onto `InteractiveDialog`
+
+Naming consistency: every other single-screen dialog in this codebase is named `*Dialog` (`ExportDialog`, the new `ImportDialog`, `GitHubConnectDialog`). `DownloadConfigModal` is the one holdout — rename it to `DownloadConfigDialog` (component, file, props type, and every `data-testid` string) in the same pass as the `InteractiveDialog` retrofit, and update its 4 consumers.
 
 **Files:**
-- Modify: `apps/studio/src/components/DownloadConfigModal.tsx`
+- Rename + modify: `apps/studio/src/components/DownloadConfigModal.tsx` → `apps/studio/src/components/DownloadConfigDialog.tsx`
+- Rename + modify: `apps/studio/test/components/DownloadConfigModal.test.tsx` → `apps/studio/test/components/DownloadConfigDialog.test.tsx`
+- Modify: `packages/design-system/src/ui/interactive-dialog.tsx` (Task 1's module docstring mentions `DownloadConfigModal` by name in its list of consumers — a one-line comment fix, no code change: `* dialogs (ExportDialog, DownloadConfigModal, ImportDialog). Standardizes` → `* dialogs (ExportDialog, DownloadConfigDialog, ImportDialog). Standardizes`)
+- Modify: `apps/studio/src/components/CodePreviewPanel.tsx` (import + JSX usage, line 31 and line 378)
+- Modify: `apps/studio/src/shell/perspectives/screens/ExportPerspective.tsx` (import + JSX usage + one comment, lines 18, 27, 233)
+- Modify: `apps/studio/test/shell/ExportPerspective.test.tsx` (mock path + identifier + one comment/test name, lines 20, 65–66, 225)
+- Modify: `apps/studio/test/components/CodePreviewPanel-table-flow.test.tsx` (one test-id string, line ~165)
+- Modify: `apps/studio/src/codegen-forms/ExcelOptionsFormAdapter.tsx` (one comment, line 6 — prose only, no code reference)
 
 **Interfaces:**
 - Consumes: `InteractiveDialog` (Task 1).
+- Produces: `DownloadConfigDialog` component, `DownloadConfigDialogProps` type (renamed from `DownloadConfigModalProps`) — consumed by `CodePreviewPanel.tsx` and `ExportPerspective.tsx` (both already exist, both updated in this task). `computeNamespaceSelection` (the pure cascade-math export) is unaffected — not part of this rename.
 
-- [ ] **Step 1: Replace the imports**
+- [ ] **Step 1: Rename the source file and its test file**
+
+```bash
+git mv apps/studio/src/components/DownloadConfigModal.tsx apps/studio/src/components/DownloadConfigDialog.tsx
+git mv apps/studio/test/components/DownloadConfigModal.test.tsx apps/studio/test/components/DownloadConfigDialog.test.tsx
+```
+
+- [ ] **Step 2: Rename the identifiers inside `DownloadConfigDialog.tsx`**
+
+Within the just-renamed file, rename every occurrence of the identifier `DownloadConfigModal` → `DownloadConfigDialog` and `DownloadConfigModalProps` → `DownloadConfigDialogProps` (the `export interface DownloadConfigModalProps` declaration and its one use-site as the destructured parameter type). Also rename every `data-testid` string carrying `download-config-modal` → `download-config-dialog` (7 occurrences: the root `data-testid="download-config-modal"`, `__layout`, `__layout-${choice.value}`, `__options`, `__namespaces`, `__ns-row-${ns}`/`__ns-${ns}`, `__cancel`, `__generate`). None of this changes any behavior — it is a pure identifier/string rename.
+
+Also fix the one stray mention in `packages/design-system/src/ui/interactive-dialog.tsx`'s module docstring (from Task 1): `* dialogs (ExportDialog, DownloadConfigModal, ImportDialog). Standardizes` → `* dialogs (ExportDialog, DownloadConfigDialog, ImportDialog). Standardizes`.
+
+- [ ] **Step 3: Replace the imports**
 
 Replace:
 
@@ -281,16 +305,16 @@ with:
 import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 ```
 
-- [ ] **Step 2: Replace the returned JSX shell**
+- [ ] **Step 4: Replace the returned JSX shell**
 
-Replace (currently, lines 236–364):
+Replace (after the Step 2 rename, currently):
 
 ```tsx
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="w-[480px] max-w-[92vw] max-h-[80vh] flex flex-col gap-0 p-0"
-        data-testid="download-config-modal"
+        data-testid="download-config-dialog"
       >
         <DialogHeader className="px-4 py-3">
           <DialogTitle>Generate {descriptor.label}</DialogTitle>
@@ -307,14 +331,14 @@ Replace (currently, lines 236–364):
 
         <Separator />
         <div className="flex justify-end gap-2 px-4 py-3">
-          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-modal__cancel">
+          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-dialog__cancel">
             Cancel
           </Button>
           <Button
             size="sm"
             onClick={handleGenerate}
             disabled={generateDisabled}
-            data-testid="download-config-modal__generate"
+            data-testid="download-config-dialog__generate"
           >
             Generate
           </Button>
@@ -334,18 +358,18 @@ with:
       title={`Generate ${descriptor.label}`}
       description={`Choose layout and namespace subset, then generate ${descriptor.label} output.`}
       width="w-[480px]"
-      testId="download-config-modal"
+      testId="download-config-dialog"
       bodyClassName="studio-scroll overflow-auto p-4 gap-5"
       footer={
         <>
-          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-modal__cancel">
+          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-dialog__cancel">
             Cancel
           </Button>
           <Button
             size="sm"
             onClick={handleGenerate}
             disabled={generateDisabled}
-            data-testid="download-config-modal__generate"
+            data-testid="download-config-dialog__generate"
           >
             Generate
           </Button>
@@ -359,20 +383,51 @@ with:
 
 (Note the original had a stray nesting — the footer bar was inside the same `<DialogContent>` as the scrollable body, after its closing `</div>` but before `</DialogContent>`. `InteractiveDialog`'s `footer` prop reproduces that exact structure: body div, then Separator, then footer bar, all inside one `DialogContent`.)
 
-- [ ] **Step 3: Run the existing test suite**
+- [ ] **Step 5: Update the 4 consumer files**
 
-Run: `pnpm --filter @rune-langium/studio exec vitest run test/components/DownloadConfigModal.test.tsx`
-Expected: all existing assertions pass unchanged — `download-config-modal`, `download-config-modal__cancel`, `download-config-modal__generate`, and the `download-config-modal__layout`/`__options`/`__namespaces` section test-ids are untouched by this refactor.
+In `apps/studio/src/components/CodePreviewPanel.tsx`:
+- Line 31: `import { DownloadConfigModal, type DownloadConfig } from './DownloadConfigModal.js';` → `import { DownloadConfigDialog, type DownloadConfig } from './DownloadConfigDialog.js';`
+- Line 378: `<DownloadConfigModal` → `<DownloadConfigDialog` (closing tag, if self-closing or explicit, follows automatically — check for a matching `</DownloadConfigModal>` a few lines below and rename it too if present).
+
+In `apps/studio/src/shell/perspectives/screens/ExportPerspective.tsx`:
+- Line 18 (comment): `Download — opens \`DownloadConfigModal\` and calls \`downloadTargetViaRouter\`` → `Download — opens \`DownloadConfigDialog\` and calls \`downloadTargetViaRouter\``
+- Line 27: `import { DownloadConfigModal, type DownloadConfig } from '../../../components/DownloadConfigModal.js';` → `import { DownloadConfigDialog, type DownloadConfig } from '../../../components/DownloadConfigDialog.js';`
+- Line 233: `<DownloadConfigModal` → `<DownloadConfigDialog` (and its closing tag, if present).
+
+In `apps/studio/test/shell/ExportPerspective.test.tsx`:
+- Line 20 (comment): `Heavy children (CodegenTargetsTable, DownloadConfigModal) are mocked...` → `...DownloadConfigDialog) are mocked...`
+- Lines 65–66:
+  ```ts
+  vi.mock('../../src/components/DownloadConfigModal.js', () => ({
+    DownloadConfigModal: vi.fn((props: Record<string, unknown>) => {
+  ```
+  → 
+  ```ts
+  vi.mock('../../src/components/DownloadConfigDialog.js', () => ({
+    DownloadConfigDialog: vi.fn((props: Record<string, unknown>) => {
+  ```
+- Line 225: `it('opens DownloadConfigModal when workspace has user files', () => {` → `it('opens DownloadConfigDialog when workspace has user files', () => {`
+
+In `apps/studio/test/components/CodePreviewPanel-table-flow.test.tsx` (~line 165): `fireEvent.click(screen.getByTestId('download-config-modal__generate'));` → `fireEvent.click(screen.getByTestId('download-config-dialog__generate'));`
+
+In `apps/studio/src/codegen-forms/ExcelOptionsFormAdapter.tsx` (line 6, prose comment only): ``\`{ value, onChange }\` contract expected by DownloadConfigModal.optionsForm.`` → ``...expected by DownloadConfigDialog.optionsForm.``
+
+- [ ] **Step 6: Run the affected test suites**
+
+Run: `pnpm --filter @rune-langium/studio exec vitest run test/components/DownloadConfigDialog.test.tsx test/shell/ExportPerspective.test.tsx test/components/CodePreviewPanel-table-flow.test.tsx test/components/CodePreviewPanel.test.tsx`
+Expected: all pass — same assertions as before, now against the renamed identifiers/test-ids.
 
 Run: `pnpm --filter @rune-langium/studio run type-check`
-Expected: PASS.
+Expected: PASS (confirms no other file still imports the old `DownloadConfigModal`/`DownloadConfigModal.js` name).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add apps/studio/src/components/DownloadConfigModal.tsx
-git commit -m "refactor(studio): retrofit DownloadConfigModal onto InteractiveDialog"
+git add apps/studio/src/components/DownloadConfigDialog.tsx apps/studio/src/components/DownloadConfigModal.tsx apps/studio/test/components/DownloadConfigDialog.test.tsx apps/studio/test/components/DownloadConfigModal.test.tsx apps/studio/src/components/CodePreviewPanel.tsx apps/studio/src/shell/perspectives/screens/ExportPerspective.tsx apps/studio/test/shell/ExportPerspective.test.tsx apps/studio/test/components/CodePreviewPanel-table-flow.test.tsx apps/studio/src/codegen-forms/ExcelOptionsFormAdapter.tsx packages/design-system/src/ui/interactive-dialog.tsx
+git commit -m "refactor(studio): rename DownloadConfigModal to DownloadConfigDialog, retrofit onto InteractiveDialog"
 ```
+
+(The `git add` lists both old and new paths for the two renamed files — `git mv` plus subsequent edits sometimes shows as add+delete rather than a clean rename depending on content-similarity heuristics; listing both paths stages correctly either way.)
 
 ---
 
