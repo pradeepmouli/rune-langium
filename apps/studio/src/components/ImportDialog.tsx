@@ -24,7 +24,7 @@ import { mergeImportedText, type MergeResult } from '../shell/import-merge.js';
 export interface ImportDialogProps {
   open: boolean;
   onClose: () => void;
-  files: WorkspaceFile[];
+  files: readonly WorkspaceFile[];
   onFilesChange: (files: WorkspaceFile[]) => void;
   onFileFocused: (path: string) => void;
   /** namespace -> path, for every currently-open workspace file (ExplorePerspective's `namespaceToFile`). */

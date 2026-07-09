@@ -68,6 +68,7 @@ import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
+import { ImportDialog } from '../components/ImportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
@@ -100,6 +101,7 @@ import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { combineFileDiagnostics, countDiagnostics } from './explore-diagnostics.js';
 import { useExploreFileNavStore } from './explore-file-nav-store.js';
 import { useExportDialogStore } from './export-dialog-store.js';
+import { useImportDialogStore } from './import-dialog-store.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -408,6 +410,8 @@ export function ExplorePerspective() {
   // plan, Task 3 hazard #2).
   const showExportDialog = useExportDialogStore((s) => s.open);
   const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
+  const showImportDialog = useImportDialogStore((s) => s.open);
+  const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
   // Curated Models modal — wired from the ActivityBar's Database button.
   // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
   // reuse the same component in a Dialog so the affordance stays discoverable
@@ -1897,6 +1901,15 @@ export function ExplorePerspective() {
         onClose={() => setShowExportDialog(false)}
         getUserFiles={getSerializedFiles}
         validateModel={validateModelForExport}
+      />
+
+      <ImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        files={files}
+        onFilesChange={(next) => onFilesChange?.(next)}
+        onFileFocused={openFileInSource}
+        namespaceToFile={namespaceToFile}
       />
 
       {/*

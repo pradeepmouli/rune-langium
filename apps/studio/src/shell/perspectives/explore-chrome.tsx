@@ -3,7 +3,7 @@
 
 /**
  * Explore's chrome — the center (FileTabStrip) and actions (Validate /
- * Export Code / Share / Generate) slots declared by the `explore` registry
+ * Export Code / Share / Import) slots declared by the `explore` registry
  * entry, rendered by `AppHeader` (shared-perspective-chrome plan, Task 3).
  * Content MOVED VERBATIM from `ExplorePerspective`'s private header; each is
  * a zero-arg component reading its own hooks/stores rather than props
@@ -13,7 +13,7 @@
  */
 
 import { useMemo } from 'react';
-import { Check, Download, Share2, Zap, Plus } from 'lucide-react';
+import { Check, Download, Share2, Wand2, Plus } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import type { WorkspaceFile } from '../../services/workspace.js';
 import { createBlankWorkspaceFile } from '../../services/workspace.js';
@@ -23,6 +23,7 @@ import { useDiagnosticsStore } from '../../store/diagnostics-store.js';
 import { combineFileDiagnostics } from '../explore-diagnostics.js';
 import { useExploreFileNavStore } from '../explore-file-nav-store.js';
 import { useExportDialogStore } from '../export-dialog-store.js';
+import { useImportDialogStore } from '../import-dialog-store.js';
 import type { LspDiagnostic } from '../../store/diagnostics-store.js';
 
 /** Stable module-level reference — same rationale as ExplorePerspective's
@@ -165,6 +166,7 @@ export function ExploreCenterSlot() {
 
 export function ExploreActions() {
   const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
+  const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
   return (
     <>
       <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
@@ -182,9 +184,9 @@ export function ExploreActions() {
       <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
         <Share2 />
       </Button>
-      <button type="button" className="studio-topbar__generate" onClick={() => setShowExportDialog(true)}>
-        <Zap className="size-3.5" />
-        Generate
+      <button type="button" className="studio-topbar__import" onClick={() => setShowImportDialog(true)}>
+        <Wand2 className="size-3.5" />
+        Import
       </button>
     </>
   );

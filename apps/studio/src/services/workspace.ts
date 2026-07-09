@@ -793,7 +793,7 @@ export async function readFileList(
 /**
  * Update a file's content and mark it dirty.
  */
-export function updateFileContent(files: WorkspaceFile[], path: string, newContent: string): WorkspaceFile[] {
+export function updateFileContent(files: readonly WorkspaceFile[], path: string, newContent: string): WorkspaceFile[] {
   return files.map((f) => (f.path === path ? { ...f, content: newContent, dirty: true } : f));
 }
 

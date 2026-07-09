@@ -621,7 +621,7 @@ html {
   /* studio-topbar__icon-btn — removed; topbar icon buttons now use the
    * design-system <Button variant="ghost" size="icon-sm">. */
 
-  .studio-app .studio-topbar__generate {
+  .studio-app .studio-topbar__import {
     appearance: none;
     border: 0;
     display: inline-flex;
@@ -641,7 +641,7 @@ html {
     transition: filter 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
   }
 
-  .studio-app .studio-topbar__generate:hover {
+  .studio-app .studio-topbar__import:hover {
     filter: brightness(1.1);
     box-shadow:
       0 0 0 0.5px color-mix(in oklch, var(--primary), transparent 50%),
@@ -650,7 +650,7 @@ html {
 
   /* :focus-visible ring covered by the global baseline. */
 
-  .studio-app .studio-topbar__generate:active {
+  .studio-app .studio-topbar__import:active {
     transform: translateY(0.5px) scale(0.99);
     filter: brightness(0.96);
   }
