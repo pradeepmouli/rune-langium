@@ -823,6 +823,26 @@ const BLANK_TEMPLATE = `namespace example
 `;
 
 /**
+ * Returns `candidate` unchanged if no file in `existingFiles` already has
+ * that path; otherwise appends -2, -3, ... before the extension until a
+ * free path is found.
+ */
+export function uniqueFilePath(candidate: string, existingFiles: ReadonlyArray<WorkspaceFile>): string {
+  const paths = new Set(existingFiles.map((f) => f.path));
+  if (!paths.has(candidate)) return candidate;
+  const dotIndex = candidate.lastIndexOf('.');
+  const base = dotIndex === -1 ? candidate : candidate.slice(0, dotIndex);
+  const ext = dotIndex === -1 ? '' : candidate.slice(dotIndex);
+  let n = 2;
+  let next = `${base}-${n}${ext}`;
+  while (paths.has(next)) {
+    n += 1;
+    next = `${base}-${n}${ext}`;
+  }
+  return next;
+}
+
+/**
  * Create a blank untitled workspace file for the "New" start-page option.
  *
  * Picks the next available `untitled[-N].rosetta` name that doesn't collide
@@ -830,13 +850,8 @@ const BLANK_TEMPLATE = `namespace example
  * live under a `[model-id]/` prefix and never shadow user-editable paths.
  */
 export function createBlankWorkspaceFile(existingFiles: ReadonlyArray<WorkspaceFile>): WorkspaceFile {
-  const userPaths = new Set(existingFiles.filter((f) => !f.readOnly).map((f) => f.path));
-  let candidate = 'untitled.rosetta';
-  let n = 2;
-  while (userPaths.has(candidate)) {
-    candidate = `untitled-${n}.rosetta`;
-    n += 1;
-  }
+  const userFiles = existingFiles.filter((f) => !f.readOnly);
+  const candidate = uniqueFilePath('untitled.rosetta', userFiles);
   return createWorkspaceFile(candidate, BLANK_TEMPLATE);
 }
 

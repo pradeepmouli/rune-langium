@@ -18,7 +18,7 @@ import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-di
 import { parse } from '@rune-langium/core';
 import type { ImportResult, ImportSourceKind } from '@rune-langium/codegen/import';
 import type { WorkspaceFile } from '../services/workspace.js';
-import { createWorkspaceFile, updateFileContent } from '../services/workspace.js';
+import { createWorkspaceFile, updateFileContent, uniqueFilePath } from '../services/workspace.js';
 import { mergeImportedText, type MergeResult } from '../shell/import-merge.js';
 
 export interface ImportDialogProps {
@@ -120,7 +120,8 @@ export function ImportDialog({
       onFilesChange(updateFileContent(files, matchedPath, merge.mergedText));
       onFileFocused(matchedPath);
     } else {
-      const file = createWorkspaceFile(`${result.model.namespace}.rosetta`, result.text);
+      const path = uniqueFilePath(`${result.model.namespace}.rosetta`, files);
+      const file = createWorkspaceFile(path, result.text);
       onFilesChange([...files, file]);
       onFileFocused(file.path);
     }
@@ -152,7 +153,7 @@ export function ImportDialog({
       description="Pick a source format, provide the source, preview the generated model, and add it to the workspace."
       width="w-[640px]"
       testId="import-dialog"
-      bodyClassName="p-4 gap-4 overflow-auto"
+      bodyClassName="p-4 gap-4 overflow-hidden"
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose} data-testid="import-dialog__cancel">

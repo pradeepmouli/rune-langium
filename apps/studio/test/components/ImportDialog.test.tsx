@@ -74,6 +74,40 @@ describe('ImportDialog', () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 
+  it('disambiguates the new-file path when a file already occupies <namespace>.rosetta (final-review Finding 1)', async () => {
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    (parse as any).mockResolvedValue({ hasErrors: false });
+
+    // No namespaceToFile entry for 'demo' (so the "new file" branch is taken),
+    // but a file at the derived path 'demo.rosetta' already exists in the
+    // workspace under an unrelated namespace — simulating file-name != namespace.
+    const files: WorkspaceFile[] = [
+      { name: 'demo.rosetta', path: 'demo.rosetta', content: 'namespace other', dirty: false }
+    ];
+    const props = baseProps({ files, namespaceToFile: new Map<string, string>() });
+    render(<ImportDialog {...props} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(screen.getByTestId('import-dialog__confirm')).not.toBeDisabled());
+    expect(screen.getByTestId('import-dialog__confirm')).toHaveTextContent('Add to workspace');
+
+    fireEvent.click(screen.getByTestId('import-dialog__confirm'));
+    expect(props.onFilesChange).toHaveBeenCalledWith([
+      ...files,
+      expect.objectContaining({
+        name: 'demo-2.rosetta',
+        path: 'demo-2.rosetta',
+        content: expect.stringContaining('type Foo')
+      })
+    ]);
+    expect(props.onFileFocused).toHaveBeenCalledWith('demo-2.rosetta');
+  });
+
   it('previews a namespace match and offers "Merge into <path>"', async () => {
     (importModel as any).mockResolvedValue({
       text: 'namespace demo\nversion "0.0.0"\n\ntype Foo:\n  bar string (1..1)\n',
@@ -163,6 +197,53 @@ describe('ImportDialog', () => {
 
     await waitFor(() => expect(screen.getByTestId('import-dialog__empty')).toBeInTheDocument());
     expect(screen.getByTestId('import-dialog__confirm')).toBeDisabled();
+  });
+
+  it('drives the REAL mergeImportedText (and real parse) through the confirm flow end-to-end (final-review Finding 3)', async () => {
+    // Only importModel stays mocked here — the reader itself is out of scope
+    // for this integration test. `parse` and `mergeImportedText` are restored
+    // to their real implementations for this one test via mockImplementation,
+    // so the actual CST-splice merge logic runs (not the per-file mocks the
+    // rest of this suite uses).
+    const realCore = await vi.importActual<typeof import('@rune-langium/core')>('@rune-langium/core');
+    const realImportMerge = await vi.importActual<typeof import('../../src/shell/import-merge.js')>(
+      '../../src/shell/import-merge.js'
+    );
+    (parse as any).mockImplementation(realCore.parse);
+    (mergeImportedText as any).mockImplementation(realImportMerge.mergeImportedText);
+
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\nversion "0.0.0"\n\ntype NewType:\n  field string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'NewType' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+
+    const files: WorkspaceFile[] = [
+      {
+        name: 'demo.rosetta',
+        path: 'demo.rosetta',
+        content: 'namespace demo\nversion "0.0.0"\n\ntype OldType:\n  x string (1..1)\n',
+        dirty: false
+      }
+    ];
+    const props = baseProps({ files, namespaceToFile: new Map([['demo', 'demo.rosetta']]) });
+    render(<ImportDialog {...props} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('import-dialog__confirm')).toHaveTextContent('Merge into demo.rosetta')
+    );
+    expect(screen.getByTestId('import-dialog__merge-banner')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('import-dialog__confirm'));
+
+    expect(props.onFilesChange).toHaveBeenCalledTimes(1);
+    const updatedFiles = (props.onFilesChange as any).mock.calls[0][0] as WorkspaceFile[];
+    const merged = updatedFiles.find((f) => f.path === 'demo.rosetta');
+    expect(merged?.content).toContain('type OldType');
+    expect(merged?.content).toContain('type NewType');
+    expect(props.onFileFocused).toHaveBeenCalledWith('demo.rosetta');
   });
 
   it('resets the preview when the format is switched', async () => {
