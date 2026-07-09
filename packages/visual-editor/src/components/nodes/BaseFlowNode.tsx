@@ -78,11 +78,16 @@ export function BaseFlowNode({
         <span>{name}</span>
         {metaIndicators}
         {isHydrating ? (
-          <Spinner
-            className="rune-node-hydrating-spinner size-3"
-            aria-label={`Loading ${name || 'namespace'}…`}
-            data-testid="rune-node-hydrating-spinner"
-          />
+          <>
+            <Spinner
+              className="rune-node-hydrating-spinner size-3"
+              aria-hidden="true"
+              data-testid="rune-node-hydrating-spinner"
+            />
+            {/* The node name is already announced via the adjacent `name` span —
+                this status text describes the hydrating state without repeating it. */}
+            <span className="sr-only">Loading…</span>
+          </>
         ) : null}
       </div>
       {children}
