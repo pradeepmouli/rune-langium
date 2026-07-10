@@ -530,20 +530,38 @@ describe('json-schema-reader — namespace derivation ($id → reverse-DNS-ish; 
 });
 
 describe('json-schema-reader — includeUnreferencedDefs option', () => {
-  it('includeUnreferencedDefs: false drops defs no other def references', () => {
+  it('includeUnreferencedDefs: false drops defs only reachable through an isolated reference cycle', () => {
+    // OrphanA/OrphanB reference only each other — neither is an unreferenced
+    // root, and neither is reachable from Root's transitive walk, so both
+    // are correctly dropped. (A single unreferenced def with no outgoing
+    // ref, by contrast, is itself a root and must be KEPT — see the
+    // "standalone def" test below.)
     const schema = {
       $id: 'https://example.com/test',
       $defs: {
         Root: { type: 'object', properties: { child: { $ref: '#/$defs/Referenced' } } },
         Referenced: { type: 'object', properties: { x: { type: 'string' } } },
-        Orphan: { type: 'object', properties: { y: { type: 'string' } } }
+        OrphanA: { type: 'object', properties: { link: { $ref: '#/$defs/OrphanB' } } },
+        OrphanB: { type: 'object', properties: { link: { $ref: '#/$defs/OrphanA' } } }
       }
     } as unknown as Parameters<typeof readJsonSchema>[0];
     const { model } = readJsonSchema(schema, { includeUnreferencedDefs: false });
     const names = model.types.map((t) => t.name);
     expect(names).toContain('Root');
     expect(names).toContain('Referenced');
-    expect(names).not.toContain('Orphan');
+    expect(names).not.toContain('OrphanA');
+    expect(names).not.toContain('OrphanB');
+  });
+
+  it('includeUnreferencedDefs: false keeps a standalone def with no incoming or outgoing refs', () => {
+    const schema = {
+      $id: 'https://example.com/test',
+      $defs: {
+        Standalone: { type: 'object', properties: { x: { type: 'string' } } }
+      }
+    } as unknown as Parameters<typeof readJsonSchema>[0];
+    const { model } = readJsonSchema(schema, { includeUnreferencedDefs: false });
+    expect(model.types.map((t) => t.name)).toContain('Standalone');
   });
 
   it('includeUnreferencedDefs: true (default) imports every def regardless of reachability', () => {

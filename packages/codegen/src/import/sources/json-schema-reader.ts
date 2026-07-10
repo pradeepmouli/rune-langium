@@ -158,22 +158,21 @@ function filterUnreferencedDefs(
   const referencedByOthers = new Set([...referenced].filter((n) => defNames.has(n)));
   const keep = new Set<string>();
 
-  // Start from unreferenced defs that reference something (active roots)
+  // Start from unreferenced defs — each is itself a root, regardless of
+  // whether it references anything else.
   for (const name of Object.keys(defs)) {
-    if (!referencedByOthers.has(name)) {
-      const refsHere = new Set<string>();
-      collectRefTargets(rawDefs[name], refsHere);
-      if (refsHere.size > 0) {
-        // This is an active root — keep it and walk transitively
-        keep.add(name);
-        const stack = Array.from(refsHere);
-        while (stack.length > 0) {
-          const r = stack.pop()!;
-          if (!defNames.has(r) || keep.has(r)) continue;
-          keep.add(r);
-          const refsHere2 = new Set<string>();
-          collectRefTargets(rawDefs[r], refsHere2);
-          for (const r2 of refsHere2) if (defNames.has(r2) && !keep.has(r2)) stack.push(r2);
+    if (!referencedByOthers.has(name) && !keep.has(name)) {
+      keep.add(name);
+      const stack = [name];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        const refsHere = new Set<string>();
+        collectRefTargets(rawDefs[current], refsHere);
+        for (const r of refsHere) {
+          if (defNames.has(r) && !keep.has(r)) {
+            keep.add(r);
+            stack.push(r);
+          }
         }
       }
     }
