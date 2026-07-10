@@ -108,4 +108,35 @@ test.describe('production checkout smoke', () => {
     // being explicit here documents the intent clearly.
     await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
   });
+
+  test('graph node shows a hydrating spinner while a never-hydrated namespace loads', async ({ page }) => {
+    // Regression for the BaseFlowNode hydrating-placeholder indicator (spec
+    // 021 follow-up). Production's on-demand hydration round-trip
+    // (/api/parse) is normally too fast to reliably observe the transient
+    // spinner state, so this test deliberately delays that one endpoint —
+    // the delay only affects when the browser's real request completes, it
+    // does not fabricate the response — giving the spinner a guaranteed
+    // window to assert against before it clears.
+    await page.route('**/api/parse', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await route.continue();
+    });
+
+    await loadCdm(page);
+
+    await page.getByTestId('rail-explore').click();
+    await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20_000 });
+
+    const namespaceSearch = page.getByTestId('namespace-search');
+    await namespaceSearch.fill('Counterparty');
+    await page.getByTestId(`ns-type-nav-${COUNTERPARTY_NODE_ID}`).click();
+
+    await expect(page.getByTestId('rune-node-hydrating-spinner')).toBeVisible({ timeout: 5_000 });
+
+    // The spinner clears once hydration completes and members populate.
+    const centerStack = page.getByTestId('center-stack');
+    await page.getByRole('button', { name: 'Inspector' }).click();
+    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('rune-node-hydrating-spinner')).toHaveCount(0);
+  });
 });
