@@ -127,7 +127,8 @@ export function readOpenApi(
   const shimmed: LooseSchema = { $defs: defs };
   const { model, diagnostics: readerDiagnostics } = readJsonSchema(shimmed as never, {
     namespace,
-    ...(options.skipConditions !== undefined && { skipConditions: options.skipConditions })
+    ...(options.skipConditions !== undefined && { skipConditions: options.skipConditions }),
+    ...(options.includeUnreferencedDefs !== undefined && { includeUnreferencedDefs: options.includeUnreferencedDefs })
   });
 
   const funcs =
