@@ -32,7 +32,6 @@ import { renderModel } from '../emit/rosetta/rosetta-render-core.js';
 import { buildModel } from './ast-builder.js';
 import { readJsonSchema } from './sources/json-schema-reader.js';
 import { readOpenApi, parseOpenApiDocument } from './sources/openapi-reader.js';
-import { readSql } from './sources/sql-reader.js';
 import { readXsd } from './sources/xsd-reader.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 import type { SourceModel } from './source-model.js';
@@ -141,7 +140,11 @@ export async function importModel(source: string, options: ImportOptions): Promi
   };
 
   const { model, diagnostics: readerDiagnostics } = await (options.from === 'sql'
-    ? readSql(source, { namespace: options.namespace!, dialect: options.sqlDialect ?? 'postgres', ...readerOptions })
+    ? (await import('./sources/sql-reader.js')).readSql(source, {
+        namespace: options.namespace!,
+        dialect: options.sqlDialect ?? 'postgres',
+        ...readerOptions
+      })
     : options.from === 'openapi'
       ? Promise.resolve(readOpenApi(parseOpenApiDocument(source), readerOptions))
       : options.from === 'xsd'

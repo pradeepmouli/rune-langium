@@ -6,4 +6,4 @@
  * plugin. See excel-options.schema.ts for the established pattern this
  * mirrors. Keep this a thin re-export — no studio-local state or React.
  */
-export { XsdImportOptionsSchema as default, XsdImportOptionsSchema } from '@rune-langium/codegen/import';
+export { XsdImportOptionsSchema as default, XsdImportOptionsSchema } from '@rune-langium/codegen/import/options';

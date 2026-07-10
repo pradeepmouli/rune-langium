@@ -6,4 +6,7 @@
  * plugin. See excel-options.schema.ts for the established pattern this
  * mirrors. Keep this a thin re-export — no studio-local state or React.
  */
-export { OpenApiImportOptionsSchema as default, OpenApiImportOptionsSchema } from '@rune-langium/codegen/import';
+export {
+  OpenApiImportOptionsSchema as default,
+  OpenApiImportOptionsSchema
+} from '@rune-langium/codegen/import/options';
