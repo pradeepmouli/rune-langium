@@ -37,6 +37,22 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function DefaultMockOptionsForm({
+  value
+}: {
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+}) {
+  return <div data-testid="default-mock-options-form">{JSON.stringify(value)}</div>;
+}
+
+const DEFAULT_OPTIONS_FORMS_BY_FORMAT = {
+  'json-schema': DefaultMockOptionsForm,
+  openapi: DefaultMockOptionsForm,
+  sql: DefaultMockOptionsForm,
+  xsd: DefaultMockOptionsForm
+};
+
 function baseProps(overrides: Partial<React.ComponentProps<typeof ImportDialog>> = {}) {
   return {
     open: true,
@@ -45,6 +61,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof ImportDialog>>
     onFilesChange: vi.fn(),
     onFileFocused: vi.fn(),
     namespaceToFile: new Map<string, string>(),
+    optionsFormsByFormat: DEFAULT_OPTIONS_FORMS_BY_FORMAT,
     ...overrides
   };
 }
@@ -114,7 +131,12 @@ describe('ImportDialog', () => {
       model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
       diagnostics: []
     });
-    (mergeImportedText as any).mockResolvedValue({ mergedText: 'MERGED', skipped: ['Existing'] });
+    (mergeImportedText as any).mockResolvedValue({
+      mergedText: 'MERGED',
+      skipped: ['Existing'],
+      overwritten: [],
+      renamed: []
+    });
 
     const files: WorkspaceFile[] = [{ name: 'demo.rosetta', path: 'demo.rosetta', content: 'ORIGINAL', dirty: false }];
     const props = baseProps({ files, namespaceToFile: new Map([['demo', 'demo.rosetta']]) });
@@ -292,5 +314,50 @@ describe('ImportDialog', () => {
 
     await waitFor(() => expect(screen.queryByTestId('import-dialog__previewing')).not.toBeInTheDocument());
     expect(screen.getByTestId('import-dialog__confirm')).not.toBeDisabled();
+  });
+
+  it('renders the options form for the selected format and threads its value into importModel', async () => {
+    function MockOptionsForm({
+      value,
+      onChange
+    }: {
+      value: Record<string, unknown>;
+      onChange: (v: Record<string, unknown>) => void;
+    }) {
+      return (
+        <button data-testid="mock-options-form" onClick={() => onChange({ skipConditions: true })}>
+          {JSON.stringify(value)}
+        </button>
+      );
+    }
+
+    const optionsFormsByFormat = {
+      'json-schema': MockOptionsForm,
+      openapi: MockOptionsForm,
+      sql: MockOptionsForm,
+      xsd: MockOptionsForm
+    };
+
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\n\ntype Foo:\n\ta string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    render(<ImportDialog {...baseProps({ optionsFormsByFormat })} />);
+    expect(screen.getByTestId('mock-options-form')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mock-options-form'));
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+    await waitFor(() =>
+      expect(importModel).toHaveBeenCalledWith(
+        '{}',
+        expect.objectContaining({ from: 'json-schema', skipConditions: true })
+      )
+    );
+  });
+
+  it('always shows the onCollision selector defaulting to skip', () => {
+    render(<ImportDialog {...baseProps()} />);
+    expect(screen.getByTestId('import-dialog__on-collision')).toHaveTextContent(/skip/i);
   });
 });
