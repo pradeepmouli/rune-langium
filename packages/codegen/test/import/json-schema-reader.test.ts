@@ -529,6 +529,37 @@ describe('json-schema-reader — namespace derivation ($id → reverse-DNS-ish; 
   });
 });
 
+describe('json-schema-reader — includeUnreferencedDefs option', () => {
+  it('includeUnreferencedDefs: false drops defs no other def references', () => {
+    const schema = {
+      $id: 'https://example.com/test',
+      $defs: {
+        Root: { type: 'object', properties: { child: { $ref: '#/$defs/Referenced' } } },
+        Referenced: { type: 'object', properties: { x: { type: 'string' } } },
+        Orphan: { type: 'object', properties: { y: { type: 'string' } } }
+      }
+    } as unknown as Parameters<typeof readJsonSchema>[0];
+    const { model } = readJsonSchema(schema, { includeUnreferencedDefs: false });
+    const names = model.types.map((t) => t.name);
+    expect(names).toContain('Root');
+    expect(names).toContain('Referenced');
+    expect(names).not.toContain('Orphan');
+  });
+
+  it('includeUnreferencedDefs: true (default) imports every def regardless of reachability', () => {
+    const schema = {
+      $id: 'https://example.com/test',
+      $defs: {
+        Root: { type: 'object', properties: { child: { $ref: '#/$defs/Referenced' } } },
+        Referenced: { type: 'object', properties: { x: { type: 'string' } } },
+        Orphan: { type: 'object', properties: { y: { type: 'string' } } }
+      }
+    } as unknown as Parameters<typeof readJsonSchema>[0];
+    const { model } = readJsonSchema(schema);
+    expect(model.types.map((t) => t.name)).toContain('Orphan');
+  });
+});
+
 describe('json-schema-reader — round-trip against a synonym-annotated Rune fixture', () => {
   it('property named identically to its Rune-safe form still gets a synonym annotation (MVP always-emit default)', async () => {
     const schema = {
