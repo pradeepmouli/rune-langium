@@ -445,3 +445,17 @@ describe('readOpenApi input guard (PR #374 Copilot finding)', () => {
     expect(() => readOpenApi(parsed)).toThrowError(/not an OpenAPI document/);
   });
 });
+
+describe('openapi-reader — includeOperations', () => {
+  it('includeOperations: false skips path-derived functions', () => {
+    const doc = {
+      openapi: '3.0.3',
+      info: { title: 'Demo', version: '1.0.0' },
+      paths: { '/widgets': { get: { operationId: 'listWidgets', responses: { '200': { description: 'ok' } } } } },
+      components: { schemas: { Widget: { type: 'object', properties: { id: { type: 'string' } } } } }
+    };
+    const { model } = readOpenApi(doc, { includeOperations: false });
+    expect(model.funcs).toEqual([]);
+    expect(model.types.map((t) => t.name)).toContain('Widget');
+  });
+});

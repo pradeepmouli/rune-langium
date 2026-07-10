@@ -62,12 +62,18 @@
  */
 
 import { parse as parseYaml } from 'yaml';
+import type { z } from 'zod';
 import type { OpenAPIV3, OpenAPIV3_1 } from 'openapi-types';
 import type { SourceFunc, SourceFuncParam, SourceModel } from '../source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
-import { readJsonSchema, type JsonSchemaImportOptions } from './json-schema-reader.js';
+import { readJsonSchema } from './json-schema-reader.js';
+import type { OpenApiImportOptionsSchema } from '../../options/openapi-import-options.js';
 
-export interface OpenApiImportOptions extends JsonSchemaImportOptions {}
+/** See json-schema-reader.ts's `JsonSchemaImportOptions` for why this extends `z.input`, not `z.infer`. */
+export interface OpenApiImportOptions extends z.input<typeof OpenApiImportOptionsSchema> {
+  /** Overrides namespace derivation (spec.md CLI `--namespace`). */
+  namespace?: string;
+}
 
 /** A loosely-typed schema-or-reference object, matching this reader's normalization output shape (fed to `readJsonSchema` via the same `as never` boundary convention `import/index.ts`/its own tests already use). */
 type LooseSchema = Record<string, unknown>;
@@ -124,7 +130,10 @@ export function readOpenApi(
     ...(options.skipConditions !== undefined && { skipConditions: options.skipConditions })
   });
 
-  const funcs = readOperations((document.paths ?? {}) as unknown as Record<string, LooseSchema>, diagnostics);
+  const funcs =
+    options.includeOperations === false
+      ? []
+      : readOperations((document.paths ?? {}) as unknown as Record<string, LooseSchema>, diagnostics);
 
   // readJsonSchema always stamps sourceName: 'JsonSchema' (it has no
   // awareness this document originated from OpenAPI) — corrected here to
