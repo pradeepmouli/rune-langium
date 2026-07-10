@@ -27,13 +27,13 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsgo -b",
+    "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "license": "MIT",
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen-legacy",

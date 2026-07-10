@@ -28,7 +28,13 @@ import { tmpdir } from 'node:os';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { describe, it, expect } from 'vitest';
-import ts from 'typescript';
+// TypeScript 7's default export dropped the classic synchronous Compiler
+// API (createProgram/getPreEmitDiagnostics/etc.) in favor of the new
+// typescript/unstable/sync RPC-style API. This oracle test needs the
+// classic API to compile+typecheck the codegen's own generated output,
+// so it imports a scoped legacy 'typescript-classic' alias (see
+// package.json) instead of the workspace-wide TS7 'typescript'.
+import ts from 'typescript-classic';
 import { generate } from '../../src/export.js';
 
 const FIXTURE_DIR = resolve(new URL('.', import.meta.url).pathname, '../fixtures/data-extends-data-crossns');
