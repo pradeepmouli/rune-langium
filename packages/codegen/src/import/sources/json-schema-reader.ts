@@ -116,10 +116,17 @@ const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {
   boolean: 'boolean'
 };
 
-import type { JsonSchemaImportOptions as BaseOptions } from '../../options/json-schema-import-options.js';
+import type { z } from 'zod';
+import type { JsonSchemaImportOptionsSchema } from '../../options/json-schema-import-options.js';
 
-/** `namespace` isn't part of the Zod schema (dedicated dialog field) — extend the derived type with it here, same as before. */
-export interface JsonSchemaImportOptions extends BaseOptions {
+/**
+ * `namespace` isn't part of the Zod schema (dedicated dialog field) — extend
+ * the schema's INPUT type (not `z.infer`/output) with it here. `z.input`
+ * keeps every `.optional().default(...)` field genuinely optional for
+ * callers; `z.infer` resolves to the OUTPUT type, where defaulted fields
+ * become required — which breaks every existing call site that omits them.
+ */
+export interface JsonSchemaImportOptions extends z.input<typeof JsonSchemaImportOptionsSchema> {
   /** Overrides namespace derivation from `$id` (spec.md CLI `--namespace`). */
   namespace?: string;
 }
