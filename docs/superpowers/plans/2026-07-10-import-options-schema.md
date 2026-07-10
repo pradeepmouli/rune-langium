@@ -129,10 +129,18 @@ export interface JsonSchemaImportOptions {
 Replace it with:
 
 ```ts
-import type { JsonSchemaImportOptions as BaseOptions } from '../../options/json-schema-import-options.js';
+import type { z } from 'zod';
+import type { JsonSchemaImportOptionsSchema } from '../../options/json-schema-import-options.js';
 
-/** `namespace` isn't part of the Zod schema (dedicated dialog field) — extend the derived type with it here, same as before. */
-export interface JsonSchemaImportOptions extends BaseOptions {
+/**
+ * `namespace` isn't part of the Zod schema (dedicated dialog field) — extend
+ * the schema's INPUT type (not `z.infer`/output) with it here. `z.input`
+ * keeps every `.optional().default(...)` field genuinely optional for
+ * callers; `z.infer` resolves to the OUTPUT type, where defaulted fields
+ * become required — which breaks every existing call site that omits them
+ * (e.g. `readJsonSchema(schema, { namespace: 'x' })`).
+ */
+export interface JsonSchemaImportOptions extends z.input<typeof JsonSchemaImportOptionsSchema> {
   /** Overrides namespace derivation from `$id` (spec.md CLI `--namespace`). */
   namespace?: string;
 }
@@ -319,9 +327,11 @@ export interface OpenApiImportOptions extends JsonSchemaImportOptions {}
 with:
 
 ```ts
-import type { OpenApiImportOptions as BaseOptions } from '../../options/openapi-import-options.js';
+import type { z } from 'zod';
+import type { OpenApiImportOptionsSchema } from '../../options/openapi-import-options.js';
 
-export interface OpenApiImportOptions extends BaseOptions {
+/** See json-schema-reader.ts's `JsonSchemaImportOptions` for why this extends `z.input`, not `z.infer`. */
+export interface OpenApiImportOptions extends z.input<typeof OpenApiImportOptionsSchema> {
   /** Overrides namespace derivation (spec.md CLI `--namespace`). */
   namespace?: string;
 }
@@ -448,9 +458,11 @@ Expected: PASS (2/2)
 In `packages/codegen/src/import/sources/sql-reader.ts`, replace the existing hand-written `SqlImportOptions` interface (lines 163-182) with:
 
 ```ts
-import type { SqlImportOptions as BaseOptions } from '../../options/sql-import-options.js';
+import type { z } from 'zod';
+import type { SqlImportOptionsSchema } from '../../options/sql-import-options.js';
 
-export interface SqlImportOptions extends BaseOptions {
+/** See json-schema-reader.ts's `JsonSchemaImportOptions` for why this extends `z.input`, not `z.infer`. */
+export interface SqlImportOptions extends z.input<typeof SqlImportOptionsSchema> {
   /** Rune namespace (SQL DDL has no namespace concept of its own — always required). */
   namespace: string;
   /** Overrides the default `web-tree-sitter` wasm loading — primarily for browser callers. */
@@ -545,9 +557,11 @@ Expected: PASS (1/1)
 In `packages/codegen/src/import/sources/xsd-reader.ts`, replace the existing hand-written `XsdImportOptions` interface (lines 300-305) with:
 
 ```ts
-import type { XsdImportOptions as BaseOptions } from '../../options/xsd-import-options.js';
+import type { z } from 'zod';
+import type { XsdImportOptionsSchema } from '../../options/xsd-import-options.js';
 
-export interface XsdImportOptions extends BaseOptions {
+/** See json-schema-reader.ts's `JsonSchemaImportOptions` for why this extends `z.input`, not `z.infer`. */
+export interface XsdImportOptions extends z.input<typeof XsdImportOptionsSchema> {
   /** Overrides namespace derivation; falls back to a sanitized targetNamespace when omitted. */
   namespace?: string;
 }
@@ -1031,16 +1045,12 @@ In `packages/codegen/src/import/index.ts`, add near the top with the other re-ex
 
 ```ts
 export { JsonSchemaImportOptionsSchema } from '../options/json-schema-import-options.js';
-export type { JsonSchemaImportOptions as JsonSchemaImportOptionsInput } from '../options/json-schema-import-options.js';
 export { OpenApiImportOptionsSchema } from '../options/openapi-import-options.js';
-export type { OpenApiImportOptions as OpenApiImportOptionsInput } from '../options/openapi-import-options.js';
 export { SqlImportOptionsSchema } from '../options/sql-import-options.js';
-export type { SqlImportOptions as SqlImportOptionsInput } from '../options/sql-import-options.js';
 export { XsdImportOptionsSchema } from '../options/xsd-import-options.js';
-export type { XsdImportOptions as XsdImportOptionsInput } from '../options/xsd-import-options.js';
 ```
 
-(Aliased to `*Input` on the type-only exports because `import/index.ts`'s own `sources/*.ts` modules already export a same-named `{Format}ImportOptions` interface with `namespace` added — avoids a re-export collision. Verify this compiles; if `packages/codegen`'s own barrel already re-exports the per-reader `{Format}ImportOptions` interfaces elsewhere, adjust the alias to whatever avoids the actual collision found.)
+Only the schema VALUES are re-exported here — the `?z2f` adapters (Step 3) import only the schema, not any type. No type re-export is needed: nothing downstream in this plan (adapters, `ImportDialog`, `ExplorePerspective`) consumes a typed `{Format}ImportOptions` shape from this subpath, and each reader's own `sources/*.ts` module already exports its own same-named `{Format}ImportOptions` interface (Tasks 1-4) — re-exporting a same-named type here too would collide with no consumer to justify it.
 
 - [ ] **Step 2: Create the 4 thin `.schema.ts` re-export files**
 
@@ -1496,4 +1506,5 @@ git commit -m "feat(studio): wire the 4 import-options adapters into ExplorePers
 ## Self-Review Notes (for the plan author, not a task)
 
 - **Spec coverage:** Task 1-4 cover the 4 reader options schemas; Task 5 covers `importModel` threading; Task 6 covers merge options; Task 7-9 cover z2f wiring end to end. All sections of the design doc are represented.
-- **Known risk flagged inline, not hidden:** Task 4 Step 5 (XSD `importTopLevelElements`) and Task 7 Step 1 (the `*Input` type-alias naming to avoid a re-export collision) are both marked as needing verification against the real code during implementation — they are grounded in what the design doc and prior investigation established, but the exact `buildType`/`readComplexType` call shape and the exact existing re-export surface were not read in full before this plan was written. A task reviewer should treat these as the two highest-scrutiny spots in the whole plan.
+- **Known risk flagged inline, not hidden:** Task 4 Step 5 (XSD `importTopLevelElements`) is marked as needing verification against the real code during implementation — it is grounded in what the design doc and prior investigation established, but the exact `buildType`/`readComplexType` call shape was not read in full before this plan was written. A task reviewer should treat this as the highest-scrutiny spot in the whole plan.
+- **Correction (post-Task-1 implementation):** Tasks 1-4's reader-facing `{Format}ImportOptions` interfaces were originally specified to extend `z.infer<typeof {Format}ImportOptionsSchema>` (the schema's OUTPUT type). Since every field uses `.optional().default(...)`, `z.infer`/`z.output` resolves those fields to REQUIRED (defaults guarantee they're always present post-parse) — which broke every existing call site that omits them (e.g. `readJsonSchema(schema, { namespace: 'x' })`), confirmed by real compiler diagnostics during Task 1's implementation. Fixed by extending `z.input<typeof {Format}ImportOptionsSchema>` instead (keeps every defaulted field genuinely optional for callers — the same pattern `resolveExcelSheets` in `excel-options.ts` uses, just applied at the type level instead of via an explicit `Partial<>` parameter). All 4 tasks' Step 5 code blocks above already reflect this fix. This also removed the Task 7 naming-collision risk noted in an earlier version of this section — Task 7 no longer re-exports any type, only the schema values, so there is nothing to collide with.
