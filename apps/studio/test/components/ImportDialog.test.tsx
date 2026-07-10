@@ -316,7 +316,11 @@ describe('ImportDialog', () => {
     expect(screen.getByTestId('import-dialog__confirm')).not.toBeDisabled();
   });
 
-  it('renders the options form for the selected format and threads its value into importModel', async () => {
+  it('renders the options form for the selected format and translates its reader-native field names into importModel', async () => {
+    // The z2f-generated forms produce reader-native field names
+    // (skipConditions) — importModel()'s ImportOptions still uses the legacy
+    // CLI-flag name (conditions, inverse polarity). ImportDialog must
+    // translate, not pass the reader-native name straight through.
     function MockOptionsForm({
       value,
       onChange
@@ -351,9 +355,57 @@ describe('ImportDialog', () => {
     await waitFor(() =>
       expect(importModel).toHaveBeenCalledWith(
         '{}',
-        expect.objectContaining({ from: 'json-schema', skipConditions: true })
+        expect.objectContaining({ from: 'json-schema', conditions: false })
       )
     );
+    const call = (importModel as any).mock.calls.at(-1)[1];
+    expect(call).not.toHaveProperty('skipConditions');
+  });
+
+  it('translates the SQL options form\'s "dialect" field into importModel\'s "sqlDialect"', async () => {
+    function MockSqlOptionsForm({
+      onChange
+    }: {
+      value: Record<string, unknown>;
+      onChange: (v: Record<string, unknown>) => void;
+    }) {
+      return (
+        <button data-testid="mock-sql-options-form" onClick={() => onChange({ dialect: 'sqlserver' })}>
+          form
+        </button>
+      );
+    }
+
+    const optionsFormsByFormat = {
+      'json-schema': MockSqlOptionsForm,
+      openapi: MockSqlOptionsForm,
+      sql: MockSqlOptionsForm,
+      xsd: MockSqlOptionsForm
+    };
+
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\n\ntype Foo:\n\ta string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    render(<ImportDialog {...baseProps({ optionsFormsByFormat })} />);
+
+    const user = userEvent.setup({ writeToClipboard: false });
+    await user.click(screen.getByRole('combobox', { name: 'Format:' }));
+    await user.click(await screen.findByRole('option', { name: 'SQL DDL' }));
+
+    fireEvent.click(screen.getByTestId('mock-sql-options-form'));
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() =>
+      expect(importModel).toHaveBeenCalledWith(
+        'CREATE TABLE foo (id int);',
+        expect.objectContaining({ from: 'sql', sqlDialect: 'sqlserver' })
+      )
+    );
+    const call = (importModel as any).mock.calls.at(-1)[1];
+    expect(call).not.toHaveProperty('dialect');
   });
 
   it('always shows the onCollision selector defaulting to skip', () => {

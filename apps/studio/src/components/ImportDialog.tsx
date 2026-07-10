@@ -28,6 +28,25 @@ export interface ImportOptionsFormProps {
   onChange: (v: Record<string, unknown>) => void;
 }
 
+/**
+ * The z2f-generated options forms produce reader-native field names
+ * (`skipConditions`, SQL's `dialect`) since those are the actual Zod schema
+ * field names — but `importModel()`'s `ImportOptions` still uses the legacy
+ * CLI-flag names (`conditions`, `sqlDialect`) that predate this schema work.
+ * Translate before spreading into the `importModel` call; the newer
+ * `includeUnreferencedDefs`/`includeOperations`/`importTopLevelElements`
+ * fields already share the same name in both places and pass through
+ * untouched.
+ */
+function toImportModelOptions(formatOptions: Record<string, unknown>): Record<string, unknown> {
+  const { skipConditions, dialect, ...rest } = formatOptions;
+  return {
+    ...rest,
+    ...(typeof skipConditions === 'boolean' && { conditions: !skipConditions }),
+    ...(dialect !== undefined && { sqlDialect: dialect })
+  };
+}
+
 export interface ImportDialogProps {
   open: boolean;
   onClose: () => void;
@@ -70,7 +89,9 @@ export function ImportDialog({
   const [namespaceField, setNamespaceField] = useState('');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [formatOptions, setFormatOptions] = useState<Record<string, unknown>>({});
-  const [onCollision, setOnCollision] = useState<MergeOptions['onCollision']>(MergeOptionsSchema.parse({}).onCollision);
+  const [onCollision, setOnCollision] = useState<MergeOptions['onCollision']>(
+    () => MergeOptionsSchema.parse({}).onCollision
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +115,7 @@ export function ImportDialog({
       const result = await importModel(sourceText, {
         from: format,
         namespace: namespaceField.trim() || undefined,
-        ...formatOptions
+        ...toImportModelOptions(formatOptions)
       });
       if (!namespaceField.trim()) setNamespaceField(result.model.namespace);
 
