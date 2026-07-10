@@ -176,5 +176,6 @@ which already run under `apps/studio`'s jsdom vitest environment.
 
 - Editing the generated `.rune` text before commit (beyond the namespace field) — the preview is read-only; further edits happen in the editor after commit, like any other file.
 - Multi-format batch import (one source document per dialog run).
-- Merging into a file that ISN'T currently open in the workspace (namespace-matching only checks open files, not the whole workspace's file list) — deferred; scanning every closed file's namespace on each keystroke is unnecessary complexity for a first cut.
 - Any change to `@rune-langium/codegen`'s public `./import` export surface — this design deliberately stays within `importModel()` + `@rune-langium/core`'s existing `parse()`, adding zero new codegen-package exports.
+
+**Correction (2026-07-10):** an earlier version of this section listed "merging into a file that isn't currently open in the workspace" as deferred, on the assumption that namespace-matching only checked open files. That assumption was wrong — `namespaceToFile` (`ExplorePerspective.tsx`) is built from the studio's full workspace file list (`parseWorkspaceFiles` parses every file regardless of tab state), so merging into any workspace file — open or not — already worked as shipped. See `docs/superpowers/specs/2026-07-10-import-options-schema-design.md`.
