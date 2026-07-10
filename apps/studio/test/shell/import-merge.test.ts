@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { mergeImportedText } from '../../src/shell/import-merge.js';
+import { importModel } from '@rune-langium/codegen/import';
 
 const EXISTING = `namespace example
 version "0.0.0"
@@ -98,5 +99,31 @@ describe('mergeImportedText — onCollision', () => {
     expect(result.mergedText).toContain('a string');
     expect(result.mergedText).not.toContain('b string');
     expect(result.skipped).toEqual(['Foo']);
+  });
+
+  it('rename does not crash on a colliding shared meta-declaration (synonym source), and still renames the real type collision', async () => {
+    // Every importModel() output carries a `synonym source <Name>` declaration
+    // (buildSynonymSourceDeclaration) — a top-level element with a `name`, but
+    // not a type/enum/choice/func, so it can never be safely renamed (other
+    // declarations' own synonym refs still point at the original name). Two
+    // json-schema imports into the same namespace collide on BOTH the shared
+    // synonym source AND a same-named type — the synonym-source collision must
+    // fall back to skip, not throw, while the type collision still renames.
+    const widgetSchema = (x: string) =>
+      JSON.stringify({ $defs: { Widget: { type: 'object', properties: { [x]: { type: 'string' } } } } });
+    const { text: existingText } = await importModel(widgetSchema('a'), { from: 'json-schema', namespace: 'demo' });
+    const { text: importedText } = await importModel(widgetSchema('b'), { from: 'json-schema', namespace: 'demo' });
+
+    const result = await mergeImportedText(existingText, importedText, { onCollision: 'rename' });
+
+    expect(result.skipped).toEqual(['JsonSchema']);
+    expect(result.renamed).toEqual([{ from: 'Widget', to: 'Widget_2' }]);
+    expect(result.mergedText).toContain('type Widget:');
+    expect(result.mergedText).toContain('type Widget_2:');
+    expect((result.mergedText.match(/synonym source JsonSchema/g) ?? []).length).toBe(1);
+
+    const { parse } = await import('@rune-langium/core');
+    const reparsed = await parse(result.mergedText, 'inmemory:///rename-synonym-source-check.rosetta');
+    expect(reparsed.hasErrors).toBe(false);
   });
 });

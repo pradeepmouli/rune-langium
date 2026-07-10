@@ -130,7 +130,15 @@ export async function mergeImportedText(
       continue;
     }
 
-    // rename
+    // rename — only type/enum/choice/func declarations are safe to rename.
+    // Shared meta-declarations (e.g. `synonym source <Name>`, emitted on
+    // every import) are never renamed: other declarations' own synonym refs
+    // still point at the original name, so renaming would corrupt them.
+    // Treat a non-renamable collision as a skip instead.
+    if (!DECL_NAME_RE.test(spanText)) {
+      skipped.push(name!);
+      continue;
+    }
     const newName = uniqueDeclarationName(name!, allNames);
     allNames.add(newName);
     renamed.push({ from: name!, to: newName });
