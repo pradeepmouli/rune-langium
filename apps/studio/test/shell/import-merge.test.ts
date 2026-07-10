@@ -70,3 +70,33 @@ describe('mergeImportedText', () => {
     await expect(mergeImportedText(EXISTING, INVALID)).rejects.toThrow(/importedText failed to parse/);
   });
 });
+
+describe('mergeImportedText — onCollision', () => {
+  const existingText = 'namespace demo\n\ntype Foo:\n\ta string (1..1)\n';
+  const importedText = 'namespace demo\n\ntype Foo:\n\tb string (1..1)\n\ntype Bar:\n\tc string (1..1)\n';
+
+  it('overwrite replaces the existing Foo with the incoming Foo, keeps Bar', async () => {
+    const result = await mergeImportedText(existingText, importedText, { onCollision: 'overwrite' });
+    expect(result.mergedText).toContain('b string');
+    expect(result.mergedText).not.toContain('a string');
+    expect(result.mergedText).toContain('type Bar');
+    expect(result.overwritten).toEqual(['Foo']);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('rename keeps both Foo declarations under distinct names', async () => {
+    const result = await mergeImportedText(existingText, importedText, { onCollision: 'rename' });
+    expect(result.mergedText).toContain('type Foo:');
+    expect(result.mergedText).toContain('type Foo_2:');
+    expect(result.mergedText).toContain('type Bar');
+    expect(result.renamed).toEqual([{ from: 'Foo', to: 'Foo_2' }]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('skip (default, no options arg) is unchanged from before this task', async () => {
+    const result = await mergeImportedText(existingText, importedText);
+    expect(result.mergedText).toContain('a string');
+    expect(result.mergedText).not.toContain('b string');
+    expect(result.skipped).toEqual(['Foo']);
+  });
+});
