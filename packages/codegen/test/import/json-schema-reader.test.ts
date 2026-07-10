@@ -564,6 +564,20 @@ describe('json-schema-reader — includeUnreferencedDefs option', () => {
     expect(model.types.map((t) => t.name)).toContain('Standalone');
   });
 
+  it('includeUnreferencedDefs: false keeps a standalone def that only references itself', () => {
+    const schema = {
+      $id: 'https://example.com/test',
+      $defs: {
+        TreeNode: {
+          type: 'object',
+          properties: { children: { type: 'array', items: { $ref: '#/$defs/TreeNode' } } }
+        }
+      }
+    } as unknown as Parameters<typeof readJsonSchema>[0];
+    const { model } = readJsonSchema(schema, { includeUnreferencedDefs: false });
+    expect(model.types.map((t) => t.name)).toContain('TreeNode');
+  });
+
   it('includeUnreferencedDefs: true (default) imports every def regardless of reachability', () => {
     const schema = {
       $id: 'https://example.com/test',

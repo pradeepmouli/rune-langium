@@ -153,7 +153,13 @@ function filterUnreferencedDefs(
   rawDefs: Record<string, JSONSchema7Definition>
 ): Record<string, JsonSchemaNode> {
   const referenced = new Set<string>();
-  for (const def of Object.values(rawDefs)) collectRefTargets(def, referenced);
+  for (const [defName, def] of Object.entries(rawDefs)) {
+    const refsInThisDef = new Set<string>();
+    collectRefTargets(def, refsInThisDef);
+    for (const target of refsInThisDef) {
+      if (target !== defName) referenced.add(target);
+    }
+  }
   const defNames = new Set(Object.keys(defs));
   const referencedByOthers = new Set([...referenced].filter((n) => defNames.has(n)));
   const keep = new Set<string>();
