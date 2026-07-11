@@ -22,16 +22,11 @@ preserve original formatting.
 - Generating code from a set of related `.rosetta` files → use `parseWorkspace`
 - Validating a full namespace bundle where types reference each other → use `parseWorkspace`
 - Running integration tests that span multiple Rosetta files → use `parseWorkspace`
+- Parsing an expression body in isolation (editor previews, round-trip tests) → use `parseExpression`
+- Validating user-typed expression text without a synthetic wrapper document → use `parseExpression`
 - Building a Node.js script that parses or validates `.rosetta` files → use `createRuneDslServices`
 - Writing unit tests for grammar rules or validators → use `createRuneDslServices`
 - Constructing a `parseWorkspace()` pipeline outside of the LSP server → use `createRuneDslServices`
-- Exporting a modified AST back to `.rosetta` format after programmatic edits → use `serializeModel`
-- Generating a stub `.rosetta` file from a synthesized model object → use `serializeModel`
-- Round-trip testing: parse → mutate → serialize → re-parse → use `serializeModel`
-- Generating a snippet for one type definition without a full namespace header → use `serializeElement`
-- Preview rendering a single type in editor UI → use `serializeElement`
-- Batch-exporting a full CDM/DRR workspace to `.rosetta` files → use `serializeModels`
-- Building a zip archive of serialized models keyed by namespace → use `serializeModels`
 - This is used automatically by `createRuneDslServices()` → use `RuneDslParser` — you do not need to instantiate it directly.
 
 **Do NOT use when:**
@@ -39,27 +34,26 @@ preserve original formatting.
 - Running inside a Langium LSP server — the DocumentBuilder is already managed by the server lifecycle; calling `parse()` creates a second services instance and wastes memory. (`parse`)
 - Parsing a single self-contained file — use the simpler `parse()` instead (`parseWorkspace`)
 - Processing very large CDM workspaces incrementally — prefer the LSP server for streaming document updates (`parseWorkspace`)
+- You need resolved cross-references — use `parse()`/`parseWorkspace()` with a full document instead. (`parseExpression`)
 - Inside the LSP server — use `createRuneLspServer()` which provides the full `LangiumServices` (LSP providers) instead of core-only services. (`createRuneDslServices`)
 - When you need to share a service instance across multiple requests in a long-running server — the returned instance is not thread-safe for concurrent `DocumentBuilder.build()` calls; serialize builds with a queue. (`createRuneDslServices`)
-- You need to preserve user-authored comments or whitespace — use a CST-preserving formatter instead. (`serializeModel`)
-- The model contains `RosettaFunction` or `RosettaRule` elements — these are silently dropped; use the visual editor serializer for full round-trip fidelity. (`serializeModel`)
 - Subclassing for grammar experiments — prefer creating a separate grammar variant and a new services container instead. (`RuneDslParser`)
 
-API surface: 176 functions, 6 classes, 160 types, 149 constants
+API surface: 695 functions, 8 classes, 166 types, 76 constants
 
 ## Configuration
 
-**RosettaQualifiableConfiguration** (8 options — see references/config.md)
+2 configuration interfaces — see references/config.md for details.
 
 ## Quick Reference
 
-**Key functions:** `parse` (Parse a Rosetta DSL source string into a typed AST), `parseWorkspace` (Parse multiple Rosetta DSL source strings as a workspace), `createRuneDslServices` (Create the full set of services required for the Rune DSL language), `createRuneDslParser` (Factory function that creates and fully initializes a RuneDslParser), `insertImplicitBrackets` (Scans Rune DSL source text and inserts `[` and `]` around bare expressions
-that follow `extract`, `filter`, or `reduce` operators), `serializeModel` (Serialize a single `RosettaModel` AST node back to `), `serializeElement` (Serialize a single AST element (`Data`, `Choice`, or `RosettaEnumeration`) to text), `serializeModels` (Serialize multiple `RosettaModel` nodes, returning a `Map` of namespace → source text)
+**Key functions:** `parse` (Parse a Rosetta DSL source string into a typed AST), `parseWorkspace` (Parse multiple Rosetta DSL source strings as a workspace), `parseExpression` (Synchronously parse a bare Rune DSL expression snippet (e), `createRuneDslServices` (Create the full set of services required for the Rune DSL language), `createRuneDslParser` (Factory function that creates and fully initializes a RuneDslParser), `insertImplicitBrackets` (Scans Rune DSL source text and inserts `[` and `]` around bare expressions
+that follow `extract`, `filter`, or `reduce` operators)
 **Key classes:** `RuneDslParser` (Custom Langium parser for the Rune DSL that pre-processes input text to insert
 implicit `[` and `]` brackets around bare expressions after `extract`,
 `filter`, and `reduce` operators)
 
-*491 exports total — see references/ for full API.*
+*945 exports total — see references/ for full API.*
 
 ## References
 

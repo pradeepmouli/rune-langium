@@ -28,6 +28,9 @@ getKindBadgeClasses(kind: TypeKind | "builtin"): string
 
 ### `getKindLabel`
 Returns a human-readable label for a type kind.
+Delegates to the canonical KIND_LABEL map from KindBadge; handles the
+'builtin' pseudo-kind (not a TypeKind) locally since KIND_LABEL only
+covers TypeKind values.
 ```ts
 getKindLabel(kind: TypeKind | "builtin"): string
 ```
@@ -36,10 +39,6 @@ getKindLabel(kind: TypeKind | "builtin"): string
 **Returns:** `string`
 
 ### `CardinalityPicker`
-Cardinality picker as a compact dropdown with 4 presets and a custom option.
-
-Preset selection commits immediately. Choosing "Custom…" shows an inline
-input that validates with `validateCardinality()` on blur or Enter.
 ```ts
 CardinalityPicker(__namedParameters: CardinalityPickerProps): ReactNode
 ```
@@ -51,7 +50,7 @@ CardinalityPicker(__namedParameters: CardinalityPickerProps): ReactNode
 Collapsible metadata section with description, comments, and synonym fields.
 
 Reads field values from the parent `FormProvider` context. Auto-resize
-textareas for description and comments, tag-list with inline add for synonyms.
+textareas for description and comments; SourceRefField picker for synonyms.
 ```ts
 MetadataSection(__namedParameters: MetadataSectionProps): ReactNode
 ```

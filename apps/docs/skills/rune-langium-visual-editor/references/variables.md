@@ -35,6 +35,18 @@ const BUILTIN_TYPES: readonly ["boolean", "number", "string", "time", "pattern",
 const RuneTypeGraph: ForwardRefExoticComponent<RuneTypeGraphProps & RefAttributes<RuneTypeGraphRef>>
 ```
 
+### `KIND_LABEL`
+Canonical kind → full label. The ONE source for kind labels.
+```ts
+const KIND_LABEL: Record<TypeKind, string>
+```
+
+### `KIND_LETTER`
+Canonical kind → single-letter classifier for the compact glyph shape.
+```ts
+const KIND_LETTER: Record<TypeKind, string>
+```
+
 ## components/panels
 
 ### `EditorFormPanel`
@@ -59,9 +71,9 @@ const TypeCreator: MemoExoticComponent<(__namedParameters: TypeCreatorProps) => 
 const AttributeEditor: MemoExoticComponent<(__namedParameters: AttributeEditorProps) => Element>
 ```
 
-### `CardinalityEditor`
+### `TypeChip`
 ```ts
-const CardinalityEditor: MemoExoticComponent<(__namedParameters: CardinalityEditorProps) => Element>
+const TypeChip: ForwardRefExoticComponent<Omit<TypeChipProps, "ref"> & RefAttributes<HTMLButtonElement>>
 ```
 
 ## adapters
@@ -97,5 +109,5 @@ Structure View section).  The unit test
 `test/layout/structure-css-ssot.test.ts` enforces parity and will
 fail CI if the two drift apart.**
 ```ts
-const STRUCTURE_LAYOUT_CONSTANTS: { ROW_HEIGHT: 28; HEADER_HEIGHT: 28; COL_WIDTH: 320; COL_WIDTH_MAX: 600; COL_GAP: 32; ROW_GAP: 8; BASE_PADDING: 4; NODE_PADDING: 4 }
+const STRUCTURE_LAYOUT_CONSTANTS: { ROW_HEIGHT: 28; DATA_ROW_HEIGHT: 44; DATA_ROW_GAP: 3; DATA_ROWS_PADDING: 4; DATA_ROW_PADDING_Y: 1; DATA_ROW_PADDING_X: 2; HEADER_HEIGHT: 28; COL_WIDTH: 96; COL_WIDTH_MAX: 600; COL_GAP: 32; ROW_GAP: 8; BASE_PADDING: 4; NODE_PADDING: 4; FUNCTION_OUTPUT_SEP_HEIGHT: 9 }
 ```

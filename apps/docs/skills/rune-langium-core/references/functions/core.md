@@ -62,6 +62,28 @@ const tradeModel = results[1].value;
 // Type references in tradeModel now resolve into baseModel's types
 ```
 
+### `parseExpression`
+Synchronously parse a bare Rune DSL expression snippet (e.g. a Condition,
+Operation, or ShortcutDeclaration body) into a typed `RosettaExpression`.
+
+Parses from the grammar's `ExpressionWithAsKey` rule via Langium's
+`LangiumParser.parse(text, { rule })` — no document, no `DocumentBuilder`,
+no linking pass. `ExpressionWithAsKey` is a strict superset of `Expression`
+(its trailing `as-key` is optional), so it covers all three body forms.
+The project's `RuneDslParser` applies implicit-bracket insertion to the
+input, exactly as it does for full documents.
+```ts
+parseExpression(text: string): ExpressionParseResult
+```
+**Parameters:**
+- `text: string`
+**Returns:** `ExpressionParseResult`
+```ts
+import { parseExpression } from '@rune-langium/core';
+const r = parseExpression('quantity > 0 and price exists');
+if (!r.hasErrors) console.log(r.value.$type); // 'LogicalOperation'
+```
+
 ### `createRuneDslServices`
 Create the full set of services required for the Rune DSL language.
 
@@ -133,57 +155,3 @@ insertImplicitBrackets(text: string): string
 **Parameters:**
 - `text: string` — Raw Rune DSL (`.rosetta`) source text.
 **Returns:** `string` — Transformed text with implicit brackets inserted where needed.
-
-### `serializeModel`
-Serialize a single `RosettaModel` AST node back to `.rosetta` source text.
-
-This serializer performs a **lossy** round-trip — it re-formats output with
-consistent indentation and does not preserve the original whitespace, comments,
-or annotation ordering. It is intended for code-generation and export workflows,
-not for preserving user-authored formatting.
-
-Supported top-level element types:
-- `Data` (type definitions)
-- `Choice` (choice types)
-- `RosettaEnumeration` (enum types)
-
-Unsupported elements (functions, rules, reporting rules, annotations) are
-silently skipped. Condition expression bodies are emitted as `True` placeholders.
-```ts
-serializeModel(model: unknown): string
-```
-**Parameters:**
-- `model: unknown` — A `RosettaModel` AST node (or duck-typed equivalent).
-**Returns:** `string` — Formatted `.rosetta` source text ending with a trailing newline.
-```ts
-import { parse, serializeModel } from '@rune-langium/core';
-
-const { value } = await parse(source);
-const text = serializeModel(value);
-// text is valid .rosetta source (minus functions/rules/comments)
-```
-
-### `serializeElement`
-Serialize a single AST element (`Data`, `Choice`, or `RosettaEnumeration`) to text.
-
-Returns an empty string for unsupported element types (`RosettaFunction`,
-`RosettaRule`, etc.) — callers should check the returned string length if
-element type membership is uncertain.
-```ts
-serializeElement(element: unknown): string
-```
-**Parameters:**
-- `element: unknown` — A duck-typed AST element with a `$type` discriminant.
-**Returns:** `string` — `.rosetta` text for the element, or `""` for unsupported element types.
-
-### `serializeModels`
-Serialize multiple `RosettaModel` nodes, returning a `Map` of namespace → source text.
-
-If two models share the same namespace string, the later entry overwrites
-the earlier one in the result `Map` without warning.
-```ts
-serializeModels(models: unknown[]): Map<string, string>
-```
-**Parameters:**
-- `models: unknown[]` — Array of duck-typed `RosettaModel` AST nodes.
-**Returns:** `Map<string, string>` — `Map<namespace, rosettaSource>` with one entry per unique namespace.

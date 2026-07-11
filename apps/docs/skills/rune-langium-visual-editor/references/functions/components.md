@@ -2,6 +2,38 @@
 
 ## components
 
+### `KindBadge`
+```ts
+KindBadge(__namedParameters: KindBadgeProps): ReactElement
+```
+**Parameters:**
+- `__namedParameters: KindBadgeProps`
+**Returns:** `ReactElement`
+
+### `TypeHeader`
+```ts
+TypeHeader(__namedParameters: TypeHeaderProps): ReactElement
+```
+**Parameters:**
+- `__namedParameters: TypeHeaderProps`
+**Returns:** `ReactElement`
+
+### `DefinitionField`
+```ts
+DefinitionField(__namedParameters: DefinitionFieldProps): Element
+```
+**Parameters:**
+- `__namedParameters: DefinitionFieldProps`
+**Returns:** `Element`
+
+### `ExtendsField`
+```ts
+ExtendsField(__namedParameters: ExtendsFieldProps): Element
+```
+**Parameters:**
+- `__namedParameters: ExtendsFieldProps`
+**Returns:** `Element`
+
 ### `StructureView`
 StructureView component.
 

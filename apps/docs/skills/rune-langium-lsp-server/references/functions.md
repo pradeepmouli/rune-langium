@@ -44,9 +44,9 @@ Without this, Langium's `startLanguageServer` would register its own handler
 that bypasses the state machine, causing all subsequent non-lifecycle requests
 to be rejected with `ServerNotInitialized`.
 ```ts
-createConnectionAdapter(server: LSPServer<ServerCapabilities<any>>): any
+createConnectionAdapter(server: any): any
 ```
 **Parameters:**
-- `server: LSPServer<ServerCapabilities<any>>` — The `@lspeasy/server` `LSPServer` instance to adapt.
+- `server: any` — The `@lspeasy/server` `LSPServer` instance to adapt.
 **Returns:** `any` — A duck-typed `Connection` object compatible with Langium's
   `createDefaultSharedModule({ connection })`.

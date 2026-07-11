@@ -57,10 +57,29 @@ Fires `onModelChanged` (serialized source keyed by namespace name) whenever
 `nodes` or `edges` change in content — independent of which visual pane is
 currently mounted.
 ```ts
-useModelSourceSync(nodes: TypeGraphNode[], edges: TypeGraphEdge[], onModelChanged?: (serialized: Map<string, string>) => void | Promise<void>): void
+useModelSourceSync(nodes: TypeGraphNode[], edges: TypeGraphEdge[], onModelChanged?: (serialized: Map<string, string>) => void | Promise<void>, parseEpoch: number, patches: Patches, originalSourceByNamespace: Map<string, string>, inversePatches: Patches): void
 ```
 **Parameters:**
 - `nodes: TypeGraphNode[]` — Current nodes from the editor store.
 - `edges: TypeGraphEdge[]` — Current edges from the editor store.
 - `onModelChanged: (serialized: Map<string, string>) => void | Promise<void>` (optional) — Callback invoked with a `Map<namespace, serializedText>`
   on each content change after the initial mount.
+- `parseEpoch: number` — default: `0` — The editor store's `parseEpoch` — bumped ONLY when the graph is (re)built
+from a parse result. Used to gate serialization: a `nodes`/`edges` change
+that arrives together with a `parseEpoch` bump came FROM the source (a
+parse), so serializing it back is pointless and — for a degraded reparse
+(worker unavailable) — actively corrupts the file. We serialize ONLY when
+the change is USER-EDIT-origin (parseEpoch unchanged since the last run).
+Optional/defaulted so non-studio callers (tests, standalone) keep the old
+"serialize every content change" behavior.
+- `patches: Patches` — default: `[]` — The store's accumulated Mutative patches since the last parse. Drives the
+CST-reuse dirty set: only nodes/subtrees touched by a patch are
+regenerated; everything else is sliced verbatim from originalSourceByNamespace.
+- `originalSourceByNamespace: Map<string, string>` — default: `...` — Original source text keyed by namespace name — used as the CST baseline for
+the reuse serializer. Built by the caller from the current workspace files.
+Defaults to an empty map so legacy/test callers that don't supply it get an
+empty output (no write-back).
+- `inversePatches: Patches` — default: `[]` — The store's accumulated Mutative INVERSE patches since the last parse.
+Used to derive the source byte ranges of genuinely-deleted elements so
+those ranges are omitted from the assembled output. Defaults to [] so
+legacy/test callers without deletion support keep the old behavior.
