@@ -2197,3 +2197,11 @@ html {
   flex-basis: 100%;
   order: 3;
 }
+
+/* z2f emits a bare <form>{...Field...}</form> with no gap between sibling
+ * fields, so one field's trailing description sat flush against the next
+ * field's label. Space out siblings only — no trailing margin after the
+ * form's last field. */
+.z2f-field + .z2f-field {
+  margin-top: var(--space-4);
+}
