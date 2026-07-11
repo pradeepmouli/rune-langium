@@ -13,6 +13,7 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
+import { CodeBlock } from '@rune-langium/design-system/ui/code-block';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
@@ -235,7 +236,7 @@ export function ImportDialog({
         value={sourceText}
         onChange={(e) => setSourceText(e.target.value)}
         placeholder="Paste source text…"
-        className="min-h-32 font-mono text-xs"
+        className="min-h-32 bg-background font-mono text-xs"
         data-testid="import-dialog__source"
       />
 
@@ -331,12 +332,12 @@ export function ImportDialog({
               </AlertDescription>
             </Alert>
           )}
-          <pre
-            className="studio-scroll flex-1 min-h-0 border border-border rounded bg-muted/30 p-3 text-xs font-mono whitespace-pre overflow-auto"
+          <CodeBlock
+            className="studio-scroll flex-1 min-h-0 bg-background text-xs whitespace-pre overflow-auto"
             data-testid="import-dialog__preview"
           >
             {phase.matchedPath && phase.merge ? phase.merge.mergedText : phase.result.text}
-          </pre>
+          </CodeBlock>
         </>
       )}
     </InteractiveDialog>
