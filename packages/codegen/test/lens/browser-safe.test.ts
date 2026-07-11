@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 const LENS_DIR = join(import.meta.dirname, '../../src/lens');
 
@@ -28,7 +28,7 @@ describe('codegen/lens is browser-safe', () => {
 
   it('imports no Node built-ins outside the grammar loader', () => {
     for (const file of walk(LENS_DIR)) {
-      if (FS_ALLOWED.has(file.split('/').pop()!)) continue;
+      if (FS_ALLOWED.has(basename(file))) continue;
       const src = readFileSync(file, 'utf8');
       expect(src, `${file} must not import 'fs'/'module'`).not.toMatch(/from ['"]node:(fs|module)(\/promises)?['"]/);
     }
