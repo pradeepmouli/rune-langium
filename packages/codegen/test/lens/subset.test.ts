@@ -16,7 +16,7 @@ describe('isInSubsetS', () => {
     }
   });
 
-  it('has exactly 13 members', () => {
-    expect(SUBSET_S_TYPES).toHaveLength(13);
+  it('has exactly 12 members', () => {
+    expect(SUBSET_S_TYPES).toHaveLength(12);
   });
 });

@@ -18,7 +18,6 @@ const IN_SUBSET_CORPUS = [
   'a = b',
   'a <> b',
   'trade -> quantity',
-  'trade -> quantity ->> amount',
   '(a + b) * c',
   '"USD"',
   '3.5',

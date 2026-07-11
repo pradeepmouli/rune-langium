@@ -69,11 +69,6 @@ function dispatch(node: AnyNode): string {
       const feature = node['feature'] as { $refText?: string } | undefined;
       return `${receiver}?.${feature?.$refText ?? ''}`;
     }
-    case 'RosettaDeepFeatureCall': {
-      const receiver = r(node['receiver'] as RosettaExpression);
-      const feature = node['feature'] as { $refText?: string } | undefined;
-      return `${receiver}?.${feature?.$refText ?? ''}`;
-    }
     case 'RosettaExistsExpression': {
       const argument = r(node['argument'] as RosettaExpression);
       return `${argument} != null`;
