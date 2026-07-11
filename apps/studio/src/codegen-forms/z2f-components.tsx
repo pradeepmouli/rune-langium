@@ -72,6 +72,33 @@ export const RadioGroupItem = DSRadioGroupItem;
 // with the same Radix-compatible prop contract (checked / onCheckedChange).
 export const Switch = DSCheckbox;
 
+// ── Field / FieldLabel / FieldDescription / FieldError ───────────────────────
+// The shadcn preset's BUILT-IN FieldTemplate (there is no config hook to swap
+// it for our own — @zod-to-form/core's `fieldTemplate` config option is
+// declared but not yet consumed by the codegen) hardcodes an import of these
+// 4 names from the component source module. They must exist under these
+// exact names for `preset: 'shadcn'` generated forms to resolve at all.
+export function Field({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <div className="flex flex-col gap-1">{children}</div>;
+}
+
+export function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }): React.ReactElement {
+  return (
+    <DSLabel htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+      {children}
+    </DSLabel>
+  );
+}
+
+export function FieldDescription({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <p className="text-xs text-muted-foreground">{children}</p>;
+}
+
+export function FieldError({ children }: { children?: React.ReactNode }): React.ReactElement | null {
+  if (!children) return null;
+  return <p className="text-xs text-destructive">{children}</p>;
+}
+
 // ── FieldTemplate ────────────────────────────────────────────────────────────
 // Controls label + input + error layout for every generated field.
 // z2f resolves `FieldTemplate` by name from the componentModule.

@@ -25,7 +25,7 @@ export function JsonSchemaImportOptionsFormAdapter({
   return (
     <GeneratedJsonSchemaImportOptionsForm
       defaultValues={value}
-      onSubmit={(data: unknown) => onChange(data as Record<string, unknown>)}
+      onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
     />
   );
 }

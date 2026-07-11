@@ -69,3 +69,4 @@ overrides:
 patchedDependencies:
   '@radix-ui/react-slot@1.2.4': patches/@radix-ui__react-slot@1.2.4.patch
   '@radix-ui/react-compose-refs@1.1.2': patches/@radix-ui__react-compose-refs@1.1.2.patch
+  '@zod-to-form/vite': patches/@zod-to-form__vite.patch

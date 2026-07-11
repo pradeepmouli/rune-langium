@@ -22,7 +22,7 @@ export function XsdImportOptionsFormAdapter({ value, onChange }: XsdImportOption
   return (
     <GeneratedXsdImportOptionsForm
       defaultValues={value}
-      onSubmit={(data: unknown) => onChange(data as Record<string, unknown>)}
+      onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
     />
   );
 }

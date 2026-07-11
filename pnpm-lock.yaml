@@ -24,6 +24,7 @@ overrides:
 patchedDependencies:
   '@radix-ui/react-compose-refs@1.1.2': 8e5e08a1552a2380c169c4af7c0682cf3baf9bfc4462c2a5d1bd75d28519128c
   '@radix-ui/react-slot@1.2.4': 0bbc5cd3584d5dc149c0025c50842be8cec9b0ac15fcc45c76f219cd71720807
+  '@zod-to-form/vite': 858d017a616ca5ed104561fd85b21c7af20275651766f5ac3bd7082ad233bde0
 
 importers:
 
@@ -391,9 +392,12 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.3
         version: 6.0.3(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@zod-to-form/core':
+        specifier: 0.11.1
+        version: 0.11.1(jiti@2.7.0)(zod@4.4.3)
       '@zod-to-form/vite':
         specifier: 0.4.4
-        version: 0.4.4(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.4.4(patch_hash=858d017a616ca5ed104561fd85b21c7af20275651766f5ac3bd7082ad233bde0)(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
@@ -752,7 +756,7 @@ importers:
         version: 19.2.3(@types/react@19.2.17)
       '@zod-to-form/vite':
         specifier: 0.4.4
-        version: 0.4.4(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
+        version: 0.4.4(patch_hash=858d017a616ca5ed104561fd85b21c7af20275651766f5ac3bd7082ad233bde0)(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -8122,7 +8126,7 @@ snapshots:
     transitivePeerDependencies:
       - jiti
 
-  '@zod-to-form/vite@0.4.4(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)':
+  '@zod-to-form/vite@0.4.4(patch_hash=858d017a616ca5ed104561fd85b21c7af20275651766f5ac3bd7082ad233bde0)(@hookform/resolvers@5.4.0(react-hook-form@7.80.0(react@19.2.7)))(jiti@2.7.0)(react-hook-form@7.80.0(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))(zod@4.4.3)':
     dependencies:
       '@babel/parser': 7.29.7
       '@babel/traverse': 7.29.7

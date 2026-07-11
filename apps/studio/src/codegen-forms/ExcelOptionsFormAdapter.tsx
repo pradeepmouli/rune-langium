@@ -5,9 +5,10 @@
  * Adapter that wraps the ?z2f-generated ExcelOptionsForm with the controlled
  * `{ value, onChange }` contract expected by DownloadConfigDialog.optionsForm.
  *
- * The generated form (auto-save mode) calls `onSubmit` on every field change.
- * This adapter bridges that into `onChange(newValue)` so the modal can store
- * the collected options without knowing about z2f internals.
+ * The generated form (auto-save mode) calls `onValueChange` on every field
+ * change (RHF's `watch()`, not a submit event — there is no submit button in
+ * auto-save mode). This adapter bridges that into `onChange(newValue)` so the
+ * modal can store the collected options without knowing about z2f internals.
  *
  * IMPORTANT: this file imports `?z2f` and MUST NOT be imported from the modal
  * or from any test that exercises the modal in isolation. Only the wiring site
@@ -32,15 +33,15 @@ export interface ExcelOptionsFormAdapterProps {
  * reads defaultValues once). The modal mounts/unmounts this adapter as the
  * Download modal opens/closes, and resets its options state per open, so the
  * form re-seeds from a fresh `value` each time — no remount key needed here.
- * `onSubmit` (called on every field change in auto-save mode) forwards the
- * data to `onChange` as a plain Record.
+ * `onValueChange` (called on every field change in auto-save mode) forwards
+ * the data to `onChange` as a plain Record.
  */
 export function ExcelOptionsFormAdapter({ value, onChange }: ExcelOptionsFormAdapterProps): React.ReactElement {
   return (
     <GeneratedExcelOptionsForm
       // defaultValues seeds RHF on mount with the parent's current value.
       defaultValues={value as Record<string, unknown>}
-      onSubmit={(data: unknown) => {
+      onValueChange={(data: unknown) => {
         onChange(data as Record<string, unknown>);
       }}
     />

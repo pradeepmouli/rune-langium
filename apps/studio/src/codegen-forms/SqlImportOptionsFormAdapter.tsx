@@ -22,7 +22,7 @@ export function SqlImportOptionsFormAdapter({ value, onChange }: SqlImportOption
   return (
     <GeneratedSqlImportOptionsForm
       defaultValues={value}
-      onSubmit={(data: unknown) => onChange(data as Record<string, unknown>)}
+      onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
     />
   );
 }
