@@ -78,8 +78,16 @@ export const Switch = DSCheckbox;
 // declared but not yet consumed by the codegen) hardcodes an import of these
 // 4 names from the component source module. They must exist under these
 // exact names for `preset: 'shadcn'` generated forms to resolve at all.
+// z2f always emits Field's children in the same fixed order — FieldLabel,
+// then the control (Checkbox/Input/Select/...), then FieldDescription,
+// FieldError — regardless of field type. For a checkbox that puts the label
+// ABOVE the (small, left-aligned) control instead of beside it, which reads
+// oddly for a boolean toggle. `z2f-field` + the `:has()` rule in app.css
+// detects a checkbox control specifically and reflows just that case to the
+// conventional checkbox-then-label row, leaving every other field type
+// (text/select/etc., which want label-above-control) untouched.
 export function Field({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <div className="flex flex-col gap-1">{children}</div>;
+  return <div className="z2f-field flex flex-col gap-1">{children}</div>;
 }
 
 export function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }): React.ReactElement {
