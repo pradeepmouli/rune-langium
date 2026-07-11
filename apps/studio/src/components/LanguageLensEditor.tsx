@@ -60,7 +60,13 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
   }, []);
 
   const handleTsBlur = useCallback(async () => {
-    const wasmBytes = await getTsWasmBytes();
+    let wasmBytes: Uint8Array;
+    try {
+      wasmBytes = await getTsWasmBytes();
+    } catch {
+      setTsError('Could not load the TypeScript parser — check your connection and try again.');
+      return;
+    }
     const result = await parseTs(tsDraft, wasmBytes);
     if (!result.ok) {
       setTsError(result.reason.message);
@@ -100,6 +106,9 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
           {value || '(empty)'}
         </pre>
       ) : (
+        // Phase 1 stand-in for a real CodeMirror instance (see
+        // ExpressionEditor.tsx's buildExtensions for the pattern this will
+        // migrate to) — deliberate scope decision, not an unfinished path.
         <div
           role="textbox"
           aria-label="TypeScript expression"
