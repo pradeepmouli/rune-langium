@@ -33,6 +33,15 @@ For codegen-only work prefer `pnpm --filter @rune-langium/codegen test` and
 `pnpm --filter @rune-langium/codegen run type-check`. After any codegen render
 change, rebuild dist (`pnpm --filter @rune-langium/codegen run build`) — studio/VE consume the build.
 
+**Production smoke check** — verifies the deployed studio site is healthy (read-only, safe to run anytime):
+```bash
+pnpm --filter @rune-langium/studio run test:prod-smoke
+```
+Runs `apps/studio/test/prod-smoke/production-checkout.spec.ts` via `playwright.prod.config.ts` against the real
+deployed site (default `https://www.daikonic.dev/rune-studio/studio/`, override with `PLAYWRIGHT_BASE_URL`).
+Loads a CDM workspace file and checks explorer/inspector panes update and never-hydrated curated namespaces
+populate + show a hydrating spinner correctly.
+
 ## Current Repo-Wide Notes
 
 - The Zod schemas and editable domain model under `packages/core/src/generated/`
