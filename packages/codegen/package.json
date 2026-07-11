@@ -26,6 +26,10 @@
     "./rosetta": {
       "types": "./dist/src/rosetta.d.ts",
       "default": "./dist/src/rosetta.js"
+    },
+    "./lens": {
+      "types": "./dist/src/lens.d.ts",
+      "default": "./dist/src/lens.js"
     }
   },
   "bin": {
