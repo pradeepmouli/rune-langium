@@ -4,16 +4,16 @@
 
 **Goal:** Let a studio user toggle a Rune `condition` expression to a TypeScript projection, edit it there, and commit a change back to canonical Rune — for a narrow, provably-reversible subset of boolean expressions (comparisons, logical ops, exists/absent, arithmetic, feature-call paths, literals) — with hard refusal (never silent degradation) outside that subset.
 
-**Architecture:** A new `packages/codegen/src/lens/` module (MIT, browser-safe subpath `@rune-langium/codegen/lens`) owns the bijection: `subset.ts` defines which `RosettaExpression` `$type`s are in scope, `typescript/render-ts.ts` projects a `RosettaExpression` to TS text (`string | null`), `typescript/parse-ts.ts` parses TS text back to a `RosettaExpression` or a typed refusal, using a **dynamically-imported** `typescript` compiler (`await import('typescript')`) so the parser only loads into the browser bundle on first use of the toggle, not eagerly. Studio wires a new `LanguageLensEditor.tsx` into `ExplorePerspective.tsx`'s existing `renderExpressionEditor` slot, alongside the already-shipped `<ExpressionBuilder>`. Commit reuses the **exact same plain-text channel** the Textarea fallback in `ConditionSection.tsx` already uses (`onChange(runeText)` → `onUpdate(index, { expressionText: runeText })`) — the lens produces canonical Rune text via the already-shipped, corpus-tested `renderExpression()` and hands it to that unmodified path. No new store-patch mechanism is introduced.
+**Architecture:** A new `packages/codegen/src/lens/` module (MIT, browser-safe subpath `@rune-langium/codegen/lens`) owns the bijection: `subset.ts` defines which `RosettaExpression` `$type`s are in scope, `typescript/render-ts.ts` projects a `RosettaExpression` to TS text (`string | null`), `typescript/parse-ts.ts` parses TS text back to a `RosettaExpression` or a typed refusal, using **tree-sitter** (`web-tree-sitter` + `@vscode/tree-sitter-wasm`'s prebuilt `tree-sitter-typescript.wasm`) — the same WASM-grammar approach already shipped for the SQL reader (`sql-grammar-loader.ts`/`sql-reader.ts`), so a future Python lens (Phase 3, US4) reuses the identical loader shape against `tree-sitter-python.wasm` from the same npm package instead of introducing a second parsing technology. Studio wires a new `LanguageLensEditor.tsx` into `ExplorePerspective.tsx`'s existing `renderExpressionEditor` slot, alongside the already-shipped `<ExpressionBuilder>`. Commit reuses the **exact same plain-text channel** the Textarea fallback in `ConditionSection.tsx` already uses (`onChange(runeText)` → `onUpdate(index, { expressionText: runeText })`) — the lens produces canonical Rune text via the already-shipped, corpus-tested `renderExpression()` and hands it to that unmodified path. No new store-patch mechanism is introduced.
 
-**Tech Stack:** TypeScript 5.9 (strict, ESM), Vitest, Langium 4.3 (`@rune-langium/core`'s `parseExpression`), `@rune-langium/codegen`'s shipped `rosetta` renderer, CodeMirror 6 (`@codemirror/lang-javascript`, already a studio dependency), the `typescript` npm package's compiler API (parser-only usage, dynamically imported), React 19.
+**Tech Stack:** TypeScript 5.9 (strict, ESM), Vitest, Langium 4.3 (`@rune-langium/core`'s `parseExpression`), `@rune-langium/codegen`'s shipped `rosetta` renderer, CodeMirror 6 (`@codemirror/lang-javascript`, already a studio dependency), `web-tree-sitter` (already a codegen dependency) + `@vscode/tree-sitter-wasm` (new dependency, prebuilt `tree-sitter-typescript.wasm`/`tree-sitter-python.wasm`), React 19.
 
 ## Global Constraints
 
 - Every file under `packages/codegen/src/lens/` is **MIT**-licensed (SPDX header `// SPDX-License-Identifier: MIT`), matching `emit/rosetta/*` and `expr/transpiler.ts`.
 - Files under `apps/studio/src/**` are **FSL-1.1-ALv2** (SPDX header `// SPDX-License-Identifier: FSL-1.1-ALv2`), matching `ExpressionEditor.tsx`.
-- `packages/codegen/src/lens/**` must import **no** Node built-ins (`fs`, `path`, etc.) and **no** `ExcelJS` — it is exposed via a browser-safe subpath exactly like `rosetta.ts`, consumed by the visual editor / studio in the browser hot path.
-- The `typescript` compiler package must be loaded via dynamic `import('typescript')`, never a static top-level `import` — this is what keeps it out of the eagerly-loaded main bundle (Vite/Rollup code-splits dynamic imports into a separate chunk, fetched only when the toggle is first used).
+- `packages/codegen/src/lens/**` must import **no** `ExcelJS` — it is exposed via a browser-safe subpath exactly like `rosetta.ts`, consumed by the visual editor / studio in the browser hot path. The one exception, matching the existing `sql-grammar-loader.ts` precedent exactly: the grammar-loader file (Task 3) may import `node:fs/promises` + `node:module` for its default Node-side WASM-loading path, since its exported functions also accept explicit `Uint8Array` bytes for the browser path (fetched via `fetch(...).then(r => r.arrayBuffer())`) — the same seam SQL already ships with in production.
+- The TypeScript grammar is loaded via `web-tree-sitter`'s `Language.load()` from `@vscode/tree-sitter-wasm`'s prebuilt `tree-sitter-typescript.wasm` — **not** the `typescript` npm package's compiler API, and **not** `tree-sitter-wasms` (viability-spiked and rejected — see Task 3 Step 1). This keeps the parsing technology identical across the lens and any future tree-sitter-based inbound TS/Python reader (spec 021 follow-up), rather than introducing a second, unrelated parser stack.
 - After any change under `packages/codegen/src/**`, run `pnpm --filter @rune-langium/codegen run build` before testing studio/visual-editor against it — both consume the built `dist/`, not the source, per this repo's established convention.
 - `S` (the supported subset) for Phase 1 is **exactly** these 13 `RosettaExpression` `$type`s — no others, and no unary logical negation (there is no `$type` for it in the shipped grammar; do not invent one):
   `ComparisonOperation`, `EqualityOperation`, `LogicalOperation`, `ArithmeticOperation`, `RosettaExistsExpression`, `RosettaAbsentExpression`, `RosettaFeatureCall`, `RosettaDeepFeatureCall`, `RosettaBooleanLiteral`, `RosettaIntLiteral`, `RosettaNumberLiteral`, `RosettaStringLiteral`, `RosettaSymbolReference`.
@@ -27,6 +27,11 @@ The spec (`docs/superpowers/specs/2026-07-11-expression-language-lens-design.md`
 
 1. **Do not wrap `packages/codegen/src/expr/transpiler.ts`.** Its per-category functions (`transpileComparison`, `transpileBoolean`, etc.) all require an `ExpressionTranspilerContext` — `{ selfName, emitMode: 'zod-refine' | 'zod-superRefine' | 'ts-method', conditionName, ... }` — a context shaped entirely around emitting Zod-validator predicates for a named `Condition` inside a generated class. The lens projects a **bare** expression tree with no host condition, no `selfName`, no error-emission mode. Forcing a fake context to satisfy the signature would be more code than writing a small dedicated dispatcher, and would couple the lens to codegen's validator-emission concerns. `render-ts.ts` (Task 2) is therefore new, independent code — not a wrapper.
 2. **Use CodeMirror, not Monaco.** The spec's UI section says "a Monaco editor showing the core projection." Monaco is not used anywhere in this repo. `apps/studio/src/components/ExpressionEditor.tsx` already implements exactly this render-slot pattern with CodeMirror 6, and `@codemirror/lang-javascript@^6.2.5` (which supports a `typescript: true` mode) is already a studio dependency. `LanguageLensEditor.tsx` (Task 6) follows `ExpressionEditor.tsx`'s existing shape.
+3. **Use tree-sitter for parse-back, not the `typescript` compiler API — decided after a viability spike, per user direction.** The user directed this explicitly: parse-back should use tree-sitter for both the TypeScript lens now and a Python lens later (Phase 3), reusing one parsing technology across both rather than the `typescript` compiler API for TS and a separate Python parser for Phase 3. A real spike (not just a plan) was run before writing Task 3:
+   - `tree-sitter-wasms@0.1.13` (bundles 30+ prebuilt grammar `.wasm` files, including `tree-sitter-typescript.wasm` and `tree-sitter-python.wasm`) **fails to load** against the installed `web-tree-sitter@0.26.10` — `Language.load()` throws inside Emscripten's `getDylinkMetadata` before even reaching tree-sitter's own ABI check. The package's own README example (`parser.setLanguage(treeSitterCpp)` called directly on an imported module, no `Language.load()`) suggests its wasm files are built for an older/different consumption API than the current `web-tree-sitter` expects — this package is not a viable dependency here.
+   - The **official** `tree-sitter/tree-sitter-typescript` npm package (v0.23.2, matching the spike's version) ships **no** prebuilt `.wasm` at all — only `parser.c`/`scanner.c` C source for the native N-API binding, exactly like every native SQL grammar the earlier SQL-reader spike rejected for the same reason.
+   - **`@vscode/tree-sitter-wasm@0.3.1`** (Microsoft-maintained, published for VS Code's own tree-sitter integration) ships both `wasm/tree-sitter-typescript.wasm` (1.4 MB) and `wasm/tree-sitter-python.wasm` (458 KB) as a normal, installable npm dependency, and **both were confirmed to load successfully** against the installed `web-tree-sitter@0.26.10` (verified directly: `Language.load(bytes)` resolves without error for each). This is the dependency Task 3 uses. It also directly satisfies the "one loader shape for both TS and Python" goal, since a single package supplies both grammars.
+   - Real node-shape probing (parsing `value >= 0`, `trade?.quantity`, `trade.quantity`, `value = 3`, `value.toFixed(2)`, `for (;;) {}`, and a syntax error) against the loaded grammar was used to ground Task 3's actual dispatch code — see the real `binary_expression`/`member_expression`/`optional_chain` shapes documented there. This is not a hypothetical API; every node type name in Task 3's code was confirmed against a real parse.
 
 ---
 
@@ -363,24 +368,125 @@ git commit -m "feat(codegen): lens render-ts — RosettaExpression to TypeScript
 
 ---
 
-### Task 3: `parse-ts.ts` — TypeScript text → `LensResult`
+### Task 3: `ts-grammar-loader.ts` + `parse-ts.ts` — TypeScript text → `LensResult`, via tree-sitter
 
 **Files:**
+- Modify: `packages/codegen/package.json:dependencies` — add `"@vscode/tree-sitter-wasm": "0.3.1"` (exact-pinned — this is a WASM-ABI-sensitive dependency, same rationale as `@l1xnan/tree-sitter-sql`'s exact pin; `web-tree-sitter` is already a dependency, unchanged).
+- Create: `packages/codegen/src/lens/typescript/ts-grammar-loader.ts` (mirrors `packages/codegen/src/import/sources/sql-grammar-loader.ts`'s exact shape)
 - Create: `packages/codegen/src/lens/typescript/parse-ts.ts`
-- Modify: `packages/codegen/package.json:dependencies` — add `"typescript"` if not already present (check first: `packages/codegen` likely already has it as a devDependency for its own build; confirm with `node -e "console.log(require('/Users/pmouli/GitHub.nosync/active/ts/rune-langium/packages/codegen/package.json').devDependencies.typescript)"` — if present only in devDependencies, move/add it to `dependencies` since `parse-ts.ts` needs it at runtime, not just build time).
+- Test: `packages/codegen/test/lens/typescript/ts-grammar-loader.test.ts`
 - Test: `packages/codegen/test/lens/typescript/parse-ts.test.ts`
 
 **Interfaces:**
 - Consumes: `LensResult`, `RefusalReason` (Task 1, `../language-lens.js`); `isInSubsetS` (Task 1, `../subset.js`).
-- Produces: `async function parseTs(text: string): Promise<LensResult>` — async because the `typescript` module is dynamically imported. Used by Task 4's round-trip test and Task 6's commit path.
+- Produces: `loadTsGrammar(source?: WasmSource): Promise<Language>` and `createTsParser(source?: WasmSource): Promise<Parser>` (grammar loader, same shape as `loadSqlGrammar`/`createSqlParser`); `async function parseTs(text: string, wasmSource?: WasmSource): Promise<LensResult>` — async because the grammar/parser are loaded lazily and cached; `wasmSource` passes explicit bytes through to `createTsParser` for the browser path (Task 6 supplies these; Task 4's tests omit it and use the default Node path). Used by Task 4's round-trip test and Task 6's commit path.
 
-- [ ] **Step 1: Check whether `typescript` is already a runtime dependency**
+**Why tree-sitter, and why this exact dependency** (see also the plan's "Deviations From the Spec" §3 for the full spike writeup): `tree-sitter-wasms` fails to load against the installed `web-tree-sitter@0.26.10` (confirmed — throws inside Emscripten's `getDylinkMetadata`); the official `tree-sitter-typescript` npm package ships no `.wasm` at all, only native C source. `@vscode/tree-sitter-wasm@0.3.1` ships both `wasm/tree-sitter-typescript.wasm` and `wasm/tree-sitter-python.wasm` and was confirmed (by directly calling `Language.load()` on its bytes) to load correctly — that confirmation is why this task does not re-run its own viability spike as Step 1; the spike is already done and reported above.
 
-Run: `node -e "const p = require('/Users/pmouli/GitHub.nosync/active/ts/rune-langium/packages/codegen/package.json'); console.log('dependencies:', p.dependencies?.typescript); console.log('devDependencies:', p.devDependencies?.typescript);"`
+- [ ] **Step 1: Add the dependency**
 
-If it prints only under `devDependencies`, move the line from `devDependencies` to `dependencies` in `packages/codegen/package.json` (same version string), then run `pnpm install` at the repo root. If it's already under `dependencies`, skip the edit.
+In `packages/codegen/package.json`, add to `dependencies`:
 
-- [ ] **Step 2: Write the failing test**
+```json
+    "@vscode/tree-sitter-wasm": "0.3.1",
+```
+
+Run: `pnpm install` (repo root)
+
+- [ ] **Step 2: Write the failing grammar-loader test**
+
+```typescript
+// packages/codegen/test/lens/typescript/ts-grammar-loader.test.ts
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+import { describe, it, expect } from 'vitest';
+import { createTsParser } from '../../../src/lens/typescript/ts-grammar-loader.js';
+
+describe('createTsParser', () => {
+  it('loads the TypeScript grammar and parses a trivial expression', async () => {
+    const parser = await createTsParser();
+    const tree = parser.parse('value >= 0');
+    expect(tree.rootNode.hasError).toBe(false);
+    expect(tree.rootNode.child(0)?.type).toBe('expression_statement');
+  });
+});
+```
+
+- [ ] **Step 3: Run test to verify it fails**
+
+Run: `pnpm --filter @rune-langium/codegen exec vitest run test/lens/typescript/ts-grammar-loader.test.ts`
+Expected: FAIL — `Cannot find module '../../../src/lens/typescript/ts-grammar-loader.js'`
+
+- [ ] **Step 4: Write `ts-grammar-loader.ts`**
+
+```typescript
+// packages/codegen/src/lens/typescript/ts-grammar-loader.ts
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * ts-grammar-loader — loads the tree-sitter TypeScript grammar
+ * (`web-tree-sitter` WASM runtime) for `parse-ts.ts`.
+ *
+ * Mirrors `../../import/sources/sql-grammar-loader.ts` exactly. A viability
+ * spike (see the plan's "Deviations From the Spec" §3) found:
+ * - `tree-sitter-wasms` fails to load against the installed `web-tree-sitter`
+ *   (Emscripten dylink-metadata error) — not a viable dependency.
+ * - The official `tree-sitter-typescript` npm package ships no `.wasm`, only
+ *   native C source.
+ * - `@vscode/tree-sitter-wasm` ships a working, confirmed-loadable
+ *   `tree-sitter-typescript.wasm` (and, for the future Python lens, Phase 3,
+ *   a `tree-sitter-python.wasm` from the SAME package — one dependency for
+ *   both languages, per the user's explicit direction).
+ */
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { Language, Parser } from 'web-tree-sitter';
+
+/** Raw WASM bytes for the grammar, or a path resolvable by `web-tree-sitter`'s own `Language.load`. Supplying bytes directly is the browser-loadable path (e.g. `fetch(...).then(r => r.arrayBuffer()).then(b => new Uint8Array(b))`). */
+export type WasmSource = Uint8Array | string;
+
+let cachedLanguage: Language | undefined;
+
+/** Resolves `@vscode/tree-sitter-wasm`'s published `tree-sitter-typescript.wasm` path via Node's own CommonJS-style resolution. Node-only — never called when a caller supplies `WasmSource` bytes directly. */
+function resolveDefaultWasmPath(): string {
+  const require = createRequire(import.meta.url);
+  const pkgJsonPath = require.resolve('@vscode/tree-sitter-wasm/package.json');
+  return pkgJsonPath.replace(/package\.json$/, 'wasm/tree-sitter-typescript.wasm');
+}
+
+/** Loads (and caches) the tree-sitter TypeScript `Language`. Call once per process. */
+export async function loadTsGrammar(source?: WasmSource): Promise<Language> {
+  if (cachedLanguage && source === undefined) return cachedLanguage;
+
+  await Parser.init();
+  const bytes = source instanceof Uint8Array ? source : await readWasmBytes(source);
+  const language = await Language.load(bytes);
+  if (source === undefined) cachedLanguage = language;
+  return language;
+}
+
+async function readWasmBytes(pathOverride: string | undefined): Promise<Uint8Array> {
+  const path = pathOverride ?? resolveDefaultWasmPath();
+  const buf = await readFile(path);
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+}
+
+/** Creates a `Parser` configured with the loaded TypeScript grammar. */
+export async function createTsParser(source?: WasmSource): Promise<Parser> {
+  const language = await loadTsGrammar(source);
+  const parser = new Parser();
+  parser.setLanguage(language);
+  return parser;
+}
+```
+
+- [ ] **Step 5: Run the grammar-loader test to verify it passes**
+
+Run: `pnpm --filter @rune-langium/codegen exec vitest run test/lens/typescript/ts-grammar-loader.test.ts`
+Expected: PASS (1 test)
+
+- [ ] **Step 6: Write the failing `parse-ts.ts` test**
 
 ```typescript
 // packages/codegen/test/lens/typescript/parse-ts.test.ts
@@ -420,6 +526,15 @@ describe('parseTs', () => {
     if (r.ok) expect(r.node.$type).toBe('RosettaFeatureCall');
   });
 
+  it('parses chained optional feature paths', async () => {
+    const r = await parseTs('trade?.quantity?.amount');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.node.$type).toBe('RosettaFeatureCall');
+      expect((r.node as unknown as { receiver: { $type: string } }).receiver.$type).toBe('RosettaFeatureCall');
+    }
+  });
+
   it('refuses a syntactically invalid buffer', async () => {
     const r = await parseTs('value >=');
     expect(r.ok).toBe(false);
@@ -443,15 +558,23 @@ describe('parseTs', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  it('refuses a non-expression statement', async () => {
+    const r = await parseTs('for (;;) {}');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('syntax-error');
+  });
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [ ] **Step 7: Run test to verify it fails**
 
 Run: `pnpm --filter @rune-langium/codegen exec vitest run test/lens/typescript/parse-ts.test.ts`
 Expected: FAIL — `Cannot find module '../../../src/lens/typescript/parse-ts.js'`
 
-- [ ] **Step 4: Write `parse-ts.ts`**
+- [ ] **Step 8: Write `parse-ts.ts`**
+
+Real node-shape reference, confirmed by parsing each sample against the loaded grammar before writing this code (not assumed): `value >= 0` → `(program (expression_statement (binary_expression left: (identifier) right: (number))))`, operator is the unnamed `child(1)` (`.text` gives `>=`/`&&`/`+`/etc. verbatim — there is no named `operator` field). `trade?.quantity` → `(member_expression object: (identifier) optional_chain: (optional_chain) property: (property_identifier))` — the `optional_chain` field is present (a real child node) only when `?.` was used; `trade.quantity` produces the same `member_expression` shape but `childForFieldName('optional_chain')` returns `null`, which is exactly the accept/refuse signal. `value.toFixed(2)` is a `call_expression`, `value = 3` is an `assignment_expression`, `for (;;) {}` parses as a top-level `for_statement` (not an `expression_statement`) — all three are structurally distinguishable by `.type` alone, no need to special-case them beyond "not in the accepted type list."
 
 ```typescript
 // packages/codegen/src/lens/typescript/parse-ts.ts
@@ -459,55 +582,61 @@ Expected: FAIL — `Cannot find module '../../../src/lens/typescript/parse-ts.js
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * TypeScript text → `LensResult` (parse-back).
+ * TypeScript text → `LensResult` (parse-back), via tree-sitter.
  *
- * Uses the `typescript` compiler API's parser only (no type-checker, no
- * `Program`) via a DYNAMIC import — this keeps `typescript` out of the
- * eagerly-loaded browser bundle; Vite code-splits it into a chunk fetched
- * only the first time a user opens the TypeScript lens.
- *
- * Walks a deliberately narrow set of `ts.SyntaxKind`s. Anything else —
- * assignments, calls (except the disallowed forms below), unguarded
- * `PropertyAccessExpression` (no `?.`), loops, statements other than a
- * single expression — is a refusal, never a degraded node.
+ * Walks a deliberately narrow set of tree-sitter node `.type`s. Anything
+ * else — assignments, calls, unguarded `member_expression` (no `?.`), any
+ * statement other than a single `expression_statement` — is a refusal,
+ * never a degraded node. Node type names below were confirmed against a
+ * real parse of each construct (see Step 8's note) — not assumed from
+ * grammar documentation.
  */
+import type { Node as TsNode } from 'web-tree-sitter';
 import type { RosettaExpression } from '@rune-langium/core';
 import type { LensResult, RefusalReason } from '../language-lens.js';
+import { createTsParser, type WasmSource } from './ts-grammar-loader.js';
 
 function refusal(kind: RefusalReason['kind'], message: string, offset: number, length: number): LensResult {
   return { ok: false, reason: { kind, message, offset, length } };
 }
 
-export async function parseTs(text: string): Promise<LensResult> {
-  const ts = await import('typescript');
-  const sourceFile = ts.createSourceFile('lens.ts', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+/**
+ * `wasmSource` is threaded straight through to `createTsParser` — omit it
+ * in Node/test contexts (resolves the package's own `.wasm` from disk);
+ * pass fetched bytes explicitly in the browser (see Task 6's studio wiring,
+ * which fetches the grammar once via a Vite `?url` asset import and caches
+ * the resulting `Parser`).
+ */
+export async function parseTs(text: string, wasmSource?: WasmSource): Promise<LensResult> {
+  const parser = await createTsParser(wasmSource);
+  const tree = parser.parse(text);
+  const root = tree.rootNode;
 
-  const diagnosticSyntaxErrors = (
-    sourceFile as unknown as { parseDiagnostics?: Array<{ messageText: unknown; start: number; length: number }> }
-  ).parseDiagnostics;
-  if (diagnosticSyntaxErrors && diagnosticSyntaxErrors.length > 0) {
-    const d = diagnosticSyntaxErrors[0]!;
-    return refusal('syntax-error', ts.flattenDiagnosticMessageText(d.messageText as never, '\n'), d.start, d.length);
+  if (root.hasError) {
+    const errorNode = root.descendantsOfType('ERROR')[0] ?? root;
+    return refusal('syntax-error', 'syntax error in TypeScript expression', errorNode.startIndex, errorNode.endIndex - errorNode.startIndex);
   }
 
-  const statements = sourceFile.statements;
-  if (statements.length !== 1 || !ts.isExpressionStatement(statements[0]!)) {
+  if (root.childCount !== 1 || root.child(0)?.type !== 'expression_statement') {
     return refusal('syntax-error', 'expected a single expression', 0, text.length);
   }
 
-  const expr = (statements[0] as import('typescript').ExpressionStatement).expression;
+  const exprStatement = root.child(0)!;
+  const expr = exprStatement.child(0);
+  if (!expr) return refusal('syntax-error', 'expected a single expression', 0, text.length);
+
   try {
-    return { ok: true, node: toRosetta(ts, expr) };
+    return { ok: true, node: toRosetta(expr) };
   } catch (e) {
     if (e instanceof OutOfSubset) {
-      return refusal('out-of-subset', e.message, e.tsNode.getStart(sourceFile), e.tsNode.getWidth(sourceFile));
+      return refusal('out-of-subset', e.message, e.tsNode.startIndex, e.tsNode.endIndex - e.tsNode.startIndex);
     }
     throw e;
   }
 }
 
 class OutOfSubset extends Error {
-  constructor(message: string, public readonly tsNode: import('typescript').Node) {
+  constructor(message: string, public readonly tsNode: TsNode) {
     super(message);
   }
 }
@@ -517,114 +646,141 @@ const EQUALITY_FROM_TS: Record<string, string> = { '===': '=', '!==': '<>' };
 const LOGICAL_FROM_TS: Record<string, string> = { '&&': 'and', '||': 'or' };
 const ARITHMETIC_FROM_TS: Record<string, string> = { '+': '+', '-': '-', '*': '*', '/': '/' };
 
-function toRosetta(ts: typeof import('typescript'), node: import('typescript').Node): RosettaExpression {
-  if (ts.isParenthesizedExpression(node)) return toRosetta(ts, node.expression);
+function child(node: TsNode, i: number): TsNode {
+  const c = node.child(i);
+  if (!c) throw new OutOfSubset('malformed expression', node);
+  return c;
+}
 
-  if (ts.isBinaryExpression(node)) {
-    const op = node.operatorToken.getText();
+function field(node: TsNode, name: string): TsNode {
+  const c = node.childForFieldName(name);
+  if (!c) throw new OutOfSubset(`malformed '${node.type}' (missing ${name})`, node);
+  return c;
+}
 
-    // `x != null` / `x == null` are the presence idiom, not literal equality —
-    // Rune has no null literal, so this mapping is unambiguous both ways.
-    if ((op === '!==' || op === '!=') && ts.isNullLiteral(node.right)) {
+function toRosetta(node: TsNode): RosettaExpression {
+  switch (node.type) {
+    case 'parenthesized_expression':
+      // Children are positional — `(`, expression, `)` — not a named field.
+      // Confirmed against a real parse of `(a + b) * c` before writing this.
+      return toRosetta(child(node, 1));
+
+    case 'binary_expression': {
+      const left = field(node, 'left');
+      const right = field(node, 'right');
+      const op = child(node, 1).text;
+
+      // `x != null` / `x == null` are the presence idiom, not literal
+      // equality — Rune has no null literal, so this mapping is
+      // unambiguous both ways.
+      if ((op === '!==' || op === '!=') && right.type === 'null') {
+        return { $type: 'RosettaExistsExpression', argument: toRosetta(left), operator: 'exists' } as unknown as RosettaExpression;
+      }
+      if ((op === '===' || op === '==') && right.type === 'null') {
+        return { $type: 'RosettaAbsentExpression', argument: toRosetta(left), operator: 'absent' } as unknown as RosettaExpression;
+      }
+
+      if (op in COMPARISON_FROM_TS) {
+        return {
+          $type: 'ComparisonOperation',
+          left: toRosetta(left),
+          operator: COMPARISON_FROM_TS[op],
+          right: toRosetta(right)
+        } as unknown as RosettaExpression;
+      }
+      if (op in EQUALITY_FROM_TS) {
+        return {
+          $type: 'EqualityOperation',
+          left: toRosetta(left),
+          operator: EQUALITY_FROM_TS[op],
+          right: toRosetta(right)
+        } as unknown as RosettaExpression;
+      }
+      if (op in LOGICAL_FROM_TS) {
+        return {
+          $type: 'LogicalOperation',
+          left: toRosetta(left),
+          operator: LOGICAL_FROM_TS[op],
+          right: toRosetta(right)
+        } as unknown as RosettaExpression;
+      }
+      if (op in ARITHMETIC_FROM_TS) {
+        return {
+          $type: 'ArithmeticOperation',
+          left: toRosetta(left),
+          operator: ARITHMETIC_FROM_TS[op],
+          right: toRosetta(right)
+        } as unknown as RosettaExpression;
+      }
+      throw new OutOfSubset(`operator '${op}' is not supported`, node);
+    }
+
+    // Only `?.`-guarded access is accepted — plain `.` implies a different
+    // (non-propagating) null semantic than Rune's optional path navigation.
+    // Distinguishing field, confirmed by parsing both forms: `optional_chain`
+    // is a present child node for `?.` and `null` for plain `.`.
+    case 'member_expression': {
+      if (!node.childForFieldName('optional_chain')) {
+        throw new OutOfSubset('property access must use ?. — plain . has no Rune equivalent', node);
+      }
+      const object = field(node, 'object');
+      const property = field(node, 'property');
       return {
-        $type: 'RosettaExistsExpression',
-        argument: toRosetta(ts, node.left),
-        operator: 'exists'
+        $type: 'RosettaFeatureCall',
+        receiver: toRosetta(object),
+        feature: { $refText: property.text }
       } as unknown as RosettaExpression;
     }
-    if ((op === '===' || op === '==') && ts.isNullLiteral(node.right)) {
+
+    case 'identifier':
       return {
-        $type: 'RosettaAbsentExpression',
-        argument: toRosetta(ts, node.left),
-        operator: 'absent'
+        $type: 'RosettaSymbolReference',
+        explicitArguments: false,
+        rawArgs: [],
+        symbol: { $refText: node.text }
+      } as unknown as RosettaExpression;
+
+    case 'true':
+    case 'false':
+      return { $type: 'RosettaBooleanLiteral', value: node.type === 'true' } as unknown as RosettaExpression;
+
+    case 'number': {
+      const text = node.text;
+      return {
+        $type: text.includes('.') ? 'RosettaNumberLiteral' : 'RosettaIntLiteral',
+        value: text.includes('.') ? Number(text) : parseInt(text, 10)
       } as unknown as RosettaExpression;
     }
 
-    if (op in COMPARISON_FROM_TS) {
-      return {
-        $type: 'ComparisonOperation',
-        left: toRosetta(ts, node.left),
-        operator: COMPARISON_FROM_TS[op],
-        right: toRosetta(ts, node.right)
-      } as unknown as RosettaExpression;
+    case 'string': {
+      // tree-sitter's `string` node's `.text` includes the surrounding
+      // quotes verbatim (e.g. `"USD"`), but `RosettaStringLiteral.value`
+      // (per packages/core/src/generated/ast.ts) holds the unquoted
+      // content — render-expression.ts re-adds quoting on the way back out.
+      // Strip exactly the outer quote pair; no escape-sequence unescaping
+      // is done here (out of scope for Phase 1's corpus, which uses only
+      // plain ASCII string literals like "USD").
+      return { $type: 'RosettaStringLiteral', value: node.text.slice(1, -1) } as unknown as RosettaExpression;
     }
-    if (op in EQUALITY_FROM_TS) {
-      return {
-        $type: 'EqualityOperation',
-        left: toRosetta(ts, node.left),
-        operator: EQUALITY_FROM_TS[op],
-        right: toRosetta(ts, node.right)
-      } as unknown as RosettaExpression;
-    }
-    if (op in LOGICAL_FROM_TS) {
-      return {
-        $type: 'LogicalOperation',
-        left: toRosetta(ts, node.left),
-        operator: LOGICAL_FROM_TS[op],
-        right: toRosetta(ts, node.right)
-      } as unknown as RosettaExpression;
-    }
-    if (op in ARITHMETIC_FROM_TS) {
-      return {
-        $type: 'ArithmeticOperation',
-        left: toRosetta(ts, node.left),
-        operator: ARITHMETIC_FROM_TS[op],
-        right: toRosetta(ts, node.right)
-      } as unknown as RosettaExpression;
-    }
-    throw new OutOfSubset(`operator '${op}' is not supported`, node);
-  }
 
-  // Only `?.`-guarded access is accepted — plain `.` implies a different
-  // (non-propagating) null semantic than Rune's optional path navigation.
-  if (ts.isPropertyAccessExpression(node)) {
-    if (!node.questionDotToken) {
-      throw new OutOfSubset('property access must use ?. — plain . has no Rune equivalent', node);
-    }
-    return {
-      $type: 'RosettaFeatureCall',
-      receiver: toRosetta(ts, node.expression),
-      feature: { $refText: node.name.getText() }
-    } as unknown as RosettaExpression;
+    default:
+      throw new OutOfSubset(`'${node.type}' is not supported`, node);
   }
-
-  if (ts.isIdentifier(node)) {
-    return {
-      $type: 'RosettaSymbolReference',
-      explicitArguments: false,
-      rawArgs: [],
-      symbol: { $refText: node.getText() }
-    } as unknown as RosettaExpression;
-  }
-
-  if (node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword) {
-    return { $type: 'RosettaBooleanLiteral', value: node.kind === ts.SyntaxKind.TrueKeyword } as unknown as RosettaExpression;
-  }
-  if (ts.isNumericLiteral(node)) {
-    const text = node.getText();
-    return {
-      $type: text.includes('.') ? 'RosettaNumberLiteral' : 'RosettaIntLiteral',
-      value: text.includes('.') ? Number(text) : parseInt(text, 10)
-    } as unknown as RosettaExpression;
-  }
-  if (ts.isStringLiteral(node)) {
-    return { $type: 'RosettaStringLiteral', value: node.text } as unknown as RosettaExpression;
-  }
-
-  throw new OutOfSubset(`'${ts.SyntaxKind[node.kind]}' is not supported`, node);
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+> Note: the `parenthesized_expression` case above is intentionally written to unwrap via `child(node, 1)` (children are `(`, expression, `)`) rather than `childForFieldName('expression')`, because a real parse of `(a + b)` was checked and the grammar does not expose a named `expression` field on this node — only positional children. Do not "clean this up" to a field lookup without re-confirming against a real parse first.
+
+- [ ] **Step 9: Run test to verify it passes**
 
 Run: `pnpm --filter @rune-langium/codegen exec vitest run test/lens/typescript/parse-ts.test.ts`
-Expected: PASS (9 tests)
+Expected: PASS (11 tests)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add packages/codegen/src/lens/typescript/parse-ts.ts packages/codegen/test/lens/typescript/parse-ts.test.ts packages/codegen/package.json pnpm-lock.yaml
-git commit -m "feat(codegen): lens parse-ts — TypeScript text to RosettaExpression parse-back"
+git add packages/codegen/src/lens/typescript/ts-grammar-loader.ts packages/codegen/src/lens/typescript/parse-ts.ts packages/codegen/test/lens/typescript/ts-grammar-loader.test.ts packages/codegen/test/lens/typescript/parse-ts.test.ts packages/codegen/package.json pnpm-lock.yaml
+git commit -m "feat(codegen): lens parse-ts — tree-sitter-based TypeScript parse-back"
 ```
 
 ---
@@ -768,28 +924,34 @@ function walk(dir: string): string[] {
   );
 }
 
+// ts-grammar-loader.ts is the one deliberate exception — it mirrors
+// sql-grammar-loader.ts's exact precedent: a default Node-side WASM-loading
+// path via node:fs/promises, alongside an explicit-bytes path callers use
+// in the browser. See Task 3.
+const FS_ALLOWED = new Set(['ts-grammar-loader.ts']);
+
 describe('codegen/lens is browser-safe', () => {
-  it('imports no Node built-ins or ExcelJS in any source file', () => {
+  it('imports no ExcelJS in any source file', () => {
     for (const file of walk(LENS_DIR)) {
       const src = readFileSync(file, 'utf8');
-      expect(src, `${file} must not import 'fs'`).not.toMatch(/from ['"](node:)?fs['"]/);
       expect(src, `${file} must not import ExcelJS`).not.toMatch(/exceljs/i);
     }
   });
 
-  it("'typescript' is only ever dynamically imported, never a static import", () => {
+  it('imports no Node built-ins outside the grammar loader', () => {
     for (const file of walk(LENS_DIR)) {
+      if (FS_ALLOWED.has(file.split('/').pop()!)) continue;
       const src = readFileSync(file, 'utf8');
-      expect(src, `${file} must not statically import 'typescript'`).not.toMatch(/^import .* from ['"]typescript['"]/m);
+      expect(src, `${file} must not import 'fs'/'module'`).not.toMatch(/from ['"]node:(fs|module)(\/promises)?['"]/);
     }
   });
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run test to verify it passes against Tasks 1–3's existing files**
 
 Run: `pnpm --filter @rune-langium/codegen exec vitest run test/lens/browser-safe.test.ts`
-Expected: PASS actually (nothing to violate yet) — this is a guard test, not a red/green TDD step for new behavior. Confirm it passes now so it's a real regression guard once Task 6 or later tasks add files.
+Expected: PASS (2 tests) — `ts-grammar-loader.ts` (Task 3) already imports `node:fs/promises`/`node:module` at this point and is correctly exempted via `FS_ALLOWED`; every other file under `src/lens/` (language-lens.ts, subset.ts, render-ts.ts, parse-ts.ts) has neither. This is a regression guard, not red/green TDD for new behavior — it should already be green, confirming no earlier task accidentally violated the constraint.
 
 - [ ] **Step 3: Write `src/lens.ts`**
 
@@ -803,15 +965,18 @@ Expected: PASS actually (nothing to violate yet) — this is a guard test, not a
  *
  * Re-exports ONLY the lens bijection. Must never import `./index.js`,
  * `./generator.js`, or anything under `./emit/excel-emitter.js` — same
- * constraint as `./rosetta.ts`. The `typescript` compiler is loaded via a
- * dynamic `import()` inside `parse-ts.ts`, not a static import here, so it
- * never lands in this subpath's eagerly-bundled dependency graph.
+ * constraint as `./rosetta.ts`. The TypeScript tree-sitter grammar is
+ * loaded lazily and cached by `ts-grammar-loader.ts` (see Task 3) — its
+ * `node:fs/promises` usage is confined to that one file's default
+ * (Node-side) loading path; callers needing the browser path supply
+ * WASM bytes explicitly instead (fetched via `fetch()`).
  */
 export type { LanguageLens, LensResult, RefusalReason } from './lens/language-lens.js';
 export { isInSubsetS, SUBSET_S_TYPES } from './lens/subset.js';
 export type { SubsetSType } from './lens/subset.js';
 export { renderTs } from './lens/typescript/render-ts.js';
 export { parseTs } from './lens/typescript/parse-ts.js';
+export type { WasmSource } from './lens/typescript/ts-grammar-loader.js';
 ```
 
 - [ ] **Step 4: Add the `./lens` export to `package.json`**
@@ -844,15 +1009,94 @@ git commit -m "feat(codegen): expose @rune-langium/codegen/lens browser-safe sub
 
 **Files:**
 - Create: `apps/studio/src/components/LanguageLensEditor.tsx`
-- Create: `apps/studio/src/lang/typescript-readonly.ts` (small CodeMirror extension helper — read-only TS syntax highlighting for the projection view)
+- Create: `apps/studio/src/lens/ts-wasm-asset.ts` (fetches the TypeScript grammar's WASM bytes once, in-browser, and caches the result)
 - Modify: `apps/studio/src/shell/ExplorePerspective.tsx` — wrap the existing `renderExpressionEditor` callback
+- Modify: `apps/studio/package.json:dependencies` — add `@vscode/tree-sitter-wasm`
+- Test: `apps/studio/test/lens/ts-wasm-asset.test.ts`
 - Test: `apps/studio/test/components/LanguageLensEditor.test.tsx`
 
 **Interfaces:**
-- Consumes: `ExpressionEditorSlotProps` (`@rune-langium/visual-editor`, already shipped — `{ value, onChange, onBlur, error, placeholder, expressionAst }`), `parseTs`/`renderTs`/`isInSubsetS` (`@rune-langium/codegen/lens`), `parseExpression`/`renderExpression` (already shipped).
-- Produces: `LanguageLensEditor(props: ExpressionEditorSlotProps): ReactElement` — a drop-in alternative to `<ExpressionBuilder>` for the same slot, adding a Rune/TypeScript toggle.
+- Consumes: `ExpressionEditorSlotProps` (`@rune-langium/visual-editor`, already shipped — `{ value, onChange, onBlur, error, placeholder, expressionAst }`), `parseTs`/`renderTs`/`isInSubsetS`/`WasmSource` (`@rune-langium/codegen/lens`), `parseExpression`/`renderExpression` (already shipped).
+- Produces: `LanguageLensEditor(props: ExpressionEditorSlotProps): ReactElement` — a drop-in alternative to `<ExpressionBuilder>` for the same slot, adding a Rune/TypeScript toggle. `getTsWasmBytes(): Promise<Uint8Array>` — fetches and caches the grammar bytes for the browser.
 
-- [ ] **Step 1: Write the failing test**
+**Why this file exists at all:** `parse-ts.ts`'s default path (Task 3) resolves and reads the `.wasm` file from disk via `node:fs/promises` — that only works in Node (Vitest's test environment, and the CLI). Studio runs in a real browser, where `node:fs` is unavailable; nothing in this codebase already wires a browser-side WASM asset fetch for any tree-sitter grammar (the SQL reader's grammar loader has the same seam but is not yet consumed from `apps/studio/src/**` at all — checked directly, no call site exists). This task is therefore the first real browser-side wiring of it, not a copy of an existing pattern.
+
+- [ ] **Step 1: Write the failing test for the WASM asset fetcher**
+
+```typescript
+// apps/studio/test/lens/ts-wasm-asset.test.ts
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { getTsWasmBytes } from '../../src/lens/ts-wasm-asset.js';
+
+describe('getTsWasmBytes', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }))
+    );
+  });
+
+  it('fetches the grammar bytes', async () => {
+    const bytes = await getTsWasmBytes();
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(Array.from(bytes)).toEqual([1, 2, 3]);
+  });
+
+  it('caches the result — only fetches once across repeated calls', async () => {
+    await getTsWasmBytes();
+    await getTsWasmBytes();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm --filter @rune-langium/studio exec vitest run test/lens/ts-wasm-asset.test.ts`
+Expected: FAIL — `Cannot find module '../../src/lens/ts-wasm-asset.js'`
+
+- [ ] **Step 3: Write `ts-wasm-asset.ts`**
+
+```typescript
+// apps/studio/src/lens/ts-wasm-asset.ts
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+
+/**
+ * Fetches the tree-sitter TypeScript grammar's WASM bytes for the browser
+ * path of `@rune-langium/codegen/lens`'s `parseTs` (its default path uses
+ * `node:fs/promises`, which does not exist in the browser). The `?url`
+ * suffix is Vite's asset-import convention — it resolves the imported
+ * file to a hashed, servable URL and copies it into the build output,
+ * without a manual public-asset copy step.
+ */
+import tsWasmUrl from '@vscode/tree-sitter-wasm/wasm/tree-sitter-typescript.wasm?url';
+
+let cached: Promise<Uint8Array> | undefined;
+
+export function getTsWasmBytes(): Promise<Uint8Array> {
+  cached ??= fetch(tsWasmUrl)
+    .then((r) => r.arrayBuffer())
+    .then((buf) => new Uint8Array(buf));
+  return cached;
+}
+```
+
+- [ ] **Step 4: Add `@vscode/tree-sitter-wasm` as a studio dependency and run the test**
+
+`apps/studio/package.json` needs its own `dependencies` entry (Vite resolves the `?url` import from studio's own `node_modules`, not transitively through `@rune-langium/codegen`):
+
+```json
+    "@vscode/tree-sitter-wasm": "0.3.1",
+```
+
+Run: `pnpm install` (repo root)
+Run: `pnpm --filter @rune-langium/studio exec vitest run test/lens/ts-wasm-asset.test.ts`
+Expected: PASS (2 tests)
+
+- [ ] **Step 5: Write the failing component test**
 
 ```tsx
 // apps/studio/test/components/LanguageLensEditor.test.tsx
@@ -861,6 +1105,20 @@ git commit -m "feat(codegen): expose @rune-langium/codegen/lens browser-safe sub
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LanguageLensEditor } from '../../src/components/LanguageLensEditor.js';
+
+// Real WASM fetch is exercised by ts-wasm-asset.test.ts (Step 1 of this
+// task) and by parse-ts.test.ts's Node-path tests (Task 3) — this
+// component test only needs SOME bytes to reach parseTs, not a real
+// network fetch, so it stubs the asset fetcher deterministically.
+vi.mock('../../src/lens/ts-wasm-asset.js', () => ({
+  getTsWasmBytes: vi.fn(async () => {
+    const { readFileSync } = await import('node:fs');
+    const { createRequire } = await import('node:module');
+    const require = createRequire(import.meta.url);
+    const pkgJsonPath = require.resolve('@vscode/tree-sitter-wasm/package.json');
+    return new Uint8Array(readFileSync(pkgJsonPath.replace(/package\.json$/, 'wasm/tree-sitter-typescript.wasm')));
+  })
+}));
 
 describe('LanguageLensEditor', () => {
   it('defaults to the Rune view', () => {
@@ -912,12 +1170,12 @@ describe('LanguageLensEditor', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 6: Run test to verify it fails**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/components/LanguageLensEditor.test.tsx`
 Expected: FAIL — `Cannot find module '../../src/components/LanguageLensEditor.js'`
 
-- [ ] **Step 3: Write `LanguageLensEditor.tsx`**
+- [ ] **Step 7: Write `LanguageLensEditor.tsx`**
 
 ```tsx
 // apps/studio/src/components/LanguageLensEditor.tsx
@@ -953,6 +1211,7 @@ import { renderExpression } from '@rune-langium/codegen/rosetta';
 import { renderTs, parseTs } from '@rune-langium/codegen/lens';
 import { cn } from '@rune-langium/design-system/utils';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { getTsWasmBytes } from '../lens/ts-wasm-asset.js';
 
 type Language = 'rune' | 'typescript';
 
@@ -982,7 +1241,8 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
   }, []);
 
   const handleTsBlur = useCallback(async () => {
-    const result = await parseTs(tsDraft);
+    const wasmBytes = await getTsWasmBytes();
+    const result = await parseTs(tsDraft, wasmBytes);
     if (!result.ok) {
       setTsError(result.reason.message);
       return;
@@ -1050,12 +1310,12 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
 
 > Note: the test's `contentEditable` div stands in for the CodeMirror instance in this task's scope — it exercises the toggle/commit/refusal contract without requiring a full CodeMirror harness in the test. A follow-up task (not in this plan) can swap the `contentEditable` for a real `@codemirror/lang-javascript` instance (mirroring `ExpressionEditor.tsx`'s `buildExtensions` pattern) once this contract is proven; the `ExpressionEditorSlotProps` surface does not change either way.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 8: Run test to verify it passes**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/components/LanguageLensEditor.test.tsx`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Wire it into `ExplorePerspective.tsx`**
+- [ ] **Step 9: Wire it into `ExplorePerspective.tsx`**
 
 Find the existing `renderExpressionEditor` callback (currently `(props) => <ExpressionBuilder {...props} scope={functionScope} />`) and wrap it with a top-level editor-family toggle so `<ExpressionBuilder>` (the structured builder) remains the default and `<LanguageLensEditor>` becomes an alternative, not a replacement:
 
@@ -1080,18 +1340,18 @@ const renderExpressionEditor = useCallback(
 
 (A visible switch for `expressionEditorMode` — e.g. a settings toggle — is deliberately out of scope for this plan; wiring the two modes side-by-side here unblocks manual QA and a future settings-surface task without widening Phase 1.)
 
-- [ ] **Step 6: Type-check and run the full studio test suite**
+- [ ] **Step 10: Type-check and run the full studio test suite**
 
 Run: `pnpm --filter @rune-langium/studio run type-check`
-Expected: no errors — confirms `@rune-langium/codegen/lens` and `@rune-langium/codegen/rosetta` both resolve their types correctly from studio.
+Expected: no errors — confirms `@rune-langium/codegen/lens` and `@rune-langium/codegen/rosetta` both resolve their types correctly from studio, and that Vite's `?url` import type (from `vite/client` types, already part of studio's `tsconfig.json`) resolves `tree-sitter-typescript.wasm?url` without an ambient-type error.
 
 Run: `pnpm --filter @rune-langium/studio run test`
-Expected: all existing tests still pass, plus the 5 new `LanguageLensEditor` tests.
+Expected: all existing tests still pass, plus the 2 new `ts-wasm-asset` tests and the 5 new `LanguageLensEditor` tests.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add apps/studio/src/components/LanguageLensEditor.tsx apps/studio/src/shell/ExplorePerspective.tsx apps/studio/test/components/LanguageLensEditor.test.tsx apps/studio/package.json pnpm-lock.yaml
+git add apps/studio/src/components/LanguageLensEditor.tsx apps/studio/src/lens/ts-wasm-asset.ts apps/studio/src/shell/ExplorePerspective.tsx apps/studio/test/lens/ts-wasm-asset.test.ts apps/studio/test/components/LanguageLensEditor.test.tsx apps/studio/package.json pnpm-lock.yaml
 git commit -m "feat(studio): LanguageLensEditor — TypeScript projection toggle for conditions"
 ```
 
@@ -1107,9 +1367,11 @@ git commit -m "feat(studio): LanguageLensEditor — TypeScript projection toggle
 
 ## Open items carried forward (not blocking Phase 1, tracked for Phase 2 planning)
 
-- Spec Open Questions 2 (`us12-cdm-corpus.test.ts` ceiling ratcheting) and 5/6 (Monaco language services / keyword-collision identifiers) remain unaddressed — none block Phase 1's narrower subset, since Phase 1 doesn't touch reserved-keyword identifiers or the CDM corpus ceilings.
+- **Spec Open Question 7 (bundle-size risk) is resolved, differently than the spec anticipated.** The spec worried about the `typescript` compiler API's bundle weight; this plan uses tree-sitter instead, and the WASM grammar (1.4 MB) is fetched on demand by `ts-wasm-asset.ts` only the first time a user opens the TypeScript lens — it never lands in the eagerly-loaded main bundle regardless. No bundle-size spike or threshold decision was needed.
+- Spec Open Questions 2 (`us12-cdm-corpus.test.ts` ceiling ratcheting) and 5/6 (Monaco language services / keyword-collision identifiers) remain unaddressed — none block Phase 1's narrower subset, since Phase 1 doesn't touch reserved-keyword identifiers or the CDM corpus ceilings. (Open Question 5's "Monaco language services" framing is itself moot post-Deviation #2 — there is no Monaco; the equivalent CodeMirror follow-up is Task 6's own named `contentEditable`-to-real-editor follow-up.)
 - Undo/redo (spec Open Question 8) should be manually verified once Task 6 lands: toggle to TS, edit, commit, then exercise the studio's undo control and confirm the Rune text reverts. Not written as an automated test in this plan because it requires the full editor-store + zundo harness, which is disproportionate to Phase 1's scope — flag as a manual QA step before this ships.
-- The rollback/kill-switch (spec Open Question 10) is partially addressed by Task 6 Step 5's `expressionEditorMode` local toggle (an escape hatch already exists structurally), but no user-facing settings surface or feature flag is built — a follow-up, not this plan's job.
+- The rollback/kill-switch (spec Open Question 10) is partially addressed by Task 6 Step 9's `expressionEditorMode` local toggle (an escape hatch already exists structurally), but no user-facing settings surface or feature flag is built — a follow-up, not this plan's job.
+- **New, filed separately:** while building Task 6's browser-side WASM-fetch wiring, found that the existing SQL importer (`sql-reader.ts`/`sql-grammar-loader.ts`) has the identical seam but nothing in `apps/studio` ever supplies it — its Node-only default path is the only one ever exercised, and would fail in a real browser build. Filed as [issue #385](https://github.com/pradeepmouli/rune-langium/issues/385), not fixed here (different feature, different files) — but it's a good candidate to tackle in parallel, since it needs the exact same fetch/cache shape `ts-wasm-asset.ts` establishes.
 
 ---
 
