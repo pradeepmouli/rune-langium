@@ -29,6 +29,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - langium-zod@0.11.2
   - '@zod-to-form/react@0.11.0'
+  - '@zod-to-form/vite@0.4.5'
 
 # pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
 # `pnpm` field, which they ignore). Migrated from package.json so the
@@ -53,7 +54,6 @@ overrides:
   x-to-zod: ^0.8.0
   '@zod-to-form/core': 0.11.1
   '@zod-to-form/react': 0.11.0
-  '@zod-to-form/vite': 0.4.4
   codemirror: 6.0.2
   '@radix-ui/react-compose-refs': 1.1.2
   '@radix-ui/react-primitive': 2.1.4
@@ -69,4 +69,3 @@ overrides:
 patchedDependencies:
   '@radix-ui/react-slot@1.2.4': patches/@radix-ui__react-slot@1.2.4.patch
   '@radix-ui/react-compose-refs@1.1.2': patches/@radix-ui__react-compose-refs@1.1.2.patch
-  '@zod-to-form/vite': patches/@zod-to-form__vite.patch
