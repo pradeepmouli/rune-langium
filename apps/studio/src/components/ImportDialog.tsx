@@ -21,6 +21,31 @@ import type { ImportResult, ImportSourceKind } from '@rune-langium/codegen/impor
 import type { WorkspaceFile } from '../services/workspace.js';
 import { createWorkspaceFile, updateFileContent, uniqueFilePath } from '../services/workspace.js';
 import { mergeImportedText, type MergeResult } from '../shell/import-merge.js';
+import { MergeOptionsSchema, type MergeOptions } from '../shell/import-merge-options.js';
+
+export interface ImportOptionsFormProps {
+  value: Record<string, unknown>;
+  onChange: (v: Record<string, unknown>) => void;
+}
+
+/**
+ * The z2f-generated options forms produce reader-native field names
+ * (`skipConditions`, SQL's `dialect`) since those are the actual Zod schema
+ * field names — but `importModel()`'s `ImportOptions` still uses the legacy
+ * CLI-flag names (`conditions`, `sqlDialect`) that predate this schema work.
+ * Translate before spreading into the `importModel` call; the newer
+ * `includeUnreferencedDefs`/`includeOperations`/`importTopLevelElements`
+ * fields already share the same name in both places and pass through
+ * untouched.
+ */
+function toImportModelOptions(formatOptions: Record<string, unknown>): Record<string, unknown> {
+  const { skipConditions, dialect, ...rest } = formatOptions;
+  return {
+    ...rest,
+    ...(typeof skipConditions === 'boolean' && { conditions: !skipConditions }),
+    ...(dialect !== undefined && { sqlDialect: dialect })
+  };
+}
 
 export interface ImportDialogProps {
   open: boolean;
@@ -28,8 +53,10 @@ export interface ImportDialogProps {
   files: readonly WorkspaceFile[];
   onFilesChange: (files: WorkspaceFile[]) => void;
   onFileFocused: (path: string) => void;
-  /** namespace -> path, for every currently-open workspace file (ExplorePerspective's `namespaceToFile`). */
+  /** namespace -> path, for every workspace file with a resolved model (ExplorePerspective's `namespaceToFile`, built from `resolvedModelFiles` — not limited to open tabs). */
   namespaceToFile: ReadonlyMap<string, string>;
+  /** format → z2f-generated options-form component. Supplied by the mount site (ExplorePerspective) so ImportDialog itself never imports a `?z2f` module — see the plan's Global Constraints. */
+  optionsFormsByFormat: Record<ImportFormat, React.ComponentType<ImportOptionsFormProps>>;
 }
 
 type ImportFormat = Extract<ImportSourceKind, 'json-schema' | 'openapi' | 'sql' | 'xsd'>;
@@ -54,12 +81,17 @@ export function ImportDialog({
   files,
   onFilesChange,
   onFileFocused,
-  namespaceToFile
+  namespaceToFile,
+  optionsFormsByFormat
 }: ImportDialogProps) {
   const [format, setFormat] = useState<ImportFormat>('json-schema');
   const [sourceText, setSourceText] = useState('');
   const [namespaceField, setNamespaceField] = useState('');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  const [formatOptions, setFormatOptions] = useState<Record<string, unknown>>({});
+  const [onCollision, setOnCollision] = useState<MergeOptions['onCollision']>(
+    () => MergeOptionsSchema.parse({}).onCollision
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +105,7 @@ export function ImportDialog({
   // different reader and no longer reflects the selected format.
   useEffect(() => {
     setPhase({ kind: 'idle' });
+    setFormatOptions({});
   }, [format]);
 
   const handlePreview = useCallback(async () => {
@@ -81,7 +114,8 @@ export function ImportDialog({
       const { importModel } = await import('@rune-langium/codegen/import');
       const result = await importModel(sourceText, {
         from: format,
-        namespace: namespaceField.trim() || undefined
+        namespace: namespaceField.trim() || undefined,
+        ...toImportModelOptions(formatOptions)
       });
       if (!namespaceField.trim()) setNamespaceField(result.model.namespace);
 
@@ -90,7 +124,7 @@ export function ImportDialog({
         const existing = files.find((f) => f.path === matchedPath);
         if (existing) {
           try {
-            const merge = await mergeImportedText(existing.content, result.text);
+            const merge = await mergeImportedText(existing.content, result.text, { onCollision });
             setPhase({ kind: 'previewed', result, matchedPath, merge });
           } catch (mergeErr) {
             setPhase({
@@ -112,7 +146,7 @@ export function ImportDialog({
     } catch (err) {
       setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
     }
-  }, [sourceText, format, namespaceField, namespaceToFile, files]);
+  }, [sourceText, format, namespaceField, namespaceToFile, files, formatOptions, onCollision]);
 
   const handleConfirm = useCallback(() => {
     if (phase.kind !== 'previewed') return;
@@ -222,6 +256,32 @@ export function ImportDialog({
         </Button>
       </div>
 
+      {(() => {
+        const OptionsForm = optionsFormsByFormat[format];
+        return <OptionsForm value={formatOptions} onChange={setFormatOptions} />;
+      })()}
+
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium" htmlFor="import-dialog-on-collision">
+          On collision:
+        </label>
+        <Select value={onCollision} onValueChange={(v) => setOnCollision(v as MergeOptions['onCollision'])}>
+          <SelectTrigger
+            id="import-dialog-on-collision"
+            size="sm"
+            className="w-40"
+            data-testid="import-dialog__on-collision"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="skip">Skip</SelectItem>
+            <SelectItem value="overwrite">Overwrite</SelectItem>
+            <SelectItem value="rename">Rename</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Previewing state */}
       {phase.kind === 'previewing' && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="import-dialog__previewing">
@@ -262,6 +322,12 @@ export function ImportDialog({
                 Will merge into <span className="font-mono">{phase.matchedPath}</span>
                 {phase.merge.skipped.length > 0 &&
                   ` — ${phase.merge.skipped.length} declaration(s) skipped, already exist: ${phase.merge.skipped.join(', ')}`}
+                {phase.merge.overwritten.length > 0 &&
+                  ` — ${phase.merge.overwritten.length} declaration(s) will be overwritten: ${phase.merge.overwritten.join(', ')}`}
+                {phase.merge.renamed.length > 0 &&
+                  ` — ${phase.merge.renamed.length} declaration(s) renamed to avoid collision: ${phase.merge.renamed
+                    .map((r) => `${r.from} → ${r.to}`)
+                    .join(', ')}`}
               </AlertDescription>
             </Alert>
           )}

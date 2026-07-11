@@ -116,11 +116,74 @@ const BUILTIN_TYPE_MAP: Readonly<Record<string, string>> = {
   boolean: 'boolean'
 };
 
-export interface JsonSchemaImportOptions {
+import type { z } from 'zod';
+import type { JsonSchemaImportOptionsSchema } from '../../options/json-schema-import-options.js';
+
+/**
+ * `namespace` isn't part of the Zod schema (dedicated dialog field) — extend
+ * the schema's INPUT type (not `z.infer`/output) with it here. `z.input`
+ * keeps every `.optional().default(...)` field genuinely optional for
+ * callers; `z.infer` resolves to the OUTPUT type, where defaulted fields
+ * become required — which breaks every existing call site that omits them.
+ */
+export interface JsonSchemaImportOptions extends z.input<typeof JsonSchemaImportOptionsSchema> {
   /** Overrides namespace derivation from `$id` (spec.md CLI `--namespace`). */
   namespace?: string;
-  /** Structural import only — never populate `constraints` arrays (spec.md CLI `--no-conditions`). Default: translate constraints. */
-  skipConditions?: boolean;
+}
+
+function collectRefTargets(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectRefTargets(item, out);
+    return;
+  }
+  if (node !== null && typeof node === 'object') {
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === '$ref' && typeof value === 'string') {
+        const match = /^#\/(?:\$defs|definitions)\/(.+)$/.exec(value);
+        if (match) out.add(match[1]!);
+        continue;
+      }
+      collectRefTargets(value, out);
+    }
+  }
+}
+
+function filterUnreferencedDefs(
+  defs: Record<string, JsonSchemaNode>,
+  rawDefs: Record<string, JSONSchema7Definition>
+): Record<string, JsonSchemaNode> {
+  const referenced = new Set<string>();
+  for (const [defName, def] of Object.entries(rawDefs)) {
+    const refsInThisDef = new Set<string>();
+    collectRefTargets(def, refsInThisDef);
+    for (const target of refsInThisDef) {
+      if (target !== defName) referenced.add(target);
+    }
+  }
+  const defNames = new Set(Object.keys(defs));
+  const referencedByOthers = new Set([...referenced].filter((n) => defNames.has(n)));
+  const keep = new Set<string>();
+
+  // Start from unreferenced defs — each is itself a root, regardless of
+  // whether it references anything else.
+  for (const name of Object.keys(defs)) {
+    if (!referencedByOthers.has(name) && !keep.has(name)) {
+      keep.add(name);
+      const stack = [name];
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        const refsHere = new Set<string>();
+        collectRefTargets(rawDefs[current], refsHere);
+        for (const r of refsHere) {
+          if (defNames.has(r) && !keep.has(r)) {
+            keep.add(r);
+            stack.push(r);
+          }
+        }
+      }
+    }
+  }
+  return Object.fromEntries(Object.entries(defs).filter(([name]) => keep.has(name)));
 }
 
 /**
@@ -140,10 +203,12 @@ export function readJsonSchema(
     Object.entries(rawDefs).map(([k, v]) => [k, asNode(v, diagnostics, `$defs/${k}`)])
   );
 
+  const effectiveDefs = options.includeUnreferencedDefs === false ? filterUnreferencedDefs(defs, rawDefs) : defs;
+
   const types: SourceType[] = [];
   const enums: SourceEnum[] = [];
 
-  for (const [key, def] of Object.entries(defs)) {
+  for (const [key, def] of Object.entries(effectiveDefs)) {
     if (isEnumDef(def)) {
       enums.push(readEnumDef(key, def, diagnostics));
       continue;

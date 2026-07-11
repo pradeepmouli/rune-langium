@@ -56,10 +56,12 @@
  */
 
 import type { Node, Parser } from 'web-tree-sitter';
+import type { z } from 'zod';
 import type { ConstraintIR, Literal, SourceAttribute, SourceEnum, SourceModel, SourceType } from '../source-model.js';
 import { pushDiagnostic, type ImportDiagnostic } from '../diagnostics.js';
 import { createSqlParser, type WasmSource } from './sql-grammar-loader.js';
 import type { SqlNodeKind, SqlNodeFields } from './generated/sql-node-types.js';
+import type { SqlImportOptionsSchema } from '../../options/sql-import-options.js';
 
 // --- typed field access (spec 021 Phase 2c Addendum 2) --------------------
 
@@ -160,24 +162,11 @@ const COLUMN_TYPE_MAP: Readonly<Record<string, string>> = {
 
 // --- reader options -------------------------------------------------------
 
-export interface SqlImportOptions {
-  /** Rune namespace (SQL DDL has no namespace concept of its own — always required, unlike the JSON Schema/OpenAPI readers' `$id`-derived fallback). */
+/** See json-schema-reader.ts's `JsonSchemaImportOptions` for why this extends `z.input`, not `z.infer`. */
+export interface SqlImportOptions extends z.input<typeof SqlImportOptionsSchema> {
+  /** Rune namespace (SQL DDL has no namespace concept of its own — always required). */
   namespace: string;
-  /**
-   * Matches the outbound SQL emitter's `SqlDialectName` surface
-   * (`sql-dialect.ts`), spec.md's `--sql-dialect` CLI flag. The
-   * `web-tree-sitter` grammar itself is dialect-tolerant (both dialects'
-   * DDL shapes parse without a mode switch — confirmed by the T0 spike's
-   * dialect-matrix probes), so this is currently informational/reserved
-   * for future dialect-specific reader behavior (e.g. a diagnostic that
-   * only makes sense for one dialect's own conventions) rather than a
-   * parsing-mode switch. Default: `'postgres'` (matches the outbound
-   * emitter's own default).
-   */
-  dialect?: 'postgres' | 'sqlserver';
-  /** Structural import only — never populate `constraints` arrays (spec.md CLI `--no-conditions`). Default: translate constraints. */
-  skipConditions?: boolean;
-  /** Overrides the default `web-tree-sitter` wasm loading (see `sql-grammar-loader.ts`'s `WasmSource`) — primarily for browser callers. */
+  /** Overrides the default `web-tree-sitter` wasm loading — primarily for browser callers. */
   wasmSource?: WasmSource;
 }
 

@@ -297,11 +297,13 @@ function readAttributeUseCardinality(node: XmlNode): SourceCardinality {
 
 // --- reader options --------------------------------------------------------
 
-export interface XsdImportOptions {
-  /** Overrides namespace derivation. XSD's `targetNamespace` has no reverse-DNS-ish structure guaranteed to yield a valid dotted Rune namespace, so (unlike JSON Schema/OpenAPI's `$id`/`info.title`) this is effectively always required in practice; falls back to a sanitized form of `targetNamespace` when omitted. */
+import type { z } from 'zod';
+import type { XsdImportOptionsSchema } from '../../options/xsd-import-options.js';
+
+/** See json-schema-reader.ts's `JsonSchemaImportOptions` for why this extends `z.input`, not `z.infer`. */
+export interface XsdImportOptions extends z.input<typeof XsdImportOptionsSchema> {
+  /** Overrides namespace derivation; falls back to a sanitized targetNamespace when omitted. */
   namespace?: string;
-  /** Structural import only — never populate `constraints` arrays (spec.md CLI `--no-conditions`). Default: translate constraints. */
-  skipConditions?: boolean;
 }
 
 // --- restriction facets -----------------------------------------------------
@@ -912,6 +914,34 @@ export function readXsd(
       topLevelElementsByName
     )
   );
+
+  if (options.importTopLevelElements) {
+    for (const el of topLevelElementList) {
+      const typeName = toTypeName(el.name);
+      if (types.some((t) => t.name === typeName)) continue;
+      // A bare top-level xs:element (no inline complexType, just type=) has
+      // no attributes of its own in this reader's object-shaped SourceType
+      // model — wrap its resolved type as a single 'value' attribute, the
+      // same buildAttributeFromElementLike pipeline buildType's own
+      // member/choice/attribute branches already use for every other
+      // element-to-attribute conversion in this file.
+      const attribute = buildAttributeFromElementLike(
+        { ...el, name: 'value' },
+        nsMap,
+        xsdPrefix,
+        simpleTypesByName,
+        diagnostics,
+        options.skipConditions ?? false,
+        topLevelElementsByName
+      );
+      types.push({
+        name: typeName,
+        sourceKey: el.name,
+        attributes: attribute ? [attribute] : [],
+        constraints: []
+      });
+    }
+  }
 
   for (const el of topLevelElementList) {
     if (el.abstract) {

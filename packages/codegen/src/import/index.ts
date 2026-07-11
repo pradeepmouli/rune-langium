@@ -32,7 +32,6 @@ import { renderModel } from '../emit/rosetta/rosetta-render-core.js';
 import { buildModel } from './ast-builder.js';
 import { readJsonSchema } from './sources/json-schema-reader.js';
 import { readOpenApi, parseOpenApiDocument } from './sources/openapi-reader.js';
-import { readSql } from './sources/sql-reader.js';
 import { readXsd } from './sources/xsd-reader.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 import type { SourceModel } from './source-model.js';
@@ -41,6 +40,10 @@ export { runImport } from './cli.js';
 export type { ImportCommandOptions } from './cli.js';
 export type { ImportDiagnostic, ImportDiagnosticOpts } from './diagnostics.js';
 export { pushDiagnostic, hasFatalImportDiagnostics } from './diagnostics.js';
+export { JsonSchemaImportOptionsSchema } from '../options/json-schema-import-options.js';
+export { OpenApiImportOptionsSchema } from '../options/openapi-import-options.js';
+export { SqlImportOptionsSchema } from '../options/sql-import-options.js';
+export { XsdImportOptionsSchema } from '../options/xsd-import-options.js';
 export type {
   SourceKind,
   SourceCardinality,
@@ -74,6 +77,12 @@ export interface ImportOptions {
   onUntranslatable?: 'stub' | 'skip' | 'error';
   /** `from: 'sql'` only (spec.md CLI `--sql-dialect`, matching the outbound SQL emitter's `SqlDialectName`). Default: `'postgres'`. */
   sqlDialect?: 'postgres' | 'sqlserver';
+  /** `from: 'json-schema' | 'openapi'` only. Default: true (current behavior — import every def regardless of reachability). */
+  includeUnreferencedDefs?: boolean;
+  /** `from: 'openapi'` only. Default: true (current behavior — always convert paths into funcs). */
+  includeOperations?: boolean;
+  /** `from: 'xsd'` only. Default: false (current behavior — top-level elements are never their own type). */
+  importTopLevelElements?: boolean;
 }
 
 export interface ImportResult {
@@ -124,11 +133,18 @@ export async function importModel(source: string, options: ImportOptions): Promi
 
   const readerOptions = {
     ...(options.namespace !== undefined && { namespace: options.namespace }),
-    ...(options.conditions === false && { skipConditions: true })
+    ...(options.conditions === false && { skipConditions: true }),
+    ...(options.includeUnreferencedDefs !== undefined && { includeUnreferencedDefs: options.includeUnreferencedDefs }),
+    ...(options.includeOperations !== undefined && { includeOperations: options.includeOperations }),
+    ...(options.importTopLevelElements !== undefined && { importTopLevelElements: options.importTopLevelElements })
   };
 
   const { model, diagnostics: readerDiagnostics } = await (options.from === 'sql'
-    ? readSql(source, { namespace: options.namespace!, dialect: options.sqlDialect ?? 'postgres', ...readerOptions })
+    ? (await import('./sources/sql-reader.js')).readSql(source, {
+        namespace: options.namespace!,
+        dialect: options.sqlDialect ?? 'postgres',
+        ...readerOptions
+      })
     : options.from === 'openapi'
       ? Promise.resolve(readOpenApi(parseOpenApiDocument(source), readerOptions))
       : options.from === 'xsd'

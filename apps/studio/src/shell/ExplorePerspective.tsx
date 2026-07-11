@@ -70,6 +70,10 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { ImportDialog } from '../components/ImportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
+import { JsonSchemaImportOptionsFormAdapter } from '../codegen-forms/JsonSchemaImportOptionsFormAdapter.js';
+import { OpenApiImportOptionsFormAdapter } from '../codegen-forms/OpenApiImportOptionsFormAdapter.js';
+import { SqlImportOptionsFormAdapter } from '../codegen-forms/SqlImportOptionsFormAdapter.js';
+import { XsdImportOptionsFormAdapter } from '../codegen-forms/XsdImportOptionsFormAdapter.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import {
@@ -122,6 +126,13 @@ const EMPTY_PARSE_ERRORS: ReadonlyMap<string, string[]> = new Map();
  * there are no diagnostics for the focused file.
  */
 const EMPTY_RANGE_DIAGNOSTICS: readonly RangeDiagnostic[] = Object.freeze([]);
+
+const IMPORT_OPTIONS_FORMS_BY_FORMAT = {
+  'json-schema': JsonSchemaImportOptionsFormAdapter,
+  openapi: OpenApiImportOptionsFormAdapter,
+  sql: SqlImportOptionsFormAdapter,
+  xsd: XsdImportOptionsFormAdapter
+} as const;
 
 // normalizeDiagnosticFilePath / toParserDiagnostics / countDiagnostics moved to
 // explore-diagnostics.ts (shared-perspective-chrome plan, Task 3 prep) so the
@@ -1930,6 +1941,7 @@ export function ExplorePerspective() {
         onFilesChange={(next) => onFilesChange?.(next)}
         onFileFocused={openFileInSource}
         namespaceToFile={namespaceToFile}
+        optionsFormsByFormat={IMPORT_OPTIONS_FORMS_BY_FORMAT}
       />
 
       {/*

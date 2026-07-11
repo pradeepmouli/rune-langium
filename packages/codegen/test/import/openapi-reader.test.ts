@@ -445,3 +445,44 @@ describe('readOpenApi input guard (PR #374 Copilot finding)', () => {
     expect(() => readOpenApi(parsed)).toThrowError(/not an OpenAPI document/);
   });
 });
+
+describe('openapi-reader — includeOperations', () => {
+  it('includeOperations: false skips path-derived functions', () => {
+    const doc = {
+      openapi: '3.0.3',
+      info: { title: 'Demo', version: '1.0.0' },
+      paths: { '/widgets': { get: { operationId: 'listWidgets', responses: { '200': { description: 'ok' } } } } },
+      components: { schemas: { Widget: { type: 'object', properties: { id: { type: 'string' } } } } }
+    };
+    const { model } = readOpenApi(doc, { includeOperations: false });
+    expect(model.funcs).toEqual([]);
+    expect(model.types.map((t) => t.name)).toContain('Widget');
+  });
+});
+
+describe('openapi-reader — includeUnreferencedDefs forwarding', () => {
+  it('includeUnreferencedDefs: false drops an isolated mutual-reference cycle nothing else reaches', () => {
+    // A single standalone (zero-ref) schema is, by design, always kept as its
+    // own root (json-schema-reader.ts's filterUnreferencedDefs) — only an
+    // isolated cycle nothing OUTSIDE it ever references actually gets dropped.
+    const doc = {
+      openapi: '3.0.3',
+      info: { title: 'Demo', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Root: { type: 'object', properties: { child: { $ref: '#/components/schemas/Referenced' } } },
+          Referenced: { type: 'object', properties: { x: { type: 'string' } } },
+          OrphanA: { type: 'object', properties: { b: { $ref: '#/components/schemas/OrphanB' } } },
+          OrphanB: { type: 'object', properties: { a: { $ref: '#/components/schemas/OrphanA' } } }
+        }
+      }
+    };
+    const { model } = readOpenApi(doc, { includeUnreferencedDefs: false });
+    const names = model.types.map((t) => t.name);
+    expect(names).toContain('Root');
+    expect(names).toContain('Referenced');
+    expect(names).not.toContain('OrphanA');
+    expect(names).not.toContain('OrphanB');
+  });
+});

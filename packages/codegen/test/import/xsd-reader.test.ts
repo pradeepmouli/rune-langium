@@ -865,3 +865,44 @@ describe('xsd-reader — skipConditions (structural-only import)', () => {
     await assertParses(text);
   });
 });
+
+describe('xsd-reader — importTopLevelElements', () => {
+  it('importTopLevelElements: true imports a bare top-level xs:element as a standalone type', () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:demo">
+  <xs:element name="RootThing" type="xs:string"/>
+</xs:schema>`;
+    const withoutOption = readXsd(xml, { namespace: 'demo' });
+    expect(withoutOption.model.types.map((t) => t.name)).not.toContain('RootThing');
+
+    const withOption = readXsd(xml, { namespace: 'demo', importTopLevelElements: true });
+    expect(withOption.model.types.map((t) => t.name)).toContain('RootThing');
+  });
+
+  it('wraps the resolved element type as a single value attribute', () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:demo">
+  <xs:element name="RootThing" type="xs:string"/>
+</xs:schema>`;
+    const { model } = readXsd(xml, { namespace: 'demo', importTopLevelElements: true });
+    const rootThing = model.types.find((t) => t.name === 'RootThing');
+    expect(rootThing?.attributes).toHaveLength(1);
+    expect(rootThing?.attributes[0]).toMatchObject({ name: 'value', typeName: 'string' });
+  });
+
+  it('does not duplicate a top-level element already covered by a same-named complexType', () => {
+    const xml = `<?xml version="1.0"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:demo">
+  <xs:element name="Widget" type="Widget"/>
+  <xs:complexType name="Widget">
+    <xs:sequence>
+      <xs:element name="label" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>`;
+    const { model } = readXsd(xml, { namespace: 'demo', importTopLevelElements: true });
+    const widgets = model.types.filter((t) => t.name === 'Widget');
+    expect(widgets).toHaveLength(1);
+    expect(widgets[0]?.attributes.map((a) => a.name)).toContain('label');
+  });
+});

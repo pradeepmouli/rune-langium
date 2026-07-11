@@ -19,6 +19,10 @@
       "types": "./dist/src/import/index.d.ts",
       "default": "./dist/src/import/index.js"
     },
+    "./import/options": {
+      "types": "./dist/src/import/options-schemas.d.ts",
+      "default": "./dist/src/import/options-schemas.js"
+    },
     "./rosetta": {
       "types": "./dist/src/rosetta.d.ts",
       "default": "./dist/src/rosetta.js"
