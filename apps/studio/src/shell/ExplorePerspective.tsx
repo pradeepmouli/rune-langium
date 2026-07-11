@@ -70,6 +70,7 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { ImportDialog } from '../components/ImportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
+import { LanguageLensEditor } from '../components/LanguageLensEditor.js';
 import { JsonSchemaImportOptionsFormAdapter } from '../codegen-forms/JsonSchemaImportOptionsFormAdapter.js';
 import { OpenApiImportOptionsFormAdapter } from '../codegen-forms/OpenApiImportOptionsFormAdapter.js';
 import { SqlImportOptionsFormAdapter } from '../codegen-forms/SqlImportOptionsFormAdapter.js';
@@ -895,9 +896,16 @@ export function ExplorePerspective() {
     };
   }, [selectedNodeData]);
 
+  const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
+
   const renderExpressionEditor = useCallback(
-    (props: ExpressionEditorSlotProps) => <ExpressionBuilder {...props} scope={functionScope} />,
-    [functionScope]
+    (props: ExpressionEditorSlotProps) =>
+      expressionEditorMode === 'lens' ? (
+        <LanguageLensEditor {...props} />
+      ) : (
+        <ExpressionBuilder {...props} scope={functionScope} />
+      ),
+    [functionScope, expressionEditorMode]
   );
 
   const filesRef = useRef(files);

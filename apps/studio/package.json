@@ -49,6 +49,7 @@
     "@rune-langium/lsp-server": "workspace:*",
     "@rune-langium/visual-editor": "workspace:*",
     "@tanstack/react-virtual": "^3.14.3",
+    "@vscode/tree-sitter-wasm": "0.3.1",
     "@xyflow/react": "^12.11.1",
     "buffer": "^6.0.3",
     "codemirror": "6.0.2",
