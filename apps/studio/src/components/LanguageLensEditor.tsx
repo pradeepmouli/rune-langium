@@ -67,15 +67,20 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
       setTsError('Could not load the TypeScript parser — check your connection and try again.');
       return;
     }
-    const result = await parseTs(tsDraft, wasmBytes);
-    if (!result.ok) {
-      setTsError(result.reason.message);
-      return;
+
+    try {
+      const result = await parseTs(tsDraft, wasmBytes);
+      if (!result.ok) {
+        setTsError(result.reason.message);
+        return;
+      }
+      setTsError(null);
+      const runeText = renderExpression(result.node);
+      onChange(runeText);
+      onBlur();
+    } catch {
+      setTsError('Something went wrong parsing that expression — try again.');
     }
-    setTsError(null);
-    const runeText = renderExpression(result.node);
-    onChange(runeText);
-    onBlur();
   }, [tsDraft, onChange, onBlur]);
 
   const outOfSubset = language === 'typescript' && projection === null;

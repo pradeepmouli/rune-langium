@@ -185,6 +185,14 @@ function toRosetta(node: TsNode): RosettaExpression {
 
     case 'number': {
       const text = node.text;
+      // Only plain, lossless decimal literals are accepted — no exponential
+      // notation (`1e5`), hex/binary/octal prefixes (`0xFF`), or numeric
+      // separators (`1_000`). Those would otherwise silently truncate under
+      // `parseInt`/`Number` (e.g. `parseInt('1_000', 10) === 1`), which
+      // violates this feature's hard-refusal contract on the write-back path.
+      if (!/^-?\d+(\.\d+)?$/.test(text)) {
+        throw new OutOfSubset(`number literal '${text}' is not supported (only plain decimal literals are)`, node);
+      }
       return {
         $type: text.includes('.') ? 'RosettaNumberLiteral' : 'RosettaIntLiteral',
         value: text.includes('.') ? Number(text) : parseInt(text, 10)

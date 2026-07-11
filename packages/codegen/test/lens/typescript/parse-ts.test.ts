@@ -72,4 +72,42 @@ describe('parseTs', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('syntax-error');
   });
+
+  it('parses a plain decimal int literal', async () => {
+    const r = await parseTs('value >= 42');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: number } }).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(42);
+    }
+  });
+
+  it('parses a plain decimal number literal', async () => {
+    const r = await parseTs('value >= 3.5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: number } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe(3.5);
+    }
+  });
+
+  it('refuses exponential notation number literals (would silently truncate)', async () => {
+    const r = await parseTs('value >= 1e5');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses hex literals (would silently truncate to 0)', async () => {
+    const r = await parseTs('value >= 0xFF');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses numeric-separator literals (would silently truncate)', async () => {
+    const r = await parseTs('value >= 1_000');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
 });
