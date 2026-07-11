@@ -53,7 +53,7 @@ export interface ImportDialogProps {
   files: readonly WorkspaceFile[];
   onFilesChange: (files: WorkspaceFile[]) => void;
   onFileFocused: (path: string) => void;
-  /** namespace -> path, for every currently-open workspace file (ExplorePerspective's `namespaceToFile`). */
+  /** namespace -> path, for every workspace file with a resolved model (ExplorePerspective's `namespaceToFile`, built from `resolvedModelFiles` — not limited to open tabs). */
   namespaceToFile: ReadonlyMap<string, string>;
   /** format → z2f-generated options-form component. Supplied by the mount site (ExplorePerspective) so ImportDialog itself never imports a `?z2f` module — see the plan's Global Constraints. */
   optionsFormsByFormat: Record<ImportFormat, React.ComponentType<ImportOptionsFormProps>>;

@@ -19,4 +19,4 @@ export const XsdImportOptionsSchema = z.object({
     )
 });
 
-export type XsdImportOptions = z.infer<typeof XsdImportOptionsSchema>;
+export type XsdImportOptions = z.input<typeof XsdImportOptionsSchema>;

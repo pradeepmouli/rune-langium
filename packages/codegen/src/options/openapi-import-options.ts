@@ -17,4 +17,4 @@ export const OpenApiImportOptionsSchema = JsonSchemaImportOptionsSchema.extend({
     .describe('Convert OpenAPI paths into Rune functions (current behavior). Turn off to import types/enums only.')
 });
 
-export type OpenApiImportOptions = z.infer<typeof OpenApiImportOptionsSchema>;
+export type OpenApiImportOptions = z.input<typeof OpenApiImportOptionsSchema>;

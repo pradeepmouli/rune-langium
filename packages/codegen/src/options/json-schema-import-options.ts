@@ -19,8 +19,8 @@ export const JsonSchemaImportOptionsSchema = z.object({
     .optional()
     .default(true)
     .describe(
-      'Import every $defs/definitions entry (current behavior). Turn off to only import defs transitively referenced from the root schema.'
+      'Import every $defs/definitions entry (current behavior). Turn off to keep only defs reachable from a def nothing else references (a "root") — drops isolated defs/groups nothing outside ever points to.'
     )
 });
 
-export type JsonSchemaImportOptions = z.infer<typeof JsonSchemaImportOptionsSchema>;
+export type JsonSchemaImportOptions = z.input<typeof JsonSchemaImportOptionsSchema>;

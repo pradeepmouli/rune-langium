@@ -25,4 +25,4 @@ export const SqlImportOptionsSchema = z.object({
     .describe('Structural import only — never populate constraints arrays.')
 });
 
-export type SqlImportOptions = z.infer<typeof SqlImportOptionsSchema>;
+export type SqlImportOptions = z.input<typeof SqlImportOptionsSchema>;
