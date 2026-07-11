@@ -14,7 +14,7 @@ import type { RosettaExpression } from '@rune-langium/core';
 export interface LanguageLens<L extends string> {
   readonly language: L;
   render(node: RosettaExpression): string | null;
-  parse(text: string): LensResult;
+  parse(text: string): Promise<LensResult>;
 }
 
 export type LensResult = { ok: true; node: RosettaExpression } | { ok: false; reason: RefusalReason };

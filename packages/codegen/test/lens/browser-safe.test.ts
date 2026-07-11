@@ -12,11 +12,13 @@ function walk(dir: string): string[] {
   );
 }
 
-// ts-grammar-loader.ts is the one deliberate exception — it mirrors
-// sql-grammar-loader.ts's exact precedent: a default Node-side WASM-loading
-// path via node:fs/promises, alongside an explicit-bytes path callers use
-// in the browser. See Task 3.
-const FS_ALLOWED = new Set(['ts-grammar-loader.ts']);
+// ts-grammar-loader.ts mirrors sql-grammar-loader.ts's precedent: a default
+// Node-side WASM-loading path, alongside an explicit-bytes path callers use
+// in the browser (see Task 3). Its Node-builtin imports (`node:fs/promises`,
+// `node:module`) are dynamic (`await import(...)`), not static `from`
+// imports, so it no longer needs an exception here — the regex below only
+// matches static `from 'node:...'` imports.
+const FS_ALLOWED = new Set<string>([]);
 
 describe('codegen/lens is browser-safe', () => {
   it('imports no ExcelJS in any source file', () => {

@@ -22,6 +22,18 @@ describe('parseTs', () => {
     if (r.ok) expect(r.node.$type).toBe('RosettaAbsentExpression');
   });
 
+  it('refuses strict `!== null` (not the same semantic as `!= null`)', async () => {
+    const r = await parseTs('currency !== null');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses strict `=== null` (not the same semantic as `== null`)', async () => {
+    const r = await parseTs('currency === null');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
   it('parses logical and/or with correct precedence', async () => {
     const r = await parseTs('a && (b || c)');
     expect(r.ok).toBe(true);
@@ -73,41 +85,101 @@ describe('parseTs', () => {
     if (!r.ok) expect(r.reason.kind).toBe('syntax-error');
   });
 
-  it('parses a plain decimal int literal', async () => {
+  it('parses a plain decimal int literal as a bigint', async () => {
     const r = await parseTs('value >= 42');
     expect(r.ok).toBe(true);
     if (r.ok) {
-      const right = (r.node as unknown as { right: { $type: string; value: number } }).right;
+      const right = (r.node as unknown as { right: { $type: string; value: bigint } }).right;
       expect(right.$type).toBe('RosettaIntLiteral');
-      expect(right.value).toBe(42);
+      expect(right.value).toBe(42n);
     }
   });
 
-  it('parses a plain decimal number literal', async () => {
+  it('round-trips a large integer beyond Number.MAX_SAFE_INTEGER exactly', async () => {
+    const r = await parseTs('value >= 9007199254740993');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: bigint } }).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(9007199254740993n);
+    }
+  });
+
+  it('parses a plain decimal number literal as its raw text (BigDecimal is a string type)', async () => {
     const r = await parseTs('value >= 3.5');
     expect(r.ok).toBe(true);
     if (r.ok) {
-      const right = (r.node as unknown as { right: { $type: string; value: number } }).right;
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
       expect(right.$type).toBe('RosettaNumberLiteral');
-      expect(right.value).toBe(3.5);
+      expect(right.value).toBe('3.5');
     }
   });
 
-  it('refuses exponential notation number literals (would silently truncate)', async () => {
-    const r = await parseTs('value >= 1e5');
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  it('parses a leading-dot decimal literal', async () => {
+    const r = await parseTs('value >= .5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('.5');
+    }
   });
 
-  it('refuses hex literals (would silently truncate to 0)', async () => {
+  it('parses exponential notation as a RosettaNumberLiteral (render-ts.ts can legitimately produce these)', async () => {
+    const r = await parseTs('value >= 1e5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('1e5');
+    }
+  });
+
+  it('refuses hex literals (no faithful Rune representation)', async () => {
     const r = await parseTs('value >= 0xFF');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
 
-  it('refuses numeric-separator literals (would silently truncate)', async () => {
+  it('refuses binary literals (no faithful Rune representation)', async () => {
+    const r = await parseTs('value >= 0b101');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses octal literals (no faithful Rune representation)', async () => {
+    const r = await parseTs('value >= 0o17');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses numeric-separator literals (no faithful Rune representation)', async () => {
     const r = await parseTs('value >= 1_000');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('parses a double-quoted string literal', async () => {
+    const r = await parseTs('"USD"');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.node.$type).toBe('RosettaStringLiteral');
+      expect((r.node as unknown as { value: string }).value).toBe('USD');
+    }
+  });
+
+  it('refuses a single-quoted string literal', async () => {
+    const r = await parseTs("'USD'");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('decodes a string escape sequence rather than storing it literally', async () => {
+    const r = await parseTs('"a\\nb"');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.node.$type).toBe('RosettaStringLiteral');
+      expect((r.node as unknown as { value: string }).value).toBe('a\nb');
+    }
   });
 });

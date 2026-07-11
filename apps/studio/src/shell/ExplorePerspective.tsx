@@ -899,7 +899,7 @@ export function ExplorePerspective() {
   // No settings UI toggles this yet (deliberately out of Phase 1 scope) —
   // 'builder' stays the default; flipping to 'lens' unblocks manual QA and
   // a future settings-surface task.
-  const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
+  const [expressionEditorMode, _setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
 
   const renderExpressionEditor = useCallback(
     (props: ExpressionEditorSlotProps) =>

@@ -16,6 +16,13 @@ let cached: Promise<Uint8Array> | undefined;
 export function getTsWasmBytes(): Promise<Uint8Array> {
   cached ??= fetch(tsWasmUrl)
     .then((r) => r.arrayBuffer())
-    .then((buf) => new Uint8Array(buf));
+    .then((buf) => new Uint8Array(buf))
+    .catch((e) => {
+      // A failed fetch (offline, transient network error) must not poison
+      // the cache forever — clear it so the next call retries instead of
+      // replaying the same rejection indefinitely.
+      cached = undefined;
+      throw e;
+    });
   return cached;
 }

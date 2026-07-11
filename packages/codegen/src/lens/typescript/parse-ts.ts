@@ -103,15 +103,19 @@ function toRosetta(node: TsNode): RosettaExpression {
 
       // `x != null` / `x == null` are the presence idiom, not literal
       // equality — Rune has no null literal, so this mapping is
-      // unambiguous both ways.
-      if ((op === '!==' || op === '!=') && right.type === 'null') {
+      // unambiguous both ways. Only the LOOSE spellings (`!=`/`==`) map to
+      // exists/absent: `x !== null`/`x === null` are strict comparisons
+      // (they don't also match `undefined`, unlike the loose forms), which
+      // is NOT the semantic `render-ts.ts` emits (`!= null`/`== null`), so
+      // those must fall through and be refused below.
+      if (op === '!=' && right.type === 'null') {
         return {
           $type: 'RosettaExistsExpression',
           argument: toRosetta(left),
           operator: 'exists'
         } as unknown as RosettaExpression;
       }
-      if ((op === '===' || op === '==') && right.type === 'null') {
+      if (op === '==' && right.type === 'null') {
         return {
           $type: 'RosettaAbsentExpression',
           argument: toRosetta(left),
@@ -185,29 +189,51 @@ function toRosetta(node: TsNode): RosettaExpression {
 
     case 'number': {
       const text = node.text;
-      // Only plain, lossless decimal literals are accepted — no exponential
-      // notation (`1e5`), hex/binary/octal prefixes (`0xFF`), or numeric
-      // separators (`1_000`). Those would otherwise silently truncate under
-      // `parseInt`/`Number` (e.g. `parseInt('1_000', 10) === 1`), which
-      // violates this feature's hard-refusal contract on the write-back path.
-      if (!/^-?\d+(\.\d+)?$/.test(text)) {
-        throw new OutOfSubset(`number literal '${text}' is not supported (only plain decimal literals are)`, node);
+      // Hex/binary/octal prefixes and numeric separators have no faithful
+      // Rune representation and are refused outright. Note: a decimal
+      // exponent uses `e`/`E`, not `b`/`B` — the `b`/`B` check here is only
+      // about `0b`-style binary prefixes, not exponent forms.
+      if (/[xXbBoO_]/.test(text)) {
+        throw new OutOfSubset(
+          `number literal '${text}' is not supported (hex/binary/octal/separator forms have no Rune equivalent)`,
+          node
+        );
       }
-      return {
-        $type: text.includes('.') ? 'RosettaNumberLiteral' : 'RosettaIntLiteral',
-        value: text.includes('.') ? Number(text) : parseInt(text, 10)
-      } as unknown as RosettaExpression;
+      // Decimal or exponential form — Rune's `BigDecimal` (a string type)
+      // accepts both per its grammar. Preserve the raw source text exactly
+      // (no `Number()` round-trip) to avoid any precision loss.
+      if (/[.eE]/.test(text)) {
+        return { $type: 'RosettaNumberLiteral', value: text } as unknown as RosettaExpression;
+      }
+      // Plain integer — `RosettaIntLiteral.value` is a real `bigint`;
+      // `BigInt(text)` (not `parseInt`) correctly handles arbitrary
+      // precision (e.g. `9007199254740993`, which `parseInt`/`Number`
+      // would silently round).
+      return { $type: 'RosettaIntLiteral', value: BigInt(text) } as unknown as RosettaExpression;
     }
 
     case 'string': {
       // tree-sitter's `string` node's `.text` includes the surrounding
       // quotes verbatim (e.g. `"USD"`), but `RosettaStringLiteral.value`
-      // (per packages/core/src/generated/ast.ts) holds the unquoted
-      // content — render-expression.ts re-adds quoting on the way back out.
-      // Strip exactly the outer quote pair; no escape-sequence unescaping
-      // is done here (out of scope for Phase 1's corpus, which uses only
-      // plain ASCII string literals like "USD").
-      return { $type: 'RosettaStringLiteral', value: node.text.slice(1, -1) } as unknown as RosettaExpression;
+      // (per packages/core/src/generated/ast.ts) holds the unquoted,
+      // unescaped content. Only double-quoted strings are accepted —
+      // matching `render-ts.ts`'s own `JSON.stringify`-based emission
+      // convention (Rune's own string syntax and this lens's TS projection
+      // are both double-quote based). A double-quoted TS string literal
+      // (no template-literal features) is JSON-compatible syntax, so
+      // `JSON.parse` both validates the quote style and correctly decodes
+      // escape sequences in one step; anything that isn't double-quoted or
+      // doesn't decode cleanly is refused rather than guessed at.
+      if (!node.text.startsWith('"')) {
+        throw new OutOfSubset('string literals must be double-quoted', node);
+      }
+      let value: string;
+      try {
+        value = JSON.parse(node.text) as string;
+      } catch {
+        throw new OutOfSubset(`string literal '${node.text}' could not be decoded`, node);
+      }
+      return { $type: 'RosettaStringLiteral', value } as unknown as RosettaExpression;
     }
 
     default:

@@ -62,12 +62,14 @@ function dispatch(node: AnyNode): string {
       const symbol = node['symbol'] as { $refText?: string } | undefined;
       const rawArgs = (node['rawArgs'] as RosettaExpression[] | undefined) ?? [];
       if (rawArgs.length > 0) throw new UnsupportedInChild(); // function calls: out of S for Phase 1
-      return symbol?.$refText ?? '';
+      if (!symbol?.$refText) throw new UnsupportedInChild();
+      return symbol.$refText;
     }
     case 'RosettaFeatureCall': {
       const receiver = r(node['receiver'] as RosettaExpression);
       const feature = node['feature'] as { $refText?: string } | undefined;
-      return `${receiver}?.${feature?.$refText ?? ''}`;
+      if (!feature?.$refText) throw new UnsupportedInChild();
+      return `${receiver}?.${feature.$refText}`;
     }
     case 'RosettaExistsExpression': {
       const argument = r(node['argument'] as RosettaExpression);
@@ -81,24 +83,28 @@ function dispatch(node: AnyNode): string {
       const left = r(node['left'] as RosettaExpression);
       const right = r(node['right'] as RosettaExpression);
       const op = ARITHMETIC_TS[node['operator'] as string];
+      if (op === undefined) throw new UnsupportedInChild();
       return `${left} ${op} ${right}`;
     }
     case 'ComparisonOperation': {
       const left = r(node['left'] as RosettaExpression);
       const right = r(node['right'] as RosettaExpression);
       const op = COMPARISON_TS[node['operator'] as string];
+      if (op === undefined) throw new UnsupportedInChild();
       return `${left} ${op} ${right}`;
     }
     case 'EqualityOperation': {
       const left = r(node['left'] as RosettaExpression);
       const right = r(node['right'] as RosettaExpression);
       const op = EQUALITY_TS[node['operator'] as string];
+      if (op === undefined) throw new UnsupportedInChild();
       return `${left} ${op} ${right}`;
     }
     case 'LogicalOperation': {
       const left = r(node['left'] as RosettaExpression);
       const right = r(node['right'] as RosettaExpression);
       const op = LOGICAL_TS[node['operator'] as string];
+      if (op === undefined) throw new UnsupportedInChild();
       return `${left} ${op} ${right}`;
     }
     default:

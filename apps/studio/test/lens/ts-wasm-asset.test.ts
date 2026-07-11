@@ -30,4 +30,24 @@ describe('getTsWasmBytes', () => {
     await getTsWasmBytes();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('clears the cache on a rejected fetch so a later call can retry', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network error');
+      })
+    );
+    const { getTsWasmBytes } = await import('../../src/lens/ts-wasm-asset.js');
+
+    await expect(getTsWasmBytes()).rejects.toThrow('network error');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ arrayBuffer: async () => new Uint8Array([4, 5, 6]).buffer }))
+    );
+
+    const bytes = await getTsWasmBytes();
+    expect(Array.from(bytes)).toEqual([4, 5, 6]);
+  });
 });
