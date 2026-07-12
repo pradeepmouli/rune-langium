@@ -136,15 +136,15 @@ A user authoring a `func` writes the output logic in TypeScript: `output = princ
 
 ---
 
-### User Story 4 — Python lens (Priority: P3)
+### User Story 4 — Python lens (Priority: P3) — DELIVERED
 
 A Python-thinking quant reads/writes the same expressions in a Python projection. Identical contract, different surface language. Deferred to P3: it doubles the projection/parse-back surface and Python's looser syntax widens refusal-detection; it should follow once the TS lens has proven the bijection machinery.
 
-**Acceptance Scenarios**:
+**Acceptance Scenarios** — All delivered (Phase 3, `docs/superpowers/plans/2026-07-12-expression-language-lens-phase3.md`):
 
-1. **Given** the TS lens shipped and the `LanguageLens` interface stable, **When** a Python adapter is added, **Then** it implements the same `render` / `parse` interface over the **same core AST**, no change to the canonical pipeline.
-2. **Given** Python within `S`, **When** committed, **Then** canonical Rune is written and round-trips.
-3. **Given** Python outside `S`, **When** committed, **Then** refusal with inline reason; canonical Rune unchanged.
+1. **Given** the TS lens shipped and the `LanguageLens` interface stable, **When** a Python adapter is added, **Then** it implements the same `render` / `parse` interface over the **same core AST**, no change to the canonical pipeline. ✅ **Delivered**: Tasks 1–6 reused `language-lens.ts` and `subset.ts` unmodified; `packages/codegen/src/lens/python/` mirrors the TypeScript adapter file-for-file with identical `LensResult`/`RefusalReason` types; studio's `LanguageLensEditor` generalized to a data-driven per-language descriptor table (Task 6).
+2. **Given** Python within `S`, **When** committed, **Then** canonical Rune is written and round-trips. ✅ **Delivered**: Phase 3's Task 4 corpus-sweep (fixed-point + tree-equivalence, matching Phase 1/2 pattern) confirmed all 12 subset types represented in Python with no unexpected refusals. Corpus counts: **Condition 94/681 in-S**, **Operation 258/1196 in-S**, **ShortcutDeclaration 201/451 in-S** (read-only) — matching TypeScript's Phase 2 numbers closely, confirming Python coverage. Task 6 added Python-specific round-trip tests to `LanguageLensEditor.test.tsx` (toggle-to-Python, commit, undo/redo, error-boundary).
+3. **Given** Python outside `S`, **When** committed, **Then** refusal with inline reason; canonical Rune unchanged. ✅ **Delivered**: Task 4's refusal corpus swept the same `.resources/` corpora; Task 6 added error-boundary tests mirroring Phase 1's TS pattern.
 
 ---
 
@@ -322,6 +322,14 @@ Materially shortened versus the previous revision: steps 4 and 6 of the old plan
 
 **Resolved by Phase 2** (`docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md`):
 - ~~Undo/redo is assumed, not verified~~ → Task 3 added explicit coverage for `updateExpression`'s `RosettaFunction` branch: create-when-empty and undo/redo, both confirmed already working correctly against production code (no production changes were needed). Toggle-to-TS/edit/commit/undo was exercised at the store level via the same patch-shape path an `ExpressionBuilder` commit uses.
+
+**Resolved by Phase 3** (`docs/superpowers/plans/2026-07-12-expression-language-lens-phase3.md`):
+- **Python projection contract completed** — User Story 4's acceptance scenarios (all 3) are delivered. Tasks 1–6 added a Python language adapter (`packages/codegen/src/lens/python/`) reusing the canonical AST, the 12-type subset `S`, and the core `LanguageLens<L>` interface unmodified. Corpus-sweep (Task 4) confirmed all types represented in Python with corpus counts matching TypeScript's Phase 2 (Condition 94/681, Operation 258/1196, ShortcutDeclaration 201/451 in-S/read-only), proving equivalent coverage. Task 6 wired Python into studio's `LanguageLensEditor` as a 3-way Rune/TypeScript/Python toggle via a per-language descriptor table (DRY, not duplicated component).
+- **Python-specific design decisions, resolved during Phase 3 planning** — Three subset-boundary refusal decisions and one idiom decision, all documented in render-py.ts and parse-py.ts per-case comments:
+  - **Power (`**`) and floor division (`//`) have no Rune equivalent** — `ArithmeticOperation` only supports `+ - * /`. Both tokens refused on parse; render never produces them (Rune input can't contain them).
+  - **Boolean negation (`not`) has no Rune equivalent** — Rune's grammar has no unary "not" `$type` (see `subset.ts`'s existing note). Python's `not_operator` refused on parse, matching TS's unsupported `!` precedent.
+  - **Chained comparisons (`a < b < c`) have no Rune equivalent** — Rune's `ComparisonOperation` is strict binary `left`/`operator`/`right`; Python's native N-way chains refused on parse.
+  - **Optional-propagation idiom: `RosettaFeatureCall` → `getattr(receiver, "field", None)`** — Python has no `?.` operator; the 3-argument `getattr` form (with `None` default) semantically mirrors Rune's optional propagation. The 2-argument form (`getattr(a, "b")` without default) raises `AttributeError` on missing field instead of propagating `None` — refused. Plain `.` attribute access also refused (same logic TS applies to unguarded `.`).
 
 **Still open:**
 
