@@ -182,4 +182,47 @@ describe('parseTs', () => {
       expect((r.node as unknown as { value: string }).value).toBe('a\nb');
     }
   });
+
+  // Root cause C (task1 investigation): tree-sitter always parses a leading
+  // `-` before a numeric literal as a `unary_expression` wrapping a `number`
+  // node, never a single negative `number` token — `render-ts.ts` correctly
+  // emits `-1`, but `toRosetta` had no `unary_expression` case, so this text
+  // fell to the `default:` branch and was refused.
+  it('parses a negative integer literal (unary_expression wrapping a number)', async () => {
+    const r = await parseTs('value > -1');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: bigint } }).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(-1n);
+    }
+  });
+
+  it('parses a negative decimal literal, preserving raw text', async () => {
+    const r = await parseTs('value > -1.5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('-1.5');
+    }
+  });
+
+  it('round-trips the corpus finding: a chained comparison against a negative literal', async () => {
+    const r = await parseTs('correlationStrikePrice?.value > -1 && correlationStrikePrice?.value < 1');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.node.$type).toBe('LogicalOperation');
+  });
+
+  it('refuses unary negation of a non-numeric-literal operand (e.g. an identifier)', async () => {
+    const r = await parseTs('value > -x');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses logical NOT (no Rune equivalent)', async () => {
+    const r = await parseTs('!value');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
 });

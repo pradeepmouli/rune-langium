@@ -91,6 +91,36 @@ function field(node: TsNode, name: string): TsNode {
   return c;
 }
 
+/**
+ * Shared by `case 'number':` and `case 'unary_expression':` (negative
+ * numeric literals) — `text` is the numeric text to convert (with a leading
+ * `-` prepended by the unary case), `node` is the tree-sitter node to blame
+ * in any refusal.
+ */
+function numberNodeToRosetta(text: string, node: TsNode): RosettaExpression {
+  // Hex/binary/octal prefixes and numeric separators have no faithful
+  // Rune representation and are refused outright. Note: a decimal
+  // exponent uses `e`/`E`, not `b`/`B` — the `b`/`B` check here is only
+  // about `0b`-style binary prefixes, not exponent forms.
+  if (/[xXbBoO_]/.test(text)) {
+    throw new OutOfSubset(
+      `number literal '${text}' is not supported (hex/binary/octal/separator forms have no Rune equivalent)`,
+      node
+    );
+  }
+  // Decimal or exponential form — Rune's `BigDecimal` (a string type)
+  // accepts both per its grammar. Preserve the raw source text exactly
+  // (no `Number()` round-trip) to avoid any precision loss.
+  if (/[.eE]/.test(text)) {
+    return { $type: 'RosettaNumberLiteral', value: text } as unknown as RosettaExpression;
+  }
+  // Plain integer — `RosettaIntLiteral.value` is a real `bigint`;
+  // `BigInt(text)` (not `parseInt`) correctly handles arbitrary
+  // precision (e.g. `9007199254740993`, which `parseInt`/`Number`
+  // would silently round).
+  return { $type: 'RosettaIntLiteral', value: BigInt(text) } as unknown as RosettaExpression;
+}
+
 function toRosetta(node: TsNode): RosettaExpression {
   switch (node.type) {
     case 'parenthesized_expression':
@@ -189,29 +219,27 @@ function toRosetta(node: TsNode): RosettaExpression {
     case 'false':
       return { $type: 'RosettaBooleanLiteral', value: node.type === 'true' } as unknown as RosettaExpression;
 
-    case 'number': {
-      const text = node.text;
-      // Hex/binary/octal prefixes and numeric separators have no faithful
-      // Rune representation and are refused outright. Note: a decimal
-      // exponent uses `e`/`E`, not `b`/`B` — the `b`/`B` check here is only
-      // about `0b`-style binary prefixes, not exponent forms.
-      if (/[xXbBoO_]/.test(text)) {
+    case 'number':
+      return numberNodeToRosetta(node.text, node);
+
+    // tree-sitter always parses a leading `-` before a numeric literal as a
+    // `unary_expression` wrapping a `number` node — never a single negative
+    // `number` token (confirmed via an isolated grammar parse of `-1;`, see
+    // task1 investigation report's "Root cause C"). `render-ts.ts` emits
+    // exactly this text for a negative `RosettaIntLiteral`/`RosettaNumberLiteral`,
+    // so this case must accept it back. Every other unary shape (negating an
+    // identifier/call/member-expression, `!`, `~`, unary `+`, `typeof`, etc.)
+    // has no Rune equivalent and is refused.
+    case 'unary_expression': {
+      const operator = field(node, 'operator');
+      const argument = field(node, 'argument');
+      if (operator.text !== '-' || argument.type !== 'number') {
         throw new OutOfSubset(
-          `number literal '${text}' is not supported (hex/binary/octal/separator forms have no Rune equivalent)`,
+          "'unary_expression' is not supported (only negative numeric literals have a Rune equivalent)",
           node
         );
       }
-      // Decimal or exponential form — Rune's `BigDecimal` (a string type)
-      // accepts both per its grammar. Preserve the raw source text exactly
-      // (no `Number()` round-trip) to avoid any precision loss.
-      if (/[.eE]/.test(text)) {
-        return { $type: 'RosettaNumberLiteral', value: text } as unknown as RosettaExpression;
-      }
-      // Plain integer — `RosettaIntLiteral.value` is a real `bigint`;
-      // `BigInt(text)` (not `parseInt`) correctly handles arbitrary
-      // precision (e.g. `9007199254740993`, which `parseInt`/`Number`
-      // would silently round).
-      return { $type: 'RosettaIntLiteral', value: BigInt(text) } as unknown as RosettaExpression;
+      return numberNodeToRosetta('-' + argument.text, argument);
     }
 
     case 'string': {
