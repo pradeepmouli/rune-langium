@@ -145,6 +145,18 @@ function stringNodeToRosetta(node: PyNode): RosettaExpression {
 
 function toRosetta(node: PyNode): RosettaExpression {
   switch (node.type) {
+    case 'parenthesized_expression':
+      // Children are positional — `(`, expression, `)` — not a named
+      // field. Same shape as TS's parenthesized_expression (mirrors
+      // parse-ts.ts's identical case); confirmed against a real parse of
+      // `(a + b) * c` before writing this — see py-grammar-loader spike
+      // notes. Without this case, any parenthesized subexpression
+      // rendered by render-py.ts (e.g. `(a + b) * c`) falls through to
+      // `default:` and refuses with 'out-of-subset', which is wrong: a
+      // parenthesized expression the renderer itself emitted must always
+      // parse back.
+      return toRosetta(child(node, 1));
+
     case 'boolean_operator': {
       const left = field(node, 'left');
       const right = field(node, 'right');
