@@ -160,4 +160,44 @@ describe('parsePy', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  // Round 7 Finding 1 (P2): tree-sitter-python lexes `async`/`await` as a
+  // plain `identifier` node in some grammar positions (e.g. a comparison
+  // operand) even though they're Python 3 hard keywords. The old code only
+  // checked character-shape validity (isRuneValidId), not reserved-word
+  // membership, so this used to return `ok: true` with a
+  // RosettaSymbolReference — but renderPy already refuses to render a
+  // RosettaSymbolReference whose $refText is in PY_RESERVED_WORDS, breaking
+  // the Python→Rune→Python round-trip fixed point.
+  it('refuses a bare identifier that is the Python reserved word `async`', async () => {
+    const r = await parsePy('async > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a bare identifier that is the Python reserved word `await`', async () => {
+    const r = await parsePy('await > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // Round 7 Finding 2 (P2): tree-sitter-python's `integer` token includes
+  // Python 2's legacy long-integer `L`/`l` suffix in the token text
+  // (`"1L"`), which the grammar still lexes as a valid `integer` node even
+  // though it's not valid Python 3 syntax. The old refused-character regex
+  // didn't include `L`/`l`, so execution fell through to `BigInt(text)`,
+  // which threw a raw, uncaught SyntaxError instead of resolving with the
+  // normal `LensResult` refusal contract. Assert the promise resolves
+  // normally with `ok: false`, not that it throws/rejects.
+  it('refuses a long-integer literal with the Python 2 `L` suffix (no throw)', async () => {
+    const r = await parsePy('value > 1L');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a negative long-integer literal with the Python 2 `L` suffix (unary_operator path, no throw)', async () => {
+    const r = await parsePy('value > -1L');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
 });

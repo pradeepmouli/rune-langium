@@ -13,6 +13,7 @@ import type { RosettaExpression } from '@rune-langium/core';
 import type { LensResult, RefusalReason } from '../language-lens.js';
 import { createPyParser, type WasmSource } from './py-grammar-loader.js';
 import { isRuneValidId } from '../valid-id.js';
+import { PY_RESERVED_WORDS } from '../reserved-words.js';
 
 function refusal(kind: RefusalReason['kind'], message: string, offset: number, length: number): LensResult {
   return { ok: false, reason: { kind, message, offset, length } };
@@ -95,9 +96,9 @@ function field(node: PyNode, name: string): PyNode {
  * complex node type — the suffix is baked into the token text).
  */
 function numberNodeToRosetta(text: string, node: PyNode): RosettaExpression {
-  if (/[xXoObBjJ_]/.test(text)) {
+  if (/[xXoObBjJlL_]/.test(text)) {
     throw new OutOfSubset(
-      `number literal '${text}' is not supported (hex/octal/binary/complex/separator forms have no Rune equivalent)`,
+      `number literal '${text}' is not supported (hex/octal/binary/complex/separator/long-integer forms have no Rune equivalent)`,
       node
     );
   }
@@ -309,7 +310,15 @@ function toRosetta(node: PyNode): RosettaExpression {
     }
 
     case 'identifier': {
-      if (!isRuneValidId(node.text)) {
+      // A Python reserved word can still be lexed by tree-sitter as a plain
+      // `identifier` token in some grammar positions (e.g. `async`/`await`
+      // as a comparison operand) even though it's not a valid Python
+      // identifier at the language level. renderPy already refuses to emit
+      // a RosettaSymbolReference whose $refText collides with
+      // PY_RESERVED_WORDS (see render-py.ts) — refuse it here too, or the
+      // Python→Rune→Python fixed point breaks: this text would parse
+      // successfully but the resulting AST could never render back.
+      if (!isRuneValidId(node.text) || PY_RESERVED_WORDS.has(node.text)) {
         throw new OutOfSubset(`"${node.text}" is not a valid Rune identifier`, node);
       }
       return {

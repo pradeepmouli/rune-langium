@@ -303,4 +303,39 @@ describe('parseTs', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.node.$type).toBe('ComparisonOperation');
   });
+
+  // Round 7 Finding 1 (P2) sibling case: `let` is a real TS reserved word
+  // (already in TS_RESERVED_WORDS) but tree-sitter-typescript lexes it as a
+  // plain `identifier` token outside declaration position (e.g. a
+  // comparison operand). The old code only checked character-shape
+  // validity (isRuneValidId), not reserved-word membership, so this used to
+  // return `ok: true` with a RosettaSymbolReference — but renderTs already
+  // refuses to render a RosettaSymbolReference whose $refText is in
+  // TS_RESERVED_WORDS, breaking the TypeScript→Rune→TypeScript round-trip
+  // fixed point. (Note: `async` is NOT a TS reserved word — it's a
+  // contextual keyword — so it is not a reproducer here.)
+  it('refuses a bare identifier that is the TypeScript reserved word `let`', async () => {
+    const r = await parseTs('let > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // Round 7 Finding 2 (P2) sibling case: tree-sitter-typescript's `number`
+  // token includes JS/TS's own BigInt-literal suffix (`n`) in the token
+  // text (`"5n"`), and the old refused-character regex didn't include `n`,
+  // so execution fell through to `BigInt(text)`, which threw a raw,
+  // uncaught SyntaxError instead of resolving with the normal `LensResult`
+  // refusal contract. Assert the promise resolves normally with
+  // `ok: false`, not that it throws/rejects.
+  it('refuses a BigInt literal with the `n` suffix (no throw)', async () => {
+    const r = await parseTs('value > 5n');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a negative BigInt literal with the `n` suffix (unary_expression path, no throw)', async () => {
+    const r = await parseTs('value > -5n');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
 });
