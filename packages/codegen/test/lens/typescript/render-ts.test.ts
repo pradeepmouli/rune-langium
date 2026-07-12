@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseExpression, type RosettaExpression } from '@rune-langium/core';
 import { renderTs } from '../../../src/lens/typescript/render-ts.js';
+import { parseTs } from '../../../src/lens/typescript/parse-ts.js';
 
 /** A well-formed `RosettaSymbolReference`-shaped leaf, for use as a valid child operand. */
 function symbolRef(name: string): RosettaExpression {
@@ -74,6 +75,56 @@ describe('renderTs', () => {
     // logical &&/||, so no parens are needed here -- confirms the
     // ArithmeticOperation fix above didn't regress this case.
     expect(render('(currency exists) and flag')).toBe('currency != null && flag');
+  });
+
+  it('refuses a `single`-modified exists rather than dropping the modifier', () => {
+    // Pre-fix: rendered 'items != null', silently dropping 'single' (which
+    // checks cardinality-exactly-one, not just presence) -- real semantic
+    // data loss on round-trip. Must refuse instead.
+    expect(render('items single exists')).toBeNull();
+  });
+
+  it('refuses a `multiple`-modified exists rather than dropping the modifier', () => {
+    expect(render('items multiple exists')).toBeNull();
+  });
+
+  it('refuses an argument-less RosettaExistsExpression rather than throwing', () => {
+    // The grammar's "without left" form (RHS of a then-chain) has no
+    // `argument`. Pre-fix: `node['argument']` was undefined and `r(...)`
+    // crashed with a raw, uncaught TypeError -- not caught by renderTs's
+    // try/catch (which only catches UnsupportedInChild). Must refuse
+    // gracefully instead.
+    const node = {
+      $type: 'RosettaExistsExpression',
+      operator: 'exists',
+      explicitArguments: false,
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(() => renderTs(node)).not.toThrow();
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses an argument-less RosettaAbsentExpression rather than throwing', () => {
+    const node = {
+      $type: 'RosettaAbsentExpression',
+      operator: 'absent',
+      explicitArguments: false,
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(() => renderTs(node)).not.toThrow();
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('strips a redundant leading + from a decimal literal and round-trips', async () => {
+    // Pre-fix: rendered 'value > +1.5' verbatim; TS parses '+1.5' as a
+    // unary '+' expression, which parseTs refuses (only unary '-' has a
+    // Rune equivalent) -- renderTs returning non-null implied a round-trip
+    // that parseTs then broke. Stripping the redundant sign fixes both.
+    const ts = render('value > +1.5');
+    expect(ts).toBe('value > 1.5');
+
+    const back = await parseTs(ts!);
+    expect(back.ok, `TS must parse back: ${ts}`).toBe(true);
   });
 
   it('refuses a qualified (dotted) symbol reference', () => {

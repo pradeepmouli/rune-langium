@@ -110,8 +110,18 @@ function dispatch(node: AnyNode): string {
     case 'RosettaBooleanLiteral':
       return node['value'] ? 'true' : 'false';
     case 'RosettaIntLiteral':
-    case 'RosettaNumberLiteral':
-      return String(node['value']);
+    case 'RosettaNumberLiteral': {
+      // A leading '+' is a redundant sign (mathematically identical to its
+      // absence) but TS parses "+1.5" as a unary '+' expression, which
+      // parseTs refuses (only unary '-' has a Rune equivalent) — strip it
+      // rather than emit an unround-trippable projection. Only reachable
+      // for RosettaNumberLiteral's string-typed value (Rune's BigDecimal
+      // grammar preserves a leading '+' verbatim); RosettaIntLiteral's
+      // bigint value never stringifies with a leading '+', so this is a
+      // no-op for that case.
+      const text = String(node['value']);
+      return text.startsWith('+') ? text.slice(1) : text;
+    }
     case 'RosettaStringLiteral':
       return JSON.stringify(String(node['value']));
     case 'RosettaSymbolReference': {
@@ -141,11 +151,24 @@ function dispatch(node: AnyNode): string {
       return `${receiver}?.${feature.$refText}`;
     }
     case 'RosettaExistsExpression': {
-      const argument = r(node['argument'] as RosettaExpression, 3, 'left');
+      // 'single'/'multiple' exists have no honest TS equivalent (they check
+      // cardinality, not just presence) — refuse rather than silently drop
+      // the modifier and change the semantics.
+      if (node['modifier']) throw new UnsupportedInChild();
+      // Argument-less exists (the grammar's "without left" form, used as
+      // the RHS of a then-chain) has no receiver text to render — refuse
+      // rather than let `node['argument']` be undefined and crash later.
+      const argumentNode = node['argument'] as RosettaExpression | undefined;
+      if (!argumentNode) throw new UnsupportedInChild();
+      const argument = r(argumentNode, 3, 'left');
       return `${argument} != null`;
     }
     case 'RosettaAbsentExpression': {
-      const argument = r(node['argument'] as RosettaExpression, 3, 'left');
+      // RosettaAbsentExpression has no modifier field (only 'is absent', no
+      // single/multiple variant) — only the argument-less case applies.
+      const argumentNode = node['argument'] as RosettaExpression | undefined;
+      if (!argumentNode) throw new UnsupportedInChild();
+      const argument = r(argumentNode, 3, 'left');
       return `${argument} == null`;
     }
     case 'ArithmeticOperation': {

@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseExpression } from '@rune-langium/core';
 import { renderPy } from '../../../src/lens/python/render-py.js';
+import { parsePy } from '../../../src/lens/python/parse-py.js';
 
 function render(rune: string): string | null {
   const p = parseExpression(rune);
@@ -118,6 +119,56 @@ describe('renderPy', () => {
       symbol: { $refText: 'from' }
     } as any;
     expect(renderPy(node)).toBeNull();
+  });
+
+  it('refuses a `single`-modified exists rather than dropping the modifier', () => {
+    // Pre-fix: rendered 'items is not None', silently dropping 'single'
+    // (which checks cardinality-exactly-one, not just presence) -- real
+    // semantic data loss on round-trip. Must refuse instead.
+    expect(render('items single exists')).toBeNull();
+  });
+
+  it('refuses a `multiple`-modified exists rather than dropping the modifier', () => {
+    expect(render('items multiple exists')).toBeNull();
+  });
+
+  it('refuses an argument-less RosettaExistsExpression rather than throwing', () => {
+    // The grammar's "without left" form (RHS of a then-chain) has no
+    // `argument`. Pre-fix: `node['argument']` was undefined and
+    // `rComparisonFamily` crashed with a raw, uncaught TypeError -- not
+    // caught by renderPy's try/catch (which only catches
+    // UnsupportedInChild). Must refuse gracefully instead.
+    const node = {
+      $type: 'RosettaExistsExpression',
+      operator: 'exists',
+      explicitArguments: false,
+      rawArgs: []
+    } as any;
+    expect(() => renderPy(node)).not.toThrow();
+    expect(renderPy(node)).toBeNull();
+  });
+
+  it('refuses an argument-less RosettaAbsentExpression rather than throwing', () => {
+    const node = {
+      $type: 'RosettaAbsentExpression',
+      operator: 'absent',
+      explicitArguments: false,
+      rawArgs: []
+    } as any;
+    expect(() => renderPy(node)).not.toThrow();
+    expect(renderPy(node)).toBeNull();
+  });
+
+  it('strips a redundant leading + from a decimal literal and round-trips', async () => {
+    // Pre-fix: rendered 'value > +1.5' verbatim; Python parses '+1.5' as a
+    // unary '+' expression, which parsePy refuses (only unary '-' has a
+    // Rune equivalent) -- renderPy returning non-null implied a round-trip
+    // that parsePy then broke. Stripping the redundant sign fixes both.
+    const py = render('value > +1.5');
+    expect(py).toBe('value > 1.5');
+
+    const back = await parsePy(py!);
+    expect(back.ok, `Python must parse back: ${py}`).toBe(true);
   });
 
   it('refuses a function-call symbol reference (explicitArguments)', () => {
