@@ -108,9 +108,26 @@ function numberNodeToRosetta(text: string, node: TsNode): RosettaExpression {
       node
     );
   }
-  // Decimal or exponential form — Rune's `BigDecimal` (a string type)
-  // accepts both per its grammar. Preserve the raw source text exactly
-  // (no `Number()` round-trip) to avoid any precision loss.
+  // Rune's `BigDecimal` grammar (rune-dsl.langium:881-883) only allows an
+  // `e`/`E` exponent suffix AFTER a mantissa that already contains a `.`
+  // (`.INT` or `INT.INT?`). A bare integer with an exponent and no decimal
+  // point (e.g. `1e5`) is NOT valid Rune BigDecimal syntax, so text like
+  // that must be refused outright — accepting it would produce a
+  // `RosettaNumberLiteral` whose value string can never be reparsed by
+  // Rune's own grammar. We deliberately do NOT normalize by inserting a
+  // `.0` (e.g. `1e5` → `1.0e5`): that would break the TS→Rune→TS exact
+  // round-trip this lens must preserve, since the normalized Rune text
+  // would render back to a different TS string than the user typed.
+  if (/[eE]/.test(text) && !text.includes('.')) {
+    throw new OutOfSubset(
+      `number literal '${text}' is not supported (Rune's BigDecimal grammar requires a decimal point before an exponent — use e.g. '1.0e5' instead of '1e5')`,
+      node
+    );
+  }
+  // Decimal or exponential form (with a decimal point) — Rune's
+  // `BigDecimal` (a string type) accepts both per its grammar. Preserve
+  // the raw source text exactly (no `Number()` round-trip) to avoid any
+  // precision loss.
   if (/[.eE]/.test(text)) {
     return { $type: 'RosettaNumberLiteral', value: text } as unknown as RosettaExpression;
   }
@@ -239,7 +256,7 @@ function toRosetta(node: TsNode): RosettaExpression {
           node
         );
       }
-      return numberNodeToRosetta('-' + argument.text, argument);
+      return numberNodeToRosetta('-' + argument.text, node);
     }
 
     case 'string': {

@@ -125,13 +125,50 @@ describe('parseTs', () => {
     }
   });
 
-  it('parses exponential notation as a RosettaNumberLiteral (render-ts.ts can legitimately produce these)', async () => {
-    const r = await parseTs('value >= 1e5');
+  it('parses exponential notation with a decimal point as a RosettaNumberLiteral (render-ts.ts can legitimately produce these)', async () => {
+    const r = await parseTs('value >= 1.0e5');
     expect(r.ok).toBe(true);
     if (r.ok) {
       const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
       expect(right.$type).toBe('RosettaNumberLiteral');
-      expect(right.value).toBe('1e5');
+      expect(right.value).toBe('1.0e5');
+    }
+  });
+
+  it('parses a leading-dot exponential literal', async () => {
+    const r = await parseTs('value >= .5e5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('.5e5');
+    }
+  });
+
+  // Rune's BigDecimal grammar (rune-dsl.langium:881-883) only allows an
+  // exponent suffix AFTER a mantissa that already contains a `.` — a bare
+  // integer with an exponent (e.g. `1e5`) is not valid Rune BigDecimal
+  // syntax and can never be reparsed by Rune's own grammar, so it must be
+  // refused rather than accepted as a RosettaNumberLiteral.
+  it('refuses exponent-without-decimal numeric literals (not valid Rune BigDecimal syntax)', async () => {
+    const r = await parseTs('value > 1e5');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses negative exponent-without-decimal numeric literals (unary_expression path)', async () => {
+    const r = await parseTs('value > -1e5');
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason.kind).toBe('out-of-subset');
+      // The blame node must be the full `unary_expression` (starting at the
+      // `-`), not just the numeric argument — regression test for passing
+      // `node` (not `argument`) to `numberNodeToRosetta` in the
+      // `unary_expression` case.
+      const text = 'value > -1e5';
+      const expectedOffset = text.indexOf('-1e5');
+      expect(r.reason.offset).toBe(expectedOffset);
+      expect(r.reason.length).toBe('-1e5'.length);
     }
   });
 
