@@ -47,6 +47,16 @@ describe('renderPy', () => {
     expect(render('a and b and c')).toBe('a and b and c'); // same-tier left chain — no spurious parens
   });
 
+  it('parenthesizes a nested comparison under another comparison (Python chains unparenthesized comparisons)', () => {
+    // Rune: (a < b) = c  ->  Python must NOT read as a chained comparison
+    expect(render('(a < b) = c')).toBe('(a < b) == c');
+  });
+
+  it('parenthesizes a nested comparison under exists', () => {
+    // Rune: (a < b) exists
+    expect(render('(a < b) exists')).toBe('(a < b) is not None');
+  });
+
   it('refuses a function-call symbol reference (explicitArguments)', () => {
     // parseExpression on a call form — construct the node directly since
     // Rune's own grammar for a bare call reference may not parse standalone;

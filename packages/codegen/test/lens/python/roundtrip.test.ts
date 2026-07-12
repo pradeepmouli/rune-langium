@@ -56,7 +56,9 @@ describe('lens/python: Python -> Rune -> Python fixed point (write-back directio
     'currency is None',
     'a and (b or c)',
     'getattr(trade, "quantity", None)',
-    'getattr(getattr(trade, "quantity", None), "amount", None)'
+    'getattr(getattr(trade, "quantity", None), "amount", None)',
+    '(a < b) == c',
+    '(a < b) is not None'
   ];
   for (const py of PY_CORPUS) {
     it(`round-trips: ${py}`, async () => {

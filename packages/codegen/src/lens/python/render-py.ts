@@ -67,6 +67,28 @@ function rTight(child: RosettaExpression): string {
   return needsParens ? `(${text})` : text;
 }
 
+/**
+ * Render `child` as the argument/left/right of a Python comparison-family
+ * construct (ComparisonOperation, EqualityOperation, RosettaExistsExpression,
+ * RosettaAbsentExpression). Python's `<`/`<=`/`>`/`>=`/`==`/`!=`/`is`/`is not`
+ * are ALL the same `comparison_operator` grammar production and CHAIN when
+ * unparenthesized (`a < b < c` means `(a<b) and (b<c)`, not `(a<b)<c` —
+ * confirmed via a real tree-sitter-python parse during the PR #388 review
+ * fix). So a nested ComparisonOperation/EqualityOperation child must ALWAYS
+ * be parenthesized here, regardless of tier/side — unlike TS, where `<` and
+ * `===` share no such chaining ambiguity. Every other child type (arithmetic,
+ * logical, atomic) has no chaining hazard and uses the normal tier-based `r()`.
+ */
+function rComparisonFamily(child: RosettaExpression, parentTier: number, side: 'left' | 'right'): string {
+  const node = child as AnyNode;
+  if (node.$type === 'ComparisonOperation' || node.$type === 'EqualityOperation') {
+    const text = renderPy(child);
+    if (text === null) throw new UnsupportedInChild();
+    return `(${text})`;
+  }
+  return r(child, parentTier, side);
+}
+
 class UnsupportedInChild extends Error {}
 
 export function renderPy(node: RosettaExpression): string | null {
@@ -102,11 +124,11 @@ function dispatch(node: AnyNode): string {
       return `getattr(${receiver}, ${JSON.stringify(feature.$refText)}, None)`;
     }
     case 'RosettaExistsExpression': {
-      const argument = r(node['argument'] as RosettaExpression, 3, 'left');
+      const argument = rComparisonFamily(node['argument'] as RosettaExpression, 3, 'left');
       return `${argument} is not None`;
     }
     case 'RosettaAbsentExpression': {
-      const argument = r(node['argument'] as RosettaExpression, 3, 'left');
+      const argument = rComparisonFamily(node['argument'] as RosettaExpression, 3, 'left');
       return `${argument} is None`;
     }
     case 'ArithmeticOperation': {
@@ -124,8 +146,8 @@ function dispatch(node: AnyNode): string {
       const op = COMPARISON_PY[opKey];
       if (op === undefined) throw new UnsupportedInChild();
       const tier = precedenceTier('ComparisonOperation', opKey)!;
-      const left = r(node['left'] as RosettaExpression, tier, 'left');
-      const right = r(node['right'] as RosettaExpression, tier, 'right');
+      const left = rComparisonFamily(node['left'] as RosettaExpression, tier, 'left');
+      const right = rComparisonFamily(node['right'] as RosettaExpression, tier, 'right');
       return `${left} ${op} ${right}`;
     }
     case 'EqualityOperation': {
@@ -134,8 +156,8 @@ function dispatch(node: AnyNode): string {
       const op = EQUALITY_PY[opKey];
       if (op === undefined) throw new UnsupportedInChild();
       const tier = precedenceTier('EqualityOperation', opKey)!;
-      const left = r(node['left'] as RosettaExpression, tier, 'left');
-      const right = r(node['right'] as RosettaExpression, tier, 'right');
+      const left = rComparisonFamily(node['left'] as RosettaExpression, tier, 'left');
+      const right = rComparisonFamily(node['right'] as RosettaExpression, tier, 'right');
       return `${left} ${op} ${right}`;
     }
     case 'LogicalOperation': {
