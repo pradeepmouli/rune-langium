@@ -17,4 +17,6 @@ export { isInSubsetS, SUBSET_S_TYPES } from './lens/subset.js';
 export type { SubsetSType } from './lens/subset.js';
 export { renderTs } from './lens/typescript/render-ts.js';
 export { parseTs } from './lens/typescript/parse-ts.js';
+export { renderPy } from './lens/python/render-py.js';
+export { parsePy } from './lens/python/parse-py.js';
 export type { WasmSource } from './lens/typescript/ts-grammar-loader.js';

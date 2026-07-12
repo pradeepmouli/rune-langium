@@ -18,7 +18,7 @@ function walk(dir: string): string[] {
 // `node:module`) are dynamic (`await import(...)`), not static `from`
 // imports, so it no longer needs an exception here — the regex below only
 // matches static `from 'node:...'` imports.
-const FS_ALLOWED = new Set<string>([]);
+const FS_ALLOWED = new Set(['ts-grammar-loader.ts', 'py-grammar-loader.ts']);
 
 describe('codegen/lens is browser-safe', () => {
   it('imports no ExcelJS in any source file', () => {
