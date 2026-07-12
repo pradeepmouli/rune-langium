@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LanguageLensEditor } from '../../src/components/LanguageLensEditor.js';
 import { parseTs } from '@rune-langium/codegen/lens';
+import { getPyWasmBytes } from '../../src/lens/py-wasm-asset.js';
 
 // Real WASM fetch is exercised by ts-wasm-asset.test.ts (Step 1 of this
 // task) and by parse-ts.test.ts's Node-path tests (Task 3) — this
@@ -16,6 +17,19 @@ vi.mock('../../src/lens/ts-wasm-asset.js', () => ({
     const require = createRequire(import.meta.url);
     const pkgJsonPath = require.resolve('@vscode/tree-sitter-wasm/package.json');
     return new Uint8Array(readFileSync(pkgJsonPath.replace(/package\.json$/, 'wasm/tree-sitter-typescript.wasm')));
+  })
+}));
+
+// Same deterministic-bytes strategy as ts-wasm-asset.js above, but wrapped
+// in `vi.fn` (not a plain async function) so the WASM-fetch-failure test
+// below can override it with `mockRejectedValueOnce` for a single call.
+vi.mock('../../src/lens/py-wasm-asset.js', () => ({
+  getPyWasmBytes: vi.fn(async () => {
+    const { readFileSync } = await import('node:fs');
+    const { createRequire } = await import('node:module');
+    const require = createRequire(import.meta.url);
+    const pkgJsonPath = require.resolve('@vscode/tree-sitter-wasm/package.json');
+    return new Uint8Array(readFileSync(pkgJsonPath.replace(/package\.json$/, 'wasm/tree-sitter-python.wasm')));
   })
 }));
 
@@ -90,6 +104,73 @@ describe('LanguageLensEditor', () => {
     render(<LanguageLensEditor value="items count" onChange={vi.fn()} onBlur={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
     expect(screen.getByText(/can.t be shown in typescript/i)).toBeInTheDocument();
+    expect(screen.getByText('items count')).toBeInTheDocument();
+  });
+
+  // Python-specific mirror of the TypeScript tests above — exercises the
+  // SAME descriptor-table code paths (effect/blur handler) through the
+  // 'python' entry in LENSES, proving the generalization in
+  // LanguageLensEditor.tsx is genuinely shared, not per-language duplicated
+  // logic. Uses the real renderPy/parsePy (see the `@rune-langium/codegen/lens`
+  // mock above — only parseTs is overridden with a vi.fn wrapper; parsePy
+  // passes through to the actual implementation).
+  it('projects to Python on toggle', async () => {
+    render(<LanguageLensEditor value="currency exists" onChange={vi.fn()} onBlur={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /python/i }));
+    await waitFor(() => expect(screen.getByText('currency is not None')).toBeInTheDocument());
+  });
+
+  it('commits a valid Python edit back as canonical Rune text via onChange', async () => {
+    const onChange = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /python/i }));
+    await waitFor(() => screen.getByText('value >= 0'));
+
+    const editor = screen.getByRole('textbox', { name: /python expression/i });
+    fireEvent.input(editor, { target: { textContent: 'value > 0' } });
+    fireEvent.blur(editor);
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('value > 0'));
+  });
+
+  it('blocks commit and shows an inline error for out-of-subset Python', async () => {
+    const onChange = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /python/i }));
+    await waitFor(() => screen.getByText('value >= 0'));
+
+    const editor = screen.getByRole('textbox', { name: /python expression/i });
+    // `not x` has no Rune equivalent (Rune has no unary boolean-negation
+    // $type) — parsePy refuses it with a message containing "not supported".
+    fireEvent.input(editor, { target: { textContent: 'not x' } });
+    fireEvent.blur(editor);
+
+    await waitFor(() => expect(screen.getByText(/not supported/i)).toBeInTheDocument());
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('shows an error message when the Python WASM grammar fails to load', async () => {
+    const onChange = vi.fn();
+    vi.mocked(getPyWasmBytes).mockRejectedValueOnce(new Error('network error'));
+
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /python/i }));
+    await waitFor(() => screen.getByText('value >= 0'));
+
+    const editor = screen.getByRole('textbox', { name: /python expression/i });
+    fireEvent.input(editor, { target: { textContent: 'value > 0' } });
+    fireEvent.blur(editor);
+
+    await waitFor(() => expect(screen.getByText(/could not load the python parser/i)).toBeInTheDocument());
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('shows read-only Rune with a notice for expressions outside S, never a Python toggle result', () => {
+    // 'items count' is outside S (RosettaCountOperation) — renderPy returns
+    // null too (same isInSubsetS gate as renderTs, see subset.ts).
+    render(<LanguageLensEditor value="items count" onChange={vi.fn()} onBlur={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /python/i }));
+    expect(screen.getByText(/can.t be shown in python/i)).toBeInTheDocument();
     expect(screen.getByText('items count')).toBeInTheDocument();
   });
 });
