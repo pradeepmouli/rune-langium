@@ -12,6 +12,10 @@
  * during Phase 3 planning (no new dependency needed).
  */
 import { Language, Parser } from 'web-tree-sitter';
+// Re-exported (not just imported) so `parse-py.ts` can consume `WasmSource`
+// from this module directly, matching the documented Task 3 interface
+// contract ("Consumes: createPyParser, WasmSource from ./py-grammar-loader.js").
+export type { WasmSource } from '../typescript/ts-grammar-loader.js';
 import type { WasmSource } from '../typescript/ts-grammar-loader.js';
 
 let cachedLanguage: Language | undefined;
