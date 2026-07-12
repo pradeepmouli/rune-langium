@@ -234,7 +234,14 @@ function toRosetta(node: PyNode): RosettaExpression {
     case 'unary_operator': {
       const operator = field(node, 'operator');
       const argument = field(node, 'argument');
-      if (operator.text !== '-' || argument.type !== 'integer') {
+      // Python distinguishes `integer` and `float` as separate node types
+      // (unlike TS, where both fold into a single `number` type) — a
+      // negative decimal like `-1.5` produces `argument.type === 'float'`,
+      // confirmed via a direct parse. render-py.ts's numeric case emits
+      // this exact text for a negative RosettaNumberLiteral, so both
+      // literal node types must be accepted here or negative decimals
+      // silently fail to round-trip.
+      if (operator.text !== '-' || (argument.type !== 'integer' && argument.type !== 'float')) {
         throw new OutOfSubset(
           "'unary_operator' is not supported (only negative numeric literals have a Rune equivalent)",
           node

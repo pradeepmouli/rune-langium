@@ -62,9 +62,24 @@ describe('parsePy', () => {
     expect((await parsePy('not x')).ok).toBe(false);
   });
 
-  it('parses negative numeric literals via unary_operator', async () => {
+  it('parses negative integer literals via unary_operator', async () => {
     const r = await parsePy('value > -1');
     expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as any).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(-1n);
+    }
+  });
+
+  it('parses negative decimal literals via unary_operator (argument.type is "float", not "integer")', async () => {
+    const r = await parsePy('value > -1.5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as any).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('-1.5');
+    }
   });
 
   it('refuses exponent-without-decimal, same Rune BigDecimal grammar constraint as parse-ts.ts', async () => {
