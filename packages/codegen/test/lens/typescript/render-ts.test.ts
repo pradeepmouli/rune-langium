@@ -127,4 +127,30 @@ describe('renderTs', () => {
     // (a + b) * c: the '+' left child binds looser than '*' and must keep its parens
     expect(render('(a + b) * c')).toBe('(a + b) * c');
   });
+
+  // Root cause A (task1 investigation): the old guard only checked
+  // `rawArgs.length > 0`, which misses zero-arg explicit calls and silently
+  // downgrades them to a bare identifier reference — dropping call syntax.
+  it('refuses a zero-arg explicit function call rather than downgrading to a bare identifier', () => {
+    expect(render('EmptyTransferHistory()')).toBe(null);
+  });
+
+  it('refuses a qualified zero-arg explicit function call (import-alias form)', () => {
+    expect(render('dep.MyFunc()')).toBe(null);
+  });
+
+  // Root cause B: ComparisonOperation/EqualityOperation never checked the
+  // optional `cardMod` ('all'/'any' list-quantifier) field, silently
+  // stripping a real semantic quantifier instead of refusing.
+  it('refuses an `all`-quantified inequality (EqualityOperation cardMod)', () => {
+    expect(render('whoToDetermine all <> disputingParty')).toBe(null);
+  });
+
+  it('refuses an `all`-quantified comparison (ComparisonOperation cardMod)', () => {
+    expect(render('quantity all > 0')).toBe(null);
+  });
+
+  it('refuses an `all`-quantified comparison nested inside a LogicalOperation', () => {
+    expect(render('(quantity all > 0) and (quantity all < 100)')).toBe(null);
+  });
 });

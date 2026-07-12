@@ -103,8 +103,7 @@ function dispatch(node: AnyNode): string {
       return JSON.stringify(String(node['value']));
     case 'RosettaSymbolReference': {
       const symbol = node['symbol'] as { $refText?: string } | undefined;
-      const rawArgs = (node['rawArgs'] as RosettaExpression[] | undefined) ?? [];
-      if (rawArgs.length > 0) throw new UnsupportedInChild(); // function calls: out of S for Phase 1
+      if (node['explicitArguments']) throw new UnsupportedInChild(); // function calls (any arity) are out of S for Phase 1
       if (!symbol?.$refText) throw new UnsupportedInChild();
       return symbol.$refText;
     }
@@ -132,6 +131,7 @@ function dispatch(node: AnyNode): string {
       return `${left} ${op} ${right}`;
     }
     case 'ComparisonOperation': {
+      if (node['cardMod']) throw new UnsupportedInChild(); // 'all'/'any' quantified comparisons have no TS equivalent
       const opKey = node['operator'] as string;
       const op = COMPARISON_TS[opKey];
       if (op === undefined) throw new UnsupportedInChild();
@@ -141,6 +141,7 @@ function dispatch(node: AnyNode): string {
       return `${left} ${op} ${right}`;
     }
     case 'EqualityOperation': {
+      if (node['cardMod']) throw new UnsupportedInChild(); // 'all'/'any' quantified comparisons have no TS equivalent
       const opKey = node['operator'] as string;
       const op = EQUALITY_TS[opKey];
       if (op === undefined) throw new UnsupportedInChild();

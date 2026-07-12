@@ -132,6 +132,8 @@ A user authoring a `func` writes the output logic in TypeScript: `output = princ
 3. **Given** TS with a loop, mutation, or assignment to anything other than `output`, **When** committing, **Then** refusal with inline reason; canonical Rune unchanged.
 4. **Given** a Rune func body using an operation with no TS-subset equivalent, **When** toggling to TS, **Then** read-only Rune + "not representable in TypeScript" notice (never a partial rendering).
 
+> **Phase 2 note**: the function-body lens described by this user story shipped as a byproduct of Phase 1's generic `renderExpressionEditor` wiring in `ExplorePerspective.tsx` — `FunctionForm` already threaded each operation's/alias's bare RHS expression text through the same slot `ConditionSection` uses, so no new UI code was needed. Phase 2 *verified* (did not build) this: see `docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md` Task 4 (`FunctionForm.test.tsx`'s `renderExpressionEditor` slot-contract tests) and Tasks 1–2 (the TS-lens correctness bugs for function operation/shortcut bodies) and Task 3 (`updateExpression`'s function branch).
+
 ---
 
 ### User Story 4 — Python lens (Priority: P3)
@@ -318,6 +320,9 @@ Materially shortened versus the previous revision: steps 4 and 6 of the old plan
 - ~~Range-splice write-back design~~ → superseded by `cst-reuse-renderer` + `dirty-paths`: clean subtrees byte-sliced, dirty subtrees regenerated, wired into the live save path with its own locality test suite.
 - ~~Transpiler reuse question~~ → resolved in the "reuse, constrained to the reversible subset" direction: `render-ts` wraps `expr/transpiler.ts` where reversible; the corpus-sweep gap list (`ThenOperation`, `SwitchOperation`, `ToEnumOperation`, `RosettaOnlyExistsExpression`) supplies the initial read-only boundary.
 
+**Resolved by Phase 2** (`docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md`):
+- ~~Undo/redo is assumed, not verified~~ → Task 3 added explicit coverage for `updateExpression`'s `RosettaFunction` branch: create-when-empty and undo/redo, both confirmed already working correctly against production code (no production changes were needed). Toggle-to-TS/edit/commit/undo was exercised at the store level via the same patch-shape path an `ExpressionBuilder` commit uses.
+
 **Still open:**
 
 1. **Lens-committed node hygiene — stale `$cstRange` AND schema conformance**: a lens-committed node must not carry the *old* expression's `$cstRange` (or `cst-reuse-renderer` byte-slices the pre-edit text) and must pass its `$type`'s generated Zod schema (or the #371 gate silently CST-falls-back and the edit doesn't take — dev-gated warn only). Both failure modes present identically to the user: the edit appears to be ignored. Confirm the editor store's existing expression-commit path handles both, and add lens-path regression tests for each.
@@ -330,7 +335,7 @@ Materially shortened versus the previous revision: steps 4 and 6 of the old plan
 **Added by self-review (2026-07-11), before this moves to planning:**
 
 7. **`parse-ts.ts` bundle-size risk is unaddressed.** `codegen/lens` must ship through the same browser-safe subpath discipline as `rosetta.ts`, but "browser-safe" there means *no Node built-ins* (fs/ExcelJS/generator) — it says nothing about bundle weight, and the full TypeScript compiler API is not free even used parser-only (no type-checker). Studio already ships Monaco, so *some* size budget exists, but Phase 1 needs an explicit spike: measure the parser-only import cost (e.g. `typescript/lib/typescript.js` tree-shaken to `createSourceFile`/`forEachChild`, or a lighter alternative like `@typescript-eslint/typescript-estree`'s parser or `acorn` with a TS dialect) before committing to "the `typescript` compiler API" as stated fact in Phase 1 step 3.
-8. **Undo/redo is assumed, not verified.** The write-back integration section asserts a lens commit "produces the same store-patch shape as a builder commit" and that locality "holds by the same tests that already guard builder edits" — true for locality, but zundo undo/redo is never mentioned. If the patch shape truly matches `ExpressionBuilder`'s, undo should fall out for free; this needs to be an explicit acceptance check in Phase 1 (toggle to TS, edit, commit, undo, confirm the Rune text reverts and the undo stack entry reads sensibly), not an assumption carried silently into implementation.
+8. ~~**Undo/redo is assumed, not verified.**~~ Resolved by Phase 2 — see "Resolved by Phase 2" above.
 9. **`RefusalReason`'s `location` is untyped.** The interface sketch (`{ ok: false; reason: RefusalReason }`) doesn't specify what coordinate space "location" uses — TS source offsets, line/col, or a range into the *edited* buffer vs. the *original* Rune text. Monaco needs a concrete `{ line, column }` or offset range to place an inline diagnostic; this must be pinned down in Phase 1 step 3's design, not left to the implementer to invent per open question 5's Monaco integration.
 10. **No rollback/kill-switch story.** The feature's entire trust thesis is "refuse, don't degrade" — one bad in-`S` round-trip discovered in production after Phase 1 ships would cost exactly the trust the design is built to protect. The plan should include a cheap way to disable the language toggle (a studio feature flag, not a full revert) so a corpus gap found post-release can be muted immediately while it's fixed, rather than requiring a hotfix release.
 

@@ -16,6 +16,14 @@
  * `receiver?.feature`, since TS has no `->` vs `->>` distinction — so it
  * can never round-trip faithfully; parse-back can only ever reconstruct
  * `RosettaFeatureCall`).
+ *
+ * Also covers `Operation.expression` and `ShortcutDeclaration.expression`
+ * bodies (Rune func operations/aliases) — subset `S` is expression-shaped,
+ * not holder-shaped, so it applies uniformly wherever a bare
+ * `RosettaExpression` is rendered/parsed, whether the holder is a
+ * `Condition` or a `RosettaFunction`'s operation/alias. See
+ * docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md for
+ * the audit that confirmed this (function-body-corpus-sweep.test.ts).
  */
 export const SUBSET_S_TYPES = [
   'ComparisonOperation',
