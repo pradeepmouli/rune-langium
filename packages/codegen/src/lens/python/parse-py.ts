@@ -308,13 +308,17 @@ function toRosetta(node: PyNode): RosettaExpression {
       } as unknown as RosettaExpression;
     }
 
-    case 'identifier':
+    case 'identifier': {
+      if (!isRuneValidId(node.text)) {
+        throw new OutOfSubset(`"${node.text}" is not a valid Rune identifier`, node);
+      }
       return {
         $type: 'RosettaSymbolReference',
         explicitArguments: false,
         rawArgs: [],
         symbol: { $refText: node.text }
       } as unknown as RosettaExpression;
+    }
 
     // Confirmed via Task 3 Step 1 spike: Python's tree-sitter grammar uses
     // the SAME lowercase `true`/`false` node type strings TS uses.

@@ -277,4 +277,30 @@ describe('parseTs', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.node.$type).toBe('RosettaFeatureCall');
   });
+
+  // Fix 3 (P2 sibling case): the plainer, more fundamental `identifier`
+  // case (producing a bare RosettaSymbolReference, not a RosettaFeatureCall)
+  // had the same gap as Fix 2's `?.` feature-name check. TS identifiers
+  // allow Unicode, but Rune's ID terminal is ASCII-only
+  // (`/\^?[a-zA-Z_][a-zA-Z_0-9]*/`, packages/core/src/grammar/rune-dsl.langium:7).
+  it('refuses a bare identifier containing a non-ASCII character', async () => {
+    const r = await parseTs('π > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // `$` is legal in TS identifiers but not in Rune's ID terminal — same
+  // class of gap already fixed for the `?.` feature-name case (Fix 2),
+  // now closed for the plain identifier case too.
+  it('refuses a bare identifier containing $ (legal TS identifier char, not a legal Rune ID char)', async () => {
+    const r = await parseTs('$foo > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a plain ASCII bare identifier (no regression from the identifier-validation fix)', async () => {
+    const r = await parseTs('value >= 0');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.node.$type).toBe('ComparisonOperation');
+  });
 });

@@ -147,4 +147,17 @@ describe('parsePy', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  // Fix 3 (P2 sibling case): the plainer, more fundamental `identifier`
+  // case (producing a bare RosettaSymbolReference, not a RosettaFeatureCall)
+  // had the same gap as Fix 2's getattr feature-name check. Python's
+  // tree-sitter `identifier` token allows Unicode (XID_Start/XID_Continue),
+  // but Rune's ID terminal is ASCII-only
+  // (`/\^?[a-zA-Z_][a-zA-Z_0-9]*/`, packages/core/src/grammar/rune-dsl.langium:7)
+  // — this used to be silently accepted and committed as invalid Rune text.
+  it('refuses a bare identifier containing a non-ASCII character', async () => {
+    const r = await parsePy('π > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
 });

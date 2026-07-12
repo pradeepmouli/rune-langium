@@ -228,13 +228,17 @@ function toRosetta(node: TsNode): RosettaExpression {
       } as unknown as RosettaExpression;
     }
 
-    case 'identifier':
+    case 'identifier': {
+      if (!isRuneValidId(node.text)) {
+        throw new OutOfSubset(`"${node.text}" is not a valid Rune identifier`, node);
+      }
       return {
         $type: 'RosettaSymbolReference',
         explicitArguments: false,
         rawArgs: [],
         symbol: { $refText: node.text }
       } as unknown as RosettaExpression;
+    }
 
     case 'true':
     case 'false':
