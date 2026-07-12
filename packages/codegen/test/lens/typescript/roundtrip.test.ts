@@ -50,7 +50,19 @@ describe('lens: Rune -> TS -> Rune fixed point (contract points 1+2)', () => {
 });
 
 describe('lens: TS -> Rune -> TS fixed point (write-back direction)', () => {
-  const TS_CORPUS = ['value >= 0', 'currency != null', 'currency == null', 'a && (b || c)', 'trade?.quantity'];
+  const TS_CORPUS = [
+    'value >= 0',
+    'currency != null',
+    'currency == null',
+    'a && (b || c)',
+    'trade?.quantity',
+    'a && b && c',
+    'a || b || c',
+    'a + b - c',
+    'a - (b - c)',
+    'a * b + c',
+    '(a + b) * c'
+  ];
   for (const ts of TS_CORPUS) {
     it(`round-trips: ${ts}`, async () => {
       const parsed = await parseTs(ts);

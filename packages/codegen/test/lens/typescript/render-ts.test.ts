@@ -117,4 +117,14 @@ describe('renderTs', () => {
     } as unknown as RosettaExpression;
     expect(renderTs(node)).toBe(null);
   });
+
+  it('does not parenthesize a same-tier left child of a LogicalOperation chain', () => {
+    // a && b && c parses left-nested: LogicalOperation{ left: LogicalOperation{a,b}, right: c }
+    expect(render('a and b and c')).toBe('a && b && c');
+  });
+
+  it('parenthesizes a lower-tier left child of an ArithmeticOperation', () => {
+    // (a + b) * c: the '+' left child binds looser than '*' and must keep its parens
+    expect(render('(a + b) * c')).toBe('(a + b) * c');
+  });
 });
