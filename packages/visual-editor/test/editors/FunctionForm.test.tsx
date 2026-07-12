@@ -568,6 +568,11 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
 // renderExpressionEditor slot ConditionSection uses, so Phase 1's
 // LanguageLensEditor (unmodified) already works for function bodies with
 // zero new code. See docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md.
+//
+// The alias (shortcut) slot is covered too, but only for reachability/text
+// shape — its onChange is a deliberate no-op today (alias editing isn't
+// implemented via ANY editor yet, not just the lens; see FunctionForm.tsx's
+// own alias-rendering block), so there is no commit flow to assert there.
 
 describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verification)', () => {
   it('passes the bare RHS expression text (not the full set/add statement) to renderExpressionEditor for an existing operation', () => {
@@ -601,6 +606,46 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
       call,
       'renderExpressionEditor must receive the bare RHS text, not "set result: principal * rate"'
     ).toBeDefined();
+  });
+
+  it('passes the bare RHS expression text to renderExpressionEditor for an alias (shortcut), with a no-op onChange', () => {
+    const data = makeFuncData({
+      operations: [],
+      shortcuts: [
+        {
+          $type: 'ShortcutDeclaration',
+          name: 'discountedRate',
+          expression: { $type: 'RawDsl', text: 'rate * 0.9', $cstNode: { text: 'rate * 0.9' } }
+        }
+      ]
+    } as any);
+
+    const renderExpressionEditor = vi.fn((props: any) => <div data-testid="slot-value">{props.value}</div>);
+    const actions = makeActions();
+
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+        renderExpressionEditor={renderExpressionEditor}
+      />
+    );
+
+    expect(renderExpressionEditor).toHaveBeenCalled();
+    const call = renderExpressionEditor.mock.calls.find((c: any) => c[0].value === 'rate * 0.9');
+    expect(
+      call,
+      'renderExpressionEditor must receive the bare alias RHS text, not "alias discountedRate: rate * 0.9"'
+    ).toBeDefined();
+
+    // Alias editing isn't implemented via ANY editor today (not a lens gap) —
+    // onChange is a deliberate no-op. Confirm it doesn't throw and doesn't
+    // reach any store action.
+    expect(() => call![0].onChange('something else')).not.toThrow();
+    expect(actions.updateExpression).not.toHaveBeenCalled();
   });
 
   it('offers an empty-state expression slot when the function has no operations yet, and its onChange reaches updateExpression via the form field on blur', () => {
