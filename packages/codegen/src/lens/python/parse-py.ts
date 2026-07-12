@@ -12,6 +12,7 @@ import type { Node as PyNode } from 'web-tree-sitter';
 import type { RosettaExpression } from '@rune-langium/core';
 import type { LensResult, RefusalReason } from '../language-lens.js';
 import { createPyParser, type WasmSource } from './py-grammar-loader.js';
+import { isRuneValidId } from '../valid-id.js';
 
 function refusal(kind: RefusalReason['kind'], message: string, offset: number, length: number): LensResult {
   return { ok: false, reason: { kind, message, offset, length } };
@@ -43,6 +44,9 @@ export async function parsePy(text: string, wasmSource?: WasmSource): Promise<Le
   }
 
   const exprStatement = root.child(0)!;
+  if (exprStatement.childCount !== 1) {
+    return refusal('syntax-error', 'expected a single expression', 0, text.length);
+  }
   const expr = exprStatement.child(0);
   if (!expr) return refusal('syntax-error', 'expected a single expression', 0, text.length);
 
@@ -291,6 +295,12 @@ function toRosetta(node: PyNode): RosettaExpression {
         throw new OutOfSubset('only getattr(x, "field", None) calls are supported', node);
       }
       const featureLiteral = stringNodeToRosetta(fieldNode) as unknown as { value: string };
+      if (!isRuneValidId(featureLiteral.value)) {
+        throw new OutOfSubset(
+          `"${featureLiteral.value}" is not a valid Rune identifier for a feature reference`,
+          fieldNode
+        );
+      }
       return {
         $type: 'RosettaFeatureCall',
         receiver: toRosetta(receiverNode),

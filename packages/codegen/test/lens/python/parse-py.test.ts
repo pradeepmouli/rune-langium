@@ -100,4 +100,51 @@ describe('parsePy', () => {
     const r = await parsePy('value == "USD"');
     expect(r.ok).toBe(true);
   });
+
+  // Fix 1 (P1): `expression_statement`'s grammar production also accepts a
+  // bare comma-separated expression list (`seq(commaSep1($.expression),
+  // optional(','))`), giving it MULTIPLE children — `a, b` produces
+  // `identifier "a"`, `,`, `identifier "b"` (3 children). The old code only
+  // read `exprStatement.child(0)`, silently ignoring the `, b` part, so this
+  // used to return `ok: true` with a RosettaSymbolReference for just `a`,
+  // silently dropping `b`.
+  it('refuses a comma-separated expression list (silent-truncation guard)', async () => {
+    const r = await parsePy('a, b');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('syntax-error');
+  });
+
+  it('refuses a trailing-comma expression list', async () => {
+    const r = await parsePy('a,');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('syntax-error');
+  });
+
+  it('still parses a plain single expression (no regression from the comma-list fix)', async () => {
+    const r = await parsePy('a');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.node.$type).toBe('RosettaSymbolReference');
+  });
+
+  // Fix 2 (P2): a getattr feature name must be a legal Rune ID
+  // (`/\^?[a-zA-Z_][a-zA-Z_0-9]*/`, whole-string). None of these can ever be
+  // rescued by `^`-escaping (that only handles reserved-keyword collisions,
+  // not illegal characters).
+  it('refuses a getattr feature name containing a hyphen', async () => {
+    const r = await parsePy('getattr(trade, "bad-name", None)');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a getattr feature name containing a dot', async () => {
+    const r = await parsePy('getattr(trade, "a.b", None)');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a getattr feature name with a leading digit', async () => {
+    const r = await parsePy('getattr(trade, "9bad", None)');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
 });

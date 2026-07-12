@@ -15,6 +15,7 @@ import type { Node as TsNode } from 'web-tree-sitter';
 import type { RosettaExpression } from '@rune-langium/core';
 import type { LensResult, RefusalReason } from '../language-lens.js';
 import { createTsParser, type WasmSource } from './ts-grammar-loader.js';
+import { isRuneValidId } from '../valid-id.js';
 
 function refusal(kind: RefusalReason['kind'], message: string, offset: number, length: number): LensResult {
   return { ok: false, reason: { kind, message, offset, length } };
@@ -217,6 +218,9 @@ function toRosetta(node: TsNode): RosettaExpression {
       }
       const object = field(node, 'object');
       const property = field(node, 'property');
+      if (!isRuneValidId(property.text)) {
+        throw new OutOfSubset(`"${property.text}" is not a valid Rune identifier for a feature reference`, property);
+      }
       return {
         $type: 'RosettaFeatureCall',
         receiver: toRosetta(object),

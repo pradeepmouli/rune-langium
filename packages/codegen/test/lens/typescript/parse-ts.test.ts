@@ -262,4 +262,19 @@ describe('parseTs', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  // Fix 2 (P2) sibling case: `$` is a legal TS identifier character but not
+  // a legal Rune ID character (Rune's ID terminal is ASCII
+  // `[a-zA-Z_][a-zA-Z_0-9]*` only).
+  it('refuses a feature name containing $ (legal TS identifier char, not a legal Rune ID char)', async () => {
+    const r = await parseTs('receiver?.$foo');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a normal optional-chained feature path (no regression from the identifier-validation fix)', async () => {
+    const r = await parseTs('receiver?.field');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.node.$type).toBe('RosettaFeatureCall');
+  });
 });
