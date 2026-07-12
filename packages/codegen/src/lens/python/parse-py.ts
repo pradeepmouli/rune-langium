@@ -117,6 +117,22 @@ function numberNodeToRosetta(text: string, node: PyNode): RosettaExpression {
   if (/[.eE]/.test(text)) {
     return { $type: 'RosettaNumberLiteral', value: text } as unknown as RosettaExpression;
   }
+  // Python 3 forbids a leading zero on a decimal integer literal with more
+  // than one digit (SyntaxError: "leading zeros in decimal integer
+  // literals are not permitted; use an 0o prefix for octal integers") —
+  // tree-sitter's Python-2-compatible `integer` token still lexes forms
+  // like "01"/"-01" as valid `integer` nodes, and BigInt("01") happily
+  // returns 1n, so without this check invalid Python input would be
+  // silently normalized into valid Rune instead of refused. A bare "0" (no
+  // second digit) and a leading zero before a decimal point (e.g. "0.5",
+  // which returns earlier via the RosettaNumberLiteral branch above) are
+  // unaffected.
+  if (/^-?0\d/.test(text)) {
+    throw new OutOfSubset(
+      `number literal '${text}' is not supported (a leading zero is not valid Python 3 syntax — use an explicit 0o prefix for octal, or drop the leading zero)`,
+      node
+    );
+  }
   return { $type: 'RosettaIntLiteral', value: BigInt(text) } as unknown as RosettaExpression;
 }
 

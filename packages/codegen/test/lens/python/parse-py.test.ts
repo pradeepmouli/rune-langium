@@ -200,4 +200,53 @@ describe('parsePy', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  // Round 8 Finding 1 (P2): tree-sitter-python's Python-2-compatible
+  // `integer` token still lexes a leading-zero decimal form like `"01"` as
+  // a valid `integer` node, even though a leading zero on a decimal
+  // integer literal with more than one digit is a SyntaxError in real
+  // Python 3 ("leading zeros in decimal integer literals are not
+  // permitted; use an 0o prefix for octal integers"). The old refused-
+  // character regex had no forbidden CHARACTER to catch here — `"01"` is
+  // an invalid decimal SHAPE, not an invalid character — so execution fell
+  // through to `BigInt("01")`, which happily returns `1n`, silently
+  // normalizing invalid Python input into valid Rune instead of refusing
+  // it.
+  it('refuses a decimal integer literal with a leading zero', async () => {
+    const r = await parsePy('value > 01');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a negative decimal integer literal with a leading zero (unary_operator path)', async () => {
+    const r = await parsePy('value > -01');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a run of leading zeros, not just a single one', async () => {
+    const r = await parsePy('value > 00');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a bare single zero (no regression from the leading-zero fix)', async () => {
+    const r = await parsePy('value > 0');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as any).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(0n);
+    }
+  });
+
+  it('still parses a leading zero before a decimal point (no regression from the leading-zero fix)', async () => {
+    const r = await parsePy('value > 0.5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as any).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('0.5');
+    }
+  });
 });

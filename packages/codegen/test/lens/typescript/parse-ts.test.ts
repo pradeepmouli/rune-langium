@@ -338,4 +338,52 @@ describe('parseTs', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  // Round 8 Finding 1 sibling case: tree-sitter-typescript's `number` token
+  // still lexes a leading-zero decimal form like `"01"` as a valid `number`
+  // node, even though strict-mode ES modules (which TS/JS always compile
+  // to) forbid a leading zero on a decimal integer literal with more than
+  // one digit (SyntaxError: "Octal literals are not allowed in strict
+  // mode."). The old refused-character regex had no forbidden CHARACTER to
+  // catch here — `"01"` is an invalid decimal SHAPE, not an invalid
+  // character — so execution fell through to `BigInt("01")`, which happily
+  // returns `1n`, silently normalizing invalid TS/JS input into valid Rune
+  // instead of refusing it.
+  it('refuses a decimal integer literal with a leading zero', async () => {
+    const r = await parseTs('value > 01');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a negative decimal integer literal with a leading zero (unary_expression path)', async () => {
+    const r = await parseTs('value > -01');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a run of leading zeros, not just a single one', async () => {
+    const r = await parseTs('value > 00');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a bare single zero (no regression from the leading-zero fix)', async () => {
+    const r = await parseTs('value > 0');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: bigint } }).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(0n);
+    }
+  });
+
+  it('still parses a leading zero before a decimal point (no regression from the leading-zero fix)', async () => {
+    const r = await parseTs('value > 0.5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('0.5');
+    }
+  });
 });
