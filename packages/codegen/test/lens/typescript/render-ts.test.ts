@@ -60,6 +60,22 @@ describe('renderTs', () => {
     expect(renderTs(node)).toBe(null);
   });
 
+  it('parenthesizes exists/absent when nested under an ArithmeticOperation parent', () => {
+    // exists/absent used to be treated as atomic (default: return null in
+    // precedenceTier), so this rendered unparenthesized as
+    // "currency != null + 1" -- which real TS parses as
+    // "currency != (null + 1)", changing the grouping.
+    expect(render('(currency exists) + 1')).toBe('(currency != null) + 1');
+    expect(render('(currency is absent) + 1')).toBe('(currency == null) + 1');
+  });
+
+  it('does not add spurious parens for exists nested under a LogicalOperation', () => {
+    // Equality (exists/absent's tier) already binds tighter than
+    // logical &&/||, so no parens are needed here -- confirms the
+    // ArithmeticOperation fix above didn't regress this case.
+    expect(render('(currency exists) and flag')).toBe('currency != null && flag');
+  });
+
   it('refuses a qualified (dotted) symbol reference', () => {
     const node = {
       $type: 'RosettaSymbolReference',
@@ -73,6 +89,20 @@ describe('renderTs', () => {
     const node = {
       $type: 'RosettaSymbolReference',
       symbol: { $refText: '^class' },
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses a bare $refText that collides with a TS reserved keyword', () => {
+    // $refText === 'class' with no dot and no caret -- this is what a Rune
+    // field named `^class` in source looks like AFTER Langium's convertID
+    // strips the `^`-escape, per escapeId()'s doc comment. It was never a
+    // Rune reserved word, but 'class' is a TS reserved word and would be a
+    // SyntaxError if emitted verbatim as an identifier.
+    const node = {
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: 'class' },
       rawArgs: []
     } as unknown as RosettaExpression;
     expect(renderTs(node)).toBeNull();

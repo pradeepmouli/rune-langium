@@ -69,6 +69,22 @@ describe('renderPy', () => {
     expect(render('(currency is absent) exists')).toBe('(currency is None) is not None');
   });
 
+  it('parenthesizes exists/absent when nested under an ArithmeticOperation parent', () => {
+    // exists/absent used to be treated as atomic (default: return null in
+    // precedenceTier), so this rendered unparenthesized as
+    // "currency is not None + 1" -- wrong grouping, since Python's '+' binds
+    // tighter than 'is not'.
+    expect(render('(currency exists) + 1')).toBe('(currency is not None) + 1');
+    expect(render('(currency is absent) + 1')).toBe('(currency is None) + 1');
+  });
+
+  it('does not add spurious parens for exists nested under a LogicalOperation', () => {
+    // Python's 'is not' already binds tighter than 'and', so no parens are
+    // needed here -- confirms the ArithmeticOperation fix above didn't
+    // regress this case.
+    expect(render('(currency exists) and flag')).toBe('currency is not None and flag');
+  });
+
   it('refuses a qualified (dotted) symbol reference', () => {
     const node = {
       $type: 'RosettaSymbolReference',
@@ -85,6 +101,21 @@ describe('renderPy', () => {
       explicitArguments: false,
       rawArgs: [],
       symbol: { $refText: '^class' }
+    } as any;
+    expect(renderPy(node)).toBeNull();
+  });
+
+  it('refuses a bare $refText that collides with a Python reserved keyword', () => {
+    // $refText === 'from' with no dot and no caret -- this is what a Rune
+    // field named `^from` in source looks like AFTER Langium's convertID
+    // strips the `^`-escape, per escapeId()'s doc comment. It was never a
+    // Rune reserved word, but 'from' is a Python hard keyword and would be a
+    // SyntaxError if emitted verbatim as an identifier.
+    const node = {
+      $type: 'RosettaSymbolReference',
+      explicitArguments: false,
+      rawArgs: [],
+      symbol: { $refText: 'from' }
     } as any;
     expect(renderPy(node)).toBeNull();
   });

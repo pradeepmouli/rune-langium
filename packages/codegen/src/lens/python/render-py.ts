@@ -18,6 +18,7 @@
  * Returns `null` for any node outside `S` — never an approximate rendering.
  */
 import type { RosettaExpression } from '@rune-langium/core';
+import { PY_RESERVED_WORDS } from '../reserved-words.js';
 import { isInSubsetS } from '../subset.js';
 
 type AnyNode = RosettaExpression & Record<string, unknown>;
@@ -27,12 +28,27 @@ const EQUALITY_PY: Record<string, string> = { '=': '==', '<>': '!=' };
 const LOGICAL_PY: Record<string, string> = { and: 'and', or: 'or' };
 const ARITHMETIC_PY: Record<string, string> = { '+': '+', '-': '-', '*': '*', '/': '/' };
 
-/** Same tier table as render-ts.ts's precedenceTier — Python's relative operator precedence matches TS's for these 4 tiers. */
+/**
+ * Same tier table as render-ts.ts's precedenceTier — Python's relative operator
+ * precedence matches TS's for these tiers. RosettaExistsExpression/
+ * RosettaAbsentExpression share EqualityOperation's tier (3): `rComparisonFamily`'s
+ * docstring already treats Equality/Comparison/Exists/Absent as one "comparison
+ * family", and exists/absent's own two call sites already hardcode
+ * `rComparisonFamily(argument, 3, 'left')`, so tier 3 is the value already
+ * implicitly used elsewhere in this file for these two node types. Without a real
+ * tier here they were treated as atomic (`default: return null`), which was wrong
+ * as a PARENT's child: Python's `+` binds tighter than `is not`, so
+ * `(currency exists) + 1` rendered unparenthesized as `currency is not None + 1`,
+ * changing the grouping and breaking round-trip.
+ */
 function precedenceTier(kind: string, operator: unknown): number | null {
   switch (kind) {
     case 'LogicalOperation':
       return operator === 'or' ? 1 : 2;
     case 'EqualityOperation':
+      return 3;
+    case 'RosettaExistsExpression':
+    case 'RosettaAbsentExpression':
       return 3;
     case 'ComparisonOperation':
       return 4;
@@ -125,13 +141,21 @@ function dispatch(node: AnyNode): string {
       const symbol = node['symbol'] as { $refText?: string } | undefined;
       if (node['explicitArguments']) throw new UnsupportedInChild();
       if (!symbol?.$refText) throw new UnsupportedInChild();
-      // A qualified (dotted) or ^-escaped $refText (Rune's QualifiedName cross-ref
-      // grammar and reserved-keyword escaping — see render-expression.ts's
-      // escapeId()) is not a single valid Python identifier: a dotted name would
-      // render as Python attribute access (which parse-py.ts correctly refuses
-      // without the getattr(...) idiom), and a ^-prefixed name isn't valid Python
-      // syntax at all. Refuse rather than guess at an encoding.
-      if (symbol.$refText.includes('.') || symbol.$refText.startsWith('^')) throw new UnsupportedInChild();
+      // A qualified (dotted) $refText (Rune's QualifiedName cross-ref grammar)
+      // is not a single valid Python identifier: it would render as Python
+      // attribute access, which parse-py.ts correctly refuses without the
+      // getattr(...) idiom. The `^`-prefix check below is defensive (guards
+      // hand-constructed AST nodes) — Langium's convertID already strips a
+      // real `^`-escape before $refText is populated (see
+      // render-expression.ts's escapeId()), so $refText from real parsing
+      // never contains a literal `^`. That means a stripped $refText can
+      // silently collide with a *Python* reserved word even though it was
+      // never a *Rune* reserved word — refuse those too, since emitting them
+      // verbatim (e.g. `from`) is a Python SyntaxError, not a valid
+      // identifier. Refuse rather than guess at an encoding.
+      if (symbol.$refText.includes('.') || symbol.$refText.startsWith('^') || PY_RESERVED_WORDS.has(symbol.$refText)) {
+        throw new UnsupportedInChild();
+      }
       return symbol.$refText;
     }
     case 'RosettaFeatureCall': {

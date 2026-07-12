@@ -13,6 +13,7 @@
  * Returns `null` for any node outside `S` — never an approximate rendering.
  */
 import type { RosettaExpression } from '@rune-langium/core';
+import { TS_RESERVED_WORDS } from '../reserved-words.js';
 import { isInSubsetS } from '../subset.js';
 
 type AnyNode = RosettaExpression & Record<string, unknown>;
@@ -23,16 +24,28 @@ const LOGICAL_TS: Record<string, string> = { and: '&&', or: '||' };
 const ARITHMETIC_TS: Record<string, string> = { '+': '+', '-': '-', '*': '*', '/': '/' };
 
 /**
- * JS/TS binary-operator precedence tier for the 4 binary $types this file emits,
- * from loosest (1) to tightest (6). Returns `null` for anything else (literals,
- * symbol references, feature calls, exists/absent-as-a-node) since those are
- * never the PARENT in this table, only ever a possible child.
+ * JS/TS binary-operator precedence tier for the binary/comparison-shaped $types
+ * this file emits, from loosest (1) to tightest (6). Returns `null` for anything
+ * else (literals, symbol references, feature calls) since those are never the
+ * PARENT in this table, only ever a possible child.
+ *
+ * RosettaExistsExpression/RosettaAbsentExpression share EqualityOperation's tier
+ * (3): they render via `!= null`/`== null` (loose equality), which per the real
+ * ECMAScript spec sits at the SAME precedence as `===`/`!==` (both are "Equality
+ * operators", looser than relational `<`/`>` and tighter than logical `&&`/`||`).
+ * Without a real tier here they were treated as atomic (`default: return null`),
+ * which was wrong as a PARENT's child: `(currency exists) + 1` rendered
+ * unparenthesized as `currency != null + 1`, which real TS parses as
+ * `currency != (null + 1)` — wrong grouping, breaking round-trip.
  */
 function precedenceTier(kind: string, operator: unknown): number | null {
   switch (kind) {
     case 'LogicalOperation':
       return operator === 'or' ? 1 : 2; // 'and'
     case 'EqualityOperation':
+      return 3;
+    case 'RosettaExistsExpression':
+    case 'RosettaAbsentExpression':
       return 3;
     case 'ComparisonOperation':
       return 4;
@@ -105,13 +118,20 @@ function dispatch(node: AnyNode): string {
       const symbol = node['symbol'] as { $refText?: string } | undefined;
       if (node['explicitArguments']) throw new UnsupportedInChild(); // function calls (any arity) are out of S for Phase 1
       if (!symbol?.$refText) throw new UnsupportedInChild();
-      // A qualified (dotted) or ^-escaped $refText (Rune's QualifiedName cross-ref
-      // grammar and reserved-keyword escaping — see render-expression.ts's
-      // escapeId()) is not a single valid TS identifier: a dotted name would
-      // render as TS member access (which parse-ts.ts correctly refuses without
-      // ?.), and a ^-prefixed name isn't valid TS syntax at all. Refuse rather
-      // than guess at an encoding.
-      if (symbol.$refText.includes('.') || symbol.$refText.startsWith('^')) throw new UnsupportedInChild();
+      // A qualified (dotted) $refText (Rune's QualifiedName cross-ref grammar)
+      // is not a single valid TS identifier: it would render as TS member
+      // access, which parse-ts.ts correctly refuses without the `?.` idiom.
+      // The `^`-prefix check below is defensive (guards hand-constructed AST
+      // nodes) — Langium's convertID already strips a real `^`-escape before
+      // $refText is populated (see render-expression.ts's escapeId()), so
+      // $refText from real parsing never contains a literal `^`. That means a
+      // stripped $refText can silently collide with a *TS* reserved word even
+      // though it was never a *Rune* reserved word — refuse those too, since
+      // emitting them verbatim (e.g. `class`) is a TS SyntaxError, not a valid
+      // identifier. Refuse rather than guess at an encoding.
+      if (symbol.$refText.includes('.') || symbol.$refText.startsWith('^') || TS_RESERVED_WORDS.has(symbol.$refText)) {
+        throw new UnsupportedInChild();
+      }
       return symbol.$refText;
     }
     case 'RosettaFeatureCall': {
