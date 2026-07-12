@@ -57,6 +57,38 @@ describe('renderPy', () => {
     expect(render('(a < b) exists')).toBe('(a < b) is not None');
   });
 
+  it('parenthesizes a nested exists under an equality comparison', () => {
+    // Rune: (currency exists) = flag
+    expect(render('(currency exists) = flag')).toBe('(currency is not None) == flag');
+  });
+
+  it('parenthesizes a nested absent under exists', () => {
+    // Rune: (currency is absent) exists -- yes, this is a weird/unusual Rune
+    // tree, but the AST shape is what render-py.ts must handle correctly
+    // regardless.
+    expect(render('(currency is absent) exists')).toBe('(currency is None) is not None');
+  });
+
+  it('refuses a qualified (dotted) symbol reference', () => {
+    const node = {
+      $type: 'RosettaSymbolReference',
+      explicitArguments: false,
+      rawArgs: [],
+      symbol: { $refText: 'foo.bar' }
+    } as any;
+    expect(renderPy(node)).toBeNull();
+  });
+
+  it('refuses a ^-escaped (reserved-keyword) symbol reference', () => {
+    const node = {
+      $type: 'RosettaSymbolReference',
+      explicitArguments: false,
+      rawArgs: [],
+      symbol: { $refText: '^class' }
+    } as any;
+    expect(renderPy(node)).toBeNull();
+  });
+
   it('refuses a function-call symbol reference (explicitArguments)', () => {
     // parseExpression on a call form — construct the node directly since
     // Rune's own grammar for a bare call reference may not parse standalone;

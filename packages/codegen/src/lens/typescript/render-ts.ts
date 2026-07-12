@@ -105,6 +105,13 @@ function dispatch(node: AnyNode): string {
       const symbol = node['symbol'] as { $refText?: string } | undefined;
       if (node['explicitArguments']) throw new UnsupportedInChild(); // function calls (any arity) are out of S for Phase 1
       if (!symbol?.$refText) throw new UnsupportedInChild();
+      // A qualified (dotted) or ^-escaped $refText (Rune's QualifiedName cross-ref
+      // grammar and reserved-keyword escaping — see render-expression.ts's
+      // escapeId()) is not a single valid TS identifier: a dotted name would
+      // render as TS member access (which parse-ts.ts correctly refuses without
+      // ?.), and a ^-prefixed name isn't valid TS syntax at all. Refuse rather
+      // than guess at an encoding.
+      if (symbol.$refText.includes('.') || symbol.$refText.startsWith('^')) throw new UnsupportedInChild();
       return symbol.$refText;
     }
     case 'RosettaFeatureCall': {

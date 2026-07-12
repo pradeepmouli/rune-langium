@@ -60,6 +60,24 @@ describe('renderTs', () => {
     expect(renderTs(node)).toBe(null);
   });
 
+  it('refuses a qualified (dotted) symbol reference', () => {
+    const node = {
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: 'foo.bar' },
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses a ^-escaped (reserved-keyword) symbol reference', () => {
+    const node = {
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: '^class' },
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(renderTs(node)).toBeNull();
+  });
+
   it('returns null for a RosettaSymbolReference with no symbol at all', () => {
     const node = {
       $type: 'RosettaSymbolReference',

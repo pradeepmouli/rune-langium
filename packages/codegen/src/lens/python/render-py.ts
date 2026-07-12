@@ -74,14 +74,24 @@ function rTight(child: RosettaExpression): string {
  * are ALL the same `comparison_operator` grammar production and CHAIN when
  * unparenthesized (`a < b < c` means `(a<b) and (b<c)`, not `(a<b)<c` —
  * confirmed via a real tree-sitter-python parse during the PR #388 review
- * fix). So a nested ComparisonOperation/EqualityOperation child must ALWAYS
- * be parenthesized here, regardless of tier/side — unlike TS, where `<` and
- * `===` share no such chaining ambiguity. Every other child type (arithmetic,
- * logical, atomic) has no chaining hazard and uses the normal tier-based `r()`.
+ * fix). So a nested ComparisonOperation/EqualityOperation/
+ * RosettaExistsExpression/RosettaAbsentExpression child must ALWAYS be
+ * parenthesized here, regardless of tier/side — `exists`/`absent` render as
+ * `is not None`/`is None`, which use the same `is`/`is not` tokens that
+ * chain in that same grammar production, so they share the hazard even
+ * though `precedenceTier()` treats them as atomic (no binary tier of their
+ * own). This is unlike TS, where `<` and `===` share no such chaining
+ * ambiguity. Every other child type (arithmetic, logical, atomic) has no
+ * chaining hazard and uses the normal tier-based `r()`.
  */
 function rComparisonFamily(child: RosettaExpression, parentTier: number, side: 'left' | 'right'): string {
   const node = child as AnyNode;
-  if (node.$type === 'ComparisonOperation' || node.$type === 'EqualityOperation') {
+  if (
+    node.$type === 'ComparisonOperation' ||
+    node.$type === 'EqualityOperation' ||
+    node.$type === 'RosettaExistsExpression' ||
+    node.$type === 'RosettaAbsentExpression'
+  ) {
     const text = renderPy(child);
     if (text === null) throw new UnsupportedInChild();
     return `(${text})`;
@@ -115,6 +125,13 @@ function dispatch(node: AnyNode): string {
       const symbol = node['symbol'] as { $refText?: string } | undefined;
       if (node['explicitArguments']) throw new UnsupportedInChild();
       if (!symbol?.$refText) throw new UnsupportedInChild();
+      // A qualified (dotted) or ^-escaped $refText (Rune's QualifiedName cross-ref
+      // grammar and reserved-keyword escaping — see render-expression.ts's
+      // escapeId()) is not a single valid Python identifier: a dotted name would
+      // render as Python attribute access (which parse-py.ts correctly refuses
+      // without the getattr(...) idiom), and a ^-prefixed name isn't valid Python
+      // syntax at all. Refuse rather than guess at an encoding.
+      if (symbol.$refText.includes('.') || symbol.$refText.startsWith('^')) throw new UnsupportedInChild();
       return symbol.$refText;
     }
     case 'RosettaFeatureCall': {
