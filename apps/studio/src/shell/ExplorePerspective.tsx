@@ -896,18 +896,34 @@ export function ExplorePerspective() {
     };
   }, [selectedNodeData]);
 
-  // No settings UI toggles this yet (deliberately out of Phase 1 scope) —
-  // 'builder' stays the default; flipping to 'lens' unblocks manual QA and
-  // a future settings-surface task.
-  const [expressionEditorMode, _setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
+  // Lightweight per-session UI toggle (component state only — not a
+  // persisted user setting, and not wired into the shared AppHeader /
+  // perspective-chrome registry). 'builder' stays the default; the small
+  // toggle below flips a condition's expression editor to the TypeScript
+  // lens for manual QA and everyday use.
+  const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
 
   const renderExpressionEditor = useCallback(
-    (props: ExpressionEditorSlotProps) =>
-      expressionEditorMode === 'lens' ? (
-        <LanguageLensEditor {...props} />
-      ) : (
-        <ExpressionBuilder {...props} scope={functionScope} />
-      ),
+    (props: ExpressionEditorSlotProps) => (
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="link"
+            size="xs"
+            className="h-auto p-0 text-muted-foreground"
+            onClick={() => setExpressionEditorMode((m) => (m === 'lens' ? 'builder' : 'lens'))}
+          >
+            {expressionEditorMode === 'lens' ? 'Use builder' : 'Try TypeScript view'}
+          </Button>
+        </div>
+        {expressionEditorMode === 'lens' ? (
+          <LanguageLensEditor {...props} />
+        ) : (
+          <ExpressionBuilder {...props} scope={functionScope} />
+        )}
+      </div>
+    ),
     [functionScope, expressionEditorMode]
   );
 

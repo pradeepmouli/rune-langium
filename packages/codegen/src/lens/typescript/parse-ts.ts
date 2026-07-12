@@ -25,7 +25,9 @@ function refusal(kind: RefusalReason['kind'], message: string, offset: number, l
  * in Node/test contexts (resolves the package's own `.wasm` from disk);
  * pass fetched bytes explicitly in the browser (see Task 6's studio wiring,
  * which fetches the grammar once via a Vite `?url` asset import and caches
- * the resulting `Parser`).
+ * the resulting bytes — `ts-wasm-asset.ts` only caches the fetched WASM
+ * bytes; `createTsParser` still constructs a new `Parser` instance on
+ * every call).
  */
 export async function parseTs(text: string, wasmSource?: WasmSource): Promise<LensResult> {
   const parser = await createTsParser(wasmSource);
