@@ -1281,6 +1281,77 @@ describe('EditorStore — condition and expression operations', () => {
       expect(ops[0].expression.text).toBe('x * 2');
       expect((updated!.data as any).expressionText).toBe('x * 2');
     });
+
+    it('creates operations[0] targeting output when the function has no operations yet', async () => {
+      const funcStore = createEditorStore();
+      const funcResult = await parse(`
+        namespace test.func
+        version "test"
+
+        func MyFunc:
+          inputs:
+            x int (1..1)
+          output:
+            result int (1..1)
+      `);
+      funcStore.getState().loadModels(funcResult.value);
+
+      const funcNode = funcStore.getState().nodes.find((n) => n.data.name === 'MyFunc');
+      expect(funcNode).toBeDefined();
+      expect(((funcNode!.data as any).operations ?? []).length).toBe(0);
+
+      funcStore.getState().updateExpression(funcNode!.id, 'x + 1');
+
+      const updated = funcStore.getState().nodes.find((n) => n.id === funcNode!.id);
+      const ops = (updated!.data as any).operations ?? [];
+      expect(ops.length).toBe(1);
+      expect(ops[0].add).toBe(false);
+      expect(ops[0].assignRoot.$refText).toBe('result');
+      expect(ops[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(ops[0].expression.text).toBe('x + 1');
+    });
+
+    it('undo reverts a lens-driven commit and redo re-applies it', async () => {
+      const funcStore = createEditorStore();
+      const funcResult = await parse(`
+        namespace test.func
+        version "test"
+
+        func MyFunc:
+          inputs:
+            x int (1..1)
+          output:
+            result int (1..1)
+          set result:
+            x + 1
+      `);
+      funcStore.getState().loadModels(funcResult.value);
+      const funcNode = funcStore.getState().nodes.find((n) => n.data.name === 'MyFunc');
+      const nodeId = funcNode!.id;
+
+      // The freshly-parsed body is a structural `ArithmeticOperation` AST node
+      // (left/operator/right), not a RawDsl `{ $type, text }` leaf — that
+      // conversion only happens once a lens-driven `updateExpression` commit
+      // runs (see editor-store.ts's RosettaFunction branch). So the first
+      // commit here establishes a RawDsl baseline; undo below reverts to
+      // *this* commit, not to the pre-edit structural parse (which has no
+      // `.text` field to assert against).
+      funcStore.getState().updateExpression(nodeId, 'x + 1');
+      const afterFirstEdit = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterFirstEdit!.data as any).operations[0].expression.text).toBe('x + 1');
+
+      funcStore.getState().updateExpression(nodeId, 'x * 2');
+      const afterSecondEdit = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterSecondEdit!.data as any).operations[0].expression.text).toBe('x * 2');
+
+      funcStore.temporal.getState().undo();
+      const afterUndo = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterUndo!.data as any).operations[0].expression.text).toBe('x + 1');
+
+      funcStore.temporal.getState().redo();
+      const afterRedo = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterRedo!.data as any).operations[0].expression.text).toBe('x * 2');
+    });
   });
 });
 
