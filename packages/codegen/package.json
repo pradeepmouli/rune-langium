@@ -26,6 +26,10 @@
     "./rosetta": {
       "types": "./dist/src/rosetta.d.ts",
       "default": "./dist/src/rosetta.js"
+    },
+    "./lens": {
+      "types": "./dist/src/lens.d.ts",
+      "default": "./dist/src/lens.js"
     }
   },
   "bin": {
@@ -46,6 +50,7 @@
   "dependencies": {
     "@l1xnan/tree-sitter-sql": "0.4.7",
     "@rune-langium/core": "workspace:*",
+    "@vscode/tree-sitter-wasm": "0.3.1",
     "commander": "^15.0.0",
     "exceljs": "^4.4.0",
     "fast-xml-parser": "^5.9.3",

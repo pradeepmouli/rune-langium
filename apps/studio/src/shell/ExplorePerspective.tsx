@@ -70,6 +70,7 @@ import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
 import { ImportDialog } from '../components/ImportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
+import { LanguageLensEditor } from '../components/LanguageLensEditor.js';
 import { JsonSchemaImportOptionsFormAdapter } from '../codegen-forms/JsonSchemaImportOptionsFormAdapter.js';
 import { OpenApiImportOptionsFormAdapter } from '../codegen-forms/OpenApiImportOptionsFormAdapter.js';
 import { SqlImportOptionsFormAdapter } from '../codegen-forms/SqlImportOptionsFormAdapter.js';
@@ -895,9 +896,35 @@ export function ExplorePerspective() {
     };
   }, [selectedNodeData]);
 
+  // Lightweight per-session UI toggle (component state only — not a
+  // persisted user setting, and not wired into the shared AppHeader /
+  // perspective-chrome registry). 'builder' stays the default; the small
+  // toggle below flips a condition's expression editor to the TypeScript
+  // lens for manual QA and everyday use.
+  const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
+
   const renderExpressionEditor = useCallback(
-    (props: ExpressionEditorSlotProps) => <ExpressionBuilder {...props} scope={functionScope} />,
-    [functionScope]
+    (props: ExpressionEditorSlotProps) => (
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="link"
+            size="xs"
+            className="h-auto p-0 text-muted-foreground"
+            onClick={() => setExpressionEditorMode((m) => (m === 'lens' ? 'builder' : 'lens'))}
+          >
+            {expressionEditorMode === 'lens' ? 'Use builder' : 'Try TypeScript view'}
+          </Button>
+        </div>
+        {expressionEditorMode === 'lens' ? (
+          <LanguageLensEditor {...props} />
+        ) : (
+          <ExpressionBuilder {...props} scope={functionScope} />
+        )}
+      </div>
+    ),
+    [functionScope, expressionEditorMode]
   );
 
   const filesRef = useRef(files);
