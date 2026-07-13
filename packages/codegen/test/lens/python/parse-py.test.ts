@@ -249,4 +249,45 @@ describe('parsePy', () => {
       expect(right.value).toBe('0.5');
     }
   });
+
+  // Round 11 Finding 1 (P2): `stringNodeToRosetta` decoded a Python
+  // double-quoted string via `JSON.parse`, which recognizes `\/` as an
+  // escape sequence that decodes to a single `/`, DROPPING the backslash.
+  // Real Python has no `\/` escape — an unrecognized escape keeps BOTH the
+  // backslash and the following character literally (a 2-character
+  // result). Without this check, `parsePy` used to silently commit a
+  // `RosettaStringLiteral` with the WRONG value (JSON's decoding, not
+  // Python's) instead of refusing — this is a Python-only bug: real
+  // TypeScript/JavaScript's `\/` escape decodes to `/` just like JSON, so
+  // parse-ts.ts's identical-looking `stringNodeToRosetta` does not need
+  // (and must not get) a matching guard.
+  it('refuses a string containing the JSON-only `\\/` escape', async () => {
+    const r = await parsePy('value == "\\/"');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses the `\\/` escape embedded mid-string, not just at the start', async () => {
+    const r = await parsePy('value == "a\\/b"');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // False-positive guard: an ESCAPED backslash immediately followed by a
+  // literal slash (Python source `"\\/"`, i.e. `\\` then `/`) is NOT the
+  // JSON-only `\/` escape — both JSON and real Python decode `\\` to a
+  // single backslash, then take the `/` literally, agreeing on the
+  // 2-character result `\` + `/`. A naive substring search for `\/` would
+  // wrongly flag this; the scan must track escape state char-by-char so it
+  // only flags an UNESCAPED backslash directly before a slash.
+  it('does not flag an escaped backslash followed by a literal slash (no false positive)', async () => {
+    const r = await parsePy('value == "\\\\/"');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as any).right;
+      expect(right.$type).toBe('RosettaStringLiteral');
+      expect(right.value).toBe('\\/');
+      expect(right.value).toHaveLength(2);
+    }
+  });
 });

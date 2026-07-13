@@ -155,6 +155,27 @@ function stringNodeToRosetta(node: PyNode): RosettaExpression {
   if (!node.text.startsWith('"')) {
     throw new OutOfSubset('string literals must be double-quoted', node);
   }
+  // Python has no `\/` escape sequence — an unrecognized escape like `\/`
+  // keeps BOTH the backslash and the following character literally (a
+  // 2-character result), unlike JSON (where `\/` is a recognized escape
+  // that decodes to a single `/`, dropping the backslash). JSON.parse below
+  // would silently decode `\/` the JSON way, producing a string DIFFERENT
+  // from what the Python source actually means — refuse rather than
+  // silently change the user's string contents. Scanned char-by-char
+  // (tracking escape state), not via substring search, so an ESCAPED
+  // backslash followed by a literal slash (`\\/`, which both JSON and
+  // Python decode identically to `\` + `/`) is correctly NOT flagged.
+  for (let i = 1; i < node.text.length - 1; i++) {
+    if (node.text[i] === '\\') {
+      if (node.text[i + 1] === '/') {
+        throw new OutOfSubset(
+          `string literal '${node.text}' is not supported (the '\\/' escape means something different in Python than in JSON — Python keeps the backslash literally, JSON drops it)`,
+          node
+        );
+      }
+      i++; // skip the escaped character as one unit — do not re-examine it
+    }
+  }
   let value: string;
   try {
     value = JSON.parse(node.text) as string;
