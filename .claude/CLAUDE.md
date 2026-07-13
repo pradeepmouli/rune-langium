@@ -1,5 +1,6 @@
 
-<!-- BEGIN INFIGRAPH v1 -->
+
+<!-- BEGIN INFIGRAPH v2 -->
 ## Infigraph — Code Intelligence (auto-generated)
 
 This project is indexed by Infigraph. Use Infigraph MCP tools FIRST for all code tasks.
@@ -24,4 +25,12 @@ For tasks requiring a subagent, use **general-purpose** — it has full MCP/infi
 `get_architecture`, `transitive_impact`, `detect_dead_code`, `detect_clusters`,
 `detect_clones`, `export_graph`, `query_graph`, `trace_callers`/`trace_callees` (deep),
 `group_query`, `group_index`
+
+### Context Compression
+Tool outputs are automatically compressed to save context window budget.
+- Compression scales with session length (Off → Summary → Aggressive → Minimal)
+- `search` results are capped at Summary level to preserve result quality
+- Security tools (`detect_security_issues`, `detect_taint_flows`, etc.) are never compressed
+- `get_code_snippet` passes through uncompressed for edit accuracy
+- No action needed — compression is transparent and automatic
 <!-- END INFIGRAPH -->

@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LanguageLensEditor } from '../../src/components/LanguageLensEditor.js';
-import { parseTs } from '@rune-langium/codegen/lens';
+import { parseTs, parsePy } from '@rune-langium/codegen/lens';
 import { getPyWasmBytes } from '../../src/lens/py-wasm-asset.js';
 
 // Real WASM fetch is exercised by ts-wasm-asset.test.ts (Step 1 of this
@@ -33,14 +33,17 @@ vi.mock('../../src/lens/py-wasm-asset.js', () => ({
   })
 }));
 
-// `parseTs` is wrapped in a `vi.fn` that calls through to the real
-// implementation by default, so every other test still exercises the real
-// tree-sitter parse-back path. Only the "parseTs rejects" test below
-// overrides it with `mockRejectedValueOnce` to simulate an internal
-// web-tree-sitter/Parser.init() failure unrelated to the WASM fetch.
+// `parseTs`/`parsePy` are wrapped in a `vi.fn` that calls through to the
+// real implementation by default, so every other test still exercises the
+// real tree-sitter parse-back path. The "parseTs rejects" test below
+// overrides `parseTs` with `mockRejectedValueOnce` to simulate an internal
+// web-tree-sitter/Parser.init() failure unrelated to the WASM fetch; the
+// no-op-blur tests await `parseTs`/`parsePy`'s recorded return promise
+// directly to deterministically wait past the async blur handler's
+// no-op-detection check (there's no DOM change to assert on for a no-op).
 vi.mock('@rune-langium/codegen/lens', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@rune-langium/codegen/lens')>();
-  return { ...actual, parseTs: vi.fn(actual.parseTs) };
+  return { ...actual, parseTs: vi.fn(actual.parseTs), parsePy: vi.fn(actual.parsePy) };
 });
 
 describe('LanguageLensEditor', () => {
@@ -69,9 +72,10 @@ describe('LanguageLensEditor', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('value > 0'));
   });
 
-  it('blocks commit and shows an inline error for out-of-subset TS', async () => {
+  it('blocks commit and shows an inline error for out-of-subset TS, but still notifies onBlur', async () => {
     const onChange = vi.fn();
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    const onBlur = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -81,13 +85,17 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/not supported/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    // A refusal is still a real DOM blur — upstream form state (touched/
+    // validation) must see it even though nothing was committed.
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an inline error and does not commit when parseTs rejects (thrown, not a refusal)', async () => {
+  it('shows an inline error, notifies onBlur, and does not commit when parseTs rejects (thrown, not a refusal)', async () => {
     const onChange = vi.fn();
+    const onBlur = vi.fn();
     vi.mocked(parseTs).mockRejectedValueOnce(new Error('boom — Parser.init() failure'));
 
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -97,6 +105,7 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/something went wrong/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
   it('shows read-only Rune with a notice for expressions outside S, never a TS toggle result', () => {
@@ -105,6 +114,34 @@ describe('LanguageLensEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
     expect(screen.getByText(/can.t be shown in typescript/i)).toBeInTheDocument();
     expect(screen.getByText('items count')).toBeInTheDocument();
+  });
+
+  it('skips onChange but still calls onBlur when blurring the TS lens without any edit', async () => {
+    const onChange = vi.fn();
+    const onBlur = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
+    fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
+    await waitFor(() => screen.getByText('value >= 0'));
+
+    const resultsBefore = vi.mocked(parseTs).mock.results.length;
+    const editor = screen.getByRole('textbox', { name: /typescript expression/i });
+    fireEvent.blur(editor);
+
+    // The blur handler still parses (it needs the resulting tree to compare
+    // against the original) before deciding it's a no-op. Await the same
+    // promise the handler itself awaits — the handler registered its
+    // continuation on it first, so this deterministically waits past the
+    // no-op check without relying on a DOM change (onChange not firing isn't
+    // observable in the DOM; onBlur firing is asserted directly below).
+    await waitFor(() => expect(vi.mocked(parseTs).mock.results.length).toBeGreaterThan(resultsBefore));
+    await vi.mocked(parseTs).mock.results.at(-1)!.value;
+
+    // onBlur is the slot's blur notification (marks the field touched /
+    // triggers validation upstream, e.g. FunctionForm's `field.onBlur()`
+    // composed into this same callback) — it must still fire even though
+    // nothing changed, or upstream touched/validation state goes stale.
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   // Python-specific mirror of the TypeScript tests above — exercises the
@@ -133,9 +170,10 @@ describe('LanguageLensEditor', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('value > 0'));
   });
 
-  it('blocks commit and shows an inline error for out-of-subset Python', async () => {
+  it('blocks commit and shows an inline error for out-of-subset Python, but still notifies onBlur', async () => {
     const onChange = vi.fn();
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    const onBlur = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /python/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -147,13 +185,15 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/not supported/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an error message when the Python WASM grammar fails to load', async () => {
+  it('shows an error message and still notifies onBlur when the Python WASM grammar fails to load', async () => {
     const onChange = vi.fn();
+    const onBlur = vi.fn();
     vi.mocked(getPyWasmBytes).mockRejectedValueOnce(new Error('network error'));
 
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /python/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -163,6 +203,10 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/could not load the python parser/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    // A WASM-load failure is still a real DOM blur — the user tabbed away
+    // from the field, so upstream form state must be notified even though
+    // the lens itself couldn't parse anything.
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
   it('shows read-only Rune with a notice for expressions outside S, never a Python toggle result', () => {
@@ -172,5 +216,23 @@ describe('LanguageLensEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /python/i }));
     expect(screen.getByText(/can.t be shown in python/i)).toBeInTheDocument();
     expect(screen.getByText('items count')).toBeInTheDocument();
+  });
+
+  it('skips onChange but still calls onBlur when blurring the Python lens without any edit', async () => {
+    const onChange = vi.fn();
+    const onBlur = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
+    fireEvent.click(screen.getByRole('button', { name: /python/i }));
+    await waitFor(() => screen.getByText('value >= 0'));
+
+    const resultsBefore = vi.mocked(parsePy).mock.results.length;
+    const editor = screen.getByRole('textbox', { name: /python expression/i });
+    fireEvent.blur(editor);
+
+    await waitFor(() => expect(vi.mocked(parsePy).mock.results.length).toBeGreaterThan(resultsBefore));
+    await vi.mocked(parsePy).mock.results.at(-1)!.value;
+
+    expect(onBlur).toHaveBeenCalledTimes(1);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

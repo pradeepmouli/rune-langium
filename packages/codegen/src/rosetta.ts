@@ -17,3 +17,4 @@ export {
   renderClassSynonymValue,
   UnsupportedSynonymBodyError
 } from './emit/rosetta/render-synonym-body.js';
+export { treesEquivalent } from './emit/rosetta/expression-tree-equivalence.js';
