@@ -262,4 +262,128 @@ describe('parseTs', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
   });
+
+  // Fix 2 (P2) sibling case: `$` is a legal TS identifier character but not
+  // a legal Rune ID character (Rune's ID terminal is ASCII
+  // `[a-zA-Z_][a-zA-Z_0-9]*` only).
+  it('refuses a feature name containing $ (legal TS identifier char, not a legal Rune ID char)', async () => {
+    const r = await parseTs('receiver?.$foo');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a normal optional-chained feature path (no regression from the identifier-validation fix)', async () => {
+    const r = await parseTs('receiver?.field');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.node.$type).toBe('RosettaFeatureCall');
+  });
+
+  // Fix 3 (P2 sibling case): the plainer, more fundamental `identifier`
+  // case (producing a bare RosettaSymbolReference, not a RosettaFeatureCall)
+  // had the same gap as Fix 2's `?.` feature-name check. TS identifiers
+  // allow Unicode, but Rune's ID terminal is ASCII-only
+  // (`/\^?[a-zA-Z_][a-zA-Z_0-9]*/`, packages/core/src/grammar/rune-dsl.langium:7).
+  it('refuses a bare identifier containing a non-ASCII character', async () => {
+    const r = await parseTs('π > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // `$` is legal in TS identifiers but not in Rune's ID terminal — same
+  // class of gap already fixed for the `?.` feature-name case (Fix 2),
+  // now closed for the plain identifier case too.
+  it('refuses a bare identifier containing $ (legal TS identifier char, not a legal Rune ID char)', async () => {
+    const r = await parseTs('$foo > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a plain ASCII bare identifier (no regression from the identifier-validation fix)', async () => {
+    const r = await parseTs('value >= 0');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.node.$type).toBe('ComparisonOperation');
+  });
+
+  // Round 7 Finding 1 (P2) sibling case: `let` is a real TS reserved word
+  // (already in TS_RESERVED_WORDS) but tree-sitter-typescript lexes it as a
+  // plain `identifier` token outside declaration position (e.g. a
+  // comparison operand). The old code only checked character-shape
+  // validity (isRuneValidId), not reserved-word membership, so this used to
+  // return `ok: true` with a RosettaSymbolReference — but renderTs already
+  // refuses to render a RosettaSymbolReference whose $refText is in
+  // TS_RESERVED_WORDS, breaking the TypeScript→Rune→TypeScript round-trip
+  // fixed point. (Note: `async` is NOT a TS reserved word — it's a
+  // contextual keyword — so it is not a reproducer here.)
+  it('refuses a bare identifier that is the TypeScript reserved word `let`', async () => {
+    const r = await parseTs('let > 0');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // Round 7 Finding 2 (P2) sibling case: tree-sitter-typescript's `number`
+  // token includes JS/TS's own BigInt-literal suffix (`n`) in the token
+  // text (`"5n"`), and the old refused-character regex didn't include `n`,
+  // so execution fell through to `BigInt(text)`, which threw a raw,
+  // uncaught SyntaxError instead of resolving with the normal `LensResult`
+  // refusal contract. Assert the promise resolves normally with
+  // `ok: false`, not that it throws/rejects.
+  it('refuses a BigInt literal with the `n` suffix (no throw)', async () => {
+    const r = await parseTs('value > 5n');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a negative BigInt literal with the `n` suffix (unary_expression path, no throw)', async () => {
+    const r = await parseTs('value > -5n');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  // Round 8 Finding 1 sibling case: tree-sitter-typescript's `number` token
+  // still lexes a leading-zero decimal form like `"01"` as a valid `number`
+  // node, even though strict-mode ES modules (which TS/JS always compile
+  // to) forbid a leading zero on a decimal integer literal with more than
+  // one digit (SyntaxError: "Octal literals are not allowed in strict
+  // mode."). The old refused-character regex had no forbidden CHARACTER to
+  // catch here — `"01"` is an invalid decimal SHAPE, not an invalid
+  // character — so execution fell through to `BigInt("01")`, which happily
+  // returns `1n`, silently normalizing invalid TS/JS input into valid Rune
+  // instead of refusing it.
+  it('refuses a decimal integer literal with a leading zero', async () => {
+    const r = await parseTs('value > 01');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a negative decimal integer literal with a leading zero (unary_expression path)', async () => {
+    const r = await parseTs('value > -01');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('refuses a run of leading zeros, not just a single one', async () => {
+    const r = await parseTs('value > 00');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason.kind).toBe('out-of-subset');
+  });
+
+  it('still parses a bare single zero (no regression from the leading-zero fix)', async () => {
+    const r = await parseTs('value > 0');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: bigint } }).right;
+      expect(right.$type).toBe('RosettaIntLiteral');
+      expect(right.value).toBe(0n);
+    }
+  });
+
+  it('still parses a leading zero before a decimal point (no regression from the leading-zero fix)', async () => {
+    const r = await parseTs('value > 0.5');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const right = (r.node as unknown as { right: { $type: string; value: string } }).right;
+      expect(right.$type).toBe('RosettaNumberLiteral');
+      expect(right.value).toBe('0.5');
+    }
+  });
 });

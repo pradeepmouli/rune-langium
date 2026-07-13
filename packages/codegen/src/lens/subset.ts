@@ -24,6 +24,17 @@
  * `Condition` or a `RosettaFunction`'s operation/alias. See
  * docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md for
  * the audit that confirmed this (function-body-corpus-sweep.test.ts).
+ *
+ * Phase 3 note: subset `S` now also has a confirmed Python projection via
+ * `lens/python/`. Every one of the 12 types is representable in Python with
+ * no `$type`-level changes — each type's Python idiom is documented directly
+ * in `render-py.ts`'s own per-case comments. A real-corpus sweep confirmed
+ * Python coverage matches TypeScript's closely across `Condition`,
+ * `Operation`, and `ShortcutDeclaration` bodies; see
+ * docs/superpowers/plans/2026-07-12-expression-language-lens-phase3.md for
+ * the exact measured counts — those are a point-in-time snapshot of the
+ * `.resources/` corpus, not a live-updated figure, so they are recorded
+ * there rather than here.
  */
 export const SUBSET_S_TYPES = [
   'ComparisonOperation',

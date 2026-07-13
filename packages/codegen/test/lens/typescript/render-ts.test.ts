@@ -60,6 +60,104 @@ describe('renderTs', () => {
     expect(renderTs(node)).toBe(null);
   });
 
+  it('parenthesizes exists/absent when nested under an ArithmeticOperation parent', () => {
+    // exists/absent used to be treated as atomic (default: return null in
+    // precedenceTier), so this rendered unparenthesized as
+    // "currency != null + 1" -- which real TS parses as
+    // "currency != (null + 1)", changing the grouping.
+    expect(render('(currency exists) + 1')).toBe('(currency != null) + 1');
+    expect(render('(currency is absent) + 1')).toBe('(currency == null) + 1');
+  });
+
+  it('does not add spurious parens for exists nested under a LogicalOperation', () => {
+    // Equality (exists/absent's tier) already binds tighter than
+    // logical &&/||, so no parens are needed here -- confirms the
+    // ArithmeticOperation fix above didn't regress this case.
+    expect(render('(currency exists) and flag')).toBe('currency != null && flag');
+  });
+
+  it('refuses a `single`-modified exists rather than dropping the modifier', () => {
+    // Pre-fix: rendered 'items != null', silently dropping 'single' (which
+    // checks cardinality-exactly-one, not just presence) -- real semantic
+    // data loss on round-trip. Must refuse instead.
+    expect(render('items single exists')).toBeNull();
+  });
+
+  it('refuses a `multiple`-modified exists rather than dropping the modifier', () => {
+    expect(render('items multiple exists')).toBeNull();
+  });
+
+  it('refuses an argument-less RosettaExistsExpression rather than throwing', () => {
+    // The grammar's "without left" form (RHS of a then-chain) has no
+    // `argument`. Pre-fix: `node['argument']` was undefined and `r(...)`
+    // crashed with a raw, uncaught TypeError -- not caught by renderTs's
+    // try/catch (which only catches UnsupportedInChild). Must refuse
+    // gracefully instead.
+    const node = {
+      $type: 'RosettaExistsExpression',
+      operator: 'exists',
+      explicitArguments: false,
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(() => renderTs(node)).not.toThrow();
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses an argument-less RosettaAbsentExpression rather than throwing', () => {
+    const node = {
+      $type: 'RosettaAbsentExpression',
+      operator: 'absent',
+      explicitArguments: false,
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(() => renderTs(node)).not.toThrow();
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses a leading-+ decimal literal rather than silently dropping the sign', () => {
+    // Round 6 stripped the '+' here, which fixed render-succeeds-but-
+    // doesn't-round-trip but introduced a WORSE bug: opening the lens on
+    // 'value > +1.5' and blurring WITHOUT editing anything silently
+    // mutated the underlying Rune AST from '+1.5' to '1.5' -- a real
+    // TypeScript->Rune->TypeScript tree-equivalence loss on a no-op. TS
+    // has no syntax that round-trips a '+'-prefixed literal (a bare unary
+    // '+' parses to a different, already-refused AST shape), so refuse
+    // outright instead.
+    expect(render('value > +1.5')).toBeNull();
+  });
+
+  it('refuses a qualified (dotted) symbol reference', () => {
+    const node = {
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: 'foo.bar' },
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses a ^-escaped (reserved-keyword) symbol reference', () => {
+    const node = {
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: '^class' },
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(renderTs(node)).toBeNull();
+  });
+
+  it('refuses a bare $refText that collides with a TS reserved keyword', () => {
+    // $refText === 'class' with no dot and no caret -- this is what a Rune
+    // field named `^class` in source looks like AFTER Langium's convertID
+    // strips the `^`-escape, per escapeId()'s doc comment. It was never a
+    // Rune reserved word, but 'class' is a TS reserved word and would be a
+    // SyntaxError if emitted verbatim as an identifier.
+    const node = {
+      $type: 'RosettaSymbolReference',
+      symbol: { $refText: 'class' },
+      rawArgs: []
+    } as unknown as RosettaExpression;
+    expect(renderTs(node)).toBeNull();
+  });
+
   it('returns null for a RosettaSymbolReference with no symbol at all', () => {
     const node = {
       $type: 'RosettaSymbolReference',

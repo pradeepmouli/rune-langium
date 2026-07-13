@@ -15,6 +15,8 @@ import type { Node as TsNode } from 'web-tree-sitter';
 import type { RosettaExpression } from '@rune-langium/core';
 import type { LensResult, RefusalReason } from '../language-lens.js';
 import { createTsParser, type WasmSource } from './ts-grammar-loader.js';
+import { isRuneValidId } from '../valid-id.js';
+import { TS_RESERVED_WORDS } from '../reserved-words.js';
 
 function refusal(kind: RefusalReason['kind'], message: string, offset: number, length: number): LensResult {
   return { ok: false, reason: { kind, message, offset, length } };
@@ -98,13 +100,15 @@ function field(node: TsNode, name: string): TsNode {
  * in any refusal.
  */
 function numberNodeToRosetta(text: string, node: TsNode): RosettaExpression {
-  // Hex/binary/octal prefixes and numeric separators have no faithful
-  // Rune representation and are refused outright. Note: a decimal
-  // exponent uses `e`/`E`, not `b`/`B` — the `b`/`B` check here is only
-  // about `0b`-style binary prefixes, not exponent forms.
-  if (/[xXbBoO_]/.test(text)) {
+  // Hex/binary/octal prefixes, numeric separators, and the BigInt-literal
+  // `n` suffix (e.g. `5n`) have no faithful Rune representation and are
+  // refused outright — a bare `BigInt(text)` call on `n`-suffixed text
+  // throws a raw, uncaught SyntaxError instead of refusing gracefully.
+  // Note: a decimal exponent uses `e`/`E`, not `b`/`B` — the `b`/`B` check
+  // here is only about `0b`-style binary prefixes, not exponent forms.
+  if (/[xXbBoOn_]/.test(text)) {
     throw new OutOfSubset(
-      `number literal '${text}' is not supported (hex/binary/octal/separator forms have no Rune equivalent)`,
+      `number literal '${text}' is not supported (hex/binary/octal/separator/BigInt-literal forms have no Rune equivalent)`,
       node
     );
   }
@@ -135,6 +139,21 @@ function numberNodeToRosetta(text: string, node: TsNode): RosettaExpression {
   // `BigInt(text)` (not `parseInt`) correctly handles arbitrary
   // precision (e.g. `9007199254740993`, which `parseInt`/`Number`
   // would silently round).
+  // Strict-mode ES modules (which TS/JS always compile to) forbid a
+  // leading zero on a decimal integer literal with more than one digit
+  // (SyntaxError: "Octal literals are not allowed in strict mode.") —
+  // tree-sitter's `number` token still lexes forms like "01"/"-01" as
+  // valid `number` nodes, and BigInt("01") happily returns 1n, so without
+  // this check invalid TS/JS input would be silently normalized into
+  // valid Rune instead of refused. A bare "0" (no second digit) and a
+  // leading zero before a decimal point (e.g. "0.5", which returns
+  // earlier via the RosettaNumberLiteral branch above) are unaffected.
+  if (/^-?0\d/.test(text)) {
+    throw new OutOfSubset(
+      `number literal '${text}' is not supported (a leading zero is not valid strict-mode JS/TS syntax — use an explicit 0o prefix for octal, or drop the leading zero)`,
+      node
+    );
+  }
   return { $type: 'RosettaIntLiteral', value: BigInt(text) } as unknown as RosettaExpression;
 }
 
@@ -217,6 +236,9 @@ function toRosetta(node: TsNode): RosettaExpression {
       }
       const object = field(node, 'object');
       const property = field(node, 'property');
+      if (!isRuneValidId(property.text)) {
+        throw new OutOfSubset(`"${property.text}" is not a valid Rune identifier for a feature reference`, property);
+      }
       return {
         $type: 'RosettaFeatureCall',
         receiver: toRosetta(object),
@@ -224,13 +246,25 @@ function toRosetta(node: TsNode): RosettaExpression {
       } as unknown as RosettaExpression;
     }
 
-    case 'identifier':
+    case 'identifier': {
+      // A TypeScript reserved word can still be lexed by tree-sitter as a
+      // plain `identifier` token outside declaration position (e.g. `let`
+      // as a comparison operand) even though it's not a valid TypeScript
+      // identifier at the language level. renderTs already refuses to emit
+      // a RosettaSymbolReference whose $refText collides with
+      // TS_RESERVED_WORDS (see render-ts.ts) — refuse it here too, or the
+      // TypeScript→Rune→TypeScript fixed point breaks: this text would
+      // parse successfully but the resulting AST could never render back.
+      if (!isRuneValidId(node.text) || TS_RESERVED_WORDS.has(node.text)) {
+        throw new OutOfSubset(`"${node.text}" is not a valid Rune identifier`, node);
+      }
       return {
         $type: 'RosettaSymbolReference',
         explicitArguments: false,
         rawArgs: [],
         symbol: { $refText: node.text }
       } as unknown as RosettaExpression;
+    }
 
     case 'true':
     case 'false':

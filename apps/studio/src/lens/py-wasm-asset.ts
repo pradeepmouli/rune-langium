@@ -2,19 +2,19 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Fetches the tree-sitter TypeScript grammar's WASM bytes for the browser
- * path of `@rune-langium/codegen/lens`'s `parseTs` (its default path uses
- * `node:fs/promises`, which does not exist in the browser). The `?url`
- * suffix is Vite's asset-import convention — it resolves the imported
- * file to a hashed, servable URL and copies it into the build output,
- * without a manual public-asset copy step.
+ * Fetches the tree-sitter Python grammar's WASM bytes for the browser
+ * path of `@rune-langium/codegen/lens`'s `parsePy` (its default path uses
+ * `node:fs/promises`, which does not exist in the browser). Mirrors
+ * `ts-wasm-asset.ts` exactly, including the clear-cache-on-rejection fix
+ * from the Phase 2 PR review (a failed first fetch must not permanently
+ * block retry) — see that file's header comment for the full rationale.
  */
-import tsWasmUrl from '@vscode/tree-sitter-wasm/wasm/tree-sitter-typescript.wasm?url';
+import pyWasmUrl from '@vscode/tree-sitter-wasm/wasm/tree-sitter-python.wasm?url';
 
 let cached: Promise<Uint8Array> | undefined;
 
-export function getTsWasmBytes(): Promise<Uint8Array> {
-  cached ??= fetch(tsWasmUrl)
+export function getPyWasmBytes(): Promise<Uint8Array> {
+  cached ??= fetch(pyWasmUrl)
     .then((r) => {
       // fetch() only rejects on network-level failures — it resolves
       // normally for HTTP error statuses (404, a transient 503, etc.).
@@ -23,7 +23,7 @@ export function getTsWasmBytes(): Promise<Uint8Array> {
       // so the .catch() below (which only fires on rejection) would never
       // clear the bad cache — Language.load() would then fail much later
       // on every retry until a full page reload.
-      if (!r.ok) throw new Error(`failed to fetch TypeScript WASM grammar: ${r.status} ${r.statusText}`);
+      if (!r.ok) throw new Error(`failed to fetch Python WASM grammar: ${r.status} ${r.statusText}`);
       return r.arrayBuffer();
     })
     .then((buf) => new Uint8Array(buf))
