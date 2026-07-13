@@ -72,9 +72,10 @@ describe('LanguageLensEditor', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('value > 0'));
   });
 
-  it('blocks commit and shows an inline error for out-of-subset TS', async () => {
+  it('blocks commit and shows an inline error for out-of-subset TS, but still notifies onBlur', async () => {
     const onChange = vi.fn();
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    const onBlur = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -84,13 +85,17 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/not supported/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    // A refusal is still a real DOM blur — upstream form state (touched/
+    // validation) must see it even though nothing was committed.
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an inline error and does not commit when parseTs rejects (thrown, not a refusal)', async () => {
+  it('shows an inline error, notifies onBlur, and does not commit when parseTs rejects (thrown, not a refusal)', async () => {
     const onChange = vi.fn();
+    const onBlur = vi.fn();
     vi.mocked(parseTs).mockRejectedValueOnce(new Error('boom — Parser.init() failure'));
 
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /typescript/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -100,6 +105,7 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/something went wrong/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
   it('shows read-only Rune with a notice for expressions outside S, never a TS toggle result', () => {
@@ -164,9 +170,10 @@ describe('LanguageLensEditor', () => {
     await waitFor(() => expect(onChange).toHaveBeenCalledWith('value > 0'));
   });
 
-  it('blocks commit and shows an inline error for out-of-subset Python', async () => {
+  it('blocks commit and shows an inline error for out-of-subset Python, but still notifies onBlur', async () => {
     const onChange = vi.fn();
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    const onBlur = vi.fn();
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /python/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -178,13 +185,15 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/not supported/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an error message when the Python WASM grammar fails to load', async () => {
+  it('shows an error message and still notifies onBlur when the Python WASM grammar fails to load', async () => {
     const onChange = vi.fn();
+    const onBlur = vi.fn();
     vi.mocked(getPyWasmBytes).mockRejectedValueOnce(new Error('network error'));
 
-    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={vi.fn()} />);
+    render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
     fireEvent.click(screen.getByRole('button', { name: /python/i }));
     await waitFor(() => screen.getByText('value >= 0'));
 
@@ -194,6 +203,10 @@ describe('LanguageLensEditor', () => {
 
     await waitFor(() => expect(screen.getByText(/could not load the python parser/i)).toBeInTheDocument());
     expect(onChange).not.toHaveBeenCalled();
+    // A WASM-load failure is still a real DOM blur — the user tabbed away
+    // from the field, so upstream form state must be notified even though
+    // the lens itself couldn't parse anything.
+    expect(onBlur).toHaveBeenCalledTimes(1);
   });
 
   it('shows read-only Rune with a notice for expressions outside S, never a Python toggle result', () => {
