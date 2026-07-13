@@ -134,16 +134,19 @@ function dispatch(node: AnyNode): string {
       return node['value'] ? 'True' : 'False';
     case 'RosettaIntLiteral':
     case 'RosettaNumberLiteral': {
-      // A leading '+' is a redundant sign (mathematically identical to its
-      // absence) but Python parses "+1.5" as a unary '+' expression, which
-      // parsePy refuses (only unary '-' has a Rune equivalent) — strip it
-      // rather than emit an unround-trippable projection. Only reachable
-      // for RosettaNumberLiteral's string-typed value (Rune's BigDecimal
-      // grammar preserves a leading '+' verbatim); RosettaIntLiteral's
-      // bigint value never stringifies with a leading '+', so this is a
-      // no-op for that case.
       const text = String(node['value']);
-      return text.startsWith('+') ? text.slice(1) : text;
+      // A leading '+' is real, meaningful Rune AST data (Rune's BigDecimal
+      // grammar preserves it verbatim in RosettaNumberLiteral.value; only
+      // reachable there — RosettaIntLiteral's bigint value never
+      // stringifies with a leading '+'). Python has no syntax that
+      // round-trips it: "+1.5" parses as a unary '+' expression, which
+      // parsePy refuses (only unary '-' has a Rune equivalent). Stripping
+      // it (the prior approach) silently mutated the underlying Rune AST
+      // on a no-op lens open+close (no edit) — a real Rune→Python→Rune
+      // tree-equivalence loss, not just cosmetic. Refuse rather than
+      // silently drop real AST data with no honest encoding available.
+      if (text.startsWith('+')) throw new UnsupportedInChild();
+      return text;
     }
     case 'RosettaStringLiteral':
       return JSON.stringify(String(node['value']));

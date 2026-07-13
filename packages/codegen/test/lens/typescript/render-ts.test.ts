@@ -3,7 +3,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseExpression, type RosettaExpression } from '@rune-langium/core';
 import { renderTs } from '../../../src/lens/typescript/render-ts.js';
-import { parseTs } from '../../../src/lens/typescript/parse-ts.js';
 
 /** A well-formed `RosettaSymbolReference`-shaped leaf, for use as a valid child operand. */
 function symbolRef(name: string): RosettaExpression {
@@ -115,16 +114,16 @@ describe('renderTs', () => {
     expect(renderTs(node)).toBeNull();
   });
 
-  it('strips a redundant leading + from a decimal literal and round-trips', async () => {
-    // Pre-fix: rendered 'value > +1.5' verbatim; TS parses '+1.5' as a
-    // unary '+' expression, which parseTs refuses (only unary '-' has a
-    // Rune equivalent) -- renderTs returning non-null implied a round-trip
-    // that parseTs then broke. Stripping the redundant sign fixes both.
-    const ts = render('value > +1.5');
-    expect(ts).toBe('value > 1.5');
-
-    const back = await parseTs(ts!);
-    expect(back.ok, `TS must parse back: ${ts}`).toBe(true);
+  it('refuses a leading-+ decimal literal rather than silently dropping the sign', () => {
+    // Round 6 stripped the '+' here, which fixed render-succeeds-but-
+    // doesn't-round-trip but introduced a WORSE bug: opening the lens on
+    // 'value > +1.5' and blurring WITHOUT editing anything silently
+    // mutated the underlying Rune AST from '+1.5' to '1.5' -- a real
+    // TypeScript->Rune->TypeScript tree-equivalence loss on a no-op. TS
+    // has no syntax that round-trips a '+'-prefixed literal (a bare unary
+    // '+' parses to a different, already-refused AST shape), so refuse
+    // outright instead.
+    expect(render('value > +1.5')).toBeNull();
   });
 
   it('refuses a qualified (dotted) symbol reference', () => {

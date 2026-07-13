@@ -3,7 +3,6 @@
 import { describe, it, expect } from 'vitest';
 import { parseExpression } from '@rune-langium/core';
 import { renderPy } from '../../../src/lens/python/render-py.js';
-import { parsePy } from '../../../src/lens/python/parse-py.js';
 
 function render(rune: string): string | null {
   const p = parseExpression(rune);
@@ -159,16 +158,16 @@ describe('renderPy', () => {
     expect(renderPy(node)).toBeNull();
   });
 
-  it('strips a redundant leading + from a decimal literal and round-trips', async () => {
-    // Pre-fix: rendered 'value > +1.5' verbatim; Python parses '+1.5' as a
-    // unary '+' expression, which parsePy refuses (only unary '-' has a
-    // Rune equivalent) -- renderPy returning non-null implied a round-trip
-    // that parsePy then broke. Stripping the redundant sign fixes both.
-    const py = render('value > +1.5');
-    expect(py).toBe('value > 1.5');
-
-    const back = await parsePy(py!);
-    expect(back.ok, `Python must parse back: ${py}`).toBe(true);
+  it('refuses a leading-+ decimal literal rather than silently dropping the sign', () => {
+    // Round 6 stripped the '+' here, which fixed render-succeeds-but-
+    // doesn't-round-trip but introduced a WORSE bug: opening the lens on
+    // 'value > +1.5' and blurring WITHOUT editing anything silently
+    // mutated the underlying Rune AST from '+1.5' to '1.5' -- a real
+    // Rune->Python->Rune tree-equivalence loss on a no-op. Python has no
+    // syntax that round-trips a '+'-prefixed literal (a bare unary '+'
+    // parses to a different, already-refused AST shape), so refuse
+    // outright instead.
+    expect(render('value > +1.5')).toBeNull();
   });
 
   it('refuses a function-call symbol reference (explicitArguments)', () => {
