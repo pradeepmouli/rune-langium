@@ -263,6 +263,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.4.0
         version: 5.4.0(react-hook-form@7.80.0(react@19.2.7))
+      '@l1xnan/tree-sitter-sql':
+        specifier: 0.4.7
+        version: 0.4.7(tree-sitter@0.25.0)
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3

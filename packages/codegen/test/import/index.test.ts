@@ -70,6 +70,24 @@ describe('importModel — public API', () => {
     ).rejects.toThrow(/--sql-dialect 'mysql' is not supported/);
   });
 
+  it("honors an explicit wasmSource for --from 'sql' (the browser-loading override — issue #385; the default path resolves the grammar via node:fs, this proves the alternate bytes-supplied path also works end to end through importModel, not just readSql directly)", async () => {
+    const { readFileSync } = await import('node:fs');
+    const { createRequire } = await import('node:module');
+    const require = createRequire(import.meta.url);
+    const pkgJsonPath = require.resolve('@l1xnan/tree-sitter-sql/package.json');
+    const wasmSource = new Uint8Array(readFileSync(pkgJsonPath.replace(/package\.json$/, 'tree-sitter-sql.wasm')));
+
+    const sql = `CREATE TABLE trade_event (
+      id INT PRIMARY KEY,
+      party_id INT NOT NULL
+    )`;
+    const result = await importModel(sql, { from: 'sql', namespace: 'test.sql', wasmSource });
+    expect(result.text).toContain('type TradeEvent:');
+    expect(result.text).toContain('partyId int (1..1)');
+    const parseResult = await parse(result.text);
+    expect(parseResult.hasErrors).toBe(false);
+  });
+
   it('rejects an unimplemented --on-untranslatable value', async () => {
     await expect(importModel(PARTY_SCHEMA, { from: 'json-schema', onUntranslatable: 'skip' })).rejects.toThrow(
       /not yet supported/
