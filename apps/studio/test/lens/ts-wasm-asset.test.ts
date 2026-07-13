@@ -13,7 +13,7 @@ describe('getTsWasmBytes', () => {
     vi.resetModules();
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }))
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }))
     );
   });
 
@@ -44,10 +44,36 @@ describe('getTsWasmBytes', () => {
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => ({ arrayBuffer: async () => new Uint8Array([4, 5, 6]).buffer }))
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([4, 5, 6]).buffer }))
     );
 
     const bytes = await getTsWasmBytes();
     expect(Array.from(bytes)).toEqual([4, 5, 6]);
+  });
+
+  it('rejects and clears the cache on a non-2xx fetch response so a later call can retry', async () => {
+    const badArrayBuffer = vi.fn(async () => new TextEncoder().encode('<html>error page</html>').buffer);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 503,
+        statusText: 'Service Unavailable',
+        arrayBuffer: badArrayBuffer
+      }))
+    );
+    const { getTsWasmBytes } = await import('../../src/lens/ts-wasm-asset.js');
+
+    await expect(getTsWasmBytes()).rejects.toThrow(/503/);
+    // The error-page body must never be read as if it were valid WASM bytes.
+    expect(badArrayBuffer).not.toHaveBeenCalled();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([7, 8, 9]).buffer }))
+    );
+
+    const bytes = await getTsWasmBytes();
+    expect(Array.from(bytes)).toEqual([7, 8, 9]);
   });
 });
