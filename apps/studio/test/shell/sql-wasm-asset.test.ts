@@ -2,13 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// `getPyWasmBytes` caches its result in module-level state (by design — see
-// py-wasm-asset.ts). Vitest only resets the module registry per test FILE,
+// `getSqlWasmBytes` caches its result in module-level state (by design — see
+// sql-wasm-asset.ts). Vitest only resets the module registry per test FILE,
 // not per `it()` block, so a static top-level import would let one test's
 // cache warm-up silently defeat another test's fresh `fetch` mock. Each test
 // resets modules and re-imports dynamically so the cache starts empty and
 // only observes its own `fetch` stub.
-describe('getPyWasmBytes', () => {
+describe('getSqlWasmBytes', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.stubGlobal(
@@ -25,16 +25,16 @@ describe('getPyWasmBytes', () => {
   });
 
   it('fetches the grammar bytes', async () => {
-    const { getPyWasmBytes } = await import('../../src/lens/py-wasm-asset.js');
-    const bytes = await getPyWasmBytes();
+    const { getSqlWasmBytes } = await import('../../src/shell/sql-wasm-asset.js');
+    const bytes = await getSqlWasmBytes();
     expect(bytes).toBeInstanceOf(Uint8Array);
     expect(Array.from(bytes)).toEqual([1, 2, 3]);
   });
 
   it('caches the result — only fetches once across repeated calls', async () => {
-    const { getPyWasmBytes } = await import('../../src/lens/py-wasm-asset.js');
-    await getPyWasmBytes();
-    await getPyWasmBytes();
+    const { getSqlWasmBytes } = await import('../../src/shell/sql-wasm-asset.js');
+    await getSqlWasmBytes();
+    await getSqlWasmBytes();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -45,16 +45,16 @@ describe('getPyWasmBytes', () => {
         throw new Error('network error');
       })
     );
-    const { getPyWasmBytes } = await import('../../src/lens/py-wasm-asset.js');
+    const { getSqlWasmBytes } = await import('../../src/shell/sql-wasm-asset.js');
 
-    await expect(getPyWasmBytes()).rejects.toThrow('network error');
+    await expect(getSqlWasmBytes()).rejects.toThrow('network error');
 
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([4, 5, 6]).buffer }))
     );
 
-    const bytes = await getPyWasmBytes();
+    const bytes = await getSqlWasmBytes();
     expect(Array.from(bytes)).toEqual([4, 5, 6]);
   });
 
@@ -69,9 +69,9 @@ describe('getPyWasmBytes', () => {
         arrayBuffer: badArrayBuffer
       }))
     );
-    const { getPyWasmBytes } = await import('../../src/lens/py-wasm-asset.js');
+    const { getSqlWasmBytes } = await import('../../src/shell/sql-wasm-asset.js');
 
-    await expect(getPyWasmBytes()).rejects.toThrow(/503/);
+    await expect(getSqlWasmBytes()).rejects.toThrow(/503/);
     // The error-page body must never be read as if it were valid WASM bytes.
     expect(badArrayBuffer).not.toHaveBeenCalled();
 
@@ -80,7 +80,7 @@ describe('getPyWasmBytes', () => {
       vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([7, 8, 9]).buffer }))
     );
 
-    const bytes = await getPyWasmBytes();
+    const bytes = await getSqlWasmBytes();
     expect(Array.from(bytes)).toEqual([7, 8, 9]);
   });
 });

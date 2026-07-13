@@ -23,6 +23,7 @@ import type { WorkspaceFile } from '../services/workspace.js';
 import { createWorkspaceFile, updateFileContent, uniqueFilePath } from '../services/workspace.js';
 import { mergeImportedText, type MergeResult } from '../shell/import-merge.js';
 import { MergeOptionsSchema, type MergeOptions } from '../shell/import-merge-options.js';
+import { getSqlWasmBytes } from '../shell/sql-wasm-asset.js';
 
 export interface ImportOptionsFormProps {
   value: Record<string, unknown>;
@@ -111,11 +112,29 @@ export function ImportDialog({
 
   const handlePreview = useCallback(async () => {
     setPhase({ kind: 'previewing' });
+    // Cheap local check before any async work: importModel() throws
+    // synchronously for `from: 'sql'` with no namespace (SQL DDL has no
+    // namespace concept of its own to derive one from) — failing fast here
+    // avoids fetching the ~MB-scale SQL grammar WASM for a preview that's
+    // already guaranteed to fail.
+    if (format === 'sql' && !namespaceField.trim()) {
+      setPhase({
+        kind: 'error',
+        message: 'SQL import requires a namespace — SQL DDL has no namespace concept of its own to derive one from.'
+      });
+      return;
+    }
     try {
       const { importModel } = await import('@rune-langium/codegen/import');
+      // The SQL reader's default WASM loading uses node:fs, which doesn't
+      // exist in the browser (issue #385) — fetch the grammar bytes
+      // ourselves and supply them via wasmSource. Every other format has no
+      // WASM step (fast-xml-parser / plain JSON parsing).
+      const wasmSource = format === 'sql' ? await getSqlWasmBytes() : undefined;
       const result = await importModel(sourceText, {
         from: format,
         namespace: namespaceField.trim() || undefined,
+        ...(wasmSource !== undefined && { wasmSource }),
         ...toImportModelOptions(formatOptions)
       });
       if (!namespaceField.trim()) setNamespaceField(result.model.namespace);

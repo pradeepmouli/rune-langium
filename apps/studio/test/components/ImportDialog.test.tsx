@@ -27,10 +27,14 @@ vi.mock('@rune-langium/core', async (importOriginal) => {
 vi.mock('../../src/shell/import-merge.js', () => ({
   mergeImportedText: vi.fn()
 }));
+vi.mock('../../src/shell/sql-wasm-asset.js', () => ({
+  getSqlWasmBytes: vi.fn(async () => new Uint8Array([1, 2, 3]))
+}));
 
 import { importModel } from '@rune-langium/codegen/import';
 import { parse } from '@rune-langium/core';
 import { mergeImportedText } from '../../src/shell/import-merge.js';
+import { getSqlWasmBytes } from '../../src/shell/sql-wasm-asset.js';
 
 afterEach(() => {
   cleanup();
@@ -396,6 +400,7 @@ describe('ImportDialog', () => {
 
     fireEvent.click(screen.getByTestId('mock-sql-options-form'));
     fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    fireEvent.change(screen.getByTestId('import-dialog__namespace'), { target: { value: 'test.sql' } });
     fireEvent.click(screen.getByText('Preview'));
 
     await waitFor(() =>
@@ -406,6 +411,77 @@ describe('ImportDialog', () => {
     );
     const call = (importModel as any).mock.calls.at(-1)[1];
     expect(call).not.toHaveProperty('dialect');
+  });
+
+  it('fetches and threads the SQL grammar WASM bytes into importModel as wasmSource (issue #385 — the browser build has no node:fs)', async () => {
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\n\ntype Foo:\n\ta string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    render(<ImportDialog {...baseProps()} />);
+
+    const user = userEvent.setup({ writeToClipboard: false });
+    await user.click(screen.getByRole('combobox', { name: 'Format:' }));
+    await user.click(await screen.findByRole('option', { name: 'SQL DDL' }));
+
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    fireEvent.change(screen.getByTestId('import-dialog__namespace'), { target: { value: 'test.sql' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(getSqlWasmBytes).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(importModel).toHaveBeenCalledWith(
+        'CREATE TABLE foo (id int);',
+        expect.objectContaining({ from: 'sql', wasmSource: new Uint8Array([1, 2, 3]) })
+      )
+    );
+  });
+
+  it('shows a namespace-required error and never fetches SQL WASM bytes when previewing SQL with no namespace', async () => {
+    // Both mocks persist call history across tests in this file (see the
+    // comment on the next test) — assert on deltas, not absolute counts.
+    const wasmCallsBefore = (getSqlWasmBytes as any).mock.calls.length;
+    const importCallsBefore = (importModel as any).mock.calls.length;
+
+    render(<ImportDialog {...baseProps()} />);
+
+    const user = userEvent.setup({ writeToClipboard: false });
+    await user.click(screen.getByRole('combobox', { name: 'Format:' }));
+    await user.click(await screen.findByRole('option', { name: 'SQL DDL' }));
+
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    // Namespace field deliberately left blank.
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(screen.getByTestId('import-dialog__error')).toBeInTheDocument());
+    expect(screen.getByTestId('import-dialog__error')).toHaveTextContent(/namespace/i);
+    // The ~MB-scale WASM fetch and importModel() itself (which would throw
+    // for this exact reason anyway) must both be skipped, not just called
+    // and then have their error surfaced after the fact.
+    expect((getSqlWasmBytes as any).mock.calls.length).toBe(wasmCallsBefore);
+    expect((importModel as any).mock.calls.length).toBe(importCallsBefore);
+  });
+
+  it('never fetches SQL WASM bytes or passes wasmSource for a non-SQL format', async () => {
+    // getSqlWasmBytes is a vi.mock()-level mock, not a vi.spyOn() — the
+    // afterEach's vi.restoreAllMocks() doesn't clear its call history across
+    // tests in this file, so assert on a delta rather than an absolute count.
+    const callsBefore = (getSqlWasmBytes as any).mock.calls.length;
+
+    (importModel as any).mockResolvedValue({
+      text: 'namespace demo\n\ntype Foo:\n\ta string (1..1)\n',
+      model: { namespace: 'demo', types: [{ name: 'Foo' }], enums: [], funcs: [] },
+      diagnostics: []
+    });
+    render(<ImportDialog {...baseProps()} />);
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: '{}' } });
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(importModel).toHaveBeenCalled());
+    expect((getSqlWasmBytes as any).mock.calls.length).toBe(callsBefore);
+    const call = (importModel as any).mock.calls.at(-1)[1];
+    expect(call).not.toHaveProperty('wasmSource');
   });
 
   it('always shows the onCollision selector defaulting to skip', () => {

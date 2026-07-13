@@ -35,6 +35,7 @@ import { readOpenApi, parseOpenApiDocument } from './sources/openapi-reader.js';
 import { readXsd } from './sources/xsd-reader.js';
 import type { ImportDiagnostic } from './diagnostics.js';
 import type { SourceModel } from './source-model.js';
+import type { WasmSource } from './sources/sql-grammar-loader.js';
 
 export { runImport } from './cli.js';
 export type { ImportCommandOptions } from './cli.js';
@@ -83,6 +84,16 @@ export interface ImportOptions {
   includeOperations?: boolean;
   /** `from: 'xsd'` only. Default: false (current behavior — top-level elements are never their own type). */
   importTopLevelElements?: boolean;
+  /**
+   * `from: 'sql'` only. Overrides the SQL reader's default `web-tree-sitter`
+   * WASM loading (which resolves the grammar from disk via `node:fs` — Node
+   * only). Browser callers must fetch `@l1xnan/tree-sitter-sql`'s
+   * `tree-sitter-sql.wasm` themselves (e.g. via Vite's `?url` asset
+   * convention) and supply the bytes here; omitted, the default Node path
+   * is used (CLI/tests, and the only path exercised until this option
+   * existed).
+   */
+  wasmSource?: WasmSource;
 }
 
 export interface ImportResult {
@@ -143,6 +154,7 @@ export async function importModel(source: string, options: ImportOptions): Promi
     ? (await import('./sources/sql-reader.js')).readSql(source, {
         namespace: options.namespace!,
         dialect: options.sqlDialect ?? 'postgres',
+        ...(options.wasmSource !== undefined && { wasmSource: options.wasmSource }),
         ...readerOptions
       })
     : options.from === 'openapi'
