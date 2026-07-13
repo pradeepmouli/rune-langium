@@ -400,6 +400,7 @@ describe('ImportDialog', () => {
 
     fireEvent.click(screen.getByTestId('mock-sql-options-form'));
     fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    fireEvent.change(screen.getByTestId('import-dialog__namespace'), { target: { value: 'test.sql' } });
     fireEvent.click(screen.getByText('Preview'));
 
     await waitFor(() =>
@@ -425,6 +426,7 @@ describe('ImportDialog', () => {
     await user.click(await screen.findByRole('option', { name: 'SQL DDL' }));
 
     fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    fireEvent.change(screen.getByTestId('import-dialog__namespace'), { target: { value: 'test.sql' } });
     fireEvent.click(screen.getByText('Preview'));
 
     await waitFor(() => expect(getSqlWasmBytes).toHaveBeenCalled());
@@ -434,6 +436,31 @@ describe('ImportDialog', () => {
         expect.objectContaining({ from: 'sql', wasmSource: new Uint8Array([1, 2, 3]) })
       )
     );
+  });
+
+  it('shows a namespace-required error and never fetches SQL WASM bytes when previewing SQL with no namespace', async () => {
+    // Both mocks persist call history across tests in this file (see the
+    // comment on the next test) — assert on deltas, not absolute counts.
+    const wasmCallsBefore = (getSqlWasmBytes as any).mock.calls.length;
+    const importCallsBefore = (importModel as any).mock.calls.length;
+
+    render(<ImportDialog {...baseProps()} />);
+
+    const user = userEvent.setup({ writeToClipboard: false });
+    await user.click(screen.getByRole('combobox', { name: 'Format:' }));
+    await user.click(await screen.findByRole('option', { name: 'SQL DDL' }));
+
+    fireEvent.change(screen.getByTestId('import-dialog__source'), { target: { value: 'CREATE TABLE foo (id int);' } });
+    // Namespace field deliberately left blank.
+    fireEvent.click(screen.getByText('Preview'));
+
+    await waitFor(() => expect(screen.getByTestId('import-dialog__error')).toBeInTheDocument());
+    expect(screen.getByTestId('import-dialog__error')).toHaveTextContent(/namespace/i);
+    // The ~MB-scale WASM fetch and importModel() itself (which would throw
+    // for this exact reason anyway) must both be skipped, not just called
+    // and then have their error surfaced after the fact.
+    expect((getSqlWasmBytes as any).mock.calls.length).toBe(wasmCallsBefore);
+    expect((importModel as any).mock.calls.length).toBe(importCallsBefore);
   });
 
   it('never fetches SQL WASM bytes or passes wasmSource for a non-SQL format', async () => {

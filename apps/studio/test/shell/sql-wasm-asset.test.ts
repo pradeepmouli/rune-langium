@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // `getSqlWasmBytes` caches its result in module-level state (by design — see
 // sql-wasm-asset.ts). Vitest only resets the module registry per test FILE,
@@ -15,6 +15,13 @@ describe('getSqlWasmBytes', () => {
       'fetch',
       vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer }))
     );
+  });
+
+  // vi.stubGlobal() mutates the process-wide global — leaving it stubbed
+  // after this file's tests finish could leak into a later test file's
+  // `fetch` and create order-dependent failures.
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('fetches the grammar bytes', async () => {

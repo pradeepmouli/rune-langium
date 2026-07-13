@@ -112,6 +112,18 @@ export function ImportDialog({
 
   const handlePreview = useCallback(async () => {
     setPhase({ kind: 'previewing' });
+    // Cheap local check before any async work: importModel() throws
+    // synchronously for `from: 'sql'` with no namespace (SQL DDL has no
+    // namespace concept of its own to derive one from) — failing fast here
+    // avoids fetching the ~MB-scale SQL grammar WASM for a preview that's
+    // already guaranteed to fail.
+    if (format === 'sql' && !namespaceField.trim()) {
+      setPhase({
+        kind: 'error',
+        message: 'SQL import requires a namespace — SQL DDL has no namespace concept of its own to derive one from.'
+      });
+      return;
+    }
     try {
       const { importModel } = await import('@rune-langium/codegen/import');
       // The SQL reader's default WASM loading uses node:fs, which doesn't
