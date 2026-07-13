@@ -15,12 +15,16 @@
  * Commit path: on blur, the active language's `parse` function parses the
  * edited buffer. A refusal (syntax error or out-of-subset construct) is
  * shown inline and `onChange` is NOT called — canonical Rune is unaffected.
- * A successful parse is rendered back to canonical Rune text via
- * `renderExpression` (the shipped, corpus-tested Rune emitter) and handed to
- * `onChange` UNCHANGED — this is the exact same plain-text commit contract
- * `ConditionSection.tsx`'s Textarea fallback already uses
- * (`onChange={(val) => onUpdate?.(index, { expressionText: val })}`), so no
- * new store-patch mechanism is needed.
+ * A successful parse is compared structurally (via `treesEquivalent`)
+ * against the current canonical Rune text — if the edited buffer's tree is
+ * equivalent to the original (e.g. the field was toggled and blurred without
+ * a real edit), `onChange`/`onBlur` are skipped so an unedited field never
+ * rewrites the canonical text's formatting. Otherwise it's rendered back to
+ * canonical Rune text via `renderExpression` (the shipped, corpus-tested
+ * Rune emitter) and handed to `onChange` UNCHANGED — this is the exact same
+ * plain-text commit contract `ConditionSection.tsx`'s Textarea fallback
+ * already uses (`onChange={(val) => onUpdate?.(index, { expressionText: val })}`),
+ * so no new store-patch mechanism is needed.
  *
  * Each foreign language is described by a `LensDescriptor` in the `LENSES`
  * table below — the projection/parse/blur logic is written once, generic
@@ -34,7 +38,7 @@ import { useEffect, useState, useCallback } from 'react';
 import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 import { parseExpression } from '@rune-langium/core';
 import type { RosettaExpression } from '@rune-langium/core';
-import { renderExpression } from '@rune-langium/codegen/rosetta';
+import { renderExpression, treesEquivalent } from '@rune-langium/codegen/rosetta';
 import { renderTs, parseTs, renderPy, parsePy } from '@rune-langium/codegen/lens';
 import type { LensResult } from '@rune-langium/codegen/lens';
 import { cn } from '@rune-langium/design-system/utils';
@@ -105,13 +109,19 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
         return;
       }
       setForeignError(null);
+
+      const original = parseExpression(value);
+      if (!original.hasErrors && treesEquivalent(original.value, result.node)) {
+        return;
+      }
+
       const runeText = renderExpression(result.node);
       onChange(runeText);
       onBlur();
     } catch {
       setForeignError('Something went wrong parsing that expression — try again.');
     }
-  }, [language, foreignDraft, onChange, onBlur]);
+  }, [language, foreignDraft, value, onChange, onBlur]);
 
   const outOfSubset = descriptor !== null && projection === null;
 
