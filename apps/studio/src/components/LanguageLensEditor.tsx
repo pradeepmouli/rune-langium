@@ -18,13 +18,16 @@
  * A successful parse is compared structurally (via `treesEquivalent`)
  * against the current canonical Rune text — if the edited buffer's tree is
  * equivalent to the original (e.g. the field was toggled and blurred without
- * a real edit), `onChange`/`onBlur` are skipped so an unedited field never
- * rewrites the canonical text's formatting. Otherwise it's rendered back to
- * canonical Rune text via `renderExpression` (the shipped, corpus-tested
- * Rune emitter) and handed to `onChange` UNCHANGED — this is the exact same
- * plain-text commit contract `ConditionSection.tsx`'s Textarea fallback
- * already uses (`onChange={(val) => onUpdate?.(index, { expressionText: val })}`),
- * so no new store-patch mechanism is needed.
+ * a real edit), `onChange` is skipped so an unedited field never rewrites
+ * the canonical text's formatting. `onBlur` still fires unconditionally —
+ * it's the slot's blur notification (marks the field touched / triggers
+ * validation upstream), not just a commit signal, so a no-op lens blur must
+ * still reach it. A real edit is rendered back to canonical Rune text via
+ * `renderExpression` (the shipped, corpus-tested Rune emitter) and handed to
+ * `onChange` UNCHANGED — this is the exact same plain-text commit contract
+ * `ConditionSection.tsx`'s Textarea fallback already uses
+ * (`onChange={(val) => onUpdate?.(index, { expressionText: val })}`), so no
+ * new store-patch mechanism is needed.
  *
  * Each foreign language is described by a `LensDescriptor` in the `LENSES`
  * table below — the projection/parse/blur logic is written once, generic
@@ -111,12 +114,15 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
       setForeignError(null);
 
       const original = parseExpression(value);
-      if (!original.hasErrors && treesEquivalent(original.value, result.node)) {
-        return;
+      const isNoOp = !original.hasErrors && treesEquivalent(original.value, result.node);
+      if (!isNoOp) {
+        const runeText = renderExpression(result.node);
+        onChange(runeText);
       }
-
-      const runeText = renderExpression(result.node);
-      onChange(runeText);
+      // `onBlur` is the slot's blur notification (marks the field touched /
+      // triggers validation upstream — see ExpressionEditorSlotProps), not
+      // just a commit signal, so it fires on every successful parse whether
+      // or not the tree actually changed.
       onBlur();
     } catch {
       setForeignError('Something went wrong parsing that expression — try again.');

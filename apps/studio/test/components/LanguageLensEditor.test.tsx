@@ -110,7 +110,7 @@ describe('LanguageLensEditor', () => {
     expect(screen.getByText('items count')).toBeInTheDocument();
   });
 
-  it('does not call onChange/onBlur when blurring the TS lens without any edit', async () => {
+  it('skips onChange but still calls onBlur when blurring the TS lens without any edit', async () => {
     const onChange = vi.fn();
     const onBlur = vi.fn();
     render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
@@ -125,12 +125,17 @@ describe('LanguageLensEditor', () => {
     // against the original) before deciding it's a no-op. Await the same
     // promise the handler itself awaits — the handler registered its
     // continuation on it first, so this deterministically waits past the
-    // no-op check without relying on a DOM change (there isn't one).
+    // no-op check without relying on a DOM change (onChange not firing isn't
+    // observable in the DOM; onBlur firing is asserted directly below).
     await waitFor(() => expect(vi.mocked(parseTs).mock.results.length).toBeGreaterThan(resultsBefore));
     await vi.mocked(parseTs).mock.results.at(-1)!.value;
 
+    // onBlur is the slot's blur notification (marks the field touched /
+    // triggers validation upstream, e.g. FunctionForm's `field.onBlur()`
+    // composed into this same callback) — it must still fire even though
+    // nothing changed, or upstream touched/validation state goes stale.
+    expect(onBlur).toHaveBeenCalledTimes(1);
     expect(onChange).not.toHaveBeenCalled();
-    expect(onBlur).not.toHaveBeenCalled();
   });
 
   // Python-specific mirror of the TypeScript tests above — exercises the
@@ -200,7 +205,7 @@ describe('LanguageLensEditor', () => {
     expect(screen.getByText('items count')).toBeInTheDocument();
   });
 
-  it('does not call onChange/onBlur when blurring the Python lens without any edit', async () => {
+  it('skips onChange but still calls onBlur when blurring the Python lens without any edit', async () => {
     const onChange = vi.fn();
     const onBlur = vi.fn();
     render(<LanguageLensEditor value="value >= 0" onChange={onChange} onBlur={onBlur} />);
@@ -214,7 +219,7 @@ describe('LanguageLensEditor', () => {
     await waitFor(() => expect(vi.mocked(parsePy).mock.results.length).toBeGreaterThan(resultsBefore));
     await vi.mocked(parsePy).mock.results.at(-1)!.value;
 
+    expect(onBlur).toHaveBeenCalledTimes(1);
     expect(onChange).not.toHaveBeenCalled();
-    expect(onBlur).not.toHaveBeenCalled();
   });
 });
