@@ -26,6 +26,8 @@ export interface FormPreviewPanelProps {
   target?: FormPreviewTarget;
   getFieldSource?: (fieldPath: string) => PreviewSourceMapEntry | undefined;
   onExecute?: (funcName: string, inputs: Record<string, unknown>) => void;
+  values?: Record<string, unknown>;
+  onValuesChange?: (values: Record<string, unknown>) => void;
 }
 
 export function FormPreviewPanel({
@@ -33,12 +35,20 @@ export function FormPreviewPanel({
   status,
   target: _target,
   getFieldSource,
-  onExecute
+  onExecute,
+  values,
+  onValuesChange
 }: FormPreviewPanelProps): ReactElement {
+  const isControlled = values !== undefined;
   const ensureSample = usePreviewStore((s) => s.ensureSample);
   const updateSample = usePreviewStore((s) => s.updateSample);
   const resetSample = usePreviewStore((s) => s.resetSample);
   const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
+  const [controlledMeta, setControlledMeta] = useState<{
+    errors: Record<string, string>;
+    valid: boolean;
+    validated: boolean;
+  }>({ errors: {}, valid: true, validated: false });
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
   const [executionResult, setExecutionResult] = useState<unknown>(undefined);
@@ -74,12 +84,23 @@ export function FormPreviewPanel({
   );
 
   useEffect(() => {
-    if (!schema) return;
+    if (isControlled || !schema) return;
     ensureSample(schema.targetId, defaultValues);
-  }, [defaultValues, ensureSample, schema]);
+  }, [defaultValues, ensureSample, isControlled, schema]);
 
   const activeSample = useMemo<PreviewSampleState | undefined>(() => {
     if (!schema) return undefined;
+    if (isControlled) {
+      return {
+        targetId: schema.targetId,
+        values: values ?? defaultValues,
+        serialized: JSON.stringify(values ?? defaultValues, null, 2),
+        errors: controlledMeta.errors,
+        valid: controlledMeta.valid,
+        validated: controlledMeta.validated,
+        updatedAt: 0
+      };
+    }
     return (
       sample ?? {
         targetId: schema.targetId,
@@ -91,7 +112,7 @@ export function FormPreviewPanel({
         updatedAt: 0
       }
     );
-  }, [defaultValues, sample, schema]);
+  }, [controlledMeta, defaultValues, isControlled, sample, schema, values]);
 
   const showStatusOnly = !schema || status.state === 'unavailable' || schema.schemaVersion !== 1;
 
@@ -101,9 +122,14 @@ export function FormPreviewPanel({
       const result = validated
         ? validatePreviewSample(schema, nextValues)
         : { errors: {} as Record<string, string>, valid: true };
+      if (isControlled) {
+        setControlledMeta({ errors: result.errors, valid: result.valid, validated });
+        onValuesChange?.(nextValues);
+        return;
+      }
       updateSample(schema.targetId, nextValues, result.errors, result.valid, validated);
     },
-    [schema, updateSample]
+    [isControlled, onValuesChange, schema, updateSample]
   );
 
   const handleFieldBlur = useCallback(() => {
@@ -180,9 +206,14 @@ export function FormPreviewPanel({
 
   const handleReset = useCallback(() => {
     if (!schema) return;
-    resetSample(schema.targetId, defaultValues);
+    if (isControlled) {
+      setControlledMeta({ errors: {}, valid: true, validated: false });
+      onValuesChange?.(defaultValues);
+    } else {
+      resetSample(schema.targetId, defaultValues);
+    }
     setCopyFeedback(null);
-  }, [defaultValues, resetSample, schema]);
+  }, [defaultValues, isControlled, onValuesChange, resetSample, schema]);
 
   const handleCopySample = useCallback(async () => {
     if (!activeSample) {

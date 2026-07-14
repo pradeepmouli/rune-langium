@@ -166,6 +166,22 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         useInstanceStore.getState().receiveValidateResult(msg.requestId, msg.diagnostics);
         return;
       }
+      // Instance-store's schema fetches reuse the preview:generate/preview:result
+      // messages but key their own requestIds (`schema:<typeFqn>:<n>`), which
+      // will never match currentPreviewRequestIdRef (only usePreviewStore's own
+      // target-selection effect sets that ref). Intercept and consume them here,
+      // before the staleness check below, so they never leak into usePreviewStore.
+      if (isPreviewWorkerMessage(msg)) {
+        if (
+          msg.type === 'preview:result' &&
+          useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema)
+        ) {
+          return; // consumed by instance-store's own pending schema request
+        }
+        if (msg.type === 'preview:stale') {
+          useInstanceStore.getState().clearPendingSchemaRequest(msg.requestId);
+        }
+      }
       // Preview messages below — execution messages above bypass stale-check
       // since they carry their own funcName-based keying
       if (!isPreviewWorkerMessage(e.data)) return;

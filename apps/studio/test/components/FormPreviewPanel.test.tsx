@@ -406,4 +406,96 @@ describe('FormPreviewPanel', () => {
 }`);
     expect(screen.getByText(/sample data copied/i)).toBeInTheDocument();
   });
+
+  describe('controlled mode (values/onValuesChange props)', () => {
+    it('renders using the given values prop instead of usePreviewStore state', () => {
+      render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'EXT-1', party: { name: 'External Bank' }, aliases: ['Ext alias'] }}
+        />
+      );
+
+      expect(screen.getByLabelText('Trade id')).toHaveValue('EXT-1');
+      expect(screen.getByLabelText('Name')).toHaveValue('External Bank');
+      expect(screen.getByLabelText('Alias 1')).toHaveValue('Ext alias');
+      // The uncontrolled store's sample for this targetId must remain untouched.
+      expect(usePreviewStore.getState().samples.has(validationTradeSchema.targetId)).toBe(false);
+    });
+
+    it('calls onValuesChange with the full merged object on a scalar edit + blur, and does not call updateSample', () => {
+      const updateSampleSpy = vi.spyOn(usePreviewStore.getState(), 'updateSample');
+      const onValuesChange = vi.fn();
+      render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      fireEvent.change(screen.getByLabelText('Trade id'), { target: { value: 'TRD-9' } });
+      fireEvent.blur(screen.getByLabelText('Trade id'));
+
+      expect(onValuesChange).toHaveBeenCalledWith({ tradeId: 'TRD-9', party: { name: '' }, aliases: [] });
+      expect(updateSampleSpy).not.toHaveBeenCalled();
+      updateSampleSpy.mockRestore();
+    });
+
+    it('produces correctly nested onValuesChange payloads for a nested-object field edit and an array add/remove', () => {
+      const onValuesChange = vi.fn();
+      const { rerender } = render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'TRD-1', party: { name: '' }, aliases: [] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      // Nested-object field edit.
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme Bank' } });
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'TRD-1',
+        party: { name: 'Acme Bank' },
+        aliases: []
+      });
+
+      // Array add — simulate the parent feeding the updated values back in
+      // (as InstanceFormPanel will via the store), since this component is
+      // controlled and does not track its own values across renders.
+      rerender(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'TRD-1', party: { name: 'Acme Bank' }, aliases: [] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /add aliases item/i }));
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'TRD-1',
+        party: { name: 'Acme Bank' },
+        aliases: ['']
+      });
+
+      // Array remove — feed the added-item state back in, then remove it.
+      rerender(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'TRD-1', party: { name: 'Acme Bank' }, aliases: ['Primary alias'] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /remove alias 1/i }));
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'TRD-1',
+        party: { name: 'Acme Bank' },
+        aliases: []
+      });
+    });
+  });
 });
