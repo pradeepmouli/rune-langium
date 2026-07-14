@@ -2,6 +2,41 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **ARCHITECTURE CORRECTION (found during execution, 2026-07-14):** the "lazy
+> field resolver" design described below (Tasks 2 and 3: `preview-schema.ts`'s
+> `lazy` mode, `instances/resolve-fields.ts`'s `resolveFields`/one-level-at-a-time
+> expansion) has been **removed**. It duplicated a pipeline that already exists
+> and already works: `generatePreviewSchemas()` (used today by the Preview
+> perspective's `FormPreviewPanel`) already generates a full `FormPreviewSchema`
+> for a plain Data-type target — not just functions — via the existing
+> `preview:generate`/`preview:result` worker round trip. Instance authoring
+> reuses that pipeline directly instead of a parallel lazy one. Concretely:
+> - Tasks 2 and 3 are reverted (commit `7274b81d`). The only piece of Task 3
+>   worth keeping — `findDataNode(typeFqn, documents)`, a plain Data-AST-node
+>   lookup needed by `instance:validate`'s condition-predicate check regardless
+>   of field-resolution strategy — survives standalone in
+>   `packages/codegen/src/instances/data-lookup.ts`.
+> - Task 9's `validateInstance()` now builds its structural validator from
+>   `generatePreviewSchemas(documents, { targetId })` instead of `resolveFields`.
+> - Task 13 (`InstanceFormPanel`) is being redesigned around
+>   `components/FormPreviewPanel.tsx`'s existing field-control rendering
+>   (`PreviewFieldControl`) generalized to accept sample state (`values`/
+>   `onValuesChange`-shaped props) instead of hardcoding `usePreviewStore`, so
+>   both the Preview perspective and instance editing can drive the same
+>   component without colliding state. Instance-store gets its own schema
+>   cache (`schemas`/`dispatchGenerateSchema`/`receiveSchemaResult`), reusing
+>   the *same* `preview:generate`/`preview:result` worker messages
+>   `usePreviewStore` already uses, kept separate from `usePreviewStore`'s own
+>   `selectedTargetId`/`schemas` so opening an instance for editing doesn't
+>   clobber whatever's shown in the Preview perspective, and vice versa.
+> - See `.superpowers/sdd/task-13-report.md` for the full implementation
+>   history (including the superseded worker-transport-only fix) and
+>   `.superpowers/sdd/progress.md` for the ledger.
+> Tasks 4-8, 10-12 are unaffected (Task 10's `instance-store.ts` reverted the
+> incidental `resolvedFields`/`dispatchResolveFields` additions layered on top
+> during Task 13's first pass — it is back to its originally reviewed shape,
+> plus the new schema-cache fields once Task 13 lands).
+
 **Goal:** Ship a "Prototype" perspective in Rune Studio where a user creates, edits, imports, and exports named instances of Rune model types (data types and choices), with unbounded-depth field authoring, real validation (structure + conditions), and JSON/bundle import-export — the smallest slice of the Prototype Workspace spec that stands alone as working software.
 
 **Architecture:** MIT `@rune-langium/codegen` gains an `./instances` subpath: a lazy field resolver that extends the existing `preview-schema.ts` recursive walk instead of duplicating it, a condition-predicate extractor that reuses the existing expression transpiler, bundle/manifest types, and a plain-JSON import codec. FSL `apps/studio` gains a 6th perspective (`prototype`) with three panels backed by a new zustand `instance-store`, OPFS persistence under the already-reserved `.studio/` namespace, a new `createTarGz` (the codebase currently only has extraction), and a new `instance:validate` codegen-worker message that runs structural checks plus worker-executed condition predicates — never eval'ing a full generated Zod module.
@@ -141,6 +176,10 @@ git commit -m "feat(codegen): add sha256Hex fingerprint helper for instance bund
 ---
 
 ### Task 2: Export `preview-schema.ts` internals + lazy mode on the depth ceiling (MIT)
+
+> **REVERTED 2026-07-14** — see the architecture correction note at the top
+> of this document. This task's changes were reverted in commit `7274b81d`.
+> Left below for history; do not re-implement.
 
 **Files:**
 - Modify: `packages/codegen/src/preview-schema.ts:52-62` (`FieldContext`), `:589-619` (`objectField`)
@@ -286,6 +325,12 @@ git commit -m "feat(codegen): add lazy mode to the field-context walk for on-dem
 ---
 
 ### Task 3: `resolveFields` — the lazy field resolver entry point (MIT)
+
+> **REVERTED 2026-07-14** — see the architecture correction note at the top
+> of this document. Reverted in commit `7274b81d`; `findDataNode` survives
+> standalone in `packages/codegen/src/instances/data-lookup.ts` (still needed
+> by `instance:validate`). Left below for history; do not re-implement
+> `resolveFields`.
 
 **Files:**
 - Create: `packages/codegen/src/instances/resolve-fields.ts`
@@ -1134,6 +1179,18 @@ git commit -m "feat(studio): add .studio/instances/ OPFS read/write layer"
 
 ### Task 9: `instance:validate` codegen-worker message (FSL)
 
+> **PARTIALLY REVISED 2026-07-14** — see the architecture correction note at
+> the top of this document. `validateInstance()`'s structural validator is
+> now built from `generatePreviewSchemas(documents, { targetId })` instead of
+> `resolveFields(typeFqn, [], documents)`; `findDataNode` (still needed for
+> condition-predicate lookup) now comes from the standalone
+> `instances/data-lookup.ts`. Everything else in this task (the
+> `instance:validate`/`instance:validateResult` message pair,
+> `runInWorkerSandbox`, the `preview-validator.ts` extraction, condition
+> diagnostics) is unchanged. The Step 3 code below still shows the original
+> `resolveFields`-based version for history — read the actual
+> `apps/studio/src/workers/codegen-worker.ts` for the current implementation.
+
 **Files:**
 - Modify: `apps/studio/src/workers/codegen-worker.ts` (new message type + handler, alongside `PreviewExecuteMessage`/`preview:execute`)
 - Modify: `apps/studio/src/services/codegen-service.ts` (dispatch helper + result typing, alongside `createPreviewExecuteMessage`)
@@ -1676,11 +1733,45 @@ git commit -m "feat(studio): add InstanceExplorerPanel (list + filter)"
 
 ### Task 13: `InstanceFormPanel` (FSL)
 
-**Files:**
+> **REDESIGNED (found during execution, 2026-07-14):** superseded twice —
+> first for a wrong `resolveFields`-on-the-main-thread assumption (fixed with
+> a worker round trip), then for a deeper architecture mismatch: this plan
+> originally built a bespoke lazy field resolver (Tasks 2/3) instead of
+> reusing the already-working eager `generatePreviewSchemas()` +
+> `FormPreviewPanel` rendering pipeline the Preview perspective already uses
+> for exactly this case (`generatePreviewSchemas` already supports plain
+> Data-type targets, not just functions). See the architecture correction
+> note at the top of this document. The final design:
+>
+> - `components/FormPreviewPanel.tsx` is generalized to accept sample state
+>   via props (`values`/`onValuesChange`-shaped) instead of hardcoding
+>   `usePreviewStore.ensureSample`/`updateSample`/`sample` — existing Preview
+>   perspective behavior is unchanged when the props are omitted.
+> - `instance-store.ts` gains its own schema cache (`schemas`,
+>   `dispatchGenerateSchema(typeFqn)`, `receiveSchemaResult(schema)`),
+>   dispatching the *same* `preview:generate`/`preview:result` worker
+>   messages `usePreviewStore` already uses, kept in a separate map so
+>   editing an instance doesn't clobber the Preview perspective's
+>   `selectedTargetId`/`schemas` (or vice versa).
+> - `CodegenProvider.tsx` routes `preview:result` to instance-store's
+>   `receiveSchemaResult` when the request was one instance-store is waiting
+>   on (tracked via its own pending-request map, checked before falling
+>   through to `usePreviewStore`'s existing handling), otherwise unchanged.
+> - `InstanceFormPanel` becomes a thin wrapper: dispatch a schema fetch for
+>   the instance's `typeFqn`, then render the generalized
+>   `components/FormPreviewPanel` with `values={record.data}` and
+>   `onValuesChange` wired to `useInstanceStore.updateInstanceData`.
+>
+> The Step 1/3 code below (and the "Interfaces" line) describes the
+> since-reverted lazy-resolver version and is left for history — do not use
+> it as-is. See `.superpowers/sdd/task-13-report.md` for the full
+> implementation history and `.superpowers/sdd/progress.md` for the ledger.
+
+**Files (as originally planned — see the note above for what actually ships):**
 - Create: `apps/studio/src/shell/panels/InstanceFormPanel.tsx`
 - Test: `apps/studio/test/shell/panels/InstanceFormPanel.test.tsx`
 
-**Interfaces:**
+**Interfaces (superseded — see the redesign note above):**
 - Consumes: `resolveFields` (`@rune-langium/codegen/instances`), `useInstanceStore` (Task 10), `useModelStore`'s parsed documents (existing store already used by `FormPreviewPanel` — same source `generatePreviewSchemas` reads from today).
 - Produces: `<InstanceFormPanel instanceId={string} />`.
 
