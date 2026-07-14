@@ -35,7 +35,16 @@ export function PrototypePerspective(): ReactElement {
               <TabsTrigger value="function">Function</TabsTrigger>
             </TabsList>
             <TabsContent value="fields" className="min-h-0 flex-1">
-              <InstanceFormPanel instanceId={selectedId} />
+              {/* `key={selectedId}` forces a full remount of InstanceFormPanel
+                  (and its nested FormPreviewPanel) on every instance switch —
+                  FormPreviewPanel's `controlledMeta` local state (errors/valid/
+                  validated) is scoped to the component instance's lifetime, not
+                  keyed by instance id, so without a remount, switching from
+                  instance A to instance B could keep showing A's validation
+                  errors until B is edited (finding #8). Scoped to just this
+                  panel (not the whole Tabs group) so the active tab selection
+                  survives an instance switch. */}
+              <InstanceFormPanel key={selectedId} instanceId={selectedId} />
             </TabsContent>
             <TabsContent value="inspector" className="min-h-0 flex-1 overflow-auto">
               <InstanceInspectorPanel instanceId={selectedId} />

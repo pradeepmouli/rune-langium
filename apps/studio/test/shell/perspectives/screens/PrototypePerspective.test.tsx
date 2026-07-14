@@ -8,7 +8,12 @@ import { useInstanceStore } from '../../../../src/store/instance-store.js';
 
 describe('PrototypePerspective', () => {
   beforeEach(() => {
-    useInstanceStore.setState({ instances: {}, validationErrors: {}, schemas: new Map() });
+    useInstanceStore.setState({
+      instances: {},
+      validationErrors: {},
+      schemas: new Map(),
+      schemaErrors: new Map()
+    });
   });
 
   it('renders the empty state when no instance is selected', () => {
@@ -47,5 +52,41 @@ describe('PrototypePerspective', () => {
     expect(screen.getByText('Validation')).toBeInTheDocument();
     expect(screen.getByText('Provenance')).toBeInTheDocument();
     expect(screen.getByText('Raw JSON')).toBeInTheDocument();
+  });
+
+  it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', () => {
+    useInstanceStore.setState((s) => ({
+      schemas: new Map(s.schemas).set('test.Party', {
+        schemaVersion: 1,
+        targetId: 'test.Party',
+        title: 'Party',
+        status: 'ready',
+        fields: [{ path: 'name', label: 'Name', kind: 'string', required: true }]
+      })
+    }));
+    const idA = useInstanceStore.getState().createInstance('test.Party', 'Instance A');
+    const idB = useInstanceStore.getState().createInstance('test.Party', 'Instance B');
+
+    render(<PrototypePerspective />);
+
+    // Select instance A and blur its empty required field to produce a
+    // validation error.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Instance A' }));
+    });
+    act(() => {
+      fireEvent.blur(screen.getByLabelText('Name'));
+    });
+    expect(screen.getByText('Name is required')).toBeInTheDocument();
+
+    // Switch to instance B — its Name field is equally empty, but it was
+    // never touched/blurred, so it must NOT show A's stale error.
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Instance B' }));
+    });
+
+    expect(screen.queryByText('Name is required')).not.toBeInTheDocument();
+    expect(useInstanceStore.getState().instances[idA]).toBeDefined();
+    expect(useInstanceStore.getState().instances[idB]).toBeDefined();
   });
 });
