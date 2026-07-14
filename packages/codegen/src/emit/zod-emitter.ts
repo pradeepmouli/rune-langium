@@ -38,8 +38,7 @@ import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.
 import { RUNE_EXTEND_CHOICE_HELPER_SOURCE } from './zod-runtime-helpers.js';
 import {
   decodeCardinality,
-  buildAttributeTypesMap,
-  buildAttrAccessorNamesMap,
+  buildConditionTranspilerContext,
   activeConditions,
   mergeProfileTypeMaps,
   buildReportRulesLines,
@@ -841,17 +840,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     emitMode: 'zod-refine' | 'zod-superRefine',
     conditionName: string
   ): ExpressionTranspilerContext {
-    const attributeTypes = buildAttributeTypesMap(data);
-    const attrAccessorNames = buildAttrAccessorNamesMap(data);
-    return {
-      selfName: 'data',
-      emitMode,
-      conditionName,
-      typeName: data.name,
-      attributeTypes,
-      diagnostics: this.ctx.diagnostics,
-      attrAccessorNames
-    };
+    return buildConditionTranspilerContext(data, emitMode, conditionName, this.ctx.diagnostics);
   }
 
   /**
