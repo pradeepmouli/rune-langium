@@ -71,7 +71,7 @@ interface InstanceRecord {
     └── <ulid>.json         # one InstanceRecord per file
 ```
 
-File-per-instance was chosen over a single JSON blob: partial writes stay cheap (editing one instance doesn't rewrite the whole store), and — the load-bearing reason — **the on-disk layout is the bundle layout**. Export reuses the tar-create counterpart to the existing `extractTarGz` (`apps/studio/src/opfs/tar-untar.ts:56-108`) over the `instances/` directory rather than a bespoke bundle serializer.
+File-per-instance was chosen over a single JSON blob: partial writes stay cheap (editing one instance doesn't rewrite the whole store), and — the load-bearing reason — **the on-disk layout is the bundle layout**. `apps/studio/src/opfs/tar-untar.ts` currently only implements extraction (`extractTarGz`, 56-108, gunzip via `pako.inflate` + a purpose-built ustar reader) — there is no create-side counterpart today, so this design adds one (`createTarGz`, symmetric ustar writer + `pako.gzip`) rather than assuming it already exists. The new function is tested by round-tripping its own output back through the existing `extractTarGz`.
 
 **Bundle format**: `manifest.json` (format version, `modelFingerprint`, per-instance index) + `instances/*.json`, tarred.
 
@@ -116,7 +116,13 @@ Phase 1 ships only the `json` codec (parse + pass-through; validation diagnostic
 
 ## 7. Data flow
 
-**Create/edit (US1)**: `InstanceExplorerPanel` "New instance" → type picker → `InstanceFormPanel` calls `resolveFields(typeFqn, [])` for the top level; expanding a nested field calls it again for that subtree. Every edit updates `InstanceRecord.data` in the new `instance-store` (zustand, mirroring `preview-store.ts` conventions). Validation runs through the existing codegen-worker Zod pipeline (same `dispatchExecute`-style worker boundary already used for previews), errors keyed by field path, condition names surfaced from the Zod emitter's issue metadata. Saving writes `.studio/instances/<ulid>.json` and updates `index.json`.
+**Create/edit (US1)**: `InstanceExplorerPanel` "New instance" → type picker → `InstanceFormPanel` calls `resolveFields(typeFqn, [])` for the top level; expanding a nested field calls it again for that subtree. Every edit updates `InstanceRecord.data` in the new `instance-store` (zustand, mirroring `preview-store.ts` conventions). Saving writes `.studio/instances/<ulid>.json` and updates `index.json`.
+
+**Validation (corrected from the original draft)** — checked against real code rather than assumed: `FormPreviewPanel.validatePreviewSample` (874-891) builds a purely *structural* Zod validator from the `PreviewField[]` tree (types/cardinality/enum) and never executes the real generated schema; `specs/016-studio-form-preview/research.md` explicitly rejected eval'ing a full generated Zod module in-browser (import/bundling/security risk), so that limitation is deliberate, not an oversight. But US1 AS5 requires condition-name-anchored violations, which the structural validator cannot produce. Resolution: two collaborating pieces, neither of which eval's a full generated module —
+1. **Structural check**: extend the `buildSchemaValidator` approach to operate over `resolveFields`' lazy tree, recursing into currently-unexpanded subtrees as needed so the *whole* instance is checked, not just what the UI happens to have expanded.
+2. **Condition check**: `emitConditionBlock` (zod-emitter.ts:865-903) already calls `transpileCondition(cond, ctx)` to get a plain JS boolean-predicate string (no imports) for each active condition — the exact same expression-transpiler `dispatchExecute` already runs safely in the codegen worker for function bodies. Phase 1 reuses that: run each type's condition predicates in the worker against the instance data, attach violations by condition name.
+
+Errors from both pieces are merged and keyed by field path.
 
 Manual form entry (blank instance, filled in by hand from the type picker) and JSON import are **both primary Phase 1 entry points** — neither is secondary to the other. Both converge on the same `InstanceRecord`/`InstanceFormPanel`/validation machinery once the instance exists, so a user can import a payload and keep hand-editing it, or author entirely from scratch.
 
