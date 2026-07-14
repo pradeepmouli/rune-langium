@@ -79,7 +79,11 @@ export async function importBundle(
   const currentFingerprint = await computeModelFingerprint(documents);
   const stale = currentFingerprint !== manifest.modelFingerprint;
 
-  const imported: InstanceRecord[] = [];
+  // Parse phase: read and validate every instance record from `scratchRoot`
+  // (never `workspaceRoot`) before writing anything. This makes a bundle
+  // that fails to parse anywhere naturally atomic — nothing has touched the
+  // real workspace's instance store yet, so the throw needs no rollback.
+  const finalRecords: InstanceRecord[] = [];
   for (const entry of manifest.instances) {
     let record: InstanceRecord;
     try {
@@ -91,6 +95,12 @@ export async function importBundle(
     const finalRecord: InstanceRecord = stale
       ? { ...record, stale: { reason: 'model-fingerprint-mismatch', diagnostics: [] } }
       : record;
+    finalRecords.push(finalRecord);
+  }
+
+  // Write phase: only after every record parsed successfully.
+  const imported: InstanceRecord[] = [];
+  for (const finalRecord of finalRecords) {
     await writeInstance(fs, workspaceRoot, finalRecord);
     imported.push(finalRecord);
   }

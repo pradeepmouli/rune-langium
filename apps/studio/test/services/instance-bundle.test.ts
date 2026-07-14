@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
-import { writeInstance } from '../../src/opfs/instances-fs.js';
+import { listInstanceFiles, writeInstance } from '../../src/opfs/instances-fs.js';
 import { createTarGz } from '../../src/opfs/tar-untar.js';
 import { exportBundle, importBundle } from '../../src/services/instance-bundle.js';
 import type { InstanceRecord } from '@rune-langium/codegen/instances';
@@ -105,5 +105,37 @@ describe('instance bundle export/import', () => {
     // "succeed" by reading import #1's leftover file from the shared
     // scratch directory.
     await expect(importBundle(fs, '/ws1', malformedBytes, docs)).rejects.toThrow(/Invalid bundle/);
+  });
+
+  it('makes zero writes to the workspace when a LATER instance record in the bundle is corrupt (atomicity)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // manifest lists TWO instances: the first ("...0001") has valid JSON in
+    // the archive, the second ("...0002") is corrupt. If importBundle writes
+    // as it parses (instead of parsing everything up front), the first
+    // record would already be persisted to the real workspaceRoot by the
+    // time the second entry's parse failure throws.
+    const secondId = '01J000000000000000000002';
+    const manifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [
+        { id: RECORD.id, name: RECORD.name, typeFqn: RECORD.typeFqn },
+        { id: secondId, name: 'Broken Record', typeFqn: 'test.Party' }
+      ]
+    };
+    const bundleBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: `instances/${RECORD.id}.json`, data: new TextEncoder().encode(JSON.stringify(RECORD)) },
+      { path: `instances/${secondId}.json`, data: new TextEncoder().encode('{ not valid json') }
+    ]);
+
+    await expect(importBundle(fs, '/ws-atomic', bundleBytes, docs)).rejects.toThrow(/Invalid bundle/);
+
+    // The earlier, validly-parsed record must NOT have been written to the
+    // real workspace root — the whole import must be all-or-nothing.
+    const files = await listInstanceFiles(fs, '/ws-atomic');
+    expect(files).toHaveLength(0);
   });
 });
