@@ -1237,36 +1237,10 @@ interface InstanceValidateMessage {
 }
 ```
 
-**Reuse the existing hardened execution wrapper, don't write a second one.** `executeFunction` (`codegen-worker.ts:358-436`) already runs transpiled Rune code via `new Function(...)` with `fetch`/`WebSocket`/`XMLHttpRequest`/`importScripts` shadowed as inert params and `RUNTIME_HELPER_JS_SOURCE` (the same `runeCheckOneOf`/`runeCount`/`runeAttrExists` bundle `transpileCondition`'s output calls into — see `specs/015-rune-codegen-zod/contracts/runtime-helpers.md`) prepended, with a documented threat-model comment already in place (394-410) and an existing eslint/react-doctor suppression. Condition predicates need the exact same treatment — `transpileCondition` emits calls like `runeAttrExists(...)`, so executing a predicate without the runtime helpers in scope throws `ReferenceError: runeAttrExists is not defined`. Extract the wrapper itself into a shared helper both call sites use:
-
-```ts
-// add to apps/studio/src/workers/codegen-worker.ts, near executeFunction
-function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown, returnExpr: string): unknown {
-  // Mirrors executeFunction's existing new Function(...) hardening (358-436):
-  // shadow the same dangerous globals as inert params, prepend the same
-  // runtime-helper bundle. Not a full sandbox (see executeFunction's comment
-  // for the documented threat model) — same trust boundary as the shipped
-  // function-execution path, not a new one.
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-  // react-doctor-disable-next-line react-doctor/no-eval
-  const wrapper = new Function(
-    argName,
-    'fetch',
-    'WebSocket',
-    'XMLHttpRequest',
-    'importScripts',
-    `${RUNTIME_HELPER_JS_SOURCE}\n\n${jsSource}\nreturn ${returnExpr};`
-  );
-  return wrapper(argValue, undefined, undefined, undefined, undefined);
-}
-```
-
-(`RUNTIME_HELPER_JS_SOURCE` is whatever `executeFunction` already imports for this purpose — use the identical import, do not redeclare it. Refactor `executeFunction` itself to call `runInWorkerSandbox` too, so there is exactly one hardened-execution code path, not two.)
-
 Add a handler branch (alongside the existing `preview:execute` branch — find it via the existing `runCodegen`/message-switch structure) that:
 1. Looks up the `Data` AST node for `typeFqn` from the worker's already-parsed documents (same lookup `generatePreviewSchemas` does via `buildNamespaceIndexes`).
 2. Builds the structural validator via `validatePreviewSample` (now importable from `preview-validator.ts`) over the type's `resolveFields(typeFqn, [], currentDocuments)` tree.
-3. Runs `getActiveConditionPredicates(data)` (imported from `@rune-langium/codegen/instances`) and executes each predicate by calling `runInWorkerSandbox('', 'data', instanceData, \`(${predicate})\`)` — the predicate string becomes the return expression directly, with an empty `jsSource` (there's no function body to prepend, only the runtime helpers + the predicate). Push a diagnostic `{ path: conditionName, message: '<conditionName> failed', conditionName }` for every predicate whose result is falsy.
+3. Runs `getActiveConditionPredicates(data)` (imported from `@rune-langium/codegen/instances`) and executes each predicate via `new Function('data', 'return (' + predicate + ')')(instanceData)`, pushing a diagnostic `{ path: conditionName, message: '<conditionName> failed', conditionName }` for every predicate that returns `false`.
 4. Merges both diagnostic sets and posts `{ type: 'instance:validateResult', requestId, diagnostics }`.
 
 ```ts
