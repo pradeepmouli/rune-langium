@@ -62,4 +62,16 @@ describe('instance bundle export/import', () => {
 
     await expect(importBundle(fs, '/ws2', corruptBytes, docs)).rejects.toThrow(/Invalid bundle/);
   });
+
+  it('rethrows a clearly-messaged, distinguishable error when the bundle bytes are not valid gzip/tar at all', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // Not a gzip archive at all (no gzip magic header) — simulates a user
+    // selecting the wrong file entirely, as opposed to a corrupted-but-valid
+    // archive. This exercises the extractTarGz call site specifically.
+    const notGzipBytes = new Uint8Array([1, 2, 3, 4, 5]);
+
+    await expect(importBundle(fs, '/ws2', notGzipBytes, docs)).rejects.toThrow(/Invalid bundle/);
+  });
 });

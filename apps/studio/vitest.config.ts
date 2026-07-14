@@ -27,7 +27,14 @@ export default defineConfig({
         // `import()` call and fails to parse it. Forcing this package
         // external restores Node's native loader for it, sidestepping the
         // parser bug; it has no effect on the actual code under test.
-        external: [/@rune-langium\/codegen/, /packages\/codegen\/dist/]
+        //
+        // NOTE: the package-name pattern is anchored with `(\/|$)` so it
+        // matches `@rune-langium/codegen` and its subpaths (e.g.
+        // `@rune-langium/codegen/instances`) but NOT the sibling package
+        // `@rune-langium/codegen-legacy`, which apps/studio also imports
+        // value-level (see src/services/codegen-service.ts) and must keep
+        // going through the normal SSR transform.
+        external: [/@rune-langium\/codegen(\/|$)/, /packages\/codegen\/dist/]
       }
     }
   }

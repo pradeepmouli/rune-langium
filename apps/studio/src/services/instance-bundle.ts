@@ -41,11 +41,13 @@ export async function exportBundle(
  * `stale` on whether the currently-loaded model's fingerprint matches the
  * bundle manifest's — see design doc §4.
  *
- * A malformed/corrupt bundle (e.g. a truncated archive whose extracted
- * `manifest.json` isn't valid JSON) surfaces as a distinctly-messaged
- * "Invalid bundle" error rather than a raw `SyntaxError`, so a future
- * caller (an import dialog) can present a specific message instead of a
- * parser internals leak.
+ * A malformed/corrupt bundle — whether the bytes aren't a valid gzip/tar
+ * archive at all, the extracted `manifest.json` isn't valid JSON, or an
+ * individual instance record's JSON is corrupt — surfaces as a distinctly-
+ * messaged "Invalid bundle" error rather than a raw, un-namespaced parser
+ * error (e.g. pako's raw gzip-header error, or a raw `SyntaxError`), so a
+ * future caller (an import dialog) can present a specific message instead
+ * of a parser internals leak.
  */
 export async function importBundle(
   fs: OpfsFs,
@@ -54,7 +56,11 @@ export async function importBundle(
   documents: LangiumDocument[]
 ): Promise<{ imported: InstanceRecord[]; stale: boolean }> {
   const scratchRoot = `${workspaceRoot}/.studio/.bundle-import-scratch`;
-  await extractTarGz(bundleBytes, fs, { pathPrefix: scratchRoot });
+  try {
+    await extractTarGz(bundleBytes, fs, { pathPrefix: scratchRoot });
+  } catch (err) {
+    throw new Error(`Invalid bundle: archive could not be extracted (${errMessage(err)})`);
+  }
 
   let manifest;
   try {
