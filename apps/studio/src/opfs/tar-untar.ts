@@ -22,7 +22,7 @@
  * truncate to "we ignore the data."
  */
 
-import { inflate } from 'pako';
+import { gzip, inflate } from 'pako';
 import type { OpfsFs } from './opfs-fs.js';
 
 export interface ExtractOptions {
@@ -165,4 +165,74 @@ function isAllZero(block: Uint8Array): boolean {
     if (block[i] !== 0) return false;
   }
   return true;
+}
+
+export interface TarEntry {
+  path: string;
+  data: Uint8Array;
+}
+
+/**
+ * Builds one 512-byte ustar header. Field offsets mirror parseUstarHeader
+ * above exactly: name 0-100, mode 100-108, uid 108-116, gid 116-124,
+ * size 124-136, mtime 136-148, checksum 148-156, typeflag 156, magic
+ * 257-263, version 263-265. Only the regular-file typeflag ('0') is
+ * produced — no dirs/links, matching extractTarGz's create-side needs.
+ */
+function ustarHeaderBytes(path: string, size: number): Uint8Array {
+  const header = new Uint8Array(BLOCK);
+  const enc = new TextEncoder();
+  const nameBytes = enc.encode(path);
+  if (nameBytes.length > 100) {
+    throw new Error(`tar: entry path exceeds 100-byte ustar name limit: ${path}`);
+  }
+  header.set(nameBytes, 0);
+  header.set(enc.encode('0000644\0'), 100);
+  header.set(enc.encode('0000000\0'), 108);
+  header.set(enc.encode('0000000\0'), 116);
+  const sizeOctal = size.toString(8).padStart(11, '0') + '\0';
+  header.set(enc.encode(sizeOctal), 124);
+  header.set(enc.encode('00000000000\0'), 136);
+  header.set(enc.encode('        '), 148); // checksum placeholder while computing
+  header[156] = '0'.charCodeAt(0); // typeflag: regular file
+  header.set(enc.encode('ustar\0'), 257);
+  header.set(enc.encode('00'), 263);
+
+  let checksum = 0;
+  for (const b of header) checksum += b;
+  const checksumOctal = checksum.toString(8).padStart(6, '0') + '\0 ';
+  header.set(enc.encode(checksumOctal), 148);
+  return header;
+}
+
+function padTo512(data: Uint8Array): Uint8Array {
+  const remainder = data.byteLength % BLOCK;
+  if (remainder === 0) return data;
+  const padded = new Uint8Array(data.byteLength + (BLOCK - remainder));
+  padded.set(data);
+  return padded;
+}
+
+/**
+ * ustar writer + gzip — the create-side counterpart extractTarGz never had.
+ * Purpose-built to match: only regular files (no dirs/links needed for
+ * bundle export), 512-byte blocks, two trailing zero blocks per the ustar
+ * end-of-archive convention extractTarGz already relies on.
+ */
+export function createTarGz(entries: TarEntry[]): Uint8Array {
+  const parts: Uint8Array[] = [];
+  for (const entry of entries) {
+    parts.push(ustarHeaderBytes(entry.path, entry.data.byteLength));
+    parts.push(padTo512(entry.data));
+  }
+  parts.push(new Uint8Array(BLOCK * 2)); // end-of-archive: two zero blocks
+
+  const totalLength = parts.reduce((sum, p) => sum + p.byteLength, 0);
+  const tar = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    tar.set(part, offset);
+    offset += part.byteLength;
+  }
+  return gzip(tar);
 }
