@@ -28,6 +28,7 @@ import type {
   PreviewFieldKind,
   PreviewSourceMapEntry
 } from './types.js';
+import { choiceOptionFieldName } from './emit/base-namespace-emitter.js';
 
 function humanizeLabel(name: string): string {
   return name
@@ -404,9 +405,15 @@ function buildChoiceOptionField(
   const typeRef = option.typeCall?.type?.ref;
   const refText = option.typeCall?.type?.$refText;
 
-  // Resolve the option's label from the referenced type name
+  // Resolve the option's label from the referenced type name (original DSL
+  // casing, for display) and its `path` from the REAL emitted object key
+  // (lower-camel-cased, per `choiceOptionFieldName`) — the same rule
+  // zod-emitter/json-schema-emitter/ts-emitter apply when generating the
+  // actual schema for a Choice, so instance data keyed by `path` here
+  // round-trips against the real generated schema instead of being
+  // rejected for using the raw (capitalized) DSL type-reference text.
   const label = refText ?? 'unknown';
-  const path = label;
+  const path = refText ? choiceOptionFieldName(refText) : label;
 
   // Primitive type option
   const builtinKind =

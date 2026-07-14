@@ -380,16 +380,53 @@ describe('FormPreviewSchema generation', () => {
       title: 'Collateral',
       status: 'ready'
     });
-    expect(choice?.fields.map((f) => f.path)).toEqual(['Cash', 'Securities']);
+    // `path` is the REAL emitted object key (lower-camel-cased, matching
+    // `choiceOptionFieldName` — the same rule zod/json-schema/ts emitters
+    // use for a Choice's actual generated schema), while `label` keeps the
+    // original DSL casing for display.
+    expect(choice?.fields.map((f) => f.path)).toEqual(['cash', 'securities']);
+    expect(choice?.fields.map((f) => f.label)).toEqual(['Cash', 'Securities']);
     // Each option is required: false because only one may be chosen
     expect(choice?.fields.every((f) => f.required === false)).toBe(true);
-    expect(choice?.fields.find((f) => f.path === 'Cash')).toMatchObject({
-      kind: 'object'
+    expect(choice?.fields.find((f) => f.path === 'cash')).toMatchObject({
+      kind: 'object',
+      label: 'Cash'
     });
-    expect(choice?.fields.find((f) => f.path === 'Securities')).toMatchObject({
-      kind: 'object'
+    expect(choice?.fields.find((f) => f.path === 'securities')).toMatchObject({
+      kind: 'object',
+      label: 'Securities'
     });
   });
+
+  skipIfNodeLt22(
+    "choice option field 'path' uses the real emitted key (lower-camel), not the raw DSL casing",
+    async () => {
+      // Regression test (Codex round-3 finding #1): buildChoiceOptionField
+      // previously set `path` from the raw DSL type-reference text
+      // (`Cash`), which does NOT match what the real generated Zod/JSON
+      // Schema/TypeScript emitters accept as the Choice arm's object key
+      // (`cash`, per `choiceOptionFieldName` in base-namespace-emitter.ts).
+      // An instance authored via the Prototype perspective and keyed by the
+      // old `path` would fail to validate against the real generated
+      // schema for the same model.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        type Cash:
+          amount number (1..1)
+
+        choice Collateral:
+          Cash
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral');
+
+      expect(choice?.fields).toHaveLength(1);
+      expect(choice?.fields[0]).toMatchObject({ path: 'cash', label: 'Cash' });
+    }
+  );
 
   skipIfNodeLt22('choice with unresolved option type produces unsupported status', async () => {
     const doc = await parseModel(`
