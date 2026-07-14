@@ -405,7 +405,7 @@ export function resolveFields(typeFqn: string, path: string[], documents: Langiu
       unsupportedFeatures: new Set(),
       sourceMap: [],
       sourceUri,
-      maxDepth: depth + 1,
+      maxDepth: depth,
       depth,
       path: [...path, attr.name].join('.'),
       label: attr.name,
@@ -415,6 +415,8 @@ export function resolveFields(typeFqn: string, path: string[], documents: Langiu
   );
 }
 ```
+
+**Correction (found during execution, verified independently by the Task 3 reviewer):** `maxDepth: depth` is used above, not `depth + 1` as an earlier draft of this step had it. With `depth + 1`, any non-cyclic object-kind field among the returned attributes would fail `objectField`'s ceiling check and eagerly expand one extra level of its own children — `expandable` would be `undefined` instead of `true`, breaking the "resolve exactly one level" contract and failing the Step 1 test below. `maxDepth: depth` makes `ctx.depth >= ctx.maxDepth` true immediately for every returned attribute, which is what forces object-kind fields into stubs regardless of whether their type happens to already be in `seenTypes`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
