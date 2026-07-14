@@ -45,18 +45,50 @@ const pendingSchemaRequests = new Map<string, string>(); // requestId -> typeFqn
 let opfsFs: OpfsFs | undefined;
 let opfsWorkspaceRoot: string | undefined;
 
+// Per-instance persistence queue (round-4 finding #1) — fire-and-forget
+// `writeInstance`/`deleteInstance` calls issued for the SAME instance id
+// (e.g. one per keystroke from rapid edits) are not guaranteed to resolve
+// in the order they were issued; without sequencing, an older write
+// finishing AFTER a newer one (or a delete racing a still-in-flight write)
+// could leave stale — or wrongly-resurrected — data persisted to OPFS even
+// though the in-memory `instances` state already reflects the latest edit.
+// Chaining every operation for a given id onto that id's current queue tail
+// guarantees writes AND deletes for the same instance execute in call
+// order. Pruned back to empty once an operation's chain settles and no
+// newer operation has replaced it in the meantime, so the map doesn't grow
+// unboundedly across a long session of created-then-deleted instances.
+const instanceWriteQueue = new Map<string, Promise<void>>();
+
+function enqueueInstanceOp(id: string, op: () => Promise<void>): void {
+  const prior = instanceWriteQueue.get(id) ?? Promise.resolve();
+  const next = prior.then(op).finally(() => {
+    if (instanceWriteQueue.get(id) === next) {
+      instanceWriteQueue.delete(id);
+    }
+  });
+  instanceWriteQueue.set(id, next);
+}
+
 function persistInstance(record: InstanceRecord): void {
   if (!opfsFs || !opfsWorkspaceRoot) return;
-  void writeInstance(opfsFs, opfsWorkspaceRoot, record).catch((err) => {
-    console.error('[instance-store] Failed to persist instance to OPFS:', err);
-  });
+  const fs = opfsFs;
+  const workspaceRoot = opfsWorkspaceRoot;
+  enqueueInstanceOp(record.id, () =>
+    writeInstance(fs, workspaceRoot, record).catch((err) => {
+      console.error('[instance-store] Failed to persist instance to OPFS:', err);
+    })
+  );
 }
 
 function persistDelete(id: string): void {
   if (!opfsFs || !opfsWorkspaceRoot) return;
-  void deleteInstance(opfsFs, opfsWorkspaceRoot, id).catch((err) => {
-    console.error('[instance-store] Failed to delete persisted instance from OPFS:', err);
-  });
+  const fs = opfsFs;
+  const workspaceRoot = opfsWorkspaceRoot;
+  enqueueInstanceOp(id, () =>
+    deleteInstance(fs, workspaceRoot, id).catch((err) => {
+      console.error('[instance-store] Failed to delete persisted instance from OPFS:', err);
+    })
+  );
 }
 
 interface InstanceStoreState {
@@ -202,9 +234,25 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   // simply answered before the worker's file state caught up) could
   // otherwise be read by InstanceFormPanel before the fresh
   // `dispatchGenerateSchema` request for the new workspace resolves.
+  //
+  // Also clears the module-level `pendingSchemaRequests` map (round-4
+  // finding #2) — clearing `schemas`/`schemaErrors` state alone isn't
+  // enough: a schema request dispatched from the PREVIOUS workspace can
+  // still be in flight at switch time, and if its `requestId` is left in
+  // `pendingSchemaRequests`, `receiveSchemaResult`/`receiveSchemaStale`
+  // will still recognize it as owned and accept it once it lands —
+  // repopulating `schemas` for that type FQN with data from the WRONG
+  // (previous) workspace's model. `pendingRequests`/
+  // `latestValidateRequestForInstance` (the analogous validate-request
+  // tracking) do NOT need the same treatment: they're keyed by instance id
+  // (a ulid), not by type FQN, so a stale validate response landing after a
+  // switch writes into `validationErrors` under an id that cannot collide
+  // with any instance id in the new workspace — there's no reused key for
+  // it to corrupt.
   setOpfsContext(fs, workspaceRoot) {
     opfsFs = fs;
     opfsWorkspaceRoot = workspaceRoot;
+    pendingSchemaRequests.clear();
     set({ instances: {}, validationErrors: {}, schemas: new Map(), schemaErrors: new Map() });
     void get().loadInstancesFromOpfs();
   },

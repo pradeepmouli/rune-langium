@@ -299,6 +299,63 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     expect(useInstanceStore.getState().schemaErrors.size).toBe(0);
   });
 
+  it('serializes out-of-order writeInstance completions so the LATEST edit always wins on disk (round-4 finding #1)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-order');
+    await flush();
+
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    await flush();
+
+    // Make the FIRST write artificially slow and the SECOND write fast, so
+    // that without per-instance sequencing the second (newer) write would
+    // land on disk before the first (older, now-stale) write completes and
+    // overwrites it.
+    const originalWriteFile = fs.writeFile.bind(fs);
+    let writeCount = 0;
+    vi.spyOn(fs, 'writeFile').mockImplementation(async (path: string, data: never) => {
+      const isFirstWrite = writeCount === 0;
+      writeCount++;
+      if (isFirstWrite) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      return originalWriteFile(path, data);
+    });
+
+    useInstanceStore.getState().updateInstanceData(id, { name: 'first (stale)' });
+    useInstanceStore.getState().updateInstanceData(id, { name: 'second (latest)' });
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const persisted = await readInstance(fs, '/ws-order', id);
+    expect(persisted.data).toEqual({ name: 'second (latest)' });
+  });
+
+  it('sequences a delete after an in-flight write for the same instance id so the delete always wins (round-4 finding #1)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-order-delete');
+    await flush();
+
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    await flush();
+
+    // Delay every subsequent write so the delete issued right after it would
+    // otherwise race ahead and complete first, leaving a stale file behind
+    // once the delayed write finally lands.
+    const originalWriteFile = fs.writeFile.bind(fs);
+    vi.spyOn(fs, 'writeFile').mockImplementation(async (path: string, data: never) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return originalWriteFile(path, data);
+    });
+
+    useInstanceStore.getState().updateInstanceData(id, { name: 'about to be deleted' });
+    useInstanceStore.getState().removeInstance(id);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    await expect(readInstance(fs, '/ws-order-delete', id)).rejects.toThrow();
+  });
+
   it('loadInstancesFromOpfs dispatches validation for every instance restored from OPFS (round-3 finding #3)', async () => {
     const fs = new OpfsFs(createOpfsRoot() as never);
     await writeInstance(fs, '/ws-validate', {
@@ -329,5 +386,24 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     const validatedIds = validateCalls.map((msg) => msg.requestId.split(':')[1]);
 
     expect(validatedIds).toEqual(expect.arrayContaining(['01J000000000000000000010', '01J000000000000000000011']));
+  });
+
+  it('setOpfsContext invalidates in-flight schema requests so a late response from the PREVIOUS workspace is rejected (round-4 finding #2)', async () => {
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    useInstanceStore.getState().dispatchGenerateSchema('test.Party');
+    const requestId = postMessage.mock.calls[0]![0].requestId as string;
+
+    // Simulate a workspace switch happening BEFORE the in-flight request's
+    // response arrives.
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-switch');
+    await flush();
+
+    const schema = { schemaVersion: 1, targetId: 'test.Party', title: 'Party', status: 'ready', fields: [] } as never;
+    const handled = useInstanceStore.getState().receiveSchemaResult(requestId, schema);
+
+    expect(handled).toBe(false);
+    expect(useInstanceStore.getState().schemas.has('test.Party')).toBe(false);
   });
 });
