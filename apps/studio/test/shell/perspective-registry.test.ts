@@ -4,20 +4,26 @@ import { describe, it, expect } from 'vitest';
 import { PERSPECTIVES, resolveEffectivePerspective } from '../../src/shell/perspectives/perspective-registry.js';
 
 describe('PERSPECTIVES registry', () => {
-  it('has the five perspectives in rail order', () => {
-    expect(PERSPECTIVES.map((p) => p.id)).toEqual(['explore', 'workspaces', 'git', 'export', 'settings']);
+  it('has the six perspectives in rail order', () => {
+    expect(PERSPECTIVES.map((p) => p.id)).toEqual(['explore', 'workspaces', 'git', 'export', 'prototype', 'settings']);
   });
   it('only Explore declares a centerSlot (file tabs)', () => {
     expect(PERSPECTIVES.filter((p) => p.centerSlot).map((p) => p.id)).toEqual(['explore']);
   });
-  it('explore/git/export require a workspace; workspaces/settings do not', () => {
+  it('explore/git/export/prototype require a workspace; workspaces/settings do not', () => {
     const req = PERSPECTIVES.filter((p) => p.requiresWorkspace)
       .map((p) => p.id)
       .sort();
-    expect(req).toEqual(['explore', 'export', 'git']);
+    expect(req).toEqual(['explore', 'export', 'git', 'prototype']);
   });
   it('settings is in the bottom group', () => {
     expect(PERSPECTIVES.find((p) => p.id === 'settings')!.group).toBe('bottom');
+  });
+  it('includes a prototype entry requiring a workspace', () => {
+    const prototype = PERSPECTIVES.find((p) => p.id === 'prototype');
+    expect(prototype).toBeDefined();
+    expect(prototype?.requiresWorkspace).toBe(true);
+    expect(prototype?.group).toBe('main');
   });
 });
 

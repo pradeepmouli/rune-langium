@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { Layers, FolderOpen, GitBranch, Package, Settings } from 'lucide-react';
+import { Layers, FolderOpen, GitBranch, Package, Settings, Boxes } from 'lucide-react';
 import type { Perspective, PerspectiveId } from './perspective-types.js';
 import { ExploreCenterSlot, ExploreActions } from './explore-chrome.js';
+import { PrototypeActions } from './prototype-chrome.js';
 
 /** Rail order, top group first; settings pinned to the bottom group. */
 export const PERSPECTIVES: readonly Perspective[] = [
@@ -38,6 +39,15 @@ export const PERSPECTIVES: readonly Perspective[] = [
     group: 'main',
     requiresWorkspace: true,
     title: 'Export / Packaging'
+  },
+  {
+    id: 'prototype',
+    label: 'Prototype',
+    icon: Boxes,
+    group: 'main',
+    requiresWorkspace: true,
+    title: 'Prototype',
+    actions: PrototypeActions
   },
   {
     id: 'settings',
