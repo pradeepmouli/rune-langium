@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { describe, expect, it } from 'vitest';
 import { sha256Hex } from '../../src/instances/fingerprint.js';
 
