@@ -773,8 +773,9 @@ describe('codegen-worker instance:validate messages', () => {
     });
   });
 
-  it('posts an unknown-type diagnostic when the typeFqn cannot be resolved', async () => {
+  it('posts an unknown-type diagnostic when the typeFqn cannot be resolved by either findDataNode or generatePreviewSchemas', async () => {
     findDataNodeMock.mockReturnValue(undefined);
+    generatePreviewSchemasMock.mockReturnValue([]);
 
     const { scope, dispatch } = await loadWorkerModule();
 
@@ -786,12 +787,47 @@ describe('codegen-worker instance:validate messages', () => {
     });
     await flushWorker();
 
-    expect(generatePreviewSchemasMock).not.toHaveBeenCalled();
+    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.Unknown' });
     expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
     expect(scope.postMessage).toHaveBeenLastCalledWith({
       type: 'instance:validateResult',
       requestId: 'validate:2',
       diagnostics: [{ path: '', message: "Unknown type 'test.Unknown'" }]
+    });
+  });
+
+  it('validates a Choice-type instance structurally via generatePreviewSchemas even though findDataNode cannot resolve it (Choice types are not Data nodes)', async () => {
+    findDataNodeMock.mockReturnValue(undefined);
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        kind: 'choice',
+        targetId: 'test.PaymentMethod',
+        title: 'PaymentMethod',
+        status: 'ready',
+        fields: [{ path: 'Cash', label: 'Cash', kind: 'string', required: false }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'test.PaymentMethod',
+      data: {},
+      requestId: 'validate:3'
+    });
+    await flushWorker();
+
+    expect(findDataNodeMock).toHaveBeenCalledWith('test.PaymentMethod', expect.any(Array));
+    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.PaymentMethod' });
+    // Condition predicates need the real Data AST node; a Choice target has
+    // none, so they must be skipped rather than blocking validation entirely.
+    expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'validate:3',
+      diagnostics: []
     });
   });
 });

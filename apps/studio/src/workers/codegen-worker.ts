@@ -474,8 +474,16 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
 
   try {
     const documents = await buildDocuments();
+    // `findDataNode` only searches Data types — it returns undefined for a
+    // Choice target even though `generatePreviewSchemas` (the structural
+    // validator source) supports Choice targets too. Only condition-
+    // predicate extraction genuinely needs the Data AST node; structural
+    // validation must proceed for any target `generatePreviewSchemas` can
+    // resolve, Choice included. "Unknown type" is only correct when NEITHER
+    // resolves the target.
     const dataNode = findDataNode(typeFqn, documents);
-    if (!dataNode) {
+    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    if (!dataNode && !schema) {
       scope.postMessage({
         type: 'instance:validateResult',
         requestId,
@@ -484,9 +492,8 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
       return;
     }
 
-    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
     const structural = validatePreviewSample(
-      schema ?? { schemaVersion: 1, targetId: typeFqn, title: dataNode.name, status: 'ready', fields: [] },
+      schema ?? { schemaVersion: 1, targetId: typeFqn, title: dataNode!.name, status: 'ready', fields: [] },
       data
     );
     const structuralDiagnostics: ValidationDiagnostic[] = Object.entries(structural.errors).map(([path, message]) => ({
@@ -497,10 +504,13 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
     // Condition predicates are the same plain-JS boolean strings
     // transpileCondition() emits into `.refine((data) => <predicate>, ...)`
     // for the zod target — executed here through runInWorkerSandbox so
-    // runeAttrExists/runeCount/etc. are in scope.
-    const conditionDiagnostics: ValidationDiagnostic[] = getActiveConditionPredicates(dataNode)
-      .filter(({ predicate }) => !runInWorkerSandbox('', 'data', data, `(${predicate})`))
-      .map(({ name }) => ({ path: name, message: `Condition '${name}' failed`, conditionName: name }));
+    // runeAttrExists/runeCount/etc. are in scope. Only Data targets carry
+    // conditions; a Choice target (no `dataNode`) has none to evaluate.
+    const conditionDiagnostics: ValidationDiagnostic[] = dataNode
+      ? getActiveConditionPredicates(dataNode)
+          .filter(({ predicate }) => !runInWorkerSandbox('', 'data', data, `(${predicate})`))
+          .map(({ name }) => ({ path: name, message: `Condition '${name}' failed`, conditionName: name }))
+      : [];
 
     scope.postMessage({
       type: 'instance:validateResult',
