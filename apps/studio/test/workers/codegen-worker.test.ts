@@ -917,8 +917,13 @@ describe('codegen-worker instance:validate messages', () => {
 
     dispatch({
       type: 'instance:validate',
+      // Exactly one option present — the Choice "exactly one option" rule
+      // (Codex round-2 finding #2) is covered separately in
+      // preview-validator.test.ts; this test's own concern is only that
+      // Choice targets get routed through generatePreviewSchemas at all
+      // despite findDataNode returning undefined for them.
       typeFqn: 'test.PaymentMethod',
-      data: {},
+      data: { Cash: 'value' },
       requestId: 'validate:3'
     });
     await flushWorker();

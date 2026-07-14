@@ -57,7 +57,12 @@ export function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
       const childShape = Object.fromEntries(
         (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildFieldValidator(child)])
       );
-      const objectSchema = z.object(childShape);
+      // .strict() so an unrecognized/typo'd key surfaces as a validation
+      // error (Codex round-2 finding #1) — this only affects the verdict
+      // this validator reports, never what instance-store.ts actually
+      // persists to InstanceRecord.data (computed independently, never
+      // derived from this validator's parsed/stripped output).
+      const objectSchema = z.object(childShape).strict();
       return field.required ? objectSchema : objectSchema.optional();
     }
     case 'array': {
@@ -84,7 +89,11 @@ export function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
 }
 
 export function buildSchemaValidator(fields: PreviewField[]): z.ZodObject<Record<string, z.ZodTypeAny>> {
-  return z.object(Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildFieldValidator(field)])));
+  // .strict() — see the buildFieldValidator 'object' case for why (Codex
+  // round-2 finding #1).
+  return z
+    .object(Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildFieldValidator(field)])))
+    .strict();
 }
 
 export function validatePreviewSample(
@@ -94,14 +103,36 @@ export function validatePreviewSample(
   const validator = buildSchemaValidator(schema.fields);
   const result = validator.safeParse(values);
 
-  if (result.success) {
-    return { errors: {}, valid: true };
+  const errors: Record<string, string> = {};
+  let valid = result.success;
+
+  if (!result.success) {
+    for (const issue of result.error.issues) {
+      const key = formatIssuePath(issue.path);
+      errors[key] = issue.message;
+    }
   }
 
-  const errors: Record<string, string> = {};
-  for (const issue of result.error.issues) {
-    const key = formatIssuePath(issue.path);
-    errors[key] = issue.message;
+  // A Choice schema's option fields are ALL generated with `required:
+  // false` (FormPreviewPanel's ChoiceFieldGroup renders "which option is
+  // chosen" via presence in `values`, not a required flag — see
+  // ChoiceFieldGroup's `activeField` lookup), so the structural validator
+  // above happily accepts both zero options present and multiple options
+  // present simultaneously, even though the real generated Zod schema for
+  // a Choice type is a strict union requiring exactly one arm (Codex
+  // round-2 finding #2). Uses the same presence semantics ChoiceFieldGroup
+  // already relies on for rendering: a root key's value is `!== undefined`.
+  if (schema.kind === 'choice') {
+    const presentCount = schema.fields.filter((field) => values[fieldRootKey(field.path)] !== undefined).length;
+    if (presentCount !== 1) {
+      // Keyed at the empty path — the same schema-level (not field-level)
+      // convention `formatIssuePath([])` produces, and the same convention
+      // codegen-worker.ts's `validateInstance` already uses for its
+      // schema-level "Unknown type" diagnostic (`path: ''`).
+      errors[''] = presentCount === 0 ? 'Choose one option.' : 'Only one option can be selected.';
+      valid = false;
+    }
   }
-  return { errors, valid: false };
+
+  return { errors, valid };
 }
