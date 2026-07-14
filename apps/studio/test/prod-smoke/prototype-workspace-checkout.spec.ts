@@ -2,24 +2,24 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Validated live against `pnpm dev` (plain Vite, no Pages Functions) for the
- * navigation/selector portion — workspace load, rail-prototype, New Instance
- * creation, tab switching, and label targeting all confirmed correct against
- * real rendered DOM (one real bug was found and fixed this way: `getByRole`
- * substring-matched "Name" against the sidebar's "New instance name" input;
- * `exact: true` below is required).
+ * Validated live end-to-end (both against `pnpm dev` and a real production
+ * build served via `vite preview`): workspace load, rail-prototype, New
+ * Instance creation, the worker-backed schema round trip, field editing, tab
+ * switching, and the Inspector's Raw JSON all confirmed correct against real
+ * rendered DOM. Two real bugs were found and fixed this way:
+ *   - `getByRole('textbox', { name: 'Name' })` substring-matched the
+ *     sidebar's "New instance name" input — `exact: true` is required.
+ *   - An unscoped `getByText('"Acme"')` matched two elements: the Inspector
+ *     tab's Raw JSON AND the Fields tab's own still-mounted (hidden, not
+ *     unmounted) "Sample data" preview — scoped to the Inspector tabpanel.
  *
- * The worker-backed schema round trip (Fields tab resolving past "Generating
- * preview…") could NOT be exercised under plain `pnpm dev`: `/api/parse` and
- * `/api/lsp/session` are Cloudflare Pages Functions unavailable outside
- * `pnpm dev:pages`/`dev:full`, and the codegen worker crashes without them.
- * This is a pre-existing dev-mode gap (confirmed unrelated to this feature —
- * the worker module and all its transitive imports load and transform
- * without error under plain Vite; the crash is a runtime dependency on the
- * Pages Functions layer, not a bug in this branch's code) — exactly why this
- * suite is a `PLAYWRIGHT_PROD_SMOKE`-gated *production* smoke test rather
- * than a unit/integration test. Full end-to-end validation of this file
- * happens on first real run against `pnpm dev:full` or a deployed Studio.
+ * Under plain `pnpm dev` (no Cloudflare Pages Functions), the codegen worker
+ * crashed on this flow; under a real production build (`vite preview`) it
+ * did not — this workspace never uses the curated-bundle-hydration path
+ * `/api/parse` exists for, so the crash was a `pnpm dev`-only artifact, not
+ * a feature dependency on Pages Functions. See `schema-import-checkout.spec.ts`
+ * for a related, confirmed dev-mode-only bug (an unrelated Node-builtin
+ * import that a production build's tree-shaking correctly eliminates).
  */
 
 import { Buffer } from 'node:buffer';
@@ -79,8 +79,13 @@ test.describe('prototype workspace checkout smoke', () => {
     await nameField.blur();
 
     await page.getByRole('tab', { name: 'Inspector' }).click();
-    await expect(page.getByRole('heading', { name: 'Raw JSON' })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('"Acme"', { exact: false })).toBeVisible({ timeout: 10000 });
+    // Scoped to the Inspector tabpanel — base-ui Tabs keeps inactive panels
+    // (including FormPreviewPanel's own "Sample data" JSON preview on the
+    // Fields tab, which shows the same value) mounted-but-hidden rather than
+    // unmounted, so an unscoped page-wide text match hits both.
+    const inspectorPanel = page.getByRole('tabpanel', { name: 'Inspector' });
+    await expect(inspectorPanel.getByRole('heading', { name: 'Raw JSON' })).toBeVisible({ timeout: 10000 });
+    await expect(inspectorPanel.getByText('"Acme"', { exact: false })).toBeVisible({ timeout: 10000 });
 
     // The instance also appears in the explorer list under its given name —
     // proving createInstance + the sidebar's list rendering share the same
