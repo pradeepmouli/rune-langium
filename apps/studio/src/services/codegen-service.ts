@@ -18,7 +18,7 @@
  */
 
 import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
-import type { FormPreviewSchema, PreviewField } from '@rune-langium/codegen/export';
+import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import type {
   CodeGenerationRequest,
   CodeGenerationResult,
@@ -102,21 +102,6 @@ export function createInstanceValidateMessage(
   return { type: 'instance:validate', typeFqn, data, requestId };
 }
 
-export interface InstanceResolveFieldsMessage {
-  type: 'instance:resolveFields';
-  typeFqn: string;
-  path: string[];
-  requestId: string;
-}
-
-export function createInstanceResolveFieldsMessage(
-  typeFqn: string,
-  path: string[],
-  requestId: string
-): InstanceResolveFieldsMessage {
-  return { type: 'instance:resolveFields', typeFqn, path, requestId };
-}
-
 export function isPreviewExecuteResultMessage(msg: unknown): msg is {
   type: 'preview:execute-result';
   requestId: string;
@@ -141,18 +126,6 @@ export function isInstanceValidateResultMessage(msg: unknown): msg is {
   diagnostics: Array<{ path: string; message: string; conditionName?: string }>;
 } {
   return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'instance:validateResult';
-}
-
-export function isInstanceResolveFieldsResultMessage(msg: unknown): msg is {
-  type: 'instance:resolveFieldsResult';
-  requestId: string;
-  path: string[];
-  fields: PreviewField[];
-  error?: string;
-} {
-  return (
-    typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'instance:resolveFieldsResult'
-  );
 }
 
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;

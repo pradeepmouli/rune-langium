@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 export { sha256Hex } from './fingerprint.js';
-export { resolveFields, findDataNode } from './resolve-fields.js';
+export { findDataNode } from './data-lookup.js';
 export { getActiveConditionPredicates, type ConditionPredicate } from './condition-predicates.js';
 export {
   buildManifest,

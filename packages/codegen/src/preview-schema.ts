@@ -49,7 +49,7 @@ export interface NamespaceIndex {
   duplicateDataNames: Set<string>;
 }
 
-export interface FieldContext {
+interface FieldContext {
   namespace: NamespaceIndex;
   unsupportedFeatures: Set<string>;
   sourceMap: PreviewSourceMapEntry[];
@@ -59,8 +59,6 @@ export interface FieldContext {
   path: string;
   label: string;
   seenTypes: Set<string>;
-  /** When true, a depth-ceiling object field becomes an expandable stub instead of an 'unknown' stub. Used by the lazy resolver (instances/resolve-fields.ts) — absent/false preserves today's bounded generatePreviewSchemas() behavior exactly. */
-  lazy?: boolean;
 }
 
 const BUILTIN_KIND_MAP: Record<string, Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>> = {
@@ -486,7 +484,7 @@ function buildFunctionSchema(
   };
 }
 
-export function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
+function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
   addSourceMapEntry(ctx.sourceMap, ctx.path, attr, ctx.sourceUri);
   const card = attr.card;
   const base = buildBaseField(attr, ctx);
@@ -590,16 +588,6 @@ function enumField(ctx: FieldContext, enumNode: RosettaEnumeration): PreviewFiel
 
 function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewField {
   if (ctx.seenTypes.has(data.name) || ctx.depth >= ctx.maxDepth) {
-    if (ctx.lazy) {
-      return {
-        path: ctx.path,
-        label: ctx.label,
-        kind: 'object',
-        required: true,
-        children: [],
-        expandable: true
-      };
-    }
     ctx.unsupportedFeatures.add(`recursive-reference:${data.name}`);
     return {
       path: ctx.path,

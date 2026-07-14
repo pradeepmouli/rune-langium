@@ -265,12 +265,6 @@ export interface PreviewEnumField extends PreviewFieldBase {
 export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
   children: PreviewField[];
-  /**
-   * When true, this object field is a depth-ceiling stub with no expanded
-   * `children` yet — the lazy resolver (instances/resolve-fields.ts) can
-   * expand it on demand. Absent for normal eagerly-expanded object fields.
-   */
-  expandable?: boolean;
 }
 
 export interface PreviewArrayField extends PreviewFieldBase {

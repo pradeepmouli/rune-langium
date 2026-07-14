@@ -15,8 +15,7 @@ import {
   isPreviewWorkerMessage,
   isPreviewExecuteResultMessage,
   isPreviewExecuteErrorMessage,
-  isInstanceValidateResultMessage,
-  isInstanceResolveFieldsResultMessage
+  isInstanceValidateResultMessage
 } from '../../services/codegen-service.js';
 import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
@@ -165,10 +164,6 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       }
       if (isInstanceValidateResultMessage(msg)) {
         useInstanceStore.getState().receiveValidateResult(msg.requestId, msg.diagnostics);
-        return;
-      }
-      if (isInstanceResolveFieldsResultMessage(msg)) {
-        useInstanceStore.getState().receiveResolveFieldsResult(msg.requestId, msg.fields);
         return;
       }
       // Preview messages below — execution messages above bypass stale-check

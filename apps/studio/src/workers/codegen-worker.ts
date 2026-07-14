@@ -27,7 +27,7 @@ import { URI } from 'langium';
 import { createRuneDslServices, hydrateModelDocument } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
 import type { Target } from '@rune-langium/codegen/export';
-import { resolveFields, getActiveConditionPredicates, findDataNode } from '@rune-langium/codegen/instances';
+import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 import { validatePreviewSample } from '../services/preview-validator.js';
@@ -75,20 +75,8 @@ interface InstanceValidateMessage {
   requestId: string;
 }
 
-interface InstanceResolveFieldsMessage {
-  type: 'instance:resolveFields';
-  typeFqn: string;
-  path: string[];
-  requestId: string;
-}
-
 type InboundMessage = SetFilesMessage | GenerateMessage;
-type WorkerInboundMessage =
-  | InboundMessage
-  | PreviewWorkerRequest
-  | PreviewExecuteMessage
-  | InstanceValidateMessage
-  | InstanceResolveFieldsMessage;
+type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecuteMessage | InstanceValidateMessage;
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -496,9 +484,9 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
       return;
     }
 
-    const fields = resolveFields(typeFqn, [], documents);
+    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
     const structural = validatePreviewSample(
-      { schemaVersion: 1, targetId: typeFqn, title: dataNode.name, status: 'ready', fields },
+      schema ?? { schemaVersion: 1, targetId: typeFqn, title: dataNode.name, status: 'ready', fields: [] },
       data
     );
     const structuralDiagnostics: ValidationDiagnostic[] = Object.entries(structural.errors).map(([path, message]) => ({
@@ -525,28 +513,6 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
       type: 'instance:validateResult',
       requestId,
       diagnostics: [{ path: '', message: err instanceof Error ? err.message : 'Instance validation failed.' }]
-    });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Instance field resolution
-// ---------------------------------------------------------------------------
-
-async function resolveInstanceFields(typeFqn: string, path: string[], requestId: string): Promise<void> {
-  const scope = self as unknown as DedicatedWorkerGlobalScope;
-  try {
-    const documents = await buildDocuments();
-    const fields = resolveFields(typeFqn, path, documents);
-    scope.postMessage({ type: 'instance:resolveFieldsResult', requestId, path, fields });
-  } catch (err) {
-    console.error('[codegen-worker] Instance field resolution error:', err);
-    scope.postMessage({
-      type: 'instance:resolveFieldsResult',
-      requestId,
-      path,
-      fields: [],
-      error: err instanceof Error ? err.message : 'Field resolution failed.'
     });
   }
 }
@@ -600,9 +566,6 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'instance:validate') {
         const { typeFqn, data, requestId } = msg;
         validateInstance(typeFqn, data, requestId).catch(console.error);
-      } else if (msg.type === 'instance:resolveFields') {
-        const { typeFqn, path, requestId } = msg;
-        resolveInstanceFields(typeFqn, path, requestId).catch(console.error);
       }
     }
   );

@@ -69,12 +69,10 @@ vi.mock('@rune-langium/codegen/export', () => ({
   RUNTIME_HELPER_JS_SOURCE: ''
 }));
 
-const resolveFieldsMock = vi.fn(() => []);
 const getActiveConditionPredicatesMock = vi.fn(() => []);
 const findDataNodeMock = vi.fn(() => undefined);
 
 vi.mock('@rune-langium/codegen/instances', () => ({
-  resolveFields: resolveFieldsMock,
   getActiveConditionPredicates: getActiveConditionPredicatesMock,
   findDataNode: findDataNodeMock
 }));
@@ -714,7 +712,8 @@ describe('codegen-worker instance:validate messages', () => {
     buildMock.mockReset();
     buildMock.mockImplementation(async () => undefined);
     fromStringMock.mockClear();
-    resolveFieldsMock.mockReset();
+    generatePreviewSchemasMock.mockReset();
+    generatePreviewSchemasMock.mockReturnValue([]);
     getActiveConditionPredicatesMock.mockReset();
     findDataNodeMock.mockReset();
   });
@@ -725,9 +724,17 @@ describe('codegen-worker instance:validate messages', () => {
 
   it('handles instance:validate — structural error and condition violation both surface as diagnostics', async () => {
     findDataNodeMock.mockReturnValue({ name: 'Trade' });
-    resolveFieldsMock.mockReturnValue([
-      { path: 'symbol', label: 'Symbol', kind: 'string', required: true },
-      { path: 'quantity', label: 'Quantity', kind: 'number', required: true }
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        targetId: 'test.Trade',
+        title: 'Trade',
+        status: 'ready',
+        fields: [
+          { path: 'symbol', label: 'Symbol', kind: 'string', required: true },
+          { path: 'quantity', label: 'Quantity', kind: 'number', required: true }
+        ]
+      }
     ]);
     getActiveConditionPredicatesMock.mockReturnValue([{ name: 'PositiveQuantity', predicate: 'data.quantity > 0' }]);
 
@@ -749,7 +756,7 @@ describe('codegen-worker instance:validate messages', () => {
     await flushWorker();
 
     expect(findDataNodeMock).toHaveBeenCalledWith('test.Trade', expect.any(Array));
-    expect(resolveFieldsMock).toHaveBeenCalledWith('test.Trade', [], expect.any(Array));
+    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.Trade' });
     expect(getActiveConditionPredicatesMock).toHaveBeenCalledWith({ name: 'Trade' });
 
     expect(scope.postMessage).toHaveBeenLastCalledWith({
@@ -779,7 +786,7 @@ describe('codegen-worker instance:validate messages', () => {
     });
     await flushWorker();
 
-    expect(resolveFieldsMock).not.toHaveBeenCalled();
+    expect(generatePreviewSchemasMock).not.toHaveBeenCalled();
     expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
     expect(scope.postMessage).toHaveBeenLastCalledWith({
       type: 'instance:validateResult',
