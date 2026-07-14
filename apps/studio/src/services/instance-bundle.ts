@@ -55,7 +55,13 @@ export async function importBundle(
   bundleBytes: Uint8Array,
   documents: LangiumDocument[]
 ): Promise<{ imported: InstanceRecord[]; stale: boolean }> {
-  const scratchRoot = `${workspaceRoot}/.studio/.bundle-import-scratch`;
+  // A unique-per-call scratch path (not a fixed shared one) — `extractTarGz`
+  // only writes entries present in the NEW archive, so a fixed, reused path
+  // could let a PRIOR import's leftover file (e.g. `instances/<id>.json` for
+  // an id the new, malformed bundle's manifest references but doesn't
+  // actually include) be read as if it were part of THIS import, instead of
+  // correctly failing.
+  const scratchRoot = `${workspaceRoot}/.studio/.bundle-import-scratch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   try {
     await extractTarGz(bundleBytes, fs, { pathPrefix: scratchRoot });
   } catch (err) {
