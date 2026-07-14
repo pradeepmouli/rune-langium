@@ -14,6 +14,7 @@ import { SettingsPerspective } from './screens/SettingsPerspective.js';
 import { WorkspacesPerspective } from './screens/WorkspacesPerspective.js';
 import { GitSyncPerspective } from './screens/GitSyncPerspective.js';
 import { ExportPerspective } from './screens/ExportPerspective.js';
+import { PrototypePerspective } from './screens/PrototypePerspective.js';
 import { ExplorePerspective } from '../ExplorePerspective.js';
 import type { WorkspaceKind } from '../../workspace/persistence.js';
 import type { WorkspaceFile } from '../../services/workspace.js';
@@ -58,6 +59,7 @@ export function PerspectiveHost({
       {effective === 'workspaces' && <WorkspacesPerspective />}
       {effective === 'git' && <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />}
       {effective === 'export' && <ExportPerspective files={files} />}
+      {effective === 'prototype' && <PrototypePerspective />}
       {effective === 'settings' && <SettingsPerspective />}
     </div>
   );

@@ -27,4 +27,34 @@ describe('InstanceExplorerPanel', () => {
     expect(screen.getByText('Alpha')).toBeInTheDocument();
     expect(screen.queryByText('Beta')).not.toBeInTheDocument();
   });
+
+  it('creates a new instance from the type FQN + name inputs and selects it', () => {
+    const onSelect = vi.fn();
+    render(<InstanceExplorerPanel onSelect={onSelect} selectedId={undefined} />);
+
+    fireEvent.change(screen.getByLabelText('New instance type'), { target: { value: 'test.Party' } });
+    fireEvent.change(screen.getByLabelText('New instance name'), { target: { value: 'Acme' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    const instances = Object.values(useInstanceStore.getState().instances);
+    expect(instances).toHaveLength(1);
+    expect(instances[0]).toMatchObject({ typeFqn: 'test.Party', name: 'Acme' });
+    expect(onSelect).toHaveBeenCalledWith(instances[0]!.id);
+  });
+
+  it('disables the Create button when the type or name input is empty/whitespace-only', () => {
+    render(<InstanceExplorerPanel onSelect={() => {}} selectedId={undefined} />);
+    const createButton = screen.getByRole('button', { name: 'Create' });
+
+    expect(createButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('New instance type'), { target: { value: 'test.Party' } });
+    expect(createButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('New instance name'), { target: { value: '   ' } });
+    expect(createButton).toBeDisabled();
+
+    fireEvent.click(createButton);
+    expect(Object.values(useInstanceStore.getState().instances)).toHaveLength(0);
+  });
 });
