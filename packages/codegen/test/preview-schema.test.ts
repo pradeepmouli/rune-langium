@@ -405,4 +405,34 @@ describe('FormPreviewSchema generation', () => {
     expect(instrument).toBeDefined();
     expect(instrument!.fields.length).toBeGreaterThanOrEqual(0);
   });
+
+  skipIfNodeLt22(
+    'includes inherited fields from a Data supertype chain, not just the subtype own attributes',
+    async () => {
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Base:
+        id string (1..1)
+
+      type Middle extends Base:
+        note string (1..1)
+
+      type Sub extends Middle:
+        quantity int (0..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Sub' });
+      const sub = schemas.find((schema) => schema.targetId === 'test.preview.Sub');
+
+      expect(sub).toBeDefined();
+      // Inherited fields (from Base and Middle) must be present alongside Sub's
+      // own attribute — a bug here would silently pass validation on required
+      // parent fields that were missing from an instance.
+      expect(sub?.fields.map((field) => field.path).sort()).toEqual(['id', 'note', 'quantity']);
+      expect(sub?.fields.find((field) => field.path === 'id')).toMatchObject({ kind: 'string', required: true });
+      expect(sub?.fields.find((field) => field.path === 'note')).toMatchObject({ kind: 'string', required: true });
+    }
+  );
 });
