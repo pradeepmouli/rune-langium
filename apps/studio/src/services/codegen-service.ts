@@ -128,6 +128,61 @@ export function isInstanceValidateResultMessage(msg: unknown): msg is {
   return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'instance:validateResult';
 }
 
+/**
+ * Own message channel for instance-editing's schema fetches (finding
+ * #6/#7 fix) — previously these piggy-backed on `preview:generate`/
+ * `preview:result`, the SAME messages `usePreviewStore` uses for the
+ * Preview perspective's own target selection. The codegen worker tracks
+ * module-level `lastPreviewTargetId`/`lastPreviewRequestId` keyed off ANY
+ * `preview:generate` message, so an instance schema fetch could silently
+ * overwrite which target gets re-generated on the next `preview:setFiles`
+ * — corrupting the Preview perspective's state for a type the user never
+ * selected there. A distinct request/response pair (mirroring
+ * `instance:validate`/`instance:validateResult`) means the codegen worker
+ * never touches `lastPreviewTargetId`/`lastPreviewRequestId` for these
+ * requests at all — no ambiguity to disambiguate on the receiving end.
+ */
+export interface InstanceGenerateSchemaMessage {
+  type: 'instance:generateSchema';
+  typeFqn: string;
+  requestId: string;
+}
+
+export function createInstanceGenerateSchemaMessage(typeFqn: string, requestId: string): InstanceGenerateSchemaMessage {
+  return { type: 'instance:generateSchema', typeFqn, requestId };
+}
+
+export function isInstanceGenerateSchemaResultMessage(msg: unknown): msg is {
+  type: 'instance:generateSchemaResult';
+  requestId: string;
+  schema: FormPreviewSchema;
+} {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const candidate = msg as Record<string, unknown>;
+  return (
+    candidate.type === 'instance:generateSchemaResult' &&
+    typeof candidate.requestId === 'string' &&
+    isFormPreviewSchema(candidate.schema)
+  );
+}
+
+export function isInstanceGenerateSchemaStaleMessage(msg: unknown): msg is {
+  type: 'instance:generateSchemaStale';
+  requestId: string;
+  reason: PreviewStaleMessage['reason'];
+  message: string;
+} {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const candidate = msg as Record<string, unknown>;
+  return (
+    candidate.type === 'instance:generateSchemaStale' &&
+    typeof candidate.requestId === 'string' &&
+    typeof candidate.reason === 'string' &&
+    PREVIEW_STALE_REASONS.has(candidate.reason as PreviewStaleMessage['reason']) &&
+    typeof candidate.message === 'string'
+  );
+}
+
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
 export type PreviewWorkerMessage = PreviewResultMessage | PreviewStaleMessage;
 

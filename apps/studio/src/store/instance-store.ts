@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
-import { createInstanceValidateMessage, createPreviewGenerateMessage } from '../services/codegen-service.js';
+import { createInstanceGenerateSchemaMessage, createInstanceValidateMessage } from '../services/codegen-service.js';
+import { deleteInstance, listInstanceFiles, readInstance, writeInstance } from '../opfs/instances-fs.js';
+import type { OpfsFs } from '../opfs/opfs-fs.js';
 import type { InstanceRecord, ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
+import type { PreviewStaleReason } from './preview-store.js';
 import { create } from 'zustand';
 
 function ulid(): string {
@@ -17,18 +20,50 @@ function ulid(): string {
 let workerRef: Worker | undefined;
 let requestCounter = 0;
 const pendingRequests = new Map<string, string>(); // requestId -> instanceId
+// Tracks the LATEST outstanding validate requestId per instance so an
+// out-of-order response (an older request's result arriving after a newer
+// one, e.g. from rapid edits) can be dropped instead of overwriting fresher
+// diagnostics with stale ones (finding #9).
+const latestValidateRequestForInstance = new Map<string, string>(); // instanceId -> requestId
 
 // Separate module-level map for instance-editing's schema fetches — must
-// never collide with dispatchValidate's pendingRequests above, nor with
-// usePreviewStore's own target-selection requestIds (both reuse the
-// preview:generate/preview:result worker messages).
+// never collide with dispatchValidate's pendingRequests above. These now
+// dispatch on their own `instance:generateSchema`/`instance:generateSchemaResult`
+// worker message channel (finding #6/#7) rather than reusing
+// `preview:generate`/`preview:result` (usePreviewStore's own target-
+// selection channel) — sharing that channel let an instance schema fetch
+// silently overwrite the codegen worker's `lastPreviewTargetId`, corrupting
+// which target the Preview perspective re-generates on the next workspace
+// file change.
 let schemaRequestCounter = 0;
 const pendingSchemaRequests = new Map<string, string>(); // requestId -> typeFqn
+
+// OPFS persistence context (finding #1) — set once both an `OpfsFs` instance
+// and the active workspace's root path are available. Follows the same
+// module-level-ref pattern as `workerRef` above (not store state, since
+// `OpfsFs` wraps a non-serializable `FileSystemDirectoryHandle`).
+let opfsFs: OpfsFs | undefined;
+let opfsWorkspaceRoot: string | undefined;
+
+function persistInstance(record: InstanceRecord): void {
+  if (!opfsFs || !opfsWorkspaceRoot) return;
+  void writeInstance(opfsFs, opfsWorkspaceRoot, record).catch((err) => {
+    console.error('[instance-store] Failed to persist instance to OPFS:', err);
+  });
+}
+
+function persistDelete(id: string): void {
+  if (!opfsFs || !opfsWorkspaceRoot) return;
+  void deleteInstance(opfsFs, opfsWorkspaceRoot, id).catch((err) => {
+    console.error('[instance-store] Failed to delete persisted instance from OPFS:', err);
+  });
+}
 
 interface InstanceStoreState {
   instances: Record<string, InstanceRecord>;
   validationErrors: Record<string, ValidationDiagnostic[]>;
   schemas: Map<string, FormPreviewSchema>;
+  schemaErrors: Map<string, { reason: PreviewStaleReason; message: string }>;
   createInstance(typeFqn: string, name: string): string;
   updateInstanceData(id: string, data: Record<string, unknown>): void;
   removeInstance(id: string): void;
@@ -37,19 +72,23 @@ interface InstanceStoreState {
   receiveValidateResult(requestId: string, diagnostics: ValidationDiagnostic[]): void;
   dispatchGenerateSchema(typeFqn: string): void;
   receiveSchemaResult(requestId: string, schema: FormPreviewSchema): boolean;
-  clearPendingSchemaRequest(requestId: string): void;
+  receiveSchemaStale(requestId: string, reason: PreviewStaleReason, message: string): boolean;
+  setOpfsContext(fs: OpfsFs, workspaceRoot: string): void;
+  loadInstancesFromOpfs(): Promise<void>;
 }
 
 export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   instances: {},
   validationErrors: {},
   schemas: new Map(),
+  schemaErrors: new Map(),
 
   createInstance(typeFqn, name) {
     const id = ulid();
     const now = Date.now();
     const record: InstanceRecord = { id, name, typeFqn, data: {}, createdAt: now, modifiedAt: now };
     set((state) => ({ instances: { ...state.instances, [id]: record } }));
+    persistInstance(record);
     return id;
   },
 
@@ -58,11 +97,14 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   // always supplies the complete top-level values tree, matching how
   // usePreviewStore's updateSample already treats its `values` argument.
   updateInstanceData(id, data) {
+    let updated: InstanceRecord | undefined;
     set((state) => {
       const existing = state.instances[id];
       if (!existing) return state;
-      return { instances: { ...state.instances, [id]: { ...existing, data, modifiedAt: Date.now() } } };
+      updated = { ...existing, data, modifiedAt: Date.now() };
+      return { instances: { ...state.instances, [id]: updated } };
     });
+    if (updated) persistInstance(updated);
     get().dispatchValidate(id);
   },
 
@@ -71,6 +113,7 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       const { [id]: _removed, ...rest } = state.instances;
       return { instances: rest };
     });
+    persistDelete(id);
   },
 
   setWorker(worker) {
@@ -83,6 +126,7 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     requestCounter++;
     const requestId = `validate:${id}:${requestCounter}`;
     pendingRequests.set(requestId, id);
+    latestValidateRequestForInstance.set(id, requestId);
     workerRef.postMessage(
       createInstanceValidateMessage(record.typeFqn, record.data as Record<string, unknown>, requestId)
     );
@@ -92,6 +136,9 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     const id = pendingRequests.get(requestId);
     if (!id) return;
     pendingRequests.delete(requestId);
+    // Drop an out-of-order response: only the LATEST request issued for
+    // this instance is allowed to write validationErrors (finding #9).
+    if (latestValidateRequestForInstance.get(id) !== requestId) return;
     set((state) => ({ validationErrors: { ...state.validationErrors, [id]: diagnostics } }));
   },
 
@@ -105,7 +152,7 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     schemaRequestCounter++;
     const requestId = `schema:${typeFqn}:${schemaRequestCounter}`;
     pendingSchemaRequests.set(requestId, typeFqn);
-    workerRef.postMessage(createPreviewGenerateMessage(typeFqn, requestId));
+    workerRef.postMessage(createInstanceGenerateSchemaMessage(typeFqn, requestId));
   },
 
   receiveSchemaResult(requestId, schema) {
@@ -114,12 +161,68 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     set((state) => {
       const schemas = new Map(state.schemas);
       schemas.set(schema.targetId, schema);
-      return { schemas };
+      const schemaErrors = new Map(state.schemaErrors);
+      schemaErrors.delete(schema.targetId);
+      return { schemas, schemaErrors };
     });
     return true;
   },
 
-  clearPendingSchemaRequest(requestId) {
+  receiveSchemaStale(requestId, reason, message) {
+    const typeFqn = pendingSchemaRequests.get(requestId);
+    if (!typeFqn) return false;
     pendingSchemaRequests.delete(requestId);
+    set((state) => {
+      const schemaErrors = new Map(state.schemaErrors);
+      schemaErrors.set(typeFqn, { reason, message });
+      return { schemaErrors };
+    });
+    return true;
+  },
+
+  // Wires the shared `OpfsFs` + active workspace root (finding #1) — set
+  // from wherever in the component tree both become available (see
+  // App.tsx's workspace-manager effect). Immediately clears in-memory
+  // instances (a workspace switch must not leak the PREVIOUS workspace's
+  // instances while the new workspace's are being loaded) and kicks off
+  // `loadInstancesFromOpfs` fire-and-forget, mirroring the
+  // fire-and-forget `dispatchValidate` pattern already used elsewhere in
+  // this store.
+  setOpfsContext(fs, workspaceRoot) {
+    opfsFs = fs;
+    opfsWorkspaceRoot = workspaceRoot;
+    set({ instances: {}, validationErrors: {} });
+    void get().loadInstancesFromOpfs();
+  },
+
+  async loadInstancesFromOpfs() {
+    if (!opfsFs || !opfsWorkspaceRoot) return;
+    const fs = opfsFs;
+    const workspaceRoot = opfsWorkspaceRoot;
+    try {
+      const files = await listInstanceFiles(fs, workspaceRoot);
+      const ids = files.map((f) => f.replace(/\.json$/, ''));
+      const records = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            return await readInstance(fs, workspaceRoot, id);
+          } catch (err) {
+            console.error(`[instance-store] Failed to read persisted instance "${id}" from OPFS:`, err);
+            return undefined;
+          }
+        })
+      );
+      const loaded: Record<string, InstanceRecord> = {};
+      for (const record of records) {
+        if (record) loaded[record.id] = record;
+      }
+      // Only apply if this OPFS context is still the current one — guards
+      // against a rapid workspace switch resolving out of order.
+      if (opfsFs === fs && opfsWorkspaceRoot === workspaceRoot) {
+        set({ instances: loaded });
+      }
+    } catch (err) {
+      console.error('[instance-store] Failed to load instances from OPFS:', err);
+    }
   }
 }));

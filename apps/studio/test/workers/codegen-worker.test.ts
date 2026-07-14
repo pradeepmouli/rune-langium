@@ -358,6 +358,110 @@ describe('codegen-worker preview messages', () => {
     expect(generatePreviewSchemasMock).not.toHaveBeenCalled();
     expect(scope.postMessage).not.toHaveBeenCalled();
   });
+
+  it("instance:generateSchema posts instance:generateSchemaResult and does NOT corrupt the Preview perspective's own re-run target (finding #6/#7)", async () => {
+    generatePreviewSchemasMock.mockImplementation((_docs: unknown, opts: { targetId: string }) => {
+      if (opts.targetId === 'beta.Trade') {
+        return [{ schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }];
+      }
+      if (opts.targetId === 'instance.Party') {
+        return [{ schemaVersion: 1, targetId: 'instance.Party', title: 'Party', status: 'ready', fields: [] }];
+      }
+      return [];
+    });
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    // Files are loaded and the Preview perspective selects `beta.Trade`.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'preview:beta.Trade:1'
+    });
+    await flushWorker();
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Trade',
+      requestId: 'preview:beta.Trade:2'
+    });
+    await flushWorker();
+
+    // Instance-editing requests a schema for an UNRELATED type on its own
+    // channel — this must not touch the worker's preview re-run target.
+    dispatch({
+      type: 'instance:generateSchema',
+      typeFqn: 'instance.Party',
+      requestId: 'schema:instance.Party:1'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:generateSchemaResult',
+      requestId: 'schema:instance.Party:1',
+      schema: { schemaVersion: 1, targetId: 'instance.Party', title: 'Party', status: 'ready', fields: [] }
+    });
+
+    // A subsequent workspace file change re-runs the Preview perspective's
+    // LAST target — must still be `beta.Trade`, not `instance.Party`.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta" // edited' }],
+      requestId: 'preview:beta.Trade:3'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:result',
+      targetId: 'beta.Trade',
+      requestId: 'preview:beta.Trade:3',
+      schema: { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    });
+  });
+
+  it('instance:generateSchema posts instance:generateSchemaStale with unsupported-target when no schema is available', async () => {
+    generatePreviewSchemasMock.mockReturnValue([]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'preview:beta.Trade:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'instance:generateSchema',
+      typeFqn: 'instance.Unknown',
+      requestId: 'schema:instance.Unknown:1'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:generateSchemaStale',
+      requestId: 'schema:instance.Unknown:1',
+      reason: 'unsupported-target',
+      message: 'No form preview schema is available for instance.Unknown.'
+    });
+  });
+
+  it('instance:generateSchema posts instance:generateSchemaStale with no-files before any files are loaded', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'instance:generateSchema',
+      typeFqn: 'instance.Party',
+      requestId: 'schema:instance.Party:1'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:generateSchemaStale',
+      requestId: 'schema:instance.Party:1',
+      reason: 'no-files',
+      message: 'No files are loaded for form preview.'
+    });
+  });
 });
 
 describe('codegen-worker execute messages', () => {

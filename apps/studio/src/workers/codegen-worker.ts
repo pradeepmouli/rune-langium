@@ -9,17 +9,26 @@
  * identity per surface, and echoes request ids back so the UI can discard
  * stale replies after files or selections change.
  *
- *   codegen:setFiles  — Update the workspace file set and trigger generation.
- *   codegen:generate  — (Re-)generate using the current file set.
- *   preview:setFiles  — Update the workspace file set and re-run the last preview target.
- *   preview:generate  — (Re-)generate the selected form-preview target.
+ *   codegen:setFiles         — Update the workspace file set and trigger generation.
+ *   codegen:generate         — (Re-)generate using the current file set.
+ *   preview:setFiles         — Update the workspace file set and re-run the last preview target.
+ *   preview:generate         — (Re-)generate the selected form-preview target.
+ *   instance:validate        — Validate an instance's data against its type's structural + condition rules.
+ *   instance:generateSchema  — Fetch a FormPreviewSchema for instance-editing, on its OWN request/response
+ *                              pair — deliberately NOT `preview:generate`/`preview:result`, so it never
+ *                              touches `lastPreviewTargetId`/`lastPreviewRequestId` (finding #6/#7 fix;
+ *                              those touch the target `preview:setFiles` re-runs on a workspace file
+ *                              change, and previously an instance schema fetch could silently corrupt it).
  *
  * Responds with:
- *   codegen:result   — On success; returns the full generated file set for the target.
- *   codegen:outdated — When files are missing or contain parse errors.
- *   codegen:error    — When generation itself fails unexpectedly.
- *   preview:result   — On success; returns the generated form-preview schema.
- *   preview:stale    — When preview inputs are missing, unsupported, or stale.
+ *   codegen:result              — On success; returns the full generated file set for the target.
+ *   codegen:outdated            — When files are missing or contain parse errors.
+ *   codegen:error                — When generation itself fails unexpectedly.
+ *   preview:result               — On success; returns the generated form-preview schema.
+ *   preview:stale                — When preview inputs are missing, unsupported, or stale.
+ *   instance:validateResult      — Structural + condition diagnostics for an `instance:validate` request.
+ *   instance:generateSchemaResult — On success; returns the generated form-preview schema.
+ *   instance:generateSchemaStale  — When schema inputs are missing, unsupported, or stale.
  */
 
 import type { LangiumDocument } from 'langium';
@@ -75,8 +84,19 @@ interface InstanceValidateMessage {
   requestId: string;
 }
 
+interface InstanceGenerateSchemaMessage {
+  type: 'instance:generateSchema';
+  typeFqn: string;
+  requestId: string;
+}
+
 type InboundMessage = SetFilesMessage | GenerateMessage;
-type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecuteMessage | InstanceValidateMessage;
+type WorkerInboundMessage =
+  | InboundMessage
+  | PreviewWorkerRequest
+  | PreviewExecuteMessage
+  | InstanceValidateMessage
+  | InstanceGenerateSchemaMessage;
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -315,6 +335,62 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       requestId,
       reason: 'generation-error',
       message: err instanceof Error ? err.message : 'Preview generation failed.'
+    });
+  }
+}
+
+/**
+ * Instance-editing's schema fetches (finding #6/#7 fix) — deliberately
+ * separate from `runPreview`: it does NOT read or write module-level
+ * `lastPreviewTargetId`/`lastPreviewRequestId`, so it can never corrupt
+ * which target `preview:setFiles` re-runs for the Preview perspective.
+ * Reuses `buildDocuments`/`generatePreviewSchemas`, the same structural
+ * source `runPreview` and `validateInstance` already use.
+ */
+async function runInstanceSchema(typeFqn: string, requestId: string): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+
+  if (currentPreviewFiles.length === 0) {
+    scope.postMessage({
+      type: 'instance:generateSchemaStale',
+      requestId,
+      reason: 'no-files',
+      message: 'No files are loaded for form preview.'
+    });
+    return;
+  }
+
+  try {
+    const documents = await buildDocuments();
+    if (documents.length === 0) {
+      scope.postMessage({
+        type: 'instance:generateSchemaStale',
+        requestId,
+        reason: 'parse-error',
+        message: 'No valid files to generate a form preview from.'
+      });
+      return;
+    }
+
+    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    if (!schema) {
+      scope.postMessage({
+        type: 'instance:generateSchemaStale',
+        requestId,
+        reason: 'unsupported-target',
+        message: `No form preview schema is available for ${typeFqn}.`
+      });
+      return;
+    }
+
+    scope.postMessage({ type: 'instance:generateSchemaResult', requestId, schema });
+  } catch (err) {
+    console.error('[codegen-worker] Instance schema generation error:', err);
+    scope.postMessage({
+      type: 'instance:generateSchemaStale',
+      requestId,
+      reason: 'generation-error',
+      message: err instanceof Error ? err.message : 'Instance schema generation failed.'
     });
   }
 }
@@ -576,6 +652,9 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'instance:validate') {
         const { typeFqn, data, requestId } = msg;
         validateInstance(typeFqn, data, requestId).catch(console.error);
+      } else if (msg.type === 'instance:generateSchema') {
+        const { typeFqn, requestId } = msg;
+        runInstanceSchema(typeFqn, requestId).catch(console.error);
       }
     }
   );

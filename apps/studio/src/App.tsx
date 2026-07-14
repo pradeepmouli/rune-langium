@@ -27,6 +27,7 @@ import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from './store/output-store.js';
 import { useActivityStore } from './store/activity-store.js';
+import { useInstanceStore } from './store/instance-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
 import { AppHeader } from './shell/AppHeader.js';
@@ -815,6 +816,45 @@ function AppContent() {
           useOutputStore
             .getState()
             .addLine(fmtLine('git', 'sync engine failed', err instanceof Error ? err.message : String(err)), 'warn');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getWorkspaceManager, restoredWorkspace]);
+
+  // Instance-store OPFS persistence wiring (spec 023 Task 13 bot-review
+  // finding #1) — mirrors the sync-engine lifecycle effect above, but
+  // unconditional on workspace kind: instance persistence is a data-layer
+  // concern independent of git-backing, so it must wire up for EVERY
+  // workspace (browser-only included), not just git-backed ones. Runs
+  // `useInstanceStore.getState().setOpfsContext(fs, workspaceRoot)` — the
+  // same `OpfsFs` the WorkspaceManager already owns, at that workspace's
+  // `/${id}` root (the convention `WorkspaceManager.create`/`createGitBacked`
+  // already use for `/${id}/files` and `/${id}/.studio`).
+  useEffect(() => {
+    if (!restoredWorkspace) return;
+    const workspaceId = restoredWorkspace.id;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const wm = await getWorkspaceManager();
+        if (cancelled) return; // workspace changed during async getWorkspaceManager
+        useInstanceStore.getState().setOpfsContext(wm.getFs(), `/${workspaceId}`);
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[instance-store] Failed to wire OPFS persistence context:', err);
+          useOutputStore
+            .getState()
+            .addLine(
+              fmtLine(
+                'workspace',
+                'instance persistence unavailable',
+                err instanceof Error ? err.message : String(err)
+              ),
+              'warn'
+            );
         }
       }
     })();

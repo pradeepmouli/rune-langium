@@ -13,6 +13,7 @@ export interface InstanceFormPanelProps {
 export function InstanceFormPanel({ instanceId }: InstanceFormPanelProps): ReactElement {
   const record = useInstanceStore((s) => s.instances[instanceId]);
   const schema = useInstanceStore((s) => (record ? s.schemas.get(record.typeFqn) : undefined));
+  const schemaError = useInstanceStore((s) => (record ? s.schemaErrors.get(record.typeFqn) : undefined));
   const updateInstanceData = useInstanceStore((s) => s.updateInstanceData);
 
   useEffect(() => {
@@ -32,9 +33,14 @@ export function InstanceFormPanel({ instanceId }: InstanceFormPanelProps): React
     );
   }
 
+  // A failed schema fetch (finding #7) renders as 'unavailable' — reusing
+  // FormPreviewPanel's existing status contract — instead of leaving the
+  // panel stuck on "Generating preview…" forever.
   const status: PreviewStatus = schema
     ? { state: 'ready', targetId: record.typeFqn }
-    : { state: 'waiting', targetId: record.typeFqn };
+    : schemaError
+      ? { state: 'unavailable', targetId: record.typeFqn, reason: schemaError.reason, message: schemaError.message }
+      : { state: 'waiting', targetId: record.typeFqn };
 
   return (
     <FormPreviewPanel

@@ -72,7 +72,7 @@ describe('CodegenProvider', () => {
     expect(after).toBeGreaterThan(before); // re-posted on model change
   });
 
-  it('routes a preview:result matching an instance-store pending schema request to instance-store, not usePreviewStore', () => {
+  it('routes an instance:generateSchemaResult matching an instance-store pending schema request to instance-store, on its own channel from usePreviewStore (finding #6/#7)', () => {
     render(
       <WorkspaceStateContext.Provider value={wsState('ws-A')}>
         <CodegenProvider>
@@ -86,9 +86,14 @@ describe('CodegenProvider', () => {
       useInstanceStore.getState().dispatchGenerateSchema('test.instance.Party');
     });
     const schemaRequest = worker.posted.find(
-      (m) => m.type === 'preview:generate' && m.targetId === 'test.instance.Party'
+      (m) => m.type === 'instance:generateSchema' && m.typeFqn === 'test.instance.Party'
     );
     expect(schemaRequest?.requestId.startsWith('schema:')).toBe(true);
+    // Confirms this request never touches preview:generate at all — the
+    // whole point of finding #6/#7's fix.
+    expect(worker.posted.some((m) => m.type === 'preview:generate' && m.targetId === 'test.instance.Party')).toBe(
+      false
+    );
 
     const schema = {
       schemaVersion: 1,
@@ -101,13 +106,50 @@ describe('CodegenProvider', () => {
     act(() => {
       for (const listener of worker.listeners['message'] ?? []) {
         listener({
-          data: { type: 'preview:result', targetId: schema.targetId, requestId: schemaRequest.requestId, schema }
+          data: { type: 'instance:generateSchemaResult', requestId: schemaRequest.requestId, schema }
         });
       }
     });
 
     expect(useInstanceStore.getState().schemas.get('test.instance.Party')).toEqual(schema);
     expect(usePreviewStore.getState().schemas.has('test.instance.Party')).toBe(false);
+  });
+
+  it('routes an instance:generateSchemaStale response to instance-store schemaErrors (finding #7)', () => {
+    useInstanceStore.setState({ schemaErrors: new Map() });
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-A')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    act(() => {
+      useInstanceStore.getState().dispatchGenerateSchema('test.instance.Unsupported');
+    });
+    const schemaRequest = worker.posted.find(
+      (m) => m.type === 'instance:generateSchema' && m.typeFqn === 'test.instance.Unsupported'
+    );
+
+    act(() => {
+      for (const listener of worker.listeners['message'] ?? []) {
+        listener({
+          data: {
+            type: 'instance:generateSchemaStale',
+            requestId: schemaRequest.requestId,
+            reason: 'unsupported-target',
+            message: 'No form preview schema is available for test.instance.Unsupported.'
+          }
+        });
+      }
+    });
+
+    expect(useInstanceStore.getState().schemaErrors.get('test.instance.Unsupported')).toEqual({
+      reason: 'unsupported-target',
+      message: 'No form preview schema is available for test.instance.Unsupported.'
+    });
   });
 
   it('still routes an ordinary preview:result matching currentPreviewRequestIdRef to usePreviewStore', () => {
