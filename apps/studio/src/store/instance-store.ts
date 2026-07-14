@@ -195,10 +195,17 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
   // `loadInstancesFromOpfs` fire-and-forget, mirroring the
   // fire-and-forget `dispatchValidate` pattern already used elsewhere in
   // this store.
+  //
+  // Also clears `schemas`/`schemaErrors` (round-3 finding #2) — a cached
+  // schema is keyed by type FQN, not by workspace, so a stale schema for
+  // the SAME FQN from the PREVIOUS workspace (a different model shape, or
+  // simply answered before the worker's file state caught up) could
+  // otherwise be read by InstanceFormPanel before the fresh
+  // `dispatchGenerateSchema` request for the new workspace resolves.
   setOpfsContext(fs, workspaceRoot) {
     opfsFs = fs;
     opfsWorkspaceRoot = workspaceRoot;
-    set({ instances: {}, validationErrors: {} });
+    set({ instances: {}, validationErrors: {}, schemas: new Map(), schemaErrors: new Map() });
     void get().loadInstancesFromOpfs();
   },
 
@@ -227,6 +234,20 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       // against a rapid workspace switch resolving out of order.
       if (opfsFs === fs && opfsWorkspaceRoot === workspaceRoot) {
         set({ instances: loaded });
+        // Dispatch validation for every restored instance (round-3 finding
+        // #3) — without this, `validationErrors` stays empty for records
+        // loaded from OPFS (e.g. imported/raw JSON missing a required
+        // field) and the Inspector reports them as "Valid" until the user
+        // happens to edit one, which is the only other path that calls
+        // dispatchValidate. `dispatchValidate` already no-ops if the worker
+        // isn't wired up yet (matches the pattern used everywhere else in
+        // this store), so this is safe to call unconditionally; if the
+        // worker isn't ready yet at load time, those instances simply
+        // aren't revalidated until touched — a smaller gap than today's
+        // "never revalidated at all".
+        for (const id of Object.keys(loaded)) {
+          get().dispatchValidate(id);
+        }
       }
     } catch (err) {
       console.error('[instance-store] Failed to load instances from OPFS:', err);

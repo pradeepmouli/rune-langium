@@ -278,4 +278,56 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
   it('gracefully no-ops (does not throw) when no OpfsFs context has been set yet', () => {
     expect(() => useInstanceStore.getState().createInstance('test.Party', 'My Party')).not.toThrow();
   });
+
+  it('setOpfsContext on a workspace switch also clears cached schemas/schemaErrors (round-3 finding #2)', async () => {
+    // Seed schemas/schemaErrors as if a previous workspace had already
+    // fetched/failed a schema for some type FQN.
+    useInstanceStore.setState({
+      schemas: new Map([
+        ['test.Party', { schemaVersion: 1, targetId: 'test.Party', title: 'Party', status: 'ready', fields: [] }]
+      ]),
+      schemaErrors: new Map([['test.Other', { reason: 'parse-error' as const, message: 'boom' }]])
+    });
+    expect(useInstanceStore.getState().schemas.size).toBe(1);
+    expect(useInstanceStore.getState().schemaErrors.size).toBe(1);
+
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-c');
+    await flush();
+
+    expect(useInstanceStore.getState().schemas.size).toBe(0);
+    expect(useInstanceStore.getState().schemaErrors.size).toBe(0);
+  });
+
+  it('loadInstancesFromOpfs dispatches validation for every instance restored from OPFS (round-3 finding #3)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws-validate', {
+      id: '01J000000000000000000010',
+      name: 'Valid Party',
+      typeFqn: 'test.Party',
+      data: { name: 'Acme' },
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    await writeInstance(fs, '/ws-validate', {
+      id: '01J000000000000000000011',
+      name: 'Invalid Party',
+      typeFqn: 'test.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-validate');
+    await flush();
+
+    const validateCalls = postMessage.mock.calls
+      .map((call) => call[0] as { type: string; requestId: string })
+      .filter((msg) => msg.type === 'instance:validate');
+    const validatedIds = validateCalls.map((msg) => msg.requestId.split(':')[1]);
+
+    expect(validatedIds).toEqual(expect.arrayContaining(['01J000000000000000000010', '01J000000000000000000011']));
+  });
 });
