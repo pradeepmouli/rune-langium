@@ -173,9 +173,16 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     if (!typeFqn) return false;
     pendingSchemaRequests.delete(requestId);
     set((state) => {
+      // Also drop any previously-cached schema for this typeFqn (Codex
+      // round-2 finding #3) — InstanceFormPanel checks `schema` BEFORE
+      // `schemaError` when computing its status, so a stale response that
+      // left an old cached schema in place would keep the panel rendering
+      // the OUTDATED schema and never surface the new failure.
+      const schemas = new Map(state.schemas);
+      schemas.delete(typeFqn);
       const schemaErrors = new Map(state.schemaErrors);
       schemaErrors.set(typeFqn, { reason, message });
-      return { schemaErrors };
+      return { schemas, schemaErrors };
     });
     return true;
   },

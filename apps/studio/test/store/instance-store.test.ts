@@ -141,6 +141,37 @@ describe('instance-store', () => {
     expect(handled).toBe(false);
   });
 
+  it('receiveSchemaStale invalidates a previously-cached schema for the same typeFqn (Codex round-2 finding #3)', () => {
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+
+    // Seed a successful cached schema first.
+    useInstanceStore.getState().dispatchGenerateSchema('test.Stale');
+    const okRequestId = postMessage.mock.calls[0]![0].requestId as string;
+    const schema = {
+      schemaVersion: 1,
+      targetId: 'test.Stale',
+      title: 'Stale',
+      status: 'ready',
+      fields: []
+    } as never;
+    useInstanceStore.getState().receiveSchemaResult(okRequestId, schema);
+    expect(useInstanceStore.getState().schemas.get('test.Stale')).toEqual(schema);
+
+    // A later fetch for the SAME typeFqn comes back stale (e.g. the type was
+    // removed/broken by a model edit) — the stale cached schema must not
+    // survive, or InstanceFormPanel will keep rendering it forever.
+    useInstanceStore.getState().dispatchGenerateSchema('test.Stale');
+    const staleRequestId = postMessage.mock.calls[1]![0].requestId as string;
+    useInstanceStore.getState().receiveSchemaStale(staleRequestId, 'parse-error', 'boom');
+
+    expect(useInstanceStore.getState().schemas.get('test.Stale')).toBeUndefined();
+    expect(useInstanceStore.getState().schemaErrors.get('test.Stale')).toEqual({
+      reason: 'parse-error',
+      message: 'boom'
+    });
+  });
+
   it('receiveSchemaResult clears a prior schemaError for the same typeFqn once a fresh schema arrives', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
