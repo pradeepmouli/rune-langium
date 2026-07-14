@@ -76,7 +76,7 @@ export function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
           `Use at most ${field.cardinality.max} ${field.label.toLowerCase()} item${field.cardinality.max === 1 ? '' : 's'}`
         );
       }
-      return arraySchema;
+      return field.required ? arraySchema : arraySchema.optional();
     }
     default:
       return z.any();
