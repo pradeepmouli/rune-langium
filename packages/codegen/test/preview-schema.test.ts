@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generatePreviewSchemas } from '../src/export.js';
+import { buildField, buildNamespaceIndexes } from '../src/preview-schema.js';
 
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
 const REAL_CDM_ADJUSTABLE_DATE_FIXTURES = [
@@ -166,6 +167,55 @@ describe('FormPreviewSchema generation', () => {
       }
     ]);
   });
+
+  skipIfNodeLt22(
+    'lazy mode emits an expandable object stub at the depth ceiling, bounded mode still emits unknown',
+    async () => {
+      const doc = await parseModel(`
+        namespace "test.preview.cyclic"
+        version "1"
+
+        type A:
+          b B (1..1)
+
+        type B:
+          a A (0..1)
+      `);
+
+      // Bounded mode (existing generatePreviewSchemas path): the A -> B -> A
+      // cycle hits the depth ceiling on B's nested 'a' and falls back to 'unknown'.
+      const [schemaBounded] = generatePreviewSchemas([doc], {
+        targetId: 'test.preview.cyclic.A',
+        maxDepth: 1
+      });
+      const bField = schemaBounded?.fields.find((field) => field.path === 'b');
+      const nested = bField?.kind === 'object' ? bField.children.find((child) => child.path === 'b.a') : undefined;
+      expect(nested?.kind).toBe('unknown');
+
+      // Lazy mode (new, exercised directly via the now-exported buildField):
+      // the same ceiling produces an expandable object stub instead.
+      const [namespace] = buildNamespaceIndexes([doc]);
+      const bData = namespace!.dataByName.get('B')!;
+      const aAttr = bData.node.attributes.find((attr) => attr.name === 'a')!;
+
+      const lazyField = buildField(aAttr, {
+        namespace: namespace!,
+        unsupportedFeatures: new Set(),
+        sourceMap: [],
+        sourceUri: bData.sourceUri,
+        maxDepth: 1,
+        depth: 1,
+        path: 'b.a',
+        label: 'A',
+        seenTypes: new Set(['A', 'B']),
+        lazy: true
+      });
+
+      expect(lazyField.kind).toBe('object');
+      expect(lazyField.kind === 'object' ? lazyField.expandable : undefined).toBe(true);
+      expect(lazyField.kind === 'object' ? lazyField.children : undefined).toEqual([]);
+    }
+  );
 
   skipIfNodeLt22('can return one fully-qualified target schema by id', async () => {
     const doc = await parseModel(`

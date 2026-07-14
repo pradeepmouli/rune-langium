@@ -39,7 +39,7 @@ function humanizeLabel(name: string): string {
 const SCHEMA_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 3;
 
-interface NamespaceIndex {
+export interface NamespaceIndex {
   namespace: string;
   dataByName: Map<string, { node: Data; sourceUri: string }>;
   enumByName: Map<string, { node: RosettaEnumeration; sourceUri: string }>;
@@ -49,7 +49,7 @@ interface NamespaceIndex {
   duplicateDataNames: Set<string>;
 }
 
-interface FieldContext {
+export interface FieldContext {
   namespace: NamespaceIndex;
   unsupportedFeatures: Set<string>;
   sourceMap: PreviewSourceMapEntry[];
@@ -59,6 +59,8 @@ interface FieldContext {
   path: string;
   label: string;
   seenTypes: Set<string>;
+  /** When true, a depth-ceiling object field becomes an expandable stub instead of an 'unknown' stub. Used by the lazy resolver (instances/resolve-fields.ts) — absent/false preserves today's bounded generatePreviewSchemas() behavior exactly. */
+  lazy?: boolean;
 }
 
 const BUILTIN_KIND_MAP: Record<string, Extract<PreviewFieldKind, 'string' | 'number' | 'boolean'>> = {
@@ -129,7 +131,7 @@ export function generatePreviewSchemas(
   return schemas;
 }
 
-function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
+export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[] {
   const byNamespace = new Map<string, NamespaceIndex>();
 
   for (const doc of docs) {
@@ -484,7 +486,7 @@ function buildFunctionSchema(
   };
 }
 
-function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
+export function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
   addSourceMapEntry(ctx.sourceMap, ctx.path, attr, ctx.sourceUri);
   const card = attr.card;
   const base = buildBaseField(attr, ctx);
@@ -588,6 +590,16 @@ function enumField(ctx: FieldContext, enumNode: RosettaEnumeration): PreviewFiel
 
 function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewField {
   if (ctx.seenTypes.has(data.name) || ctx.depth >= ctx.maxDepth) {
+    if (ctx.lazy) {
+      return {
+        path: ctx.path,
+        label: ctx.label,
+        kind: 'object',
+        required: true,
+        children: [],
+        expandable: true
+      };
+    }
     ctx.unsupportedFeatures.add(`recursive-reference:${data.name}`);
     return {
       path: ctx.path,
