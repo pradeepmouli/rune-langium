@@ -65,7 +65,18 @@ vi.mock('@rune-langium/core', () => ({
 
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
-  generatePreviewSchemas: generatePreviewSchemasMock
+  generatePreviewSchemas: generatePreviewSchemasMock,
+  RUNTIME_HELPER_JS_SOURCE: ''
+}));
+
+const resolveFieldsMock = vi.fn(() => []);
+const getActiveConditionPredicatesMock = vi.fn(() => []);
+const findDataNodeMock = vi.fn(() => undefined);
+
+vi.mock('@rune-langium/codegen/instances', () => ({
+  resolveFields: resolveFieldsMock,
+  getActiveConditionPredicates: getActiveConditionPredicatesMock,
+  findDataNode: findDataNodeMock
 }));
 
 vi.mock('langium', () => ({
@@ -695,5 +706,85 @@ describe('codegen-worker code preview messages', () => {
     const previewCall = generatePreviewSchemasMock.mock.calls.at(-1);
     const [forwardedDocs] = previewCall!;
     expect(forwardedDocs).toHaveLength(2);
+  });
+});
+
+describe('codegen-worker instance:validate messages', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    resolveFieldsMock.mockReset();
+    getActiveConditionPredicatesMock.mockReset();
+    findDataNodeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('handles instance:validate — structural error and condition violation both surface as diagnostics', async () => {
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    resolveFieldsMock.mockReturnValue([
+      { path: 'symbol', label: 'Symbol', kind: 'string', required: true },
+      { path: 'quantity', label: 'Quantity', kind: 'number', required: true }
+    ]);
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'PositiveQuantity', predicate: 'data.quantity > 0' }]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace test' }],
+      requestId: 'validate:setup'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'test.Trade',
+      data: { quantity: -1 },
+      requestId: 'validate:1'
+    });
+    await flushWorker();
+
+    expect(findDataNodeMock).toHaveBeenCalledWith('test.Trade', expect.any(Array));
+    expect(resolveFieldsMock).toHaveBeenCalledWith('test.Trade', [], expect.any(Array));
+    expect(getActiveConditionPredicatesMock).toHaveBeenCalledWith({ name: 'Trade' });
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'validate:1',
+      diagnostics: [
+        { path: 'symbol', message: 'Symbol is required' },
+        {
+          path: 'PositiveQuantity',
+          message: "Condition 'PositiveQuantity' failed",
+          conditionName: 'PositiveQuantity'
+        }
+      ]
+    });
+  });
+
+  it('posts an unknown-type diagnostic when the typeFqn cannot be resolved', async () => {
+    findDataNodeMock.mockReturnValue(undefined);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'test.Unknown',
+      data: {},
+      requestId: 'validate:2'
+    });
+    await flushWorker();
+
+    expect(resolveFieldsMock).not.toHaveBeenCalled();
+    expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'validate:2',
+      diagnostics: [{ path: '', message: "Unknown type 'test.Unknown'" }]
+    });
   });
 });

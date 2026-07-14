@@ -71,6 +71,18 @@ function navigateToPath(
 }
 
 /**
+ * Look up the `Data` AST node for `typeFqn` — the same namespace/name split
+ * `resolveFields` uses internally, exposed standalone for callers (the
+ * studio codegen worker's `instance:validate` handler) that need the node
+ * itself rather than its field tree, e.g. to pass to
+ * `getActiveConditionPredicates`.
+ */
+export function findDataNode(typeFqn: string, documents: LangiumDocument[]): Data | undefined {
+  const namespaces = buildNamespaceIndexes(documents);
+  return findDataByFqn(namespaces, typeFqn)?.data;
+}
+
+/**
  * Resolve exactly one more level of fields below `path` on `typeFqn`.
  * Unlike generatePreviewSchemas()'s bounded eager tree, this never recurses
  * past the requested level — nested object fields come back as `{ kind:

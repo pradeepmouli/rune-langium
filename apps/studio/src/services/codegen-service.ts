@@ -87,6 +87,21 @@ export function createPreviewExecuteMessage(
   return { type: 'preview:execute', funcName, inputs, requestId };
 }
 
+export interface InstanceValidateMessage {
+  type: 'instance:validate';
+  typeFqn: string;
+  data: Record<string, unknown>;
+  requestId: string;
+}
+
+export function createInstanceValidateMessage(
+  typeFqn: string,
+  data: Record<string, unknown>,
+  requestId: string
+): InstanceValidateMessage {
+  return { type: 'instance:validate', typeFqn, data, requestId };
+}
+
 export function isPreviewExecuteResultMessage(msg: unknown): msg is {
   type: 'preview:execute-result';
   requestId: string;

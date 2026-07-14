@@ -4,7 +4,7 @@
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { describe, expect, it } from 'vitest';
-import { resolveFields } from '../../src/instances/resolve-fields.js';
+import { findDataNode, resolveFields } from '../../src/instances/resolve-fields.js';
 
 async function parseModel(source: string) {
   const { RuneDsl } = createRuneDslServices();
@@ -52,5 +52,19 @@ describe('resolveFields', () => {
     const fields = resolveFields('test.instances.Root', ['child', 'grandchild'], docs);
     expect(fields[0]?.kind).toBe('object');
     expect((fields[0] as { expandable?: boolean }).expandable).toBe(true);
+  });
+});
+
+describe('findDataNode', () => {
+  it('returns the Data AST node for a known typeFqn', async () => {
+    const docs = await parseModel(FIXTURE);
+    const node = findDataNode('test.instances.Root', docs);
+    expect(node?.name).toBe('Root');
+  });
+
+  it('returns undefined for an unknown typeFqn', async () => {
+    const docs = await parseModel(FIXTURE);
+    expect(findDataNode('test.instances.Nope', docs)).toBeUndefined();
+    expect(findDataNode('not.a.namespace.Nope', docs)).toBeUndefined();
   });
 });
