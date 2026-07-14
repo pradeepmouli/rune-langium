@@ -120,6 +120,14 @@ export function isPreviewExecuteErrorMessage(msg: unknown): msg is {
   return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-error';
 }
 
+export function isInstanceValidateResultMessage(msg: unknown): msg is {
+  type: 'instance:validateResult';
+  requestId: string;
+  diagnostics: Array<{ path: string; message: string; conditionName?: string }>;
+} {
+  return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'instance:validateResult';
+}
+
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
 export type PreviewWorkerMessage = PreviewResultMessage | PreviewStaleMessage;
 
