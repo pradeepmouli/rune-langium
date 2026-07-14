@@ -42,12 +42,19 @@ export interface BundleManifest {
 
 const FORMAT_VERSION = 1;
 
-/** Content hash of the currently-loaded model's serialized parsed documents. Gates staleness on bundle import — see design doc §4. */
+/**
+ * Content hash of the currently-loaded model's serialized parsed documents.
+ * Gates staleness on bundle import — see design doc §4.
+ *
+ * Uses `JSON.stringify` on the sorted text array (not `.join('\n')`) as the
+ * hash input — a plain `\n`-join is ambiguous across document boundaries:
+ * a single document `"a\nb"` and two documents `"a"`, `"b"` both join to
+ * the identical string `"a\nb"` and would hash identically even though
+ * they're different document sets. `JSON.stringify` on the array preserves
+ * document boundaries unambiguously.
+ */
 export async function computeModelFingerprint(documents: LangiumDocument[]): Promise<string> {
-  const serialized = documents
-    .map((doc) => doc.textDocument.getText())
-    .sort()
-    .join('\n');
+  const serialized = JSON.stringify(documents.map((doc) => doc.textDocument.getText()).sort());
   return sha256Hex(new TextEncoder().encode(serialized));
 }
 
