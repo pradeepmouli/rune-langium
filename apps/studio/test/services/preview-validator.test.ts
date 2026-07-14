@@ -99,6 +99,60 @@ describe('validatePreviewSample — unknown/extra fields (Codex round-2 finding 
   });
 });
 
+describe('validatePreviewSample — Data-extends-Choice inherited fields (round-5 finding #1)', () => {
+  // Mirrors the real FormPreviewSchema shape buildDataSchema now produces
+  // for a Data type extending a Choice (e.g. `BasketConstituent extends
+  // Observable`): the schema's `fields` include BOTH the Data type's own
+  // attribute(s) AND one field per Choice option, keyed by the option's
+  // REAL emitted (lower-camel) field name — not the raw DSL type-reference
+  // casing.
+  const basketConstituentSchema: FormPreviewSchema = {
+    schemaVersion: 1,
+    targetId: 'test.preview.BasketConstituent',
+    title: 'BasketConstituent',
+    status: 'ready',
+    fields: [
+      {
+        path: 'commodity',
+        label: 'Commodity',
+        kind: 'object',
+        required: false,
+        children: [{ path: 'commodity.name', label: 'Name', kind: 'string', required: true }]
+      },
+      {
+        path: 'cash',
+        label: 'Cash',
+        kind: 'object',
+        required: false,
+        children: [{ path: 'cash.amount', label: 'Amount', kind: 'number', required: true }]
+      },
+      { path: 'weight', label: 'Weight', kind: 'number', required: true }
+    ]
+  };
+
+  it('accepts a sample keyed by the lower-camel Choice-ancestor field alongside the Data type own attribute', () => {
+    // Before round-5 finding #1's fix, `commodity` would not have appeared
+    // in the schema's fields at all, so the .strict() validator (round-2
+    // finding #1) rejected this real, generated-schema-valid payload as an
+    // "unrecognized key".
+    const result = validatePreviewSample(basketConstituentSchema, {
+      commodity: { name: 'Gold' },
+      weight: 0.5
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+
+  it('still rejects a sample missing the Data type own required attribute even with a Choice-ancestor field present', () => {
+    const result = validatePreviewSample(basketConstituentSchema, {
+      commodity: { name: 'Gold' }
+    });
+
+    expect(result.valid).toBe(false);
+  });
+});
+
 describe('validatePreviewSample — Choice "exactly one option present" (Codex round-2 finding #2)', () => {
   const choiceSchema: FormPreviewSchema = {
     schemaVersion: 1,

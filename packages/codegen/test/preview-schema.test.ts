@@ -472,4 +472,52 @@ describe('FormPreviewSchema generation', () => {
       expect(sub?.fields.find((field) => field.path === 'note')).toMatchObject({ kind: 'string', required: true });
     }
   );
+
+  skipIfNodeLt22(
+    'includes Choice-ancestor option fields when a Data type extends a Choice (round-5 finding #1)',
+    async () => {
+      // Regression test: buildDataSchema previously only walked Data-to-Data
+      // `extends` chains, silently dropping a Choice ancestor's options from
+      // the generated FormPreviewSchema. Combined with preview-validator.ts's
+      // `.strict()` validators (round-2 finding #1), a real, schema-valid
+      // payload keyed by a Choice-derived field was rejected as an
+      // "unrecognized key". `Commodity` (capitalized DSL name) intentionally
+      // differs in casing from its real emitted field key (`commodity`, per
+      // `choiceOptionFieldName`) so the test also proves the option field's
+      // `path` is lower-camel-cased, not the raw DSL type-reference text.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.BasketConstituent' });
+      const basketConstituent = schemas.find((schema) => schema.targetId === 'test.preview.BasketConstituent');
+
+      expect(basketConstituent).toBeDefined();
+      // Both BasketConstituent's own attribute AND each Choice option's
+      // (lower-camel) field must be present.
+      expect(basketConstituent?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity', 'weight']);
+      expect(basketConstituent?.fields.find((field) => field.path === 'weight')).toMatchObject({
+        kind: 'number',
+        required: true
+      });
+      const commodityField = basketConstituent?.fields.find((field) => field.path === 'commodity');
+      expect(commodityField).toMatchObject({ path: 'commodity', label: 'Commodity', kind: 'object', required: false });
+      const cashField = basketConstituent?.fields.find((field) => field.path === 'cash');
+      expect(cashField).toMatchObject({ path: 'cash', label: 'Cash', kind: 'object', required: false });
+    }
+  );
 });
