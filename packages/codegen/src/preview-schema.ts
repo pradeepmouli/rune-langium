@@ -203,17 +203,17 @@ interface InheritedAttributesResult {
    * `superType` reference is typed `DataOrChoice`, and a Choice can't
    * itself `extends` anything, so it's always the terminal ancestor —
    * mirrors `buildAttributeTypesMap`'s own Data/Choice walk in
-   * base-namespace-emitter.ts). Only `buildDataSchema`'s top-level call
-   * site currently expands this into pseudo-fields (see its call site for
-   * why). The other consumers of this helper — `buildTypeAliasSchema`'s
-   * data-alias branch, `buildChoiceOptionField`'s nested Data-type option
-   * expansion, and `objectField`'s nested attribute expansion — do not yet
-   * do so: expanding a Choice ancestor reached via a NESTED reference needs
-   * the Choice's option fields' `path` prefixed with the ambient field
-   * path, and `buildChoiceOptionField` currently always emits a bare,
-   * unprefixed `path` (correct for a top-level schema, not for a nested
-   * one) — a small additional design decision intentionally left as a
-   * follow-up rather than folded into this fix.
+   * base-namespace-emitter.ts). `buildDataSchema`'s top-level call site and
+   * `buildTypeAliasSchema`'s data-alias branch both expand this into
+   * pseudo-fields, since both build a schema whose `fields` sit directly at
+   * the root. The other consumers of this helper — `buildChoiceOptionField`'s
+   * nested Data-type option expansion and `objectField`'s nested attribute
+   * expansion — do not yet do so: expanding a Choice ancestor reached via a
+   * NESTED reference needs the Choice's option fields' `path` prefixed with
+   * the ambient field path, and `buildChoiceOptionField` currently always
+   * emits a bare, unprefixed `path` (correct for a top-level schema, not for
+   * a nested one) — a small additional design decision intentionally left as
+   * a follow-up rather than folded into this fix.
    */
   choiceAncestor?: Choice;
 }
@@ -371,7 +371,8 @@ function buildTypeAliasSchema(
 
   if (resolvedData) {
     const sourceMap: PreviewSourceMapEntry[] = [];
-    const fields = collectInheritedAttributes(resolvedData).attributes.map((attr) =>
+    const { attributes, choiceAncestor } = collectInheritedAttributes(resolvedData);
+    const attributeFields = attributes.map((attr) =>
       buildField(attr, {
         namespace,
         unsupportedFeatures,
@@ -384,6 +385,19 @@ function buildTypeAliasSchema(
         seenTypes: new Set([resolvedData.name])
       })
     );
+
+    // Data-extends-Choice (round-5 finding #1), applied to a data-type alias:
+    // mirrors buildDataSchema's expansion of a Choice ancestor's options into
+    // top-level pseudo-fields — see that call site's comment for the full
+    // rationale. On a name collision, the Data type's own attribute wins.
+    const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
+    const choiceFields = choiceAncestor
+      ? choiceAncestor.attributes
+          .map((option) => buildChoiceOptionField(option, { namespace, unsupportedFeatures, sourceUri }))
+          .filter((field) => !ownFieldPaths.has(field.path))
+      : [];
+
+    const fields = [...choiceFields, ...attributeFields];
     return {
       schemaVersion: SCHEMA_VERSION,
       kind: 'typeAlias',
