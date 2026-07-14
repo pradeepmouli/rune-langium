@@ -38,6 +38,23 @@ describe('instance-store', () => {
     expect(useInstanceStore.getState().instances[id]).toBeUndefined();
   });
 
+  it('createInstance dispatches validation for the new instance immediately (round-5 finding #2)', () => {
+    // Without this, a brand-new instance's `data: {}` was never checked
+    // against required fields until the user happened to edit it (the only
+    // other path that calls dispatchValidate) — InstanceInspectorPanel
+    // treats a missing validationErrors[id] entry as "Valid" in the
+    // meantime.
+    const postMessage = vi.fn();
+    useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'instance:validate', typeFqn: 'test.Party' })
+    );
+    const requestId = postMessage.mock.calls[0]![0].requestId as string;
+    expect(requestId.split(':')[1]).toBe(id);
+  });
+
   it('dispatchValidate posts an instance:validate message carrying a requestId the store can map back to the instance', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
@@ -52,6 +69,10 @@ describe('instance-store', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    // createInstance itself already dispatched one validate request (round-5
+    // finding #2) — clear it so the indices below refer to the explicit
+    // dispatchValidate call this test is actually exercising.
+    postMessage.mockClear();
     useInstanceStore.getState().dispatchValidate(id);
     const requestId = postMessage.mock.calls[0]![0].requestId as string;
 
@@ -63,6 +84,10 @@ describe('instance-store', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
     const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    // createInstance itself already dispatched one validate request (round-5
+    // finding #2) — clear it so the indices below refer to the two explicit
+    // dispatchValidate calls this test is actually exercising.
+    postMessage.mockClear();
 
     useInstanceStore.getState().dispatchValidate(id);
     const firstRequestId = postMessage.mock.calls[0]![0].requestId as string;

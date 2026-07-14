@@ -121,6 +121,16 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
     const record: InstanceRecord = { id, name, typeFqn, data: {}, createdAt: now, modifiedAt: now };
     set((state) => ({ instances: { ...state.instances, [id]: record } }));
     persistInstance(record);
+    // Validate immediately (round-5 finding #2) — mirrors the exact
+    // dispatchValidate(id) call already used at the end of
+    // updateInstanceData and in loadInstancesFromOpfs's per-loaded-id loop.
+    // Without this, a brand-new instance's `data: {}` was never checked
+    // against required fields, and InstanceInspectorPanel treats a missing
+    // validationErrors[id] entry as "Valid" — so a new instance of a type
+    // with required fields showed as valid until the user happened to edit
+    // it. dispatchValidate already no-ops gracefully if workerRef isn't set
+    // yet, so this is safe to call unconditionally.
+    get().dispatchValidate(id);
     return id;
   },
 

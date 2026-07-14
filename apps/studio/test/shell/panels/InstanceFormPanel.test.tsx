@@ -41,6 +41,10 @@ describe('InstanceFormPanel', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
     const id = useInstanceStore.getState().createInstance('test.instance.Party', 'My Party');
+    // createInstance itself already dispatched an instance:validate request
+    // (round-5 finding #2) — clear it so the mount-triggered
+    // instance:generateSchema request below is calls[0].
+    postMessage.mockClear();
 
     render(<InstanceFormPanel instanceId={id} />);
     expect(screen.getByText(/generating preview for the selected type/i)).toBeInTheDocument();
@@ -63,6 +67,10 @@ describe('InstanceFormPanel', () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
     const id = useInstanceStore.getState().createInstance('test.instance.Party', 'My Party');
+    // createInstance itself already dispatched an instance:validate request
+    // (round-5 finding #2) — clear it so the mount-triggered
+    // instance:generateSchema request below is calls[0].
+    postMessage.mockClear();
 
     render(<InstanceFormPanel instanceId={id} />);
 
