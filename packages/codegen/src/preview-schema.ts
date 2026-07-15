@@ -468,12 +468,11 @@ function buildChoiceOptionField(
     sourceUri: string;
     /**
      * Ambient field path to prefix this option's `path` (and its own
-     * nested Data-type option `children`, via the recursive call below)
-     * with, for a Choice ancestor expanded from a NESTED reference (e.g.
-     * `objectField`, whose `children` live under `constituent.*`). Omitted
-     * by every top-level call site (`buildChoiceSchema`, `buildDataSchema`,
-     * `buildTypeAliasSchema`) and by this function's own internal
-     * recursive call, all of which must keep producing a bare,
+     * nested Data-type option `children`, built further below) with, for a
+     * Choice ancestor expanded from a NESTED reference (e.g. `objectField`,
+     * whose `children` live under `constituent.*`). Omitted by every
+     * top-level call site (`buildChoiceSchema`, `buildDataSchema`,
+     * `buildTypeAliasSchema`), all of which must keep producing a bare,
      * unprefixed `path`.
      */
     pathPrefix?: string;
