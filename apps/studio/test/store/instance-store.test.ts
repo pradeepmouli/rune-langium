@@ -413,6 +413,44 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     expect(validatedIds).toEqual(expect.arrayContaining(['01J000000000000000000010', '01J000000000000000000011']));
   });
 
+  it('loadInstancesFromOpfs does not drop an instance created during the async load (round-7 finding #2)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws-race', {
+      id: '01J000000000000000000020',
+      name: 'Loaded From OPFS',
+      typeFqn: 'test.Party',
+      data: { name: 'Acme' },
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+
+    // Delay the OPFS directory listing so there's a window, after
+    // setOpfsContext synchronously clears `instances`, during which a
+    // synchronous createInstance call can land before
+    // loadInstancesFromOpfs's own `set({ instances: loaded })` runs. The
+    // mock returns a fixed pre-race snapshot (rather than re-reading the
+    // live directory after the delay) so the assertion isn't accidentally
+    // satisfied by the created instance's own OPFS write racing ahead of
+    // the delayed readdir and getting picked up as "loaded from disk" —
+    // this test is specifically about the IN-MEMORY merge, independent of
+    // how fast the persist side-effect lands.
+    vi.spyOn(fs, 'readdir').mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return ['01J000000000000000000020.json'];
+    });
+
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-race');
+    // setOpfsContext already cleared `instances` synchronously; the load
+    // itself is still in flight (blocked on the delayed readdir above).
+    const createdId = useInstanceStore.getState().createInstance('test.Party', 'Created During Race');
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const state = useInstanceStore.getState();
+    expect(state.instances[createdId]).toMatchObject({ name: 'Created During Race' });
+    expect(state.instances['01J000000000000000000020']).toMatchObject({ name: 'Loaded From OPFS' });
+  });
+
   it('setOpfsContext invalidates in-flight schema requests so a late response from the PREVIOUS workspace is rejected (round-4 finding #2)', async () => {
     const postMessage = vi.fn();
     useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);

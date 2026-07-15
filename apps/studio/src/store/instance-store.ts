@@ -291,7 +291,19 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       // Only apply if this OPFS context is still the current one — guards
       // against a rapid workspace switch resolving out of order.
       if (opfsFs === fs && opfsWorkspaceRoot === workspaceRoot) {
-        set({ instances: loaded });
+        // Merge, don't wholesale-replace (round-7 finding #2): `loaded` is
+        // the base, with any instances already present in current state
+        // layered on top. setOpfsContext synchronously cleared `instances`
+        // to `{}` before this async load started, and
+        // updateInstanceData/removeInstance both require an existing
+        // state.instances[id] entry to act on — so they can't have touched
+        // any OPFS-loaded-but-not-yet-applied id. The only entries that can
+        // exist in state.instances at the time this set() runs are ones
+        // created via createInstance during this exact async gap, so
+        // layering them on top of `loaded` is safe (not a stale-workspace
+        // leak; the opfsFs/opfsWorkspaceRoot guard above already handles
+        // the cross-workspace-switch case).
+        set((state) => ({ instances: { ...loaded, ...state.instances } }));
         // Dispatch validation for every restored instance (round-3 finding
         // #3) — without this, `validationErrors` stays empty for records
         // loaded from OPFS (e.g. imported/raw JSON missing a required

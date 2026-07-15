@@ -123,7 +123,8 @@ export function validatePreviewSample(
   // round-2 finding #2). Uses the same presence semantics ChoiceFieldGroup
   // already relies on for rendering: a root key's value is `!== undefined`.
   if (schema.kind === 'choice') {
-    const presentCount = schema.fields.filter((field) => values[fieldRootKey(field.path)] !== undefined).length;
+    const presentFields = schema.fields.filter((field) => values[fieldRootKey(field.path)] !== undefined);
+    const presentCount = presentFields.length;
     if (presentCount !== 1) {
       // Keyed at the empty path — the same schema-level (not field-level)
       // convention `formatIssuePath([])` produces, and the same convention
@@ -131,6 +132,26 @@ export function validatePreviewSample(
       // schema-level "Unknown type" diagnostic (`path: ''`).
       errors[''] = presentCount === 0 ? 'Choose one option.' : 'Only one option can be selected.';
       valid = false;
+    } else {
+      // The single selected arm's own PreviewField is always generated with
+      // `required: false` (see the doc comment above), so the structural
+      // validator built it as OPTIONAL — an empty-sentinel value like `''`
+      // trivially satisfies `.optional()` even though the real generated
+      // Zod schema for the selected arm requires a genuinely non-empty
+      // value (round-7 finding #3). Re-validate the selected field's actual
+      // value with a REQUIRED variant of its validator, without touching
+      // buildFieldValidator or the required:false convention itself.
+      const selectedField = presentFields[0]!;
+      const requiredFieldValidator = buildFieldValidator({ ...selectedField, required: true });
+      const rootKey = fieldRootKey(selectedField.path);
+      const fieldResult = requiredFieldValidator.safeParse(values[rootKey]);
+      if (!fieldResult.success) {
+        for (const issue of fieldResult.error.issues) {
+          const key = formatIssuePath([rootKey, ...issue.path]);
+          errors[key] = issue.message;
+        }
+        valid = false;
+      }
     }
   }
 

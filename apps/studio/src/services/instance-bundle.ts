@@ -92,6 +92,14 @@ export async function importBundle(
     } catch (err) {
       throw new Error(`Invalid bundle: instance record "${entry.id}" could not be parsed (${errMessage(err)})`);
     }
+    // Reject a payload whose own `id` doesn't match the manifest entry's id
+    // (the file NAME, not its contents) — writeInstance derives its write
+    // path from `record.id`, not `entry.id`, so trusting the payload here
+    // would let a malformed/malicious bundle silently write to an id never
+    // listed in the manifest, potentially clobbering an unrelated instance.
+    if (record.id !== entry.id) {
+      throw new Error(`Invalid bundle: instance record "${entry.id}" has a mismatched id ("${record.id}")`);
+    }
     const finalRecord: InstanceRecord = stale
       ? { ...record, stale: { reason: 'model-fingerprint-mismatch', diagnostics: [] } }
       : record;

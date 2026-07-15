@@ -138,4 +138,45 @@ describe('instance bundle export/import', () => {
     const files = await listInstanceFiles(fs, '/ws-atomic');
     expect(files).toHaveLength(0);
   });
+
+  it('rejects an instance record whose own id does not match its manifest entry id (mismatched-id bundle)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // manifest lists two entries: a genuinely valid one, and one ("...0002")
+    // whose scratch file at instances/<entry.id>.json actually contains a
+    // record with a DIFFERENT id ("...0099"). writeInstance derives its
+    // write path from record.id, not entry.id, so trusting the payload
+    // would let this write land under an id never listed in the manifest.
+    const secondEntryId = '01J000000000000000000002';
+    const mismatchedRecordId = '01J000000000000000000099';
+    const manifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [
+        { id: RECORD.id, name: RECORD.name, typeFqn: RECORD.typeFqn },
+        { id: secondEntryId, name: 'Mismatched Record', typeFqn: 'test.Party' }
+      ]
+    };
+    const mismatchedRecord: InstanceRecord = {
+      id: mismatchedRecordId,
+      name: 'Mismatched Record',
+      typeFqn: 'test.Party',
+      data: { name: 'Sneaky' },
+      createdAt: 1000,
+      modifiedAt: 1000
+    };
+    const bundleBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: `instances/${RECORD.id}.json`, data: new TextEncoder().encode(JSON.stringify(RECORD)) },
+      { path: `instances/${secondEntryId}.json`, data: new TextEncoder().encode(JSON.stringify(mismatchedRecord)) }
+    ]);
+
+    await expect(importBundle(fs, '/ws-mismatch', bundleBytes, docs)).rejects.toThrow(/Invalid bundle/);
+
+    // Nothing must have been written to the real workspace root — same
+    // atomicity guarantee as the corrupt-record case above.
+    const files = await listInstanceFiles(fs, '/ws-mismatch');
+    expect(files).toHaveLength(0);
+  });
 });

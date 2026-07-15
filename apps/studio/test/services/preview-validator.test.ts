@@ -184,3 +184,43 @@ describe('validatePreviewSample — Choice "exactly one option present" (Codex r
     expect(result.valid).toBe(false);
   });
 });
+
+describe('validatePreviewSample — Choice selected-arm payload must be genuinely non-empty (round-7 finding #3)', () => {
+  // Every Choice option field is generated with `required: false` for
+  // structural reasons (see buildChoiceOptionField / the doc comment above
+  // the Choice block in preview-validator.ts). That means the per-field
+  // validator alone treats an empty-string sentinel as valid-because-
+  // optional even once presence-checking picks that field as "the selected
+  // arm" — this suite exercises the additional required-arm-payload check.
+  const choiceSchema: FormPreviewSchema = {
+    schemaVersion: 1,
+    targetId: 'test.PaymentMethod',
+    title: 'PaymentMethod',
+    kind: 'choice',
+    status: 'ready',
+    fields: [
+      { path: 'cash', label: 'Cash', kind: 'boolean', required: false },
+      { path: 'card', label: 'Card', kind: 'string', required: false }
+    ]
+  };
+
+  it('rejects a selected string arm whose value is the empty-sentinel string', () => {
+    const result = validatePreviewSample(choiceSchema, { card: '' });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('still accepts a selected arm with a genuinely-populated value (no regression)', () => {
+    const result = validatePreviewSample(choiceSchema, { card: '4111' });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+
+  it('still accepts a selected boolean arm (no regression for non-string arm kinds)', () => {
+    const result = validatePreviewSample(choiceSchema, { cash: true });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+});
