@@ -314,7 +314,8 @@ function buildDataSchema(
     status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
     fields,
     ...(sourceMap.length > 0 ? { sourceMap } : {}),
-    ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
+    ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {}),
+    ...(choiceAncestor ? { choiceArmPaths: choiceFields.map((field) => field.path) } : {})
   };
 }
 
@@ -406,7 +407,8 @@ function buildTypeAliasSchema(
       status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
       fields,
       ...(sourceMap.length > 0 ? { sourceMap } : {}),
-      ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
+      ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {}),
+      ...(choiceAncestor ? { choiceArmPaths: choiceFields.map((field) => field.path) } : {})
     };
   }
 

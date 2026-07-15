@@ -470,6 +470,9 @@ describe('FormPreviewSchema generation', () => {
       expect(sub?.fields.map((field) => field.path).sort()).toEqual(['id', 'note', 'quantity']);
       expect(sub?.fields.find((field) => field.path === 'id')).toMatchObject({ kind: 'string', required: true });
       expect(sub?.fields.find((field) => field.path === 'note')).toMatchObject({ kind: 'string', required: true });
+      // A plain Data-only schema (no Choice ancestor) must NOT carry
+      // `choiceArmPaths` — round-9 finding #1 regression guard.
+      expect(sub?.choiceArmPaths).toBeUndefined();
     }
   );
 
@@ -518,6 +521,11 @@ describe('FormPreviewSchema generation', () => {
       expect(commodityField).toMatchObject({ path: 'commodity', label: 'Commodity', kind: 'object', required: false });
       const cashField = basketConstituent?.fields.find((field) => field.path === 'cash');
       expect(cashField).toMatchObject({ path: 'cash', label: 'Cash', kind: 'object', required: false });
+      // round-9 finding #1: `choiceArmPaths` marks which of `fields` are
+      // Choice-ancestor-derived arms, so preview-validator.ts's "exactly one
+      // arm present" enforcement can run for a Data-extends-Choice schema
+      // (whose `kind` is NOT `'choice'`).
+      expect(basketConstituent?.choiceArmPaths).toEqual(['commodity', 'cash']);
     }
   );
 
@@ -565,6 +573,9 @@ describe('FormPreviewSchema generation', () => {
       expect(commodityField).toMatchObject({ path: 'commodity', label: 'Commodity', kind: 'object', required: false });
       const cashField = alias?.fields.find((field) => field.path === 'cash');
       expect(cashField).toMatchObject({ path: 'cash', label: 'Cash', kind: 'object', required: false });
+      // round-9 finding #1: same `choiceArmPaths` expansion as buildDataSchema,
+      // applied to the typeAlias data-alias branch.
+      expect(alias?.choiceArmPaths).toEqual(['commodity', 'cash']);
     }
   );
 
