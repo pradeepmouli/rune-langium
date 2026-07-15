@@ -32,16 +32,23 @@ export function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
         : z.preprocess((value) => (value === '' ? undefined : value), z.string().trim().optional());
     }
     case 'number': {
-      const base = z.preprocess(
+      // .optional() must wrap the INNER z.number() schema, not the outer
+      // z.preprocess(...) pipeline (round-10 finding A) — mirrors the
+      // 'string' case above. ZodOptional only short-circuits when the RAW
+      // input is `undefined`, which runs BEFORE preprocess's transform; an
+      // empty-string form value isn't `undefined` yet, so wrapping the
+      // outer pipeline let '' fall through into the un-optional inner
+      // schema and fail with "must be a number".
+      const numberSchema = z.number({ error: `${field.label} must be a number` });
+      return z.preprocess(
         (value) => {
           if (value === '' || value === undefined || value === null) return undefined;
           if (typeof value === 'number') return value;
           if (typeof value === 'string') return Number(value);
           return value;
         },
-        z.number({ error: `${field.label} must be a number` })
+        field.required ? numberSchema : numberSchema.optional()
       );
-      return field.required ? base : base.optional();
     }
     case 'boolean':
       return field.required ? z.boolean() : z.boolean().optional();
@@ -63,7 +70,53 @@ export function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
       // persists to InstanceRecord.data (computed independently, never
       // derived from this validator's parsed/stripped output).
       const objectSchema = z.object(childShape).strict();
-      return field.required ? objectSchema : objectSchema.optional();
+
+      // Nested Choice-arm enforcement (round-10 finding B): mirrors the
+      // top-level "exactly one arm present" block in validatePreviewSample
+      // below, but scoped to this object's own LOCAL values via
+      // .superRefine() — see that block's doc comment for the full
+      // rationale. `field.choiceArmPaths` (set by objectField for a NESTED
+      // Data-extends-Choice reference) holds full dotted paths (e.g.
+      // `constituent.commodity`), but at runtime, inside this nested Zod
+      // object schema, the actual value keys are the LEAF property names
+      // (e.g. `commodity`), so lookups here always go through
+      // fieldLeafKey(). Zod's own path-tracking prefixes `ctx.addIssue`'s
+      // `path` with however many levels this object field is itself
+      // nested under, so this composes correctly at any depth.
+      const armPaths = field.choiceArmPaths ?? [];
+      const objectSchemaWithArms =
+        armPaths.length > 0
+          ? objectSchema.superRefine((value, ctx) => {
+              const armFields = (field.children ?? []).filter((child) => armPaths.includes(child.path));
+              const presentFields = armFields.filter(
+                (child) => (value as Record<string, unknown>)[fieldLeafKey(child.path)] !== undefined
+              );
+              const presentCount = presentFields.length;
+              if (presentCount !== 1) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: [],
+                  message: presentCount === 0 ? 'Choose one option.' : 'Only one option can be selected.'
+                });
+                return;
+              }
+              const selectedField = presentFields[0]!;
+              const leafKey = fieldLeafKey(selectedField.path);
+              const requiredFieldValidator = buildFieldValidator({ ...selectedField, required: true });
+              const fieldResult = requiredFieldValidator.safeParse((value as Record<string, unknown>)[leafKey]);
+              if (!fieldResult.success) {
+                for (const issue of fieldResult.error.issues) {
+                  ctx.addIssue({
+                    code: 'custom',
+                    path: [leafKey, ...issue.path],
+                    message: issue.message
+                  });
+                }
+              }
+            })
+          : objectSchema;
+
+      return field.required ? objectSchemaWithArms : objectSchemaWithArms.optional();
     }
     case 'array': {
       const [child] = field.children ?? [];

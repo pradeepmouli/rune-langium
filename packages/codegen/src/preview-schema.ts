@@ -766,7 +766,14 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
     label: ctx.label,
     kind: 'object',
     required: true,
-    children: [...choiceFields, ...attributeChildren]
+    children: [...choiceFields, ...attributeChildren],
+    // choiceArmPaths (round-10 finding B): mirrors buildDataSchema's/
+    // buildTypeAliasSchema's top-level choiceArmPaths — see
+    // FormPreviewSchema.choiceArmPaths' doc comment for the full
+    // rationale — scoped to this object field's own children so
+    // preview-validator.ts can enforce "exactly one arm present" for a
+    // NESTED Data-extends-Choice reference too, not just a top-level one.
+    ...(choiceAncestor ? { choiceArmPaths: choiceFields.map((field) => field.path) } : {})
   };
 }
 

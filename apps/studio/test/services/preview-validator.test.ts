@@ -53,6 +53,46 @@ describe('validatePreviewSample — array cardinality vs. field.required', () =>
   });
 });
 
+describe('validatePreviewSample — optional number field blank handling (round-10 finding A)', () => {
+  // Before this fix, `.optional()` was applied to the OUTER z.preprocess(...)
+  // pipeline instead of the INNER z.number() schema. ZodOptional only
+  // short-circuits when the RAW input is `undefined` — an empty-string form
+  // value ('') is not `undefined`, so it passed through into the preprocess
+  // transform (which correctly turns it into `undefined`), then hit the
+  // un-optional z.number() schema and failed with "must be a number". A
+  // legitimately blank optional numeric field could never validate.
+  const schema: FormPreviewSchema = {
+    schemaVersion: 1,
+    targetId: 'test.Trade',
+    title: 'Trade',
+    status: 'ready',
+    fields: [
+      { path: 'quantity', label: 'Quantity', kind: 'number', required: false },
+      { path: 'price', label: 'Price', kind: 'number', required: true }
+    ]
+  };
+
+  it('accepts an empty-string value for an optional number field', () => {
+    const result = validatePreviewSample(schema, { quantity: '', price: 5 });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+
+  it('still rejects an empty-string value for a required number field (no regression)', () => {
+    const result = validatePreviewSample(schema, { quantity: '', price: '' });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('still accepts a populated optional number field (no regression)', () => {
+    const result = validatePreviewSample(schema, { quantity: 10, price: 5 });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+});
+
 describe('validatePreviewSample — unknown/extra fields (Codex round-2 finding #1)', () => {
   const schema: FormPreviewSchema = {
     schemaVersion: 1,
@@ -206,6 +246,133 @@ describe('validatePreviewSample — Data-extends-Choice exactly-one-arm enforcem
     const result = validatePreviewSample(basketConstituentSchema, {
       commodity: { name: 'Gold' },
       weight: 0.5
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+});
+
+describe('validatePreviewSample — nested object Choice-arm enforcement (round-10 finding B)', () => {
+  // Mirrors the real FormPreviewSchema shape objectField now produces for a
+  // NESTED Data-extends-Choice attribute reference (e.g.
+  // `Trade.constituent: BasketConstituent` where `BasketConstituent extends
+  // Observable`): the object field's `children` include both the Choice
+  // ancestor's options (prefixed with the ambient path, e.g.
+  // `constituent.commodity`) and the Data type's own attributes, and the
+  // object field itself now carries `choiceArmPaths` marking which children
+  // are the arms. Before this fix, buildFieldValidator's 'object' case had
+  // no enforcement logic at all for this, so a payload with zero or
+  // multiple arms present under `constituent` still validated successfully.
+  const tradeSchema: FormPreviewSchema = {
+    schemaVersion: 1,
+    targetId: 'test.preview.Trade',
+    title: 'Trade',
+    status: 'ready',
+    fields: [
+      {
+        path: 'constituent',
+        label: 'Constituent',
+        kind: 'object',
+        required: true,
+        choiceArmPaths: ['constituent.commodity', 'constituent.cash'],
+        children: [
+          {
+            path: 'constituent.commodity',
+            label: 'Commodity',
+            kind: 'object',
+            required: false,
+            children: [{ path: 'constituent.commodity.name', label: 'Name', kind: 'string', required: true }]
+          },
+          {
+            path: 'constituent.cash',
+            label: 'Cash',
+            kind: 'object',
+            required: false,
+            children: [{ path: 'constituent.cash.amount', label: 'Amount', kind: 'number', required: true }]
+          },
+          { path: 'constituent.weight', label: 'Weight', kind: 'number', required: true }
+        ]
+      }
+    ]
+  };
+
+  it('rejects a payload with no arm present under the nested object field', () => {
+    const result = validatePreviewSample(tradeSchema, { constituent: { weight: 1 } });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a payload with both arms present under the nested object field', () => {
+    const result = validatePreviewSample(tradeSchema, {
+      constituent: { commodity: { name: 'Gold' }, cash: { amount: 5 }, weight: 1 }
+    });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('still accepts a payload with exactly one arm present and a genuine payload (no regression)', () => {
+    const result = validatePreviewSample(tradeSchema, {
+      constituent: { commodity: { name: 'Gold' }, weight: 1 }
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+
+  // Two levels of nesting (object field nested inside another object field)
+  // to verify Zod's own issue-path-prefixing composes correctly through
+  // MULTIPLE levels, not just one.
+  const wrappedSchema: FormPreviewSchema = {
+    schemaVersion: 1,
+    targetId: 'test.preview.Portfolio',
+    title: 'Portfolio',
+    status: 'ready',
+    fields: [
+      {
+        path: 'trade',
+        label: 'Trade',
+        kind: 'object',
+        required: true,
+        children: [
+          {
+            path: 'trade.constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['trade.constituent.commodity', 'trade.constituent.cash'],
+            children: [
+              {
+                path: 'trade.constituent.commodity',
+                label: 'Commodity',
+                kind: 'object',
+                required: false,
+                children: [{ path: 'trade.constituent.commodity.name', label: 'Name', kind: 'string', required: true }]
+              },
+              {
+                path: 'trade.constituent.cash',
+                label: 'Cash',
+                kind: 'object',
+                required: false,
+                children: [{ path: 'trade.constituent.cash.amount', label: 'Amount', kind: 'number', required: true }]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  };
+
+  it('rejects a payload with no arm present two levels deep, with the issue keyed at the full nested path', () => {
+    const result = validatePreviewSample(wrappedSchema, { trade: { constituent: {} } });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors['trade.constituent']).toBeDefined();
+  });
+
+  it('still accepts a payload with exactly one arm present two levels deep (no regression)', () => {
+    const result = validatePreviewSample(wrappedSchema, {
+      trade: { constituent: { commodity: { name: 'Gold' } } }
     });
 
     expect(result.valid).toBe(true);

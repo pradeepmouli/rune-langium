@@ -676,6 +676,45 @@ describe('FormPreviewSchema generation', () => {
     }
   );
 
+  skipIfNodeLt22('sets choiceArmPaths on a NESTED Data-extends-Choice object field (round-10 finding B)', async () => {
+    // objectField already expands a Choice ancestor's options into
+    // `children` (see the previous test), but the returned object field
+    // carried no equivalent to FormPreviewSchema.choiceArmPaths — so
+    // preview-validator.ts had no metadata to enforce "exactly one arm
+    // present" for a NESTED object field the way it already does for a
+    // top-level Data-extends-Choice schema (round-9 finding #1). Mirrors
+    // that same pattern, scoped to the object field's own children.
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+
+      type Trade:
+        constituent BasketConstituent (1..1)
+    `);
+
+    const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+    const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+    expect(trade).toBeDefined();
+    const constituentField = trade?.fields.find((field) => field.path === 'constituent');
+    // Only 'object'/'array' PreviewField variants carry `children`/`choiceArmPaths`.
+    if (constituentField?.kind !== 'object') throw new Error('expected constituent field to be an object');
+    expect(constituentField.choiceArmPaths?.slice().sort()).toEqual(['constituent.cash', 'constituent.commodity']);
+  });
+
   skipIfNodeLt22(
     "a NESTED Data-extends-Choice expansion keeps the Data type's own attribute on a name collision",
     async () => {
