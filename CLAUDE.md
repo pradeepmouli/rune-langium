@@ -16,6 +16,35 @@ This keeps skills discoverable from both locations without duplication.
 - Browser persistence: OPFS for workspace files, IndexedDB for workspace metadata, caches, settings, and layouts
 - Codegen server/container paths still depend on Java 21 + `rosetta-code-generators`
 
+## Architecture Precepts
+
+**NEVER build or extend a parallel implementation.** DRY is the #1
+non-negotiable correctness rule in this repo. If logic already exists as a
+real, authoritative implementation elsewhere (a codegen emitter, a shared
+library function, another package), do not hand-roll a second
+approximation of it anywhere else — including in `apps/studio` for UI-side
+"lightweight" validation/preview purposes. Reuse or derive from the real
+implementation, even if that requires new plumbing (e.g. exposing a worker
+capability, dynamically evaluating generated output), rather than
+maintaining a shadow copy that must be kept in sync by hand.
+
+Concrete case that established this rule: `apps/studio/src/services/preview-validator.ts`
+is a hand-rolled structural Zod validator built to approximate the REAL
+generated Zod schema semantics produced by `packages/codegen/src/emit/zod-emitter.ts`
+(e.g. `runeExtendChoice(...)`'s exactly-one-arm union). Five separate
+bot-review rounds on PR #391 each found a different way the hand-rolled
+validator had silently drifted from the real emitter's actual semantics
+(`.strict()` handling, optional-array handling, choice exactly-one-arm,
+required-arm-payload, nested choice arms). Each individual fix looked
+small and safe — the recurring pattern across rounds was the actual signal
+that the parallel-reimplementation approach itself was the defect, not any
+single missed case. See `feedback_never_accept_parallel_implementations.md`
+in project memory for the full incident.
+
+When you catch yourself about to add "another special case to match what
+the real implementation does" anywhere in this repo, stop and investigate
+collapsing the duplication at its root instead.
+
 ## Commands
 
 ```bash
