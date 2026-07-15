@@ -265,6 +265,17 @@ export interface PreviewEnumField extends PreviewFieldBase {
 export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
   children: PreviewField[];
+  /**
+   * `children[].path` values that are Choice-ancestor-derived arms requiring
+   * "exactly one present" enforcement, for a NESTED object field expanded
+   * from a Data-extends-Choice / typeAlias-extends-Choice reference (e.g.
+   * `Trade.constituent: BasketConstituent` where `BasketConstituent extends
+   * Observable`). Mirrors `FormPreviewSchema.choiceArmPaths` — see that
+   * field's doc comment for the full rationale — but scoped to this
+   * object's own children instead of the schema root. Omitted (not an
+   * empty array) when there's no Choice ancestor.
+   */
+  choiceArmPaths?: string[];
 }
 
 export interface PreviewArrayField extends PreviewFieldBase {
@@ -301,6 +312,16 @@ export interface FormPreviewSchema {
   fields: PreviewField[];
   unsupportedFeatures?: string[];
   sourceMap?: PreviewSourceMapEntry[];
+  /**
+   * `fields[].path` values that are Choice-ancestor-derived arms requiring
+   * "exactly one present" enforcement (a Data-extends-Choice or
+   * typeAlias-extends-Choice schema's own top-level `kind` stays
+   * `undefined`/`'typeAlias'` — only a genuine `choice`-kind schema's
+   * `kind` is `'choice'` — so this field is what lets a consumer like
+   * `validatePreviewSample` generalize the enforcement without relying on
+   * `kind`). Omitted (not an empty array) when there's no Choice ancestor.
+   */
+  choiceArmPaths?: string[];
 }
 
 /**

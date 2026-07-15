@@ -6,6 +6,7 @@ import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useWorkspace } from './workspace-context.js';
 import { usePreviewStore } from '../../store/preview-store.js';
 import { useCodegenStore } from '../../store/codegen-store.js';
+import { useInstanceStore } from '../../store/instance-store.js';
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
 import { useActivityStore } from '../../store/activity-store.js';
 import {
@@ -13,7 +14,10 @@ import {
   createPreviewSetFilesMessage,
   isPreviewWorkerMessage,
   isPreviewExecuteResultMessage,
-  isPreviewExecuteErrorMessage
+  isPreviewExecuteErrorMessage,
+  isInstanceValidateResultMessage,
+  isInstanceGenerateSchemaResultMessage,
+  isInstanceGenerateSchemaStaleMessage
 } from '../../services/codegen-service.js';
 import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
@@ -149,6 +153,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
   useEffect(() => {
     if (!codegenWorker) return;
     setWorkerRef(codegenWorker);
+    useInstanceStore.getState().setWorker(codegenWorker);
     function handleMessage(e: MessageEvent<unknown>) {
       const msg = e.data;
       if (isPreviewExecuteResultMessage(msg)) {
@@ -157,6 +162,26 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       }
       if (isPreviewExecuteErrorMessage(msg)) {
         receiveExecutionError(msg.funcName, msg.error);
+        return;
+      }
+      if (isInstanceValidateResultMessage(msg)) {
+        useInstanceStore.getState().receiveValidateResult(msg.requestId, msg.diagnostics);
+        return;
+      }
+      // Instance-store's schema fetches use their OWN `instance:generateSchema`/
+      // `instance:generateSchemaResult`/`instance:generateSchemaStale` worker
+      // messages (finding #6/#7 fix) — a completely distinct channel from
+      // `preview:generate`/`preview:result`/`preview:stale`, so there's no
+      // ambiguity to disambiguate here and no risk of leaking into
+      // usePreviewStore (or of an instance schema fetch corrupting the
+      // codegen worker's `lastPreviewTargetId`/`lastPreviewRequestId`, which
+      // `preview:setFiles` re-runs preview generation against).
+      if (isInstanceGenerateSchemaResultMessage(msg)) {
+        useInstanceStore.getState().receiveSchemaResult(msg.requestId, msg.schema);
+        return;
+      }
+      if (isInstanceGenerateSchemaStaleMessage(msg)) {
+        useInstanceStore.getState().receiveSchemaStale(msg.requestId, msg.reason, msg.message);
         return;
       }
       // Preview messages below — execution messages above bypass stale-check

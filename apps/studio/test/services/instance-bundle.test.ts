@@ -1,0 +1,221 @@
+// SPDX-License-Identifier: FSL-1.1-ALv2
+// Copyright (c) 2026 Pradeep Mouli
+import { describe, expect, it } from 'vitest';
+import { OpfsFs } from '../../src/opfs/opfs-fs.js';
+import { createOpfsRoot } from '../setup/opfs-mock.js';
+import { listInstanceFiles, writeInstance } from '../../src/opfs/instances-fs.js';
+import { createTarGz } from '../../src/opfs/tar-untar.js';
+import { exportBundle, importBundle } from '../../src/services/instance-bundle.js';
+import type { InstanceRecord } from '@rune-langium/codegen/instances';
+
+function fakeDocs(text: string) {
+  return [{ textDocument: { getText: () => text } }] as never;
+}
+
+const RECORD: InstanceRecord = {
+  id: '01J000000000000000000001',
+  name: 'My Party',
+  typeFqn: 'test.Party',
+  data: { name: 'Acme' },
+  createdAt: 1000,
+  modifiedAt: 1000
+};
+
+describe('instance bundle export/import', () => {
+  it('round-trips one instance through export and import against the SAME model', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws1', RECORD);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    const bytes = await exportBundle(fs, '/ws1', docs);
+
+    const fs2 = new OpfsFs(createOpfsRoot() as never);
+    const result = await importBundle(fs2, '/ws2', bytes, docs);
+
+    expect(result.stale).toBe(false);
+    expect(result.imported).toHaveLength(1);
+    expect(result.imported[0]?.name).toBe('My Party');
+  });
+
+  it('flags imported instances stale when the model text differs from the manifest fingerprint', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws1', RECORD);
+    const originalDocs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+    const bytes = await exportBundle(fs, '/ws1', originalDocs);
+
+    const changedDocs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n  extra string (0..1)\n');
+    const fs2 = new OpfsFs(createOpfsRoot() as never);
+    const result = await importBundle(fs2, '/ws2', bytes, changedDocs);
+
+    expect(result.stale).toBe(true);
+  });
+
+  it('rethrows a clearly-messaged, distinguishable error when the bundle manifest is corrupt', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // A structurally-valid gzip/tar archive whose manifest.json is not
+    // valid JSON — simulates a corrupted/truncated bundle file.
+    const corruptBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode('{ this is not valid json') }
+    ]);
+
+    await expect(importBundle(fs, '/ws2', corruptBytes, docs)).rejects.toThrow(/Invalid bundle/);
+  });
+
+  it('rethrows a clearly-messaged, distinguishable error when the bundle bytes are not valid gzip/tar at all', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // Not a gzip archive at all (no gzip magic header) — simulates a user
+    // selecting the wrong file entirely, as opposed to a corrupted-but-valid
+    // archive. This exercises the extractTarGz call site specifically.
+    const notGzipBytes = new Uint8Array([1, 2, 3, 4, 5]);
+
+    await expect(importBundle(fs, '/ws2', notGzipBytes, docs)).rejects.toThrow(/Invalid bundle/);
+  });
+
+  it("does not resurrect a PRIOR import's leftover scratch file for a bundle that references but omits it (finding #10)", async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws1', RECORD);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // Import #1: a genuine, complete bundle — leaves
+    // `<root>/.studio/.bundle-import-scratch/instances/<id>.json` behind in
+    // the SAME workspace root (a real re-import scenario: same workspace,
+    // imported twice).
+    const goodBytes = await exportBundle(fs, '/ws1', docs);
+    const first = await importBundle(fs, '/ws1', goodBytes, docs);
+    expect(first.imported).toHaveLength(1);
+
+    // Import #2: a MALFORMED bundle whose manifest references the SAME
+    // instance id, but whose archive omits the instance file entirely
+    // (only manifest.json, no `instances/<id>.json` entry).
+    const malformedManifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [{ id: RECORD.id, name: RECORD.name, typeFqn: RECORD.typeFqn }]
+    };
+    const malformedBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(malformedManifest)) }
+    ]);
+
+    // A fixed/unique-per-call scratch path must make this fail honestly
+    // (the instance file genuinely isn't in THIS archive) — not silently
+    // "succeed" by reading import #1's leftover file from the shared
+    // scratch directory.
+    await expect(importBundle(fs, '/ws1', malformedBytes, docs)).rejects.toThrow(/Invalid bundle/);
+  });
+
+  it('makes zero writes to the workspace when a LATER instance record in the bundle is corrupt (atomicity)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // manifest lists TWO instances: the first ("...0001") has valid JSON in
+    // the archive, the second ("...0002") is corrupt. If importBundle writes
+    // as it parses (instead of parsing everything up front), the first
+    // record would already be persisted to the real workspaceRoot by the
+    // time the second entry's parse failure throws.
+    const secondId = '01J000000000000000000002';
+    const manifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [
+        { id: RECORD.id, name: RECORD.name, typeFqn: RECORD.typeFqn },
+        { id: secondId, name: 'Broken Record', typeFqn: 'test.Party' }
+      ]
+    };
+    const bundleBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: `instances/${RECORD.id}.json`, data: new TextEncoder().encode(JSON.stringify(RECORD)) },
+      { path: `instances/${secondId}.json`, data: new TextEncoder().encode('{ not valid json') }
+    ]);
+
+    await expect(importBundle(fs, '/ws-atomic', bundleBytes, docs)).rejects.toThrow(/Invalid bundle/);
+
+    // The earlier, validly-parsed record must NOT have been written to the
+    // real workspace root — the whole import must be all-or-nothing.
+    const files = await listInstanceFiles(fs, '/ws-atomic');
+    expect(files).toHaveLength(0);
+  });
+
+  it('rejects an instance record whose own id does not match its manifest entry id (mismatched-id bundle)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // manifest lists two entries: a genuinely valid one, and one ("...0002")
+    // whose scratch file at instances/<entry.id>.json actually contains a
+    // record with a DIFFERENT id ("...0099"). writeInstance derives its
+    // write path from record.id, not entry.id, so trusting the payload
+    // would let this write land under an id never listed in the manifest.
+    const secondEntryId = '01J000000000000000000002';
+    const mismatchedRecordId = '01J000000000000000000099';
+    const manifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [
+        { id: RECORD.id, name: RECORD.name, typeFqn: RECORD.typeFqn },
+        { id: secondEntryId, name: 'Mismatched Record', typeFqn: 'test.Party' }
+      ]
+    };
+    const mismatchedRecord: InstanceRecord = {
+      id: mismatchedRecordId,
+      name: 'Mismatched Record',
+      typeFqn: 'test.Party',
+      data: { name: 'Sneaky' },
+      createdAt: 1000,
+      modifiedAt: 1000
+    };
+    const bundleBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: `instances/${RECORD.id}.json`, data: new TextEncoder().encode(JSON.stringify(RECORD)) },
+      { path: `instances/${secondEntryId}.json`, data: new TextEncoder().encode(JSON.stringify(mismatchedRecord)) }
+    ]);
+
+    await expect(importBundle(fs, '/ws-mismatch', bundleBytes, docs)).rejects.toThrow(/Invalid bundle/);
+
+    // Nothing must have been written to the real workspace root — same
+    // atomicity guarantee as the corrupt-record case above.
+    const files = await listInstanceFiles(fs, '/ws-mismatch');
+    expect(files).toHaveLength(0);
+  });
+
+  it('rejects a manifest entry id containing a path separator (path-unsafe id, round-9 finding #2)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // A malformed/malicious bundle whose manifest id AND whose scratch-
+    // extracted record's own `id` both agree on "foo/bar" — this passes
+    // round 7's `record.id !== entry.id` equality check (they match), but
+    // `writeInstance` would write into a REAL nested subdirectory
+    // (`.studio/instances/foo/bar.json`) that `listInstanceFiles`'s flat,
+    // non-recursive `readdir` never sees again. No legitimately-generated
+    // `ulid()` id (instance-store.ts) ever contains a `/`.
+    const unsafeId = 'foo/bar';
+    const unsafeRecord: InstanceRecord = {
+      id: unsafeId,
+      name: 'Sneaky Nested Record',
+      typeFqn: 'test.Party',
+      data: { name: 'Sneaky' },
+      createdAt: 1000,
+      modifiedAt: 1000
+    };
+    const manifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [{ id: unsafeId, name: unsafeRecord.name, typeFqn: unsafeRecord.typeFqn }]
+    };
+    const bundleBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: `instances/${unsafeId}.json`, data: new TextEncoder().encode(JSON.stringify(unsafeRecord)) }
+    ]);
+
+    await expect(importBundle(fs, '/ws-path-unsafe', bundleBytes, docs)).rejects.toThrow(/Invalid bundle/);
+
+    // Nothing must have been written to the real workspace root — same
+    // atomicity guarantee as the corrupt-record and mismatched-id cases
+    // above (the check must run in the parse phase, before any write).
+    const files = await listInstanceFiles(fs, '/ws-path-unsafe');
+    expect(files).toHaveLength(0);
+  });
+});

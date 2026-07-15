@@ -65,7 +65,16 @@ vi.mock('@rune-langium/core', () => ({
 
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
-  generatePreviewSchemas: generatePreviewSchemasMock
+  generatePreviewSchemas: generatePreviewSchemasMock,
+  RUNTIME_HELPER_JS_SOURCE: ''
+}));
+
+const getActiveConditionPredicatesMock = vi.fn(() => []);
+const findDataNodeMock = vi.fn(() => undefined);
+
+vi.mock('@rune-langium/codegen/instances', () => ({
+  getActiveConditionPredicates: getActiveConditionPredicatesMock,
+  findDataNode: findDataNodeMock
 }));
 
 vi.mock('langium', () => ({
@@ -348,6 +357,110 @@ describe('codegen-worker preview messages', () => {
 
     expect(generatePreviewSchemasMock).not.toHaveBeenCalled();
     expect(scope.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("instance:generateSchema posts instance:generateSchemaResult and does NOT corrupt the Preview perspective's own re-run target (finding #6/#7)", async () => {
+    generatePreviewSchemasMock.mockImplementation((_docs: unknown, opts: { targetId: string }) => {
+      if (opts.targetId === 'beta.Trade') {
+        return [{ schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }];
+      }
+      if (opts.targetId === 'instance.Party') {
+        return [{ schemaVersion: 1, targetId: 'instance.Party', title: 'Party', status: 'ready', fields: [] }];
+      }
+      return [];
+    });
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    // Files are loaded and the Preview perspective selects `beta.Trade`.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'preview:beta.Trade:1'
+    });
+    await flushWorker();
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Trade',
+      requestId: 'preview:beta.Trade:2'
+    });
+    await flushWorker();
+
+    // Instance-editing requests a schema for an UNRELATED type on its own
+    // channel — this must not touch the worker's preview re-run target.
+    dispatch({
+      type: 'instance:generateSchema',
+      typeFqn: 'instance.Party',
+      requestId: 'schema:instance.Party:1'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:generateSchemaResult',
+      requestId: 'schema:instance.Party:1',
+      schema: { schemaVersion: 1, targetId: 'instance.Party', title: 'Party', status: 'ready', fields: [] }
+    });
+
+    // A subsequent workspace file change re-runs the Preview perspective's
+    // LAST target — must still be `beta.Trade`, not `instance.Party`.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta" // edited' }],
+      requestId: 'preview:beta.Trade:3'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:result',
+      targetId: 'beta.Trade',
+      requestId: 'preview:beta.Trade:3',
+      schema: { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    });
+  });
+
+  it('instance:generateSchema posts instance:generateSchemaStale with unsupported-target when no schema is available', async () => {
+    generatePreviewSchemasMock.mockReturnValue([]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'preview:beta.Trade:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'instance:generateSchema',
+      typeFqn: 'instance.Unknown',
+      requestId: 'schema:instance.Unknown:1'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:generateSchemaStale',
+      requestId: 'schema:instance.Unknown:1',
+      reason: 'unsupported-target',
+      message: 'No form preview schema is available for instance.Unknown.'
+    });
+  });
+
+  it('instance:generateSchema posts instance:generateSchemaStale with no-files before any files are loaded', async () => {
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'instance:generateSchema',
+      typeFqn: 'instance.Party',
+      requestId: 'schema:instance.Party:1'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:generateSchemaStale',
+      requestId: 'schema:instance.Party:1',
+      reason: 'no-files',
+      message: 'No files are loaded for form preview.'
+    });
   });
 });
 
@@ -695,5 +808,135 @@ describe('codegen-worker code preview messages', () => {
     const previewCall = generatePreviewSchemasMock.mock.calls.at(-1);
     const [forwardedDocs] = previewCall!;
     expect(forwardedDocs).toHaveLength(2);
+  });
+});
+
+describe('codegen-worker instance:validate messages', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generatePreviewSchemasMock.mockReset();
+    generatePreviewSchemasMock.mockReturnValue([]);
+    getActiveConditionPredicatesMock.mockReset();
+    findDataNodeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('handles instance:validate — structural error and condition violation both surface as diagnostics', async () => {
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        targetId: 'test.Trade',
+        title: 'Trade',
+        status: 'ready',
+        fields: [
+          { path: 'symbol', label: 'Symbol', kind: 'string', required: true },
+          { path: 'quantity', label: 'Quantity', kind: 'number', required: true }
+        ]
+      }
+    ]);
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'PositiveQuantity', predicate: 'data.quantity > 0' }]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace test' }],
+      requestId: 'validate:setup'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'test.Trade',
+      data: { quantity: -1 },
+      requestId: 'validate:1'
+    });
+    await flushWorker();
+
+    expect(findDataNodeMock).toHaveBeenCalledWith('test.Trade', expect.any(Array));
+    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.Trade' });
+    expect(getActiveConditionPredicatesMock).toHaveBeenCalledWith({ name: 'Trade' });
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'validate:1',
+      diagnostics: [
+        { path: 'symbol', message: 'Symbol is required' },
+        {
+          path: 'PositiveQuantity',
+          message: "Condition 'PositiveQuantity' failed",
+          conditionName: 'PositiveQuantity'
+        }
+      ]
+    });
+  });
+
+  it('posts an unknown-type diagnostic when the typeFqn cannot be resolved by either findDataNode or generatePreviewSchemas', async () => {
+    findDataNodeMock.mockReturnValue(undefined);
+    generatePreviewSchemasMock.mockReturnValue([]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'test.Unknown',
+      data: {},
+      requestId: 'validate:2'
+    });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.Unknown' });
+    expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'validate:2',
+      diagnostics: [{ path: '', message: "Unknown type 'test.Unknown'" }]
+    });
+  });
+
+  it('validates a Choice-type instance structurally via generatePreviewSchemas even though findDataNode cannot resolve it (Choice types are not Data nodes)', async () => {
+    findDataNodeMock.mockReturnValue(undefined);
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        kind: 'choice',
+        targetId: 'test.PaymentMethod',
+        title: 'PaymentMethod',
+        status: 'ready',
+        fields: [{ path: 'Cash', label: 'Cash', kind: 'string', required: false }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'instance:validate',
+      // Exactly one option present — the Choice "exactly one option" rule
+      // (Codex round-2 finding #2) is covered separately in
+      // preview-validator.test.ts; this test's own concern is only that
+      // Choice targets get routed through generatePreviewSchemas at all
+      // despite findDataNode returning undefined for them.
+      typeFqn: 'test.PaymentMethod',
+      data: { Cash: 'value' },
+      requestId: 'validate:3'
+    });
+    await flushWorker();
+
+    expect(findDataNodeMock).toHaveBeenCalledWith('test.PaymentMethod', expect.any(Array));
+    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.PaymentMethod' });
+    // Condition predicates need the real Data AST node; a Choice target has
+    // none, so they must be skipped rather than blocking validation entirely.
+    expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'validate:3',
+      diagnostics: []
+    });
   });
 });

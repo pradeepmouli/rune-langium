@@ -7,7 +7,8 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { resolveImportPath } from './namespace-registry.js';
 import type { NamespaceEmitterOptions } from './namespace-emitter.js';
 import type { NamespaceWalkResult } from './namespace-walker.js';
-import type { GeneratorOutput } from '../types.js';
+import type { GeneratorOutput, GeneratorDiagnostic } from '../types.js';
+import type { ExpressionTranspilerContext } from '../expr/transpiler.js';
 
 export abstract class BaseNamespaceEmitter {
   protected readonly model: NamespaceWalkResult;
@@ -155,6 +156,24 @@ export function buildAttrAccessorNamesMap(data: Data): Map<string, string> {
 /** Return the conditions on a Data node that have a non-null expression. */
 export function activeConditions(data: Data): Condition[] {
   return (data.conditions ?? []).filter((c) => c.expression != null);
+}
+
+/** Build an ExpressionTranspilerContext for a given Data node and emit mode. */
+export function buildConditionTranspilerContext(
+  data: Data,
+  emitMode: 'zod-refine' | 'zod-superRefine' | 'ts-method',
+  conditionName: string,
+  diagnostics: GeneratorDiagnostic[]
+): ExpressionTranspilerContext {
+  return {
+    selfName: 'data',
+    emitMode,
+    conditionName,
+    typeName: data.name,
+    attributeTypes: buildAttributeTypesMap(data),
+    diagnostics,
+    attrAccessorNames: buildAttrAccessorNamesMap(data)
+  };
 }
 
 /** Merge basicTypeMap ∪ recordTypeMap ∪ typeAliasMap from a language profile. */

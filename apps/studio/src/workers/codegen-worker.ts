@@ -9,17 +9,26 @@
  * identity per surface, and echoes request ids back so the UI can discard
  * stale replies after files or selections change.
  *
- *   codegen:setFiles  — Update the workspace file set and trigger generation.
- *   codegen:generate  — (Re-)generate using the current file set.
- *   preview:setFiles  — Update the workspace file set and re-run the last preview target.
- *   preview:generate  — (Re-)generate the selected form-preview target.
+ *   codegen:setFiles         — Update the workspace file set and trigger generation.
+ *   codegen:generate         — (Re-)generate using the current file set.
+ *   preview:setFiles         — Update the workspace file set and re-run the last preview target.
+ *   preview:generate         — (Re-)generate the selected form-preview target.
+ *   instance:validate        — Validate an instance's data against its type's structural + condition rules.
+ *   instance:generateSchema  — Fetch a FormPreviewSchema for instance-editing, on its OWN request/response
+ *                              pair — deliberately NOT `preview:generate`/`preview:result`, so it never
+ *                              touches `lastPreviewTargetId`/`lastPreviewRequestId` (finding #6/#7 fix;
+ *                              those touch the target `preview:setFiles` re-runs on a workspace file
+ *                              change, and previously an instance schema fetch could silently corrupt it).
  *
  * Responds with:
- *   codegen:result   — On success; returns the full generated file set for the target.
- *   codegen:outdated — When files are missing or contain parse errors.
- *   codegen:error    — When generation itself fails unexpectedly.
- *   preview:result   — On success; returns the generated form-preview schema.
- *   preview:stale    — When preview inputs are missing, unsupported, or stale.
+ *   codegen:result              — On success; returns the full generated file set for the target.
+ *   codegen:outdated            — When files are missing or contain parse errors.
+ *   codegen:error                — When generation itself fails unexpectedly.
+ *   preview:result               — On success; returns the generated form-preview schema.
+ *   preview:stale                — When preview inputs are missing, unsupported, or stale.
+ *   instance:validateResult      — Structural + condition diagnostics for an `instance:validate` request.
+ *   instance:generateSchemaResult — On success; returns the generated form-preview schema.
+ *   instance:generateSchemaStale  — When schema inputs are missing, unsupported, or stale.
  */
 
 import type { LangiumDocument } from 'langium';
@@ -27,7 +36,10 @@ import { URI } from 'langium';
 import { createRuneDslServices, hydrateModelDocument } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
 import type { Target } from '@rune-langium/codegen/export';
+import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
+import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
+import { validatePreviewSample } from '../services/preview-validator.js';
 import { isWorkerGlobalScope } from './runtime-guards.js';
 
 // ---------------------------------------------------------------------------
@@ -65,8 +77,26 @@ interface PreviewExecuteMessage {
   requestId: string;
 }
 
+interface InstanceValidateMessage {
+  type: 'instance:validate';
+  typeFqn: string;
+  data: Record<string, unknown>;
+  requestId: string;
+}
+
+interface InstanceGenerateSchemaMessage {
+  type: 'instance:generateSchema';
+  typeFqn: string;
+  requestId: string;
+}
+
 type InboundMessage = SetFilesMessage | GenerateMessage;
-type WorkerInboundMessage = InboundMessage | PreviewWorkerRequest | PreviewExecuteMessage;
+type WorkerInboundMessage =
+  | InboundMessage
+  | PreviewWorkerRequest
+  | PreviewExecuteMessage
+  | InstanceValidateMessage
+  | InstanceGenerateSchemaMessage;
 
 // ---------------------------------------------------------------------------
 // Module-level state
@@ -309,6 +339,62 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
   }
 }
 
+/**
+ * Instance-editing's schema fetches (finding #6/#7 fix) — deliberately
+ * separate from `runPreview`: it does NOT read or write module-level
+ * `lastPreviewTargetId`/`lastPreviewRequestId`, so it can never corrupt
+ * which target `preview:setFiles` re-runs for the Preview perspective.
+ * Reuses `buildDocuments`/`generatePreviewSchemas`, the same structural
+ * source `runPreview` and `validateInstance` already use.
+ */
+async function runInstanceSchema(typeFqn: string, requestId: string): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+
+  if (currentPreviewFiles.length === 0) {
+    scope.postMessage({
+      type: 'instance:generateSchemaStale',
+      requestId,
+      reason: 'no-files',
+      message: 'No files are loaded for form preview.'
+    });
+    return;
+  }
+
+  try {
+    const documents = await buildDocuments();
+    if (documents.length === 0) {
+      scope.postMessage({
+        type: 'instance:generateSchemaStale',
+        requestId,
+        reason: 'parse-error',
+        message: 'No valid files to generate a form preview from.'
+      });
+      return;
+    }
+
+    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    if (!schema) {
+      scope.postMessage({
+        type: 'instance:generateSchemaStale',
+        requestId,
+        reason: 'unsupported-target',
+        message: `No form preview schema is available for ${typeFqn}.`
+      });
+      return;
+    }
+
+    scope.postMessage({ type: 'instance:generateSchemaResult', requestId, schema });
+  } catch (err) {
+    console.error('[codegen-worker] Instance schema generation error:', err);
+    scope.postMessage({
+      type: 'instance:generateSchemaStale',
+      requestId,
+      reason: 'generation-error',
+      message: err instanceof Error ? err.message : 'Instance schema generation failed.'
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // TS → JS stripping for @rune-langium/codegen output
 // ---------------------------------------------------------------------------
@@ -352,6 +438,49 @@ function stripTypeAnnotations(tsCode: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Hardened `new Function(...)` execution — shared sandbox wrapper
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs `jsSource` (with the runtime-helper bundle prepended) inside
+ * `new Function(...)`, evaluates `returnExpr` as the final statement, and
+ * returns its result. `argValue` is bound to the parameter named `argName`
+ * inside that source.
+ *
+ * The `new Function(...)` constructor evaluates the given source in a
+ * dedicated module-level scope, but it is NOT a sandbox:
+ * - Identifier shadowing (`fetch`, `WebSocket`, `XMLHttpRequest`, `importScripts`
+ *   passed as params) prevents direct calls to those names from the evaluated
+ *   code, but `globalThis.fetch` etc. remain reachable.
+ * - Other Worker globals (`postMessage`, `self`, `addEventListener`) are not
+ *   shadowed.
+ * - This worker runs in a dedicated Web Worker context, so the blast radius is
+ *   limited to that worker, but the evaluated code can still exfil via globalThis.
+ * - For stronger isolation, rely on the Cloudflare Workers / browser CSP to
+ *   block network egress at the runtime level.
+ *
+ * Shared by `executeFunction` (generated Rune func bodies) and the
+ * `instance:validate` handler (condition predicates) — the single hardened-
+ * execution path in this worker; do not add a second one.
+ *
+ * react-doctor false positive: this is `new Function`, not `eval`, but the rule
+ * flags both. Disable comment preserved.
+ */
+// eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+// react-doctor-disable-next-line react-doctor/no-eval
+function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown, returnExpr: string): unknown {
+  const wrapper = new Function(
+    argName,
+    'fetch',
+    'WebSocket',
+    'XMLHttpRequest',
+    'importScripts',
+    `${RUNTIME_HELPER_JS_SOURCE}\n\n${jsSource}\nreturn ${returnExpr};`
+  );
+  return wrapper(argValue, undefined, undefined, undefined, undefined);
+}
+
+// ---------------------------------------------------------------------------
 // Function execution
 // ---------------------------------------------------------------------------
 
@@ -387,37 +516,14 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     // Strip TS type annotations from the isolated function body stored in
     // func.fileContents. This contains only the function declaration — no
     // imports, interface blocks, or helper declarations — so stripTypeAnnotations
-    // only needs to handle inline type syntax.
-    // Prepend plain-JS runtime helpers so runeCheckOneOf / runeCount /
-    // runeAttrExists are available without any TypeScript annotation.
-    // Security: execution runs in a dedicated web worker (no DOM/network/FS).
-    const jsCode = RUNTIME_HELPER_JS_SOURCE + '\n\n' + stripTypeAnnotations(code);
-
-    // The `new Function(...)` constructor evaluates user-provided code in a
-    // dedicated module-level scope, but it is NOT a sandbox:
-    // - Identifier shadowing (`fetch`, `WebSocket`, `XMLHttpRequest`, `importScripts`
-    //   passed as params) prevents direct calls to those names from the evaluated
-    //   code, but `globalThis.fetch` etc. remain reachable.
-    // - Other Worker globals (`postMessage`, `self`, `addEventListener`) are not
-    //   shadowed.
-    // - This worker runs in a dedicated Web Worker context, so the blast radius is
-    //   limited to that worker, but the user code can still exfil via globalThis.
-    // - For stronger isolation, rely on the Cloudflare Workers / browser CSP to
-    //   block network egress at the runtime level.
-    // react-doctor false positive: this is `new Function`, not `eval`, but the rule
-    // flags both. Disable comment preserved.
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-    // react-doctor-disable-next-line react-doctor/no-eval
-    const wrapper = new Function(
+    // only needs to handle inline type syntax. Execution goes through
+    // runInWorkerSandbox — see its threat-model comment.
+    const output = runInWorkerSandbox(
+      stripTypeAnnotations(code),
       'input',
-      'fetch',
-      'WebSocket',
-      'XMLHttpRequest',
-      'importScripts',
-      `${jsCode}\nreturn typeof ${funcName} === 'function' ? ${funcName}(input) : undefined;`
+      inputs,
+      `typeof ${funcName} === 'function' ? ${funcName}(input) : undefined`
     );
-
-    const output = wrapper(inputs, undefined, undefined, undefined, undefined);
 
     scope.postMessage({
       type: 'preview:execute-result',
@@ -431,6 +537,68 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
       requestId,
       funcName,
       error: e instanceof Error ? e.message : String(e)
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Instance validation
+// ---------------------------------------------------------------------------
+
+async function validateInstance(typeFqn: string, data: Record<string, unknown>, requestId: string): Promise<void> {
+  const scope = self as unknown as DedicatedWorkerGlobalScope;
+
+  try {
+    const documents = await buildDocuments();
+    // `findDataNode` only searches Data types — it returns undefined for a
+    // Choice target even though `generatePreviewSchemas` (the structural
+    // validator source) supports Choice targets too. Only condition-
+    // predicate extraction genuinely needs the Data AST node; structural
+    // validation must proceed for any target `generatePreviewSchemas` can
+    // resolve, Choice included. "Unknown type" is only correct when NEITHER
+    // resolves the target.
+    const dataNode = findDataNode(typeFqn, documents);
+    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    if (!dataNode && !schema) {
+      scope.postMessage({
+        type: 'instance:validateResult',
+        requestId,
+        diagnostics: [{ path: '', message: `Unknown type '${typeFqn}'` }]
+      });
+      return;
+    }
+
+    const structural = validatePreviewSample(
+      schema ?? { schemaVersion: 1, targetId: typeFqn, title: dataNode!.name, status: 'ready', fields: [] },
+      data
+    );
+    const structuralDiagnostics: ValidationDiagnostic[] = Object.entries(structural.errors).map(([path, message]) => ({
+      path,
+      message
+    }));
+
+    // Condition predicates are the same plain-JS boolean strings
+    // transpileCondition() emits into `.refine((data) => <predicate>, ...)`
+    // for the zod target — executed here through runInWorkerSandbox so
+    // runeAttrExists/runeCount/etc. are in scope. Only Data targets carry
+    // conditions; a Choice target (no `dataNode`) has none to evaluate.
+    const conditionDiagnostics: ValidationDiagnostic[] = dataNode
+      ? getActiveConditionPredicates(dataNode)
+          .filter(({ predicate }) => !runInWorkerSandbox('', 'data', data, `(${predicate})`))
+          .map(({ name }) => ({ path: name, message: `Condition '${name}' failed`, conditionName: name }))
+      : [];
+
+    scope.postMessage({
+      type: 'instance:validateResult',
+      requestId,
+      diagnostics: [...structuralDiagnostics, ...conditionDiagnostics]
+    });
+  } catch (err) {
+    console.error('[codegen-worker] Instance validation error:', err);
+    scope.postMessage({
+      type: 'instance:validateResult',
+      requestId,
+      diagnostics: [{ path: '', message: err instanceof Error ? err.message : 'Instance validation failed.' }]
     });
   }
 }
@@ -481,6 +649,12 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'preview:execute') {
         const { funcName, inputs, requestId } = msg;
         executeFunction(funcName, inputs, requestId).catch(console.error);
+      } else if (msg.type === 'instance:validate') {
+        const { typeFqn, data, requestId } = msg;
+        validateInstance(typeFqn, data, requestId).catch(console.error);
+      } else if (msg.type === 'instance:generateSchema') {
+        const { typeFqn, requestId } = msg;
+        runInstanceSchema(typeFqn, requestId).catch(console.error);
       }
     }
   );

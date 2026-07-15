@@ -404,7 +404,8 @@ vi.mock('lucide-react', () => ({
   // perspective-registry icons (ActivityBar now imports from perspective-registry)
   FolderOpen: () => React.createElement('span'),
   GitBranch: () => React.createElement('span'),
-  Package: () => React.createElement('span')
+  Package: () => React.createElement('span'),
+  Boxes: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({

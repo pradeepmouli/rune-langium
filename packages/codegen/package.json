@@ -30,6 +30,10 @@
     "./lens": {
       "types": "./dist/src/lens.d.ts",
       "default": "./dist/src/lens.js"
+    },
+    "./instances": {
+      "types": "./dist/src/instances/index.d.ts",
+      "default": "./dist/src/instances/index.js"
     }
   },
   "bin": {

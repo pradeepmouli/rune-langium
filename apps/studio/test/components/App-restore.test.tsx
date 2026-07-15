@@ -22,9 +22,12 @@ import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 import { App } from '../../src/App.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
+import { useInstanceStore } from '../../src/store/instance-store.js';
 import { saveWorkspace, _resetForTests, type WorkspaceRecord } from '../../src/workspace/persistence.js';
 import { createOpfsRoot, type OpfsRoot } from '../setup/opfs-mock.js';
 import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
+import { OpfsFs } from '../../src/opfs/opfs-fs.js';
+import { writeInstance } from '../../src/opfs/instances-fs.js';
 
 const { showToastSpy } = vi.hoisted(() => ({
   showToastSpy: vi.fn()
@@ -82,8 +85,11 @@ function makeWorkspace(id: string, name: string, lastOpenedAt = new Date().toISO
   };
 }
 
+let sharedOpfsRoot: OpfsRoot;
+
 beforeEach(async () => {
   const opfsRoot: OpfsRoot = createOpfsRoot();
+  sharedOpfsRoot = opfsRoot;
   setWorkspaceFilesDeps({
     getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle
   });
@@ -213,6 +219,47 @@ describe('App workspace restore on mount (T027/US2)', () => {
     });
     expect(screen.queryByTestId('workspace-restored')).not.toBeInTheDocument();
     expect(document.body).not.toHaveAttribute('data-workspace-active', 'true');
+  });
+
+  it('wires instance-store to OPFS persistence for the restored workspace (finding #1 — integration site)', async () => {
+    await saveWorkspace(makeWorkspace('ws-instances', 'Instance Persistence Project'));
+    await saveWorkspaceFiles('ws-instances', [
+      {
+        name: 'trade.rosetta',
+        path: 'trade.rosetta',
+        content: 'namespace restored.project\n\ntype Trade:\n  tradeDate date (1..1)\n',
+        dirty: false
+      }
+    ]);
+    // Pre-seed an instance record directly in OPFS, at the path the real
+    // App wiring is expected to use (`/${workspaceId}`) — proves the LOAD
+    // side of finding #1 end-to-end through the actual component tree
+    // (App → getWorkspaceManager → WorkspaceManager.getFs() →
+    // useInstanceStore.setOpfsContext → loadInstancesFromOpfs), not just
+    // the store in isolation.
+    await writeInstance(new OpfsFs(sharedOpfsRoot as unknown as FileSystemDirectoryHandle), '/ws-instances', {
+      id: '01J000000000000000000099',
+      name: 'Pre-seeded Party',
+      typeFqn: 'test.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+
+    render(<App />);
+    await waitFor(() => {
+      expect(document.body).toHaveAttribute('data-workspace-active', 'true');
+    });
+
+    await waitFor(
+      () => {
+        expect(useInstanceStore.getState().instances['01J000000000000000000099']).toMatchObject({
+          name: 'Pre-seeded Party',
+          typeFqn: 'test.Party'
+        });
+      },
+      { timeout: 4000 }
+    );
   });
 
   it('shows a destructive workspace toast when restore throws', async () => {

@@ -380,16 +380,53 @@ describe('FormPreviewSchema generation', () => {
       title: 'Collateral',
       status: 'ready'
     });
-    expect(choice?.fields.map((f) => f.path)).toEqual(['Cash', 'Securities']);
+    // `path` is the REAL emitted object key (lower-camel-cased, matching
+    // `choiceOptionFieldName` — the same rule zod/json-schema/ts emitters
+    // use for a Choice's actual generated schema), while `label` keeps the
+    // original DSL casing for display.
+    expect(choice?.fields.map((f) => f.path)).toEqual(['cash', 'securities']);
+    expect(choice?.fields.map((f) => f.label)).toEqual(['Cash', 'Securities']);
     // Each option is required: false because only one may be chosen
     expect(choice?.fields.every((f) => f.required === false)).toBe(true);
-    expect(choice?.fields.find((f) => f.path === 'Cash')).toMatchObject({
-      kind: 'object'
+    expect(choice?.fields.find((f) => f.path === 'cash')).toMatchObject({
+      kind: 'object',
+      label: 'Cash'
     });
-    expect(choice?.fields.find((f) => f.path === 'Securities')).toMatchObject({
-      kind: 'object'
+    expect(choice?.fields.find((f) => f.path === 'securities')).toMatchObject({
+      kind: 'object',
+      label: 'Securities'
     });
   });
+
+  skipIfNodeLt22(
+    "choice option field 'path' uses the real emitted key (lower-camel), not the raw DSL casing",
+    async () => {
+      // Regression test (Codex round-3 finding #1): buildChoiceOptionField
+      // previously set `path` from the raw DSL type-reference text
+      // (`Cash`), which does NOT match what the real generated Zod/JSON
+      // Schema/TypeScript emitters accept as the Choice arm's object key
+      // (`cash`, per `choiceOptionFieldName` in base-namespace-emitter.ts).
+      // An instance authored via the Prototype perspective and keyed by the
+      // old `path` would fail to validate against the real generated
+      // schema for the same model.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        type Cash:
+          amount number (1..1)
+
+        choice Collateral:
+          Cash
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral');
+
+      expect(choice?.fields).toHaveLength(1);
+      expect(choice?.fields[0]).toMatchObject({ path: 'cash', label: 'Cash' });
+    }
+  );
 
   skipIfNodeLt22('choice with unresolved option type produces unsupported status', async () => {
     const doc = await parseModel(`
@@ -405,4 +442,317 @@ describe('FormPreviewSchema generation', () => {
     expect(instrument).toBeDefined();
     expect(instrument!.fields.length).toBeGreaterThanOrEqual(0);
   });
+
+  skipIfNodeLt22(
+    'includes inherited fields from a Data supertype chain, not just the subtype own attributes',
+    async () => {
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Base:
+        id string (1..1)
+
+      type Middle extends Base:
+        note string (1..1)
+
+      type Sub extends Middle:
+        quantity int (0..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Sub' });
+      const sub = schemas.find((schema) => schema.targetId === 'test.preview.Sub');
+
+      expect(sub).toBeDefined();
+      // Inherited fields (from Base and Middle) must be present alongside Sub's
+      // own attribute — a bug here would silently pass validation on required
+      // parent fields that were missing from an instance.
+      expect(sub?.fields.map((field) => field.path).sort()).toEqual(['id', 'note', 'quantity']);
+      expect(sub?.fields.find((field) => field.path === 'id')).toMatchObject({ kind: 'string', required: true });
+      expect(sub?.fields.find((field) => field.path === 'note')).toMatchObject({ kind: 'string', required: true });
+      // A plain Data-only schema (no Choice ancestor) must NOT carry
+      // `choiceArmPaths` — round-9 finding #1 regression guard.
+      expect(sub?.choiceArmPaths).toBeUndefined();
+    }
+  );
+
+  skipIfNodeLt22(
+    'includes Choice-ancestor option fields when a Data type extends a Choice (round-5 finding #1)',
+    async () => {
+      // Regression test: buildDataSchema previously only walked Data-to-Data
+      // `extends` chains, silently dropping a Choice ancestor's options from
+      // the generated FormPreviewSchema. Combined with preview-validator.ts's
+      // `.strict()` validators (round-2 finding #1), a real, schema-valid
+      // payload keyed by a Choice-derived field was rejected as an
+      // "unrecognized key". `Commodity` (capitalized DSL name) intentionally
+      // differs in casing from its real emitted field key (`commodity`, per
+      // `choiceOptionFieldName`) so the test also proves the option field's
+      // `path` is lower-camel-cased, not the raw DSL type-reference text.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.BasketConstituent' });
+      const basketConstituent = schemas.find((schema) => schema.targetId === 'test.preview.BasketConstituent');
+
+      expect(basketConstituent).toBeDefined();
+      // Both BasketConstituent's own attribute AND each Choice option's
+      // (lower-camel) field must be present.
+      expect(basketConstituent?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity', 'weight']);
+      expect(basketConstituent?.fields.find((field) => field.path === 'weight')).toMatchObject({
+        kind: 'number',
+        required: true
+      });
+      const commodityField = basketConstituent?.fields.find((field) => field.path === 'commodity');
+      expect(commodityField).toMatchObject({ path: 'commodity', label: 'Commodity', kind: 'object', required: false });
+      const cashField = basketConstituent?.fields.find((field) => field.path === 'cash');
+      expect(cashField).toMatchObject({ path: 'cash', label: 'Cash', kind: 'object', required: false });
+      // round-9 finding #1: `choiceArmPaths` marks which of `fields` are
+      // Choice-ancestor-derived arms, so preview-validator.ts's "exactly one
+      // arm present" enforcement can run for a Data-extends-Choice schema
+      // (whose `kind` is NOT `'choice'`).
+      expect(basketConstituent?.choiceArmPaths).toEqual(['commodity', 'cash']);
+    }
+  );
+
+  skipIfNodeLt22(
+    'includes Choice-ancestor option fields when a typeAlias resolves to a Data-extends-Choice type',
+    async () => {
+      // Regression test (follow-up to round-5 finding #1): buildTypeAliasSchema's
+      // data-alias branch only destructured `.attributes` from
+      // collectInheritedAttributes, silently dropping a Choice ancestor's
+      // options — the same bug buildDataSchema had, but for a `typeAlias`
+      // pointing at a Data-extends-Choice type instead of the Data type
+      // itself. Both sit `fields` directly at the schema root, so the same
+      // expansion applies unmodified.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+
+      typeAlias BasketConstituentAlias:
+        BasketConstituent
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.BasketConstituentAlias' });
+      const alias = schemas.find((schema) => schema.targetId === 'test.preview.BasketConstituentAlias');
+
+      expect(alias).toBeDefined();
+      expect(alias?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity', 'weight']);
+      expect(alias?.fields.find((field) => field.path === 'weight')).toMatchObject({
+        kind: 'number',
+        required: true
+      });
+      const commodityField = alias?.fields.find((field) => field.path === 'commodity');
+      expect(commodityField).toMatchObject({ path: 'commodity', label: 'Commodity', kind: 'object', required: false });
+      const cashField = alias?.fields.find((field) => field.path === 'cash');
+      expect(cashField).toMatchObject({ path: 'cash', label: 'Cash', kind: 'object', required: false });
+      // round-9 finding #1: same `choiceArmPaths` expansion as buildDataSchema,
+      // applied to the typeAlias data-alias branch.
+      expect(alias?.choiceArmPaths).toEqual(['commodity', 'cash']);
+    }
+  );
+
+  skipIfNodeLt22(
+    "a typeAlias's Data-extends-Choice expansion keeps the Data type's own attribute on a name collision",
+    async () => {
+      // Mirrors buildDataSchema's collision precedence (round-5 finding #1
+      // comment at its call site): when a Choice option's real emitted field
+      // key collides with one of the Data type's own attribute names, the
+      // Data type's own (more-derived) attribute wins and the Choice option
+      // is dropped rather than overwriting it.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Cash
+
+      type BasketConstituent extends Observable:
+        cash string (1..1)
+
+      typeAlias BasketConstituentAlias:
+        BasketConstituent
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.BasketConstituentAlias' });
+      const alias = schemas.find((schema) => schema.targetId === 'test.preview.BasketConstituentAlias');
+
+      expect(alias).toBeDefined();
+      expect(alias?.fields.map((field) => field.path)).toEqual(['cash']);
+      // BasketConstituent's own `cash string` attribute wins over the Choice
+      // option's `cash` object field.
+      expect(alias?.fields.find((field) => field.path === 'cash')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+    }
+  );
+
+  skipIfNodeLt22(
+    'includes Choice-ancestor option fields, prefixed with the ambient path, on a NESTED Data-extends-Choice attribute',
+    async () => {
+      // Regression test (further follow-up to round-5 finding #1): objectField
+      // (reached via buildBaseField for a nested Data-type attribute) only
+      // destructured `.attributes` from collectInheritedAttributes, silently
+      // dropping a Choice ancestor's options for a NESTED reference — unlike
+      // buildDataSchema/buildTypeAliasSchema, whose `fields` sit at the schema
+      // root, objectField's children must have the Choice option's `path`
+      // prefixed with the ambient field path (e.g. `constituent.commodity`,
+      // not bare `commodity`), or the option is mis-keyed against the real
+      // generated (runeExtendChoice) schema for `Trade.constituent`.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+
+      type Trade:
+        constituent BasketConstituent (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      const constituentField = trade?.fields.find((field) => field.path === 'constituent');
+      expect(constituentField).toMatchObject({ path: 'constituent', kind: 'object', required: true });
+      // Only 'object'/'array' PreviewField variants carry `children`.
+      if (constituentField?.kind !== 'object') throw new Error('expected constituent field to be an object');
+      expect(constituentField.children.map((child) => child.path).sort()).toEqual([
+        'constituent.cash',
+        'constituent.commodity',
+        'constituent.weight'
+      ]);
+      const commodityChild = constituentField.children.find((child) => child.path === 'constituent.commodity');
+      expect(commodityChild).toMatchObject({
+        path: 'constituent.commodity',
+        label: 'Commodity',
+        kind: 'object',
+        required: false
+      });
+      const cashChild = constituentField.children.find((child) => child.path === 'constituent.cash');
+      expect(cashChild).toMatchObject({ path: 'constituent.cash', label: 'Cash', kind: 'object', required: false });
+    }
+  );
+
+  skipIfNodeLt22('sets choiceArmPaths on a NESTED Data-extends-Choice object field (round-10 finding B)', async () => {
+    // objectField already expands a Choice ancestor's options into
+    // `children` (see the previous test), but the returned object field
+    // carried no equivalent to FormPreviewSchema.choiceArmPaths — so
+    // preview-validator.ts had no metadata to enforce "exactly one arm
+    // present" for a NESTED object field the way it already does for a
+    // top-level Data-extends-Choice schema (round-9 finding #1). Mirrors
+    // that same pattern, scoped to the object field's own children.
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+
+      type Trade:
+        constituent BasketConstituent (1..1)
+    `);
+
+    const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+    const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+    expect(trade).toBeDefined();
+    const constituentField = trade?.fields.find((field) => field.path === 'constituent');
+    // Only 'object'/'array' PreviewField variants carry `children`/`choiceArmPaths`.
+    if (constituentField?.kind !== 'object') throw new Error('expected constituent field to be an object');
+    expect(constituentField.choiceArmPaths?.slice().sort()).toEqual(['constituent.cash', 'constituent.commodity']);
+  });
+
+  skipIfNodeLt22(
+    "a NESTED Data-extends-Choice expansion keeps the Data type's own attribute on a name collision",
+    async () => {
+      // Mirrors buildDataSchema's/buildTypeAliasSchema's collision precedence,
+      // at the nested objectField call site: when a Choice option's real
+      // emitted field key collides with one of the Data type's own attribute
+      // names, the Data type's own (more-derived) attribute wins.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Cash
+
+      type BasketConstituent extends Observable:
+        cash string (1..1)
+
+      type Trade:
+        constituent BasketConstituent (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      const constituentField = trade?.fields.find((field) => field.path === 'constituent');
+      // Only 'object'/'array' PreviewField variants carry `children`.
+      if (constituentField?.kind !== 'object') throw new Error('expected constituent field to be an object');
+      expect(constituentField.children.map((child) => child.path)).toEqual(['constituent.cash']);
+      // BasketConstituent's own `cash string` attribute wins over the Choice
+      // option's `cash` object field.
+      expect(constituentField.children.find((child) => child.path === 'constituent.cash')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+    }
+  );
 });
