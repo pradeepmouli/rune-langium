@@ -85,6 +85,20 @@ export async function importBundle(
   // real workspace's instance store yet, so the throw needs no rollback.
   const finalRecords: InstanceRecord[] = [];
   for (const entry of manifest.instances) {
+    // Reject a path-unsafe manifest entry id BEFORE it's ever used to build
+    // a read or write path. `writeInstance` (instances-fs.ts) writes to
+    // `${instancesDir(workspaceRoot)}/${record.id}.json` with no path
+    // sanitization of its own, and `listInstanceFiles` only does a flat,
+    // non-recursive `readdir` of that directory — so an id containing `/`
+    // (e.g. "foo/bar") would write into a REAL nested subdirectory that the
+    // app can never see again on a later listing, even though the write
+    // itself succeeds silently (the instance would vanish on next reload).
+    // A denylist (not a strict allowlist tied to today's `ulid()` alphabet —
+    // see instance-store.ts's Phase-1 placeholder note) keeps this future-
+    // proof against a real ULID implementation using different characters.
+    if (entry.id.includes('/') || entry.id.includes('\\') || entry.id.includes('..')) {
+      throw new Error(`Invalid bundle: instance record "${entry.id}" has a path-unsafe id`);
+    }
     let record: InstanceRecord;
     try {
       const raw = await fs.readFile(`${scratchRoot}/instances/${entry.id}.json`, 'utf8');

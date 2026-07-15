@@ -179,4 +179,43 @@ describe('instance bundle export/import', () => {
     const files = await listInstanceFiles(fs, '/ws-mismatch');
     expect(files).toHaveLength(0);
   });
+
+  it('rejects a manifest entry id containing a path separator (path-unsafe id, round-9 finding #2)', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    const docs = fakeDocs('namespace test\ntype Party:\n  name string (1..1)\n');
+
+    // A malformed/malicious bundle whose manifest id AND whose scratch-
+    // extracted record's own `id` both agree on "foo/bar" — this passes
+    // round 7's `record.id !== entry.id` equality check (they match), but
+    // `writeInstance` would write into a REAL nested subdirectory
+    // (`.studio/instances/foo/bar.json`) that `listInstanceFiles`'s flat,
+    // non-recursive `readdir` never sees again. No legitimately-generated
+    // `ulid()` id (instance-store.ts) ever contains a `/`.
+    const unsafeId = 'foo/bar';
+    const unsafeRecord: InstanceRecord = {
+      id: unsafeId,
+      name: 'Sneaky Nested Record',
+      typeFqn: 'test.Party',
+      data: { name: 'Sneaky' },
+      createdAt: 1000,
+      modifiedAt: 1000
+    };
+    const manifest = {
+      formatVersion: 1,
+      modelFingerprint: 'irrelevant-for-this-test',
+      instances: [{ id: unsafeId, name: unsafeRecord.name, typeFqn: unsafeRecord.typeFqn }]
+    };
+    const bundleBytes = createTarGz([
+      { path: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: `instances/${unsafeId}.json`, data: new TextEncoder().encode(JSON.stringify(unsafeRecord)) }
+    ]);
+
+    await expect(importBundle(fs, '/ws-path-unsafe', bundleBytes, docs)).rejects.toThrow(/Invalid bundle/);
+
+    // Nothing must have been written to the real workspace root — same
+    // atomicity guarantee as the corrupt-record and mismatched-id cases
+    // above (the check must run in the parse phase, before any write).
+    const files = await listInstanceFiles(fs, '/ws-path-unsafe');
+    expect(files).toHaveLength(0);
+  });
 });

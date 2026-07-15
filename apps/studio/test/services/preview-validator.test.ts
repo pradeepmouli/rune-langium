@@ -153,6 +153,66 @@ describe('validatePreviewSample — Data-extends-Choice inherited fields (round-
   });
 });
 
+describe('validatePreviewSample — Data-extends-Choice exactly-one-arm enforcement (round-9 finding #1)', () => {
+  // The real FormPreviewSchema shape buildDataSchema now produces for a Data
+  // type extending a Choice (e.g. `BasketConstituent extends Observable`):
+  // `kind` stays undefined (NOT `'choice'`), but `choiceArmPaths` marks which
+  // of `fields` are the Choice-ancestor-derived arms. Before this fix, the
+  // "exactly one arm present" block was gated on `schema.kind === 'choice'`,
+  // so it never ran for this shape at all — a payload missing the arm
+  // entirely, or with multiple arms present, was incorrectly accepted.
+  const basketConstituentSchema: FormPreviewSchema = {
+    schemaVersion: 1,
+    targetId: 'test.preview.BasketConstituent',
+    title: 'BasketConstituent',
+    status: 'ready',
+    choiceArmPaths: ['commodity', 'cash'],
+    fields: [
+      {
+        path: 'commodity',
+        label: 'Commodity',
+        kind: 'object',
+        required: false,
+        children: [{ path: 'commodity.name', label: 'Name', kind: 'string', required: true }]
+      },
+      {
+        path: 'cash',
+        label: 'Cash',
+        kind: 'object',
+        required: false,
+        children: [{ path: 'cash.amount', label: 'Amount', kind: 'number', required: true }]
+      },
+      { path: 'weight', label: 'Weight', kind: 'number', required: true }
+    ]
+  };
+
+  it('rejects a sample with no Choice arm present at all', () => {
+    const result = validatePreviewSample(basketConstituentSchema, { weight: 1 });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects a sample with both Choice arms present simultaneously', () => {
+    const result = validatePreviewSample(basketConstituentSchema, {
+      commodity: { name: 'Gold' },
+      cash: { amount: 5 },
+      weight: 1
+    });
+
+    expect(result.valid).toBe(false);
+  });
+
+  it('still accepts a sample with exactly one arm present and a genuinely populated payload (no regression)', () => {
+    const result = validatePreviewSample(basketConstituentSchema, {
+      commodity: { name: 'Gold' },
+      weight: 0.5
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual({});
+  });
+});
+
 describe('validatePreviewSample — Choice "exactly one option present" (Codex round-2 finding #2)', () => {
   const choiceSchema: FormPreviewSchema = {
     schemaVersion: 1,

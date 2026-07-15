@@ -122,8 +122,19 @@ export function validatePreviewSample(
   // a Choice type is a strict union requiring exactly one arm (Codex
   // round-2 finding #2). Uses the same presence semantics ChoiceFieldGroup
   // already relies on for rendering: a root key's value is `!== undefined`.
-  if (schema.kind === 'choice') {
-    const presentFields = schema.fields.filter((field) => values[fieldRootKey(field.path)] !== undefined);
+  //
+  // This "exactly one arm present" enforcement also applies to a
+  // Data-extends-Choice / typeAlias-extends-Choice schema, whose Choice
+  // ancestor's option fields sit alongside the Data type's own (separately,
+  // normally required/optional-validated) attributes rather than being the
+  // schema's entire field set — `schema.kind` stays `undefined`/`'typeAlias'`
+  // for those, so `choiceArmPaths` (set by buildDataSchema /
+  // buildTypeAliasSchema) is what scopes this block to just the arm fields
+  // in that case, instead of every field in `schema.fields`.
+  const armPaths = schema.kind === 'choice' ? schema.fields.map((field) => field.path) : (schema.choiceArmPaths ?? []);
+  if (armPaths.length > 0) {
+    const armFields = schema.fields.filter((field) => armPaths.includes(field.path));
+    const presentFields = armFields.filter((field) => values[fieldRootKey(field.path)] !== undefined);
     const presentCount = presentFields.length;
     if (presentCount !== 1) {
       // Keyed at the empty path — the same schema-level (not field-level)
