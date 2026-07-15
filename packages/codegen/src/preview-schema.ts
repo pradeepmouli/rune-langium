@@ -203,17 +203,17 @@ interface InheritedAttributesResult {
    * `superType` reference is typed `DataOrChoice`, and a Choice can't
    * itself `extends` anything, so it's always the terminal ancestor —
    * mirrors `buildAttributeTypesMap`'s own Data/Choice walk in
-   * base-namespace-emitter.ts). `buildDataSchema`'s top-level call site and
-   * `buildTypeAliasSchema`'s data-alias branch both expand this into
-   * pseudo-fields, since both build a schema whose `fields` sit directly at
-   * the root. The other consumers of this helper — `buildChoiceOptionField`'s
-   * nested Data-type option expansion and `objectField`'s nested attribute
-   * expansion — do not yet do so: expanding a Choice ancestor reached via a
-   * NESTED reference needs the Choice's option fields' `path` prefixed with
-   * the ambient field path, and `buildChoiceOptionField` currently always
-   * emits a bare, unprefixed `path` (correct for a top-level schema, not for
-   * a nested one) — a small additional design decision intentionally left as
-   * a follow-up rather than folded into this fix.
+   * base-namespace-emitter.ts). `buildDataSchema`'s top-level call site,
+   * `buildTypeAliasSchema`'s data-alias branch, and `objectField`'s nested
+   * attribute expansion all expand this into pseudo-fields — the first two
+   * build a schema whose `fields` sit directly at the root, while
+   * `objectField` passes its ambient field path to `buildChoiceOptionField`
+   * via `pathPrefix` so the Choice option fields' `path` (e.g.
+   * `constituent.commodity`) is correctly prefixed instead of bare. The one
+   * remaining consumer of this helper that does NOT yet expand a Choice
+   * ancestor is `buildChoiceOptionField`'s OWN nested Data-type option
+   * expansion (a Choice option whose Data type itself extends a Choice) —
+   * a doubly-nested case intentionally left as a follow-up.
    */
   choiceAncestor?: Choice;
 }
@@ -466,6 +466,17 @@ function buildChoiceOptionField(
     namespace: NamespaceIndex;
     unsupportedFeatures: Set<string>;
     sourceUri: string;
+    /**
+     * Ambient field path to prefix this option's `path` (and its own
+     * nested Data-type option `children`, via the recursive call below)
+     * with, for a Choice ancestor expanded from a NESTED reference (e.g.
+     * `objectField`, whose `children` live under `constituent.*`). Omitted
+     * by every top-level call site (`buildChoiceSchema`, `buildDataSchema`,
+     * `buildTypeAliasSchema`) and by this function's own internal
+     * recursive call, all of which must keep producing a bare,
+     * unprefixed `path`.
+     */
+    pathPrefix?: string;
   }
 ): PreviewField {
   const typeRef = option.typeCall?.type?.ref;
@@ -479,7 +490,8 @@ function buildChoiceOptionField(
   // round-trips against the real generated schema instead of being
   // rejected for using the raw (capitalized) DSL type-reference text.
   const label = refText ?? 'unknown';
-  const path = refText ? choiceOptionFieldName(refText) : label;
+  const basePath = refText ? choiceOptionFieldName(refText) : label;
+  const path = ctx.pathPrefix ? `${ctx.pathPrefix}.${basePath}` : basePath;
 
   // Primitive type option
   const builtinKind =
@@ -714,21 +726,46 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
 
   const nextSeen = new Set(ctx.seenTypes);
   nextSeen.add(data.name);
+  const { attributes, choiceAncestor } = collectInheritedAttributes(data);
+  const attributeChildren = attributes.map((child) =>
+    buildField(child, {
+      ...ctx,
+      sourceUri,
+      depth: ctx.depth + 1,
+      path: `${ctx.path}.${child.name}`,
+      label: humanizeLabel(child.name),
+      seenTypes: nextSeen
+    })
+  );
+
+  // Data-extends-Choice (round-5 finding #1), applied to a NESTED attribute
+  // reference: mirrors buildDataSchema's/buildTypeAliasSchema's expansion of
+  // a Choice ancestor's options — see collectInheritedAttributes'
+  // `choiceAncestor` doc comment for the full rationale — but with each
+  // option field's `path` prefixed with the ambient `ctx.path` (via
+  // `pathPrefix`) so it comes out as e.g. `constituent.commodity` instead of
+  // a bare, top-level-only `commodity`. On a name collision, the Data type's
+  // own attribute wins (same precedence as the other two call sites).
+  const ownChildPaths = new Set(attributeChildren.map((child) => child.path));
+  const choiceFields = choiceAncestor
+    ? choiceAncestor.attributes
+        .map((option) =>
+          buildChoiceOptionField(option, {
+            namespace: ctx.namespace,
+            unsupportedFeatures: ctx.unsupportedFeatures,
+            sourceUri,
+            pathPrefix: ctx.path
+          })
+        )
+        .filter((field) => !ownChildPaths.has(field.path))
+    : [];
+
   return {
     path: ctx.path,
     label: ctx.label,
     kind: 'object',
     required: true,
-    children: collectInheritedAttributes(data).attributes.map((child) =>
-      buildField(child, {
-        ...ctx,
-        sourceUri,
-        depth: ctx.depth + 1,
-        path: `${ctx.path}.${child.name}`,
-        label: humanizeLabel(child.name),
-        seenTypes: nextSeen
-      })
-    )
+    children: [...choiceFields, ...attributeChildren]
   };
 }
 

@@ -606,4 +606,103 @@ describe('FormPreviewSchema generation', () => {
       });
     }
   );
+
+  skipIfNodeLt22(
+    'includes Choice-ancestor option fields, prefixed with the ambient path, on a NESTED Data-extends-Choice attribute',
+    async () => {
+      // Regression test (further follow-up to round-5 finding #1): objectField
+      // (reached via buildBaseField for a nested Data-type attribute) only
+      // destructured `.attributes` from collectInheritedAttributes, silently
+      // dropping a Choice ancestor's options for a NESTED reference — unlike
+      // buildDataSchema/buildTypeAliasSchema, whose `fields` sit at the schema
+      // root, objectField's children must have the Choice option's `path`
+      // prefixed with the ambient field path (e.g. `constituent.commodity`,
+      // not bare `commodity`), or the option is mis-keyed against the real
+      // generated (runeExtendChoice) schema for `Trade.constituent`.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Observable:
+        weight number (1..1)
+
+      type Trade:
+        constituent BasketConstituent (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      const constituentField = trade?.fields.find((field) => field.path === 'constituent');
+      expect(constituentField).toMatchObject({ path: 'constituent', kind: 'object', required: true });
+      // Only 'object'/'array' PreviewField variants carry `children`.
+      if (constituentField?.kind !== 'object') throw new Error('expected constituent field to be an object');
+      expect(constituentField.children.map((child) => child.path).sort()).toEqual([
+        'constituent.cash',
+        'constituent.commodity',
+        'constituent.weight'
+      ]);
+      const commodityChild = constituentField.children.find((child) => child.path === 'constituent.commodity');
+      expect(commodityChild).toMatchObject({
+        path: 'constituent.commodity',
+        label: 'Commodity',
+        kind: 'object',
+        required: false
+      });
+      const cashChild = constituentField.children.find((child) => child.path === 'constituent.cash');
+      expect(cashChild).toMatchObject({ path: 'constituent.cash', label: 'Cash', kind: 'object', required: false });
+    }
+  );
+
+  skipIfNodeLt22(
+    "a NESTED Data-extends-Choice expansion keeps the Data type's own attribute on a name collision",
+    async () => {
+      // Mirrors buildDataSchema's/buildTypeAliasSchema's collision precedence,
+      // at the nested objectField call site: when a Choice option's real
+      // emitted field key collides with one of the Data type's own attribute
+      // names, the Data type's own (more-derived) attribute wins.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Cash
+
+      type BasketConstituent extends Observable:
+        cash string (1..1)
+
+      type Trade:
+        constituent BasketConstituent (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      const constituentField = trade?.fields.find((field) => field.path === 'constituent');
+      // Only 'object'/'array' PreviewField variants carry `children`.
+      if (constituentField?.kind !== 'object') throw new Error('expected constituent field to be an object');
+      expect(constituentField.children.map((child) => child.path)).toEqual(['constituent.cash']);
+      // BasketConstituent's own `cash string` attribute wins over the Choice
+      // option's `cash` object field.
+      expect(constituentField.children.find((child) => child.path === 'constituent.cash')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+    }
+  );
 });
