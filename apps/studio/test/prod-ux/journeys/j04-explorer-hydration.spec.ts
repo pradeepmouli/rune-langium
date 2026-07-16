@@ -3,15 +3,11 @@
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
 
-// Anchors must be corpus-stable: BusinessCenterEnum was migrated upstream to
-// the codelist pattern (cdm.base.staticdata.codelist.BusinessCenter) in the
-// 2026-07-02 curated build. Both anchors below match the single 'Business'
-// search and live in cdm.base.datetime.
-const ENUM_NODE_ID = 'cdm.base.datetime.BusinessDayConventionEnum';
-const DATA_NODE_ID = 'cdm.base.datetime.BusinessCenters';
-// Regression: cdm.base.staticdata.party is never pre-hydrated at load time.
-// First navigation to it must populate Inspector members (resolveNodeFileRef fix).
-const COUNTERPARTY_NODE_ID = 'cdm.base.staticdata.party.Counterparty';
+import {
+  ANCHOR_ENUM as ENUM_NODE_ID,
+  ANCHOR_DATA as DATA_NODE_ID,
+  ANCHOR_NEVER_HYDRATED_DATA as COUNTERPARTY_NODE_ID
+} from '../anchors.js';
 
 test.describe('J04 — explorer navigation & on-demand hydration', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
