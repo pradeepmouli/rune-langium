@@ -103,15 +103,30 @@ function withoutPreviousAttempts(record: JourneyRecord): JourneyRecord {
   return rest;
 }
 
+// This suite runs single-worker/non-parallel (see playwright.prod.config.ts),
+// so a simple module-scope flag is enough to detect "first call this
+// process" without globalSetup or file-locking. On the first call, any
+// manifest left on disk from an earlier `playwright test` invocation is
+// discarded rather than merged into, so stale journey records never mix in
+// with the current run's fresh runId. Every subsequent call within the same
+// process merges as before, which is what lets multiple journeys in one run
+// accumulate into a single manifest.
+let hasResetManifestThisProcess = false;
+
 export async function appendJourneyRecord(record: JourneyRecord): Promise<void> {
   await mkdir(REPORT_DIR, { recursive: true });
   const manifestPath = path.join(REPORT_DIR, 'run-manifest.json');
   let manifest: { runId: string; journeys: JourneyRecord[] };
-  try {
-    const raw = await import('node:fs/promises').then((fs) => fs.readFile(manifestPath, 'utf-8'));
-    manifest = JSON.parse(raw);
-  } catch {
+  if (!hasResetManifestThisProcess) {
+    hasResetManifestThisProcess = true;
     manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [] };
+  } else {
+    try {
+      const raw = await import('node:fs/promises').then((fs) => fs.readFile(manifestPath, 'utf-8'));
+      manifest = JSON.parse(raw);
+    } catch {
+      manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [] };
+    }
   }
 
   // A retry that supersedes a prior attempt for the same journey id must not
