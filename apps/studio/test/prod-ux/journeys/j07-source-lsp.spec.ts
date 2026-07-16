@@ -41,10 +41,17 @@ test.describe('J07 — Source view + LSP diagnostics', () => {
     await expect(footer.getByText(/^Connected/)).toBeVisible({ timeout: 20000 });
     await evidence.checkpoint('lsp-connected');
 
+    // A fresh workspace only opens the Structure pane (DockShell's
+    // activePanes seed) — Source is not active yet, so `source-editor` isn't
+    // mounted/visible until we switch to it, same as production-checkout.spec.ts
+    // / j04-explorer-hydration.spec.ts do before asserting on source content.
+    await page.getByRole('button', { name: 'Source' }).click();
+
     // Click into CodeMirror's content element (the established pattern in
     // test/e2e/source-editor.spec.ts) rather than the outer `source-editor`
     // section, so keyboard input is guaranteed to land in the editable surface.
     const editor = page.getByTestId('source-editor');
+    await expect(editor).toBeVisible({ timeout: 10000 });
     await editor.locator('.cm-content').click();
     await page.keyboard.type('type Bad syntax here###');
     await expect(page.getByTestId('panel-problems').getByText(/error/i)).toBeVisible({ timeout: 10000 });
