@@ -28,6 +28,7 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     showToastRef.current = showToast;
   }, [showToast]);
   const prevStatusRef = useRef<TransportState['status']>('disconnected');
+  const hasConnectedOnceRef = useRef(false);
 
   useEffect(() => {
     if (!config.lspEnabled) {
@@ -43,11 +44,19 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     const unsub = provider.onStateChange((state) => {
       setTransportState(state);
       if (state.status === 'connected') {
-        const durationMs = performance.now() - connectStartedAt;
-        useOutputStore
-          .getState()
-          .addLine(fmtLine('lsp', 'connected'), 'success', { op: 'lsp', opId: connectOpId, durationMs });
-        useActivityStore.getState().addActivity('lsp', true, 'connected', { opId: connectOpId, durationMs });
+        // Only the FIRST connected transition after mount is the "initial
+        // connect" — later connected transitions (a reconnect() call, or the
+        // transport auto-reconnecting) are attributed to their own span
+        // (reconnect's own opId/startedAt), not this mount-time one, so we
+        // don't double-log a reconnect with a stale/inflated durationMs.
+        if (!hasConnectedOnceRef.current) {
+          hasConnectedOnceRef.current = true;
+          const durationMs = performance.now() - connectStartedAt;
+          useOutputStore
+            .getState()
+            .addLine(fmtLine('lsp', 'connected'), 'success', { op: 'lsp', opId: connectOpId, durationMs });
+          useActivityStore.getState().addActivity('lsp', true, 'connected', { opId: connectOpId, durationMs });
+        }
       } else if (state.status === 'disconnected' && prevStatusRef.current === 'connected') {
         useOutputStore.getState().addLine(fmtLine('lsp', 'disconnected'), 'warn');
         useActivityStore.getState().addActivity('lsp', false, 'disconnected');

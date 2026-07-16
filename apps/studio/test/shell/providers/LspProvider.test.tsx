@@ -4,8 +4,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { useState } from 'react';
 
+// Captures the mount-time onStateChange listener so tests can simulate the
+// transport re-emitting 'connected' (what happens for real when reconnect()
+// succeeds) without a second component mount.
+let transportStateCb: ((state: { mode: string; status: string }) => void) | null = null;
+
 const connect = vi.fn().mockResolvedValue(undefined);
-const reconnect = vi.fn().mockResolvedValue(undefined);
+const reconnect = vi.fn().mockImplementation(async () => {
+  // Mirrors production: a successful reconnect() also causes the underlying
+  // transport to transition back to 'connected', re-firing the still-subscribed
+  // mount-time onStateChange listener.
+  transportStateCb?.({ mode: 'direct', status: 'connected' });
+});
 const syncWorkspaceFiles = vi.fn();
 const dispose = vi.fn();
 vi.mock('../../../src/services/lsp-client.js', () => ({
@@ -16,6 +26,7 @@ vi.mock('../../../src/services/transport-provider.js', () => ({
     // Simulate a transport that immediately reports itself connected, like the real
     // provider does once its underlying connection opens.
     onStateChange: (cb: (state: { mode: string; status: string }) => void) => {
+      transportStateCb = cb;
       cb({ mode: 'direct', status: 'connected' });
       return () => {};
     },
@@ -98,6 +109,53 @@ describe('LspProvider', () => {
     const connectedEntry = lspEntries.find((e) => e.msg === 'connected');
     expect(connectedEntry?.opId).toBeDefined();
     expect(connectedEntry?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reconnect() does not re-fire the mount-time connect logging as a duplicate "connected" entry', async () => {
+    useActivityStore.setState({ entries: [] });
+    function ReconnectProbe() {
+      const { reconnect } = useLsp();
+      return (
+        <button type="button" onClick={() => reconnect()}>
+          reconnect
+        </button>
+      );
+    }
+    function Host() {
+      return (
+        <WorkspaceStateContext.Provider value={wsState([])}>
+          <LspProvider>
+            <ReconnectProbe />
+          </LspProvider>
+        </WorkspaceStateContext.Provider>
+      );
+    }
+    await act(async () => {
+      render(<Host />);
+    });
+
+    const connectedAfterMount = useActivityStore
+      .getState()
+      .entries.filter((e) => e.tag === 'lsp' && e.msg === 'connected');
+    expect(connectedAfterMount).toHaveLength(1);
+
+    await act(async () => {
+      screen.getByText('reconnect').click();
+    });
+
+    // The transport re-emits 'connected' as a side effect of reconnect() (see the
+    // mock above) — the mount-time listener must NOT log a second 'connected'
+    // entry for it; only the reconnect callback's own 'reconnected' entry should
+    // appear.
+    const connectedAfterReconnect = useActivityStore
+      .getState()
+      .entries.filter((e) => e.tag === 'lsp' && e.msg === 'connected');
+    expect(connectedAfterReconnect).toHaveLength(1);
+
+    const reconnectedEntries = useActivityStore
+      .getState()
+      .entries.filter((e) => e.tag === 'lsp' && e.msg === 'reconnected');
+    expect(reconnectedEntries).toHaveLength(1);
   });
 
   it('throws when useLsp is used outside the provider', () => {
