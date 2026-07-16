@@ -47,9 +47,11 @@ For every FAIL/DEGRADED/BLOCKED journey, assign exactly one class:
 
 - **regression** — feature broke in prod. Evidence: assertion + screenshot +
   console/network record agree. Highest severity.
-- **corpus-drift** — an anchor type/namespace moved in a curated rebuild
-  (harness marks these `BLOCKED(corpus-drift)`; verify by checking the anchor
-  against the live curated manifest). Fix is an `anchors.ts` update, not app code.
+- **corpus-drift** — an anchor type/namespace moved in a curated rebuild. The
+  harness itself only reports a bare `FAIL` for an anchor-existence failure —
+  it does not classify corpus-drift automatically. You (the reviewer) assign
+  `BLOCKED(corpus-drift)` by verifying the anchor against the live curated
+  manifest. Fix is an `anchors.ts` update, not app code.
 - **known-issue** — matches a `known-issues.json` ledger entry. Check the
   entry's `expires`/`issueUrl`: an expired ledger entry is a finding in itself.
 - **flake/infra** — passed on retry, or failure is a timeout with no

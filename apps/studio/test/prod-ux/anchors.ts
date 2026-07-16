@@ -5,8 +5,12 @@
  * Corpus-stable type/namespace anchors, shared across prod-ux journeys.
  * Each anchor records WHY it's expected to survive curated corpus rebuilds.
  * If a journey fails because one of these no longer exists in the live
- * curated manifest, that's corpus-drift (BLOCKED), not a regression (FAIL) —
- * see docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md §3.
+ * curated manifest, the harness itself only surfaces a plain FAIL (see
+ * fixtures.ts) — it does not distinguish corpus-drift from a regression.
+ * It's the reviewing agent's job (per .agents/skills/prod-ux-review/SKILL.md)
+ * to recognize this pattern and classify it as corpus-drift rather than a
+ * code regression; see
+ * docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md §3.
  */
 
 /**
