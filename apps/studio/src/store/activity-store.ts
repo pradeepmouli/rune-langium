@@ -5,14 +5,25 @@ import { create } from 'zustand';
 export interface ActivityEntry {
   id: number;
   time: string;
+  /** Numeric monotonic timestamp (performance.now()) — for op-log correlation/sorting. `time` above stays the HH:MM:SS display string the panel renders. */
+  ts: number;
   tag: string;
   ok: boolean;
   msg: string;
+  subject?: string;
+  durationMs?: number;
+  opId?: number;
+}
+
+export interface AddActivityMeta {
+  subject?: string;
+  durationMs?: number;
+  opId?: number;
 }
 
 interface ActivityState {
   entries: ActivityEntry[];
-  addActivity: (tag: string, ok: boolean, msg: string) => void;
+  addActivity: (tag: string, ok: boolean, msg: string, meta?: AddActivityMeta) => void;
   clearEntries: () => void;
 }
 
@@ -26,9 +37,9 @@ function nowHHMMSS(): string {
 
 export const useActivityStore = create<ActivityState>((set) => ({
   entries: [],
-  addActivity: (tag, ok, msg) =>
+  addActivity: (tag, ok, msg, meta) =>
     set((s) => {
-      const next = [...s.entries, { id: ++_id, time: nowHHMMSS(), tag, ok, msg }];
+      const next = [...s.entries, { id: ++_id, time: nowHHMMSS(), ts: performance.now(), tag, ok, msg, ...meta }];
       return { entries: next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next };
     }),
   clearEntries: () => set({ entries: [] })
