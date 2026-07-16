@@ -12,7 +12,15 @@ vi.mock('../../../src/services/lsp-client.js', () => ({
   createLspClientService: () => ({ connect, reconnect, syncWorkspaceFiles, dispose })
 }));
 vi.mock('../../../src/services/transport-provider.js', () => ({
-  createTransportProvider: () => ({ onStateChange: () => () => {}, dispose: () => {} })
+  createTransportProvider: () => ({
+    // Simulate a transport that immediately reports itself connected, like the real
+    // provider does once its underlying connection opens.
+    onStateChange: (cb: (state: { mode: string; status: string }) => void) => {
+      cb({ mode: 'direct', status: 'connected' });
+      return () => {};
+    },
+    dispose: () => {}
+  })
 }));
 // Ensure the connect path runs (config.lspEnabled must be truthy).
 vi.mock('../../../src/config.js', () => ({ config: { lspEnabled: true }, studioConfig: {} }));
@@ -20,6 +28,7 @@ vi.mock('../../../src/config.js', () => ({ config: { lspEnabled: true }, studioC
 import { LspProvider } from '../../../src/shell/providers/LspProvider.js';
 import { useLsp } from '../../../src/shell/providers/lsp-context.js';
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
+import { useActivityStore } from '../../../src/store/activity-store.js';
 
 function wsState(files: WorkspaceState['files']): WorkspaceState {
   return {
@@ -67,6 +76,28 @@ describe('LspProvider', () => {
     act(() => screen.getByText('add').click());
     expect(syncWorkspaceFiles).toHaveBeenCalled(); // doc-set re-sync on file change
     expect(reconnect).not.toHaveBeenCalled(); // switch is NOT a reconnect
+  });
+
+  it('connect success publishes an activity entry with op-log opId and durationMs', async () => {
+    useActivityStore.setState({ entries: [] });
+    function Host() {
+      return (
+        <WorkspaceStateContext.Provider value={wsState([])}>
+          <LspProvider>
+            <LspProbe />
+          </LspProvider>
+        </WorkspaceStateContext.Provider>
+      );
+    }
+    await act(async () => {
+      render(<Host />);
+    });
+
+    const lspEntries = useActivityStore.getState().entries.filter((e) => e.tag === 'lsp');
+    expect(lspEntries.length).toBeGreaterThan(0);
+    const connectedEntry = lspEntries.find((e) => e.msg === 'connected');
+    expect(connectedEntry?.opId).toBeDefined();
+    expect(connectedEntry?.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('throws when useLsp is used outside the provider', () => {
