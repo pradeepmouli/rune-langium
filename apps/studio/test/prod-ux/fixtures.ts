@@ -12,10 +12,11 @@ interface CheckoutFixtures {
 export const checkout = base.extend<CheckoutFixtures>({
   evidence: async ({ page }, use, testInfo) => {
     const journeyId = testInfo.title.match(/^(J\d+[a-z]?)/)?.[1] ?? testInfo.title;
-    const collector = new EvidenceCollector(page, journeyId, testInfo.title);
+    const collector = new EvidenceCollector(page, journeyId, testInfo.title, testInfo.retry);
     await use(collector);
     const verdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
-    const record: JourneyRecord = await collector.finish(verdict, testInfo.retry);
+    const opLog = await readOpLog(page);
+    const record: JourneyRecord = await collector.finish(verdict, opLog);
     await appendJourneyRecord(record);
   }
 });
