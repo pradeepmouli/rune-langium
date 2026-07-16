@@ -69,18 +69,3 @@ This repo uses split licensing:
 
 When creating new source files, always include the correct SPDX header for the directory.
 Never refer to the studio as "open source" — it is "source-available."
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan.
-<!-- SPECKIT END -->
-
-## graphify
-
-This project may have a generated knowledge graph at `graphify-out/` with god nodes, community structure, and cross-file relationships.
-
-Rules:
-- IF `graphify-out/GRAPH_REPORT.md` exists, read it before reading source files, running grep/glob searches, or answering codebase questions. When present, treat the graph as your primary map of the codebase.
-- IF `graphify-out/wiki/index.md` exists, navigate it instead of reading raw files.
-- IF the graph exists, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep for cross-module "how does X relate to Y" questions — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files.
-- After modifying code, run `graphify update .` to keep the graph current when `graphify` is available and the repo is using the graph workflow.
