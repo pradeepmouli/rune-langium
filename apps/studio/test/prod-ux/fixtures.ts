@@ -15,7 +15,7 @@ export const checkout = base.extend<CheckoutFixtures>({
     const collector = new EvidenceCollector(page, journeyId, testInfo.title);
     await use(collector);
     const verdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
-    const record: JourneyRecord = await collector.finish(verdict);
+    const record: JourneyRecord = await collector.finish(verdict, testInfo.retry);
     await appendJourneyRecord(record);
   }
 });

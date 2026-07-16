@@ -57,7 +57,10 @@ For every FAIL/DEGRADED/BLOCKED journey, assign exactly one class:
 - **flake/infra** — passed on retry, or failure is a timeout with no
   corroborating console/network evidence. Check the trace before concluding
   flake; two consecutive runs flaking the same step is a regression until
-  proven otherwise.
+  proven otherwise. A journey record's `retry` (>0) plus its `previousAttempts`
+  array (the superseded earlier attempt(s), each with its own verdict/evidence)
+  is exactly the manifest evidence for "passed on retry, not cleanly" — check
+  both before defaulting a PASS to clean.
 - **harness-bug** — selector rot, race in the spec itself (e.g. asserting
   before a hydration wait). The trace's action log usually shows this.
 

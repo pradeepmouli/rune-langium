@@ -25,6 +25,14 @@ export interface JourneyRecord {
   consoleErrors: string[];
   failedRequests: string[];
   softFindings: SoftFinding[];
+  /** Playwright TestInfo.retry — 0 on the first attempt, 1+ on a retry. */
+  retry: number;
+  /**
+   * Earlier, superseded attempt(s) for this same journey id (e.g. a FAIL that
+   * was then retried and passed). Never silently discarded — see
+   * appendJourneyRecord.
+   */
+  previousAttempts?: JourneyRecord[];
 }
 
 const REPORT_DIR = path.join(process.cwd(), 'test/prod-ux/report');
@@ -74,7 +82,7 @@ export class EvidenceCollector {
     this.softFindings.push({ ledgerId, detail });
   }
 
-  async finish(verdict: JourneyRecord['verdict']): Promise<JourneyRecord> {
+  async finish(verdict: JourneyRecord['verdict'], retry = 0): Promise<JourneyRecord> {
     return {
       id: this.journeyId,
       title: this.title,
@@ -83,9 +91,16 @@ export class EvidenceCollector {
       checkpoints: this.checkpoints,
       consoleErrors: this.consoleErrors,
       failedRequests: this.failedRequests,
-      softFindings: this.softFindings
+      softFindings: this.softFindings,
+      retry
     };
   }
+}
+
+/** Strips previousAttempts so a superseded record doesn't nest its own history. */
+function withoutPreviousAttempts(record: JourneyRecord): JourneyRecord {
+  const { previousAttempts: _previousAttempts, ...rest } = record;
+  return rest;
 }
 
 export async function appendJourneyRecord(record: JourneyRecord): Promise<void> {
@@ -98,7 +113,20 @@ export async function appendJourneyRecord(record: JourneyRecord): Promise<void> 
   } catch {
     manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [] };
   }
+
+  // A retry that supersedes a prior attempt for the same journey id must not
+  // silently delete that prior attempt's evidence (e.g. a FAIL-then-PASS
+  // flake) — fold it (and anything it already carried) into previousAttempts
+  // on the surviving record, keeping ONE manifest entry per journey id.
+  const existing = manifest.journeys.find((j) => j.id === record.id);
+  const finalRecord: JourneyRecord = existing
+    ? {
+        ...record,
+        previousAttempts: [...(existing.previousAttempts ?? []), withoutPreviousAttempts(existing)]
+      }
+    : record;
+
   manifest.journeys = manifest.journeys.filter((j) => j.id !== record.id);
-  manifest.journeys.push(record);
+  manifest.journeys.push(finalRecord);
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 }
