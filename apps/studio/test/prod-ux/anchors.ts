@@ -25,7 +25,7 @@ export const ANCHOR_DATA = 'cdm.base.datetime.BusinessCenters';
 
 /**
  * Regression: cdm.base.staticdata.party is never pre-hydrated at load time.
- * First navigation to it must populate Inspector members (resolveNodeFileRef fix).
+ * First navigation to it must populate Inspector members (resolveNodeFileRef fix, commit f6a64029).
  * The canonical never-hydrated-on-first-nav anchor.
  */
 export const ANCHOR_NEVER_HYDRATED_DATA = 'cdm.base.staticdata.party.Counterparty';
