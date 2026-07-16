@@ -5,10 +5,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './test',
-  testMatch: ['prod-smoke/**/*.spec.ts'],
+  testMatch: ['prod-smoke/**/*.spec.ts', 'prod-ux/journeys/**/*.spec.ts'],
   fullyParallel: false,
   forbidOnly: false,
-  retries: 0,
+  retries: 1,
   workers: 1,
   reporter: process.env.CI ? 'list' : 'html',
   timeout: 120000,
