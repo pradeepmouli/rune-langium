@@ -8,9 +8,11 @@
  * toast (docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md).
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { StudioToastProvider, useStudioToast } from '../../src/components/StudioToastProvider.js';
+import { useOutputStore } from '../../src/store/output-store.js';
+import { useActivityStore } from '../../src/store/activity-store.js';
 
 afterEach(() => cleanup());
 
@@ -83,5 +85,44 @@ describe('StudioToastProvider', () => {
     expect(toastRoot).not.toBeNull();
     expect(toastRoot!.getAttribute('data-variant')).toBe('destructive');
     expect(toastRoot!.querySelector('[data-slot="spinner"]')).toBeNull();
+  });
+});
+
+describe('StudioToastProvider — superset-of-toasts invariant', () => {
+  beforeEach(() => {
+    useOutputStore.setState({ lines: [] });
+    useActivityStore.setState({ entries: [] });
+  });
+
+  it('showToast publishes a matching activity-store entry', () => {
+    render(
+      <StudioToastProvider>
+        <ShowToastHarness />
+      </StudioToastProvider>
+    );
+    screen.getByText('show').click();
+
+    const entries = useActivityStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0].tag).toBe('toast');
+    expect(entries[0].ok).toBe(false); // variant: 'destructive'
+    expect(entries[0].msg).toBe('Plain notification');
+  });
+
+  it('showLoadingToast publishes a start entry; dismissToast publishes the matching end entry with the same opId', () => {
+    render(
+      <StudioToastProvider>
+        <LoadingToastHarness />
+      </StudioToastProvider>
+    );
+    screen.getByText('show-and-dismiss').click();
+
+    const entries = useActivityStore.getState().entries;
+    // one entry for the loading-toast start, one for its dismissal
+    expect(entries).toHaveLength(2);
+    expect(entries[0].tag).toBe('toast');
+    expect(entries[0].opId).toBeDefined();
+    expect(entries[1].opId).toBe(entries[0].opId);
+    expect(entries[1].durationMs).toBeGreaterThanOrEqual(0);
   });
 });
