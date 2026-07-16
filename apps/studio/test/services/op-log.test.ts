@@ -45,6 +45,7 @@ describe('op-log', () => {
     useOutputStore.setState({
       lines: [
         {
+          id: 1,
           text: 'later output',
           severity: 'info',
           ts: laterTs,
@@ -59,6 +60,8 @@ describe('op-log', () => {
     useActivityStore.setState({
       entries: [
         {
+          id: 1,
+          time: '00:00:00',
           tag: 'early',
           ok: true,
           msg: 'earlier activity',
