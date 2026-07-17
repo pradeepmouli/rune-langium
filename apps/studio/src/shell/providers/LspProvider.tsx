@@ -97,10 +97,17 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
 
   const reconnect = useCallback(() => {
     void (async () => {
+      if (!lspClientRef.current) {
+        useOutputStore
+          .getState()
+          .addLine(fmtLine('lsp', 'reconnect unavailable — language server is disabled'), 'warn');
+        useActivityStore.getState().addActivity('lsp', false, 'reconnect unavailable — language server is disabled');
+        return;
+      }
       const opId = allocateOpId();
       const startedAt = performance.now();
       try {
-        await lspClientRef.current?.reconnect();
+        await lspClientRef.current.reconnect();
         const durationMs = performance.now() - startedAt;
         useOutputStore.getState().addLine(fmtLine('lsp', 'reconnected'), 'success', { op: 'lsp', opId, durationMs });
         useActivityStore.getState().addActivity('lsp', true, 'reconnected', { opId, durationMs });

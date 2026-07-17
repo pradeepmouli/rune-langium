@@ -158,6 +158,52 @@ describe('LspProvider', () => {
     expect(reconnectedEntries).toHaveLength(1);
   });
 
+  it('reconnect() with LSP disabled does not falsely log a "reconnected" success entry', async () => {
+    useActivityStore.setState({ entries: [] });
+    const { config } = await import('../../../src/config.js');
+    config.lspEnabled = false;
+    try {
+      function ReconnectProbe() {
+        const { reconnect } = useLsp();
+        return (
+          <button type="button" onClick={() => reconnect()}>
+            reconnect
+          </button>
+        );
+      }
+      function Host() {
+        return (
+          <WorkspaceStateContext.Provider value={wsState([])}>
+            <LspProvider>
+              <ReconnectProbe />
+            </LspProvider>
+          </WorkspaceStateContext.Provider>
+        );
+      }
+      await act(async () => {
+        render(<Host />);
+      });
+
+      await act(async () => {
+        screen.getByText('reconnect').click();
+      });
+
+      expect(reconnect).not.toHaveBeenCalled();
+
+      const reconnectedEntries = useActivityStore
+        .getState()
+        .entries.filter((e) => e.tag === 'lsp' && e.msg === 'reconnected');
+      expect(reconnectedEntries).toHaveLength(0);
+
+      const unavailableEntries = useActivityStore
+        .getState()
+        .entries.filter((e) => e.tag === 'lsp' && e.msg.includes('unavailable'));
+      expect(unavailableEntries.length).toBeGreaterThan(0);
+    } finally {
+      config.lspEnabled = true;
+    }
+  });
+
   it('throws when useLsp is used outside the provider', () => {
     function Bare() {
       useLsp();
