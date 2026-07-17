@@ -102,6 +102,12 @@ export class EvidenceCollector {
     this.softFindings.push({ ledgerId, detail });
   }
 
+  /** True once at least one soft finding has been recorded — used by the
+   *  fixture teardown to downgrade an otherwise-clean PASS to DEGRADED. */
+  get hasSoftFindings(): boolean {
+    return this.softFindings.length > 0;
+  }
+
   async finish(verdict: JourneyRecord['verdict'], opLog: OpLogEntry[] = []): Promise<JourneyRecord> {
     return {
       id: this.journeyId,

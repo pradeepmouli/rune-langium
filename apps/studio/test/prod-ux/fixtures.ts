@@ -14,7 +14,8 @@ export const checkout = base.extend<CheckoutFixtures>({
     const journeyId = testInfo.title.match(/^(J\d+[a-z]?)/)?.[1] ?? testInfo.title;
     const collector = new EvidenceCollector(page, journeyId, testInfo.title, testInfo.retry);
     await use(collector);
-    const verdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
+    const baseVerdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
+    const verdict = baseVerdict === 'PASS' && collector.hasSoftFindings ? 'DEGRADED' : baseVerdict;
     const opLog = await readOpLog(page);
     const record: JourneyRecord = await collector.finish(verdict, opLog);
     await appendJourneyRecord(record);
