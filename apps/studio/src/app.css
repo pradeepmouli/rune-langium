@@ -193,7 +193,13 @@ html {
    * to packages/design-system/src/dock-theme.css (MIT). */
 
   .studio-app .studio-layout-presets {
-    display: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 38px;
+    padding: 0 0.5rem;
+    background: transparent;
+    border-bottom: none;
   }
 
   .studio-app .studio-layout-presets__group {
