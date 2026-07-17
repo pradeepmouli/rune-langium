@@ -9,6 +9,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
 import { installOpLogWindowBridge } from './services/op-log-window-bridge.js';
+import { installTypeGraphWindowBridge } from './services/type-graph-window-bridge.js';
 // Dockview chrome (tab strips, sash handles, abyss theme palette).
 // dockview's upstream theme CSS — UNLAYERED, sits above all @layer rules.
 import 'dockview-react/dist/styles/dockview.css';
@@ -23,6 +24,7 @@ import './app.css';
 import '@rune-langium/design-system/dock-theme.css';
 
 installOpLogWindowBridge();
+installTypeGraphWindowBridge();
 
 const root = document.getElementById('root');
 if (!root) {

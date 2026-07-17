@@ -4,6 +4,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { useOutputStore } from '../../src/store/output-store.js';
+import { useActivityStore } from '../../src/store/activity-store.js';
 
 function schema(targetId: string, title = targetId.split('.').at(-1) ?? targetId): FormPreviewSchema {
   return {
@@ -429,5 +431,69 @@ describe('usePreviewStore', () => {
       },
       serialized: '{\n  "tradeId": "T-1",\n  "quantity": ""\n}'
     });
+  });
+});
+
+// Task 1 (2026-07-17 prod-ux-checkout-harness Phase 2): dispatchExecute/
+// receiveExecutionResult/receiveExecutionError gain a `functionExecute`
+// op-log span, correlated by funcName via a module-scope Map — mirrors
+// model-store.ts's `load()`/modelLoad span test pattern (see
+// model-store.test.ts).
+describe('usePreviewStore — functionExecute op-log span', () => {
+  const fakeWorker = { postMessage: () => {} } as unknown as Worker;
+
+  beforeEach(() => {
+    usePreviewStore.getState().resetPreviewState();
+    usePreviewStore.getState().setWorkerRef(fakeWorker);
+    useOutputStore.setState({ lines: [] });
+    useActivityStore.setState({ entries: [] });
+  });
+
+  it('dispatchExecute + receiveExecutionResult publishes one success functionExecute activity entry', () => {
+    usePreviewStore.getState().dispatchExecute('alpha.CalcTrade', {});
+    usePreviewStore.getState().receiveExecutionResult('alpha.CalcTrade', { ok: true });
+
+    const entries = useActivityStore.getState().entries;
+    const functionExecuteEntries = entries.filter((e) => e.tag === 'functionExecute');
+    expect(functionExecuteEntries).toHaveLength(1);
+    expect(functionExecuteEntries[0]?.ok).toBe(true);
+    expect(functionExecuteEntries[0]?.subject).toBe('alpha.CalcTrade');
+    expect(functionExecuteEntries[0]?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(functionExecuteEntries[0]?.opId).toBeTypeOf('number');
+
+    const lines = useOutputStore.getState().lines;
+    const functionExecuteLines = lines.filter((l) => l.op === 'functionExecute');
+    expect(functionExecuteLines).toHaveLength(1);
+    expect(functionExecuteLines[0]?.severity).toBe('success');
+    expect(functionExecuteLines[0]?.subject).toBe('alpha.CalcTrade');
+    expect(functionExecuteLines[0]?.opId).toBe(functionExecuteEntries[0]?.opId);
+  });
+
+  it('dispatchExecute + receiveExecutionError publishes one failure functionExecute activity entry', () => {
+    usePreviewStore.getState().dispatchExecute('alpha.CalcTrade', {});
+    usePreviewStore.getState().receiveExecutionError('alpha.CalcTrade', 'boom');
+
+    const entries = useActivityStore.getState().entries;
+    const functionExecuteEntries = entries.filter((e) => e.tag === 'functionExecute');
+    expect(functionExecuteEntries).toHaveLength(1);
+    expect(functionExecuteEntries[0]?.ok).toBe(false);
+    expect(functionExecuteEntries[0]?.subject).toBe('alpha.CalcTrade');
+    expect(functionExecuteEntries[0]?.durationMs).toBeGreaterThanOrEqual(0);
+
+    const lines = useOutputStore.getState().lines;
+    const functionExecuteLines = lines.filter((l) => l.op === 'functionExecute');
+    expect(functionExecuteLines).toHaveLength(1);
+    expect(functionExecuteLines[0]?.severity).toBe('error');
+    expect(functionExecuteLines[0]?.opId).toBe(functionExecuteEntries[0]?.opId);
+  });
+
+  it('receiveExecutionResult for a funcName never dispatched does not throw or log an entry', () => {
+    expect(() => usePreviewStore.getState().receiveExecutionResult('never.Dispatched', { ok: true })).not.toThrow();
+
+    const entries = useActivityStore.getState().entries;
+    expect(entries.filter((e) => e.tag === 'functionExecute')).toHaveLength(0);
+
+    const lines = useOutputStore.getState().lines;
+    expect(lines.filter((l) => l.op === 'functionExecute')).toHaveLength(0);
   });
 });
