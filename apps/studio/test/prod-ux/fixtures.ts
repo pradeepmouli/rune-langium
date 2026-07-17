@@ -75,3 +75,78 @@ export async function loadCdm(page: Page): Promise<void> {
   await expect(page.getByText('Loaded Models', { exact: false })).toBeVisible({ timeout: 90000 });
   await expect(page.getByRole('button', { name: `Unload ${CDM_BUTTON}` })).toBeVisible({ timeout: 90000 });
 }
+
+export interface ScratchAttributeSpec {
+  name: string;
+  typeName: string;
+  /** e.g. '(1..1)', '(0..*)' — parens included, matches raw Rune DSL syntax. */
+  cardinality: string;
+}
+
+export interface ScratchTypeSpec {
+  name: string;
+  namespace: string;
+  attributes: ScratchAttributeSpec[];
+}
+
+/**
+ * Authors a new Data type in a fresh scratch workspace by typing raw Rune
+ * DSL into the Source editor and waiting for the app's debounced reparse to
+ * pick it up.
+ *
+ * This app has no graphical "create type" UI — `TypeCreator.tsx` and
+ * `editor-store.ts`'s `createType` action are fully implemented but have
+ * zero JSX call sites anywhere in the app (confirmed via full-tree search).
+ * Every other e2e test that involves a "new" type loads a pre-written
+ * `.rosetta` file and edits *existing* nodes graphically. This helper is
+ * deliberately the ONE place that authors a type via live Source-pane
+ * typing — J8, J9, and J18 all import it rather than re-deriving the same
+ * setup (DRY; see the Phase 2 plan's Task 2 design note).
+ *
+ * Reaches a blank workspace via the same file-input flow J02/J07 already
+ * use (a fresh Playwright page gets its own OPFS/IndexedDB origin, so this
+ * always starts from an empty workspace), then types the given type
+ * definition into the Source editor.
+ *
+ * Typing is deliberately PACED — a per-keystroke delay plus a short wait
+ * after each line — rather than one bulk write. A fast/instant bulk write
+ * can race the workspace's debounced OPFS save (a remove+recreate of the
+ * underlying file), truncating the persisted content; pacing the input
+ * avoids that race. See task-2-report.md's OPFS-save-race finding.
+ */
+export async function authorScratchType(page: Page, spec: ScratchTypeSpec): Promise<void> {
+  await page.goto('./');
+  await page.waitForLoadState('domcontentloaded');
+  await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
+
+  const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
+  await fileInput.setInputFiles([
+    { name: WORKSPACE_FILE_NAME, mimeType: 'text/plain', buffer: Buffer.from(WORKSPACE_FILE_CONTENT) }
+  ]);
+  await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+
+  await page.getByRole('button', { name: 'Source' }).click();
+  const editor = page.getByTestId('source-editor').locator('.cm-content');
+  await expect(editor).toBeVisible({ timeout: 10000 });
+  await editor.click();
+
+  const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+  await page.keyboard.press(`${platformModifier}+A`);
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(300);
+
+  await editor.pressSequentially(`namespace ${spec.namespace}\n`, { delay: 20 });
+  await page.waitForTimeout(800);
+  await editor.pressSequentially(`\ntype ${spec.name}:\n`, { delay: 20 });
+  await page.waitForTimeout(800);
+  for (const attribute of spec.attributes) {
+    await editor.pressSequentially(`    ${attribute.name} ${attribute.typeName} ${attribute.cardinality}\n`, {
+      delay: 20
+    });
+    await page.waitForTimeout(800);
+  }
+
+  const namespaceSearch = page.getByTestId('namespace-search');
+  await namespaceSearch.fill(spec.name);
+  await expect(page.getByTestId(`ns-type-nav-${spec.namespace}.${spec.name}`)).toBeVisible({ timeout: 15000 });
+}
