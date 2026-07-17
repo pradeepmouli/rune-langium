@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page, ConsoleMessage, Request, Response } from '@playwright/test';
 import type { OpLogEntry } from '../../src/services/op-log.js';
@@ -124,30 +124,25 @@ function withoutPreviousAttempts(record: JourneyRecord): JourneyRecord {
   return rest;
 }
 
-// This suite runs single-worker/non-parallel (see playwright.prod.config.ts),
-// so a simple module-scope flag is enough to detect "first call this
-// process" without globalSetup or file-locking. On the first call, any
-// manifest left on disk from an earlier `playwright test` invocation is
-// discarded rather than merged into, so stale journey records never mix in
-// with the current run's fresh runId. Every subsequent call within the same
-// process merges as before, which is what lets multiple journeys in one run
-// accumulate into a single manifest.
-let hasResetManifestThisProcess = false;
+// The manifest is reset exactly once per `playwright test` invocation by
+// global-setup.ts, which runs once in the main orchestrator process before
+// any worker starts and is NOT re-run for retries. Worker processes, by
+// contrast, restart on every retry (even with workers: 1), so a module-scope
+// flag here cannot reliably detect "first call this run" — that's why the
+// reset responsibility lives in global-setup.ts instead of this module. By
+// the time this function runs, the manifest on disk (if any) always belongs
+// to the current run, so we simply read-and-merge, falling back to a fresh
+// manifest if it's absent or unparseable.
 
 export async function appendJourneyRecord(record: JourneyRecord): Promise<void> {
   await mkdir(REPORT_DIR, { recursive: true });
   const manifestPath = path.join(REPORT_DIR, 'run-manifest.json');
   let manifest: { runId: string; journeys: JourneyRecord[] };
-  if (!hasResetManifestThisProcess) {
-    hasResetManifestThisProcess = true;
+  try {
+    const raw = await readFile(manifestPath, 'utf-8');
+    manifest = JSON.parse(raw);
+  } catch {
     manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [] };
-  } else {
-    try {
-      const raw = await import('node:fs/promises').then((fs) => fs.readFile(manifestPath, 'utf-8'));
-      manifest = JSON.parse(raw);
-    } catch {
-      manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [] };
-    }
   }
 
   // A retry that supersedes a prior attempt for the same journey id must not
