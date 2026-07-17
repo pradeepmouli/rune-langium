@@ -10,11 +10,23 @@ export interface OutputLine {
   text: string;
   severity: OutputSeverity;
   ts: number;
+  /** Structured op-log correlation fields — optional, set by producers that want span/duration tracking (op-log.ts reads these; existing callers are unaffected). */
+  op?: string;
+  subject?: string;
+  durationMs?: number;
+  opId?: number;
+}
+
+export interface AddLineMeta {
+  op?: string;
+  subject?: string;
+  durationMs?: number;
+  opId?: number;
 }
 
 interface OutputState {
   lines: OutputLine[];
-  addLine(text: string, severity?: OutputSeverity): void;
+  addLine(text: string, severity?: OutputSeverity, meta?: AddLineMeta): void;
   clearLines(): void;
 }
 
@@ -24,12 +36,13 @@ const MAX_LINES = 500;
 export const useOutputStore = create<OutputState>((set) => ({
   lines: [],
 
-  addLine(text: string, severity: OutputSeverity = 'info'): void {
+  addLine(text: string, severity: OutputSeverity = 'info', meta?: AddLineMeta): void {
     const line: OutputLine = {
       id: ++_idCounter,
       text,
       severity,
-      ts: performance.now() as number
+      ts: performance.now() as number,
+      ...meta
     };
     set((state) => {
       const next = [...state.lines, line];

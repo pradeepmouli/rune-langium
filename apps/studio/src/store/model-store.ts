@@ -17,6 +17,9 @@ import { config } from '../config.js';
 import { CURATED_MODEL_IDS, type CuratedModelId } from '@rune-langium/curated-schema';
 import { usePreviewStore } from './preview-store.js';
 import { useCodegenStore } from './codegen-store.js';
+import { useOutputStore, fmtLine } from './output-store.js';
+import { useActivityStore } from './activity-store.js';
+import { allocateOpId } from '../services/op-log.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -176,6 +179,9 @@ export const useModelStore = create<ModelStore>((set, get) => ({
 
     set({ loading: newLoading, errors: newErrors });
 
+    const opId = allocateOpId();
+    const startedAt = performance.now();
+
     try {
       const archiveLoader = source.archiveUrl ? buildArchiveLoader() : undefined;
 
@@ -201,6 +207,19 @@ export const useModelStore = create<ModelStore>((set, get) => ({
 
       set({ models: currentModels, loading: currentLoading });
 
+      const durationMs = performance.now() - startedAt;
+      useOutputStore.getState().addLine(fmtLine('modelLoad', 'loaded', source.name), 'success', {
+        op: 'modelLoad',
+        subject: source.id,
+        durationMs,
+        opId
+      });
+      useActivityStore.getState().addActivity('modelLoad', true, `${source.name} loaded`, {
+        subject: source.id,
+        durationMs,
+        opId
+      });
+
       // Auto-load declared dependencies that aren't already loaded or loading.
       if (source.depends?.length) {
         for (const depId of source.depends) {
@@ -225,6 +244,19 @@ export const useModelStore = create<ModelStore>((set, get) => ({
       });
 
       set({ loading: currentLoading, errors: currentErrors });
+
+      const durationMs = performance.now() - startedAt;
+      useOutputStore.getState().addLine(fmtLine('modelLoad', 'load failed', err.message ?? 'Unknown error'), 'error', {
+        op: 'modelLoad',
+        subject: source.id,
+        durationMs,
+        opId
+      });
+      useActivityStore.getState().addActivity('modelLoad', false, `${source.name} load failed`, {
+        subject: source.id,
+        durationMs,
+        opId
+      });
     }
   },
 

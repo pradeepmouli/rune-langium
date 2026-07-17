@@ -13,14 +13,41 @@ import { applyLayout, isFactoryShape, serializeLayout } from '../../src/shell/do
 import { buildDefaultLayout } from '../../src/shell/layout-factory.js';
 
 interface FakeGroupSpy {
-  api: { setSize: (s: { width?: number; height?: number }) => void };
+  api: {
+    setSize: (s: { width?: number; height?: number }) => void;
+    setConstraints: (c: {
+      minimumHeight?: number;
+      minimumWidth?: number;
+      maximumHeight?: number;
+      maximumWidth?: number;
+    }) => void;
+  };
   sizeCalls: Array<{ width?: number; height?: number }>;
+  constraintCalls: Array<{
+    minimumHeight?: number;
+    minimumWidth?: number;
+    maximumHeight?: number;
+    maximumWidth?: number;
+  }>;
+  /** Records call order across both setSize and setConstraints for sequencing assertions. */
+  callOrder: Array<'setSize' | 'setConstraints'>;
 }
 
 function makeFakeGroup(): FakeGroupSpy {
   const spy: FakeGroupSpy = {
     sizeCalls: [],
-    api: { setSize: (s) => spy.sizeCalls.push(s) }
+    constraintCalls: [],
+    callOrder: [],
+    api: {
+      setSize: (s) => {
+        spy.sizeCalls.push(s);
+        spy.callOrder.push('setSize');
+      },
+      setConstraints: (c) => {
+        spy.constraintCalls.push(c);
+        spy.callOrder.push('setConstraints');
+      }
+    }
   };
   return spy;
 }
@@ -55,7 +82,7 @@ class FakeDockviewApi {
   }
   getPanel(id: string) {
     if (!this.calls.some((c) => c.id === id)) return undefined;
-    return { api: { setActive: () => this.activatedPanels.push(id) } };
+    return { api: { setActive: () => this.activatedPanels.push(id) }, group: this.groups.get(id) };
   }
   get panels() {
     return this.calls.map((call) => ({
@@ -157,6 +184,31 @@ describe('applyLayout — factory shape', () => {
     applyLayout(api as never, layout);
     expect(api.activatedPanels).toContain('workspace.problems');
   });
+
+  it('constrains the bottom group minimum height so collapse can reach the tab-strip height', () => {
+    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
+    const api = new FakeDockviewApi();
+    applyLayout(api as never, layout);
+    const bottomGroup = api.groups.get('workspace.problems');
+    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 24 });
+  });
+
+  it('sets the minimum-height constraint before any collapse setSize call', () => {
+    const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
+    const factoryDockview = layout.dockview as Extract<typeof layout.dockview, { shape: 'factory' }>;
+    layout.dockview = {
+      ...factoryDockview,
+      bottomGroup: { ...factoryDockview.bottomGroup, collapsed: true }
+    };
+    const api = new FakeDockviewApi();
+    applyLayout(api as never, layout);
+    const bottomGroup = api.groups.get('workspace.problems');
+    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 24 });
+    expect(bottomGroup?.sizeCalls).toContainEqual({ height: 0 });
+    // setConstraints must fire before setSize so the height: 0 request is clamped
+    // against the 24px floor, not dockview's default 100px floor.
+    expect(bottomGroup?.callOrder).toEqual(['setConstraints', 'setSize']);
+  });
 });
 
 describe('applyLayout — native shape', () => {
@@ -174,6 +226,24 @@ describe('applyLayout — native shape', () => {
     applyLayout(api as never, native);
     expect(api.fromJSONCalls).toBe(1);
     expect(api.calls).toHaveLength(1);
+  });
+
+  it('constrains the restored bottom group minimum height so a later collapse can reach 24px', () => {
+    const native = {
+      version: 1,
+      writtenBy: '0.1.0',
+      dockview: { shape: 'native' as const, json: { panels: ['workspace.problems'] } }
+    };
+    const api = new FakeDockviewApi();
+    api.fromJSON = () => {
+      api.fromJSONCalls++;
+      // Simulate dockview restoring the panel via addPanel so a tracked group exists.
+      api.addPanel({ id: 'workspace.problems', component: 'workspace.problems' });
+    };
+    applyLayout(api as never, native);
+    expect(api.fromJSONCalls).toBe(1);
+    const bottomGroup = api.groups.get('workspace.problems');
+    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 24 });
   });
 
   it('logs and falls back to factory layout when api.fromJSON throws', () => {

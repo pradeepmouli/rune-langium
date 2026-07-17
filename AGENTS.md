@@ -50,18 +50,6 @@ This repository is designed for multi-agent collaboration (Copilot, Claude, Gemi
 - Studio/UI: `@xyflow/react` 12, `dockview-react`, zustand 5, zundo 2, Tailwind CSS 4, Radix UI, CodeMirror 6
 - Language/tooling: Langium 4.2.x, Zod v4, `@rune-langium/core`, `@rune-langium/codegen`, `@rune-langium/visual-editor`
 - Storage/runtime: browser-only app, OPFS for workspace files, IndexedDB for metadata/cache/layouts
-- Codegen server/container paths still depend on Java 21 + `rosetta-code-generators`
-
-## Recent Changes
-
-- Codegen cleanup: extracted shared namespace walking and target path helpers so Zod/TS/JSON Schema emitters stay language-specific; covered by `packages/codegen/test/namespace-walker.test.ts`.
-
-<!-- SPECKIT START -->
-## Active Spec Kit Plan
-
-- 016-studio-form-preview: `specs/016-studio-form-preview/plan.md`
-<!-- SPECKIT END -->
-
 
 <!-- infigraph-instructions -->
 # Infigraph — Code Intelligence

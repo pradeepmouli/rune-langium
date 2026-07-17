@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
 import {
   Toast,
   ToastClose,
@@ -12,6 +12,9 @@ import {
   useToastManager
 } from '@rune-langium/design-system/ui/toast';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { useActivityStore } from '../store/activity-store.js';
+import { allocateOpId } from '../services/op-log.js';
 
 type StudioToastVariant = 'default' | 'destructive' | 'loading';
 
@@ -52,9 +55,27 @@ export function StudioToastProvider({ children }: { children: ReactNode }) {
 
 function StudioToastInner({ children }: { children: ReactNode }) {
   const { toasts, add, close } = useToastManager();
+  // Tracks each in-flight loading toast's op-log span, keyed by the toast
+  // library's own id (distinct from opId), so dismissToast can close the
+  // matching span with a real elapsed duration.
+  const loadingSpans = useRef(new Map<string, { opId: number; description: string; startedAt: number }>()).current;
 
   const showToast = useCallback(
     (input: StudioToastInput) => {
+      const opId = allocateOpId();
+      const isDestructive = input.variant === 'destructive';
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('toast', input.title ?? input.description, input.title ? input.description : undefined),
+          isDestructive ? 'error' : 'info',
+          {
+            op: 'toast',
+            opId
+          }
+        );
+      useActivityStore.getState().addActivity('toast', !isDestructive, input.title ?? input.description, { opId });
+
       add({
         title: input.title,
         description: input.description,
@@ -66,19 +87,46 @@ function StudioToastInner({ children }: { children: ReactNode }) {
   );
 
   const showLoadingToast = useCallback(
-    (input: StudioLoadingToastInput) =>
-      add({
+    (input: StudioLoadingToastInput) => {
+      const opId = allocateOpId();
+      const description = input.title ?? input.description;
+      useOutputStore.getState().addLine(fmtLine('toast', description), 'info', { op: 'toast', opId });
+      useActivityStore.getState().addActivity('toast', true, description, { opId });
+
+      const id = add({
         title: input.title,
         description: input.description,
         type: 'loading',
         // No auto-dismiss timeout — a background process has no fixed
         // duration; the caller dismisses it explicitly when done.
         timeout: 0
-      }),
+      });
+      loadingSpans.set(id, { opId, description, startedAt: performance.now() });
+      return id;
+    },
     [add]
   );
 
-  const dismissToast = useCallback((id: string) => close(id), [close]);
+  const dismissToast = useCallback(
+    (id: string) => {
+      const span = loadingSpans.get(id);
+      if (span) {
+        loadingSpans.delete(id);
+        const durationMs = performance.now() - span.startedAt;
+        useOutputStore.getState().addLine(fmtLine('toast', 'dismissed', span.description), 'success', {
+          op: 'toast',
+          opId: span.opId,
+          durationMs
+        });
+        useActivityStore.getState().addActivity('toast', true, `dismissed · ${span.description}`, {
+          opId: span.opId,
+          durationMs
+        });
+      }
+      close(id);
+    },
+    [close]
+  );
 
   const contextValue = useMemo<StudioToastContextValue>(
     () => ({ showToast, showLoadingToast, dismissToast }),
