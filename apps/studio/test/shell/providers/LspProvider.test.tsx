@@ -8,6 +8,11 @@ import { useState } from 'react';
 // transport re-emitting 'connected' (what happens for real when reconnect()
 // succeeds) without a second component mount.
 let transportStateCb: ((state: { mode: string; status: string }) => void) | null = null;
+// Lets a test suppress the transport's normal "immediately connected on
+// subscribe" behavior, so it can simulate a mount where the transport never
+// reaches 'connected' during the initial connect attempt (e.g. connect()
+// rejects) and only later reports 'connected' via a reconnect().
+let fireConnectedOnSubscribe = true;
 
 const connect = vi.fn().mockResolvedValue(undefined);
 const reconnect = vi.fn().mockImplementation(async () => {
@@ -27,7 +32,9 @@ vi.mock('../../../src/services/transport-provider.js', () => ({
     // provider does once its underlying connection opens.
     onStateChange: (cb: (state: { mode: string; status: string }) => void) => {
       transportStateCb = cb;
-      cb({ mode: 'direct', status: 'connected' });
+      if (fireConnectedOnSubscribe) {
+        cb({ mode: 'direct', status: 'connected' });
+      }
       return () => {};
     },
     dispose: () => {}
@@ -63,6 +70,7 @@ beforeEach(() => {
   connect.mockClear();
   reconnect.mockClear();
   syncWorkspaceFiles.mockClear();
+  fireConnectedOnSubscribe = true;
 });
 
 describe('LspProvider', () => {
@@ -156,6 +164,59 @@ describe('LspProvider', () => {
       .getState()
       .entries.filter((e) => e.tag === 'lsp' && e.msg === 'reconnected');
     expect(reconnectedEntries).toHaveLength(1);
+  });
+
+  it('reconnect() after a failed initial connect does not double-log a connected entry', async () => {
+    useActivityStore.setState({ entries: [] });
+    // Simulate a mount where the transport never reaches 'connected' during
+    // the initial connect attempt, and connect() itself rejects — mirrors a
+    // real initial-connect failure (e.g. LSP server unreachable at mount).
+    fireConnectedOnSubscribe = false;
+    connect.mockRejectedValueOnce(new Error('initial connect failed'));
+
+    function ReconnectProbe() {
+      const { reconnect } = useLsp();
+      return (
+        <button type="button" onClick={() => reconnect()}>
+          reconnect
+        </button>
+      );
+    }
+    function Host() {
+      return (
+        <WorkspaceStateContext.Provider value={wsState([])}>
+          <LspProvider>
+            <ReconnectProbe />
+          </LspProvider>
+        </WorkspaceStateContext.Provider>
+      );
+    }
+    await act(async () => {
+      render(<Host />);
+    });
+
+    // The initial connect attempt failed — prove the test is actually
+    // exercising the failure path, not accidentally succeeding.
+    const failedEntries = useActivityStore
+      .getState()
+      .entries.filter((e) => e.tag === 'lsp' && e.msg.startsWith('connect failed'));
+    expect(failedEntries).toHaveLength(1);
+
+    await act(async () => {
+      screen.getByText('reconnect').click();
+    });
+
+    // reconnect() re-fires the still-subscribed mount-time onStateChange
+    // listener with 'connected' (see the reconnect mock above). Without
+    // closing the initial-connect span on failure, the mount-time listener
+    // would still treat this as the "first" connected transition and log a
+    // stale 'connected' entry alongside reconnect()'s own 'reconnected'
+    // entry — two entries for one user action. Assert there is exactly one.
+    const connectedEntries = useActivityStore
+      .getState()
+      .entries.filter((e) => e.tag === 'lsp' && (e.msg === 'connected' || e.msg === 'reconnected'));
+    expect(connectedEntries).toHaveLength(1);
+    expect(connectedEntries[0]?.msg).toBe('reconnected');
   });
 
   it('reconnect() with LSP disabled does not falsely log a "reconnected" success entry', async () => {

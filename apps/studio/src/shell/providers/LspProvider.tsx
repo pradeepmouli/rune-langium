@@ -66,6 +66,14 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     const client = createLspClientService({ transportProvider: provider });
     lspClientRef.current = client;
     client.connect().catch((err) => {
+      // Close the initial-connect span on failure, exactly like a successful
+      // connect does. Otherwise, if a LATER connected transition arrives via
+      // reconnect() (which re-fires this still-subscribed mount-time
+      // onStateChange listener) or the transport's own retry, this listener
+      // would still treat it as the "first" connected transition and log a
+      // stale entry using this failed attempt's connectOpId/connectStartedAt
+      // alongside the reconnect callback's own correct log — double-logging.
+      hasConnectedOnceRef.current = true;
       const msg = err instanceof Error ? err.message : String(err);
       const durationMs = performance.now() - connectStartedAt;
       console.error('[LspProvider] LSP connect failed:', err);
