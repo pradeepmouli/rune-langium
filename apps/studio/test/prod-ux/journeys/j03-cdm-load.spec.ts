@@ -7,7 +7,9 @@ test.describe('J03 — curated CDM load & unload', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
   test('J03 loads and unloads CDM, recording cdmLoad timing', async ({ page, evidence }) => {
+    const cdmLoadStartedAt = Date.now();
     await loadCdm(page);
+    const cdmLoadWallClockMs = Date.now() - cdmLoadStartedAt;
     await evidence.checkpoint('cdm-loaded');
 
     const opLog = await readOpLog(page);
@@ -18,8 +20,14 @@ test.describe('J03 — curated CDM load & unload', () => {
     ).toBeGreaterThan(0);
     const successEntry = modelLoadEntries.find((e) => e.level === 'success');
     expect(successEntry?.durationMs, 'cdmLoad duration should be recorded').toBeGreaterThanOrEqual(0);
-    if ((successEntry?.durationMs ?? 0) > 45000) {
-      evidence.softFinding('cdmLoad-budget', `cdmLoad took ${successEntry?.durationMs}ms, over the 45s soft budget`);
+
+    // Budget check uses a test-side wall-clock stopwatch spanning the full
+    // click-to-loaded UI transition (including the curated parse/link that
+    // happens in App.tsx's model-change effect AFTER model-store's own
+    // modelLoad span closes) rather than the opLog entry's durationMs, which
+    // only covers the initial metadata fetch and can miss a slow/stuck parse.
+    if (cdmLoadWallClockMs > 45000) {
+      evidence.softFinding('cdmLoad-budget', `cdmLoad took ${cdmLoadWallClockMs}ms, over the 45s soft budget`);
     }
 
     await page.getByRole('button', { name: /Unload CDM/ }).click();
