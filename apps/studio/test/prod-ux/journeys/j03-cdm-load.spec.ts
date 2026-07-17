@@ -9,6 +9,15 @@ test.describe('J03 — curated CDM load & unload', () => {
   test('J03 loads and unloads CDM, recording cdmLoad timing', async ({ page, evidence }) => {
     const cdmLoadStartedAt = Date.now();
     await loadCdm(page);
+    // loadCdm() only waits for the model chip + Unload button to mount, which
+    // happens as soon as the curated archive's metadata-only load resolves —
+    // BEFORE App.tsx's model-change effect re-parses/re-links and populates
+    // the model's real file list (ModelLoader.tsx's isHydrating: curated
+    // bundles render "(loading…)" until files.length > 0). Wait for that
+    // transition too, or a slow/stuck /api/parse would stop the clock early
+    // and silently pass the budget check — the exact gap this journey exists
+    // to catch.
+    await expect(page.getByTestId('model-loader').getByText(/\(\d+ files?\)/)).toBeVisible({ timeout: 90000 });
     const cdmLoadWallClockMs = Date.now() - cdmLoadStartedAt;
     await evidence.checkpoint('cdm-loaded');
 
