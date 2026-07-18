@@ -52,7 +52,8 @@ export interface JourneyRecord {
   typeClosure?: TypeClosureRecord[];
 }
 
-const REPORT_DIR = path.join(process.cwd(), 'test/prod-ux/report');
+/** Exported so test suites (e.g. fixtures.test.ts) can back up/restore the on-disk manifest around their own writes. */
+export const REPORT_DIR = path.join(process.cwd(), 'test/prod-ux/report');
 
 export class EvidenceCollector {
   private readonly startedAt: number;

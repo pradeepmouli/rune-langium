@@ -17,9 +17,11 @@
  * crashed on this flow; under a real production build (`vite preview`) it
  * did not — this workspace never uses the curated-bundle-hydration path
  * `/api/parse` exists for, so the crash was a `pnpm dev`-only artifact, not
- * a feature dependency on Pages Functions. See `schema-import-checkout.spec.ts`
- * for a related, confirmed dev-mode-only bug (an unrelated Node-builtin
- * import that a production build's tree-shaking correctly eliminates).
+ * a feature dependency on Pages Functions. See
+ * `test/prod-ux/journeys/j12-import-dialog.spec.ts` (formerly
+ * `schema-import-checkout.spec.ts`, absorbed into J12) for a related,
+ * confirmed dev-mode-only bug (an unrelated Node-builtin import that a
+ * production build's tree-shaking correctly eliminates).
  */
 
 import { Buffer } from 'node:buffer';
