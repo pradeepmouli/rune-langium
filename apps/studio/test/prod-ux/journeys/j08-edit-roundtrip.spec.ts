@@ -145,6 +145,17 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     const preReloadSource = page.getByTestId('source-editor').locator('.cm-content');
     await expect(preReloadSource).toContainText(`type ${TYPE_NAME}:`, { timeout: 10000 });
     await expect(preReloadSource).toContainText('notes');
+
+    // Regression isolation: prove the $cstRange fix holds immediately after
+    // add-attribute + cardinality-set, not just after reload — the manual
+    // repro that motivated commit 282dcebe showed the duplicate `type X:`
+    // declaration appearing live, before any reload.
+    const preReloadSourceText = (await preReloadSource.textContent()) ?? '';
+    const preReloadDeclarationMatches = preReloadSourceText.match(new RegExp(`type ${TYPE_NAME}:`, 'g')) ?? [];
+    expect(
+      preReloadDeclarationMatches,
+      'expected exactly one type ScratchOrder: declaration (no duplication) after add-attribute + cardinality-set, before reload'
+    ).toHaveLength(1);
     await page.waitForTimeout(1500);
 
     // Reload: workspace persistence lives in OPFS/IndexedDB (J02's
