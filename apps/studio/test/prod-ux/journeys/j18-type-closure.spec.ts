@@ -61,10 +61,11 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     // resolved for form preview." This is a real, verified DOM marker — not
     // the "unconfirmed" fallback the plan flagged, so this asserts its
     // absence directly rather than narrowing to a throws/no-throw check.
-    // "Form" is a toggle-panel that's already the default-active sub-tab on
-    // node selection (confirmed live in J9 this session) — clicking it here
-    // would TOGGLE IT CLOSED (J8's confirmed multi-select-toggle finding),
-    // so this only waits for it, exactly like J9 does.
+    // "Form" is a Dockview panel tab (role="tab"), separate from the
+    // graph/source/inspector multi-select toggle J8 exercises — it's already
+    // the default-active sub-tab on node selection (confirmed live in J9
+    // this session), so this only waits for it rather than clicking it,
+    // exactly like J9 does.
     const formPreviewPanel = page.getByTestId('panel-formPreview');
     await expect(formPreviewPanel).toBeVisible({ timeout: 20000 });
     await expect(formPreviewPanel.getByText(/could not be resolved for form preview/i)).toHaveCount(0);
