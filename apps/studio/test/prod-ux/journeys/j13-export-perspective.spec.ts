@@ -65,79 +65,87 @@ import { checkout as test, expect, loadCdm } from '../fixtures.js';
 test.describe('J13 — Export perspective', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
-  test('J13 Export perspective renders and DownloadConfigDialog opens/edits/closes', async ({ page, evidence }) => {
-    evidence.softFinding(
-      'KI-exportmenu-unmounted',
-      "ExportMenu.tsx's client-side, always-succeeding 'Export .rosetta' button " +
-        '(handleExportRosetta — pure Blob+<a download>, no network call) has ZERO confirmed JSX render sites ' +
-        'anywhere in the current app (codebase-wide search for `<ExportMenu` finds only its own definition and ' +
-        'a plan-doc mention) — it is not reachable from the Explore toolbar, the Export perspective, or ' +
-        'anywhere else. The spec wording describing a client-side workspace-bundle export affordance does not ' +
-        'currently correspond to a live UI surface; the only real Export-perspective output path is the ' +
-        '/api/codegen-backed DownloadConfigDialog generate flow exercised elsewhere in this journey.'
-    );
-
-    await loadCdm(page);
-    await page.getByTestId('rail-export').click();
-    await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-    await expect(page.getByTestId('export-targets-section')).toBeVisible({ timeout: 10000 });
-    await evidence.checkpoint('export-perspective-loaded');
-
-    // Open the download modal for the zod target — confirmed live as the
-    // first rendered row and one of the three layout-aware targets (see
-    // file-header comment).
-    await page.getByTestId('codegen-targets-table__download-zod').click();
-    await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
-
-    // Edit: toggle a layout radio choice.
-    const layoutGroup = page.getByTestId('download-config-dialog__layout');
-    await expect(layoutGroup).toBeVisible();
-    const layoutOptions = page.locator('[data-testid^="download-config-dialog__layout-"]');
-    await expect(layoutOptions.first()).toBeVisible();
-    await layoutOptions.last().click();
-    await evidence.checkpoint('download-config-edited');
-
-    // Close via cancel — confirms edits don't leak into a later open.
-    await page.getByTestId('download-config-dialog__cancel').click();
-    await expect(page.getByTestId('download-config-dialog')).not.toBeVisible({ timeout: 5000 });
-  });
-
-  test('J13 Export generate — soft-asserted under KI-codegen-503', async ({ page, evidence }) => {
-    await loadCdm(page);
-    await page.getByTestId('rail-export').click();
-    await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-
-    await page.getByTestId('codegen-targets-table__download-zod').click();
-    await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
-
-    const downloadPromise = page.waitForEvent('download', { timeout: 20000 }).catch(() => null);
-    await page.getByTestId('download-config-dialog__generate').click();
-    const download = await downloadPromise;
-
-    if (download) {
-      const path = await download.path();
-      expect(path, 'download produced a file').toBeTruthy();
-      // download.path() is a truthy temp-file path even when the response
-      // body is empty (e.g. /api/codegen returns HTTP 200 with a zero-byte
-      // body) — verify the file actually has content before treating this
-      // as a real success.
-      const { size } = await stat(path!);
-      expect(size, 'downloaded file is non-empty').toBeGreaterThan(0);
-      await evidence.checkpoint('export-generate-succeeded');
-    } else {
-      // /api/codegen is a known, historically-503ing endpoint in prod (see
-      // feedback_code_tab_vs_export_button.md / KI-codegen-503) — this
-      // journey's own generate flow goes through the same endpoint
-      // (confirmed via handleModalGenerate's unconditional call into
-      // downloadTargetViaRouter, which POSTs to /api/codegen), so a
-      // failure here is a corpus/infra known-issue candidate, not an
-      // unambiguous regression. J11 (Phase 2) already covers the
-      // client-side, always-available Code tab path separately.
+  test(
+    'J13 Export perspective renders and DownloadConfigDialog opens/edits/closes',
+    { annotation: { type: 'journey-subid', description: 'render' } },
+    async ({ page, evidence }) => {
       evidence.softFinding(
-        'KI-codegen-503',
-        'ExportPerspective DownloadConfigDialog generate did not produce a download within 20s — ' +
-          '/api/codegen is a known historically-503ing endpoint in prod; see feedback_code_tab_vs_export_button.md'
+        'KI-exportmenu-unmounted',
+        "ExportMenu.tsx's client-side, always-succeeding 'Export .rosetta' button " +
+          '(handleExportRosetta — pure Blob+<a download>, no network call) has ZERO confirmed JSX render sites ' +
+          'anywhere in the current app (codebase-wide search for `<ExportMenu` finds only its own definition and ' +
+          'a plan-doc mention) — it is not reachable from the Explore toolbar, the Export perspective, or ' +
+          'anywhere else. The spec wording describing a client-side workspace-bundle export affordance does not ' +
+          'currently correspond to a live UI surface; the only real Export-perspective output path is the ' +
+          '/api/codegen-backed DownloadConfigDialog generate flow exercised elsewhere in this journey.'
       );
+
+      await loadCdm(page);
+      await page.getByTestId('rail-export').click();
+      await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
+      await expect(page.getByTestId('export-targets-section')).toBeVisible({ timeout: 10000 });
+      await evidence.checkpoint('export-perspective-loaded');
+
+      // Open the download modal for the zod target — confirmed live as the
+      // first rendered row and one of the three layout-aware targets (see
+      // file-header comment).
+      await page.getByTestId('codegen-targets-table__download-zod').click();
+      await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
+
+      // Edit: toggle a layout radio choice.
+      const layoutGroup = page.getByTestId('download-config-dialog__layout');
+      await expect(layoutGroup).toBeVisible();
+      const layoutOptions = page.locator('[data-testid^="download-config-dialog__layout-"]');
+      await expect(layoutOptions.first()).toBeVisible();
+      await layoutOptions.last().click();
+      await evidence.checkpoint('download-config-edited');
+
+      // Close via cancel — confirms edits don't leak into a later open.
+      await page.getByTestId('download-config-dialog__cancel').click();
+      await expect(page.getByTestId('download-config-dialog')).not.toBeVisible({ timeout: 5000 });
     }
-  });
+  );
+
+  test(
+    'J13 Export generate — soft-asserted under KI-codegen-503',
+    { annotation: { type: 'journey-subid', description: 'generate' } },
+    async ({ page, evidence }) => {
+      await loadCdm(page);
+      await page.getByTestId('rail-export').click();
+      await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
+
+      await page.getByTestId('codegen-targets-table__download-zod').click();
+      await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
+
+      const downloadPromise = page.waitForEvent('download', { timeout: 20000 }).catch(() => null);
+      await page.getByTestId('download-config-dialog__generate').click();
+      const download = await downloadPromise;
+
+      if (download) {
+        const path = await download.path();
+        expect(path, 'download produced a file').toBeTruthy();
+        // download.path() is a truthy temp-file path even when the response
+        // body is empty (e.g. /api/codegen returns HTTP 200 with a zero-byte
+        // body) — verify the file actually has content before treating this
+        // as a real success.
+        const { size } = await stat(path!);
+        expect(size, 'downloaded file is non-empty').toBeGreaterThan(0);
+        await evidence.checkpoint('export-generate-succeeded');
+      } else {
+        // /api/codegen is a known, historically-503ing endpoint in prod (see
+        // feedback_code_tab_vs_export_button.md / KI-codegen-503) — this
+        // journey's own generate flow goes through the same endpoint
+        // (confirmed via handleModalGenerate's unconditional call into
+        // downloadTargetViaRouter, which POSTs to /api/codegen), so a
+        // failure here is a corpus/infra known-issue candidate, not an
+        // unambiguous regression. J11 (Phase 2) already covers the
+        // client-side, always-available Code tab path separately.
+        evidence.softFinding(
+          'KI-codegen-503',
+          'ExportPerspective DownloadConfigDialog generate did not produce a download within 20s — ' +
+            '/api/codegen is a known historically-503ing endpoint in prod; see feedback_code_tab_vs_export_button.md'
+        );
+      }
+    }
+  );
 });

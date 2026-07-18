@@ -9,9 +9,34 @@ interface CheckoutFixtures {
   evidence: EvidenceCollector;
 }
 
+/**
+ * Derives the manifest `id` a journey's evidence is filed under.
+ *
+ * `group` is the leading `J<n>[a-z]?` prefix shared by every test in a
+ * journey's spec file (e.g. all of J13's tests start with `J13`). Most
+ * journey spec files have exactly one test per group, so the bare group is
+ * the id (J0 through J11, J18 — completely unaffected by `subId`).
+ *
+ * A handful of spec files (J13, J14, J16) have MULTIPLE tests sharing one
+ * group. Without disambiguation, `appendJourneyRecord`'s id-keyed merge (see
+ * evidence.ts) treats the second test's record as a RETRY of the first —
+ * silently folding a genuinely different test into `previousAttempts` and
+ * losing its own manifest entry. `subId` (sourced from each test's
+ * `journey-subid` annotation) appends `:${subId}` to the group so each test
+ * gets its own stable, distinct manifest id. A real retry of the SAME test
+ * carries the SAME title and the SAME `journey-subid` annotation on every
+ * attempt, so `computeJourneyId` still returns the same id across retries —
+ * the merge-into-previousAttempts behavior for genuine retries is preserved.
+ */
+export function computeJourneyId(title: string, subId?: string): string {
+  const group = title.match(/^(J\d+[a-z]?)/)?.[1] ?? title;
+  return subId ? `${group}:${subId}` : group;
+}
+
 export const checkout = base.extend<CheckoutFixtures>({
   evidence: async ({ page }, use, testInfo) => {
-    const journeyId = testInfo.title.match(/^(J\d+[a-z]?)/)?.[1] ?? testInfo.title;
+    const subId = testInfo.annotations.find((a) => a.type === 'journey-subid')?.description;
+    const journeyId = computeJourneyId(testInfo.title, subId);
     const collector = new EvidenceCollector(page, journeyId, testInfo.title, testInfo.retry);
     await use(collector);
     const baseVerdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';

@@ -63,201 +63,214 @@ test.describe('J16 — Resilience & chrome', () => {
   // wrangler proxy involved) — verified live this session before deleting
   // it. Recorded as a soft finding rather than forcing a broken assertion
   // or fabricating a pass.
-  test('J16 curated load cancel mid-flight returns cleanly to the loader', async ({ page, evidence }) => {
-    await page.route(MANIFEST_URL, async (route: Route) => {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: makeManifest() });
-    });
-    await page.route(ARCHIVE_URL, async (route: Route) => {
-      await new Promise((r) => setTimeout(r, 3000));
-      await route.fulfill({ status: 200, contentType: 'application/gzip', body: fixtureBytes() });
-    });
-
-    await page.goto('./');
-    await page.waitForLoadState('domcontentloaded');
-
-    const cdmButton = page.getByTestId('model-loader').getByRole('button', { name: /CDM/i }).first();
-    await expect(cdmButton).toBeVisible({ timeout: 10000 });
-    await cdmButton.click();
-
-    const cancelButton = page.getByTestId('model-loader').getByRole('button', { name: 'Cancel' });
-    const connectingText = page.getByText(/Connecting to|Cloning|Reading|Discovering/);
-    const reachedInFlight = await cancelButton
-      .or(connectingText)
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-
-    if (!reachedInFlight) {
-      evidence.softFinding(
-        'KI-curated-load-no-cancel-window',
-        'Curated-model loads no longer expose an in-flight/cancellable network window (buildArchiveLoader() ' +
-          'returns an instant client-side stub post-019; real content is fetched server-to-server by /api/parse) ' +
-          '— neither the Cancel button nor the Connecting/Cloning/Reading/Discovering progress text ever ' +
-          'rendered within 5s of clicking the CDM card, so the EC-2 mid-flight-cancel scenario this test was ' +
-          'ported from (test/e2e/curated-load-cancel.spec.ts, T019b) cannot be exercised via the current UI.'
-      );
-      await evidence.checkpoint('no-cancel-window-soft-finding');
-      return;
-    }
-    await evidence.checkpoint('load-in-flight');
-
-    if (await cancelButton.isVisible().catch(() => false)) {
-      await cancelButton.click();
-    } else {
-      await page.goto('./');
-    }
-    await evidence.checkpoint('cancelled');
-
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-
-    await expect(page.getByText(/Loading CDM.*failed/i)).not.toBeVisible({ timeout: 1000 });
-    await expect(page.getByText('Loaded Models', { exact: false })).not.toBeVisible({ timeout: 1000 });
-    await expect(page.getByTestId('model-loader').getByRole('button', { name: /✓ CDM/ })).not.toBeVisible({
-      timeout: 1000
-    });
-    await expect(page.getByTestId('model-loader').getByRole('button', { name: /^CDM/ })).toBeVisible({
-      timeout: 1000
-    });
-
-    const recents = await page.evaluate(async () => {
-      try {
-        return await new Promise<string[]>((res, rej) => {
-          const req = indexedDB.open('rune-studio');
-          req.onerror = () => rej(req.error);
-          req.onsuccess = () => {
-            const db = req.result;
-            if (!Array.from(db.objectStoreNames).includes('recents')) {
-              db.close();
-              res([]);
-              return;
-            }
-            const all = db.transaction('recents', 'readonly').objectStore('recents').getAll();
-            all.onerror = () => rej(all.error);
-            all.onsuccess = () => {
-              db.close();
-              res(((all.result as { id: string }[]) ?? []).map((e) => JSON.stringify(e)));
-            };
-          };
-        });
-      } catch {
-        return [];
-      }
-    });
-    const containsCdm = recents.some((entry) => entry.toLowerCase().includes('cdm'));
-    expect(containsCdm, 'no recents entry referencing the cancelled CDM workspace').toBe(false);
-    await evidence.checkpoint('no-orphaned-workspace');
-  });
-
-  test('J16 reload mid-Explore restores active perspective and dockview layout', async ({ page, evidence }) => {
-    await loadCdm(page);
-    await page.getByTestId('rail-explore').click();
-    await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
-    await evidence.checkpoint('before-reload');
-
-    await page.reload();
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
-    await evidence.checkpoint('after-reload');
-  });
-
-  test('J16 rail buttons for workspace-requiring perspectives are disabled with no workspace', async ({
-    page,
-    evidence
-  }) => {
-    await page.goto('./');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
-
-    // No workspace loaded yet — explore/git/export require one; workspaces/
-    // settings do not (perspective-registry.ts's requiresWorkspace flags).
-    for (const railId of ['rail-explore', 'rail-git', 'rail-export']) {
-      await expect(page.getByTestId(railId)).toBeDisabled();
-    }
-    for (const railId of ['rail-workspaces', 'rail-settings']) {
-      await expect(page.getByTestId(railId)).toBeEnabled();
-    }
-    await evidence.checkpoint('rail-disabled-no-workspace');
-
-    // SPEC ADAPTATION: "resolveEffectivePerspective fallback (delete last
-    // file while in Explore → lands on Workspaces)" has no reachable UI
-    // trigger — confirmed via source that neither FileTreePanel.tsx
-    // (open-only) nor FileTabStrip in explore-chrome.tsx (select/create
-    // only) exposes any delete/close/remove action. Recorded as a soft
-    // finding rather than driving the store directly (which would bypass
-    // this harness's whole "exercise the real UI" principle) or fabricating
-    // a pass. resolveEffectivePerspective itself remains covered by unit
-    // tests elsewhere in the repo; this is specifically about the E2E
-    // UI-driven trigger the spec describes not existing.
-    evidence.softFinding(
-      'KI-delete-file-unreachable',
-      'No UI action deletes a WorkspaceFile entirely (FileTreePanel is open-only, FileTabStrip is select/create ' +
-        'only) — resolveEffectivePerspective\'s "delete last file" fallback path cannot be exercised via real UI.'
-    );
-  });
-
-  test('J16 toasts appear and auto-dismiss', async ({ page, evidence }) => {
-    // Reuses the exact real trigger found in ExportPerspective.tsx's
-    // handleModalGenerate: a CodegenDownloadError (thrown on any non-OK
-    // /api/codegen response) calls showToast({ variant: 'destructive',
-    // title: 'Code generation failed', ... }) — a REGULAR toast (default
-    // duration={4000}), not a loading toast (those never auto-dismiss; see
-    // StudioToastProvider.tsx's showLoadingToast, timeout: 0).
-    //
-    // Unlike J13's own generate-flow test (which deliberately exercises the
-    // REAL /api/codegen endpoint and soft-asserts around its known prod
-    // flakiness — see that file's header comment), this test's whole
-    // purpose is narrower: "does the toast-appears-and-auto-dismisses UI
-    // mechanism work," not "does codegen actually succeed or fail." Relying
-    // on the real endpoint happening to fail made this test non-deterministic
-    // (a healthy /api/codegen meant the toast assertion never actually ran).
-    // Force the failure deterministically instead, using the same
-    // page.route mocking technique this journey's own first test
-    // (curated-load-cancel, above) already established for forcing
-    // deterministic network behavior.
-    await page.route('**/api/codegen', async (route: Route) => {
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'J16 toast-determinism mock — forced failure' })
+  test(
+    'J16 curated load cancel mid-flight returns cleanly to the loader',
+    { annotation: { type: 'journey-subid', description: 'cancel-load' } },
+    async ({ page, evidence }) => {
+      await page.route(MANIFEST_URL, async (route: Route) => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: makeManifest() });
       });
-    });
+      await page.route(ARCHIVE_URL, async (route: Route) => {
+        await new Promise((r) => setTimeout(r, 3000));
+        await route.fulfill({ status: 200, contentType: 'application/gzip', body: fixtureBytes() });
+      });
 
-    await loadCdm(page);
-    await page.getByTestId('rail-export').click();
-    await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-    // Specific, source-confirmed testid (read from CodegenTargetsTable.tsx)
-    // — same target J13/J17 already use on this branch, rather than the
-    // broader role/name query this test used previously.
-    await page.getByTestId('codegen-targets-table__download-zod').click();
-    await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
-    await page.getByTestId('download-config-dialog__generate').click();
+      await page.goto('./');
+      await page.waitForLoadState('domcontentloaded');
 
-    // Live-verified this session against packages/design-system/src/ui/toast.tsx
-    // + @base-ui/react's ToastRoot source (node_modules/@base-ui/react/toast/root/ToastRoot.js):
-    // the rendered toast root has `role="dialog"` (Base UI sets
-    // `role: isHighPriority ? 'alertdialog' : 'dialog'`; StudioToastProvider
-    // never sets `toast.priority`, so it's always the `'dialog'` branch),
-    // with `aria-labelledby` pointing at the rendered `ToastTitle` — and
-    // `showToast` here is called with `title: 'Code generation failed'`, so
-    // the dialog's accessible name is that title text. `getByRole('dialog',
-    // { name: ... })` is therefore the correct, real locator — NOT a
-    // plain-text locator, since the description text ("detail") is separate
-    // and the title/description are two different child elements under the
-    // same role="dialog" root.
-    //
-    // /api/codegen is now deterministically mocked to fail above, so the
-    // toast is guaranteed to fire via ExportPerspective's own real error
-    // handling — there is no longer a legitimate "endpoint happened to
-    // succeed" case to soft-assert around. A softFinding fallback here
-    // would silently mask a genuine regression in the toast mechanism
-    // itself (this test's actual subject), so the assertions below are
-    // hard, not soft — deliberately different from J13's generate test,
-    // which still soft-asserts because it exercises the real endpoint.
-    const toast = page.getByRole('dialog', { name: 'Code generation failed' });
-    await expect(toast).toBeVisible({ timeout: 20000 });
-    await evidence.checkpoint('toast-appeared');
-    await expect(toast).not.toBeVisible({ timeout: 5000 });
-    await evidence.checkpoint('toast-auto-dismissed');
-  });
+      const cdmButton = page.getByTestId('model-loader').getByRole('button', { name: /CDM/i }).first();
+      await expect(cdmButton).toBeVisible({ timeout: 10000 });
+      await cdmButton.click();
+
+      const cancelButton = page.getByTestId('model-loader').getByRole('button', { name: 'Cancel' });
+      const connectingText = page.getByText(/Connecting to|Cloning|Reading|Discovering/);
+      const reachedInFlight = await cancelButton
+        .or(connectingText)
+        .first()
+        .isVisible({ timeout: 5000 })
+        .catch(() => false);
+
+      if (!reachedInFlight) {
+        evidence.softFinding(
+          'KI-curated-load-no-cancel-window',
+          'Curated-model loads no longer expose an in-flight/cancellable network window (buildArchiveLoader() ' +
+            'returns an instant client-side stub post-019; real content is fetched server-to-server by /api/parse) ' +
+            '— neither the Cancel button nor the Connecting/Cloning/Reading/Discovering progress text ever ' +
+            'rendered within 5s of clicking the CDM card, so the EC-2 mid-flight-cancel scenario this test was ' +
+            'ported from (test/e2e/curated-load-cancel.spec.ts, T019b) cannot be exercised via the current UI.'
+        );
+        await evidence.checkpoint('no-cancel-window-soft-finding');
+        return;
+      }
+      await evidence.checkpoint('load-in-flight');
+
+      if (await cancelButton.isVisible().catch(() => false)) {
+        await cancelButton.click();
+      } else {
+        await page.goto('./');
+      }
+      await evidence.checkpoint('cancelled');
+
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+
+      await expect(page.getByText(/Loading CDM.*failed/i)).not.toBeVisible({ timeout: 1000 });
+      await expect(page.getByText('Loaded Models', { exact: false })).not.toBeVisible({ timeout: 1000 });
+      await expect(page.getByTestId('model-loader').getByRole('button', { name: /✓ CDM/ })).not.toBeVisible({
+        timeout: 1000
+      });
+      await expect(page.getByTestId('model-loader').getByRole('button', { name: /^CDM/ })).toBeVisible({
+        timeout: 1000
+      });
+
+      const recents = await page.evaluate(async () => {
+        try {
+          return await new Promise<string[]>((res, rej) => {
+            const req = indexedDB.open('rune-studio');
+            req.onerror = () => rej(req.error);
+            req.onsuccess = () => {
+              const db = req.result;
+              if (!Array.from(db.objectStoreNames).includes('recents')) {
+                db.close();
+                res([]);
+                return;
+              }
+              const all = db.transaction('recents', 'readonly').objectStore('recents').getAll();
+              all.onerror = () => rej(all.error);
+              all.onsuccess = () => {
+                db.close();
+                res(((all.result as { id: string }[]) ?? []).map((e) => JSON.stringify(e)));
+              };
+            };
+          });
+        } catch {
+          return [];
+        }
+      });
+      const containsCdm = recents.some((entry) => entry.toLowerCase().includes('cdm'));
+      expect(containsCdm, 'no recents entry referencing the cancelled CDM workspace').toBe(false);
+      await evidence.checkpoint('no-orphaned-workspace');
+    }
+  );
+
+  test(
+    'J16 reload mid-Explore restores active perspective and dockview layout',
+    { annotation: { type: 'journey-subid', description: 'reload-explore' } },
+    async ({ page, evidence }) => {
+      await loadCdm(page);
+      await page.getByTestId('rail-explore').click();
+      await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+      await evidence.checkpoint('before-reload');
+
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+      await evidence.checkpoint('after-reload');
+    }
+  );
+
+  test(
+    'J16 rail buttons for workspace-requiring perspectives are disabled with no workspace',
+    { annotation: { type: 'journey-subid', description: 'rail-disabled' } },
+    async ({ page, evidence }) => {
+      await page.goto('./');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
+
+      // No workspace loaded yet — explore/git/export require one; workspaces/
+      // settings do not (perspective-registry.ts's requiresWorkspace flags).
+      for (const railId of ['rail-explore', 'rail-git', 'rail-export']) {
+        await expect(page.getByTestId(railId)).toBeDisabled();
+      }
+      for (const railId of ['rail-workspaces', 'rail-settings']) {
+        await expect(page.getByTestId(railId)).toBeEnabled();
+      }
+      await evidence.checkpoint('rail-disabled-no-workspace');
+
+      // SPEC ADAPTATION: "resolveEffectivePerspective fallback (delete last
+      // file while in Explore → lands on Workspaces)" has no reachable UI
+      // trigger — confirmed via source that neither FileTreePanel.tsx
+      // (open-only) nor FileTabStrip in explore-chrome.tsx (select/create
+      // only) exposes any delete/close/remove action. Recorded as a soft
+      // finding rather than driving the store directly (which would bypass
+      // this harness's whole "exercise the real UI" principle) or fabricating
+      // a pass. resolveEffectivePerspective itself remains covered by unit
+      // tests elsewhere in the repo; this is specifically about the E2E
+      // UI-driven trigger the spec describes not existing.
+      evidence.softFinding(
+        'KI-delete-file-unreachable',
+        'No UI action deletes a WorkspaceFile entirely (FileTreePanel is open-only, FileTabStrip is select/create ' +
+          'only) — resolveEffectivePerspective\'s "delete last file" fallback path cannot be exercised via real UI.'
+      );
+    }
+  );
+
+  test(
+    'J16 toasts appear and auto-dismiss',
+    { annotation: { type: 'journey-subid', description: 'toasts' } },
+    async ({ page, evidence }) => {
+      // Reuses the exact real trigger found in ExportPerspective.tsx's
+      // handleModalGenerate: a CodegenDownloadError (thrown on any non-OK
+      // /api/codegen response) calls showToast({ variant: 'destructive',
+      // title: 'Code generation failed', ... }) — a REGULAR toast (default
+      // duration={4000}), not a loading toast (those never auto-dismiss; see
+      // StudioToastProvider.tsx's showLoadingToast, timeout: 0).
+      //
+      // Unlike J13's own generate-flow test (which deliberately exercises the
+      // REAL /api/codegen endpoint and soft-asserts around its known prod
+      // flakiness — see that file's header comment), this test's whole
+      // purpose is narrower: "does the toast-appears-and-auto-dismisses UI
+      // mechanism work," not "does codegen actually succeed or fail." Relying
+      // on the real endpoint happening to fail made this test non-deterministic
+      // (a healthy /api/codegen meant the toast assertion never actually ran).
+      // Force the failure deterministically instead, using the same
+      // page.route mocking technique this journey's own first test
+      // (curated-load-cancel, above) already established for forcing
+      // deterministic network behavior.
+      await page.route('**/api/codegen', async (route: Route) => {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'J16 toast-determinism mock — forced failure' })
+        });
+      });
+
+      await loadCdm(page);
+      await page.getByTestId('rail-export').click();
+      await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
+      // Specific, source-confirmed testid (read from CodegenTargetsTable.tsx)
+      // — same target J13/J17 already use on this branch, rather than the
+      // broader role/name query this test used previously.
+      await page.getByTestId('codegen-targets-table__download-zod').click();
+      await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
+      await page.getByTestId('download-config-dialog__generate').click();
+
+      // Live-verified this session against packages/design-system/src/ui/toast.tsx
+      // + @base-ui/react's ToastRoot source (node_modules/@base-ui/react/toast/root/ToastRoot.js):
+      // the rendered toast root has `role="dialog"` (Base UI sets
+      // `role: isHighPriority ? 'alertdialog' : 'dialog'`; StudioToastProvider
+      // never sets `toast.priority`, so it's always the `'dialog'` branch),
+      // with `aria-labelledby` pointing at the rendered `ToastTitle` — and
+      // `showToast` here is called with `title: 'Code generation failed'`, so
+      // the dialog's accessible name is that title text. `getByRole('dialog',
+      // { name: ... })` is therefore the correct, real locator — NOT a
+      // plain-text locator, since the description text ("detail") is separate
+      // and the title/description are two different child elements under the
+      // same role="dialog" root.
+      //
+      // /api/codegen is now deterministically mocked to fail above, so the
+      // toast is guaranteed to fire via ExportPerspective's own real error
+      // handling — there is no longer a legitimate "endpoint happened to
+      // succeed" case to soft-assert around. A softFinding fallback here
+      // would silently mask a genuine regression in the toast mechanism
+      // itself (this test's actual subject), so the assertions below are
+      // hard, not soft — deliberately different from J13's generate test,
+      // which still soft-asserts because it exercises the real endpoint.
+      const toast = page.getByRole('dialog', { name: 'Code generation failed' });
+      await expect(toast).toBeVisible({ timeout: 20000 });
+      await evidence.checkpoint('toast-appeared');
+      await expect(toast).not.toBeVisible({ timeout: 5000 });
+      await evidence.checkpoint('toast-auto-dismissed');
+    }
+  );
 });

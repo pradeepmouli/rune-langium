@@ -65,60 +65,65 @@ const WORKSPACE_FILE_CONTENT = 'namespace example\n';
 test.describe('J14 — Git / Sync perspective', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
-  test('J14 Git perspective renders and shows not-connected for a plain workspace', async ({ page, evidence }) => {
-    await page.goto('./');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
-    const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
-    await fileInput.setInputFiles([
-      { name: WORKSPACE_FILE_NAME, mimeType: 'text/plain', buffer: Buffer.from(WORKSPACE_FILE_CONTENT) }
-    ]);
-    await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+  test(
+    'J14 Git perspective renders and shows not-connected for a plain workspace',
+    { annotation: { type: 'journey-subid', description: 'not-connected' } },
+    async ({ page, evidence }) => {
+      await page.goto('./');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
+      const fileInput = page.locator('input[type="file"][accept=".rosetta"]');
+      await fileInput.setInputFiles([
+        { name: WORKSPACE_FILE_NAME, mimeType: 'text/plain', buffer: Buffer.from(WORKSPACE_FILE_CONTENT) }
+      ]);
+      await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
-    await page.getByTestId('rail-git').click();
-    await expect(page.getByTestId('git-perspective')).toBeVisible({ timeout: 20000 });
+      await page.getByTestId('rail-git').click();
+      await expect(page.getByTestId('git-perspective')).toBeVisible({ timeout: 20000 });
 
-    // SPEC ADAPTATION: the spec text says "SyncStatusBadge shows the
-    // unauthenticated state" — confirmed via source this session that
-    // SyncStatusBadge only renders for an already-git-backed workspace
-    // (workspaceKind === 'git-backed'), which this plain workspace is not.
-    // The real equivalent for a non-git workspace is GitNotConnectedEmptyState.
-    await expect(page.getByTestId('git-not-connected')).toBeVisible({ timeout: 10000 });
-    await evidence.checkpoint('git-not-connected');
-  });
+      // SPEC ADAPTATION: the spec text says "SyncStatusBadge shows the
+      // unauthenticated state" — confirmed via source this session that
+      // SyncStatusBadge only renders for an already-git-backed workspace
+      // (workspaceKind === 'git-backed'), which this plain workspace is not.
+      // The real equivalent for a non-git workspace is GitNotConnectedEmptyState.
+      await expect(page.getByTestId('git-not-connected')).toBeVisible({ timeout: 10000 });
+      await evidence.checkpoint('git-not-connected');
+    }
+  );
 
-  test('J14 GitHubConnectDialog opens, reaches the device-flow pending phase, and cancels cleanly', async ({
-    page,
-    evidence
-  }) => {
-    await page.goto('./');
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
+  test(
+    'J14 GitHubConnectDialog opens, reaches the device-flow pending phase, and cancels cleanly',
+    { annotation: { type: 'journey-subid', description: 'github-connect' } },
+    async ({ page, evidence }) => {
+      await page.goto('./');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
 
-    // Confirmed live this session: reached via WorkspacesPerspective's
-    // FileLoader "Open from GitHub repository…" CTA (see file-header
-    // comment), not via rail-git — matches an accessible-name substring
-    // match either way.
-    await page.getByRole('button', { name: /Open from GitHub/i }).click();
-    const dialog = page.getByTestId('github-connect-dialog');
-    await expect(dialog).toBeVisible({ timeout: 10000 });
+      // Confirmed live this session: reached via WorkspacesPerspective's
+      // FileLoader "Open from GitHub repository…" CTA (see file-header
+      // comment), not via rail-git — matches an accessible-name substring
+      // match either way.
+      await page.getByRole('button', { name: /Open from GitHub/i }).click();
+      const dialog = page.getByTestId('github-connect-dialog');
+      await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // Stop at the auth boundary — assert the device-flow init reached
-    // `pending` (a verification URI + user code rendered), never visit the
-    // real verificationUri.
-    //
-    // Step 2 live verification (see file-header comment #3): no dedicated
-    // testid exists on the userCode/verificationUri display, so the
-    // precise available selector is the single <strong> element the
-    // pending phase renders (GitHubConnectDialog.tsx), corroborated by the
-    // verification-URI link also becoming visible.
-    const userCode = dialog.locator('strong');
-    await expect(userCode).toBeVisible({ timeout: 15000 });
-    await expect(userCode).not.toHaveText('', { timeout: 5000 });
-    await expect(dialog.getByRole('link')).toBeVisible({ timeout: 5000 });
-    await evidence.checkpoint('github-connect-pending');
+      // Stop at the auth boundary — assert the device-flow init reached
+      // `pending` (a verification URI + user code rendered), never visit the
+      // real verificationUri.
+      //
+      // Step 2 live verification (see file-header comment #3): no dedicated
+      // testid exists on the userCode/verificationUri display, so the
+      // precise available selector is the single <strong> element the
+      // pending phase renders (GitHubConnectDialog.tsx), corroborated by the
+      // verification-URI link also becoming visible.
+      const userCode = dialog.locator('strong');
+      await expect(userCode).toBeVisible({ timeout: 15000 });
+      await expect(userCode).not.toHaveText('', { timeout: 5000 });
+      await expect(dialog.getByRole('link')).toBeVisible({ timeout: 5000 });
+      await evidence.checkpoint('github-connect-pending');
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).not.toBeVisible({ timeout: 5000 });
-  });
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).not.toBeVisible({ timeout: 5000 });
+    }
+  );
 });
