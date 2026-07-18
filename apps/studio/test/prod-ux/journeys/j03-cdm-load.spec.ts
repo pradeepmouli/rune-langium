@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { checkout as test, expect, loadCdm, readOpLog } from '../fixtures.js';
+import { checkout as test, expect, loadCdm, readOpLog, CDM_BUTTON } from '../fixtures.js';
 
 test.describe('J03 — curated CDM load & unload', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
@@ -17,7 +17,23 @@ test.describe('J03 — curated CDM load & unload', () => {
     // transition too, or a slow/stuck /api/parse would stop the clock early
     // and silently pass the budget check — the exact gap this journey exists
     // to catch.
-    await expect(page.getByTestId('model-loader').getByText(/\(\d+ files?\)/)).toBeVisible({ timeout: 90000 });
+    //
+    // Scoped to the CDM badge specifically (not `model-loader` as a whole):
+    // against the real production corpus, CDM's registry entry pulls in
+    // FpML as a dependency, so `ModelLoader.tsx` renders TWO
+    // `LoadedModelBadge`s (CDM + FpML), each with its own "(N files)" text —
+    // a bare `model-loader`-wide getByText(/\(\d+ files?\)/) hits Playwright
+    // strict-mode ambiguity ("resolved to 2 elements") the moment both
+    // finish hydrating, and asserting on "any" files-count badge is also
+    // semantically wrong here: it could pass on FpML's badge while CDM's own
+    // chip is still stuck "(loading…)", defeating the whole point of this
+    // wait (confirmed live against production this session). Locate the CDM
+    // badge via its already-proven `Unload ${CDM_BUTTON}` accessible name
+    // (same locator loadCdm() itself asserts on) and walk up to the badge
+    // container, mirroring ModelLoader.tsx's DOM (the unload button is a
+    // direct child of the badge div alongside the "(N files)" span).
+    const cdmBadge = page.getByRole('button', { name: `Unload ${CDM_BUTTON}` }).locator('xpath=..');
+    await expect(cdmBadge.getByText(/\(\d+ files?\)/)).toBeVisible({ timeout: 90000 });
     const cdmLoadWallClockMs = Date.now() - cdmLoadStartedAt;
     await evidence.checkpoint('cdm-loaded');
 

@@ -51,7 +51,7 @@ export async function readOpLog(page: Page): Promise<OpLogEntry[]> {
   return page.evaluate(() => window.__runeStudioOpLog?.snapshot() ?? []);
 }
 
-const CDM_BUTTON = 'CDM (Common Domain Model)';
+export const CDM_BUTTON = 'CDM (Common Domain Model)';
 const WORKSPACE_FILE_NAME = 'starter.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace example\n';
 

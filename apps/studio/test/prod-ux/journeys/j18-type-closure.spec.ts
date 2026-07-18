@@ -51,6 +51,43 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     const scratchWalkMs = Date.now() - scratchStartedAt;
     await evidence.checkpoint('scratch-closure-walked');
 
+    // Record the typeClosure manifest data HERE — right after both walks'
+    // results (curatedResult/scratchResult) are known — rather than at the
+    // very end of the test. The walk itself never throws (an unmapped ref
+    // is a recorded outcome, not an exception); only the DOM-level
+    // assertions below can. Deferring this call to the end meant a failure
+    // in any one of those later assertions (confirmed live this session:
+    // the form-preview check below) silently dropped the ENTIRE typeClosure
+    // record from `run-manifest.json` — including the curated root's
+    // mappedCount/unmapped, exactly the data a reviewer needs to diagnose
+    // *why* the journey failed. `evidence.setTypeClosure()` is a plain
+    // setter (mutable state read by the `checkout` fixture's own teardown
+    // in fixtures.ts), not a `finish()` call, so calling it early and having
+    // a later assertion throw afterward is safe — no double-append risk.
+    const records: TypeClosureRecord[] = [
+      {
+        rootFqn: ANCHOR_DATA,
+        rootKind: 'curated',
+        visitedCount: curatedResult.visited.length,
+        mappedCount: curatedResult.mapped.length,
+        unmapped: curatedResult.unmapped,
+        hydrationsTriggered: curatedResult.hydrationsTriggered,
+        truncated: curatedResult.truncated,
+        typeClosureWalkMs: curatedWalkMs
+      },
+      {
+        rootFqn: SCRATCH_ROOT_FQN,
+        rootKind: 'scratch',
+        visitedCount: scratchResult.visited.length,
+        mappedCount: scratchResult.mapped.length,
+        unmapped: scratchResult.unmapped,
+        hydrationsTriggered: scratchResult.hydrationsTriggered,
+        truncated: scratchResult.truncated,
+        typeClosureWalkMs: scratchWalkMs
+      }
+    ];
+    evidence.setTypeClosure(records);
+
     // Form preview: no unresolved-type stub for any field on the scratch
     // root. Confirmed directly by reading packages/codegen/src/
     // preview-schema.ts this session (buildBaseField/buildField, L568-576):
@@ -109,34 +146,5 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
         `closure walk hit the 150 visited cap — see manifest's typeClosure records for which root(s)`
       );
     }
-
-    const records: TypeClosureRecord[] = [
-      {
-        rootFqn: ANCHOR_DATA,
-        rootKind: 'curated',
-        visitedCount: curatedResult.visited.length,
-        mappedCount: curatedResult.mapped.length,
-        unmapped: curatedResult.unmapped,
-        hydrationsTriggered: curatedResult.hydrationsTriggered,
-        truncated: curatedResult.truncated,
-        typeClosureWalkMs: curatedWalkMs
-      },
-      {
-        rootFqn: SCRATCH_ROOT_FQN,
-        rootKind: 'scratch',
-        visitedCount: scratchResult.visited.length,
-        mappedCount: scratchResult.mapped.length,
-        unmapped: scratchResult.unmapped,
-        hydrationsTriggered: scratchResult.hydrationsTriggered,
-        truncated: scratchResult.truncated,
-        typeClosureWalkMs: scratchWalkMs
-      }
-    ];
-    // Handed to the `checkout` fixture's own teardown (fixtures.ts), which
-    // already calls `collector.finish(verdict, opLog)` for every journey —
-    // NOT called directly here, which would double-append this record to
-    // the manifest (once from a local finish()/appendJourneyRecord call,
-    // once from the fixture's own teardown).
-    evidence.setTypeClosure(records);
   });
 });
