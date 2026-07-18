@@ -207,6 +207,30 @@ export interface ScratchFunctionSpec {
    * arithmetic/comparison bodies (e.g. `x * 2`) execute correctly.
    */
   body: string;
+  /**
+   * Optional `condition <name>: <expression>` block, authored between
+   * `output:` and `set <outputName>: ...` — matches the grammar's own
+   * declaration order (`inputs`, `output`, `shortcuts`, `conditions`,
+   * `operations`; confirmed against `RosettaFunction` in
+   * packages/core/src/grammar/rune-dsl.langium and the real
+   * `packages/codegen/test/fixtures/funcs/precondition-alias/input.rune`
+   * fixture). Added for J10 (Task 4) — LanguageLensEditor is mounted as a
+   * function's condition expression editor, so J10 needs a scratch
+   * function with a condition, not just a body.
+   *
+   * Keep `expression` inside the language lens's subset S
+   * (ComparisonOperation/EqualityOperation/LogicalOperation/
+   * ArithmeticOperation/RosettaExistsExpression/RosettaAbsentExpression/
+   * RosettaFeatureCall — see packages/codegen/src/lens/subset.ts) or the
+   * TypeScript/Python lens falls back to the "can't be shown in {Language}"
+   * read-only state instead of rendering a textbox. A plain comparison like
+   * `amount > 0` is in-subset and round-trips (confirmed live this session
+   * against production).
+   */
+  condition?: {
+    name: string;
+    expression: string;
+  };
 }
 
 /**
@@ -237,6 +261,12 @@ export async function authorScratchFunction(page: Page, spec: ScratchFunctionSpe
     delay: 20
   });
   await page.waitForTimeout(800);
+  if (spec.condition) {
+    await editor.pressSequentially(`\n    condition ${spec.condition.name}:\n`, { delay: 20 });
+    await page.waitForTimeout(800);
+    await editor.pressSequentially(`        ${spec.condition.expression}\n`, { delay: 20 });
+    await page.waitForTimeout(800);
+  }
   await editor.pressSequentially(`    set ${spec.outputName}: ${spec.body}\n`, { delay: 20 });
   await page.waitForTimeout(800);
 
