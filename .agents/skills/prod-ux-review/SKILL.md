@@ -96,21 +96,32 @@ Report anything a user would notice, even under a PASS verdict.
   unhandled rejections rank above noisy 3rd-party).
 - **Timings:** walk the manifest's per-operation timing table
   (`startPageInteractive`, `workspaceOpen`, `cdmLoad`, per-namespace
-  `hydration`, `typeClosureWalk`, `formRender`, `functionExecute`, per-target
-  `codegen`, per-format `importPreview`/`importMerge`, `reloadRestore`). Flag
-  every entry over its `budgetMs`; compare against the previous run's manifest
-  when available and call out >25% regressions even under budget. When an
+  `hydration`, `formRender`, `functionExecute`, per-target `codegen`,
+  per-format `importPreview`/`importMerge`, `reloadRestore`). Flag every entry
+  over its `budgetMs`; compare against the previous run's manifest when
+  available and call out >25% regressions even under budget. J18's
+  `typeClosureWalkMs` is recorded per-root inside each `typeClosure` entry
+  rather than this opLog-sourced table and carries no `budgetMs` — compare it
+  across runs the same way, but don't expect a budget flag on it. When an
   entry is opLog-sourced, use the journey's `opLog` and the correlated
   Worker-side log line (`x-studio-op-id`) to attribute slowness to
   client vs Worker before speculating.
-- **Type-closure mapping (J18):** the `typeClosure` records must show
-  `unmapped: []` for both roots. Any unmapped fqn under the **scratch** root is
-  an unambiguous regression (mapping/hydration/form pipeline). Under the
-  **curated** root, first check the fqn against the live curated manifest —
-  present there ⇒ regression; absent ⇒ corpus-drift (anchors/closure update).
-  Also check `visited` didn't collapse (a closure that visited 3 types when the
+- **Type-closure mapping (J18):** each `typeClosure` array entry is a
+  `TypeClosureRecord` (`rootFqn`, `rootKind: 'curated' | 'scratch'`,
+  `visitedCount`, `mappedCount`, `unmapped: string[]`, `hydrationsTriggered`,
+  `truncated`, `typeClosureWalkMs`) — one per root, two entries total. The
+  harness itself only hard-fails on a non-empty `unmapped` for the
+  **scratch** root (an unambiguous regression: mapping/hydration/form
+  pipeline); a non-empty `unmapped` on the **curated** root is recorded as a
+  soft finding (`typeClosure-curated-unmapped`), never a hard failure — first
+  check the fqn against the live curated manifest — present there ⇒
+  regression; absent ⇒ corpus-drift (anchors/closure update). Also check
+  `visitedCount` didn't collapse (a closure that visited 3 types when the
   previous run visited 80 means the walk silently stopped — a harness or
-  hydration bug, not a pass) and whether the walk was truncated by a cap.
+  hydration bug, not a pass) and whether `truncated` is `true` (hit the
+  150-node cap; also surfaced as a `typeClosure-truncated` soft finding).
+  `typeClosureWalkMs` is recorded per-root inside the record itself, not as a
+  separate opLog-sourced timing-table entry.
 - **opLog streams:** scan embedded `opLog` entries for `warn`/`error` levels on
   passing journeys; verify the Activity/Output panel screenshots actually show
   the operation stream (an empty Activity panel after a CDM load means the

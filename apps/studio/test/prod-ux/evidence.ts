@@ -17,6 +17,18 @@ export interface SoftFinding {
   detail: string;
 }
 
+/** One root's closure-walk result, as recorded into the manifest by J18. */
+export interface TypeClosureRecord {
+  rootFqn: string;
+  rootKind: 'curated' | 'scratch';
+  visitedCount: number;
+  mappedCount: number;
+  unmapped: string[];
+  hydrationsTriggered: number;
+  truncated: boolean;
+  typeClosureWalkMs: number;
+}
+
 export interface JourneyRecord {
   id: string;
   title: string;
@@ -36,6 +48,8 @@ export interface JourneyRecord {
    * appendJourneyRecord.
    */
   previousAttempts?: JourneyRecord[];
+  /** Populated only by J18 (data-type closure mapping) — one entry per walked root. */
+  typeClosure?: TypeClosureRecord[];
 }
 
 const REPORT_DIR = path.join(process.cwd(), 'test/prod-ux/report');
@@ -46,6 +60,7 @@ export class EvidenceCollector {
   private readonly failedRequests: string[] = [];
   private readonly checkpoints: Checkpoint[] = [];
   private readonly softFindings: SoftFinding[] = [];
+  private typeClosureRecords: TypeClosureRecord[] = [];
   private seq = 0;
 
   constructor(
@@ -102,6 +117,20 @@ export class EvidenceCollector {
     this.softFindings.push({ ledgerId, detail });
   }
 
+  /**
+   * Records J18's per-root closure-walk results for inclusion in the next
+   * `finish()` call. A setter rather than a `finish()` parameter — the
+   * generic `checkout` fixture teardown in fixtures.ts always calls
+   * `collector.finish(verdict, opLog)` with no knowledge of `typeClosure`
+   * (a J18-specific field); routing it through mutable state here means
+   * that teardown call picks it up automatically, with no risk of the
+   * double-manifest-append a J18-local `finish()`/`appendJourneyRecord`
+   * call would otherwise create.
+   */
+  setTypeClosure(records: TypeClosureRecord[]): void {
+    this.typeClosureRecords = records;
+  }
+
   /** True once at least one soft finding has been recorded — used by the
    *  fixture teardown to downgrade an otherwise-clean PASS to DEGRADED. */
   get hasSoftFindings(): boolean {
@@ -119,7 +148,8 @@ export class EvidenceCollector {
       failedRequests: this.failedRequests,
       softFindings: this.softFindings,
       retry: this.retry,
-      opLog
+      opLog,
+      typeClosure: this.typeClosureRecords.length > 0 ? this.typeClosureRecords : undefined
     };
   }
 }

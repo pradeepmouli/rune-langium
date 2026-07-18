@@ -87,6 +87,17 @@ export interface ScratchTypeSpec {
   name: string;
   namespace: string;
   attributes: ScratchAttributeSpec[];
+  /**
+   * Additional raw Rune DSL declarations (each a full `type`/`enum`/
+   * `choice` block, trailing newline included) authored in the SAME Source
+   * block immediately after the primary `type <name>:` declaration. Lets a
+   * root type reference not-yet-defined sibling types via forward
+   * reference within one namespace — used by J18's closure fixture, which
+   * needs a nested Data type, an Enum, and a Choice declared alongside the
+   * root in a single scratch workspace. Optional; every existing caller
+   * (J8, J9) is unaffected.
+   */
+  extraDeclarations?: string[];
 }
 
 /**
@@ -173,6 +184,10 @@ export async function authorScratchType(page: Page, spec: ScratchTypeSpec): Prom
     await editor.pressSequentially(`    ${attribute.name} ${attribute.typeName} ${attribute.cardinality}\n`, {
       delay: 20
     });
+    await page.waitForTimeout(800);
+  }
+  for (const declaration of spec.extraDeclarations ?? []) {
+    await editor.pressSequentially(`\n${declaration}`, { delay: 20 });
     await page.waitForTimeout(800);
   }
 
