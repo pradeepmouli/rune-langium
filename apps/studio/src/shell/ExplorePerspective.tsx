@@ -1441,17 +1441,30 @@ export function ExplorePerspective() {
 
   const InspectorPanelMounted = useCallback(() => <div data-testid="panel-inspector" />, []);
 
+  // Wrapped in the same `data-testid="panel-problems"` / `data-component`
+  // container `ProblemsPanel.tsx` (the DEFAULT_PANEL_REGISTRY entry for
+  // `workspace.problems`) uses — this perspective overrides that registry
+  // entry to pass `onNavigate`, but the override previously rendered
+  // `DiagnosticsPanel` bare, silently dropping the wrapper markers every
+  // other consumer of the `workspace.problems` panel id relies on (found
+  // live against production: `panel-problems` never mounts in the Explore
+  // perspective, the perspective every prod-ux journey exercises, breaking
+  // any locator scoped to that testid).
   const ProblemsPanelMounted = useCallback(
     () => (
-      <DiagnosticsPanel
-        fileDiagnostics={combinedFileDiagnostics}
-        onNavigate={(uri) => {
-          const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-          const fileName = normPath.split('/').pop() ?? normPath;
-          const file = files.find((f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? ''));
-          if (file) openFileInSource(file.path ?? file.name);
-        }}
-      />
+      <div data-testid="panel-problems" data-component="workspace.problems" className="h-full">
+        <DiagnosticsPanel
+          fileDiagnostics={combinedFileDiagnostics}
+          onNavigate={(uri) => {
+            const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
+            const fileName = normPath.split('/').pop() ?? normPath;
+            const file = files.find(
+              (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
+            );
+            if (file) openFileInSource(file.path ?? file.name);
+          }}
+        />
+      </div>
     ),
     [combinedFileDiagnostics, files, openFileInSource]
   );

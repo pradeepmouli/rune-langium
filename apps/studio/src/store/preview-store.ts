@@ -3,6 +3,9 @@
 
 import { create } from 'zustand';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
+import { useOutputStore, fmtLine } from './output-store.js';
+import { useActivityStore } from './activity-store.js';
+import { allocateOpId } from '../services/op-log.js';
 
 export interface FormPreviewTarget {
   id: string;
@@ -88,6 +91,7 @@ const initialState: PreviewStoreState = {
 let dispatchExecuteCounter = 0;
 let _lastExecuteRequestId = '';
 let workerRef: Worker | null = null;
+const executeSpans = new Map<string, { opId: number; startedAt: number }>();
 
 function serializeSampleValues(values: Record<string, unknown>): string {
   return JSON.stringify(values, null, 2);
@@ -456,15 +460,53 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   },
 
   receiveExecutionResult(funcName, output) {
+    // A missing span means either this funcName was never dispatched, or its
+    // in-flight span was discarded by resetPreviewState() (e.g. unloading
+    // the model mid-execution) before this result arrived — in both cases
+    // the result belongs to an execution the app no longer tracks, so it
+    // must not be written back into the (possibly just-reset) store nor
+    // surfaced as a functionExecute op-log/activity entry.
+    const span = executeSpans.get(funcName);
+    if (!span) return;
+    executeSpans.delete(funcName);
     const executionResults = new Map(get().executionResults);
     executionResults.set(funcName, { output });
     set({ executionResults });
+    const durationMs = performance.now() - span.startedAt;
+    useOutputStore.getState().addLine(fmtLine('functionExecute', 'executed', funcName), 'success', {
+      op: 'functionExecute',
+      subject: funcName,
+      durationMs,
+      opId: span.opId
+    });
+    useActivityStore.getState().addActivity('functionExecute', true, `${funcName} executed`, {
+      subject: funcName,
+      durationMs,
+      opId: span.opId
+    });
   },
 
   receiveExecutionError(funcName, error) {
+    // See receiveExecutionResult's comment: a missing span means this result
+    // belongs to a discarded/untracked execution and must be dropped.
+    const span = executeSpans.get(funcName);
+    if (!span) return;
+    executeSpans.delete(funcName);
     const executionResults = new Map(get().executionResults);
     executionResults.set(funcName, { output: undefined, error });
     set({ executionResults });
+    const durationMs = performance.now() - span.startedAt;
+    useOutputStore.getState().addLine(fmtLine('functionExecute', 'execute failed', error), 'error', {
+      op: 'functionExecute',
+      subject: funcName,
+      durationMs,
+      opId: span.opId
+    });
+    useActivityStore.getState().addActivity('functionExecute', false, `${funcName} execute failed · ${error}`, {
+      subject: funcName,
+      durationMs,
+      opId: span.opId
+    });
   },
 
   clearExecutionResult(funcName) {
@@ -483,6 +525,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     dispatchExecuteCounter++;
     const requestId = `exec:${funcName}:${dispatchExecuteCounter}`;
     _lastExecuteRequestId = requestId;
+    executeSpans.set(funcName, { opId: allocateOpId(), startedAt: performance.now() });
     worker.postMessage({
       type: 'preview:execute',
       funcName,
@@ -503,5 +546,6 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
       executionResults: new Map()
     });
     workerRef = null;
+    executeSpans.clear();
   }
 }));
