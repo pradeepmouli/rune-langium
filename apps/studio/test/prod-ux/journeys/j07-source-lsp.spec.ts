@@ -6,6 +6,15 @@ import { checkout as test, expect } from '../fixtures.js';
 const WORKSPACE_FILE_NAME = 'starter.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace example\ntype Foo:\n    bar string (1..1)\n';
 
+// CodeMirror's defaultKeymap binds "select all" to Cmd-A on Mac (Meta) and
+// Ctrl-A elsewhere — on Mac it separately binds a bare Ctrl-A to the emacs-
+// style cursorLineBoundaryBackward command, so a hardcoded literal
+// 'Control+A' on a Mac-hosted browser moves the caret instead of selecting
+// text, and the following Delete only forward-deletes one character. Same
+// platform-modifier pattern already used by fixtures.ts's
+// authorScratchType/authorScratchFunction and j08-edit-roundtrip.spec.ts.
+const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+
 test.describe('J07 — Source view + LSP diagnostics', () => {
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
 
@@ -57,7 +66,7 @@ test.describe('J07 — Source view + LSP diagnostics', () => {
     await expect(page.getByTestId('panel-problems').getByText(/error/i)).toBeVisible({ timeout: 10000 });
     await evidence.checkpoint('diagnostic-shown');
 
-    await page.keyboard.press('Control+A');
+    await page.keyboard.press(`${platformModifier}+A`);
     await page.keyboard.press('Delete');
     await page.keyboard.type(WORKSPACE_FILE_CONTENT);
     await expect(page.getByTestId('panel-problems').getByText(/error/i)).toHaveCount(0, { timeout: 10000 });
