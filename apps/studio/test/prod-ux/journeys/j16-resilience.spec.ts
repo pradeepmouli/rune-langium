@@ -202,18 +202,34 @@ test.describe('J16 — Resilience & chrome', () => {
     // /api/codegen response) calls showToast({ variant: 'destructive',
     // title: 'Code generation failed', ... }) — a REGULAR toast (default
     // duration={4000}), not a loading toast (those never auto-dismiss; see
-    // StudioToastProvider.tsx's showLoadingToast, timeout: 0). This is the
-    // same /api/codegen failure path Task 2 (J13) soft-asserts under
-    // KI-codegen-503 — best-effort here too, since success vs. 503 is prod
-    // infra state, not something this journey controls.
+    // StudioToastProvider.tsx's showLoadingToast, timeout: 0).
+    //
+    // Unlike J13's own generate-flow test (which deliberately exercises the
+    // REAL /api/codegen endpoint and soft-asserts around its known prod
+    // flakiness — see that file's header comment), this test's whole
+    // purpose is narrower: "does the toast-appears-and-auto-dismisses UI
+    // mechanism work," not "does codegen actually succeed or fail." Relying
+    // on the real endpoint happening to fail made this test non-deterministic
+    // (a healthy /api/codegen meant the toast assertion never actually ran).
+    // Force the failure deterministically instead, using the same
+    // page.route mocking technique this journey's own first test
+    // (curated-load-cancel, above) already established for forcing
+    // deterministic network behavior.
+    await page.route('**/api/codegen', async (route: Route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'J16 toast-determinism mock — forced failure' })
+      });
+    });
+
     await loadCdm(page);
     await page.getByTestId('rail-export').click();
     await expect(page.getByTestId('export-perspective')).toBeVisible({ timeout: 20000 });
-    await page
-      .getByTestId('export-targets-section')
-      .getByRole('button', { name: /download/i })
-      .first()
-      .click();
+    // Specific, source-confirmed testid (read from CodegenTargetsTable.tsx)
+    // — same target J13/J17 already use on this branch, rather than the
+    // broader role/name query this test used previously.
+    await page.getByTestId('codegen-targets-table__download-zod').click();
     await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('download-config-dialog__generate').click();
 
@@ -229,18 +245,19 @@ test.describe('J16 — Resilience & chrome', () => {
     // plain-text locator, since the description text ("detail") is separate
     // and the title/description are two different child elements under the
     // same role="dialog" root.
+    //
+    // /api/codegen is now deterministically mocked to fail above, so the
+    // toast is guaranteed to fire via ExportPerspective's own real error
+    // handling — there is no longer a legitimate "endpoint happened to
+    // succeed" case to soft-assert around. A softFinding fallback here
+    // would silently mask a genuine regression in the toast mechanism
+    // itself (this test's actual subject), so the assertions below are
+    // hard, not soft — deliberately different from J13's generate test,
+    // which still soft-asserts because it exercises the real endpoint.
     const toast = page.getByRole('dialog', { name: 'Code generation failed' });
-    const appeared = await toast.isVisible({ timeout: 20000 }).catch(() => false);
-    if (appeared) {
-      await evidence.checkpoint('toast-appeared');
-      await expect(toast).not.toBeVisible({ timeout: 5000 });
-      await evidence.checkpoint('toast-auto-dismissed');
-    } else {
-      evidence.softFinding(
-        'KI-codegen-503',
-        'J16 toast-auto-dismiss check found no /api/codegen failure to trigger the "Code generation failed" ' +
-          'toast within 20s — either /api/codegen succeeded (no toast expected) or is slower than the timeout.'
-      );
-    }
+    await expect(toast).toBeVisible({ timeout: 20000 });
+    await evidence.checkpoint('toast-appeared');
+    await expect(toast).not.toBeVisible({ timeout: 5000 });
+    await evidence.checkpoint('toast-auto-dismissed');
   });
 });
