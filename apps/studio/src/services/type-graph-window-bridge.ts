@@ -11,7 +11,7 @@ export interface TypeGraphNodeSnapshot {
    * generated domain model — not a synthesized projection). Deliberately
    * NOT pre-extracted into an attribute/type-ref shape here: callers that
    * need to walk a specific node kind's members (Data.attributes,
-   * Choice.options, Function.inputs, etc.) do their own kind-specific
+   * Choice.attributes, Function.inputs, etc.) do their own kind-specific
    * extraction, keeping this bridge stable across domain-model shape
    * changes instead of duplicating that knowledge into production code.
    */

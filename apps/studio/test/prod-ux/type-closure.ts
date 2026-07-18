@@ -117,11 +117,21 @@ export async function walkTypeClosure(
     const shortName = ref.split('.').pop()!;
     await searchBox.fill(shortName);
     // The filtered result list renders asynchronously (debounced search +
-    // virtualized list) — wait for at least one row before reading the DOM,
-    // rather than reading it immediately (which would race an empty list).
-    await navRows
-      .first()
-      .waitFor({ state: 'visible', timeout: 10000 })
+    // virtualized list) — wait for a row matching the CURRENT shortName
+    // specifically, not just "any row visible". A row left over from the
+    // PREVIOUS iteration's search can still be visible when this check
+    // starts (Playwright resolves an already-satisfied waitFor immediately),
+    // which would let evaluateAll below read stale previous-query testids
+    // and produce a false "unmapped" result for a type that's really mapped.
+    await page
+      .waitForFunction(
+        ({ prefix, name }) => {
+          const els = Array.from(document.querySelectorAll(`[data-testid^="${prefix}"]`));
+          return els.some((el) => el.getAttribute('data-testid')?.endsWith(`.${name}`));
+        },
+        { prefix: NAV_TESTID_PREFIX, name: shortName },
+        { timeout: 10000 }
+      )
       .catch(() => {
         /* zero matches is a legitimate outcome — falls through to unmapped below */
       });

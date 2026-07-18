@@ -496,4 +496,21 @@ describe('usePreviewStore — functionExecute op-log span', () => {
     const lines = useOutputStore.getState().lines;
     expect(lines.filter((l) => l.op === 'functionExecute')).toHaveLength(0);
   });
+
+  it('drops a stale executeSpans entry on resetPreviewState so a late worker result is not written back', () => {
+    usePreviewStore.getState().dispatchExecute('alpha.CalcTrade', {});
+
+    usePreviewStore.getState().resetPreviewState();
+    usePreviewStore.getState().setWorkerRef(fakeWorker);
+
+    usePreviewStore.getState().receiveExecutionResult('alpha.CalcTrade', { ok: true });
+
+    expect(usePreviewStore.getState().executionResults.has('alpha.CalcTrade')).toBe(false);
+
+    const entries = useActivityStore.getState().entries;
+    expect(entries.filter((e) => e.tag === 'functionExecute')).toHaveLength(0);
+
+    const lines = useOutputStore.getState().lines;
+    expect(lines.filter((l) => l.op === 'functionExecute')).toHaveLength(0);
+  });
 });

@@ -103,6 +103,17 @@ test.describe('J18 — Data-type closure mapping (scripted completeness check)',
     // the default-active sub-tab on node selection (confirmed live in J9
     // this session), so this only waits for it rather than clicking it,
     // exactly like J9 does.
+    //
+    // walkTypeClosure's BFS leaves whatever node it visited LAST selected —
+    // for this closure that's ScratchClosureVariantB (a leaf with a single
+    // scalar attribute and no outgoing type refs), NOT the scratch root. An
+    // unresolved-type stub can only ever appear on a node with a type ref in
+    // the first place, so checking without re-navigating back to the root
+    // was vacuous (always passes, never actually exercises the root's own
+    // fields) — explicitly re-select the root first, same
+    // namespace-search + `ns-type-nav-<fqn>` pattern used throughout this file.
+    await page.getByTestId('namespace-search').fill('ScratchClosureRoot');
+    await page.getByTestId(`ns-type-nav-${SCRATCH_ROOT_FQN}`).click();
     const formPreviewPanel = page.getByTestId('panel-formPreview');
     await expect(formPreviewPanel).toBeVisible({ timeout: 20000 });
     await expect(formPreviewPanel.getByText(/could not be resolved for form preview/i)).toHaveCount(0);
