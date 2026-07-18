@@ -46,7 +46,8 @@ type FormatLabel = (typeof FORMAT_LABELS)[number];
  * a higher stacking context, so the dialog body (painted later in that
  * shared stacking context) intercepts the click. Keyboard-driven
  * selection (open the trigger, then ArrowDown × N + Enter) works
- * reliably and is what this helper uses.
+ * reliably and is what this helper uses. Filed as
+ * https://github.com/pradeepmouli/rune-langium/issues/396.
  */
 async function selectImportFormat(page: import('@playwright/test').Page, label: FormatLabel): Promise<void> {
   const targetIndex = FORMAT_LABELS.indexOf(label);
@@ -148,7 +149,8 @@ test.describe('J12 — Import dialog (inbound codegen)', () => {
         "inside this dialog — the popup's Positioner renders position:fixed/z-index:auto nested inside the " +
         "dialog's own portal container, so the dialog body intercepts the click at the option's on-screen " +
         'location (confirmed live via document.elementFromPoint, not a Playwright actionability artifact). ' +
-        'Keyboard-driven selection (open trigger, ArrowDown, Enter) works and is used throughout this journey.'
+        'Keyboard-driven selection (open trigger, ArrowDown, Enter) works and is used throughout this journey. ' +
+        'Tracked in https://github.com/pradeepmouli/rune-langium/issues/396.'
     );
 
     // --- JSON Schema — format defaults to it, no selector interaction needed.
