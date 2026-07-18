@@ -176,6 +176,13 @@ test.describe('J9 — Form preview & function execution', () => {
     await expect(scratchOutput).toHaveText('10');
     await evidence.checkpoint('scratch-function-executed');
 
+    // Deploy-sequencing note: this will fail against a live production run
+    // until the branch carrying Task 1's functionExecute instrumentation
+    // (commit 290c3b28) merges and deploys — production currently serves
+    // master, which predates it. The in-browser bundle under test, not the
+    // Node/Playwright process, is what needs the instrumentation, so this
+    // affects both the curated AND scratch execution checks identically.
+    // Expected to go green automatically post-merge; see Task 6 close-out.
     const opLog = await readOpLog(page);
     const executeEntries = opLog.filter((e) => e.op === 'functionExecute');
     expect(executeEntries.length, 'expected functionExecute op-log entries (Task 1 instrumentation)').toBeGreaterThan(
