@@ -165,11 +165,33 @@ function SelectContent({
   const alignItemWithTrigger = position !== 'popper';
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Positioner alignItemWithTrigger={alignItemWithTrigger} align={align}>
+      {/*
+        When this Select is rendered inside a Dialog, base-ui's own
+        FloatingPortal resolves its portal container to the Dialog's
+        existing portal node (useFloatingPortalNode's `parentPortalNode`
+        fallback — keeps the whole floating-element tree in one DOM
+        subtree for focus-trap guards) rather than `document.body`. The
+        Positioner's default `z-index: auto` means it never establishes
+        its own stacking context, so this Popup's `z-50` only competes
+        against the Dialog's own `z-50` content as a DOM-order tie — the
+        Dialog's body (later in that shared portal) wins the hit test
+        even though the popup paints visually on top (confirmed live via
+        document.elementFromPoint; see
+        https://github.com/pradeepmouli/rune-langium/issues/396). An
+        explicit z-index here (higher than Dialog's z-50) gives the
+        Positioner its own stacking context so it always wins regardless
+        of DOM order or nesting depth.
+      */}
+      <SelectPrimitive.Positioner
+        data-slot="select-positioner"
+        className="z-[60]"
+        alignItemWithTrigger={alignItemWithTrigger}
+        align={align}
+      >
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            'bg-popover text-popover-foreground data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-(--available-height) min-w-[8rem] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md',
+            'bg-popover text-popover-foreground data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-[60] max-h-(--available-height) min-w-[8rem] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md',
             position === 'popper' &&
               'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
             className
