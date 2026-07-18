@@ -33,3 +33,26 @@ export const ANCHOR_DATA = 'cdm.base.datetime.BusinessCenters';
  * The canonical never-hydrated-on-first-nav anchor.
  */
 export const ANCHOR_NEVER_HYDRATED_DATA = 'cdm.base.staticdata.party.Counterparty';
+
+/**
+ * cdm.base.math — a small, self-contained utility function ("compares two
+ * strings while ignoring the scheme", body `set result: s1 = s2`), one of a
+ * cluster of basic-math helpers (Abs/Max/Min/CompareNumbers/StringEquals/
+ * UnitEquals/ArithmeticOperation) referenced by each other and by
+ * higher-level date/quantity logic elsewhere in the corpus — very unlikely
+ * to be renamed or removed across curated rebuilds. Matches the single
+ * 'StringEquals' search, verified live against production
+ * (https://www.daikonic.dev/rune-studio/studio/) this session.
+ *
+ * Deliberately NOT `cdm.base.math.Max`/`Min`/`Abs`, the more "obvious"
+ * choices in the same file: all three are `if a > b then a else b`-shaped,
+ * and the studio's client-side function-execution engine
+ * (`codegen-worker.ts`'s `stripTypeAnnotations` + `new Function()` wrapper)
+ * cannot currently evaluate a generated ternary from a Rune `if/then/else`
+ * expression — confirmed live: Max fails Run with "Error: Unexpected
+ * token 'if'". StringEquals has no conditional logic in its body and
+ * executes correctly, returning real output. This is a pre-existing
+ * execution-engine gap unrelated to what J9 exercises, not a corpus
+ * property — sidestepped by anchor choice rather than worked around.
+ */
+export const ANCHOR_FUNCTION = 'cdm.base.math.StringEquals';
