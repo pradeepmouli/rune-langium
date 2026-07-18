@@ -172,15 +172,17 @@ function SelectContent({
         fallback — keeps the whole floating-element tree in one DOM
         subtree for focus-trap guards) rather than `document.body`. The
         Positioner's default `z-index: auto` means it never establishes
-        its own stacking context, so this Popup's `z-50` only competes
-        against the Dialog's own `z-50` content as a DOM-order tie — the
-        Dialog's body (later in that shared portal) wins the hit test
-        even though the popup paints visually on top (confirmed live via
-        document.elementFromPoint; see
-        https://github.com/pradeepmouli/rune-langium/issues/396). An
-        explicit z-index here (higher than Dialog's z-50) gives the
-        Positioner its own stacking context so it always wins regardless
-        of DOM order or nesting depth.
+        its own stacking context on its own — WITHOUT the explicit
+        `z-[60]` below, this Popup's bare `z-50` would only compete
+        against the Dialog's own `z-50` content as a DOM-order tie, and
+        the Dialog's body (later in that shared portal) would win the
+        hit test even though the popup paints visually on top (confirmed
+        live via document.elementFromPoint; see
+        https://github.com/pradeepmouli/rune-langium/issues/396). The
+        explicit `z-[60]` on both the Positioner and the Popup below
+        (higher than Dialog's z-50) gives the Positioner its own
+        stacking context so it always wins regardless of DOM order or
+        nesting depth.
       */}
       <SelectPrimitive.Positioner
         data-slot="select-positioner"
