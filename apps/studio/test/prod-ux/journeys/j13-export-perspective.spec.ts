@@ -59,6 +59,7 @@
  * guaranteed to have something to click.
  */
 
+import { stat } from 'node:fs/promises';
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
 
 test.describe('J13 — Export perspective', () => {
@@ -115,7 +116,13 @@ test.describe('J13 — Export perspective', () => {
 
     if (download) {
       const path = await download.path();
-      expect(path, 'download produced a non-empty file').toBeTruthy();
+      expect(path, 'download produced a file').toBeTruthy();
+      // download.path() is a truthy temp-file path even when the response
+      // body is empty (e.g. /api/codegen returns HTTP 200 with a zero-byte
+      // body) — verify the file actually has content before treating this
+      // as a real success.
+      const { size } = await stat(path!);
+      expect(size, 'downloaded file is non-empty').toBeGreaterThan(0);
       await evidence.checkpoint('export-generate-succeeded');
     } else {
       // /api/codegen is a known, historically-503ing endpoint in prod (see
