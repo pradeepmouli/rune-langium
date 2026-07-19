@@ -126,6 +126,26 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
 
 type TelemetryEvent = z.infer<typeof TelemetryEventBody>;
 
+// The 10 event literals TelemetryEventBody accepts. Zod's discriminated-union
+// introspection doesn't cleanly flatten the `workspace_*` member's `z.enum`
+// (one option covers 4 literal values, not 1), so this is hand-maintained —
+// TelemetryEventBody above is the source of truth; keep this list in sync
+// with it.
+const KNOWN_EVENTS = [
+  'curated_load_attempt',
+  'curated_load_success',
+  'curated_load_failure',
+  'workspace_open_success',
+  'workspace_open_failure',
+  'workspace_restore_success',
+  'workspace_restore_failure',
+  'lsp_session_opened',
+  'lsp_session_failed',
+  'op_spans'
+] as const;
+
+const MAX_DIGEST_DAYS = 31;
+
 // ---------- In-memory per-IP rate limit (10/min, with eviction) ----------
 
 const RATE_LIMIT = 10;
@@ -408,9 +428,55 @@ export default {
       }
     }
 
+    // GET /v1/digest — server-side fan-out across every known event name and
+    // every UTC day in [since, today]. /v1/stats requires one known
+    // (event, day) pair per call; a fleet digest needs all of them merged,
+    // which is what this route exists to do (CF Access enforces the admin
+    // allowlist at the route, same as /v1/stats — nothing to check here).
+    if (url.pathname.endsWith('/v1/digest')) {
+      if (req.method !== 'GET') return jsonResponse(405, { error: 'method_not_allowed' });
+      const since = url.searchParams.get('since');
+      if (!since) return jsonResponse(400, { error: 'missing_since_query' });
+      const sinceDate = new Date(since);
+      if (Number.isNaN(sinceDate.getTime())) return jsonResponse(400, { error: 'invalid_since' });
+
+      const days = enumerateUtcDays(sinceDate, new Date(startedAt));
+      if (days.length > MAX_DIGEST_DAYS) {
+        return jsonResponse(400, { error: 'since_too_far_back', max_days: MAX_DIGEST_DAYS });
+      }
+
+      const perEvent: Record<string, Record<string, unknown>> = {};
+      for (const eventName of KNOWN_EVENTS) {
+        const perDay: Record<string, unknown> = {};
+        for (const day of days) {
+          try {
+            const id = env.TELEMETRY.idFromName(`${eventName}:${day}`);
+            const stub = env.TELEMETRY.get(id);
+            const res = await stub.fetch(new Request('https://do/stats'));
+            perDay[day] = res.ok ? await res.json() : { error: 'aggregator_failure', status: res.status };
+          } catch (err) {
+            perDay[day] = { error: 'aggregator_failure', reason: errMessage(err) };
+          }
+        }
+        perEvent[eventName] = perDay;
+      }
+      return jsonResponse(200, { since, until: utcDay(new Date(startedAt)), events: perEvent });
+    }
+
     return jsonResponse(404, { error: 'not_found' });
   }
 };
+
+function enumerateUtcDays(from: Date, to: Date): string[] {
+  const days: string[] = [];
+  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+  const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
+  while (cursor <= end) {
+    days.push(utcDay(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

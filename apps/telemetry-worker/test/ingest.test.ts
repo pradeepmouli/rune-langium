@@ -676,6 +676,97 @@ describe('telemetry ingest contract', () => {
     });
   });
 
+  describe('GET /v1/digest', () => {
+    it('fans out across all known event names for a single-day range and merges counts', async () => {
+      const { env } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'curated_load_success',
+          modelId: 'cdm',
+          durationMs: 1234,
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      await worker.fetch(
+        makeReq({ event: 'lsp_session_opened', studio_version: '0.1.0', ua_class: 'chromium-desktop' }),
+        env
+      );
+
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-04-25', {
+          method: 'GET'
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { events: Record<string, Record<string, { count: number }>> };
+      expect(body.events.curated_load_success!['2026-04-25']).toBeDefined();
+      expect(body.events.lsp_session_opened!['2026-04-25']).toBeDefined();
+    });
+
+    it('spans multiple days when since is more than 1 day in the past', async () => {
+      const { env } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'curated_load_success',
+          modelId: 'cdm',
+          durationMs: 1000,
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-04-23', {
+          method: 'GET'
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { events: Record<string, Record<string, unknown>> };
+      // 3 days inclusive: 2026-04-23, 04-24, 04-25 (system time fixed to 04-25 in beforeEach).
+      expect(Object.keys(body.events.curated_load_success!)).toEqual(['2026-04-23', '2026-04-24', '2026-04-25']);
+    });
+
+    it('returns an empty-but-valid digest when since is today and no events exist yet', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-04-25', {
+          method: 'GET'
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { events: Record<string, Record<string, unknown>> };
+      expect(body.events.curated_load_success!['2026-04-25']).toBeDefined();
+    });
+
+    it('400s when since is missing or malformed', async () => {
+      const { env } = makeEnv();
+      const missing = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest', { method: 'GET' }),
+        env
+      );
+      expect(missing.status).toBe(400);
+      const malformed = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=not-a-date', { method: 'GET' }),
+        env
+      );
+      expect(malformed.status).toBe(400);
+    });
+
+    it('400s when since is further back than MAX_DIGEST_DAYS', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-01-01', { method: 'GET' }),
+        env
+      );
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('TelemetryAggregator DO defends its own boundary', () => {
     // Direct fetches against the DO — bypasses the Worker's schema gate.
     function makeAggregator(): TelemetryAggregator {
