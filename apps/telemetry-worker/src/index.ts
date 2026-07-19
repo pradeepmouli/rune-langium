@@ -101,6 +101,26 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
       studio_version: StudioVersion,
       ua_class: UaClass
     })
+    .strict(),
+  z
+    .object({
+      event: z.literal('op_spans'),
+      spans: z
+        .array(
+          z.object({
+            op: z.string().max(64),
+            subject: z.string().max(200).optional(),
+            durationMs: z.number().int().nonnegative().max(600_000).optional(),
+            level: z.enum(['info', 'warn', 'error']),
+            signature: z.string().max(200).optional(),
+            opId: z.number().int().optional()
+          })
+        )
+        .min(1)
+        .max(50),
+      studio_version: StudioVersion,
+      ua_class: UaClass
+    })
     .strict()
 ]);
 

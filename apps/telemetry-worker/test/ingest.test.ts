@@ -602,6 +602,59 @@ describe('telemetry ingest contract', () => {
     });
   });
 
+  describe('op_spans event', () => {
+    it('204 on a valid batch of 1-50 spans', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({
+          event: 'op_spans',
+          spans: [{ op: 'clientError', level: 'error', signature: 'boom @ app.js:1' }],
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      expect(res.status).toBe(204);
+    });
+
+    it('400 on an empty spans array (schema .min(1))', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({ event: 'op_spans', spans: [], studio_version: '0.1.0', ua_class: 'chromium-desktop' }),
+        env
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('400 on a 51-span batch (schema .max(50))', async () => {
+      const { env } = makeEnv();
+      const spans = Array.from({ length: 51 }, (_, i) => ({
+        op: 'clientError',
+        level: 'error' as const,
+        subject: `${i}`
+      }));
+      const res = await worker.fetch(
+        makeReq({ event: 'op_spans', spans, studio_version: '0.1.0', ua_class: 'chromium-desktop' }),
+        env
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('forwards to the aggregator DO keyed op_spans:<day>, retrievable via /v1/stats', async () => {
+      const { env, do: doNs } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'op_spans',
+          spans: [{ op: 'cdmLoad', level: 'info', durationMs: 12_000 }],
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      expect(doNs.instances.has('op_spans:2026-04-25')).toBe(true);
+    });
+  });
+
   describe('TelemetryAggregator DO defends its own boundary', () => {
     // Direct fetches against the DO — bypasses the Worker's schema gate.
     function makeAggregator(): TelemetryAggregator {

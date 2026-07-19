@@ -36,6 +36,8 @@ import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
 import { hydrateTelemetrySettings, useTelemetrySettingsStore } from './store/telemetry-settings.js';
 import { installTelemetryCapture } from './services/telemetry-capture.js';
+import { installTelemetryShipper } from './services/telemetry-shipper.js';
+import { createTelemetryClient, resolveTelemetryEndpoint } from './services/telemetry.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -552,7 +554,16 @@ function AppContent() {
   // send — belt-and-suspenders, not either-or.
   useEffect(() => {
     void hydrateTelemetrySettings().then(() => {
-      if (useTelemetrySettingsStore.getState().enabled) installTelemetryCapture();
+      if (!useTelemetrySettingsStore.getState().enabled) return;
+      installTelemetryCapture();
+      installTelemetryShipper(
+        createTelemetryClient({
+          endpoint: resolveTelemetryEndpoint(),
+          enabled: true,
+          studioVersion: STUDIO_VERSION,
+          uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
+        })
+      );
     });
   }, []);
 
