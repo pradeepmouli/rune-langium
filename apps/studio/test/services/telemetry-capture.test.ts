@@ -33,7 +33,7 @@ describe('installTelemetryCapture', () => {
     expect(entry?.signature).toBeDefined();
     // Privacy: signature is `<AllowlistedErrorName>:<hash>`, never raw
     // message/stack text (which can carry workspace-derived content).
-    expect(entry?.signature).toMatch(/^Error:[0-9a-f]{8}$/);
+    expect(entry?.signature).toMatch(/^Error:[0-9a-f]{16}$/);
     expect(entry?.signature).not.toContain('boom');
   });
 
@@ -46,6 +46,38 @@ describe('installTelemetryCapture', () => {
     expect(entry?.signature).not.toContain('workspace');
     expect(entry?.signature).not.toContain('SecretType');
     expect(entry?.signature).not.toContain('scratch');
+  });
+
+  it('the signature does not depend on the error message — only the top stack frame and allowlisted name', () => {
+    // Codex P1 (round 2): a deterministic hash of the message is still
+    // dictionary-attackable even though the raw text is never sent (error
+    // messages are low-entropy, guessable text). The signature must be
+    // derived only from data that's never user/model content — the top
+    // stack frame identifies a location in Studio's own bundled code, not
+    // the workspace. Prove it by throwing from the SAME call site (so the
+    // stack's top frame matches) with two DIFFERENT messages and asserting
+    // the signatures are identical.
+    uninstall = installTelemetryCapture();
+    function throwFromHere(msg: string): void {
+      throw new Error(msg);
+    }
+    let errA: Error | undefined;
+    let errB: Error | undefined;
+    try {
+      throwFromHere('first message');
+    } catch (e) {
+      errA = e as Error;
+    }
+    try {
+      throwFromHere('a totally different second message');
+    } catch (e) {
+      errB = e as Error;
+    }
+    window.dispatchEvent(new ErrorEvent('error', { message: 'first message', error: errA }));
+    window.dispatchEvent(new ErrorEvent('error', { message: 'a totally different second message', error: errB }));
+    const entries = useOutputStore.getState().lines.filter((l) => l.op === 'clientError');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.signature).toBe(entries[1]?.signature);
   });
 
   it('the same recurring error produces the same signature (deterministic grouping)', () => {
@@ -72,7 +104,7 @@ describe('installTelemetryCapture', () => {
     expect(entry).toBeDefined();
     expect(entry?.severity).toBe('error');
     expect(entry?.signature).toBeDefined();
-    expect(entry?.signature).toMatch(/^Error:[0-9a-f]{8}$/);
+    expect(entry?.signature).toMatch(/^Error:[0-9a-f]{16}$/);
     expect(entry?.signature).not.toContain('rejected');
   });
 

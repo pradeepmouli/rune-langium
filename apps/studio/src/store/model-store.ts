@@ -13,6 +13,7 @@ import { loadModel } from '../services/model-loader.js';
 import { getModelSource } from '../services/model-registry.js';
 import { clearCache } from '../services/model-cache.js';
 import { createTelemetryClient, type TelemetryClient } from '../services/telemetry.js';
+import { useTelemetrySettingsStore } from './telemetry-settings.js';
 import { config } from '../config.js';
 import { CURATED_MODEL_IDS, type CuratedModelId } from '@rune-langium/curated-schema';
 import { usePreviewStore } from './preview-store.js';
@@ -85,13 +86,34 @@ interface ModelStoreDeps {
   telemetry: Pick<TelemetryClient, 'emit'>;
 }
 
+/**
+ * Gates a telemetry client's emits on the live per-user Settings opt-in
+ * (spec Phase 5), re-checked on every call rather than captured once at
+ * construction — same belt-and-suspenders pattern telemetry-shipper.ts
+ * uses. `config.telemetryEnabled` (VITE_ENABLE_TELEMETRY) below is a
+ * deployment-level kill switch an operator sets; without this wrapper, a
+ * deployment with that switch on would send curated_load_* events for
+ * every user regardless of whether they ever touched the Settings toggle,
+ * bypassing the whole point of Task 1's per-user opt-in.
+ */
+export function gatedByUserOptIn(client: Pick<TelemetryClient, 'emit'>): Pick<TelemetryClient, 'emit'> {
+  return {
+    async emit(event) {
+      if (!useTelemetrySettingsStore.getState().enabled) return;
+      return client.emit(event);
+    }
+  };
+}
+
 let deps: ModelStoreDeps = {
-  telemetry: createTelemetryClient({
-    endpoint: config.telemetryEndpoint,
-    enabled: config.telemetryEnabled && !config.devMode,
-    studioVersion: '0.1.0',
-    uaClass: 'browser'
-  })
+  telemetry: gatedByUserOptIn(
+    createTelemetryClient({
+      endpoint: config.telemetryEndpoint,
+      enabled: config.telemetryEnabled && !config.devMode,
+      studioVersion: '0.1.0',
+      uaClass: 'browser'
+    })
+  )
 };
 
 /**

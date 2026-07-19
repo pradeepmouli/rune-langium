@@ -17,7 +17,7 @@ export function installTelemetryCapture(): () => void {
   const addLine = useOutputStore.getState().addLine;
 
   const onError = (event: ErrorEvent): void => {
-    const signature = signatureFor(event.error, event.message);
+    const signature = signatureFor(event.error);
     addLine(fmtLine('clientError', event.message || 'window error'), 'error', {
       op: 'clientError',
       signature
@@ -27,7 +27,7 @@ export function installTelemetryCapture(): () => void {
   const onRejection = (event: PromiseRejectionEvent): void => {
     const reason = event.reason;
     const message = reason instanceof Error ? reason.message : String(reason);
-    const signature = signatureFor(reason instanceof Error ? reason : undefined, message);
+    const signature = signatureFor(reason instanceof Error ? reason : undefined);
     addLine(fmtLine('clientUnhandledRejection', message), 'error', {
       op: 'clientUnhandledRejection',
       signature
@@ -74,27 +74,52 @@ const KNOWN_ERROR_NAMES = new Set([
 ]);
 
 /**
- * Non-reversible grouping key: an allowlisted error category plus a hash of
- * the message + top stack frame, never the raw text itself. Error messages
- * and stack frames can carry workspace-derived content (file paths, type
- * names, interpolated values) that the Privacy UI promises never to send —
- * a raw substring here would violate that even though it's only used for
- * dedup grouping. FNV-1a is intentionally non-cryptographic (this only
- * needs collision-resistance for grouping, not security) and synchronous,
- * so it can run inline in the error/rejection handlers without an async
- * detour through the Web Crypto API.
+ * A single FNV-1a pass. Not exported — hashString() below always runs it
+ * twice with independent seeds, since a lone 32-bit hash collides too
+ * often across a real fleet (birthday bound ~2^16 distinct values) to be a
+ * trustworthy grouping key on its own.
  */
-function hashString(input: string): string {
-  let hash = 0x811c9dc5;
+function fnv1a(seed: number, input: string): number {
+  let hash = seed;
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193);
   }
-  return (hash >>> 0).toString(16).padStart(8, '0');
+  return hash >>> 0;
 }
 
-function signatureFor(error: Error | undefined, message: string): string {
+/**
+ * Two independent 32-bit FNV-1a passes (different seeds) concatenated into
+ * a 16-hex-char (64-bit-equivalent) digest — cheap, dependency-free, and
+ * cuts collision likelihood far below a single 32-bit pass. Still
+ * intentionally non-cryptographic: this only needs collision resistance
+ * for grouping, not security, and stays synchronous so it can run inline
+ * in the error/rejection handlers without an async detour through the Web
+ * Crypto API.
+ */
+function hashString(input: string): string {
+  const a = fnv1a(0x811c9dc5, input);
+  const b = fnv1a(0x9e3779b9, input); // distinct seed (a different constant, not derived from `a`)
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
+}
+
+/**
+ * Non-reversible grouping key: an allowlisted error category plus a hash of
+ * the top stack frame — deliberately EXCLUDING the error message. A hash is
+ * non-reversible against a brute-force *unknown* input, but error messages
+ * are low-entropy, guessable text (a finite-ish set of runtime error
+ * templates, often with interpolated values) — hashing them is dictionary-
+ * attackable regardless of hash strength, so a deterministic hash of the
+ * message would not actually satisfy the "never scratch workspace text"
+ * privacy invariant even though the raw text itself is never transmitted.
+ * The top stack frame doesn't have this problem: it identifies a location
+ * in STUDIO's OWN bundled code (function name + line:col of code shipped
+ * to every user), never user-authored model/workspace content, so hashing
+ * it groups the same recurring bug across sessions without deriving
+ * anything from what the user actually typed.
+ */
+function signatureFor(error: Error | undefined): string {
   const name = error?.name && KNOWN_ERROR_NAMES.has(error.name) ? error.name : 'Error';
   const topFrame = error?.stack?.split('\n')[1]?.trim() ?? '';
-  return `${name}:${hashString(`${message}\n${topFrame}`)}`;
+  return `${name}:${hashString(topFrame)}`;
 }
