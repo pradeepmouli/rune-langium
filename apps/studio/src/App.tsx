@@ -34,6 +34,7 @@ import { AppHeader } from './shell/AppHeader.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
+import { hydrateTelemetrySettings } from './store/telemetry-settings.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -533,6 +534,14 @@ function AppContent() {
     return () => {
       document.body.removeAttribute('data-studio-app');
     };
+  }, []);
+
+  // Read the persisted per-user telemetry opt-in once at mount. Fire-and-
+  // forget (not awaited) so it never blocks first paint — Task 2/3's client
+  // capture reads useTelemetrySettingsStore.getState().enabled once this
+  // resolves, defaulting to disabled (opt-in, not opt-out) until then.
+  useEffect(() => {
+    void hydrateTelemetrySettings();
   }, []);
 
   // Theme — defaults to Daikonic. Override via ?theme=<name> query param
