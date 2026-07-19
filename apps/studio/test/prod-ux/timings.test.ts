@@ -27,7 +27,7 @@ describe('buildTimingsRollup', () => {
         title: 'J03 — Curated CDM load',
         opLog: [
           {
-            op: 'cdmLoad',
+            op: 'modelLoad',
             subject: 'CDM',
             level: 'success',
             message: 'loaded',
@@ -38,7 +38,7 @@ describe('buildTimingsRollup', () => {
         ]
       })
     ];
-    expect(buildTimingsRollup(journeys)).toEqual([{ op: 'cdmLoad', subject: 'CDM', ms: 12000, budgetMs: 45000 }]);
+    expect(buildTimingsRollup(journeys)).toEqual([{ op: 'modelLoad', subject: 'CDM', ms: 12000, budgetMs: 45000 }]);
   });
 
   it('omits opLog entries whose op has no known budget', () => {
@@ -57,7 +57,7 @@ describe('buildTimingsRollup', () => {
       makeRecord({
         id: 'J03',
         title: 'J03',
-        opLog: [{ op: 'cdmLoad', subject: 'CDM', level: 'info', message: 'starting', ts: 0, panel: 'output' }]
+        opLog: [{ op: 'modelLoad', subject: 'CDM', level: 'info', message: 'starting', ts: 0, panel: 'output' }]
       })
     ];
     expect(buildTimingsRollup(journeys)).toEqual([]);
@@ -99,14 +99,14 @@ describe('buildTimingsRollup', () => {
 
 describe('exceedsBudget', () => {
   it('returns false when every op is within budget', () => {
-    expect(exceedsBudget([{ op: 'cdmLoad', durationMs: 12000 }])).toBe(false);
+    expect(exceedsBudget([{ op: 'modelLoad', durationMs: 12000 }])).toBe(false);
   });
 
   it('returns true when any op exceeds its budget', () => {
-    expect(exceedsBudget([{ op: 'cdmLoad', durationMs: 50000 }])).toBe(true);
+    expect(exceedsBudget([{ op: 'modelLoad', durationMs: 50000 }])).toBe(true);
   });
 
   it('ignores unbudgeted ops and entries with no durationMs', () => {
-    expect(exceedsBudget([{ op: 'lspConnect', durationMs: 999999 }, { op: 'cdmLoad' }])).toBe(false);
+    expect(exceedsBudget([{ op: 'lspConnect', durationMs: 999999 }, { op: 'modelLoad' }])).toBe(false);
   });
 });

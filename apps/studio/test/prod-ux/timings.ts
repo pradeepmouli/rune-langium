@@ -4,14 +4,16 @@
 import type { JourneyRecord } from './evidence.js';
 
 /**
- * Soft wall-clock budgets per operation, copied verbatim from spec §4's
+ * Soft wall-clock budgets per operation, loosely based on spec §4's
  * timings table. Exceeding a budget marks the journey DEGRADED, never
  * FAIL — only a journey's own hard assertions can fail it.
+ * Note: cdmLoad renamed to modelLoad to match the real op-log instrumentation
+ * emitted by model-store.ts (which instruments as op: 'modelLoad', subject: 'cdm').
  */
 export const TIMING_BUDGETS: Record<string, number> = {
   startPageInteractive: 5000,
   workspaceOpen: 5000,
-  cdmLoad: 45000,
+  modelLoad: 45000,
   hydration: 10000,
   typeClosureWalk: 60000,
   formRender: 5000,
