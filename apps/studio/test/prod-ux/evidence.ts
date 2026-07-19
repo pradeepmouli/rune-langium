@@ -103,7 +103,14 @@ export class EvidenceCollector {
 
   async checkpoint(name: string): Promise<void> {
     this.seq += 1;
-    const dir = path.join(REPORT_DIR, 'screenshots', this.journeyId, `attempt${this.retry}`);
+    // journeyId can contain a `:` (e.g. "J13:generate", from computeJourneyId's
+    // sub-test disambiguation) — filesystem-legal on macOS/Linux where this
+    // runs locally, but actions/upload-artifact rejects `:` in any uploaded
+    // path unconditionally (NTFS-safety rule), which silently fails the
+    // nightly CI upload. Sanitize ONLY the directory name — never the
+    // manifest's own journeyId/`id` field, which stays exactly as computed.
+    const safeJourneyId = this.journeyId.replaceAll(':', '-');
+    const dir = path.join(REPORT_DIR, 'screenshots', safeJourneyId, `attempt${this.retry}`);
     await mkdir(dir, { recursive: true });
     const fileName = `${String(this.seq).padStart(2, '0')}-${name}.png`;
     const screenshotPath = path.join(dir, fileName);
