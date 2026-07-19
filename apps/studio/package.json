@@ -23,6 +23,7 @@
     "test:e2e": "playwright test",
     "test:prod-smoke": "PLAYWRIGHT_PROD_SMOKE=1 playwright test --config playwright.prod.config.ts prod-smoke",
     "test:prod-ux": "PLAYWRIGHT_PROD_SMOKE=1 playwright test --config playwright.prod.config.ts prod-ux/journeys",
+    "telemetry:digest": "node scripts/telemetry-digest.mjs",
     "type-check": "tsc --noEmit && tsc --noEmit -p functions/tsconfig.json"
   },
   "dependencies": {
