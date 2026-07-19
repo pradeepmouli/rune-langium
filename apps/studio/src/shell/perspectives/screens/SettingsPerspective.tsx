@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type React from 'react';
+import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { FontScaleButton } from '../../../components/FontScaleButton.js';
 import { useTelemetrySettingsStore } from '../../../store/telemetry-settings.js';
 
@@ -41,11 +42,10 @@ export function SettingsPerspective(): React.ReactElement {
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Privacy</h2>
 
         <label className="flex items-center gap-3 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             data-testid="settings-telemetry-toggle"
             checked={telemetryEnabled}
-            onChange={(e) => setTelemetryEnabled(e.target.checked)}
+            onCheckedChange={setTelemetryEnabled}
           />
           Send anonymous diagnostics
         </label>
