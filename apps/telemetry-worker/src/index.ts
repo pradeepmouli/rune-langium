@@ -445,20 +445,28 @@ export default {
         return jsonResponse(400, { error: 'since_too_far_back', max_days: MAX_DIGEST_DAYS });
       }
 
-      const perEvent: Record<string, Record<string, unknown>> = {};
-      for (const eventName of KNOWN_EVENTS) {
-        const perDay: Record<string, unknown> = {};
-        for (const day of days) {
+      // Each (event, day) DO instance is independent, so these reads fan
+      // out in parallel — up to KNOWN_EVENTS.length * days.length (bounded
+      // by MAX_DIGEST_DAYS above) concurrent subrequests. Sequential reads
+      // here would turn a 31-day digest into 10-15s+ of serial round-trips
+      // for no reason; nothing about reading N independent DOs requires
+      // waiting on one before starting the next.
+      const reads = KNOWN_EVENTS.flatMap((eventName) =>
+        days.map(async (day) => {
           try {
             const id = env.TELEMETRY.idFromName(`${eventName}:${day}`);
             const stub = env.TELEMETRY.get(id);
             const res = await stub.fetch(new Request('https://do/stats'));
-            perDay[day] = res.ok ? await res.json() : { error: 'aggregator_failure', status: res.status };
+            const result = res.ok ? await res.json() : { error: 'aggregator_failure', status: res.status };
+            return { eventName, day, result };
           } catch (err) {
-            perDay[day] = { error: 'aggregator_failure', reason: errMessage(err) };
+            return { eventName, day, result: { error: 'aggregator_failure', reason: errMessage(err) } };
           }
-        }
-        perEvent[eventName] = perDay;
+        })
+      );
+      const perEvent: Record<string, Record<string, unknown>> = {};
+      for (const { eventName, day, result } of await Promise.all(reads)) {
+        (perEvent[eventName] ??= {})[day] = result;
       }
       return jsonResponse(200, { since, until: utcDay(new Date(startedAt)), events: perEvent });
     }
