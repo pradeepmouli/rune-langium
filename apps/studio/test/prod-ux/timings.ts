@@ -4,7 +4,7 @@
 import type { JourneyRecord } from './evidence.js';
 
 /**
- * Soft wall-clock budgets per operation, loosely based on spec §4's
+ * Soft wall-clock budgets per operation, taken directly from spec §4's
  * timings table. Exceeding a budget marks the journey DEGRADED, never
  * FAIL — only a journey's own hard assertions can fail it.
  * Note: cdmLoad renamed to modelLoad to match the real op-log instrumentation

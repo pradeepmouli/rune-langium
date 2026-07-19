@@ -4,7 +4,7 @@
 
 **Goal:** Close out `docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md` §8's Phase 4 ("resilience + a11y: J16, J17; wire nightly CI + review-skill handoff; switch §4 timings to opLog-sourced where Phase 0 has landed"). J16/J17 already shipped as part of the "Phase 3" implementation branch (PR #398) — the genuinely open scope is the other three items: (1) a manifest-level, budget-aware `timings[]` roll-up that downgrades a journey to `DEGRADED` when an operation blows its soft budget, (2) a nightly GitHub Actions workflow that runs `test:prod-ux` against the real deployed Studio and uploads the evidence bundle, and (3) a persistent scheduled cloud routine that picks up that nightly artifact and runs the `prod-ux-review` skill against it, filing a GitHub issue when it finds a real regression.
 
-**Architecture:** Everything the harness needs already exists — `apps/studio/src/services/op-log.ts` (Phase 0, merged), `EvidenceCollector`/`appendJourneyRecord` (Phase 1, merged), and 18 journey spec files (Phases 1–3, merged) that already populate each `JourneyRecord.opLog` from `window.__runeStudioOpLog`. This phase adds one new pure module (`timings.ts`) that aggregates already-recorded `opLog` durations against the spec §4 budget table — no new instrumentation, no new logging mechanism (repo rule: DRY, never a parallel implementation of something that already exists). CI and scheduling are additive: a new workflow file, and a new persistent routine created via the `schedule` skill (NOT the session-scoped `CronCreate` tool, which is deleted when this session ends and auto-expires after 7 days regardless — unsuitable for a "nightly, indefinitely" requirement).
+**Architecture:** Everything the harness needs already exists — `apps/studio/src/services/op-log.ts` (Phase 0, merged), `EvidenceCollector`/`appendJourneyRecord` (Phase 1, merged), and 19 journey spec files (J00–J18, Phases 1–3, merged) that already populate each `JourneyRecord.opLog` from `window.__runeStudioOpLog`. This phase adds one new pure module (`timings.ts`) that aggregates already-recorded `opLog` durations against the spec §4 budget table — no new instrumentation, no new logging mechanism (repo rule: DRY, never a parallel implementation of something that already exists). CI and scheduling are additive: a new workflow file, and a new persistent routine created via the `schedule` skill (NOT the session-scoped `CronCreate` tool, which is deleted when this session ends and auto-expires after 7 days regardless — unsuitable for a "nightly, indefinitely" requirement).
 
 **Tech Stack:** TypeScript 5.9 strict/ESM, Vitest 3, Playwright (`playwright.prod.config.ts`), GitHub Actions (`actions/upload-artifact@v7`, matching this repo's other workflows), `gh` CLI (already used by the `prod-ux-review` skill's operators), the `schedule` skill for the persistent nightly routine.
 
@@ -419,7 +419,7 @@ Read `docs/TESTING.md:34-59` first (the existing "Browser smoke checks" subsecti
 ### Full checkout harness (`test:prod-ux`)
 
 ```bash
-# Run the full 18-journey checkout harness against the default deploy.
+# Run the full 19-journey (J00-J18) checkout harness against the default deploy.
 pnpm --filter @rune-langium/studio run test:prod-ux
 
 # Against a preview/staging deployment.

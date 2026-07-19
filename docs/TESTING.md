@@ -60,7 +60,7 @@ The current smoke flow:
 ### Full checkout harness (`test:prod-ux`)
 
 ```bash
-# Run the full 18-journey checkout harness against the default deploy.
+# Run the full 19-journey (J00-J18) checkout harness against the default deploy.
 pnpm --filter @rune-langium/studio run test:prod-ux
 
 # Against a preview/staging deployment.

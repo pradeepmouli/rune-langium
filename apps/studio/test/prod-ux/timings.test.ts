@@ -28,7 +28,7 @@ describe('buildTimingsRollup', () => {
         opLog: [
           {
             op: 'modelLoad',
-            subject: 'CDM',
+            subject: 'cdm',
             level: 'success',
             message: 'loaded',
             durationMs: 12000,
@@ -38,7 +38,7 @@ describe('buildTimingsRollup', () => {
         ]
       })
     ];
-    expect(buildTimingsRollup(journeys)).toEqual([{ op: 'modelLoad', subject: 'CDM', ms: 12000, budgetMs: 45000 }]);
+    expect(buildTimingsRollup(journeys)).toEqual([{ op: 'modelLoad', subject: 'cdm', ms: 12000, budgetMs: 45000 }]);
   });
 
   it('omits opLog entries whose op has no known budget', () => {
@@ -57,7 +57,7 @@ describe('buildTimingsRollup', () => {
       makeRecord({
         id: 'J03',
         title: 'J03',
-        opLog: [{ op: 'modelLoad', subject: 'CDM', level: 'info', message: 'starting', ts: 0, panel: 'output' }]
+        opLog: [{ op: 'modelLoad', subject: 'cdm', level: 'info', message: 'starting', ts: 0, panel: 'output' }]
       })
     ];
     expect(buildTimingsRollup(journeys)).toEqual([]);
