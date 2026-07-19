@@ -34,7 +34,8 @@ import { AppHeader } from './shell/AppHeader.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
-import { hydrateTelemetrySettings } from './store/telemetry-settings.js';
+import { hydrateTelemetrySettings, useTelemetrySettingsStore } from './store/telemetry-settings.js';
+import { installTelemetryCapture } from './services/telemetry-capture.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -540,8 +541,19 @@ function AppContent() {
   // forget (not awaited) so it never blocks first paint — Task 2/3's client
   // capture reads useTelemetrySettingsStore.getState().enabled once this
   // resolves, defaulting to disabled (opt-in, not opt-out) until then.
+  //
+  // Client capture (window.onerror / unhandledrejection / long-task
+  // PerformanceObserver) is installed only AFTER hydration confirms the
+  // user has actually opted in — never install-then-gate-at-emit-time.
+  // Unconditional installation would mean capturing (locally, into
+  // output-store) even when the user opted out; the LOCAL Output panel is
+  // fine with that for every other op, but this plan's shipper (Task 3)
+  // must additionally re-check the live opt-in state before every network
+  // send — belt-and-suspenders, not either-or.
   useEffect(() => {
-    void hydrateTelemetrySettings();
+    void hydrateTelemetrySettings().then(() => {
+      if (useTelemetrySettingsStore.getState().enabled) installTelemetryCapture();
+    });
   }, []);
 
   // Theme — defaults to Daikonic. Override via ?theme=<name> query param
