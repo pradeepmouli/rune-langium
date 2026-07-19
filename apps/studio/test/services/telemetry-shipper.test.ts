@@ -34,6 +34,23 @@ describe('installTelemetryShipper', () => {
     );
   });
 
+  it('threads the error/warn dedup signature through to the shipped span, distinct from subject', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore
+      .getState()
+      .addLine('boom', 'error', { op: 'clientError', subject: 'general-subject', signature: 'boom @ app.js:1' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'op_spans',
+        spans: expect.arrayContaining([
+          expect.objectContaining({ op: 'clientError', subject: 'general-subject', signature: 'boom @ app.js:1' })
+        ])
+      })
+    );
+  });
+
   it('does not ship anything when telemetry is disabled', async () => {
     useTelemetrySettingsStore.setState({ enabled: false, hydrated: true });
     const emit = vi.fn(async () => {});

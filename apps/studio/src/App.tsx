@@ -540,32 +540,37 @@ function AppContent() {
   }, []);
 
   // Read the persisted per-user telemetry opt-in once at mount. Fire-and-
-  // forget (not awaited) so it never blocks first paint — Task 2/3's client
-  // capture reads useTelemetrySettingsStore.getState().enabled once this
-  // resolves, defaulting to disabled (opt-in, not opt-out) until then.
-  //
-  // Client capture (window.onerror / unhandledrejection / long-task
-  // PerformanceObserver) is installed only AFTER hydration confirms the
-  // user has actually opted in — never install-then-gate-at-emit-time.
-  // Unconditional installation would mean capturing (locally, into
-  // output-store) even when the user opted out; the LOCAL Output panel is
-  // fine with that for every other op, but this plan's shipper (Task 3)
-  // must additionally re-check the live opt-in state before every network
-  // send — belt-and-suspenders, not either-or.
+  // forget (not awaited) so it never blocks first paint — defaults to
+  // disabled (opt-in, not opt-out) until this resolves.
   useEffect(() => {
-    void hydrateTelemetrySettings().then(() => {
-      if (!useTelemetrySettingsStore.getState().enabled) return;
-      installTelemetryCapture();
-      installTelemetryShipper(
-        createTelemetryClient({
-          endpoint: resolveTelemetryEndpoint(),
-          enabled: true,
-          studioVersion: STUDIO_VERSION,
-          uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
-        })
-      );
-    });
+    void hydrateTelemetrySettings();
   }, []);
+
+  // Client capture (window.onerror / unhandledrejection / long-task
+  // PerformanceObserver) + shipper are installed only while the user has
+  // actually opted in — never install-then-gate-at-emit-time. Subscribing
+  // to the live `enabled` value (not a one-shot read at mount) means
+  // checking the Settings toggle ON takes effect immediately instead of
+  // requiring a reload, and returning the teardown functions from this
+  // effect means React 19 StrictMode's dev-mode mount->cleanup->mount
+  // tears down cleanly instead of leaking duplicate listeners/intervals.
+  const telemetryEnabled = useTelemetrySettingsStore((s) => s.enabled);
+  useEffect(() => {
+    if (!telemetryEnabled) return;
+    const uninstallCapture = installTelemetryCapture();
+    const uninstallShipper = installTelemetryShipper(
+      createTelemetryClient({
+        endpoint: resolveTelemetryEndpoint(),
+        enabled: true,
+        studioVersion: STUDIO_VERSION,
+        uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
+      })
+    );
+    return () => {
+      uninstallCapture();
+      uninstallShipper();
+    };
+  }, [telemetryEnabled]);
 
   // Theme — defaults to Daikonic. Override via ?theme=<name> query param
   // or localStorage. Use ?theme=default to revert to Refactory Dark.

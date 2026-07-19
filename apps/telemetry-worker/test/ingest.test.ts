@@ -21,40 +21,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import worker, { TelemetryAggregator, _resetRateLimitForTesting, _resetSaltCacheForTesting } from '../src/index.js';
 import type { Env } from '../src/index.js';
+import { makeStorage, type FakeStorage } from './fixtures/fake-storage.js';
 
 // ---------- DO fakes ----------
-
-interface FakeStorage {
-  store: Map<string, unknown>;
-  get<T = unknown>(key: string): Promise<T | undefined>;
-  put(entries: Record<string, unknown>): Promise<void>;
-  put(key: string, value: unknown): Promise<void>;
-  list<T = unknown>(opts?: { prefix?: string }): Promise<Map<string, T>>;
-}
-
-function makeStorage(): FakeStorage {
-  const store = new Map<string, unknown>();
-  return {
-    store,
-    async get<T>(key: string): Promise<T | undefined> {
-      return store.get(key) as T | undefined;
-    },
-    async put(arg1: string | Record<string, unknown>, arg2?: unknown): Promise<void> {
-      if (typeof arg1 === 'string') {
-        store.set(arg1, arg2);
-      } else {
-        for (const [k, v] of Object.entries(arg1)) store.set(k, v);
-      }
-    },
-    async list<T>(opts?: { prefix?: string }): Promise<Map<string, T>> {
-      const out = new Map<string, T>();
-      for (const [k, v] of store.entries()) {
-        if (!opts?.prefix || k.startsWith(opts.prefix)) out.set(k, v as T);
-      }
-      return out;
-    }
-  };
-}
 
 interface DOInstance {
   fetch(req: Request): Promise<Response>;

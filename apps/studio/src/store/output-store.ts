@@ -15,6 +15,8 @@ export interface OutputLine {
   subject?: string;
   durationMs?: number;
   opId?: number;
+  /** Error/warn dedup grouping key (top stack frame + message) — distinct from `subject`, which other producers use for a general op correlator like a model id. Read by telemetry-shipper.ts's op_spans mapping. */
+  signature?: string;
 }
 
 export interface AddLineMeta {
@@ -22,6 +24,7 @@ export interface AddLineMeta {
   subject?: string;
   durationMs?: number;
   opId?: number;
+  signature?: string;
 }
 
 interface OutputState {

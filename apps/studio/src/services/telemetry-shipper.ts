@@ -27,9 +27,10 @@ function toSpan(
   op: string,
   subject?: string,
   durationMs?: number,
-  opId?: number
+  opId?: number,
+  signature?: string
 ): Span {
-  return { op, subject, durationMs, level, opId };
+  return { op, subject, durationMs, level, opId, signature };
 }
 
 function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
@@ -88,7 +89,7 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
     for (const line of newLines) {
       if (line.severity !== 'error' && line.severity !== 'warn' && line.severity !== 'info') continue;
       if (!shouldSample(line.severity)) continue;
-      buffer.push(toSpan(line.severity, line.op ?? 'output', line.subject, line.durationMs, line.opId));
+      buffer.push(toSpan(line.severity, line.op ?? 'output', line.subject, line.durationMs, line.opId, line.signature));
     }
     lastOutputId = maxId(lines);
     considerFlush();

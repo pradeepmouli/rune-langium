@@ -5,36 +5,12 @@
  * Direct unit coverage for TelemetryAggregator.incrementSpans/stats().
  * ingest.test.ts covers the DO indirectly through the Worker's fetch;
  * this file exercises the new duration-bucketing/signature-counting
- * methods directly against a minimal in-memory storage fake mirroring
- * ingest.test.ts's own FakeStorage shape.
+ * methods directly against the shared in-memory storage fake.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TelemetryAggregator } from '../src/counters.js';
-
-function makeStorage() {
-  const store = new Map<string, unknown>();
-  return {
-    store,
-    async get<T>(key: string): Promise<T | undefined> {
-      return store.get(key) as T | undefined;
-    },
-    async put(arg1: string | Record<string, unknown>, arg2?: unknown): Promise<void> {
-      if (typeof arg1 === 'string') {
-        store.set(arg1, arg2);
-      } else {
-        for (const [k, v] of Object.entries(arg1)) store.set(k, v);
-      }
-    },
-    async list<T>(opts?: { prefix?: string }): Promise<Map<string, T>> {
-      const out = new Map<string, T>();
-      for (const [k, v] of store.entries()) {
-        if (!opts?.prefix || k.startsWith(opts.prefix)) out.set(k, v as T);
-      }
-      return out;
-    }
-  };
-}
+import { makeStorage } from './fixtures/fake-storage.js';
 
 function makeState() {
   const storage = makeStorage();

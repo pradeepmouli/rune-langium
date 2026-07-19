@@ -25,6 +25,13 @@ describe('installTelemetryCapture', () => {
     const entry = lines.find((l) => l.op === 'clientError');
     expect(entry).toBeDefined();
     expect(entry?.severity).toBe('error');
+    // Regression coverage for the client-capture -> shipper -> worker seam:
+    // the dedup grouping key must land in `signature`, not `subject` (a
+    // separate field other op-log producers use for a general correlator
+    // like a model id) — telemetry-shipper.ts only forwards `signature`
+    // into the wire schema's own `signature` field.
+    expect(entry?.signature).toBeDefined();
+    expect(entry?.signature).toContain('boom');
   });
 
   it('publishes an unhandled rejection as an error-level opLog entry', () => {
@@ -36,6 +43,8 @@ describe('installTelemetryCapture', () => {
     const entry = lines.find((l) => l.op === 'clientUnhandledRejection');
     expect(entry).toBeDefined();
     expect(entry?.severity).toBe('error');
+    expect(entry?.signature).toBeDefined();
+    expect(entry?.signature).toContain('rejected');
   });
 
   it('teardown stops publishing further errors', () => {

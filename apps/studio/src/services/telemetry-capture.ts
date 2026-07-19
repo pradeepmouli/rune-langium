@@ -20,7 +20,7 @@ export function installTelemetryCapture(): () => void {
     const signature = signatureFor(event.error, event.message);
     addLine(fmtLine('clientError', event.message || 'window error'), 'error', {
       op: 'clientError',
-      subject: signature
+      signature
     });
   };
 
@@ -30,7 +30,7 @@ export function installTelemetryCapture(): () => void {
     const signature = signatureFor(reason instanceof Error ? reason : undefined, message);
     addLine(fmtLine('clientUnhandledRejection', message), 'error', {
       op: 'clientUnhandledRejection',
-      subject: signature
+      signature
     });
   };
 
