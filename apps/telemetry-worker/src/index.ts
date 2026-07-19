@@ -329,13 +329,14 @@ export default {
       const counterId = env.TELEMETRY.idFromName(doIdName(event, day));
       const stub = env.TELEMETRY.get(counterId);
       const errorCategory = getErrorCategory(event);
+      const isSpans = event.event === 'op_spans';
       let stubRes: Response;
       try {
         stubRes = await stub.fetch(
-          new Request('https://do/inc', {
+          new Request(isSpans ? 'https://do/inc-spans' : 'https://do/inc', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ errorCategory })
+            body: JSON.stringify(isSpans ? { spans: event.spans } : { errorCategory })
           })
         );
       } catch (err) {

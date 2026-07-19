@@ -653,6 +653,27 @@ describe('telemetry ingest contract', () => {
       );
       expect(doNs.instances.has('op_spans:2026-04-25')).toBe(true);
     });
+
+    it('routes through /inc-spans (not /inc) so durations actually reach the histogram', async () => {
+      const { env } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'op_spans',
+          spans: [{ op: 'cdmLoad', level: 'info', durationMs: 12_000 }],
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      const statsRes = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/stats?event=op_spans&date=2026-04-25', {
+          method: 'GET'
+        }),
+        env
+      );
+      const body = (await statsRes.json()) as { durationBuckets?: Record<string, Record<string, number>> };
+      expect(body.durationBuckets?.cdmLoad).toBeDefined();
+    });
   });
 
   describe('TelemetryAggregator DO defends its own boundary', () => {
