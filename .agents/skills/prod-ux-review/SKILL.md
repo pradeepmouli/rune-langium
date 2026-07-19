@@ -95,7 +95,7 @@ Report anything a user would notice, even under a PASS verdict.
   journeys are findings (severity by content: CSP violations, React warnings,
   unhandled rejections rank above noisy 3rd-party).
 - **Timings:** walk the manifest's per-operation timing table
-  (`startPageInteractive`, `workspaceOpen`, `cdmLoad`, per-namespace
+  (`startPageInteractive`, `workspaceOpen`, `modelLoad`, per-namespace
   `hydration`, `formRender`, `functionExecute`, per-target `codegen`,
   per-format `importPreview`/`importMerge`, `reloadRestore`). Flag every entry
   over its `budgetMs`; compare against the previous run's manifest when

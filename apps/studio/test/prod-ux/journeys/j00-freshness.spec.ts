@@ -34,13 +34,23 @@ function resolveMasterCommit(): string {
 }
 
 test.describe('J00 — deployment freshness', () => {
+  // Describe-level test.skip() bypasses fixture resolution entirely (no
+  // fixture ever runs, evidence teardown never fires) — correct here, since
+  // PLAYWRIGHT_PROD_SMOKE unset means the whole prod-ux harness isn't
+  // running at all, so there's no manifest to be silently absent from.
   test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
-  test.skip(
-    !process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID,
-    'set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to verify the live deployment against master'
-  );
 
   test('J00a canonical Pages deployment serves the current master commit', async ({ request, evidence }) => {
+    // Deliberately a dynamic (in-body) skip, NOT a describe-level one: the
+    // harness IS running (other journeys produce evidence), so a missing
+    // CLOUDFLARE_API_TOKEN/ACCOUNT_ID must still leave a manifest trace
+    // (verdict BLOCKED, per spec §4 — "never silently green") rather than
+    // vanishing without a record the way a describe-level skip would.
+    test.skip(
+      !process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID,
+      'set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to verify the live deployment against master'
+    );
+
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
     const res = await request.get(
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${CF_PAGES_PROJECT}`,

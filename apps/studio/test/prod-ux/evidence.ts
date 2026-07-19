@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Page, ConsoleMessage, Request, Response } from '@playwright/test';
 import type { OpLogEntry } from '../../src/services/op-log.js';
+import { buildTimingsRollup, type TimingRecord } from './timings.js';
 
 export interface Checkpoint {
   name: string;
@@ -171,15 +172,21 @@ function withoutPreviousAttempts(record: JourneyRecord): JourneyRecord {
 // to the current run, so we simply read-and-merge, falling back to a fresh
 // manifest if it's absent or unparseable.
 
+export interface RunManifest {
+  runId: string;
+  journeys: JourneyRecord[];
+  timings: TimingRecord[];
+}
+
 export async function appendJourneyRecord(record: JourneyRecord): Promise<void> {
   await mkdir(REPORT_DIR, { recursive: true });
   const manifestPath = path.join(REPORT_DIR, 'run-manifest.json');
-  let manifest: { runId: string; journeys: JourneyRecord[] };
+  let manifest: RunManifest;
   try {
     const raw = await readFile(manifestPath, 'utf-8');
     manifest = JSON.parse(raw);
   } catch {
-    manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [] };
+    manifest = { runId: `prod-ux-${new Date().toISOString()}`, journeys: [], timings: [] };
   }
 
   // A retry that supersedes a prior attempt for the same journey id must not
@@ -196,5 +203,6 @@ export async function appendJourneyRecord(record: JourneyRecord): Promise<void> 
 
   manifest.journeys = manifest.journeys.filter((j) => j.id !== record.id);
   manifest.journeys.push(finalRecord);
+  manifest.timings = buildTimingsRollup(manifest.journeys);
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
 }

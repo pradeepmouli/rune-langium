@@ -1,0 +1,73 @@
+name: Prod UX Nightly Checkout
+
+# Runs the full production UX checkout harness (spec:
+# docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md) against the
+# real deployed Studio nightly, and uploads the evidence bundle
+# (run-manifest.json, screenshots, traces, axe results) as a build artifact.
+# This workflow never fails the build on its own — a red/degraded journey is
+# evidence for the nightly prod-ux-review routine to triage, not a CI gate
+# (unlike ci.yml's PR-blocking studio-a11y job).
+#
+# Triggers:
+#   - Nightly at 04:41 UTC (offset from curated-artifacts.yml's 04:00 UTC so
+#     the two scheduled jobs don't contend for the same runner-minute window)
+#   - Manual dispatch
+
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  prod-ux-checkout:
+    runs-on: ubuntu-latest
+    # A job-level timeout kills the whole job (including the always()-gated
+    # upload step below) — it is NOT protected by the harness step's own
+    # continue-on-error. 27 serial tests (workers: 1) with a 120s per-test
+    # timeout and 1 retry can exceed the harness's own ~20min happy-path
+    # budget on a genuinely bad night (prod outage / broad timeouts), which
+    # is exactly the night the evidence bundle matters most — so this must
+    # stay well above that worst case, not just the typical case.
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.5.0
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers (chromium only)
+        run: pnpm --filter @rune-langium/studio exec playwright install --with-deps chromium
+
+      - name: Run prod-ux checkout harness
+        continue-on-error: true
+        run: pnpm --filter @rune-langium/studio run test:prod-ux
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Upload evidence bundle
+        # Includes Playwright's default trace/output directory alongside the
+        # manifest — playwright.prod.config.ts's `trace: 'on-first-retry'`
+        # writes trace.zip under test-results/, not report/, and the nightly
+        # reviewer needs that trace to distinguish a regression from a flake.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: prod-ux-report
+          path: |
+            apps/studio/test/prod-ux/report/
+            apps/studio/test-results/
+          retention-days: 14
+          if-no-files-found: warn
