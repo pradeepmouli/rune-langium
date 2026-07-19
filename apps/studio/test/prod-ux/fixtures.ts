@@ -40,7 +40,16 @@ export const checkout = base.extend<CheckoutFixtures>({
     const journeyId = computeJourneyId(testInfo.title, subId);
     const collector = new EvidenceCollector(page, journeyId, testInfo.title, testInfo.retry);
     await use(collector);
-    const baseVerdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
+    // testInfo.expectedStatus is 'skipped' for any test.skip()'d test, so a
+    // naive status===expectedStatus comparison treats every skip as a match
+    // and reports it PASS — silently green, exactly what spec §4's verdict
+    // semantics forbid for a genuinely blocked prerequisite (e.g. J0a with no
+    // CLOUDFLARE_API_TOKEN/ACCOUNT_ID). A dynamic test.skip() call *inside* a
+    // test body still runs this fixture's teardown (only a describe-level
+    // test.skip() bypasses fixtures entirely), so 'skipped' must be mapped to
+    // BLOCKED explicitly here rather than falling through the PASS/FAIL check.
+    const baseVerdict: JourneyRecord['verdict'] =
+      testInfo.status === 'skipped' ? 'BLOCKED' : testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
     const opLog = await readOpLog(page);
     const degraded = collector.hasSoftFindings || exceedsBudget(opLog);
     const verdict = baseVerdict === 'PASS' && degraded ? 'DEGRADED' : baseVerdict;
