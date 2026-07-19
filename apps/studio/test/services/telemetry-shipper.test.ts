@@ -3,6 +3,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useOutputStore } from '../../src/store/output-store.js';
+import { useActivityStore } from '../../src/store/activity-store.js';
 import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
 import { installTelemetryShipper } from '../../src/services/telemetry-shipper.js';
 
@@ -12,6 +13,7 @@ describe('installTelemetryShipper', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     useOutputStore.setState({ lines: [] });
+    useActivityStore.setState({ entries: [] });
     useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
   });
 
@@ -37,16 +39,73 @@ describe('installTelemetryShipper', () => {
   it('threads the error/warn dedup signature through to the shipped span, distinct from subject', async () => {
     const emit = vi.fn(async () => {});
     uninstall = installTelemetryShipper({ emit });
+    // modelLoad is on the subject allowlist (see below) so this exercises
+    // signature-threading without conflating it with the allowlist itself.
     useOutputStore
       .getState()
-      .addLine('boom', 'error', { op: 'clientError', subject: 'general-subject', signature: 'boom @ app.js:1' });
+      .addLine('boom', 'error', { op: 'modelLoad', subject: 'cdm', signature: 'boom @ app.js:1' });
     await vi.advanceTimersByTimeAsync(15_000);
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'op_spans',
         spans: expect.arrayContaining([
-          expect.objectContaining({ op: 'clientError', subject: 'general-subject', signature: 'boom @ app.js:1' })
+          expect.objectContaining({ op: 'modelLoad', subject: 'cdm', signature: 'boom @ app.js:1' })
         ])
+      })
+    );
+  });
+
+  it('ships subject for an allowlisted op (modelLoad — a curated model id, never scratch content)', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    // 'error' severity for a deterministic 100% sample rate — 'info' is
+    // only sampled at 2% and would make this test flaky.
+    useOutputStore.getState().addLine('load failed', 'error', { op: 'modelLoad', subject: 'cdm' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'op_spans',
+        spans: expect.arrayContaining([expect.objectContaining({ op: 'modelLoad', subject: 'cdm' })])
+      })
+    );
+  });
+
+  it('drops subject for a non-allowlisted output-store op', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('boom', 'error', { op: 'someOtherOp', subject: 'not-vetted' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const span = spans.find((s: { op: string }) => s.op === 'someOtherOp');
+    expect(span).toBeDefined();
+    expect(span.subject).toBeUndefined();
+  });
+
+  it('drops subject for activity-store entries whose op is not allowlisted — e.g. functionExecute, whose subject is a user-authored model function name', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    // ok:false -> level 'error' (100% sample rate) for a deterministic test;
+    // ok:true would map to 'info' (2% sampled) and be flaky.
+    useActivityStore
+      .getState()
+      .addActivity('functionExecute', false, 'myScratchFunc failed', { subject: 'myScratchFunc' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledTimes(1);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const span = spans.find((s: { op: string }) => s.op === 'functionExecute');
+    expect(span).toBeDefined();
+    expect(span.subject).toBeUndefined();
+  });
+
+  it('ships subject for activity-store entries on an allowlisted op', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useActivityStore.getState().addActivity('modelLoad', false, 'cdm load failed', { subject: 'cdm' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'op_spans',
+        spans: expect.arrayContaining([expect.objectContaining({ op: 'modelLoad', subject: 'cdm' })])
       })
     );
   });

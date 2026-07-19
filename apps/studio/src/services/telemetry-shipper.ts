@@ -37,6 +37,23 @@ function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
   return Math.random() < SAMPLE_RATE[level];
 }
 
+// `subject` is a free-form correlator set by whichever op-log producer
+// published the entry — most producers never set it, but the ones that do
+// aren't all safe to ship: model-store.ts's `modelLoad` subject is a
+// curated model id (cdm/fpml/rune-dsl), which the Privacy UI's own promise
+// explicitly allows ("curated type fqns are fine"), while preview-store.ts's
+// `functionExecute` subject is the model's own function name — user-authored
+// model source content, which is exactly what "never scratch workspace
+// text" rules out. Rather than trust every current and future producer to
+// self-police what it puts in `subject`, this shipper (the one place all of
+// it funnels through before leaving the browser) only forwards `subject`
+// for an explicit allowlist of ops already vetted as curated-only.
+const SAFE_SUBJECT_OPS = new Set(['modelLoad']);
+
+function safeSubject(op: string, subject: string | undefined): string | undefined {
+  return SAFE_SUBJECT_OPS.has(op) ? subject : undefined;
+}
+
 function maxId(ids: Array<{ id: number }>): number {
   let max = 0;
   for (const item of ids) if (item.id > max) max = item.id;
@@ -89,7 +106,8 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
     for (const line of newLines) {
       if (line.severity !== 'error' && line.severity !== 'warn' && line.severity !== 'info') continue;
       if (!shouldSample(line.severity)) continue;
-      buffer.push(toSpan(line.severity, line.op ?? 'output', line.subject, line.durationMs, line.opId, line.signature));
+      const op = line.op ?? 'output';
+      buffer.push(toSpan(line.severity, op, safeSubject(op, line.subject), line.durationMs, line.opId, line.signature));
     }
     lastOutputId = maxId(lines);
     considerFlush();
@@ -102,7 +120,7 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
     for (const entry of newEntries) {
       const level = entry.ok ? 'info' : 'error';
       if (!shouldSample(level)) continue;
-      buffer.push(toSpan(level, entry.tag, entry.subject, entry.durationMs, entry.opId));
+      buffer.push(toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId));
     }
     lastActivityId = maxId(entries);
     considerFlush();
