@@ -57,6 +57,32 @@ The current smoke flow:
 4. Verifies Structure and Inspector update
 5. Verifies Source stays on the workspace file for reference-only curated types
 
+### Full checkout harness (`test:prod-ux`)
+
+```bash
+# Run the full 18-journey checkout harness against the default deploy.
+pnpm --filter @rune-langium/studio run test:prod-ux
+
+# Against a preview/staging deployment.
+PLAYWRIGHT_BASE_URL=https://preview.example/rune-studio/studio/ pnpm --filter @rune-langium/studio run test:prod-ux
+```
+
+This is the superset harness (spec: `docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md`)
+that exercises every perspective, dialog, and mutation loop the smoke check
+above does not. It writes an evidence bundle — `run-manifest.json`
+(per-journey verdicts, opLog streams, budget-aware timings), screenshots,
+traces, and axe results — to `apps/studio/test/prod-ux/report/`, meant to be
+read by the `prod-ux-review` agent skill (`.agents/skills/prod-ux-review/`),
+not by eye.
+
+**Nightly automation:** `.github/workflows/prod-ux-nightly.yml` runs this on
+a schedule (04:41 UTC) and uploads `report/` as the `prod-ux-report` build
+artifact — this job never fails the build; a red journey is evidence, not a
+gate. A separate scheduled Claude Code routine picks up the latest artifact
+and runs the `prod-ux-review` skill against it (see that skill's `SKILL.md`
+for the review procedure); it files a GitHub issue when it finds a genuine
+regression, as distinct from a corpus-drift or known-issue finding.
+
 ### Operational note
 
 If we want a published status page later, the clean next step is to have
