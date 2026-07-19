@@ -21,7 +21,14 @@ on:
 jobs:
   prod-ux-checkout:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # A job-level timeout kills the whole job (including the always()-gated
+    # upload step below) — it is NOT protected by the harness step's own
+    # continue-on-error. 27 serial tests (workers: 1) with a 120s per-test
+    # timeout and 1 retry can exceed the harness's own ~20min happy-path
+    # budget on a genuinely bad night (prod outage / broad timeouts), which
+    # is exactly the night the evidence bundle matters most — so this must
+    # stay well above that worst case, not just the typical case.
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
