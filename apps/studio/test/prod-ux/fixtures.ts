@@ -4,6 +4,7 @@
 import { Buffer } from 'node:buffer';
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 import { EvidenceCollector, appendJourneyRecord, type JourneyRecord } from './evidence.js';
+import { exceedsBudget } from './timings.js';
 
 interface CheckoutFixtures {
   evidence: EvidenceCollector;
@@ -40,8 +41,9 @@ export const checkout = base.extend<CheckoutFixtures>({
     const collector = new EvidenceCollector(page, journeyId, testInfo.title, testInfo.retry);
     await use(collector);
     const baseVerdict = testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
-    const verdict = baseVerdict === 'PASS' && collector.hasSoftFindings ? 'DEGRADED' : baseVerdict;
     const opLog = await readOpLog(page);
+    const degraded = collector.hasSoftFindings || exceedsBudget(opLog);
+    const verdict = baseVerdict === 'PASS' && degraded ? 'DEGRADED' : baseVerdict;
     const record: JourneyRecord = await collector.finish(verdict, opLog);
     await appendJourneyRecord(record);
   }
