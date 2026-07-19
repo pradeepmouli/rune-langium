@@ -6,6 +6,7 @@ import { useOutputStore } from '../../src/store/output-store.js';
 import { useActivityStore } from '../../src/store/activity-store.js';
 import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
 import { installTelemetryShipper } from '../../src/services/telemetry-shipper.js';
+import { createTelemetryClient } from '../../src/services/telemetry.js';
 
 describe('installTelemetryShipper', () => {
   let uninstall: (() => void) | undefined;
@@ -117,6 +118,46 @@ describe('installTelemetryShipper', () => {
     useOutputStore.getState().addLine('boom', 'error', { op: 'clientError' });
     await vi.advanceTimersByTimeAsync(15_000);
     expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('rounds a fractional durationMs (as performance.now() deltas always are) — the wire schema requires an integer', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('loaded', 'error', { op: 'modelLoad', durationMs: 1234.5678 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const span = spans.find((s: { op: string }) => s.op === 'modelLoad');
+    expect(span).toBeDefined();
+    expect(Number.isInteger(span.durationMs)).toBe(true);
+    expect(span.durationMs).toBe(1235);
+  });
+
+  it('a fractional durationMs no longer fails REAL schema validation, so the batch actually reaches fetch()', async () => {
+    // Regression for the actual bug: createTelemetryClient's emit() runs
+    // Zod schema validation (durationMs must be an integer) BEFORE the
+    // network call. Before this fix, that validation threw for any batch
+    // containing a fractional duration, and installTelemetryShipper's
+    // flush() swallows the rejection — so the ONLY externally-observable
+    // symptom is that fetch() never gets called (the batch silently
+    // vanishes). Asserting fetch WAS called, with an integer durationMs in
+    // the body, is what actually distinguishes "bug present" (never
+    // called) from "bug fixed" (called).
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const client = createTelemetryClient({
+      endpoint: 'https://example.invalid/rune-studio/api/telemetry/v1/event',
+      enabled: true,
+      studioVersion: '0.1.0',
+      uaClass: 'test'
+    });
+    uninstall = installTelemetryShipper(client);
+    useOutputStore.getState().addLine('loaded', 'error', { op: 'modelLoad', durationMs: 42.999 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
+    const span = body.spans.find((s: { op: string }) => s.op === 'modelLoad');
+    expect(Number.isInteger(span.durationMs)).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it('flushes early once the buffer reaches 20 entries without waiting for the timer', async () => {

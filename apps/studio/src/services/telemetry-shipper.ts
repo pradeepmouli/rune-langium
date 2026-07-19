@@ -30,7 +30,15 @@ function toSpan(
   opId?: number,
   signature?: string
 ): Span {
-  return { op, subject, durationMs, level, opId, signature };
+  // durationMs producers (model-store.ts, preview-store.ts) compute it as
+  // `performance.now() - startedAt`, which is fractional — the wire schema
+  // requires an integer (z.number().int()). Without rounding here,
+  // client.emit()'s schema validation throws for any span carrying a
+  // fractional duration, and flush()'s catch(() => {}) silently discards
+  // the WHOLE batch (including any 100%-sampled error entries bundled in
+  // it), not just the offending span.
+  const roundedDurationMs = durationMs !== undefined ? Math.round(durationMs) : undefined;
+  return { op, subject, durationMs: roundedDurationMs, level, opId, signature };
 }
 
 function shouldSample(level: 'info' | 'warn' | 'error'): boolean {

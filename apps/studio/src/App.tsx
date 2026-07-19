@@ -37,7 +37,8 @@ import { usePerspectiveStore } from './store/perspective-store.js';
 import { hydrateTelemetrySettings, useTelemetrySettingsStore } from './store/telemetry-settings.js';
 import { installTelemetryCapture } from './services/telemetry-capture.js';
 import { installTelemetryShipper } from './services/telemetry-shipper.js';
-import { createTelemetryClient, resolveTelemetryEndpoint } from './services/telemetry.js';
+import { createTelemetryClient } from './services/telemetry.js';
+import { config } from './config.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -559,9 +560,15 @@ function AppContent() {
     if (!telemetryEnabled) return;
     const uninstallCapture = installTelemetryCapture();
     const uninstallShipper = installTelemetryShipper(
+      // Same deployment configuration model-store.ts's pre-existing client
+      // uses (config.telemetryEndpoint/config.telemetryEnabled), not the
+      // hardcoded-to-prod resolveTelemetryEndpoint()/enabled:true this had
+      // before — a user's per-user opt-in must still respect the
+      // deployment-level VITE_ENABLE_TELEMETRY kill switch and any
+      // staging/custom VITE_TELEMETRY_ENDPOINT override, not bypass them.
       createTelemetryClient({
-        endpoint: resolveTelemetryEndpoint(),
-        enabled: true,
+        endpoint: config.telemetryEndpoint,
+        enabled: config.telemetryEnabled && !config.devMode,
         studioVersion: STUDIO_VERSION,
         uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
       })
