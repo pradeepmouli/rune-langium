@@ -111,6 +111,50 @@ describe('installTelemetryShipper', () => {
     );
   });
 
+  it('drops subject for a modelLoad entry whose subject is a custom-URL model id, not a real curated id', async () => {
+    // Codex P1 (round 5): modelLoad also fires for custom-URL sources
+    // (createCustomModelSource in model-registry.ts), whose id is
+    // `custom-${hashUrl(repoUrl)}` — a dictionary-matchable hash of the
+    // user's own repo URL, not a curated id. The op-name allowlist alone
+    // isn't enough; the subject VALUE must be checked against the real
+    // curated id set too.
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('load failed', 'error', { op: 'modelLoad', subject: 'custom-1a2b3c' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const span = spans.find((s: { op: string }) => s.op === 'modelLoad');
+    expect(span).toBeDefined();
+    expect(span.subject).toBeUndefined();
+  });
+
+  it('deduplicates a paired output-store + activity-store entry sharing the same opId (e.g. a failed model load publishes to both)', async () => {
+    // Codex P2 (round 5): model-store.ts's load-failure path calls both
+    // addLine (severity 'error') and addActivity (ok:false -> level
+    // 'error') with the SAME opId — both clear the 100% error sample rate,
+    // so without dedup this would ship as two spans, double-counting one
+    // real failure in the server-side duration histogram.
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('load failed', 'error', { op: 'modelLoad', durationMs: 500, opId: 777 });
+    useActivityStore.getState().addActivity('modelLoad', false, 'cdm load failed', { durationMs: 500, opId: 777 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledTimes(1);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const matching = spans.filter((s: { opId?: number }) => s.opId === 777);
+    expect(matching).toHaveLength(1);
+  });
+
+  it('does not deduplicate distinct opIds', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('one', 'error', { op: 'modelLoad', opId: 1 });
+    useOutputStore.getState().addLine('two', 'error', { op: 'modelLoad', opId: 2 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    expect(spans).toHaveLength(2);
+  });
+
   it('does not ship anything when telemetry is disabled', async () => {
     useTelemetrySettingsStore.setState({ enabled: false, hydrated: true });
     const emit = vi.fn(async () => {});

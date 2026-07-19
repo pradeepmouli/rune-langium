@@ -5,6 +5,7 @@ import { useOutputStore, type OutputLine } from '../store/output-store.js';
 import { useActivityStore, type ActivityEntry } from '../store/activity-store.js';
 import { useTelemetrySettingsStore } from '../store/telemetry-settings.js';
 import type { TelemetryClient } from './telemetry.js';
+import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 
 const FLUSH_INTERVAL_MS = 15_000;
 const MAX_BATCH = 20;
@@ -56,10 +57,19 @@ function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
 // self-police what it puts in `subject`, this shipper (the one place all of
 // it funnels through before leaving the browser) only forwards `subject`
 // for an explicit allowlist of ops already vetted as curated-only.
+//
+// `modelLoad` alone is NOT sufficient: it also fires for CUSTOM-URL model
+// sources (createCustomModelSource in model-registry.ts), whose `source.id`
+// is `custom-${hashUrl(repoUrl)}` — a deterministic, dictionary-matchable
+// hash of a user's own repository URL, not a curated id. Every `modelLoad`
+// subject must therefore ALSO be checked against the real curated-id set,
+// not just the op name.
 const SAFE_SUBJECT_OPS = new Set(['modelLoad']);
+const CURATED_MODEL_ID_SET = new Set<string>(CURATED_MODEL_IDS);
 
 function safeSubject(op: string, subject: string | undefined): string | undefined {
-  return SAFE_SUBJECT_OPS.has(op) ? subject : undefined;
+  if (!SAFE_SUBJECT_OPS.has(op) || subject === undefined) return undefined;
+  return CURATED_MODEL_ID_SET.has(subject) ? subject : undefined;
 }
 
 function maxId(ids: Array<{ id: number }>): number {
@@ -77,6 +87,16 @@ function maxId(ids: Array<{ id: number }>): number {
  */
 export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): () => void {
   let buffer: Span[] = [];
+  // Some ops (e.g. model-store.ts's load success/failure paths) publish the
+  // SAME logical event to BOTH output-store and activity-store, sharing one
+  // opId — e.g. a failed model load's Output-panel line (severity 'error',
+  // 100% sampled) and its paired Activity entry (ok:false -> level 'error',
+  // also 100% sampled) would otherwise both get buffered as independent
+  // spans, double-counting that single failure in the server-side duration
+  // histogram/signature counts (and skewing failure counts relative to
+  // successes, which usually only clear ONE store's sampling gate). Track
+  // opIds already buffered THIS flush window and keep only the first copy.
+  const seenOpIds = new Set<number>();
   // Watermarks are the highest `id` seen so far (each store's own
   // monotonically-increasing counter), NOT array length. Both stores are
   // ring buffers that trim from the front once they hit their cap
@@ -88,8 +108,17 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
   let lastOutputId = maxId(useOutputStore.getState().lines);
   let lastActivityId = maxId(useActivityStore.getState().entries);
 
+  function bufferSpan(span: Span): void {
+    if (span.opId !== undefined) {
+      if (seenOpIds.has(span.opId)) return;
+      seenOpIds.add(span.opId);
+    }
+    buffer.push(span);
+  }
+
   function flush(): void {
     if (buffer.length === 0) return;
+    seenOpIds.clear();
     if (!useTelemetrySettingsStore.getState().enabled) {
       buffer = [];
       return;
@@ -115,7 +144,7 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
       if (line.severity !== 'error' && line.severity !== 'warn' && line.severity !== 'info') continue;
       if (!shouldSample(line.severity)) continue;
       const op = line.op ?? 'output';
-      buffer.push(toSpan(line.severity, op, safeSubject(op, line.subject), line.durationMs, line.opId, line.signature));
+      bufferSpan(toSpan(line.severity, op, safeSubject(op, line.subject), line.durationMs, line.opId, line.signature));
     }
     lastOutputId = maxId(lines);
     considerFlush();
@@ -128,7 +157,7 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
     for (const entry of newEntries) {
       const level = entry.ok ? 'info' : 'error';
       if (!shouldSample(level)) continue;
-      buffer.push(toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId));
+      bufferSpan(toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId));
     }
     lastActivityId = maxId(entries);
     considerFlush();
