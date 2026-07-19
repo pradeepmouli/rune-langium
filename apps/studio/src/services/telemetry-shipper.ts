@@ -36,6 +36,12 @@ function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
   return Math.random() < SAMPLE_RATE[level];
 }
 
+function maxId(ids: Array<{ id: number }>): number {
+  let max = 0;
+  for (const item of ids) if (item.id > max) max = item.id;
+  return max;
+}
+
 /**
  * Subscribes to the SAME two stores op-log.ts already reads (output-store,
  * activity-store) — this is a second READER of existing publish points, not
@@ -45,8 +51,16 @@ function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
  */
 export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): () => void {
   let buffer: Span[] = [];
-  let lastOutputLen = useOutputStore.getState().lines.length;
-  let lastActivityLen = useActivityStore.getState().entries.length;
+  // Watermarks are the highest `id` seen so far (each store's own
+  // monotonically-increasing counter), NOT array length. Both stores are
+  // ring buffers that trim from the front once they hit their cap
+  // (MAX_LINES=500 / MAX_ENTRIES=200), so `length` stops growing forever
+  // once a store saturates even though content keeps rotating underneath —
+  // a length-based watermark would silently stop capturing new entries.
+  // `id` values are never reused and always increase, so they survive
+  // rotation as well as growth.
+  let lastOutputId = maxId(useOutputStore.getState().lines);
+  let lastActivityId = maxId(useActivityStore.getState().entries);
 
   function flush(): void {
     if (buffer.length === 0) return;
@@ -55,7 +69,12 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
       return;
     }
     const spans = buffer.splice(0, buffer.length);
-    void client.emit({ event: 'op_spans', spans });
+    // Telemetry must never throw into the app (see module doc) — swallow
+    // any rejection, including a schema-validation throw from client.emit
+    // itself (not just network failures caught inside emit's own try/catch),
+    // so it never surfaces as an unhandled rejection that installTelemetryCapture
+    // (Task 2) would re-capture and re-queue as noise.
+    void client.emit({ event: 'op_spans', spans }).catch(() => {});
   }
 
   function considerFlush(): void {
@@ -64,31 +83,27 @@ export function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): 
 
   const unsubOutput = useOutputStore.subscribe((state) => {
     const lines: OutputLine[] = state.lines;
-    if (lines.length <= lastOutputLen) {
-      lastOutputLen = lines.length;
-      return;
-    }
-    for (const line of lines.slice(lastOutputLen)) {
+    const newLines = lines.filter((line) => line.id > lastOutputId);
+    if (newLines.length === 0) return;
+    for (const line of newLines) {
       if (line.severity !== 'error' && line.severity !== 'warn' && line.severity !== 'info') continue;
       if (!shouldSample(line.severity)) continue;
       buffer.push(toSpan(line.severity, line.op ?? 'output', line.subject, line.durationMs, line.opId));
     }
-    lastOutputLen = lines.length;
+    lastOutputId = maxId(lines);
     considerFlush();
   });
 
   const unsubActivity = useActivityStore.subscribe((state) => {
     const entries: ActivityEntry[] = state.entries;
-    if (entries.length <= lastActivityLen) {
-      lastActivityLen = entries.length;
-      return;
-    }
-    for (const entry of entries.slice(lastActivityLen)) {
+    const newEntries = entries.filter((entry) => entry.id > lastActivityId);
+    if (newEntries.length === 0) return;
+    for (const entry of newEntries) {
       const level = entry.ok ? 'info' : 'error';
       if (!shouldSample(level)) continue;
       buffer.push(toSpan(level, entry.tag, entry.subject, entry.durationMs, entry.opId));
     }
-    lastActivityLen = entries.length;
+    lastActivityId = maxId(entries);
     considerFlush();
   });
 
