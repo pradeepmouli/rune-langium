@@ -61,7 +61,40 @@ export function installTelemetryCapture(): () => void {
   };
 }
 
+// Fixed vocabulary of built-in Error subclass names — safe to transmit
+// verbatim (never user/model content). Anything else collapses to 'Error'.
+const KNOWN_ERROR_NAMES = new Set([
+  'Error',
+  'TypeError',
+  'RangeError',
+  'SyntaxError',
+  'ReferenceError',
+  'EvalError',
+  'URIError'
+]);
+
+/**
+ * Non-reversible grouping key: an allowlisted error category plus a hash of
+ * the message + top stack frame, never the raw text itself. Error messages
+ * and stack frames can carry workspace-derived content (file paths, type
+ * names, interpolated values) that the Privacy UI promises never to send —
+ * a raw substring here would violate that even though it's only used for
+ * dedup grouping. FNV-1a is intentionally non-cryptographic (this only
+ * needs collision-resistance for grouping, not security) and synchronous,
+ * so it can run inline in the error/rejection handlers without an async
+ * detour through the Web Crypto API.
+ */
+function hashString(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
 function signatureFor(error: Error | undefined, message: string): string {
-  const topFrame = error?.stack?.split('\n')[1]?.trim();
-  return topFrame ? `${message.slice(0, 80)} @ ${topFrame.slice(0, 120)}` : message.slice(0, 80);
+  const name = error?.name && KNOWN_ERROR_NAMES.has(error.name) ? error.name : 'Error';
+  const topFrame = error?.stack?.split('\n')[1]?.trim() ?? '';
+  return `${name}:${hashString(`${message}\n${topFrame}`)}`;
 }

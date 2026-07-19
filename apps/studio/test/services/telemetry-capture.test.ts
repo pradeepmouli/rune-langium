@@ -31,7 +31,35 @@ describe('installTelemetryCapture', () => {
     // like a model id) — telemetry-shipper.ts only forwards `signature`
     // into the wire schema's own `signature` field.
     expect(entry?.signature).toBeDefined();
-    expect(entry?.signature).toContain('boom');
+    // Privacy: signature is `<AllowlistedErrorName>:<hash>`, never raw
+    // message/stack text (which can carry workspace-derived content).
+    expect(entry?.signature).toMatch(/^Error:[0-9a-f]{8}$/);
+    expect(entry?.signature).not.toContain('boom');
+  });
+
+  it('never transmits raw error message/stack text in the signature (privacy invariant)', () => {
+    uninstall = installTelemetryCapture();
+    const sensitive = 'workspace.myNamespace.SecretType at /Users/me/scratch/private-model.rosetta';
+    window.dispatchEvent(new ErrorEvent('error', { message: sensitive, error: new Error(sensitive) }));
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'clientError');
+    expect(entry?.signature).toBeDefined();
+    expect(entry?.signature).not.toContain('workspace');
+    expect(entry?.signature).not.toContain('SecretType');
+    expect(entry?.signature).not.toContain('scratch');
+  });
+
+  it('the same recurring error produces the same signature (deterministic grouping)', () => {
+    uninstall = installTelemetryCapture();
+    // Reuse one Error instance (same message + stack) to simulate the SAME
+    // bug recurring from the same source location — two `new Error('boom')`
+    // calls on different lines would legitimately have different stacks
+    // and are not the scenario this asserts.
+    const err = new Error('boom');
+    window.dispatchEvent(new ErrorEvent('error', { message: 'boom', error: err }));
+    window.dispatchEvent(new ErrorEvent('error', { message: 'boom', error: err }));
+    const entries = useOutputStore.getState().lines.filter((l) => l.op === 'clientError');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.signature).toBe(entries[1]?.signature);
   });
 
   it('publishes an unhandled rejection as an error-level opLog entry', () => {
@@ -44,7 +72,8 @@ describe('installTelemetryCapture', () => {
     expect(entry).toBeDefined();
     expect(entry?.severity).toBe('error');
     expect(entry?.signature).toBeDefined();
-    expect(entry?.signature).toContain('rejected');
+    expect(entry?.signature).toMatch(/^Error:[0-9a-f]{8}$/);
+    expect(entry?.signature).not.toContain('rejected');
   });
 
   it('teardown stops publishing further errors', () => {

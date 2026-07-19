@@ -16,7 +16,12 @@ export const useTelemetrySettingsStore = create<TelemetrySettingsState>((set) =>
   enabled: false,
   hydrated: false,
   setEnabled(next: boolean): void {
-    set({ enabled: next });
+    // Mark hydrated here too: an explicit user action is authoritative and
+    // must win over a hydrateTelemetrySettings() read still in flight (the
+    // user can toggle the Settings checkbox before the initial IndexedDB
+    // loadSetting() resolves — without this, that read would land afterward
+    // and silently revert the toggle back to the stale persisted value).
+    set({ enabled: next, hydrated: true });
     void saveSetting('telemetry-enabled', next);
   }
 }));
@@ -24,5 +29,8 @@ export const useTelemetrySettingsStore = create<TelemetrySettingsState>((set) =>
 /** Reads the persisted opt-in once at startup. Call from App.tsx's init sequence, same as other one-shot hydration reads. */
 export async function hydrateTelemetrySettings(): Promise<void> {
   const stored = await loadSetting<boolean>('telemetry-enabled');
+  // No-op if the user already made an explicit choice via setEnabled while
+  // this read was in flight — see the race note there.
+  if (useTelemetrySettingsStore.getState().hydrated) return;
   useTelemetrySettingsStore.setState({ enabled: stored ?? false, hydrated: true });
 }

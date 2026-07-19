@@ -45,4 +45,24 @@ describe('telemetry settings store', () => {
     expect(useTelemetrySettingsStore.getState().enabled).toBe(true);
     expect(saveSetting).toHaveBeenCalledWith('telemetry-enabled', true);
   });
+
+  it('a user toggle before hydration resolves wins — hydration does not revert it', async () => {
+    // Simulate the race: loadSetting() is in flight (resolves to the stale
+    // pre-toggle persisted value, false) while the user flips the toggle on.
+    let resolveLoad!: (value: boolean | undefined) => void;
+    loadSetting.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveLoad = resolve;
+      })
+    );
+    const hydratePromise = hydrateTelemetrySettings();
+
+    useTelemetrySettingsStore.getState().setEnabled(true);
+    expect(useTelemetrySettingsStore.getState().enabled).toBe(true);
+
+    resolveLoad(false);
+    await hydratePromise;
+
+    expect(useTelemetrySettingsStore.getState().enabled, 'hydration must not revert the user action').toBe(true);
+  });
 });

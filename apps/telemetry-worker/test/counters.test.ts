@@ -97,4 +97,19 @@ describe('TelemetryAggregator /inc-spans route', () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it('400s when op contains a colon (would desync the duration:<op>:<bucket> key parse)', async () => {
+    const agg = new TelemetryAggregator(makeState());
+    const res = await agg.fetch(
+      new Request('https://do/inc-spans', {
+        method: 'POST',
+        body: JSON.stringify({ spans: [{ op: 'foo:bar', level: 'info', durationMs: 5000 }] })
+      })
+    );
+    expect(res.status).toBe(400);
+    // Nothing from the batch should have been persisted — a rejected
+    // request must not partially corrupt state.
+    const stats = (await agg.stats()) as { durationBuckets?: Record<string, Record<string, number>> };
+    expect(stats.durationBuckets).toBeUndefined();
+  });
 });

@@ -94,7 +94,13 @@ export class TelemetryAggregator {
       for (const s of spansRaw) {
         if (!s || typeof s !== 'object') return jsonError(400, 'invalid_span');
         const { op, level, durationMs, signature } = s as Record<string, unknown>;
-        if (typeof op !== 'string' || (level !== 'info' && level !== 'warn' && level !== 'error')) {
+        // `op` becomes the middle segment of the `duration:<op>:<bucket>`
+        // storage key (see incrementSpans/stats below) — a ':' in `op`
+        // would desync the 3-part split on read and corrupt/mis-parse the
+        // bucket. The public Worker schema already caps `op` at 64 chars,
+        // but this DO endpoint is called directly and defends its own
+        // boundary independent of that, so reject here too.
+        if (typeof op !== 'string' || op.includes(':') || (level !== 'info' && level !== 'warn' && level !== 'error')) {
           return jsonError(400, 'invalid_span');
         }
         spans.push({
