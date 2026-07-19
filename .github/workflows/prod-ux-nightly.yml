@@ -50,6 +50,18 @@ jobs:
       - name: Install Playwright browsers (chromium only)
         run: pnpm --filter @rune-langium/studio exec playwright install --with-deps chromium
 
+      - name: Build studio + workspace dependencies
+        # Playwright loads the *.spec.ts test files through Vite, whose
+        # module graph reaches packages/visual-editor's RuneTypeGraph.tsx ->
+        # @rune-langium/core even though the tests themselves drive the
+        # already-deployed production bundle over the network, not a local
+        # build. Without this, @rune-langium/core's dist/ doesn't exist in a
+        # fresh checkout and every test fails at import time — the harness
+        # step's continue-on-error then silently swallows that as a 0-second
+        # "success" with zero evidence uploaded. Matches ci.yml's studio-a11y
+        # job's equivalent step.
+        run: pnpm --filter '@rune-langium/studio...' run build
+
       - name: Run prod-ux checkout harness
         continue-on-error: true
         run: pnpm --filter @rune-langium/studio run test:prod-ux
