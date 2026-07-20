@@ -6,6 +6,7 @@ import type { OpfsFs } from '../opfs/opfs-fs.js';
 import type { InstanceRecord, ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import type { PreviewStaleReason } from './preview-store.js';
+import { useOutputStore, fmtLine } from './output-store.js';
 import { create } from 'zustand';
 
 function ulid(): string {
@@ -76,6 +77,17 @@ function persistInstance(record: InstanceRecord): void {
   enqueueInstanceOp(record.id, () =>
     writeInstance(fs, workspaceRoot, record).catch((err) => {
       console.error('[instance-store] Failed to persist instance to OPFS:', err);
+      // The UI is optimistic (the edit already applied to in-memory state
+      // before this write was issued), so a failure here is otherwise
+      // invisible — the user sees their change "succeed" while it silently
+      // never reaches disk and is lost on reload.
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('instance', `failed to save "${record.name}"`, err instanceof Error ? err.message : String(err)),
+          'error',
+          { op: 'instance', subject: record.id }
+        );
     })
   );
 }
@@ -87,6 +99,19 @@ function persistDelete(id: string): void {
   enqueueInstanceOp(id, () =>
     deleteInstance(fs, workspaceRoot, id).catch((err) => {
       console.error('[instance-store] Failed to delete persisted instance from OPFS:', err);
+      // The instance already disappeared from in-memory state (removeInstance
+      // updates it synchronously), so a failed OPFS delete leaves an orphaned
+      // record on disk that can silently reappear on the next workspace load.
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('instance', 'failed to delete saved instance', err instanceof Error ? err.message : String(err)),
+          'error',
+          {
+            op: 'instance',
+            subject: id
+          }
+        );
     })
   );
 }
@@ -280,6 +305,22 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
             return await readInstance(fs, workspaceRoot, id);
           } catch (err) {
             console.error(`[instance-store] Failed to read persisted instance "${id}" from OPFS:`, err);
+            // Dropped silently otherwise — a corrupted/unreadable instance
+            // file looks indistinguishable from the user having deleted it.
+            useOutputStore
+              .getState()
+              .addLine(
+                fmtLine(
+                  'instance',
+                  `could not load saved instance "${id}"`,
+                  err instanceof Error ? err.message : String(err)
+                ),
+                'warn',
+                {
+                  op: 'instance',
+                  subject: id
+                }
+              );
             return undefined;
           }
         })
@@ -321,6 +362,15 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
       }
     } catch (err) {
       console.error('[instance-store] Failed to load instances from OPFS:', err);
+      // Whole-list failure: the instance list stays empty/stale with no
+      // explanation otherwise — the highest-blast-radius case in this file.
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine('instance', 'failed to load saved instances', err instanceof Error ? err.message : String(err)),
+          'error',
+          { op: 'instance' }
+        );
     }
   }
 }));
