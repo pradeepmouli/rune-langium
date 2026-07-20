@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { useOutputStore } from '../../src/store/output-store.js';
 
 const tradeSchema: FormPreviewSchema = {
   schemaVersion: 1,
@@ -251,6 +252,31 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByText(/exported-subschema:PartyDefaults/i)).toBeInTheDocument();
     expect(screen.getByText('Legal name')).toBeInTheDocument();
     expect(screen.queryByText(/valid sample/i)).not.toBeInTheDocument();
+  });
+
+  it('logs an op-log warning when the schema has unsupported preview features', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <FormPreviewPanel
+        schema={unsupportedTradeSchema}
+        status={{ state: 'ready', targetId: unsupportedTradeSchema.targetId }}
+      />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('warn');
+    expect(entry?.text).toContain('exported-subschema:PartyDefaults');
+    expect(entry?.subject).toBe(unsupportedTradeSchema.targetId);
+  });
+
+  it('does not log an op-log warning when the schema has no unsupported preview features', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(<FormPreviewPanel schema={tradeSchema} status={{ state: 'ready', targetId: tradeSchema.targetId }} />);
+
+    expect(useOutputStore.getState().lines.find((l) => l.op === 'preview')).toBeUndefined();
   });
 
   it('renders nested preview metadata without field description annotations', () => {

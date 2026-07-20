@@ -73,6 +73,16 @@ export function FormPreviewPanel({
     setExecutionError(null);
   }, [funcName]);
 
+  useEffect(() => {
+    if (!schema?.unsupportedFeatures?.length) return;
+    useOutputStore
+      .getState()
+      .addLine(fmtLine('preview', 'unsupported preview features', schema.unsupportedFeatures.join(', ')), 'warn', {
+        op: 'preview',
+        subject: schema.targetId
+      });
+  }, [schema]);
+
   const defaultValues = useMemo(
     () => (schema ? (buildDefaultValues(schema.fields) as Record<string, unknown>) : {}),
     [schema]
