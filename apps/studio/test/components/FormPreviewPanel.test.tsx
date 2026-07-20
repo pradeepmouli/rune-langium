@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
@@ -310,6 +311,22 @@ describe('FormPreviewPanel', () => {
     expect(entry?.text).not.toContain('unresolved-reference:');
 
     expect(screen.getByText(/references could not be resolved: Instrument, Party/i)).toBeInTheDocument();
+  });
+
+  it('logs only one op-log warning under StrictMode double-invoked effects', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <StrictMode>
+        <FormPreviewPanel
+          schema={unsupportedTradeSchema}
+          status={{ state: 'ready', targetId: unsupportedTradeSchema.targetId }}
+        />
+      </StrictMode>
+    );
+
+    const entries = useOutputStore.getState().lines.filter((l) => l.op === 'preview');
+    expect(entries).toHaveLength(1);
   });
 
   it('renders nested preview metadata without field description annotations', () => {

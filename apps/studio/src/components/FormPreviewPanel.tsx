@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useCallback, useEffect, useId, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
@@ -56,6 +56,7 @@ export function FormPreviewPanel({
 
   const funcName = schema?.kind === 'function' ? schema.title : undefined;
   const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
+  const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
 
   useEffect(() => {
     if (!storeExecResult) return;
@@ -75,6 +76,8 @@ export function FormPreviewPanel({
 
   useEffect(() => {
     if (!schema?.unsupportedFeatures?.length) return;
+    if (loggedUnsupportedSchemaRef.current === schema) return;
+    loggedUnsupportedSchemaRef.current = schema;
     useOutputStore
       .getState()
       .addLine(
