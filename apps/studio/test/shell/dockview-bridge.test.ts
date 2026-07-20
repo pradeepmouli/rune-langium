@@ -11,6 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { applyLayout, isFactoryShape, serializeLayout } from '../../src/shell/dockview-bridge.js';
 import { buildDefaultLayout } from '../../src/shell/layout-factory.js';
+import { useOutputStore } from '../../src/store/output-store.js';
 
 interface FakeGroupSpy {
   api: {
@@ -247,6 +248,7 @@ describe('applyLayout — native shape', () => {
   });
 
   it('logs and falls back to factory layout when api.fromJSON throws', () => {
+    useOutputStore.setState({ lines: [] });
     const native = {
       version: 1,
       writtenBy: '0.1.0',
@@ -264,6 +266,13 @@ describe('applyLayout — native shape', () => {
     expect(String(arg0)).toContain('api.fromJSON rejected');
     expect(api.calls.length).toBeGreaterThanOrEqual(6);
     errSpy.mockRestore();
+
+    // This path recovers internally (never rethrows), so DockShell's own
+    // op-logged try/catch around applyLayout never sees it — the op-log
+    // entry has to come from here, or the reset is otherwise silent.
+    const entry = useOutputStore.getState().lines.find((l) => l.text.includes('saved layout rejected'));
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('warn');
   });
 
   it('logs and falls back when fromJSON restores zero panels', () => {
