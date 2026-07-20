@@ -66,8 +66,17 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         message: `${baseMessage} ${detail}`.trim()
       });
       console.error(`[CodegenProvider] ${baseMessage}`, error);
+      useOutputStore.getState().addLine(fmtLine('preview', baseMessage, detail), 'error', {
+        op: 'preview',
+        subject: targetId
+      });
+      showToast({
+        title: 'Form preview unavailable',
+        description: `${baseMessage} ${detail}`.trim(),
+        variant: 'destructive'
+      });
     },
-    [receivePreviewStale]
+    [receivePreviewStale, showToast]
   );
 
   // Initialise dedicated codegen worker once on mount.

@@ -35,6 +35,7 @@ import { CodegenProvider } from '../../../src/shell/providers/CodegenProvider.js
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 import { useInstanceStore } from '../../../src/store/instance-store.js';
 import { usePreviewStore } from '../../../src/store/preview-store.js';
+import { useOutputStore } from '../../../src/store/output-store.js';
 
 function wsState(id: string): WorkspaceState {
   return {
@@ -190,5 +191,28 @@ describe('CodegenProvider', () => {
     });
 
     expect(usePreviewStore.getState().schemas.get('test.preview.Trade')).toEqual(schema);
+  });
+
+  it('logs an op-log error when the preview worker crashes, not just the preview panel status', () => {
+    useOutputStore.setState({ lines: [] });
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-crash')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    act(() => {
+      for (const listener of worker.listeners['error'] ?? []) {
+        listener({ type: 'error', message: 'boom' });
+      }
+    });
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('error');
+    expect(entry?.text).toContain('Preview worker crashed');
   });
 });
