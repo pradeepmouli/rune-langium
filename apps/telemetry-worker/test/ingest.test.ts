@@ -21,40 +21,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import worker, { TelemetryAggregator, _resetRateLimitForTesting, _resetSaltCacheForTesting } from '../src/index.js';
 import type { Env } from '../src/index.js';
+import { makeStorage, type FakeStorage } from './fixtures/fake-storage.js';
 
 // ---------- DO fakes ----------
-
-interface FakeStorage {
-  store: Map<string, unknown>;
-  get<T = unknown>(key: string): Promise<T | undefined>;
-  put(entries: Record<string, unknown>): Promise<void>;
-  put(key: string, value: unknown): Promise<void>;
-  list<T = unknown>(opts?: { prefix?: string }): Promise<Map<string, T>>;
-}
-
-function makeStorage(): FakeStorage {
-  const store = new Map<string, unknown>();
-  return {
-    store,
-    async get<T>(key: string): Promise<T | undefined> {
-      return store.get(key) as T | undefined;
-    },
-    async put(arg1: string | Record<string, unknown>, arg2?: unknown): Promise<void> {
-      if (typeof arg1 === 'string') {
-        store.set(arg1, arg2);
-      } else {
-        for (const [k, v] of Object.entries(arg1)) store.set(k, v);
-      }
-    },
-    async list<T>(opts?: { prefix?: string }): Promise<Map<string, T>> {
-      const out = new Map<string, T>();
-      for (const [k, v] of store.entries()) {
-        if (!opts?.prefix || k.startsWith(opts.prefix)) out.set(k, v as T);
-      }
-      return out;
-    }
-  };
-}
 
 interface DOInstance {
   fetch(req: Request): Promise<Response>;
@@ -599,6 +568,171 @@ describe('telemetry ingest contract', () => {
       vi.setSystemTime(new Date('2026-04-26T12:00:00Z'));
       const b = await emitAndReadIpHash(env);
       expect(a).not.toBe(b);
+    });
+  });
+
+  describe('op_spans event', () => {
+    it('204 on a valid batch of 1-50 spans', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({
+          event: 'op_spans',
+          spans: [{ op: 'clientError', level: 'error', signature: 'boom @ app.js:1' }],
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      expect(res.status).toBe(204);
+    });
+
+    it('400 on an empty spans array (schema .min(1))', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        makeReq({ event: 'op_spans', spans: [], studio_version: '0.1.0', ua_class: 'chromium-desktop' }),
+        env
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('400 on a 51-span batch (schema .max(50))', async () => {
+      const { env } = makeEnv();
+      const spans = Array.from({ length: 51 }, (_, i) => ({
+        op: 'clientError',
+        level: 'error' as const,
+        subject: `${i}`
+      }));
+      const res = await worker.fetch(
+        makeReq({ event: 'op_spans', spans, studio_version: '0.1.0', ua_class: 'chromium-desktop' }),
+        env
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('forwards to the aggregator DO keyed op_spans:<day>, retrievable via /v1/stats', async () => {
+      const { env, do: doNs } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'op_spans',
+          spans: [{ op: 'cdmLoad', level: 'info', durationMs: 12_000 }],
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      expect(doNs.instances.has('op_spans:2026-04-25')).toBe(true);
+    });
+
+    it('routes through /inc-spans (not /inc) so durations actually reach the histogram', async () => {
+      const { env } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'op_spans',
+          spans: [{ op: 'cdmLoad', level: 'info', durationMs: 12_000 }],
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      const statsRes = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/stats?event=op_spans&date=2026-04-25', {
+          method: 'GET'
+        }),
+        env
+      );
+      const body = (await statsRes.json()) as { durationBuckets?: Record<string, Record<string, number>> };
+      expect(body.durationBuckets?.cdmLoad).toBeDefined();
+    });
+  });
+
+  describe('GET /v1/digest', () => {
+    it('fans out across all known event names for a single-day range and merges counts', async () => {
+      const { env } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'curated_load_success',
+          modelId: 'cdm',
+          durationMs: 1234,
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      await worker.fetch(
+        makeReq({ event: 'lsp_session_opened', studio_version: '0.1.0', ua_class: 'chromium-desktop' }),
+        env
+      );
+
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-04-25', {
+          method: 'GET'
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { events: Record<string, Record<string, { count: number }>> };
+      expect(body.events.curated_load_success!['2026-04-25']).toBeDefined();
+      expect(body.events.lsp_session_opened!['2026-04-25']).toBeDefined();
+    });
+
+    it('spans multiple days when since is more than 1 day in the past', async () => {
+      const { env } = makeEnv();
+      await worker.fetch(
+        makeReq({
+          event: 'curated_load_success',
+          modelId: 'cdm',
+          durationMs: 1000,
+          studio_version: '0.1.0',
+          ua_class: 'chromium-desktop'
+        }),
+        env
+      );
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-04-23', {
+          method: 'GET'
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { events: Record<string, Record<string, unknown>> };
+      // 3 days inclusive: 2026-04-23, 04-24, 04-25 (system time fixed to 04-25 in beforeEach).
+      expect(Object.keys(body.events.curated_load_success!)).toEqual(['2026-04-23', '2026-04-24', '2026-04-25']);
+    });
+
+    it('returns an empty-but-valid digest when since is today and no events exist yet', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-04-25', {
+          method: 'GET'
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { events: Record<string, Record<string, unknown>> };
+      expect(body.events.curated_load_success!['2026-04-25']).toBeDefined();
+    });
+
+    it('400s when since is missing or malformed', async () => {
+      const { env } = makeEnv();
+      const missing = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest', { method: 'GET' }),
+        env
+      );
+      expect(missing.status).toBe(400);
+      const malformed = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=not-a-date', { method: 'GET' }),
+        env
+      );
+      expect(malformed.status).toBe(400);
+    });
+
+    it('400s when since is further back than MAX_DIGEST_DAYS', async () => {
+      const { env } = makeEnv();
+      const res = await worker.fetch(
+        new Request('https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest?since=2026-01-01', { method: 'GET' }),
+        env
+      );
+      expect(res.status).toBe(400);
     });
   });
 

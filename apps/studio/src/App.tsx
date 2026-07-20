@@ -34,6 +34,11 @@ import { AppHeader } from './shell/AppHeader.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
+import { hydrateTelemetrySettings, useTelemetrySettingsStore } from './store/telemetry-settings.js';
+import { installTelemetryCapture } from './services/telemetry-capture.js';
+import { installTelemetryShipper } from './services/telemetry-shipper.js';
+import { createTelemetryClient } from './services/telemetry.js';
+import { config } from './config.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -534,6 +539,45 @@ function AppContent() {
       document.body.removeAttribute('data-studio-app');
     };
   }, []);
+
+  // Read the persisted per-user telemetry opt-in once at mount. Fire-and-
+  // forget (not awaited) so it never blocks first paint — defaults to
+  // disabled (opt-in, not opt-out) until this resolves.
+  useEffect(() => {
+    void hydrateTelemetrySettings();
+  }, []);
+
+  // Client capture (window.onerror / unhandledrejection / long-task
+  // PerformanceObserver) + shipper are installed only while the user has
+  // actually opted in — never install-then-gate-at-emit-time. Subscribing
+  // to the live `enabled` value (not a one-shot read at mount) means
+  // checking the Settings toggle ON takes effect immediately instead of
+  // requiring a reload, and returning the teardown functions from this
+  // effect means React 19 StrictMode's dev-mode mount->cleanup->mount
+  // tears down cleanly instead of leaking duplicate listeners/intervals.
+  const telemetryEnabled = useTelemetrySettingsStore((s) => s.enabled);
+  useEffect(() => {
+    if (!telemetryEnabled) return;
+    const uninstallCapture = installTelemetryCapture();
+    const uninstallShipper = installTelemetryShipper(
+      // Same deployment configuration model-store.ts's pre-existing client
+      // uses (config.telemetryEndpoint/config.telemetryEnabled), not the
+      // hardcoded-to-prod resolveTelemetryEndpoint()/enabled:true this had
+      // before — a user's per-user opt-in must still respect the
+      // deployment-level VITE_ENABLE_TELEMETRY kill switch and any
+      // staging/custom VITE_TELEMETRY_ENDPOINT override, not bypass them.
+      createTelemetryClient({
+        endpoint: config.telemetryEndpoint,
+        enabled: config.telemetryEnabled && !config.devMode,
+        studioVersion: STUDIO_VERSION,
+        uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
+      })
+    );
+    return () => {
+      uninstallCapture();
+      uninstallShipper();
+    };
+  }, [telemetryEnabled]);
 
   // Theme — defaults to Daikonic. Override via ?theme=<name> query param
   // or localStorage. Use ?theme=default to revert to Refactory Dark.

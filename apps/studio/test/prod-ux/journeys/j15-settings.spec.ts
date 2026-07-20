@@ -75,6 +75,28 @@ test.describe('J15 — Settings perspective', () => {
     expect(afterReload, 'font scale persisted across reload').toBe(after);
     await evidence.checkpoint('font-scale-persisted');
 
+    // Phase 5 (spec §7): Privacy → telemetry opt-in toggle. It's a base-ui
+    // Checkbox (button role="checkbox"), not a native input — per J12's own
+    // finding, .setChecked()/.isChecked() can no-op against this component,
+    // so this asserts aria-checked directly after an explicit click (same
+    // pattern j12-import-dialog.spec.ts already established).
+    const telemetryToggle = page.getByTestId('settings-telemetry-toggle');
+    await expect(telemetryToggle).toBeVisible();
+    await expect(telemetryToggle, 'telemetry opt-in defaults to unchecked').toHaveAttribute('aria-checked', 'false');
+    await telemetryToggle.click();
+    await expect(telemetryToggle).toHaveAttribute('aria-checked', 'true');
+    await evidence.checkpoint('telemetry-toggle-checked');
+
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByTestId('rail-settings').click();
+    await expect(page.getByTestId('settings-perspective')).toBeVisible({ timeout: 20000 });
+    await expect(
+      page.getByTestId('settings-telemetry-toggle'),
+      'telemetry opt-in persisted across reload'
+    ).toHaveAttribute('aria-checked', 'true');
+    await evidence.checkpoint('telemetry-toggle-persisted');
+
     // SPEC ADAPTATION: "layout reset restores default dockview arrangement"
     // has no reachable UI trigger — resetLayout() exists in DockShell.tsx
     // but is bound only to a command-palette action, and no command palette

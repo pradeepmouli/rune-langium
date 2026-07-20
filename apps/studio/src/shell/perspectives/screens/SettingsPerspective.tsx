@@ -2,7 +2,9 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type React from 'react';
+import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { FontScaleButton } from '../../../components/FontScaleButton.js';
+import { useTelemetrySettingsStore } from '../../../store/telemetry-settings.js';
 
 /**
  * SettingsPerspective — per-machine studio settings scaffold.
@@ -10,11 +12,15 @@ import { FontScaleButton } from '../../../components/FontScaleButton.js';
  * Sections:
  *  1. Appearance — font scale (FontScaleButton, self-contained). Theme is
  *     currently fixed at dark; no toggle is available.
- *  2. Project configuration — forward-looking placeholder describing the
+ *  2. Privacy — anonymous diagnostics opt-in (telemetry).
+ *  3. Project configuration — forward-looking placeholder describing the
  *     .runestudio/config.json feature (git-backed shared project config).
  *     Nothing here is persisted or functional yet.
  */
 export function SettingsPerspective(): React.ReactElement {
+  const telemetryEnabled = useTelemetrySettingsStore((s) => s.enabled);
+  const setTelemetryEnabled = useTelemetrySettingsStore((s) => s.setEnabled);
+
   return (
     <section data-testid="settings-perspective" className="h-full overflow-auto p-6 space-y-8">
       {/* ── Appearance ──────────────────────────────────────────────────── */}
@@ -28,6 +34,26 @@ export function SettingsPerspective(): React.ReactElement {
 
         <p className="text-xs text-muted-foreground">
           Theme is currently fixed (dark). A theme toggle will be added in a future release.
+        </p>
+      </section>
+
+      {/* ── Privacy ─────────────────────────────────────────────────────── */}
+      <section data-testid="settings-privacy-section" className="space-y-4">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Privacy</h2>
+
+        <label className="flex items-center gap-3 text-sm">
+          <Checkbox
+            data-testid="settings-telemetry-toggle"
+            checked={telemetryEnabled}
+            onCheckedChange={setTelemetryEnabled}
+          />
+          Send anonymous diagnostics
+        </label>
+
+        <p className="text-xs text-muted-foreground">
+          Shares anonymised error/warning signatures and operation timings to help us find and fix issues. Never
+          includes your model's source content — only curated type names, never scratch workspace text. Off by default;
+          disabled entirely on localhost regardless of this setting.
         </p>
       </section>
 

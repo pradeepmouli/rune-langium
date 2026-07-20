@@ -101,10 +101,50 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
       studio_version: StudioVersion,
       ua_class: UaClass
     })
+    .strict(),
+  z
+    .object({
+      event: z.literal('op_spans'),
+      spans: z
+        .array(
+          z.object({
+            op: z.string().max(64),
+            subject: z.string().max(200).optional(),
+            durationMs: z.number().int().nonnegative().max(600_000).optional(),
+            level: z.enum(['info', 'warn', 'error']),
+            signature: z.string().max(200).optional(),
+            opId: z.number().int().optional()
+          })
+        )
+        .min(1)
+        .max(50),
+      studio_version: StudioVersion,
+      ua_class: UaClass
+    })
     .strict()
 ]);
 
 type TelemetryEvent = z.infer<typeof TelemetryEventBody>;
+
+// The 10 event literals TelemetryEventBody accepts. Zod's discriminated-union
+// introspection doesn't cleanly flatten the `workspace_*` member's `z.enum`
+// (one option covers 4 literal values, not 1), so this is hand-maintained —
+// TelemetryEventBody above is the source of truth; keep this list in sync
+// with it.
+const KNOWN_EVENTS = [
+  'curated_load_attempt',
+  'curated_load_success',
+  'curated_load_failure',
+  'workspace_open_success',
+  'workspace_open_failure',
+  'workspace_restore_success',
+  'workspace_restore_failure',
+  'lsp_session_opened',
+  'lsp_session_failed',
+  'op_spans'
+] as const;
+
+const MAX_DIGEST_DAYS = 31;
 
 // ---------- In-memory per-IP rate limit (10/min, with eviction) ----------
 
@@ -309,13 +349,14 @@ export default {
       const counterId = env.TELEMETRY.idFromName(doIdName(event, day));
       const stub = env.TELEMETRY.get(counterId);
       const errorCategory = getErrorCategory(event);
+      const isSpans = event.event === 'op_spans';
       let stubRes: Response;
       try {
         stubRes = await stub.fetch(
-          new Request('https://do/inc', {
+          new Request(isSpans ? 'https://do/inc-spans' : 'https://do/inc', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ errorCategory })
+            body: JSON.stringify(isSpans ? { spans: event.spans } : { errorCategory })
           })
         );
       } catch (err) {
@@ -387,9 +428,63 @@ export default {
       }
     }
 
+    // GET /v1/digest — server-side fan-out across every known event name and
+    // every UTC day in [since, today]. /v1/stats requires one known
+    // (event, day) pair per call; a fleet digest needs all of them merged,
+    // which is what this route exists to do (CF Access enforces the admin
+    // allowlist at the route, same as /v1/stats — nothing to check here).
+    if (url.pathname.endsWith('/v1/digest')) {
+      if (req.method !== 'GET') return jsonResponse(405, { error: 'method_not_allowed' });
+      const since = url.searchParams.get('since');
+      if (!since) return jsonResponse(400, { error: 'missing_since_query' });
+      const sinceDate = new Date(since);
+      if (Number.isNaN(sinceDate.getTime())) return jsonResponse(400, { error: 'invalid_since' });
+
+      const days = enumerateUtcDays(sinceDate, new Date(startedAt));
+      if (days.length > MAX_DIGEST_DAYS) {
+        return jsonResponse(400, { error: 'since_too_far_back', max_days: MAX_DIGEST_DAYS });
+      }
+
+      // Each (event, day) DO instance is independent, so these reads fan
+      // out in parallel — up to KNOWN_EVENTS.length * days.length (bounded
+      // by MAX_DIGEST_DAYS above) concurrent subrequests. Sequential reads
+      // here would turn a 31-day digest into 10-15s+ of serial round-trips
+      // for no reason; nothing about reading N independent DOs requires
+      // waiting on one before starting the next.
+      const reads = KNOWN_EVENTS.flatMap((eventName) =>
+        days.map(async (day) => {
+          try {
+            const id = env.TELEMETRY.idFromName(`${eventName}:${day}`);
+            const stub = env.TELEMETRY.get(id);
+            const res = await stub.fetch(new Request('https://do/stats'));
+            const result = res.ok ? await res.json() : { error: 'aggregator_failure', status: res.status };
+            return { eventName, day, result };
+          } catch (err) {
+            return { eventName, day, result: { error: 'aggregator_failure', reason: errMessage(err) } };
+          }
+        })
+      );
+      const perEvent: Record<string, Record<string, unknown>> = {};
+      for (const { eventName, day, result } of await Promise.all(reads)) {
+        (perEvent[eventName] ??= {})[day] = result;
+      }
+      return jsonResponse(200, { since, until: utcDay(new Date(startedAt)), events: perEvent });
+    }
+
     return jsonResponse(404, { error: 'not_found' });
   }
 };
+
+function enumerateUtcDays(from: Date, to: Date): string[] {
+  const days: string[] = [];
+  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+  const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
+  while (cursor <= end) {
+    days.push(utcDay(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

@@ -24,6 +24,7 @@ import { usePreviewStore } from '../../src/store/preview-store.js';
 import { useCodegenStore } from '../../src/store/codegen-store.js';
 import { useOutputStore } from '../../src/store/output-store.js';
 import { useActivityStore } from '../../src/store/activity-store.js';
+import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
 
 // Mock model-loader.js BEFORE the store imports it. The store calls
 // loadModel(source, options) — we capture options.archiveLoader so we can
@@ -35,7 +36,7 @@ vi.mock('../../src/services/model-loader.js', () => ({
 
 // Run the store import AFTER the mock above so the store's transitive
 // loadModel binding picks up our spy.
-const { useModelStore } = await import('../../src/store/model-store.js');
+const { useModelStore, gatedByUserOptIn } = await import('../../src/store/model-store.js');
 
 const CURATED_SOURCE: ModelSource = {
   id: 'cdm',
@@ -384,5 +385,37 @@ describe('useModelStore — setCuratedFiles (refOnly post-/api/parse)', () => {
         { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 }
       ]);
     expect(useModelStore.getState().models.get('cdm')?.files).toHaveLength(1);
+  });
+});
+
+describe('gatedByUserOptIn (Phase 5 — model-store telemetry gated on per-user Settings opt-in)', () => {
+  beforeEach(() => {
+    useTelemetrySettingsStore.setState({ enabled: false, hydrated: true });
+  });
+
+  it('does not forward emits when the user has not opted in', async () => {
+    const inner = { emit: vi.fn(async () => {}) };
+    const gated = gatedByUserOptIn(inner);
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'cdm' } as never);
+    expect(inner.emit).not.toHaveBeenCalled();
+  });
+
+  it('forwards emits once the user has opted in', async () => {
+    useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
+    const inner = { emit: vi.fn(async () => {}) };
+    const gated = gatedByUserOptIn(inner);
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'cdm' } as never);
+    expect(inner.emit).toHaveBeenCalledWith({ event: 'curated_load_attempt', modelId: 'cdm' });
+  });
+
+  it('re-checks the live opt-in on every call rather than a snapshot at construction', async () => {
+    const inner = { emit: vi.fn(async () => {}) };
+    const gated = gatedByUserOptIn(inner);
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'cdm' } as never);
+    expect(inner.emit).not.toHaveBeenCalled();
+
+    useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'fpml' } as never);
+    expect(inner.emit).toHaveBeenCalledWith({ event: 'curated_load_attempt', modelId: 'fpml' });
   });
 });

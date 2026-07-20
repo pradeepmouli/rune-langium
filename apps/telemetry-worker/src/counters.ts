@@ -10,10 +10,15 @@
  * because they share a lifecycle (rotate per UTC day).
  *
  * Counter routes:
- *   POST /inc    — increment count:<errorCategory|null>; uses
- *                  blockConcurrencyWhile to serialise read-then-write
- *                  against this instance.
- *   GET  /stats  — return all count:* keys for this DO instance.
+ *   POST /inc        — increment count:<errorCategory|null>; uses
+ *                       blockConcurrencyWhile to serialise read-then-write
+ *                       against this instance.
+ *   POST /inc-spans   — bucket op_spans durations into duration:<op>:<bucket>
+ *                       and count error/warn signatures into signature:<sig>.
+ *   GET  /stats       — return all stored counter keys for this DO instance
+ *                       (additive: `count:` keys keep their existing flat
+ *                       shape; `duration:` and `signature:` keys are
+ *                       reshaped into `durationBuckets`/`signatureCounts`).
  *
  * Salt route:
  *   GET  /salt   — mint-once-and-cache a 16-byte hex salt under the
@@ -26,6 +31,24 @@ import type { DurableObjectState } from '@cloudflare/workers-types';
 
 export interface IncomingEvent {
   errorCategory: string | null;
+}
+
+export interface IncomingSpan {
+  op: string;
+  level: 'info' | 'warn' | 'error';
+  durationMs?: number;
+  signature?: string;
+}
+
+// Fixed-width buckets in ms — raw-sample p50/p95 isn't practical in a DO's
+// KV-style storage, so this stores a count per bucket and the read side
+// derives percentiles from the bucket distribution. Buckets span from
+// sub-second ops up past the largest spec §4 timing budget (60000ms).
+const DURATION_BUCKETS_MS = [100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000, 60_000, Infinity];
+
+function bucketFor(durationMs: number): string {
+  const upper = DURATION_BUCKETS_MS.find((b) => durationMs <= b) ?? Infinity;
+  return upper === Infinity ? '60000+' : String(upper);
 }
 
 export class TelemetryAggregator {
@@ -51,6 +74,43 @@ export class TelemetryAggregator {
         return jsonError(400, 'invalid_errorCategory');
       }
       await this.increment(errorCategory ?? null);
+      return new Response(null, { status: 204 });
+    }
+    if (req.method === 'POST' && url.pathname === '/inc-spans') {
+      let raw: unknown;
+      try {
+        raw = await req.json();
+      } catch {
+        return jsonError(400, 'invalid_json');
+      }
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return jsonError(400, 'invalid_body');
+      }
+      const spansRaw = (raw as { spans?: unknown }).spans;
+      if (!Array.isArray(spansRaw)) {
+        return jsonError(400, 'invalid_spans');
+      }
+      const spans: IncomingSpan[] = [];
+      for (const s of spansRaw) {
+        if (!s || typeof s !== 'object') return jsonError(400, 'invalid_span');
+        const { op, level, durationMs, signature } = s as Record<string, unknown>;
+        // `op` becomes the middle segment of the `duration:<op>:<bucket>`
+        // storage key (see incrementSpans/stats below) — a ':' in `op`
+        // would desync the 3-part split on read and corrupt/mis-parse the
+        // bucket. The public Worker schema already caps `op` at 64 chars,
+        // but this DO endpoint is called directly and defends its own
+        // boundary independent of that, so reject here too.
+        if (typeof op !== 'string' || op.includes(':') || (level !== 'info' && level !== 'warn' && level !== 'error')) {
+          return jsonError(400, 'invalid_span');
+        }
+        spans.push({
+          op,
+          level,
+          durationMs: typeof durationMs === 'number' ? durationMs : undefined,
+          signature: typeof signature === 'string' ? signature : undefined
+        });
+      }
+      await this.incrementSpans(spans);
       return new Response(null, { status: 204 });
     }
     if (req.method === 'GET' && url.pathname === '/stats') {
@@ -82,12 +142,63 @@ export class TelemetryAggregator {
     });
   }
 
-  async stats(): Promise<Record<string, number>> {
-    const items = await this.state.storage.list<number>({ prefix: 'count:' });
-    const out: Record<string, number> = {};
-    for (const [key, value] of items.entries()) {
+  /**
+   * Buckets op_spans durations into duration:<op>:<bucket> and counts
+   * error/warn signatures into signature:<sig>. Info-level spans never
+   * carry a signature into aggregation — only error/warn shapes are
+   * grouped, matching the shipper's own sampling intent (info is noise,
+   * error/warn are what a real-user digest needs to triage).
+   */
+  async incrementSpans(spans: IncomingSpan[]): Promise<void> {
+    return this.state.blockConcurrencyWhile(async () => {
+      const updates: Record<string, number> = {};
+      for (const span of spans) {
+        if (span.durationMs !== undefined) {
+          const key = `duration:${span.op}:${bucketFor(span.durationMs)}`;
+          const current = (await this.state.storage.get<number>(key)) ?? 0;
+          updates[key] = (updates[key] ?? current) + 1;
+        }
+        if ((span.level === 'error' || span.level === 'warn') && span.signature) {
+          const key = `signature:${span.signature}`;
+          const current = (await this.state.storage.get<number>(key)) ?? 0;
+          updates[key] = (updates[key] ?? current) + 1;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await this.state.storage.put({ ...updates, last_event_ts: Date.now() });
+      }
+    });
+  }
+
+  async stats(): Promise<Record<string, unknown>> {
+    const countItems = await this.state.storage.list<number>({ prefix: 'count:' });
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of countItems.entries()) {
       out[key.slice('count:'.length)] = value;
     }
+
+    const durationItems = await this.state.storage.list<number>({ prefix: 'duration:' });
+    if (durationItems.size > 0) {
+      const durationBuckets: Record<string, Record<string, number>> = {};
+      for (const [key, value] of durationItems.entries()) {
+        // 'duration:<op>:<bucket>' — op names are opLog identifiers
+        // (camelCase, no ':'), so a 3-part split is always exact.
+        const [, op, bucket] = key.split(':');
+        if (op === undefined || bucket === undefined) continue;
+        (durationBuckets[op] ??= {})[bucket] = value;
+      }
+      out.durationBuckets = durationBuckets;
+    }
+
+    const signatureItems = await this.state.storage.list<number>({ prefix: 'signature:' });
+    if (signatureItems.size > 0) {
+      const signatureCounts: Record<string, number> = {};
+      for (const [key, value] of signatureItems.entries()) {
+        signatureCounts[key.slice('signature:'.length)] = value;
+      }
+      out.signatureCounts = signatureCounts;
+    }
+
     return out;
   }
 
