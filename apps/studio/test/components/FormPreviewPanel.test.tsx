@@ -2,11 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { useOutputStore } from '../../src/store/output-store.js';
 
 const tradeSchema: FormPreviewSchema = {
   schemaVersion: 1,
@@ -80,6 +82,22 @@ const unsupportedTradeSchema: FormPreviewSchema = {
           description: 'Uses PartyDefaults.name component mapping'
         }
       ]
+    }
+  ]
+};
+
+const unresolvedReferenceTradeSchema: FormPreviewSchema = {
+  ...tradeSchema,
+  status: 'unsupported',
+  unsupportedFeatures: ['unresolved-reference:Instrument', 'unresolved-reference:Party'],
+  fields: [
+    ...tradeSchema.fields,
+    {
+      path: 'instrument',
+      label: 'instrument',
+      kind: 'unknown',
+      required: true,
+      description: 'Type reference Instrument could not be resolved for form preview.'
     }
   ]
 };
@@ -251,6 +269,64 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByText(/exported-subschema:PartyDefaults/i)).toBeInTheDocument();
     expect(screen.getByText('Legal name')).toBeInTheDocument();
     expect(screen.queryByText(/valid sample/i)).not.toBeInTheDocument();
+  });
+
+  it('logs an op-log warning when the schema has unsupported preview features', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <FormPreviewPanel
+        schema={unsupportedTradeSchema}
+        status={{ state: 'ready', targetId: unsupportedTradeSchema.targetId }}
+      />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('warn');
+    expect(entry?.text).toContain('exported-subschema:PartyDefaults');
+    expect(entry?.subject).toBe(unsupportedTradeSchema.targetId);
+  });
+
+  it('does not log an op-log warning when the schema has no unsupported preview features', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(<FormPreviewPanel schema={tradeSchema} status={{ state: 'ready', targetId: tradeSchema.targetId }} />);
+
+    expect(useOutputStore.getState().lines.find((l) => l.op === 'preview')).toBeUndefined();
+  });
+
+  it('surfaces the root cause when a type reference could not be resolved', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <FormPreviewPanel
+        schema={unresolvedReferenceTradeSchema}
+        status={{ state: 'ready', targetId: unresolvedReferenceTradeSchema.targetId }}
+      />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry?.text).toContain('references could not be resolved: Instrument, Party');
+    expect(entry?.text).not.toContain('unresolved-reference:');
+
+    expect(screen.getByText(/references could not be resolved: Instrument, Party/i)).toBeInTheDocument();
+  });
+
+  it('logs only one op-log warning under StrictMode double-invoked effects', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <StrictMode>
+        <FormPreviewPanel
+          schema={unsupportedTradeSchema}
+          status={{ state: 'ready', targetId: unsupportedTradeSchema.targetId }}
+        />
+      </StrictMode>
+    );
+
+    const entries = useOutputStore.getState().lines.filter((l) => l.op === 'preview');
+    expect(entries).toHaveLength(1);
   });
 
   it('renders nested preview metadata without field description annotations', () => {
