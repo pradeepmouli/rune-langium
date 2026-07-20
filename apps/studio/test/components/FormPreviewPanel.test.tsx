@@ -85,6 +85,22 @@ const unsupportedTradeSchema: FormPreviewSchema = {
   ]
 };
 
+const unresolvedReferenceTradeSchema: FormPreviewSchema = {
+  ...tradeSchema,
+  status: 'unsupported',
+  unsupportedFeatures: ['unresolved-reference:Instrument', 'unresolved-reference:Party'],
+  fields: [
+    ...tradeSchema.fields,
+    {
+      path: 'instrument',
+      label: 'instrument',
+      kind: 'unknown',
+      required: true,
+      description: 'Type reference Instrument could not be resolved for form preview.'
+    }
+  ]
+};
+
 const validationTradeSchema: FormPreviewSchema = {
   schemaVersion: 1,
   targetId: 'test.preview.ValidatedTrade',
@@ -277,6 +293,23 @@ describe('FormPreviewPanel', () => {
     render(<FormPreviewPanel schema={tradeSchema} status={{ state: 'ready', targetId: tradeSchema.targetId }} />);
 
     expect(useOutputStore.getState().lines.find((l) => l.op === 'preview')).toBeUndefined();
+  });
+
+  it('surfaces the root cause when a type reference could not be resolved', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <FormPreviewPanel
+        schema={unresolvedReferenceTradeSchema}
+        status={{ state: 'ready', targetId: unresolvedReferenceTradeSchema.targetId }}
+      />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry?.text).toContain('references could not be resolved: Instrument, Party');
+    expect(entry?.text).not.toContain('unresolved-reference:');
+
+    expect(screen.getByText(/references could not be resolved: Instrument, Party/i)).toBeInTheDocument();
   });
 
   it('renders nested preview metadata without field description annotations', () => {

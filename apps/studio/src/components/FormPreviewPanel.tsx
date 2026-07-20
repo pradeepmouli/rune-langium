@@ -77,10 +77,11 @@ export function FormPreviewPanel({
     if (!schema?.unsupportedFeatures?.length) return;
     useOutputStore
       .getState()
-      .addLine(fmtLine('preview', 'unsupported preview features', schema.unsupportedFeatures.join(', ')), 'warn', {
-        op: 'preview',
-        subject: schema.targetId
-      });
+      .addLine(
+        fmtLine('preview', 'unsupported preview features', summarizeUnsupportedFeatures(schema.unsupportedFeatures)),
+        'warn',
+        { op: 'preview', subject: schema.targetId }
+      );
   }, [schema]);
 
   const defaultValues = useMemo(
@@ -328,7 +329,7 @@ export function FormPreviewPanel({
         )}
         {schema.unsupportedFeatures?.length ? (
           <div role="status" className="text-xs text-muted-foreground">
-            Unsupported preview features: {schema.unsupportedFeatures.join(', ')}
+            Unsupported preview features: {summarizeUnsupportedFeatures(schema.unsupportedFeatures)}
           </div>
         ) : null}
         {schema.kind === 'function' ? (
@@ -735,6 +736,37 @@ function getStatusOnlyMessage(schema: FormPreviewSchema | undefined, status: Pre
   }
 
   return status.state === 'unavailable' ? status.message : 'Preview unavailable.';
+}
+
+function summarizeUnsupportedFeatures(features: string[]): string {
+  const unresolvedRefs: string[] = [];
+  const recursiveRefs: string[] = [];
+  const other: string[] = [];
+
+  for (const feature of features) {
+    if (feature.startsWith('unresolved-reference:')) {
+      unresolvedRefs.push(feature.slice('unresolved-reference:'.length));
+    } else if (feature.startsWith('recursive-reference:')) {
+      recursiveRefs.push(feature.slice('recursive-reference:'.length));
+    } else {
+      other.push(feature);
+    }
+  }
+
+  const parts: string[] = [];
+  if (unresolvedRefs.length > 0) {
+    parts.push(
+      `reference${unresolvedRefs.length === 1 ? '' : 's'} could not be resolved: ${unresolvedRefs.join(', ')}`
+    );
+  }
+  if (recursiveRefs.length > 0) {
+    parts.push(`recursive reference${recursiveRefs.length === 1 ? '' : 's'} skipped: ${recursiveRefs.join(', ')}`);
+  }
+  if (other.length > 0) {
+    parts.push(other.join(', '));
+  }
+
+  return parts.join('; ');
 }
 
 function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sample?: PreviewSampleState): string {
