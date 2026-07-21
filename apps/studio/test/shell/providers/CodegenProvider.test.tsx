@@ -215,4 +215,34 @@ describe('CodegenProvider', () => {
     expect(entry?.severity).toBe('error');
     expect(entry?.text).toContain('Preview worker crashed');
   });
+
+  it('logs both the preview and codegen op-log entries for a single worker crash, since both listeners share one worker (Codex P2)', () => {
+    // The shared codegenWorker has two independent 'error' listeners (the
+    // preview channel's handleWorkerFailure and the codegen channel's
+    // handleCodegenWorkerError) — a single native crash fires both. Both
+    // op-log entries are legitimate (distinct channels), but only ONE
+    // destructive toast should fire; handlePreviewWorkerFailure's `toast`
+    // option is what prevents the duplicate (not directly observable here
+    // since these tests don't wrap a StudioToastProvider — showToast is a
+    // no-op — so this pins the op-log side of the fix).
+    useOutputStore.setState({ lines: [] });
+    render(
+      <WorkspaceStateContext.Provider value={wsState('ws-crash-both')}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    act(() => {
+      for (const listener of worker.listeners['error'] ?? []) {
+        listener({ type: 'error', message: 'boom' });
+      }
+    });
+
+    const lines = useOutputStore.getState().lines;
+    expect(lines.find((l) => l.op === 'preview')).toBeDefined();
+    expect(lines.find((l) => l.text.includes('worker crashed'))).toBeDefined();
+  });
 });
