@@ -337,10 +337,6 @@ vi.mock('../../src/components/DiagnosticsPanel.js', () => ({
   }
 }));
 
-vi.mock('../../src/components/ExportMenu.js', () => ({
-  ExportMenu: () => React.createElement('div')
-}));
-
 vi.mock('../../src/components/ExportDialog.js', () => ({
   ExportDialog: () => null
 }));
