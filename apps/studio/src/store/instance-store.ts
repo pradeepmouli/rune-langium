@@ -357,7 +357,28 @@ export const useInstanceStore = create<InstanceStoreState>((set, get) => ({
         // aren't revalidated until touched — a smaller gap than today's
         // "never revalidated at all".
         for (const id of Object.keys(loaded)) {
-          get().dispatchValidate(id);
+          try {
+            get().dispatchValidate(id);
+          } catch (err) {
+            // The instance itself already loaded successfully (set() above
+            // already applied it) — this is only a validation-dispatch
+            // failure (e.g. a terminated worker), not a load failure, so it
+            // must NOT be reported as "failed to load saved instances"
+            // (Codex P2) — and must not abort the loop for the remaining
+            // restored instances either.
+            console.error(`[instance-store] Failed to dispatch validation for restored instance "${id}":`, err);
+            useOutputStore
+              .getState()
+              .addLine(
+                fmtLine(
+                  'instance',
+                  `could not validate restored instance "${id}"`,
+                  err instanceof Error ? err.message : String(err)
+                ),
+                'warn',
+                { op: 'instance', subject: id }
+              );
+          }
         }
       }
     } catch (err) {

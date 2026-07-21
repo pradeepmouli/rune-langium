@@ -535,35 +535,47 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
     expect(entry?.severity).toBe('warn');
   });
 
-  it('logs an op-log error when the whole instance list fails to load, since the list otherwise stays empty with no explanation', async () => {
+  it('does not report a validation-dispatch failure for a restored instance as a whole-list load failure (Codex P2)', async () => {
     useOutputStore.setState({ lines: [] });
     const fs = new OpfsFs(createOpfsRoot() as never);
-    await writeInstance(fs, '/ws-load-fail', {
+    await writeInstance(fs, '/ws-validate-fail', {
       id: '01J000000000000000000040',
-      name: 'Party',
+      name: 'Party A',
       typeFqn: 'test.Party',
       data: {},
       createdAt: 1000,
       modifiedAt: 1000
     });
-    // A synchronous throw from postMessage (e.g. a terminated worker)
-    // reproduces the outer try/catch in loadInstancesFromOpfs, since
-    // listInstanceFiles/readInstance already recover from their own
-    // failures internally.
+    await writeInstance(fs, '/ws-validate-fail', {
+      id: '01J000000000000000000041',
+      name: 'Party B',
+      typeFqn: 'test.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    // A synchronous throw from postMessage (e.g. a terminated worker) hits
+    // dispatchValidate for EVERY restored instance — the instances
+    // themselves already loaded successfully (set() runs before this
+    // loop), so this must not be reported as "failed to load saved
+    // instances", and one instance's failure must not stop the next
+    // instance in the loop from being loaded/attempted.
     useInstanceStore.getState().setWorker({
       postMessage: () => {
         throw new Error('worker has been terminated');
       }
     } as unknown as Worker);
 
-    useInstanceStore.getState().setOpfsContext(fs, '/ws-load-fail');
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-validate-fail');
     await flush();
 
-    const entry = useOutputStore
-      .getState()
-      .lines.find(
-        (l) => l.op === 'instance' && l.severity === 'error' && l.text.includes('failed to load saved instances')
-      );
-    expect(entry).toBeDefined();
+    const state = useInstanceStore.getState();
+    expect(state.instances['01J000000000000000000040']).toMatchObject({ name: 'Party A' });
+    expect(state.instances['01J000000000000000000041']).toMatchObject({ name: 'Party B' });
+
+    const lines = useOutputStore.getState().lines;
+    expect(lines.find((l) => l.text.includes('failed to load saved instances'))).toBeUndefined();
+    const warnedIds = lines.filter((l) => l.op === 'instance' && l.severity === 'warn').map((l) => l.subject);
+    expect(warnedIds).toEqual(expect.arrayContaining(['01J000000000000000000040', '01J000000000000000000041']));
   });
 });
