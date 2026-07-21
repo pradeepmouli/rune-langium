@@ -33,7 +33,80 @@ function toStoredWorkspaceFiles(files: readonly WorkspaceFile[]): WorkspaceFile[
   return files.filter((file) => !file.readOnly);
 }
 
-export async function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
+// ────────────────────────────────────────────────────────────────────────
+// Per-workspace save serialization (issue #395)
+//
+// The non-git-backed path below does an unconditional removeEntry('files',
+// { recursive: true }) followed by recreating the directory and rewriting
+// every file. Callers (e.g. App.tsx's handleFilesChange, fired on every
+// Source-editor keystroke with no upstream debounce) can and do call this
+// concurrently for the SAME workspace — a later call's removeEntry then
+// races an earlier call's still-open file writes, and OPFS throws
+// NoModificationAllowedError. Serialize + coalesce per workspaceId here so
+// EVERY caller is safe by construction, not just the one that triggered
+// this bug: at most one save actually runs OPFS mutations at a time, and
+// any saves requested while one is in flight collapse into a single
+// trailing save of the latest snapshot (a typing burst becomes "the save
+// already running" + "one save with the final content", not N racing
+// saves that mostly fail and mostly never persist).
+interface SaveQueueEntry {
+  inFlight: boolean;
+  /** Most recently requested, not-yet-started snapshot (if any). */
+  pending: {
+    files: readonly WorkspaceFile[];
+    waiters: Array<{ resolve: () => void; reject: (err: unknown) => void }>;
+  } | null;
+}
+
+const saveQueues = new Map<string, SaveQueueEntry>();
+
+export function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
+  const queue = saveQueues.get(workspaceId) ?? { inFlight: false, pending: null };
+  saveQueues.set(workspaceId, queue);
+
+  if (queue.inFlight) {
+    return new Promise<void>((resolve, reject) => {
+      if (queue.pending) {
+        // A newer snapshot supersedes the previously-queued one — no need to
+        // persist an intermediate state once a later one is already known.
+        queue.pending.files = files;
+        queue.pending.waiters.push({ resolve, reject });
+      } else {
+        queue.pending = { files, waiters: [{ resolve, reject }] };
+      }
+    });
+  }
+
+  return runQueuedSave(workspaceId, files, queue);
+}
+
+async function runQueuedSave(
+  workspaceId: string,
+  files: readonly WorkspaceFile[],
+  queue: SaveQueueEntry
+): Promise<void> {
+  queue.inFlight = true;
+  try {
+    await saveWorkspaceFilesNow(workspaceId, files);
+  } finally {
+    queue.inFlight = false;
+  }
+
+  const next = queue.pending;
+  queue.pending = null;
+  if (next) {
+    // Don't await — this call's promise settles once ITS OWN write is
+    // done; the coalesced follow-up settles its own waiters independently.
+    void runQueuedSave(workspaceId, next.files, queue).then(
+      () => next.waiters.forEach((w) => w.resolve()),
+      (err: unknown) => next.waiters.forEach((w) => w.reject(err))
+    );
+  } else {
+    saveQueues.delete(workspaceId);
+  }
+}
+
+async function saveWorkspaceFilesNow(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
   const root = await deps.getOpfsRoot();
 
   // Determine the workspace kind before touching OPFS.
