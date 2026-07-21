@@ -51,7 +51,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
   const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
 
   const handlePreviewWorkerFailure = useCallback(
-    (baseMessage: string, error: unknown, targetId?: string) => {
+    (baseMessage: string, error: unknown, targetId?: string, options?: { toast?: boolean }) => {
       const detail =
         error instanceof Error
           ? error.message
@@ -66,8 +66,19 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         message: `${baseMessage} ${detail}`.trim()
       });
       console.error(`[CodegenProvider] ${baseMessage}`, error);
+      useOutputStore.getState().addLine(fmtLine('preview', baseMessage, detail), 'error', {
+        op: 'preview',
+        subject: targetId
+      });
+      if (options?.toast ?? true) {
+        showToast({
+          title: 'Form preview unavailable',
+          description: `${baseMessage} ${detail}`.trim(),
+          variant: 'destructive'
+        });
+      }
     },
-    [receivePreviewStale]
+    [receivePreviewStale, showToast]
   );
 
   // Initialise dedicated codegen worker once on mount.
@@ -199,7 +210,12 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     function handleWorkerFailure(event: ErrorEvent | MessageEvent<unknown>) {
       const baseMessage =
         event.type === 'messageerror' ? 'Preview worker rejected a message.' : 'Preview worker crashed.';
-      handlePreviewWorkerFailure(baseMessage, event, previewSelectedTargetId);
+      // A genuine 'error' event on this shared worker is ALSO handled by
+      // handleCodegenWorkerError below (same worker, both listeners fire),
+      // which already shows its own crash toast (Codex P2) — suppress this
+      // one so a single crash doesn't produce two destructive toasts.
+      // 'messageerror' has no such duplicate handler, so it still toasts.
+      handlePreviewWorkerFailure(baseMessage, event, previewSelectedTargetId, { toast: event.type !== 'error' });
     }
     codegenWorker.addEventListener('message', handleMessage as EventListener);
     codegenWorker.addEventListener('error', handleWorkerFailure as EventListener);

@@ -5,6 +5,7 @@ import { useInstanceStore } from '../../src/store/instance-store.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
 import { readInstance, writeInstance } from '../../src/opfs/instances-fs.js';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
+import { useOutputStore } from '../../src/store/output-store.js';
 
 async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -468,5 +469,113 @@ describe('instance-store — OPFS persistence (finding #1)', () => {
 
     expect(handled).toBe(false);
     expect(useInstanceStore.getState().schemas.has('test.Party')).toBe(false);
+  });
+
+  it('logs an op-log error when persisting an instance write fails, since the UI already shows the edit as saved', async () => {
+    useOutputStore.setState({ lines: [] });
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-write-fail');
+    await flush();
+
+    vi.spyOn(fs, 'writeFile').mockRejectedValue(new Error('disk full'));
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    await flush();
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'instance' && l.subject === id);
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('error');
+    expect(entry?.text).toContain('failed to save');
+  });
+
+  it('logs an op-log error when deleting a persisted instance fails, leaving an orphaned record that could reappear', async () => {
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-delete-fail');
+    await flush();
+    const id = useInstanceStore.getState().createInstance('test.Party', 'My Party');
+    await flush();
+    useOutputStore.setState({ lines: [] });
+
+    vi.spyOn(fs, 'unlink').mockRejectedValue(new Error('permission denied'));
+    useInstanceStore.getState().removeInstance(id);
+    await flush();
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'instance' && l.subject === id);
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('error');
+    expect(entry?.text).toContain('failed to delete');
+  });
+
+  it('logs an op-log warning for a corrupted instance file without dropping the rest of the loaded list', async () => {
+    useOutputStore.setState({ lines: [] });
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws-corrupt', {
+      id: '01J000000000000000000030',
+      name: 'Good Party',
+      typeFqn: 'test.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    // A corrupted/unreadable file — otherwise indistinguishable from the
+    // user having deleted this instance.
+    await fs.mkdir('/ws-corrupt/.studio/instances');
+    await fs.writeFile('/ws-corrupt/.studio/instances/01J000000000000000000031.json', 'not valid json{{{');
+
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-corrupt');
+    await flush();
+
+    const state = useInstanceStore.getState();
+    expect(state.instances['01J000000000000000000030']).toMatchObject({ name: 'Good Party' });
+    expect(state.instances['01J000000000000000000031']).toBeUndefined();
+
+    const entry = useOutputStore
+      .getState()
+      .lines.find((l) => l.op === 'instance' && l.subject === '01J000000000000000000031');
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('warn');
+  });
+
+  it('does not report a validation-dispatch failure for a restored instance as a whole-list load failure (Codex P2)', async () => {
+    useOutputStore.setState({ lines: [] });
+    const fs = new OpfsFs(createOpfsRoot() as never);
+    await writeInstance(fs, '/ws-validate-fail', {
+      id: '01J000000000000000000040',
+      name: 'Party A',
+      typeFqn: 'test.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    await writeInstance(fs, '/ws-validate-fail', {
+      id: '01J000000000000000000041',
+      name: 'Party B',
+      typeFqn: 'test.Party',
+      data: {},
+      createdAt: 1000,
+      modifiedAt: 1000
+    });
+    // A synchronous throw from postMessage (e.g. a terminated worker) hits
+    // dispatchValidate for EVERY restored instance — the instances
+    // themselves already loaded successfully (set() runs before this
+    // loop), so this must not be reported as "failed to load saved
+    // instances", and one instance's failure must not stop the next
+    // instance in the loop from being loaded/attempted.
+    useInstanceStore.getState().setWorker({
+      postMessage: () => {
+        throw new Error('worker has been terminated');
+      }
+    } as unknown as Worker);
+
+    useInstanceStore.getState().setOpfsContext(fs, '/ws-validate-fail');
+    await flush();
+
+    const state = useInstanceStore.getState();
+    expect(state.instances['01J000000000000000000040']).toMatchObject({ name: 'Party A' });
+    expect(state.instances['01J000000000000000000041']).toMatchObject({ name: 'Party B' });
+
+    const lines = useOutputStore.getState().lines;
+    expect(lines.find((l) => l.text.includes('failed to load saved instances'))).toBeUndefined();
+    const warnedIds = lines.filter((l) => l.op === 'instance' && l.severity === 'warn').map((l) => l.subject);
+    expect(warnedIds).toEqual(expect.arrayContaining(['01J000000000000000000040', '01J000000000000000000041']));
   });
 });

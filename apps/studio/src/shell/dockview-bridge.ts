@@ -28,6 +28,7 @@ import type { DockviewApi, AddPanelOptions } from 'dockview-react';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import type { DockviewPayload, FactoryShape, LayoutNode, LayoutGroup, PanelComponentName } from './layout-types.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_TITLES } from './layout-factory.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
 
@@ -92,6 +93,12 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
       err: errMessage(err),
       jsonPreview: previewJson(payload.json)
     });
+    // This recovers internally rather than rethrowing, so DockShell's own
+    // applyLayout try/catch (which op-logs + toasts) never sees this error —
+    // without an op-log entry here, the reset is otherwise silent.
+    useOutputStore
+      .getState()
+      .addLine(fmtLine('layout', 'saved layout rejected, using default', errMessage(err)), 'warn');
     api.clear();
     applyFactoryShape(api, defaultFactoryShape(layout));
   }
