@@ -83,9 +83,9 @@
     "@vitest/coverage-v8": "^4.1.9",
     "@vitest/ui": "^4.1.9",
     "concurrently": "^10.0.3",
-    "lint-staged": "^17.0.8",
-    "oxfmt": "^0.54.0",
-    "oxlint": "^1.71.0",
+    "lint-staged": "^17.1.0",
+    "oxfmt": "^0.59.0",
+    "oxlint": "^1.74.0",
     "simple-git-hooks": "^2.13.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.9"
