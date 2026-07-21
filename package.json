@@ -96,7 +96,7 @@
   },
   "packageManager": "pnpm@11.5.0",
   "dependencies": {
-    "@lspeasy/client": "^3.1.2",
+    "@lspeasy/client": "^3.1.5",
     "@lspeasy/core": "^2.3.0",
     "camelcase": "^9.0.0"
   },
