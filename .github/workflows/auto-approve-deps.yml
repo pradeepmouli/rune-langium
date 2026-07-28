@@ -29,7 +29,10 @@ jobs:
 
       - name: Merge github_actions bumps immediately
         if: steps.metadata.outputs.package-ecosystem == 'github_actions'
-        run: gh pr merge --squash --admin --repo "${{ github.repository }}" "${{ github.event.pull_request.number }}"
+        # --merge, not --squash: this repo only allows merge-commit/rebase (squash is
+        # disabled repo-wide), so --squash was rejected on every actual github_actions
+        # bump (e.g. #410) with "Merge method squash merging is not allowed".
+        run: gh pr merge --merge --admin --repo "${{ github.repository }}" "${{ github.event.pull_request.number }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -109,11 +112,14 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            // MERGE, not SQUASH: this repo only allows merge-commit/rebase (squash
+            // is disabled repo-wide), so SQUASH was rejected on every dependabot PR
+            // with "Merge method squash merging is not allowed on this repository".
             await github.graphql(`
               mutation($pullRequestId: ID!) {
                 enablePullRequestAutoMerge(input: {
                   pullRequestId: $pullRequestId,
-                  mergeMethod: SQUASH
+                  mergeMethod: MERGE
                 }) {
                   pullRequest {
                     autoMergeRequest {
