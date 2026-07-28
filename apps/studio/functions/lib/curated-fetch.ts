@@ -34,7 +34,6 @@ import { z } from 'zod';
 import {
   CuratedSerializedWorkspaceArtifactSchema,
   CuratedSerializedDocumentSchema,
-  type CuratedSerializedWorkspaceArtifact,
   type CuratedManifest,
   parseManifest
 } from '@rune-langium/curated-schema';

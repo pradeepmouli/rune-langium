@@ -46,18 +46,6 @@ const HEX_RE = /#[0-9a-fA-F]{3,8}\b/;
 // safe regions and test what's left.
 const COLOR_FN_RE = /\b(rgb|rgba|hsl|hsla|oklch|oklab)\s*\(/i;
 
-// Keywords that are always safe
-const SAFE_KEYWORDS = new Set([
-  'transparent',
-  'currentcolor',
-  'inherit',
-  'initial',
-  'unset',
-  'none',
-  'revert',
-  'revert-layer'
-]);
-
 // ─── Value sanitisation ────────────────────────────────────────────────────────
 
 /**
