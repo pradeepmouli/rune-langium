@@ -157,11 +157,11 @@ export function FileLoader({
 
         {loadProgress ? (
           <div className="w-full" data-testid="load-progress">
-            <div className="w-full bg-muted rounded-full h-2 mb-2">
+            <div className="w-full bg-muted rounded-full h-2 mb-2 overflow-hidden">
               <div
-                className="bg-primary h-2 rounded-full transition-all"
+                className="w-full h-2 rounded-full bg-primary origin-left transition-transform"
                 style={{
-                  width: `${loadProgress.total > 0 ? (loadProgress.loaded / loadProgress.total) * 100 : 0}%`
+                  transform: `scaleX(${loadProgress.total > 0 ? loadProgress.loaded / loadProgress.total : 0})`
                 }}
                 role="progressbar"
                 aria-valuenow={loadProgress.loaded}

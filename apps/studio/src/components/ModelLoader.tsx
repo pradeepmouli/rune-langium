@@ -53,10 +53,10 @@ function ProgressBar({ progress, sourceId }: { progress: LoadProgress; sourceId:
 
   return (
     <div className="w-full" data-testid="model-load-progress">
-      <div className="w-full bg-muted rounded-full h-2 mb-2">
+      <div className="w-full bg-muted rounded-full h-2 mb-2 overflow-hidden">
         <div
-          className="bg-primary h-2 rounded-full transition-all"
-          style={{ width: `${pct}%` }}
+          className="w-full h-2 rounded-full bg-primary origin-left transition-transform"
+          style={{ transform: `scaleX(${pct / 100})` }}
           role="progressbar"
           aria-valuenow={progress.current}
           aria-valuemin={0}
