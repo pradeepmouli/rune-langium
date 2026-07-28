@@ -44,6 +44,20 @@
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-full: 9999px;
   --radius-4xl: calc(var(--radius) + 16px);
+  /* Shadow scale — same-name bridge (the primitive in tokens.css is already
+   * called --shadow-sm/md/lg, matching Tailwind's own utility-scale keys, so
+   * unlike --radius-* / --color-* above there's no separate prefixed name to
+   * introduce). `inline` mode is required, not cosmetic: it makes the
+   * generated `.shadow-md` utility reference `var(--shadow-md)` directly
+   * rather than baking in a build-time-resolved value, so it stays live if a
+   * future light theme diverges --shadow-* from the current dark-tuned
+   * value. Without this bridge, `shadow-sm/md/lg` utility classes across the
+   * component library (dialog/popover/dropdown-menu/tooltip/select/toast)
+   * silently fell back to Tailwind's own built-in shadow scale instead of
+   * this design system's tokens. */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -334,6 +348,13 @@
 }
 
 .dark {
+  /* Tells the browser to theme its own native chrome (non-webkit scrollbars,
+   * form-control rendering, autofill highlight) as dark instead of assuming
+   * light — nothing else in this file declared it, so native UI was
+   * mismatched against every dark-themed consumer (studio hardcodes
+   * `<html class="dark">`). `::selection` is themed a few lines below (the
+   * sibling global declaration this one was missing next to). */
+  color-scheme: dark;
   --background: var(--color-surface-1);
   --foreground: var(--color-foreground-primary);
   --card: var(--color-surface-3);
