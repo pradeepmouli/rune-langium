@@ -30,6 +30,11 @@ minimumReleaseAgeExclude:
   - langium-zod@0.11.2
   - '@zod-to-form/react@0.11.0'
   - '@zod-to-form/vite@0.4.5'
+  # PR #353: @lspeasy/client 3.1.5 pulls in @lspeasy/core 2.6.0 as a new
+  # transitive resolution; both were too freshly-published for the age gate,
+  # which blocked `pnpm install` (not a real breaking change in the bump).
+  - '@lspeasy/client@3.1.5'
+  - '@lspeasy/core@2.6.0'
 
 # pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
 # `pnpm` field, which they ignore). Migrated from package.json so the
