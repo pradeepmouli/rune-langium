@@ -8,7 +8,11 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createOpfsRoot, type OpfsRoot, writeBytes, readBytes } from '../setup/opfs-mock.js';
-import { saveWorkspaceFiles, setWorkspaceFilesDeps } from '../../src/workspace/workspace-files.js';
+import {
+  deleteWorkspaceFiles,
+  saveWorkspaceFiles,
+  setWorkspaceFilesDeps
+} from '../../src/workspace/workspace-files.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
 
 // Stub notifySyncOnSave so the test doesn't reach the real git-sync service.
@@ -169,5 +173,89 @@ describe('saveWorkspaceFiles — concurrent calls for the same workspace (#395)'
     await expect(saveWorkspaceFiles(id, [makeFile('a.rosetta', 'content-C')])).resolves.toBeUndefined();
     const content = new TextDecoder().decode(await readBytes(opfsRoot, id, 'files', 'a.rosetta'));
     expect(content).toBe('content-C');
+  });
+});
+
+describe('deleteWorkspaceFiles — serializes with the save queue (#416 follow-up)', () => {
+  it('does not resurrect the workspace directory when delete races an in-flight save', async () => {
+    const id = 'ws-delete-race-1';
+
+    // Delay loadWorkspaceFn (the first await inside saveWorkspaceFilesNow)
+    // so the save is genuinely still in flight — with real OPFS mutations
+    // not yet run — when deleteWorkspaceFiles is called.
+    let loadCalls = 0;
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => {
+        loadCalls += 1;
+        if (loadCalls === 1) {
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        return { kind: 'browser-only' };
+      }
+    });
+
+    const savePromise = saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')]);
+    const deletePromise = deleteWorkspaceFiles(id);
+
+    await expect(savePromise).resolves.toBeUndefined();
+    await expect(deletePromise).resolves.toBeUndefined();
+
+    // The delete must run AFTER the in-flight save's writes land, and the
+    // directory must end up gone — not resurrected by the save's
+    // getDirectoryHandle(..., { create: true }) calls running after removeEntry.
+    await expect(opfsRoot.getDirectoryHandle(id)).rejects.toThrow();
+  });
+
+  it('cancels a still-queued (not yet started) save instead of letting it recreate a deleted workspace', async () => {
+    const id = 'ws-delete-race-2';
+
+    let loadCalls = 0;
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => {
+        loadCalls += 1;
+        if (loadCalls === 1) {
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        return { kind: 'browser-only' };
+      }
+    });
+
+    // First save starts (goes in-flight, gated by the delay above); second
+    // save queues behind it as `pending`.
+    const firstSave = saveWorkspaceFiles(id, [makeFile('a.rosetta', 'content-A')]);
+    const secondSave = saveWorkspaceFiles(id, [makeFile('b.rosetta', 'content-B')]);
+    // Attach the rejection assertion immediately — deleteWorkspaceFiles
+    // rejects secondSave synchronously below, and Node flags a promise as
+    // unhandled if nothing observes it within the same microtask turn.
+    const secondSaveRejects = expect(secondSave).rejects.toThrow(/deleted/);
+
+    const deletePromise = deleteWorkspaceFiles(id);
+
+    await expect(firstSave).resolves.toBeUndefined();
+    await secondSaveRejects;
+    await expect(deletePromise).resolves.toBeUndefined();
+
+    // The cancelled second save's file must never have been written, and
+    // the directory must end up fully removed.
+    await expect(opfsRoot.getDirectoryHandle(id)).rejects.toThrow();
+  });
+
+  it('ignores a save requested for a workspace that was already deleted', async () => {
+    const id = 'ws-delete-race-3';
+
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'browser-only' })
+    });
+
+    await saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')]);
+    await deleteWorkspaceFiles(id);
+
+    // A stale debounced autosave firing after the delete must not
+    // resurrect the directory.
+    await expect(saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')])).resolves.toBeUndefined();
+    await expect(opfsRoot.getDirectoryHandle(id)).rejects.toThrow();
   });
 });

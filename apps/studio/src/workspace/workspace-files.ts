@@ -56,12 +56,24 @@ interface SaveQueueEntry {
     files: readonly WorkspaceFile[];
     waiters: Array<{ resolve: () => void; reject: (err: unknown) => void }>;
   } | null;
+  /** Settles (success or failure) when the current in-flight write finishes. */
+  runDone: Promise<void> | null;
 }
 
 const saveQueues = new Map<string, SaveQueueEntry>();
 
+// Workspaces whose files have been deleted. A debounced/in-flight autosave
+// queued before the delete (e.g. a keystroke handler that hasn't fired yet)
+// must not resurrect the just-removed OPFS directory via the
+// getDirectoryHandle(..., { create: true }) calls in saveWorkspaceFilesNow.
+const deletedWorkspaceIds = new Set<string>();
+
 export function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
-  const queue = saveQueues.get(workspaceId) ?? { inFlight: false, pending: null };
+  if (deletedWorkspaceIds.has(workspaceId)) {
+    return Promise.resolve();
+  }
+
+  const queue = saveQueues.get(workspaceId) ?? { inFlight: false, pending: null, runDone: null };
   saveQueues.set(workspaceId, queue);
 
   if (queue.inFlight) {
@@ -86,8 +98,13 @@ async function runQueuedSave(
   queue: SaveQueueEntry
 ): Promise<void> {
   queue.inFlight = true;
+  const run = saveWorkspaceFilesNow(workspaceId, files);
+  queue.runDone = run.then(
+    () => undefined,
+    () => undefined
+  );
   try {
-    await saveWorkspaceFilesNow(workspaceId, files);
+    await run;
   } catch (error) {
     // A failed write must not strand anything queued behind it: reject those
     // waiters with the same error (rather than leaving them to hang forever)
@@ -213,6 +230,28 @@ async function walkWorkspaceFiles(
 }
 
 export async function deleteWorkspaceFiles(workspaceId: string): Promise<void> {
+  // Mark deleted before anything else (synchronously, before any await) so
+  // no save requested from this point on can slip past the queue drain
+  // below and later recreate the directory we're about to remove.
+  deletedWorkspaceIds.add(workspaceId);
+
+  const queue = saveQueues.get(workspaceId);
+  if (queue) {
+    // A not-yet-started save would just resurrect the directory once it
+    // runs — cancel it instead of letting it start.
+    const pending = queue.pending;
+    queue.pending = null;
+    if (pending) {
+      const err = new Error(`Workspace ${workspaceId} was deleted before its queued save could run`);
+      pending.waiters.forEach((w) => w.reject(err));
+    }
+    // Wait for an already-running write to actually finish so the delete
+    // below doesn't race its still-open OPFS mutations.
+    if (queue.runDone) {
+      await queue.runDone;
+    }
+  }
+
   const root = await deps.getOpfsRoot();
   try {
     await root.removeEntry(workspaceId, { recursive: true });
