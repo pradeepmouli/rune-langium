@@ -88,9 +88,19 @@ async function runQueuedSave(
   queue.inFlight = true;
   try {
     await saveWorkspaceFilesNow(workspaceId, files);
-  } finally {
+  } catch (error) {
+    // A failed write must not strand anything queued behind it: reject those
+    // waiters with the same error (rather than leaving them to hang forever)
+    // and tear down the queue entry so the next call starts fresh instead of
+    // later replaying this failure's stale, superseded snapshot.
     queue.inFlight = false;
+    const stranded = queue.pending;
+    queue.pending = null;
+    saveQueues.delete(workspaceId);
+    stranded?.waiters.forEach((w) => w.reject(error));
+    throw error;
   }
+  queue.inFlight = false;
 
   const next = queue.pending;
   queue.pending = null;

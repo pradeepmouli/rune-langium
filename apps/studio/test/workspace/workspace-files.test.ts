@@ -129,4 +129,45 @@ describe('saveWorkspaceFiles — concurrent calls for the same workspace (#395)'
     const content = new TextDecoder().decode(await readBytes(opfsRoot, id, 'files', 'a.rosetta'));
     expect(content).toBe('content-B');
   });
+
+  it('rejects a queued save (rather than hanging forever) when the in-flight write fails, and recovers on the next call', async () => {
+    const id = 'ws-race-2';
+
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'browser-only' })
+    });
+
+    await writeBytes(opfsRoot, new TextEncoder().encode('old'), id, 'files', 'a.rosetta');
+    const wsDir = await opfsRoot.getDirectoryHandle(id, { create: true });
+
+    // Fail only the FIRST removeEntry call (the in-flight save), so the
+    // queued second save never gets its own turn to run — it should be
+    // rejected outright rather than left to hang, and a later, independent
+    // third call should succeed normally (proving the queue entry for this
+    // workspace was torn down, not left stuck mid-flight).
+    const originalRemoveEntry = wsDir.removeEntry.bind(wsDir);
+    let call = 0;
+    const injectedError = new Error('simulated OPFS write failure');
+    wsDir.removeEntry = async (name: string, opts?: { recursive?: boolean }) => {
+      call += 1;
+      if (call === 1) {
+        await new Promise((r) => setTimeout(r, 5));
+        throw injectedError;
+      }
+      return originalRemoveEntry(name, opts);
+    };
+
+    const p1 = saveWorkspaceFiles(id, [makeFile('a.rosetta', 'content-A')]);
+    const p2 = saveWorkspaceFiles(id, [makeFile('a.rosetta', 'content-B')]);
+
+    await expect(p1).rejects.toBe(injectedError);
+    await expect(p2).rejects.toBe(injectedError);
+
+    // A subsequent, independent save must succeed — the queue must not be
+    // left permanently broken by the earlier failure.
+    await expect(saveWorkspaceFiles(id, [makeFile('a.rosetta', 'content-C')])).resolves.toBeUndefined();
+    const content = new TextDecoder().decode(await readBytes(opfsRoot, id, 'files', 'a.rosetta'));
+    expect(content).toBe('content-C');
+  });
 });
