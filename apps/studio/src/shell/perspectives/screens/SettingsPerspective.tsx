@@ -67,7 +67,7 @@ export function SettingsPerspective(): React.ReactElement {
           are <strong>not editable yet</strong>.
         </p>
 
-        <ul className="space-y-1 text-xs text-muted-foreground opacity-50 list-disc list-inside">
+        <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside">
           <li>
             <span className="font-medium">Project</span> — name, description
           </li>

@@ -26,26 +26,29 @@
  * whatever the app's fixed theme actually is, and records a `softFinding`
  * rather than fabricating a second run under an unreachable theme.
  *
- * KNOWN ISSUE CARVE-OUT: this journey's first real run found a genuine,
- * systemic `color-contrast` (serious) violation across the Settings/Import/
- * Export-download surfaces — filed as
- * https://github.com/pradeepmouli/rune-langium/issues/397 (dark-theme
- * muted-foreground/secondary-button tokens are too dark relative to their
- * backgrounds; ratios as low as 1.14:1 against WCAG 2 AA's 4.5:1 minimum).
- * That same run also found a genuine `aria-allowed-attr` (critical)
- * violation in the shared `Separator` component
- * (packages/design-system/src/ui/separator.tsx: `role="none"` doesn't
- * permit the `aria-orientation` attribute the base-ui primitive always
- * sets) — that one WAS fixed inline (same commit as this carve-out) since
- * it was small and well-isolated, unlike the token-level color-contrast
- * issue. `color-contrast` is therefore excluded from this journey's hard
- * gate below and recorded as a single `softFinding` instead, while every
- * OTHER rule (including `aria-allowed-attr`, so a regression of the
- * Separator fix would still hard-fail) remains a hard gate. Do not widen
- * this carve-out to any other rule without the same rigor (root-caused,
- * confirmed non-isolated, tracked in a filed issue) that went into this one
- * — see this harness's Global Constraints on never fabricating a passing
- * assertion for a real gap.
+ * FORMER KNOWN-ISSUE CARVE-OUT (removed): this journey previously carved
+ * `color-contrast` out of its hard gate for
+ * https://github.com/pradeepmouli/rune-langium/issues/397. Root-causing that
+ * issue found TWO separate things, not one systemic token problem:
+ *  1. A genuine, steady-state violation: SettingsPerspective.tsx's "Project
+ *     configuration" placeholder list used `text-muted-foreground
+ *     opacity-50`, which composites to ~2.6:1 against the daikonic
+ *     background — fixed by dropping the extra opacity (plain
+ *     `text-muted-foreground` alone is ~6.6:1, comfortably AA).
+ *  2. A false positive: the Import/Export-download dialog "violations" only
+ *     ever reproduced because this sweep called `sweepAxe()` immediately
+ *     after `toBeVisible()`, which resolves as soon as Base UI's dialog
+ *     popup has a layout box — WHILE its 200ms `fade-in-0`/`zoom-in-95`
+ *     entrance animation is still transitioning `opacity`. Axe was
+ *     correctly measuring a real, but transient, mid-animation frame, not
+ *     the dialog's resting state. Confirmed by re-running the exact same
+ *     sweep after an explicit settle wait: 0 violations, in both a
+ *     `--disable-gpu` and a GPU-accelerated headless Chromium session.
+ * Both are now fixed at the source (see below) and `color-contrast` is back
+ * to a hard gate like every other rule. Do not reintroduce a carve-out
+ * without the same rigor (root-caused, reproduced, tracked in a filed
+ * issue) that went into diagnosing this one — see this harness's Global
+ * Constraints on never fabricating a passing assertion for a real gap.
  */
 
 import type { Page } from '@playwright/test';
@@ -56,31 +59,26 @@ import { checkout as test, expect, loadCdm } from '../fixtures.js';
 // widget a11y debt tracked separately per FR-A04, not this journey's gate.
 const SELECTORS_TO_EXCLUDE = ['.monaco-editor', '.react-flow', '.dockview-theme-abyss'];
 
-// See the file-header "KNOWN ISSUE CARVE-OUT" note — tracked in issue #397,
-// not silently dropped. Only ever add a rule id here alongside an equally
-// well-evidenced, filed-issue justification.
-const KNOWN_ISSUE_RULE_IDS = new Set(['color-contrast']);
+// Base UI's dialog popup fades/zooms in over 200ms (dialog.tsx's
+// `duration-200` on DialogContent) — comfortably clear of it before
+// scanning, so axe measures the dialog's resting state, not a genuine but
+// transient mid-animation opacity frame (see file-header note on #397).
+const DIALOG_ANIMATION_SETTLE_MS = 400;
 
 interface AxeSweepResult {
   checkpoint: string;
   blocking: number;
-  knownIssue: number;
 }
 
 async function sweepAxe(page: Page, checkpointName: string): Promise<AxeSweepResult> {
   const builder = new AxeBuilder({ page });
   for (const sel of SELECTORS_TO_EXCLUDE) builder.exclude(sel);
   const results = await builder.analyze();
-  const seriousOrCritical = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''));
-  const knownIssue = seriousOrCritical.filter((v) => KNOWN_ISSUE_RULE_IDS.has(v.id));
-  const blocking = seriousOrCritical.filter((v) => !KNOWN_ISSUE_RULE_IDS.has(v.id));
+  const blocking = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact ?? ''));
   if (blocking.length > 0) {
     console.log(`[axe:${checkpointName}:blocking]`, JSON.stringify(blocking, null, 2));
   }
-  if (knownIssue.length > 0) {
-    console.log(`[axe:${checkpointName}:known-issue]`, JSON.stringify(knownIssue, null, 2));
-  }
-  return { checkpoint: checkpointName, blocking: blocking.length, knownIssue: knownIssue.length };
+  return { checkpoint: checkpointName, blocking: blocking.length };
 }
 
 test.describe('J17 — Accessibility sweep', () => {
@@ -120,6 +118,7 @@ test.describe('J17 — Accessibility sweep', () => {
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
     await page.getByRole('button', { name: 'Import' }).click();
     await expect(page.getByTestId('import-dialog')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(DIALOG_ANIMATION_SETTLE_MS);
     results.push(await sweepAxe(page, 'import-dialog'));
     await evidence.checkpoint('axe-import-dialog');
     await page.keyboard.press('Escape');
@@ -132,6 +131,7 @@ test.describe('J17 — Accessibility sweep', () => {
     // "download" role/name guess — see file-header comment.
     await page.getByTestId('codegen-targets-table__download-zod').click();
     await expect(page.getByTestId('download-config-dialog')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(DIALOG_ANIMATION_SETTLE_MS);
     results.push(await sweepAxe(page, 'download-config-dialog'));
     await evidence.checkpoint('axe-download-config-dialog');
     await page.getByTestId('download-config-dialog__cancel').click();
@@ -147,21 +147,7 @@ test.describe('J17 — Accessibility sweep', () => {
         'SettingsPerspective.tsx confirms theme is fixed at dark).'
     );
 
-    const totalKnownIssue = results.reduce((sum, r) => sum + r.knownIssue, 0);
-    if (totalKnownIssue > 0) {
-      evidence.softFinding(
-        'KI-color-contrast-dark-theme',
-        `${totalKnownIssue} color-contrast (serious) axe violation(s) across ${JSON.stringify(
-          results.filter((r) => r.knownIssue > 0).map((r) => r.checkpoint)
-        )} — tracked in https://github.com/pradeepmouli/rune-langium/issues/397 (systemic dark-theme ` +
-          "muted-foreground/secondary-button token contrast, ratios as low as 1.14:1 against WCAG 2 AA's 4.5:1)."
-      );
-    }
-
     const totalBlocking = results.reduce((sum, r) => sum + r.blocking, 0);
-    expect(
-      totalBlocking,
-      `serious/critical axe violations outside the known-issue carve-out: ${JSON.stringify(results)}`
-    ).toBe(0);
+    expect(totalBlocking, `serious/critical axe violations: ${JSON.stringify(results)}`).toBe(0);
   });
 });
