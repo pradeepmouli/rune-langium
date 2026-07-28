@@ -38,7 +38,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@lspeasy/client": "^3.1.2",
+    "@lspeasy/client": "^3.1.5",
     "@types/ws": "^8.18.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.9"
