@@ -11,8 +11,12 @@ import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 
 import { cn } from '../utils';
 
+// Base UI's own un-provided default (OPEN_DELAY, tooltip/utils/constants.ts) is
+// 600ms — match it here so adopting <TooltipProvider> to group a cluster of
+// tooltips (its actual purpose: instant reopen for adjacent triggers within
+// `timeout`) doesn't silently zero out the opening delay for all of them.
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 600,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider> & { delayDuration?: number }) {
   return <TooltipPrimitive.Provider data-slot="tooltip-provider" delay={delayDuration} {...props} />;
@@ -61,7 +65,7 @@ function TooltipContent({
           data-slot="tooltip-content"
           className={cn(
             'bg-popover text-popover-foreground text-xs px-3 py-1.5 rounded-md shadow-md border border-border',
-            'z-[60]',
+            'z-[60] origin-(--transform-origin)',
             'animate-in fade-in-0 zoom-in-95',
             'data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95',
             'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',

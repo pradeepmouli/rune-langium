@@ -19,8 +19,10 @@ const buttonVariants = cva(
   // change. Hover-lift (transform translateY(-1px)) and active-settle
   // are pushed here from the studio override block so all consumers
   // share the affordance; the 1px lift is subtle enough to be a
-  // universal improvement. [&:not(:disabled):hover] and active
-  // selectors use Tailwind arbitrary-variant syntax.
+  // universal improvement. Active also applies a slight press-scale
+  // (0.98) as click feedback, on top of settling the hover lift.
+  // [&:not(:disabled):hover] and active selectors use Tailwind
+  // arbitrary-variant syntax.
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium cursor-pointer ' +
     // cursor-pointer is unconditional above; restore the not-allowed cursor for
     // disabled / aria-disabled states (the disabled:/aria-disabled: variants have
@@ -29,7 +31,7 @@ const buttonVariants = cva(
     // `:where(:disabled,[aria-disabled='true']){cursor:not-allowed}` baseline).
     'disabled:cursor-not-allowed aria-disabled:cursor-not-allowed ' +
     '[transition:transform_140ms_cubic-bezier(0.22,1,0.36,1),background-color_160ms_ease,border-color_160ms_ease,color_160ms_ease,box-shadow_160ms_ease,opacity_160ms_ease] ' +
-    '[&:not(:disabled):hover]:-translate-y-px [&:not(:disabled):active]:translate-y-0 ' +
+    '[&:not(:disabled):hover]:-translate-y-px [&:not(:disabled):active]:translate-y-0 [&:not(:disabled):active]:scale-[0.98] ' +
     'disabled:pointer-events-none disabled:opacity-50 ' +
     "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 " +
     'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ring) ' +

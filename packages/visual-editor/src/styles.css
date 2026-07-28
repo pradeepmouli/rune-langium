@@ -1390,6 +1390,9 @@ button[data-navigable]:focus-visible {
   color: var(--muted-foreground);
   cursor: pointer;
   border-radius: var(--radius-xs);
+  transition:
+    color var(--motion-fast),
+    background-color var(--motion-fast);
 }
 
 .rune-row-expand:hover {
