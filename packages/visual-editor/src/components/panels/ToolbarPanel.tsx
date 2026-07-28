@@ -29,7 +29,10 @@ export function ToolbarPanel({ onFitView, onRelayout, currentDirection }: Toolba
   );
 
   return (
-    <TooltipProvider>
+    // Explicit 0: icon-only toolbar controls want instant tooltips (dense,
+    // frequently-hovered UI) — preserve that pre-existing behavior against
+    // the shared TooltipProvider's now-nonzero default (see tooltip.tsx).
+    <TooltipProvider delayDuration={0}>
       <div className="flex items-center gap-1.5 p-1.5 rounded-lg border bg-card shadow-sm">
         <Tooltip>
           <TooltipTrigger

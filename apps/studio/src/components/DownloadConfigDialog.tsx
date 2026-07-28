@@ -296,7 +296,11 @@ export function DownloadConfigDialog({
           <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
             Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
           </span>
-          <TooltipProvider>
+          {/* Explicit 0: the namespace list's dependency-source tooltips want to
+              stay instant (dense, frequently-hovered rows) — preserve that
+              pre-existing behavior against the shared TooltipProvider's now-
+              nonzero default (tooltip.tsx). */}
+          <TooltipProvider delayDuration={0}>
             <div className="flex flex-col gap-1.5">
               {namespaces.map((ns) => {
                 const isSelected = selected.has(ns);
