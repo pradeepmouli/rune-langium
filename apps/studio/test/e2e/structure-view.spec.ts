@@ -66,7 +66,7 @@ test.describe('Structure View', () => {
     await expect(page.getByTestId('structure-empty-state')).toBeVisible();
   });
 
-  test('Focusing a Data type via NamespaceExplorer double-click populates Structure View', async ({ page }) => {
+  test('Focusing a Data type via NamespaceExplorer double-click populates Structure View', async ({ page: _page }) => {
     // Phase 8: double-click on a namespace-explorer type row sets the focused
     // type in the store, which Structure View subscribes to and renders as a
     // ReactFlow graph (`data-testid="structure-view-flow"`).
@@ -83,7 +83,7 @@ test.describe('Structure View', () => {
     // await expect(page.getByText('Trade', { exact: true })).toBeVisible();
   });
 
-  test('Hexagon-plus expands a complex-typed row in Structure View', async ({ page }) => {
+  test('Hexagon-plus expands a complex-typed row in Structure View', async ({ page: _page }) => {
     // Phase 7: clicking the expand affordance on a row whose type has nested
     // complex-typed fields should inline-expand the child type's fields.
     test.skip(true, 'requires workspace-loading fixture');
@@ -92,7 +92,7 @@ test.describe('Structure View', () => {
     // child row count increases.
   });
 
-  test('Drag a type from NamespaceExplorer to a Structure cell updates the source', async ({ page }) => {
+  test('Drag a type from NamespaceExplorer to a Structure cell updates the source', async ({ page: _page }) => {
     // Phase 7/8: dragging a type node from the NamespaceExplorer and dropping
     // it onto a structure cell should update the field's type in the source and
     // reflect the change in the LSP-validated source editor.
@@ -102,7 +102,7 @@ test.describe('Structure View', () => {
     // shows the updated type reference.
   });
 
-  test('Drag a type from NamespaceExplorer to source editor inserts qualified name', async ({ page }) => {
+  test('Drag a type from NamespaceExplorer to source editor inserts qualified name', async ({ page: _page }) => {
     // Phase 9: drop target is the CodeMirror source editor (not a structure cell).
     // Dropping should insert `${namespaceUri}.${typeName}` at the cursor position.
     test.skip(true, 'requires workspace-loading fixture');
@@ -111,7 +111,7 @@ test.describe('Structure View', () => {
     // text matches the expected qualified name.
   });
 
-  test('Cmd-Z / Ctrl-Z undoes a structure edit made via drag-drop', async ({ page }) => {
+  test('Cmd-Z / Ctrl-Z undoes a structure edit made via drag-drop', async ({ page: _page }) => {
     // Phase 7/8: edits applied through the structure view should be undoable via
     // the standard browser undo shortcut (zundo integration).
     test.skip(true, 'requires workspace-loading fixture');
@@ -125,7 +125,7 @@ test.describe('Structure View', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Structure View — visual snapshots', () => {
-  test('snapshot — collapsed Trade type', async ({ page }) => {
+  test('snapshot — collapsed Trade type', async ({ page: _page }) => {
     // Phase 11.2 scaffold: screenshot of the Structure pane showing the Trade
     // type in its collapsed (default) state.
     //

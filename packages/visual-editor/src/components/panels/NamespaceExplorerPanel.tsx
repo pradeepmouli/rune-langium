@@ -187,7 +187,10 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   hiddenRefCounts,
   dragSourceId,
   onSetDragSource,
-  onClearDragSource
+  // Kept on the public props interface for back-compat only (see the
+  // "intentionally NOT forwarded" comment at its TypeItemRow call site
+  // below) — same no-op pass-through pattern as `_onToggleNamespace` above.
+  onClearDragSource: _onClearDragSource
 }: NamespaceExplorerPanelProps): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
   // Local explorer kind filter (independent of graph visibility / GraphFilterMenu).

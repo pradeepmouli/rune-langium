@@ -998,7 +998,6 @@ describe('layoutStructureGraph — base container child y includes BASE_PADDING 
     const DATA_ROW_HEIGHT = 44;
     const DATA_ROW_GAP = 3;
     const DATA_ROWS_PADDING = 4;
-    const ROW_GAP = 8;
     // Total footprint of n framed rows incl. top+bottom padding + inter-row gaps
     // (mirrors structure-layout.ts `framedRowsStackHeight`).
     const framedRowsStackHeight = (n: number) =>
