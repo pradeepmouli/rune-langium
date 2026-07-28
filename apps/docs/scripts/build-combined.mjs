@@ -67,7 +67,6 @@ const repoRoot = resolve(docsRoot, '..', '..');
 
 const siteRoot = join(repoRoot, 'site');
 const studioDist = join(repoRoot, 'apps', 'studio', 'dist');
-const studioFunctionsSrc = join(repoRoot, 'apps', 'studio', 'functions');
 const docsRawDist = join(docsRoot, '.vitepress', 'dist-docs-raw');
 const combinedDist = join(docsRoot, '.vitepress', 'dist');
 const subpathDist = join(combinedDist, 'rune-studio');

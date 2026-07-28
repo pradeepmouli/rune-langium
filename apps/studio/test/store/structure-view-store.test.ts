@@ -129,7 +129,7 @@ describe('useStructureViewStore workspace persistence', () => {
   });
 
   it('per-request token keeps an older completion from consuming a newer hydration queue', async () => {
-    const { saveWorkspace, saveStructureViewState } = await import('../../src/workspace/persistence.js');
+    const { saveWorkspace } = await import('../../src/workspace/persistence.js');
     const baseWs = {
       kind: 'browser-only' as const,
       createdAt: '2026-05-14T00:00:00Z',

@@ -91,7 +91,10 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 // rerender behavior across more than the root node.
 // -----------------------------------------------------------------------
 
-const tradeDoc: AdapterDocument = {
+// Not consumed directly (cloneTradeDoc below produces the fresh-identity
+// copies every test actually uses) — kept as the documented reference shape
+// its doc comment describes.
+const _tradeDoc: AdapterDocument = {
   namespaces: [{ uri: 'cdm.trade' }],
   nodes: [
     {
@@ -144,7 +147,7 @@ const economicsKey = expansionKey({
 });
 
 /**
- * Build a fresh AdapterDocument with content equivalent to `tradeDoc` but
+ * Build a fresh AdapterDocument with content equivalent to `_tradeDoc` but
  * everything (top-level object, namespaces, nodes, attributes) at NEW
  * identities. Mirrors what happens in apps/studio/EditorPage when
  * `storeNodes` mutates on a keystroke: `graphNodesToAdapterDocument`

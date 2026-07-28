@@ -57,8 +57,7 @@ import {
   useNodesInitialized,
   useReactFlow,
   ReactFlowProvider,
-  type Node,
-  ViewportPortal
+  type Node
 } from '@xyflow/react';
 import type { OnSelectionChangeParams } from '@xyflow/react';
 import { cn } from '@rune-langium/design-system/utils';

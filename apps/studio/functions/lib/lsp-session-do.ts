@@ -53,33 +53,12 @@ const META_KEY = 'meta';
 // JSON-RPC 2.0 framing helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-interface JsonRpcRequest {
-  jsonrpc: '2.0';
-  id: number | string;
-  method: string;
-  params?: unknown;
-}
 interface JsonRpcNotification {
   jsonrpc: '2.0';
   method: string;
   params?: unknown;
 }
-interface JsonRpcResult {
-  jsonrpc: '2.0';
-  id: number | string;
-  result: unknown;
-}
-interface JsonRpcError {
-  jsonrpc: '2.0';
-  id: number | string | null;
-  error: { code: number; message: string; data?: unknown };
-}
 
-function isJsonRpcRequest(msg: unknown): msg is JsonRpcRequest {
-  if (typeof msg !== 'object' || msg === null) return false;
-  const m = msg as Record<string, unknown>;
-  return m['jsonrpc'] === '2.0' && typeof m['method'] === 'string' && 'id' in m;
-}
 function isJsonRpcNotification(msg: unknown): msg is JsonRpcNotification {
   if (typeof msg !== 'object' || msg === null) return false;
   const m = msg as Record<string, unknown>;
@@ -88,7 +67,6 @@ function isJsonRpcNotification(msg: unknown): msg is JsonRpcNotification {
 
 // JSON-RPC 2.0 standard error codes
 const ERR_PARSE = -32700;
-const ERR_METHOD_NOT_FOUND = -32601;
 const ERR_INTERNAL = -32603;
 
 // LSP capabilities are no longer hand-rolled here — once the langium

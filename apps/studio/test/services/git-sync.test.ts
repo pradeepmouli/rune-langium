@@ -14,7 +14,7 @@ vi.mock('../../src/workspace/persistence.js', () => ({
 // vi.mock is hoisted, so the factory must not reference top-level variables
 // declared later in the file. Use vi.hoisted() to share state across the
 // hoisted boundary.
-const { created, getState, subscribeCbs } = vi.hoisted(() => {
+const { created, subscribeCbs } = vi.hoisted(() => {
   const created: unknown[] = [];
   const subscribeCbs: Array<(s: object) => void> = [];
   const state = { current: { phase: 'idle' as string } };
