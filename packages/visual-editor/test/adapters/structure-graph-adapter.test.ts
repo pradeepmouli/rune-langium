@@ -63,6 +63,36 @@ describe('buildStructureGraph — standalone Data type', () => {
 
     expect(result.nodes.size).toBe(0);
   });
+
+  it('forwards AdapterNode.deferred onto the built StructureDataNode', () => {
+    const deferredFixture = {
+      namespaces: [{ uri: 'cdm.trade' }],
+      nodes: [
+        {
+          id: 'cdm.trade.Trade',
+          $type: 'Data' as const,
+          name: 'Trade',
+          namespace: 'cdm.trade',
+          deferred: true
+        }
+      ]
+    };
+    const result = buildStructureGraph(deferredFixture, {
+      focusedTypeId: 'cdm.trade.Trade',
+      expansionMap: new Map()
+    });
+    const root = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
+    expect(root.deferred).toBe(true);
+  });
+
+  it('omits deferred (undefined) for a normally-hydrated node', () => {
+    const result = buildStructureGraph(fixtureSimple, {
+      focusedTypeId: 'cdm.trade.Trade',
+      expansionMap: new Map()
+    });
+    const root = result.nodes.get('cdm.trade.Trade') as StructureDataNode;
+    expect(root.deferred).toBeUndefined();
+  });
 });
 
 const fixtureExtends = {

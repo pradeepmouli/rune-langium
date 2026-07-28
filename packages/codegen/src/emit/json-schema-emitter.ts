@@ -34,9 +34,11 @@
  */
 
 import {
+  isChoice,
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
+  type Choice,
   type Data,
   type Attribute,
   type RosettaEnumeration,
@@ -54,7 +56,7 @@ import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
-import { mergeProfileTypeMaps, decodeCardinality } from './base-namespace-emitter.js';
+import { mergeProfileTypeMaps, decodeCardinality, choiceOptionFieldName } from './base-namespace-emitter.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
@@ -69,6 +71,8 @@ interface EmissionContext {
   relativePath: string;
   /** All Data nodes keyed by name. */
   dataByName: ReadonlyMap<string, Data>;
+  /** All Choice nodes keyed by name (W2/item-1 mirror of ts/zod emitters). */
+  choiceByName: ReadonlyMap<string, Choice>;
   /** All Enumeration nodes keyed by name. */
   enumByName: ReadonlyMap<string, RosettaEnumeration>;
   typeAliasByName: ReadonlyMap<string, RosettaTypeAlias>;
@@ -104,6 +108,7 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     namespace: model.namespace,
     relativePath: getTargetRelativePath(model.namespace, 'json-schema'),
     dataByName: model.dataByName,
+    choiceByName: model.choiceByName,
     enumByName: model.enumByName,
     typeAliasByName: model.typeAliasByName,
     rulesByName: model.rulesByName,
@@ -153,9 +158,73 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
     super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry);
     this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
+    this.typesWithLocalSubtype = JsonSchemaNamespaceEmitter.computeTypesWithLocalSubtype(
+      model.dataByName,
+      model.choiceByName
+    );
   }
 
-  private trackDefinitionSourceMap(node: Data | RosettaEnumeration | RosettaTypeAlias): void {
+  /**
+   * Names of Data AND Choice types that have at least one Data subtype IN
+   * THIS NAMESPACE's `dataByName` (i.e. some other Data in this namespace's
+   * `superType` resolves to them). Computed once per emitter instance.
+   * Shared by both `emitTypeDef` (Data-extends-Data) and `emitChoiceDef`
+   * (Data-extends-Choice) — a Choice being extended has the identical
+   * "own branches must not self-close" requirement as an extended Data,
+   * for the identical ajv-verified reason (see both methods' doc
+   * comments).
+   *
+   * Item 1 adjacent-suspect fix (docs/superpowers/specs/2026-07-02-emitter-
+   * crossns-hardening-design.md): a type that is SOMEONE's supertype must
+   * never self-close its own `$defs` entry with `additionalProperties:
+   * false` — see `emitTypeDef`'s doc comment for the full ajv-verified
+   * rationale. This index limits detection to same-namespace subtypes; a
+   * type extended ONLY from another namespace (this namespace has no
+   * visibility into foreign `dataByName` maps) is not detected and keeps
+   * `additionalProperties: false` on its own def — the same latent gap the
+   * emitter's existing cross-namespace `$ref` strategy already has
+   * elsewhere (non-goal: "JSON Schema cross-namespace $ref STRATEGY...
+   * stays whatever it is today").
+   */
+  private readonly typesWithLocalSubtype: ReadonlySet<string>;
+
+  private static computeTypesWithLocalSubtype(
+    dataByName: ReadonlyMap<string, Data>,
+    choiceByName: ReadonlyMap<string, Choice>
+  ): Set<string> {
+    const result = new Set<string>();
+    for (const data of dataByName.values()) {
+      const parentRef = data.superType?.ref;
+      if (!parentRef) continue;
+      // Identity compare, not name-presence: a cross-namespace parent whose
+      // name collides with an unrelated LOCAL type must not open the local
+      // type. (Unreachable via `extends <name>` today — Rune scoping
+      // resolves a shadowed name to the local declaration, probe-verified —
+      // but identity keeps this correct independent of that scoping
+      // invariant.)
+      if (isData(parentRef) && dataByName.get(parentRef.name) === parentRef) {
+        result.add(parentRef.name);
+      } else if (isChoice(parentRef) && choiceByName.get(parentRef.name) === parentRef) {
+        result.add(parentRef.name);
+      }
+    }
+    return result;
+  }
+
+  /*
+   * NOTE: unlike ts-emitter's and zod-emitter's `findChoiceAncestor` walk,
+   * this emitter does NOT need an equivalent multi-level lookahead. JSON
+   * Schema's `$ref` composes recursively for free: `BasketConstituent`
+   * references `#/$defs/ObservableItem`, whose OWN def already derives
+   * from `#/$defs/Asset` — a validator resolves the whole chain by
+   * following `$ref`s, so `emitTypeDef`'s single-level `$ref` to the
+   * IMMEDIATE `superType` (Data or Choice, same code path) is sufficient
+   * at every depth. Verified with a real 3-level ajv probe (Data extends
+   * Data extends Choice) during design — see item 1's design doc "Multi-
+   * level ... resolves through the chain".
+   */
+
+  private trackDefinitionSourceMap(node: Data | Choice | RosettaEnumeration | RosettaTypeAlias): void {
     const start = node.$cstNode?.range?.start;
     const sourceUri = node.$container?.$document?.uri?.toString() ?? this.fallbackSourceUri;
     if (!sourceUri || !start) {
@@ -199,6 +268,26 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   emitData(data: Data): void {
     this.$defs[data.name] = this.emitTypeDef(data);
     this.trackDefinitionSourceMap(data);
+  }
+
+  /**
+   * Item 1: emit a `$defs/<Choice>` entry expressing the key-presence
+   * discriminated union — same semantics as ts/zod's Choice surfaces
+   * (exactly one option key present). The natural JSON Schema encoding is a
+   * `oneOf` of single-required-key objects with `additionalProperties:
+   * false`: each option's branch requires exactly its own key and forbids
+   * every other property, so `oneOf` (which JSON Schema validates as
+   * "matches EXACTLY one branch") naturally enforces "exactly one option
+   * key present" — verified with real ajv (json-schema-choice.test.ts):
+   * `{cash:...}` matches only the Cash branch (valid); `{cash:...,
+   * commodity:...}` matches neither branch on its own since each branch's
+   * `additionalProperties: false` rejects the OTHER option's key (invalid);
+   * `{}` matches no branch, since each branch requires its own key
+   * (invalid).
+   */
+  emitChoice(choice: Choice): void {
+    this.$defs[choice.name] = this.emitChoiceDef(choice);
+    this.trackDefinitionSourceMap(choice);
   }
 
   emitRule(rule: RosettaRule): void {
@@ -251,6 +340,9 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
         if (this.ctx.dataByName.has(refText)) {
           return { $ref: `#/$defs/${refText}` };
         }
+        if (this.ctx.choiceByName.has(refText)) {
+          return { $ref: `#/$defs/${refText}` };
+        }
 
         this.ctx.diagnostics.push({
           severity: 'warning',
@@ -286,6 +378,15 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
       return { $ref: `#/$defs/${typeRef.name}` };
     }
 
+    // Item 3: a Choice-typed attribute resolves to the Choice's own $defs
+    // entry — same $ref convention as Data/Enum, was previously falling
+    // through to the unresolved-ref warning below (isChoice was never
+    // consulted in this mapping, mirroring the same pre-W2 gap ts/zod once
+    // had in resolveTypeExprAsTs/resolveTypeExpr).
+    if (isChoice(typeRef)) {
+      return { $ref: `#/$defs/${typeRef.name}` };
+    }
+
     if (refText) {
       const builtinSchema = this.ctx.builtinTypeMap[refText];
       if (builtinSchema) return builtinSchema;
@@ -302,6 +403,56 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Emit the JSON Schema definition for a single Data type.
    * T094, T095.
+   *
+   * Item 1 adjacent-suspect fix (docs/superpowers/specs/2026-07-02-emitter-
+   * crossns-hardening-design.md): the PRE-FIX composition for Data-extends-
+   * Data was `allOf: [{$ref: parent}, {..., additionalProperties: false}]`,
+   * with the PARENT's own `$defs` entry also self-closed via
+   * `additionalProperties: false`. Under JSON Schema `allOf` semantics each
+   * branch is evaluated against the FULL instance independently — so both
+   * the parent branch (`$ref`'d, carrying the parent's own
+   * `additionalProperties: false`) and the child's own branch reject any
+   * property outside their OWN `properties`, including properties
+   * contributed by the OTHER branch. A real parent+child instance (e.g.
+   * `{name, breed}` for `Dog extends Animal`) was rejected on BOTH branches
+   * — verified against real ajv in json-schema-data-extends-data-ajv-
+   * probe.test.ts, confirming this was a real, pre-existing bug (not
+   * speculative).
+   *
+   * Fix: branch-level schemas (both the parent's own def, when — and only
+   * when — it has a local subtype, and the child's own-attributes branch)
+   * never carry `additionalProperties: false`. Strictness is instead
+   * enforced ONCE, at the composed level: `unevaluatedProperties: false`
+   * sits alongside the `allOf`, which draft 2020-12 evaluates against
+   * whatever properties were ALREADY evaluated by any branch (`$ref`'d or
+   * inline) — exactly the semantics needed for "reject anything not
+   * declared anywhere in the chain." A plain (non-extended) Data keeps
+   * `additionalProperties: false` on its own def, UNLESS it is itself a
+   * local supertype (`typesWithLocalSubtype`), in which case it too must
+   * drop the closing keyword — the SAME `$defs` entry is `$ref`'d into
+   * every subtype's `allOf`, and `additionalProperties: false` on a
+   * `$ref`'d branch rejects the child's own properties the identical way
+   * (verified: dropping only the immediate own-branch keyword while
+   * leaving the parent's def self-closed still fails ajv).
+   *
+   * Multi-level chains (`Poodle extends Dog extends Animal`): ONLY the
+   * outermost (leaf, no further local subtype) composed node may carry
+   * `unevaluatedProperties: false` — verified with real ajv that a
+   * `$ref`'d schema which ITSELF already closes with its own
+   * `unevaluatedProperties: false` does not let that annotation propagate
+   * through to an outer `allOf`'s `unevaluatedProperties` evaluation
+   * (`Dog`'s own `unevaluatedProperties: false`, evaluated in isolation
+   * against the full `Poodle` instance, rejects `Poodle`'s own `size`
+   * property the same way the pre-fix `additionalProperties: false` did).
+   * So `Dog` (itself extended by `Poodle`) must NOT self-close even in the
+   * `allOf` branch; only `Poodle` (the leaf) does — same
+   * `typesWithLocalSubtype` check as the plain-Data branch above.
+   *
+   * Same-namespace subtype detection only (see `typesWithLocalSubtype`'s
+   * doc comment) — a supertype extended solely from another namespace is
+   * not detected here and keeps its own closing keyword; this mirrors the
+   * emitter's pre-existing cross-namespace `$ref` limitation and is out of
+   * scope per the design doc's non-goals.
    */
   private emitTypeDef(data: Data): object {
     const required: string[] = [];
@@ -336,27 +487,89 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
 
       const ownSchema: Record<string, unknown> = {
         type: 'object',
-        properties,
-        additionalProperties: false
+        properties
       };
       if (required.length > 0) ownSchema['required'] = required;
       if (conditionMeta.length > 0) ownSchema['x-rune-conditions'] = conditionMeta;
 
-      return {
-        allOf: [parentRef, ownSchema]
-      };
+      const composed: Record<string, unknown> = { allOf: [parentRef, ownSchema] };
+      if (!this.typesWithLocalSubtype.has(data.name)) {
+        composed['unevaluatedProperties'] = false;
+      }
+      return composed;
     }
 
     const def: Record<string, unknown> = {
       type: 'object',
-      properties,
-      additionalProperties: false
+      properties
     };
+    if (!this.typesWithLocalSubtype.has(data.name)) {
+      def['additionalProperties'] = false;
+    }
 
     if (required.length > 0) def['required'] = required;
     if (conditionMeta.length > 0) def['x-rune-conditions'] = conditionMeta;
 
     return def;
+  }
+
+  /**
+   * Emit the JSON Schema definition for a `choice` declaration: a
+   * key-presence discriminated union expressed as `oneOf` of
+   * single-required-key option branches. Mirrors ts/zod's Choice-union
+   * semantics (exactly one option key present) — NOT a literal-tag
+   * `discriminator`, since CDM Choice instances have no `$type`-like tag
+   * field.
+   *
+   * Each branch requires exactly its own option key
+   * (`choiceOptionFieldName`, the shared camelCase rule — same naming ts's
+   * `emitChoiceTypeDeclaration` and zod's `emitChoiceSchema` already use)
+   * and, UNLESS this Choice has a local Data subtype
+   * (`typesWithLocalSubtype`), forbids every other property via
+   * `additionalProperties: false` — `oneOf` validates "matches EXACTLY one
+   * branch", so a payload with only its own option key matches ONE branch
+   * (valid); a payload with two option keys fails EVERY branch (each
+   * branch's own key requirement is met by at most one of them, and the
+   * OTHER key is rejected by that branch's `additionalProperties: false`)
+   * (invalid); an empty payload fails every branch's `required` (invalid).
+   * Verified against real ajv (json-schema-choice.test.ts).
+   *
+   * When a Data extends this Choice (`emitTypeDef`'s `allOf` composition,
+   * derivation not decomposition — same design principle as #365/W2's
+   * ts/zod Choice surfaces), the branches must NOT self-close with
+   * `additionalProperties: false` — verified with real ajv that a
+   * `$ref`'d `oneOf` branch which closes with its own
+   * `additionalProperties: false` rejects properties contributed by the
+   * EXTENDING Data's own attributes (the identical `allOf`-branch-
+   * isolation bug `emitTypeDef`'s doc comment documents for plain
+   * Data-extends-Data). The extending Data's own composed node instead
+   * carries `unevaluatedProperties: false` once, at the outermost level —
+   * so a Choice with a local subtype trades its OWN standalone strictness
+   * for correct composition, the same recorded trade-off as an extended
+   * Data (`typesWithLocalSubtype`'s doc comment).
+   */
+  private emitChoiceDef(choice: Choice): object {
+    const closeBranches = !this.typesWithLocalSubtype.has(choice.name);
+    const branches = choice.attributes.map((option) => {
+      const optionTypeRef = option.typeCall?.type;
+      const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
+      const fieldName = choiceOptionFieldName(optionTypeName);
+      const optionSchema: object = this.ctx.builtinTypeMap[optionTypeName] ?? { $ref: `#/$defs/${optionTypeName}` };
+
+      const branch: Record<string, unknown> = {
+        type: 'object',
+        properties: { [fieldName]: optionSchema },
+        required: [fieldName]
+      };
+      if (closeBranches) branch['additionalProperties'] = false;
+      return branch;
+    });
+
+    if (branches.length === 0) {
+      return { not: {} };
+    }
+
+    return { oneOf: branches };
   }
 
   /**

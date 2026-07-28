@@ -40,7 +40,7 @@ import type {
   LayoutOptions,
   LayoutEngine,
   VisibilityState,
-  AnyGraphNode,
+  DomainNodeData,
   GraphNodeMeta
 } from '../types.js';
 // Merged type + ops namespaces: `Data` is both the interface type and the
@@ -48,6 +48,7 @@ import type {
 // from the single core barrel. Imported as values so the namespace ops resolve.
 import { Data, Choice, RosettaEnumeration, RosettaFunction, Annotation } from '@rune-langium/core';
 import { indexById } from '@rune-langium/core';
+import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
 import { astToModel } from '../adapters/ast-to-model.js';
 import { computeLayout, clearLayoutCache } from '../layout/dagre-layout.js';
 import { validateGraph } from '../validation/edit-validator.js';
@@ -66,6 +67,8 @@ import {
   edgesFromMap,
   ensureMemberArray
 } from './node-projection.js';
+import { selectEdgeIndex } from './edge-index.js';
+import { rewriteEdgeRefInNode, rewriteOwnRefs, renameRefValue } from './edge-ref-rewrite.js';
 
 // ---------------------------------------------------------------------------
 // Cross-namespace type-ref disambiguation (spec 020 Phase 13, Finding 3)
@@ -236,6 +239,7 @@ export interface EditorState {
    * it is not part of undo history — patches track in-flight intent, not state.
    */
   pendingEditPatches: Patches;
+  pendingInversePatches: Patches;
 }
 
 export interface DeferredExportEntry {
@@ -322,6 +326,8 @@ export interface EditorActions {
   removeEnumValue(nodeId: string, valueName: string): void;
   updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
   reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
+  addEnumValueSynonym(nodeId: string, valueIndex: number, source: string, value: string): void;
+  removeEnumValueSynonym(nodeId: string, valueIndex: number, synIndex: number): void;
   setEnumParent(nodeId: string, parentId: string | null): void;
 
   // --- Choice operations ---
@@ -351,6 +357,7 @@ export interface EditorActions {
   ): void;
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
+  updateTypeAliasType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
   // --- Condition operations ---
@@ -378,7 +385,7 @@ export interface EditorActions {
   // --- Metadata operations ---
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
-  addSynonym(nodeId: string, synonym: string): void;
+  addSynonym(nodeId: string, source: string, value?: string): void;
   removeSynonym(nodeId: string, index: number): void;
 
   // --- Annotation operations ---
@@ -441,7 +448,7 @@ function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
  * full RosettaModel hasn't been materialized yet. Both `loadModels`
  * (post-replace merge) and `loadDeferredExports` (direct insert) share
  * this — keeps the placeholder shape in one place so a change to
- * `AnyGraphNode`'s required fields only happens once.
+ * `DomainNodeData`'s required fields only happens once.
  *
  * Mutates `existingIds` by adding each newly-emitted node's id so
  * callers can use the same set to track de-duplication across
@@ -557,26 +564,6 @@ function formatCardinalityString(card: string): string {
 }
 
 /**
- * Rewrite a `$refText`/label that references the type being renamed.
- *
- * Matches both forms the codebase emits: a bare name (`oldName`, the same-scope
- * ref) and the namespace-qualified name (`<namespace>.<oldName>`, the form
- * `disambiguateTypeRef` writes when another node shares the bare name across
- * namespaces). Returns the rewritten value (`newName` or `<namespace>.<newName>`)
- * on a match, or `null` when `value` does not reference the renamed type.
- *
- * Qualified refs are authoritative — a dotted `$refText` resolves to exactly
- * that namespace — so qualified matching is precise. Bare matching keeps its
- * pre-existing same-scope semantics (a bare name that collides across
- * namespaces is a separate, pre-existing resolution concern, untouched here).
- */
-function renameRefText(value: string | undefined, oldName: string, newName: string, namespace: string): string | null {
-  if (value === oldName) return newName;
-  if (value === `${namespace}.${oldName}`) return `${namespace}.${newName}`;
-  return null;
-}
-
-/**
  * Move `arr[fromIndex]` to `toIndex`, mutating in place. Returns false (no-op)
  * when `fromIndex` is out of range — a negative index would otherwise splice
  * from the END and move the wrong element. `toIndex` follows native splice
@@ -589,87 +576,6 @@ function reorderInPlace<T>(arr: T[], fromIndex: number, toIndex: number): boolea
   const moved = arr.splice(fromIndex, 1)[0]!; // guard guarantees a defined element
   arr.splice(toIndex, 0, moved);
   return true;
-}
-
-/**
- * Update typeCall.type.$refText references in a node's member arrays.
- * Returns the same object if nothing changed, or a new object with updates.
- *
- * `namespace` is the renamed type's namespace, used to also match qualified
- * (`<namespace>.<oldName>`) references — not just the bare name.
- */
-function updateTypeRefsInNode(d: AnyGraphNode, oldName: string, newName: string, namespace: string): AnyGraphNode {
-  let changed = false;
-
-  function updateMemberRefs<T extends { typeCall?: { type?: { $refText?: string } } }>(members: T[]): T[] {
-    const updated = members.map((m) => {
-      const next = renameRefText(m.typeCall?.type?.$refText, oldName, newName, namespace);
-      if (next !== null) {
-        changed = true;
-        return {
-          ...m,
-          typeCall: {
-            ...m.typeCall,
-            type: { ...m.typeCall!.type, $refText: next }
-          }
-        } as T;
-      }
-      return m;
-    });
-    return updated;
-  }
-
-  function updateRefText(ref: { $refText?: string } | undefined): { $refText?: string } | undefined {
-    const next = renameRefText(ref?.$refText, oldName, newName, namespace);
-    if (next !== null) {
-      changed = true;
-      return { ...ref, $refText: next };
-    }
-    return ref;
-  }
-
-  const result = { ...d } as Record<string, unknown>;
-
-  // `d.$type` is the DomainNodeData discriminant — each case narrows `d`.
-  switch (d.$type) {
-    case 'Data': {
-      result.attributes = updateMemberRefs(d.attributes as any[]);
-      result.superType = updateRefText(d.superType);
-      break;
-    }
-    case 'Choice': {
-      result.attributes = updateMemberRefs(d.attributes as any[]);
-      break;
-    }
-    case 'RosettaFunction': {
-      result.inputs = updateMemberRefs(d.inputs as any[]);
-      const outNext = renameRefText((d.output as any)?.typeCall?.type?.$refText, oldName, newName, namespace);
-      if (outNext !== null) {
-        changed = true;
-        const out = d.output as any;
-        result.output = {
-          ...out,
-          typeCall: { ...out.typeCall, type: { ...out.typeCall.type, $refText: outNext } }
-        };
-      }
-      result.superFunction = updateRefText(d.superFunction);
-      break;
-    }
-    case 'RosettaRecordType': {
-      result.features = updateMemberRefs(d.features as any[]);
-      break;
-    }
-    case 'RosettaEnumeration': {
-      result.parent = updateRefText(d.parent);
-      break;
-    }
-    case 'Annotation': {
-      result.attributes = updateMemberRefs(d.attributes as any[]);
-      break;
-    }
-  }
-
-  return changed ? (result as unknown as AnyGraphNode) : d;
 }
 
 // ---------------------------------------------------------------------------
@@ -725,7 +631,7 @@ function buildNewTypeNode(kind: TypeKind, name: string, namespace: string, count
     id: makeNodeId(namespace, name),
     type: kind,
     position: { x: counter * 50, y: counter * 50 },
-    data: baseData as unknown as AnyGraphNode,
+    data: baseData as unknown as DomainNodeData,
     meta
   };
 }
@@ -820,7 +726,7 @@ export function isDegradedReparse(incoming: TypeGraphNode[], current: TypeGraphN
  */
 type GraphMutationExtra = Omit<
   Partial<EditorState>,
-  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'parseEpoch'
+  'nodes' | 'edges' | 'nodesById' | 'edgesById' | 'pendingEditPatches' | 'pendingInversePatches' | 'parseEpoch'
 >;
 
 /**
@@ -845,8 +751,10 @@ function mutateGraph(
   recipe: GraphEditRecipe,
   extra?: GraphMutationExtra
 ): void {
-  const { nodesById, edgesById, pendingEditPatches } = get();
-  const [next, patches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, { enablePatches: true });
+  const { nodesById, edgesById, pendingEditPatches, pendingInversePatches } = get();
+  const [next, patches, inversePatches] = mutativeCreate({ nodes: nodesById, edges: edgesById }, recipe, {
+    enablePatches: true
+  });
   if (patches.length === 0 && !extra) return; // no-op recipe — leave state untouched
   set({
     nodesById: next.nodes,
@@ -854,6 +762,8 @@ function mutateGraph(
     nodes: nodesFromMap(next.nodes), // re-derive array caches from updated Maps
     edges: edgesFromMap(next.edges),
     pendingEditPatches: patches.length > 0 ? [...pendingEditPatches, ...patches] : pendingEditPatches,
+    pendingInversePatches:
+      inversePatches.length > 0 ? [...pendingInversePatches, ...inversePatches] : pendingInversePatches,
     ...extra
   });
 }
@@ -925,7 +835,8 @@ const initialState: EditorState = {
   hydratedNamespaces: [],
   hydrationNonce: 0,
   parseEpoch: 0,
-  pendingEditPatches: []
+  pendingEditPatches: [],
+  pendingInversePatches: []
 };
 
 // ---------------------------------------------------------------------------
@@ -1086,6 +997,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               // One-shot: edits since the last parse have now been replayed; clear
               // so they can never accumulate or replay stale data across reparses.
               pendingEditPatches: [],
+              pendingInversePatches: [],
               visibility: {
                 expandedNamespaces,
                 hiddenNodeIds: new Set<string>(),
@@ -1267,11 +1179,34 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 draft.nodes.delete(nodeId);
                 draft.nodes.set(newNodeId, { ...n, id: newNodeId, data: { ...n.data, name: newName } });
 
-                // 2. Cascade typeCall/superType refs in every OTHER node
-                for (const [id, other] of originalNodes) {
-                  if (id === nodeId) continue;
-                  const updated = updateTypeRefsInNode(other.data, oldName, newName, namespace);
-                  if (updated !== other.data) draft.nodes.set(id, { ...other, data: updated });
+                // 2. Cascade refs EDGE-DRIVEN (spec §3): only nodes with an incident
+                //    edge targeting the renamed node are touched — the edge's
+                //    existence IS the binding decision, so a bare same-name ref in
+                //    another namespace that binds locally has no edge here and is
+                //    (correctly) untouched.
+                const incident = selectEdgeIndex(originalEdges).byTarget(nodeId);
+                for (const edge of incident) {
+                  if (edge.source === nodeId) continue; // self handled below via rewriteOwnRefs
+                  const other = originalNodes.get(edge.source);
+                  if (!other) continue;
+                  // A node can have several incident edges; rewrite against the
+                  // LATEST draft state so multiple slots accumulate.
+                  const current = draft.nodes.get(edge.source) ?? other;
+                  const rewritten = rewriteEdgeRefInNode(edge, current.data, oldName, newName, namespace);
+                  if (rewritten === null) {
+                    // Invariant breach (spec §3.3): warn + skip; never guess, never throw.
+                    console.warn(`[renameType] edge ${edge.id} did not locate a rewritable slot — skipped`);
+                    continue;
+                  }
+                  draft.nodes.set(edge.source, { ...current, data: rewritten });
+                }
+                // 2b. The renamed node's own data ALWAYS gets the slot rewrite
+                //     (self-refs have no edges — spec §3.4/§5). Applied to the
+                //     re-keyed entry from step 1.
+                const renamedEntry = draft.nodes.get(newNodeId)!;
+                const ownRewritten = rewriteOwnRefs(renamedEntry.data, oldName, newName, namespace);
+                if (ownRewritten !== renamedEntry.data) {
+                  draft.nodes.set(newNodeId, { ...renamedEntry, data: ownRewritten });
                 }
 
                 // 3. Re-key incident edges via parse+rebuild (NOT string .replace).
@@ -1285,7 +1220,9 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   // literal) — never rewrite those, or an attribute that happens
                   // to share the renamed type's name would corrupt its edge.
                   const relabeled =
-                    e.data?.kind === 'choice-option' ? renameRefText(e.data?.label, oldName, newName, namespace) : null;
+                    e.data?.kind === 'choice-option'
+                      ? renameRefValue(e.data?.label, oldName, newName, namespace)
+                      : null;
                   const labelChanged = relabeled !== null;
                   if (!sourceChanged && !targetChanged && !labelChanged) continue;
 
@@ -1718,6 +1655,34 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          // no generated domain op at the enum-value level; push/splice inline
+          addEnumValueSynonym(nodeId: string, valueIndex: number, source: string, value: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as { $type?: string; enumValues?: any[] } | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const ev = d.enumValues?.[valueIndex];
+              if (!ev) return;
+              if (!Array.isArray(ev.enumSynonyms)) ev.enumSynonyms = [];
+              ev.enumSynonyms.push({
+                $type: 'RosettaEnumSynonym',
+                sources: [{ $refText: source }],
+                synonymValue: value
+              });
+            });
+          },
+
+          removeEnumValueSynonym(nodeId: string, valueIndex: number, synIndex: number) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data as { $type?: string; enumValues?: any[] } | undefined;
+              if (d?.$type !== 'RosettaEnumeration') return;
+              const arr = d.enumValues?.[valueIndex]?.enumSynonyms;
+              // Bounds guard: splice(-1, 1) would delete the LAST entry; out-of-range emits spurious patch.
+              if (Array.isArray(arr) && synIndex >= 0 && synIndex < arr.length) arr.splice(synIndex, 1);
+            });
+          },
+
           setEnumParent(nodeId: string, parentId: string | null) {
             const state = get();
             const parentNode = parentId ? state.nodesById.get(parentId) : null;
@@ -1971,28 +1936,42 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             });
           },
 
+          updateTypeAliasType(nodeId: string, typeName: string) {
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              if (!n || n.data.$type !== 'RosettaTypeAlias') return;
+              const d = n.data as { typeCall?: { type?: { $refText?: string }; arguments?: unknown[] } };
+              if (!d.typeCall) d.typeCall = { type: { $refText: typeName }, arguments: [] } as never;
+              else if (!d.typeCall.type) d.typeCall.type = { $refText: typeName };
+              else d.typeCall.type.$refText = typeName;
+            });
+          },
+
           updateExpression(nodeId: string, expressionText: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               if (!n) return;
               const d = n.data;
               if (d.$type === 'RosettaFunction') {
-                // Function body is in operations[0].expression.$cstText.
+                // Function body is in operations[0].expression, represented as a
+                // RawDsl leaf (edited text pending reparse — see RAW_DSL_TYPE).
                 // Also write expressionText as a display field.
-                const fd = d as { operations?: any[]; expressionText?: string };
+                const fd = d as { operations?: any[]; expressionText?: string; output?: { name?: string } };
                 if (!fd.operations || fd.operations.length === 0) {
                   fd.operations = [
                     {
                       $type: 'Operation',
-                      operator: 'set',
-                      expression: { $cstText: expressionText }
+                      add: false,
+                      assignRoot: { $refText: fd.output?.name ?? '' },
+                      expression: { $type: RAW_DSL_TYPE, text: expressionText }
                     }
                   ];
                 } else {
-                  if (!fd.operations[0].expression) {
-                    fd.operations[0].expression = {};
-                  }
-                  fd.operations[0].expression.$cstText = expressionText;
+                  // Replace wholesale — a stale structural node with only
+                  // $cstText overwritten would still carry its OLD $type and
+                  // structural fields, which the structural-first renderer
+                  // would render instead of the edit (silently dropping it).
+                  fd.operations[0].expression = { $type: RAW_DSL_TYPE, text: expressionText };
                 }
                 fd.expressionText = expressionText;
               } else {
@@ -2021,7 +2000,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               $type: 'Condition',
               name: condition.name,
               definition: condition.definition,
-              expression: { $cstText: condition.expressionText },
+              // RawDsl leaf — edited text pending reparse — see RAW_DSL_TYPE.
+              expression: { $type: RAW_DSL_TYPE, text: condition.expressionText },
               postCondition: condition.isPostCondition ?? false
             };
             mutateGraph(set, get, (draft) => {
@@ -2079,8 +2059,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 ...cond,
                 ...(updates.name !== undefined ? { name: updates.name } : {}),
                 ...(updates.definition !== undefined ? { definition: updates.definition } : {}),
+                // Replace wholesale (not spread) — cond.expression carries the
+                // STALE structural $type/fields from the pre-edit parse; spreading
+                // it and only overwriting $cstText left the old $type intact, so
+                // the structural-first renderer re-rendered the OLD expression and
+                // silently dropped the edit. RawDsl leaf — see RAW_DSL_TYPE.
                 ...(updates.expressionText !== undefined
-                  ? { expression: { ...cond.expression, $cstText: updates.expressionText } }
+                  ? { expression: { $type: RAW_DSL_TYPE, text: updates.expressionText } }
                   : {})
               };
               dd.conditions = allConditions.filter((c: any) => !c.postCondition);
@@ -2124,15 +2109,21 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           },
 
           // item construction stays bespoke (rich-ref synonym shapes); append delegated to DomainOps
-          addSynonym(nodeId: string, synonym: string) {
+          addSynonym(nodeId: string, source: string, value?: string) {
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
               const d = n?.data;
               if (!d) return;
               const dd = d as { synonyms?: any[] };
-              // Data/Choice use RosettaClassSynonym, Enum uses RosettaSynonym
+              // Every synonym kind REQUIRES at least one source (grammar:
+              // `'[' 'synonym' sources+=[RosettaSynonymSource:QualifiedName] ...`).
+              // Data/Choice use RosettaClassSynonym (optional value → { name }),
+              // Enum uses RosettaSynonym with a body (requires value — no-op when absent,
+              // since a body-less enum synonym renders unparsable in rosetta-render-core).
+              const sources = [{ $refText: source }];
               if (d.$type === 'Data' || d.$type === 'Choice') {
-                const newSyn = { $type: 'RosettaClassSynonym', value: { name: synonym } };
+                const newSyn: any = { $type: 'RosettaClassSynonym', sources };
+                if (value) newSyn.value = { name: value };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 if (d.$type === 'Data') {
                   Data.addSynonym(d, newSyn as Parameters<typeof Data.addSynonym>[1]);
@@ -2140,7 +2131,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   Choice.addSynonym(d, newSyn as Parameters<typeof Choice.addSynonym>[1]);
                 }
               } else if (d.$type === 'RosettaEnumeration') {
-                const newSyn = { $type: 'RosettaSynonym', body: { values: [{ name: synonym }] } };
+                if (!value) return; // enum-level RosettaSynonym requires a body value
+                const newSyn = { $type: 'RosettaSynonym', sources, body: { values: [{ name: value }] } };
                 if (!Array.isArray(dd.synonyms)) dd.synonyms = [];
                 RosettaEnumeration.addSynonym(d, newSyn as Parameters<typeof RosettaEnumeration.addSynonym>[1]);
               }

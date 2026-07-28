@@ -1,0 +1,5 @@
+namespace test.dedxns.base
+version "0.0.0"
+
+type Animal:
+    name string (1..1)

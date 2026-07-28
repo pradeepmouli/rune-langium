@@ -182,6 +182,16 @@ export interface TypeOption {
   namespace?: string;
 }
 
+/** Option for the synonym-source reference picker. */
+export interface SourceRefOption {
+  /** Canonical id of the source declaration (e.g. `ns.FpML`). */
+  value: string;
+  /** Display name (bare source name). */
+  label: string;
+  /** Namespace for cross-namespace qualification. */
+  namespace?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Kind-specific form action interfaces
 // ---------------------------------------------------------------------------
@@ -192,7 +202,7 @@ export interface CommonFormActions {
   deleteType(nodeId: string): void;
   updateDefinition(nodeId: string, definition: string): void;
   updateComments(nodeId: string, comments: string): void;
-  addSynonym(nodeId: string, synonym: string): void;
+  addSynonym(nodeId: string, source: string, value?: string): void;
   removeSynonym(nodeId: string, index: number): void;
   addAnnotation(nodeId: string, annotationName: string): void;
   removeAnnotation(nodeId: string, index: number): void;
@@ -234,6 +244,8 @@ export interface EnumFormActions extends CommonFormActions {
   removeEnumValue(nodeId: string, valueName: string): void;
   updateEnumValue(nodeId: string, oldName: string, newName: string, displayName?: string): void;
   reorderEnumValue(nodeId: string, fromIndex: number, toIndex: number): void;
+  addEnumValueSynonym(nodeId: string, valueIndex: number, source: string, value: string): void;
+  removeEnumValueSynonym(nodeId: string, valueIndex: number, synIndex: number): void;
   setEnumParent(nodeId: string, parentId: string | null): void;
 }
 
@@ -260,6 +272,11 @@ export interface FuncFormActions extends CommonFormActions {
   updateExpression(nodeId: string, expressionText: string): void;
 }
 
+/** TypeAlias-specific editor actions. */
+export interface TypeAliasFormActions extends CommonFormActions {
+  updateTypeAliasType(nodeId: string, typeName: string): void;
+}
+
 /** Maps each `TypeKind` to its form actions interface. */
 export interface FormActionsKindMap {
   data: DataFormActions;
@@ -267,13 +284,17 @@ export interface FormActionsKindMap {
   choice: ChoiceFormActions;
   func: FuncFormActions;
   record: CommonFormActions;
-  typeAlias: CommonFormActions;
+  typeAlias: TypeAliasFormActions;
   basicType: CommonFormActions;
   annotation: CommonFormActions;
 }
 
 /** Intersection of all kind-specific actions (every method available). */
-export type AllEditorFormActions = DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions;
+export type AllEditorFormActions = DataFormActions &
+  EnumFormActions &
+  ChoiceFormActions &
+  FuncFormActions &
+  TypeAliasFormActions;
 
 /**
  * Kind-aware editor form actions.

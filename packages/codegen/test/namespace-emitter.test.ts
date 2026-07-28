@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import type {
   Annotation,
+  Choice,
   Data,
   RosettaEnumeration,
   RosettaExternalFunction,
@@ -50,6 +51,7 @@ describe('namespace emitter contract', () => {
         ['LibB', named<RosettaExternalFunction>('LibB')],
         ['LibA', named<RosettaExternalFunction>('LibA')]
       ]),
+      choiceByName: new Map<string, Choice>(),
       emitOrder: ['Bravo', 'Alpha'],
       cyclicTypes: new Set(),
       graph: { nodes: [], edges: new Map<string, string[]>() } satisfies TypeReferenceGraph

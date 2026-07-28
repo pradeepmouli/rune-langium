@@ -449,6 +449,22 @@ button[data-navigable]:focus-visible {
   color: var(--color-error-text);
 }
 
+/* ── Hydrating placeholder (on-demand namespace hydration in flight) ─── */
+/* Same dim+desaturate language as `.rune-flow-node-shell--dimmed` (focus-mode
+   dimming), applied directly to the node chrome since this state is a
+   property of the node's own data (deferred + namespace pending), not of
+   the surrounding focus/selection layer. */
+.rune-node-hydrating {
+  opacity: 0.6;
+  filter: saturate(0.6);
+}
+
+.rune-node-hydrating-spinner {
+  order: 2;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
 /* ── Edge styles ──────────────────────────────────────────────── */
 
 .rune-edge-extends {

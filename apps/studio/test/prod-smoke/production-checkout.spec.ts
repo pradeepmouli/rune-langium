@@ -2,10 +2,44 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { Buffer } from 'node:buffer';
+import { execFileSync } from 'node:child_process';
 import { expect, test } from '@playwright/test';
 
+const CF_PAGES_PROJECT = 'daikonic-dev';
+const CF_PRODUCTION_BRANCH = 'master';
+
+/**
+ * Cloudflare Pages never rolls back on a failed build — canonical_deployment
+ * is the last deployment that actually finished successfully, which can lag
+ * latest_deployment (the most recent attempt) by any number of commits. A
+ * "prod is current" check must read canonical_deployment, not branch HEAD or
+ * the most recent deploy attempt.
+ */
+interface CfPagesDeployment {
+  short_id: string;
+  deployment_trigger: { metadata: { branch: string; commit_hash: string } };
+  latest_stage: { status: string };
+}
+
+interface CfPagesProject {
+  canonical_deployment?: CfPagesDeployment;
+  latest_deployment?: CfPagesDeployment;
+}
+
+function resolveMasterCommit(): string {
+  try {
+    return execFileSync('git', ['rev-parse', `origin/${CF_PRODUCTION_BRANCH}`], { encoding: 'utf-8' }).trim();
+  } catch {
+    return execFileSync('git', ['rev-parse', CF_PRODUCTION_BRANCH], { encoding: 'utf-8' }).trim();
+  }
+}
+
 const CDM_BUTTON = 'CDM (Common Domain Model)';
-const ENUM_NODE_ID = 'cdm.base.datetime.BusinessCenterEnum';
+// Anchors must be corpus-stable: BusinessCenterEnum was migrated upstream to
+// the codelist pattern (cdm.base.staticdata.codelist.BusinessCenter) in the
+// 2026-07-02 curated build. Both anchors below match the single 'Business'
+// search and live in cdm.base.datetime.
+const ENUM_NODE_ID = 'cdm.base.datetime.BusinessDayConventionEnum';
 const DATA_NODE_ID = 'cdm.base.datetime.BusinessCenters';
 // Regression: cdm.base.staticdata.party is never pre-hydrated at load time.
 // First navigation to it must populate Inspector members (resolveNodeFileRef fix).
@@ -47,12 +81,15 @@ test.describe('production checkout smoke', () => {
     await page.getByTestId('rail-explore').click();
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
+    // The namespace tree is virtualized — filter narrowly before each click so
+    // the target row is mounted regardless of corpus growth.
     const namespaceSearch = page.getByTestId('namespace-search');
-    await namespaceSearch.fill('BusinessCenter');
+    await namespaceSearch.fill('BusinessDayConvention');
 
     await page.getByTestId(`ns-type-nav-${ENUM_NODE_ID}`).click();
     await expect(page.getByText(ENUM_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
 
+    await namespaceSearch.fill('BusinessCenters');
     await page.getByTestId(`ns-type-nav-${DATA_NODE_ID}`).click();
     await expect(page.getByText(DATA_NODE_ID, { exact: true })).toBeVisible({ timeout: 15000 });
 
@@ -100,5 +137,72 @@ test.describe('production checkout smoke', () => {
     // `{members.length > 0 && ...}` means "Members (0)" is never rendered, but
     // being explicit here documents the intent clearly.
     await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+  });
+
+  test('graph node shows a hydrating spinner while a never-hydrated namespace loads', async ({ page }) => {
+    // Regression for the BaseFlowNode hydrating-placeholder indicator (spec
+    // 021 follow-up). Production's on-demand hydration round-trip
+    // (/api/parse) is normally too fast to reliably observe the transient
+    // spinner state, so this test deliberately delays that one endpoint —
+    // the delay only affects when the browser's real request completes, it
+    // does not fabricate the response — giving the spinner a guaranteed
+    // window to assert against before it clears.
+    await page.route('**/api/parse', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await route.continue();
+    });
+
+    await loadCdm(page);
+
+    await page.getByTestId('rail-explore').click();
+    await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20_000 });
+
+    const namespaceSearch = page.getByTestId('namespace-search');
+    await namespaceSearch.fill('Counterparty');
+    await page.getByTestId(`ns-type-nav-${COUNTERPARTY_NODE_ID}`).click();
+
+    await expect(page.getByTestId('rune-node-hydrating-spinner')).toBeVisible({ timeout: 5_000 });
+
+    // The spinner clears once hydration completes and members populate.
+    const centerStack = page.getByTestId('center-stack');
+    await page.getByRole('button', { name: 'Inspector' }).click();
+    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('rune-node-hydrating-spinner')).toHaveCount(0);
+  });
+});
+
+test.describe('production deployment freshness', () => {
+  test.skip(!process.env.PLAYWRIGHT_PROD_SMOKE, 'set PLAYWRIGHT_PROD_SMOKE=1 to run against a deployed Studio');
+  test.skip(
+    !process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID,
+    'set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to verify the live deployment against master'
+  );
+
+  test('canonical Pages deployment serves the current master commit', async ({ request }) => {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const res = await request.get(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/pages/projects/${CF_PAGES_PROJECT}`,
+      { headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}` } }
+    );
+    expect(res.ok(), `Cloudflare API request failed: ${res.status()} ${await res.text()}`).toBeTruthy();
+
+    const { result } = (await res.json()) as { result: CfPagesProject };
+    const canonical = result.canonical_deployment;
+    expect(canonical, 'project has no canonical_deployment — nothing has ever deployed successfully').toBeTruthy();
+
+    const masterCommit = resolveMasterCommit();
+    const liveCommit = canonical!.deployment_trigger.metadata.commit_hash;
+
+    if (liveCommit !== masterCommit) {
+      const latest = result.latest_deployment;
+      const staleness =
+        latest && latest.short_id !== canonical!.short_id
+          ? ` The most recent deploy attempt (${latest.deployment_trigger.metadata.commit_hash}) is in status ` +
+            `"${latest.latest_stage.status}" — if it failed, production is silently stuck on an older commit.`
+          : '';
+      expect(liveCommit, `Production (${liveCommit}) does not match master HEAD (${masterCommit}).${staleness}`).toBe(
+        masterCommit
+      );
+    }
   });
 });

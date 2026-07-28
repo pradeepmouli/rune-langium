@@ -114,7 +114,7 @@ vi.mock('../../src/services/lsp-client.js', () => ({
 
 vi.mock('../../src/components/StudioToastProvider.js', () => ({
   StudioToastProvider: ({ children }: { children?: ReactNode }) => children,
-  useStudioToast: () => ({ showToast: showToastSpy })
+  useStudioToast: () => ({ showToast: showToastSpy, showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
 }));
 
 function makeWorkspace(

@@ -51,12 +51,30 @@ export class RuneStoreHydrator extends DefaultHydrator {
 
   protected override dehydrateAstNode(node: AstNode, context: DehydrateContext): object {
     const result = super.dehydrateAstNode(node, context) as Record<string, unknown>;
-    // Runtime-only linkage fields — excluded from Dehydrated<T>.
     delete result.$containerIndex;
     delete result.$containerProperty;
     delete result.$cstNode;
-    // Preserve the preserveCstText stamp (custom field, skipped by the base
-    // class's `$`-prefix filter).
+    // Permanent baseline locator for CST-reuse serialization. Two ints; not the
+    // text (which would nest/duplicate). Read from the live node, whose $cstNode
+    // is still attached at this point.
+    const cst = node.$cstNode;
+    if (cst && typeof cst.offset === 'number' && typeof cst.end === 'number') {
+      result.$cstRange = { offset: cst.offset, end: cst.end };
+    } else {
+      // Deserialized nodes (e.g. from /api/parse's JSON-serialized response) never
+      // carry a live $cstNode — Langium's JsonSerializer deliberately drops it on
+      // serialize and never reconstructs it on deserialize. It DOES carry a plain
+      // $textRegion snapshot (RUNE_SERIALIZE_OPTIONS sets textRegions: true), copied
+      // from the same real CstNode.offset/.end at serialize time — same offset
+      // space cst-reuse-renderer.ts already assumes, no conversion needed. Without
+      // this fallback, every node parsed via the production /api/parse router path
+      // silently loses its $cstRange, and CST-reuse serialization can never patch
+      // an existing declaration in place — it always appends a duplicate instead.
+      const textRegion = (node as AstNode & { $textRegion?: { offset?: number; end?: number } }).$textRegion;
+      if (textRegion && typeof textRegion.offset === 'number' && typeof textRegion.end === 'number') {
+        result.$cstRange = { offset: textRegion.offset, end: textRegion.end };
+      }
+    }
     const cstText = (node as AstNode & { $cstText?: unknown }).$cstText;
     if (typeof cstText === 'string') {
       result.$cstText = cstText;

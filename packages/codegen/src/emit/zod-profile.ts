@@ -12,13 +12,21 @@
 
 import type { GeneratorOutput } from '../types.js';
 import type { LanguageProfile } from './language-profile.js';
-import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import { RUNTIME_HELPER_SOURCE, RUNTIME_SIDECAR_HELPER_LINES, RUNE_HELPER_NAMES } from '../helpers.js';
+import { RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE } from './zod-runtime-helpers.js';
 
 /**
  * The shared `runtime.zod.ts` sidecar content. Mirrors
  * `RUNTIME_HELPER_SOURCE` but with `export const` declarations so the
  * helpers are importable from each per-namespace file via the import
  * line `ZodNamespaceEmitter` emits when `suppressBoilerplate: true`.
+ *
+ * The `import { z } from 'zod';` line is required (unconditionally) by
+ * `RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE` — the only `z`-dependent
+ * helper in the sidecar (`z.union`/`z.ZodUnion`/`z.ZodRawShape`); every
+ * `../helpers.ts`-mirrored helper above it is deliberately z-free.
+ * Without it the sidecar fails typecheck AND throws ReferenceError at
+ * module-init in any barrel/single-file bundle.
  */
 const RUNTIME_SIDECAR_SOURCE = [
   `// SPDX-License-Identifier: MIT`,
@@ -26,13 +34,11 @@ const RUNTIME_SIDECAR_SOURCE = [
   `// Shared runtime helpers — imported by every per-namespace .zod.ts`,
   `// in a 'barrel' or 'single-file' Zod bundle.`,
   ``,
-  `export const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>`,
-  `  values.filter((v) => v !== undefined && v !== null).length === 1;`,
+  `import { z } from 'zod';`,
   ``,
-  `export const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;`,
+  ...RUNTIME_SIDECAR_HELPER_LINES,
   ``,
-  `export const runeAttrExists = (v: unknown): boolean =>`,
-  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
+  RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE,
   ``
 ].join('\n');
 
@@ -82,6 +88,8 @@ function makeSingleFileContent(perNs: ReadonlyArray<GeneratorOutput>): string {
     `import { z } from 'zod';`,
     ``,
     RUNTIME_HELPER_SOURCE,
+    ``,
+    RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE.replace(/^export const/, 'const'),
     ``
   ];
   for (const out of perNs) {
@@ -110,7 +118,7 @@ function stripPerNamespaceHeader(content: string): string {
   const lines = content.split('\n');
   let bodyStart = 0;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i]?.startsWith(`import { runeCheckOneOf,`)) {
+    if (lines[i]?.startsWith(`import { ${RUNE_HELPER_NAMES[0]},`)) {
       bodyStart = i + 1;
       // Skip the trailing blank line after the import block.
       if (bodyStart < lines.length && lines[bodyStart] === '') bodyStart += 1;

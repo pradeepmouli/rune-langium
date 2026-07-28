@@ -75,8 +75,6 @@ export function GitSyncPerspective({ workspaceId, workspaceKind }: GitSyncPerspe
 
   return (
     <section data-testid="git-perspective" className="h-full overflow-auto p-6 space-y-6">
-      <h1 className="text-lg font-semibold">Git Sync</h1>
-
       {!isGitBacked ? (
         <GitNotConnectedEmptyState />
       ) : (

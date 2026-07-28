@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createOpfsRoot, readBytes, type OpfsRoot } from '../setup/opfs-mock.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
-import { extractTarGz } from '../../src/opfs/tar-untar.js';
+import { createTarGz, extractTarGz } from '../../src/opfs/tar-untar.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = resolve(__dirname, '../fixtures/curated/tiny.tar.gz');
@@ -73,7 +73,7 @@ describe('extractTarGz (T012)', () => {
 // thing with pako so extractTarGz's gunzip step is also exercised.
 // ---------------------------------------------------------------------------
 
-import { deflate, gzip } from 'pako';
+import { deflate, gzip, inflate } from 'pako';
 
 function buildHeader(name: string, typeflag: string, size = 0): Uint8Array {
   const block = new Uint8Array(512);
@@ -207,3 +207,24 @@ describe('extractTarGz — rejection paths (T010 hardening)', () => {
 
 // silence unused import warning if pako exposes both functions but we only use gzip
 void deflate;
+
+describe('createTarGz', () => {
+  it('output round-trips through the existing extractTarGz', async () => {
+    const root = createOpfsRoot();
+    const fs = new OpfsFs(root as unknown as FileSystemDirectoryHandle);
+    const entries = [
+      { path: 'manifest.json', data: new TextEncoder().encode('{"formatVersion":1}') },
+      { path: 'instances/a.json', data: new TextEncoder().encode('{"id":"a"}') }
+    ];
+    const gz = createTarGz(entries);
+    await extractTarGz(gz, fs, { pathPrefix: '/out' });
+
+    expect(await fs.readFile('/out/manifest.json', 'utf8')).toBe('{"formatVersion":1}');
+    expect(await fs.readFile('/out/instances/a.json', 'utf8')).toBe('{"id":"a"}');
+  });
+
+  it('produces valid gzip (round-trips through pako.inflate directly)', () => {
+    const gz = createTarGz([{ path: 'a.txt', data: new TextEncoder().encode('hi') }]);
+    expect(() => inflate(gz)).not.toThrow();
+  });
+});

@@ -50,6 +50,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   NavigateToNodeCallback
 } from '../../types.js';
@@ -65,6 +66,8 @@ export interface ChoiceFormProps {
   data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** Choice-specific editor form action callbacks. */
   actions: EditorFormActions<'choice'>;
   /** Callback to navigate to a type's graph node. */
@@ -92,6 +95,7 @@ function ChoiceForm({
   nodeId,
   data,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   onNavigateToNode,
   allNodeIds,
@@ -109,7 +113,8 @@ function ChoiceForm({
   const { form } = useZodForm(ChoiceSchema, {
     defaultValues: formValuesProjection<typeof ChoiceSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry
+    formRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different node.
@@ -172,8 +177,8 @@ function ChoiceForm({
   );
 
   const handleAddSynonym = useCallback(
-    (synonym: string) => {
-      actions.addSynonym(nodeId, synonym);
+    (source: string, value?: string) => {
+      actions.addSynonym(nodeId, source, value);
     },
     [nodeId, actions]
   );
@@ -255,6 +260,7 @@ function ChoiceForm({
 
           {/* Metadata */}
           <MetadataSection
+            synonymSourceOptions={synonymSourceOptions}
             onDefinitionCommit={commitDefinition}
             onCommentsCommit={commitComments}
             onSynonymAdd={handleAddSynonym}

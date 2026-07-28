@@ -55,6 +55,22 @@ import {
   isRosettaConstructorExpression,
   isListLiteral,
   isThenOperation,
+  isAsKeyOperation,
+  isWithMetaOperation,
+  isDefaultOperation,
+  isJoinOperation,
+  isRosettaOnlyElement,
+  isReduceOperation,
+  isToStringOperation,
+  isToNumberOperation,
+  isToIntOperation,
+  isToEnumOperation,
+  isToDateOperation,
+  isToTimeOperation,
+  isToDateTimeOperation,
+  isToZonedDateTimeOperation,
+  isSwitchOperation,
+  isRosettaSuperCall,
   type Condition,
   type RosettaExpression,
   type ThenOperation
@@ -126,6 +142,72 @@ export interface ExpressionTranspilerContext {
    * Used by Phase 8b func body emission to resolve alias references correctly.
    */
   localBindings?: Map<string, string>;
+  /**
+   * Optional map of attribute name → the PROPERTY-ACCESS SUFFIX to use
+   * instead of the bare name (i.e. `${selfName}.${attrAccessorNames.get(name)}`
+   * instead of `${selfName}.${name}`), for attribute names that resolve to
+   * a DIFFERENT emitted field key than the name a Rune condition literally
+   * references.
+   *
+   * Data-extends-Choice is the sole current use: a condition like `Cash is
+   * absent` (real corpus text: `Basket is absent`,
+   * observable-asset-type.rosetta:231) is authored against the Choice
+   * OPTION's Data-type name, capitalized (`Cash`) — that's what
+   * `buildAttributeTypesMap`'s pseudo-attribute keys are, and it MUST stay
+   * that way for `validateAttr` to match the condition's own AST text. But
+   * the REAL emitted field key at that position is camelCase-first-letter
+   * of the same name (`cash`) — `choiceOptionFieldName`'s established W2
+   * convention, used identically by both the TS type alias's union member
+   * keys (`{ cash: Cash }`) and the Zod arm's object key
+   * (`z.strictObject({ cash: CashSchema })`). Without this remap, a
+   * transpiled predicate reads `data.Cash` (undefined at runtime) instead
+   * of `data.cash` (the actual populated field) — a silent false-negative
+   * (the condition never fires because the read is always `undefined`).
+   */
+  attrAccessorNames?: Map<string, string>;
+}
+
+/**
+ * Resolve the emitted property-access expression for an attribute name:
+ * `${ctx.selfName}.${name}` by default, or `${ctx.selfName}.${accessor}`
+ * when `ctx.attrAccessorNames` maps `name` to a different emitted field key
+ * (Data-extends-Choice pseudo-attributes — see `attrAccessorNames`'s doc
+ * comment on `ExpressionTranspilerContext`). Centralizing this resolution
+ * (rather than inlining `${ctx.selfName}.${name}` at each of the many
+ * Phase 4 emit* call sites) is what makes the remap apply uniformly to
+ * every condition kind (exists/absent/one-of/only-exists/choice) without
+ * touching each one's template separately.
+ *
+ * `ts-method` mode ONLY (`ctx.selfName === 'this'`, the class-instance
+ * case): a remapped access (i.e. `name` IS a Choice-derived pseudo-
+ * attribute — `attrAccessorNames` is NEVER populated for ordinary Data
+ * attributes, see its doc comment) is cast through
+ * `(this as unknown as Record<string, unknown>)` — the emitted class does
+ * not statically declare the Choice's option keys as members (per T105/
+ * T106's generic-intersection-alias / generic-child-class design, they
+ * only exist on `this` at runtime via `Object.assign` in the constructor),
+ * so a direct `this.cash` fails real `tsc --strict` (TS2339). The Zod
+ * modes' `selfName` (`data`, a function parameter typed by the actual
+ * `runeExtendChoice`-derived union) already carries the option keys
+ * structurally and need no cast.
+ */
+function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): string {
+  // Func-scope alias (ctx.localBindings) takes priority over ordinary
+  // attribute access — mirrors transpileExpression's RosettaSymbolReference
+  // branch, which checks localBindings first before falling through to this
+  // function. emitExists/emitIsAbsent/emitOneOf/emitChoice/emitOnlyExists
+  // call this directly with an extracted attribute-name string (bypassing
+  // transpileExpression's dispatch), so they need the same priority here or
+  // an alias reference emits a wrong `${selfName}.${aliasName}` property
+  // access instead of the alias's own local binding.
+  if (ctx.localBindings?.has(name)) {
+    return ctx.localBindings.get(name)!;
+  }
+  const accessor = ctx.attrAccessorNames?.get(name);
+  if (accessor !== undefined && ctx.emitMode === 'ts-method') {
+    return `(${ctx.selfName} as unknown as Record<string, unknown>).${accessor}`;
+  }
+  return `${ctx.selfName}.${accessor ?? name}`;
 }
 
 /**
@@ -143,10 +225,23 @@ function extractAttrName(argument: RosettaExpression | undefined): string | unde
 /**
  * Validate that an attribute name exists in the context.
  * If not, emit a diagnostic and return false.
+ *
+ * A name is valid if it's either a real Data/func-input/output attribute
+ * (`ctx.attributeTypes`) OR a func-scope alias binding (`ctx.localBindings`
+ * — populated for `RosettaFunction.shortcuts` by ts-emitter's
+ * `buildFuncBodyContext`; real corpus case: CDM's `Create_Exercise` func
+ * declares `alias optionPayout: <navigation expr>` then
+ * `condition OptionPayoutExists: optionPayout exists`). `attrAccessExpr`
+ * (used to emit the actual access expression) already checks
+ * `localBindings` first — this function is the validation gate that must
+ * agree with it, or a valid alias reference in `exists`/`is absent`/
+ * `one-of`/`choice`/`only-exists` incorrectly falls through to the
+ * unknown-attribute DIAGNOSTIC even though the emitted access expression
+ * would have resolved correctly.
  * FR-025.
  */
 function validateAttr(attrName: string, ctx: ExpressionTranspilerContext): boolean {
-  if (!ctx.attributeTypes.has(attrName)) {
+  if (!ctx.attributeTypes.has(attrName) && !ctx.localBindings?.has(attrName)) {
     ctx.diagnostics.push({
       severity: 'error',
       code: 'unknown-attribute',
@@ -165,8 +260,7 @@ function validateAttr(attrName: string, ctx: ExpressionTranspilerContext): boole
  * T053.
  */
 export function emitOneOf(attrNames: string[], ctx: ExpressionTranspilerContext): string {
-  const dataRef = ctx.selfName;
-  const attrList = attrNames.map((n) => `${dataRef}.${n}`).join(', ');
+  const attrList = attrNames.map((n) => attrAccessExpr(n, ctx)).join(', ');
   const message = `${ctx.conditionName}: exactly one of [${attrNames.join(', ')}] must be present in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
@@ -196,8 +290,7 @@ export function emitOneOf(attrNames: string[], ctx: ExpressionTranspilerContext)
  * T053.
  */
 export function emitChoice(attrNames: string[], ctx: ExpressionTranspilerContext): string {
-  const dataRef = ctx.selfName;
-  const attrList = attrNames.map((n) => `${dataRef}.${n}`).join(', ');
+  const attrList = attrNames.map((n) => attrAccessExpr(n, ctx)).join(', ');
   const message = `${ctx.conditionName}: exactly one of [${attrNames.join(', ')}] must be present in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
@@ -229,20 +322,20 @@ export function emitExists(attrName: string, ctx: ExpressionTranspilerContext): 
     return `/* DIAGNOSTIC: unknown attribute "${attrName}" */`;
   }
 
-  const dataRef = ctx.selfName;
+  const access = attrAccessExpr(attrName, ctx);
   const message = `${ctx.conditionName}: ${attrName} must be present in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
-    return `runeAttrExists(${dataRef}.${attrName})`;
+    return `runeAttrExists(${access})`;
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [`if (!runeAttrExists(${dataRef}.${attrName})) {`, `  errors.push('${message}');`, `}`].join('\n');
+    return [`if (!runeAttrExists(${access})) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
   return [
-    `if (!runeAttrExists(${dataRef}.${attrName})) {`,
+    `if (!runeAttrExists(${access})) {`,
     `  ctx.addIssue({`,
     `    code: 'custom',`,
     `    message: '${message}',`,
@@ -261,20 +354,20 @@ export function emitIsAbsent(attrName: string, ctx: ExpressionTranspilerContext)
     return `/* DIAGNOSTIC: unknown attribute "${attrName}" */`;
   }
 
-  const dataRef = ctx.selfName;
+  const access = attrAccessExpr(attrName, ctx);
   const message = `${ctx.conditionName}: ${attrName} must be absent in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
-    return `!runeAttrExists(${dataRef}.${attrName})`;
+    return `!runeAttrExists(${access})`;
   }
 
   if (ctx.emitMode === 'ts-method') {
-    return [`if (runeAttrExists(${dataRef}.${attrName})) {`, `  errors.push('${message}');`, `}`].join('\n');
+    return [`if (runeAttrExists(${access})) {`, `  errors.push('${message}');`, `}`].join('\n');
   }
 
   // superRefine mode
   return [
-    `if (runeAttrExists(${dataRef}.${attrName})) {`,
+    `if (runeAttrExists(${access})) {`,
     `  ctx.addIssue({`,
     `    code: 'custom',`,
     `    message: '${message}',`,
@@ -298,7 +391,6 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
   // Find all attributes on the type that are NOT in the allowed list
   const forbiddenAttrs = Array.from(ctx.attributeTypes.keys()).filter((name) => !allowedAttrNames.includes(name));
 
-  const dataRef = ctx.selfName;
   const message = `${ctx.conditionName}: only [${allowedAttrNames.join(', ')}] may exist in ${ctx.typeName}`;
 
   if (ctx.emitMode === 'zod-refine') {
@@ -306,9 +398,9 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
       return 'true';
     }
     if (forbiddenAttrs.length === 1) {
-      return `!runeAttrExists(${dataRef}.${forbiddenAttrs[0]})`;
+      return `!runeAttrExists(${attrAccessExpr(forbiddenAttrs[0]!, ctx)})`;
     }
-    return forbiddenAttrs.map((n) => `!runeAttrExists(${dataRef}.${n})`).join(' && ');
+    return forbiddenAttrs.map((n) => `!runeAttrExists(${attrAccessExpr(n, ctx)})`).join(' && ');
   }
 
   if (ctx.emitMode === 'ts-method') {
@@ -316,7 +408,7 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
       return '// only-exists: no forbidden attributes';
     }
     const checks = forbiddenAttrs.map((n) =>
-      [`if (runeAttrExists(${dataRef}.${n})) {`, `  errors.push('${message}');`, `}`].join('\n')
+      [`if (runeAttrExists(${attrAccessExpr(n, ctx)})) {`, `  errors.push('${message}');`, `}`].join('\n')
     );
     return checks.join('\n');
   }
@@ -327,7 +419,7 @@ export function emitOnlyExists(allowedAttrNames: string[], ctx: ExpressionTransp
   }
   const checks = forbiddenAttrs.map((n) =>
     [
-      `if (runeAttrExists(${dataRef}.${n})) {`,
+      `if (runeAttrExists(${attrAccessExpr(n, ctx)})) {`,
       `  ctx.addIssue({`,
       `    code: 'custom',`,
       `    message: '${message}',`,
@@ -512,8 +604,15 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
     return ctx.emitMode === 'zod-refine' ? 'true' : '// unsupported is-absent';
   }
 
-  // only exists: `[a, b] only exists` → RosettaOnlyExistsExpression
+  // only exists: `[a, b] only exists` or `(a, b) only exists` → RosettaOnlyExistsExpression
   if (isRosettaOnlyExistsExpression(expr)) {
+    // Paren-tuple form: `(a, b, c) only exists` — grammar populates `args`
+    // (NOT `argument`) via the PrimaryExpression multi-arg escape hatch
+    // (`'(' Expression (',' args+=Expression)+ ')' 'only' 'exists'`).
+    if (expr.args.length > 0) {
+      const names = expr.args.map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
+      return emitOnlyExists(names, ctx);
+    }
     const arg = expr.argument;
     if (!arg) {
       ctx.diagnostics.push({
@@ -968,6 +1067,258 @@ export function transpileListLiteral(expr: RosettaExpression, ctx: ExpressionTra
 }
 
 /**
+ * W1 Tier 1 — passthrough operations.
+ *
+ * AsKeyOperation / WithMetaOperation: `as-key` and `with-meta` are metadata
+ * annotations (key referencing, scheme/globalKey attachment) with no runtime
+ * meaning in a validation predicate — the value itself is unchanged. Transpile
+ * `argument` and return it as-is, matching the grammar's `argument` field.
+ */
+export function transpilePassthrough(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (isAsKeyOperation(expr) || isWithMetaOperation(expr)) {
+    return transpileExpression(expr.argument, ctx);
+  }
+  return 'undefined /* not a passthrough operation */';
+}
+
+/**
+ * W1 Tier 2 — simple mappings.
+ *
+ * DefaultOperation: `(L ?? R)` — matches the transpiler's existing
+ * undefined-as-absent convention (no special empty-array/empty-string
+ * handling; sibling cases like exists/absent only special-case undefined,
+ * null, and empty arrays via runeAttrExists, not plain `??`).
+ *
+ * JoinOperation: `(L ?? []).join(R ?? '')` — right is optional per grammar.
+ *
+ * RosettaOnlyElement: mirrors first/last's `(arr ?? [])[0]`/`.at(-1)` guard
+ * style — single-element extraction: value when exactly one element exists,
+ * else undefined.
+ *
+ * ReduceOperation: `.reduce` using the two-parameter closure form (grammar:
+ * `parameters` carries exactly 2 params for reduce, unlike filter/map's 1).
+ */
+export function transpileDefault(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isDefaultOperation(expr)) {
+    return 'undefined /* not DefaultOperation */';
+  }
+  const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
+  const right = transpileExpression(expr.right, ctx);
+  return `(${left} ?? ${right})`;
+}
+
+export function transpileJoin(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isJoinOperation(expr)) {
+    return 'undefined /* not JoinOperation */';
+  }
+  const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
+  const right = expr.right ? transpileExpression(expr.right, ctx) : "''";
+  return `(${left} ?? []).join(${right})`;
+}
+
+export function transpileOnlyElement(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isRosettaOnlyElement(expr)) {
+    return 'undefined /* not RosettaOnlyElement */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `((__oe) => (__oe.length === 1 ? __oe[0] : undefined))(${arg} ?? [])`;
+}
+
+export function transpileReduce(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isReduceOperation(expr)) {
+    return 'undefined /* not ReduceOperation */';
+  }
+  const arr = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  const fn = expr.function;
+  if (!fn) {
+    return `(${arr} ?? [])`;
+  }
+  const [accName = 'a', itemName = 'b'] = fn.parameters?.map((p) => p.name) ?? [];
+  // Both closure params are plain locals (not `selfName`-qualified attribute
+  // access) — bind both via localBindings rather than reusing selfName like
+  // filter/map's single-param case does.
+  const localBindings = new Map(ctx.localBindings);
+  localBindings.set(accName, accName);
+  localBindings.set(itemName, itemName);
+  const childCtx: ExpressionTranspilerContext = { ...ctx, localBindings };
+  const body = transpileExpression(fn.body, childCtx);
+  return `(${arr} ?? []).reduce((${accName}, ${itemName}) => ${body})`;
+}
+
+/**
+ * W1 Tier 3 — conversions. Temporal runtime representation is `string`
+ * (see ts-emitter's `TS_BUILTIN_TYPE_MAP` / `typescriptProfile.recordTypeMap`:
+ * date/dateTime/zonedDateTime/time all map to `Temporal.*` TS types but the
+ * WIRE representation validated here is the ISO string prior to any
+ * Temporal parsing — so these emit shape-validating passthroughs, not
+ * Temporal object construction).
+ *
+ * ToStringOperation / ToNumberOperation / ToIntOperation are undefined-guarded
+ * per sibling conventions (see transpileLiteral / transpileAggregation).
+ *
+ * ToIntOperation semantics: Rune's reference generator (TypeCoercionService,
+ * BigDecimal→int coercion) fails when the value has a fractional part —
+ * verified against `.resources/rune-dsl-src`; mirrored here via
+ * `Number.isInteger`.
+ *
+ * ToEnumOperation resolves against the emitted enum shape. ts-emitter's
+ * `emitEnumDeclaration` emits enums as a plain string-literal union
+ * (`export type Foo = 'A' | 'B'`), i.e. the member NAME is its own runtime
+ * value — so enum resolution is a membership check against the reference
+ * enum's `enumValues` names, not a display-name lookup or const-object index.
+ */
+export function transpileToString(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToStringOperation(expr)) {
+    return 'undefined /* not ToStringOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  // Bind once via IIFE — matches to-number/to-int; avoids double-evaluating
+  // a non-trivial argument (switch IIFE, function call).
+  return `((__s) => (__s === undefined ? undefined : String(__s)))(${arg})`;
+}
+
+export function transpileToNumber(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToNumberOperation(expr)) {
+    return 'undefined /* not ToNumberOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `((__n) => (__n === undefined ? undefined : Number.isNaN(Number(__n)) ? undefined : Number(__n)))(${arg})`;
+}
+
+export function transpileToInt(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToIntOperation(expr)) {
+    return 'undefined /* not ToIntOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `((__i) => (__i === undefined ? undefined : Number.isInteger(Number(__i)) ? Number(__i) : undefined))(${arg})`;
+}
+
+export function transpileToEnum(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToEnumOperation(expr)) {
+    return 'undefined /* not ToEnumOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  const enumRef = expr.enumeration?.ref;
+  if (!enumRef) {
+    ctx.diagnostics.push({
+      severity: 'error',
+      code: 'unresolved-enum-reference',
+      message: `to-enum in '${ctx.conditionName}' references an unresolved enumeration '${expr.enumeration?.$refText ?? '?'}'`
+    });
+    return `undefined /* DIAGNOSTIC: unresolved enum reference "${expr.enumeration?.$refText ?? '?'}" */`;
+  }
+  const memberList = enumRef.enumValues.map((v) => `'${v.name}'`).join(', ');
+  return `((__e) => ([${memberList}].includes(__e) ? __e : undefined))(${arg})`;
+}
+
+export function transpileToDate(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToDateOperation(expr)) {
+    return 'undefined /* not ToDateOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `runeToDate(${arg})`;
+}
+
+export function transpileToTime(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToTimeOperation(expr)) {
+    return 'undefined /* not ToTimeOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `runeToTime(${arg})`;
+}
+
+export function transpileToDateTime(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToDateTimeOperation(expr)) {
+    return 'undefined /* not ToDateTimeOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `runeToDateTime(${arg})`;
+}
+
+export function transpileToZonedDateTime(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isToZonedDateTimeOperation(expr)) {
+    return 'undefined /* not ToZonedDateTimeOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  return `runeToZonedDateTime(${arg})`;
+}
+
+/**
+ * W1 Tier 4 — switch.
+ *
+ * Chained ternaries over an IIFE binding the switched value once (avoids
+ * re-evaluating a non-trivial argument expression per case). Guards:
+ * `referenceGuard` (an enum member or other SwitchCaseTarget) compares
+ * against its resolved name — same resolution style as ToEnumOperation
+ * (the emitted enum member IS its string value). `literalGuard` compares
+ * against the transpiled literal. `default` (no guard) is the trailing
+ * else; if no default case is present, the final else is `undefined`.
+ */
+export function transpileSwitch(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isSwitchOperation(expr)) {
+    return 'undefined /* not SwitchOperation */';
+  }
+  const arg = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+
+  let elseExpr = 'undefined';
+  const ternaryCases: { guardExpr: string; resultExpr: string }[] = [];
+
+  for (const c of expr.cases) {
+    const resultExpr = transpileExpression(c.expression, ctx);
+    if (!c.guard) {
+      // `default` case — becomes the trailing else, not a ternary arm.
+      elseExpr = resultExpr;
+      continue;
+    }
+    if (c.guard.literalGuard) {
+      const guardExpr = transpileLiteral(c.guard.literalGuard, ctx);
+      ternaryCases.push({ guardExpr, resultExpr });
+      continue;
+    }
+    if (c.guard.referenceGuard) {
+      const targetName = c.guard.referenceGuard.$refText ?? c.guard.referenceGuard.ref?.name;
+      if (targetName === undefined) {
+        ctx.diagnostics.push({
+          severity: 'error',
+          code: 'unresolved-switch-guard',
+          message: `switch case in '${ctx.conditionName}' has an unresolved reference guard`
+        });
+        continue;
+      }
+      ternaryCases.push({ guardExpr: `'${targetName}'`, resultExpr });
+      continue;
+    }
+  }
+
+  const chain = ternaryCases.reduceRight(
+    (acc, { guardExpr, resultExpr }) => `${guardExpr} === __sw ? ${resultExpr} : ${acc}`,
+    elseExpr
+  );
+  return `((__sw) => (${chain}))(${arg})`;
+}
+
+/**
+ * The one exception — RosettaSuperCall: `super(...)` has no referent in a
+ * validation-predicate context (it's a func-body dispatch construct;
+ * conditions have no enclosing function to call up from). Deliberate loud
+ * diagnostic — its own case, own message — NOT silent fall-through, per
+ * spec §"The one exception". If the corpus gate ever finds real `super`
+ * usage in a condition expression, that is a design escalation, not a bug
+ * to route around here.
+ */
+export function transpileSuperCall(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  if (!isRosettaSuperCall(expr)) {
+    return 'undefined /* not RosettaSuperCall */';
+  }
+  ctx.diagnostics.push({
+    severity: 'error',
+    code: 'unsupported-super-call',
+    message: `Condition '${ctx.conditionName}' on type '${ctx.typeName}' calls super(), which has no meaning in a transpiled validation predicate`
+  });
+  return 'true /* DIAGNOSTIC: super() is not supported in transpiled conditions */';
+}
+
+/**
  * T075: Top-level expression dispatcher.
  *
  * Routes based on expr.$type to the appropriate transpiler function.
@@ -1001,7 +1352,7 @@ export function transpileExpression(
     if (ctx.localBindings?.has(name)) {
       return ctx.localBindings.get(name)!;
     }
-    return `${ctx.selfName}.${name}`;
+    return attrAccessExpr(name, ctx);
   }
 
   // Implicit variable (lambda parameter 'item')
@@ -1079,6 +1430,25 @@ export function transpileExpression(
     return `!runeAttrExists(${ctx.selfName})`;
   }
 
+  // only exists, in a NESTED (non-top-level-Condition) position — e.g. as
+  // the consequent of an if/then. transpileCondition's dispatcher handles
+  // the top-level Condition.expression case (with attribute-name validation
+  // and mode-specific statement-block emission via emitOnlyExists); here we
+  // need a pure boolean expression, so inline the same "every attr NOT
+  // listed must be absent" semantics without the attributeTypes validation
+  // (attribute existence was already checked when this expression's
+  // attributeTypes were built at the top-level dispatch).
+  if (isRosettaOnlyExistsExpression(expr)) {
+    const listedExprs = expr.args.length > 0 ? expr.args : isListLiteral(expr.argument) ? expr.argument.elements : [];
+    const names = (listedExprs ?? []).map((e) => extractAttrName(e)).filter((n): n is string => n !== undefined);
+    const forbiddenAttrs = Array.from(ctx.attributeTypes.keys()).filter((name) => !names.includes(name));
+    if (forbiddenAttrs.length === 0) {
+      return 'true';
+    }
+    const checks = forbiddenAttrs.map((n) => `!runeAttrExists(${attrAccessExpr(n, ctx)})`);
+    return checks.length === 1 ? checks[0]! : `(${checks.join(' && ')})`;
+  }
+
   // Conditional if/then/else (T074)
   if (isRosettaConditionalExpression(expr)) {
     return transpileConditional(expr, ctx);
@@ -1092,6 +1462,61 @@ export function transpileExpression(
   // List literal (T077)
   if (isListLiteral(expr)) {
     return transpileListLiteral(expr, ctx);
+  }
+
+  // W1 Tier 1 — passthrough (as-key / with-meta)
+  if (isAsKeyOperation(expr) || isWithMetaOperation(expr)) {
+    return transpilePassthrough(expr, ctx);
+  }
+
+  // W1 Tier 2 — simple mappings
+  if (isDefaultOperation(expr)) {
+    return transpileDefault(expr, ctx);
+  }
+  if (isJoinOperation(expr)) {
+    return transpileJoin(expr, ctx);
+  }
+  if (isRosettaOnlyElement(expr)) {
+    return transpileOnlyElement(expr, ctx);
+  }
+  if (isReduceOperation(expr)) {
+    return transpileReduce(expr, ctx);
+  }
+
+  // W1 Tier 3 — conversions
+  if (isToStringOperation(expr)) {
+    return transpileToString(expr, ctx);
+  }
+  if (isToNumberOperation(expr)) {
+    return transpileToNumber(expr, ctx);
+  }
+  if (isToIntOperation(expr)) {
+    return transpileToInt(expr, ctx);
+  }
+  if (isToEnumOperation(expr)) {
+    return transpileToEnum(expr, ctx);
+  }
+  if (isToDateOperation(expr)) {
+    return transpileToDate(expr, ctx);
+  }
+  if (isToTimeOperation(expr)) {
+    return transpileToTime(expr, ctx);
+  }
+  if (isToDateTimeOperation(expr)) {
+    return transpileToDateTime(expr, ctx);
+  }
+  if (isToZonedDateTimeOperation(expr)) {
+    return transpileToZonedDateTime(expr, ctx);
+  }
+
+  // W1 Tier 4 — switch
+  if (isSwitchOperation(expr)) {
+    return transpileSwitch(expr, ctx);
+  }
+
+  // The one exception — RosettaSuperCall (deliberate loud diagnostic)
+  if (isRosettaSuperCall(expr)) {
+    return transpileSuperCall(expr, ctx);
   }
 
   // Unknown expression type — emit diagnostic and placeholder
@@ -1121,24 +1546,54 @@ function getExprPrecedence(expr: RosettaExpression): number | undefined {
 }
 
 /**
+ * Operators whose JS equivalent is NOT left-associative in a way that
+ * preserves Rune semantics when re-nested without parens — chaining these
+ * at the same tier changes meaning (`a === b === c` is `(a===b)===c` in JS,
+ * comparing a boolean to `c`, not the Rune-intended `a===(b===c)`).
+ * Rune's own grammar only allows same-tier nesting on these via an explicit
+ * parenthesized sub-expression (PrimaryExpression's `'(' Expression ')'`
+ * escape hatch — EqualityOperation.right is otherwise AdditiveOperation,
+ * not another EqualityOperation), so a same-tier RIGHT child of one of
+ * these operators must always keep its parens. Arithmetic (+,-,*,/) and
+ * logical (and/or → &&/||) chain left-associatively in both Rune and JS,
+ * so dropping redundant right-side parens there is semantics-preserving.
+ *
+ * Note: `contains`/`disjoint`/`default` are grammatically same-tier too, but
+ * never reach transpileWithPrecedence as parentOp — their transpile sites use
+ * structural templates (`.includes()`/`.some()`/self-wrapped `??`) that are
+ * immune by construction — so only the six eq/cmp operators are listed here.
+ */
+const NON_ASSOCIATIVE_OPERATORS = new Set(['=', '<>', '<', '<=', '>', '>=']);
+
+/**
  * Transpile a sub-expression, wrapping in parentheses if needed for precedence.
  * Used by binary operators (T069, T070).
  *
  * @param expr      The sub-expression to transpile.
  * @param parentOp  The operator of the parent expression.
  * @param ctx       Transpiler context.
- * @param side      Whether this is the left or right operand (for future associativity).
+ * @param side      Whether this is the left or right operand. Same-tier
+ *                  RIGHT children of a non-associative parentOp are always
+ *                  parenthesized (see NON_ASSOCIATIVE_OPERATORS); same-tier
+ *                  LEFT children never need parens (JS left-associativity
+ *                  matches evaluation order either way).
  */
 function transpileWithPrecedence(
   expr: RosettaExpression,
   parentOp: string,
   ctx: ExpressionTranspilerContext,
-  _side: 'left' | 'right'
+  side: 'left' | 'right'
 ): string {
   const result = transpileExpression(expr, ctx);
   const myPrec = getExprPrecedence(expr);
   const parentPrec = PRECEDENCE[parentOp];
-  if (myPrec !== undefined && parentPrec !== undefined && myPrec < parentPrec) {
+  if (myPrec === undefined || parentPrec === undefined) {
+    return result;
+  }
+  if (myPrec < parentPrec) {
+    return `(${result})`;
+  }
+  if (side === 'right' && myPrec === parentPrec && NON_ASSOCIATIVE_OPERATORS.has(parentOp)) {
     return `(${result})`;
   }
   return result;

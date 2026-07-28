@@ -17,7 +17,7 @@
  *  5. Download action opens the config modal and calls `downloadTargetViaRouter`.
  *  6. No `CodePreviewPanel` is ever mounted (no worker subscription).
  *
- * Heavy children (CodegenTargetsTable, DownloadConfigModal) are mocked to avoid
+ * Heavy children (CodegenTargetsTable, DownloadConfigDialog) are mocked to avoid
  * needing CodeMirror / real Worker / OPFS / dockview in jsdom.
  */
 
@@ -25,7 +25,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { ExportPerspective } from '../../src/shell/perspectives/screens/ExportPerspective.js';
 import { useCodegenStore } from '../../src/store/codegen-store.js';
-import type { Target } from '@rune-langium/codegen';
+import type { Target } from '@rune-langium/codegen/export';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks (vi.hoisted avoids the TDZ issue with module factory hoisting)
@@ -62,8 +62,8 @@ let capturedModalTarget: Target | undefined;
 let capturedOnGenerate: ((config: Record<string, unknown>) => void) | undefined;
 let capturedOnClose: (() => void) | undefined;
 
-vi.mock('../../src/components/DownloadConfigModal.js', () => ({
-  DownloadConfigModal: vi.fn((props: Record<string, unknown>) => {
+vi.mock('../../src/components/DownloadConfigDialog.js', () => ({
+  DownloadConfigDialog: vi.fn((props: Record<string, unknown>) => {
     capturedModalTarget = props['target'] as Target;
     capturedOnGenerate = props['onGenerate'] as typeof capturedOnGenerate;
     capturedOnClose = props['onClose'] as typeof capturedOnClose;
@@ -222,7 +222,7 @@ describe('ExportPerspective', () => {
       expect(screen.queryByTestId('mock-download-modal')).toBeNull();
     });
 
-    it('opens DownloadConfigModal when workspace has user files', () => {
+    it('opens DownloadConfigDialog when workspace has user files', () => {
       render(<ExportPerspective files={makeFiles()} />);
       act(() => {
         capturedOnDownload?.('typescript');

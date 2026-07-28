@@ -9,4 +9,4 @@ Core parsing, AST, and serialization utilities for Rune DSL / Rosetta tooling.
 - Parse single files with `parse`
 - Parse related document sets with `parseWorkspace`
 - Access raw Langium services with `createRuneDslServices`
-- Serialize models with `serializeModel`, `serializeElement`, and `serializeModels`
+- Render an AST back to `.rosetta` source via `renderModel` / `renderNode` from `@rune-langium/codegen/rosetta` (the JSON `serialize` path stays in core's `JsonSerializer`)

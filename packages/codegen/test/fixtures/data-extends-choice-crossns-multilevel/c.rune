@@ -1,0 +1,7 @@
+namespace test.declmulti.c
+version "0.0.0"
+
+import test.declmulti.b.*
+
+type BasketConstituent extends ObservableItem:
+    weight number (0..1)

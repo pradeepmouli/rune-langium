@@ -7,11 +7,11 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "tsgo --noEmit",
+    "build": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "pino": "^10.3.1"

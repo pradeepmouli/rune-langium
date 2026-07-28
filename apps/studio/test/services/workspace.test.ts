@@ -13,6 +13,7 @@ import {
   updateFileContent,
   createWorkspaceFile,
   createBlankWorkspaceFile,
+  uniqueFilePath,
   readFileList,
   mergeModelFiles,
   collectCuratedDocsFromWorkspace,
@@ -254,6 +255,29 @@ describe('createBlankWorkspaceFile', () => {
     ];
     const file = createBlankWorkspaceFile(existing);
     expect(file.path).toBe('untitled.rosetta');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// uniqueFilePath (final-review Finding 1 — import-dialog new-file collision)
+// ---------------------------------------------------------------------------
+describe('uniqueFilePath', () => {
+  it('returns the candidate unchanged when no file has that path', () => {
+    const existing: WorkspaceFile[] = [{ name: 'a.rosetta', path: 'a.rosetta', content: '', dirty: false }];
+    expect(uniqueFilePath('demo.rosetta', existing)).toBe('demo.rosetta');
+  });
+
+  it('appends -2 when the candidate path already exists', () => {
+    const existing: WorkspaceFile[] = [{ name: 'demo.rosetta', path: 'demo.rosetta', content: '', dirty: false }];
+    expect(uniqueFilePath('demo.rosetta', existing)).toBe('demo-2.rosetta');
+  });
+
+  it('appends -3 when both the candidate and -2 already exist', () => {
+    const existing: WorkspaceFile[] = [
+      { name: 'demo.rosetta', path: 'demo.rosetta', content: '', dirty: false },
+      { name: 'demo-2.rosetta', path: 'demo-2.rosetta', content: '', dirty: false }
+    ];
+    expect(uniqueFilePath('demo.rosetta', existing)).toBe('demo-3.rosetta');
   });
 });
 

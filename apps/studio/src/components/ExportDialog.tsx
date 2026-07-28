@@ -12,15 +12,8 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
-import { Separator } from '@rune-langium/design-system/ui/separator';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@rune-langium/design-system/ui/dialog';
+import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
 import type { CodeGenerationResult, GeneratedFile, GenerationError } from '@rune-langium/codegen-legacy';
@@ -233,212 +226,201 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        className="w-[720px] max-w-[92vw] max-h-[80vh] flex flex-col gap-0 p-0"
-        data-testid="export-dialog"
-        overlayProps={{ 'data-testid': 'export-dialog-overlay' }}
-      >
-        {/* Header */}
-        <DialogHeader className="px-4 py-3">
-          <DialogTitle>Export Code</DialogTitle>
-          <DialogDescription className="sr-only">
-            Choose a target language, generate code, preview the output, and download files.
-          </DialogDescription>
-        </DialogHeader>
-        <Separator />
-
-        {/* Content */}
-        <div className="flex-1 min-h-0 p-4 flex flex-col gap-4 overflow-hidden">
-          {/* Service unavailable warning — T030: give hosted users a
-              different hint than local-dev users. */}
-          {serviceAvailable === false && (
-            <Alert variant="destructive">
-              <AlertDescription>
-                {isHosted ? (
-                  <>
-                    The code generation service is temporarily unavailable. Please try again in a minute, or{' '}
-                    <a href="https://github.com/pradeepmouli/rune-langium#export-code" className="underline">
-                      run Studio locally
-                    </a>{' '}
-                    for unlimited generation.
-                  </>
-                ) : (
-                  <>
-                    Code generation service is not available. Start it with{' '}
-                    <code className="font-mono">pnpm codegen:start</code>, or set{' '}
-                    <code className="font-mono">VITE_CODEGEN_URL</code> to a reachable service.
-                  </>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Validation warnings */}
-          {validationWarnings.length > 0 && (
-            <Alert variant="warning">
-              <AlertTitle>Validation warnings</AlertTitle>
-              <AlertDescription>
-                <ul className="list-disc pl-4">
-                  {validationWarnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* CF Turnstile challenge — hosted deploys only; first generation per session */}
-          {turnstileNeeded && turnstileSiteKey && (
-            <div className="flex items-center justify-center py-2" data-testid="turnstile-widget-container">
-              <Turnstile
-                siteKey={turnstileSiteKey}
-                onSuccess={(token) => setTurnstileToken(token)}
-                onExpire={() => setTurnstileToken(null)}
-                onError={() => setTurnstileToken(null)}
-                options={{ action: 'export-code', theme: 'auto', size: 'flexible' }}
-              />
-            </div>
-          )}
-
-          {/* Language selector + generate button */}
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Target language:</label>
-            <Select value={language} onValueChange={setLanguage} disabled={state.phase === 'generating'}>
-              <SelectTrigger size="sm" className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {KNOWN_GENERATORS.map((gen) => (
-                  <SelectItem key={gen.id} value={gen.id}>
-                    {gen.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {state.phase === 'generating' ? (
-              <Button variant="secondary" size="sm" onClick={handleCancel}>
-                Cancel
-              </Button>
+    <InteractiveDialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      title="Export Code"
+      description="Choose a target language, generate code, preview the output, and download files."
+      width="w-[720px]"
+      testId="export-dialog"
+      overlayProps={{ 'data-testid': 'export-dialog-overlay' }}
+      bodyClassName="p-4 gap-4 overflow-hidden"
+    >
+      {/* Service unavailable warning — T030: give hosted users a
+            different hint than local-dev users. */}
+      {serviceAvailable === false && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {isHosted ? (
+              <>
+                The code generation service is temporarily unavailable. Please try again in a minute, or{' '}
+                <a href="https://github.com/pradeepmouli/rune-langium#export-code" className="underline">
+                  run Studio locally
+                </a>{' '}
+                for unlimited generation.
+              </>
             ) : (
-              <Button
-                size="sm"
-                onClick={handleGenerate}
-                disabled={serviceAvailable === false || (turnstileNeeded && turnstileToken === null)}
-              >
-                Generate
-              </Button>
+              <>
+                Code generation service is not available. Start it with{' '}
+                <code className="font-mono">pnpm codegen:start</code>, or set{' '}
+                <code className="font-mono">VITE_CODEGEN_URL</code> to a reachable service.
+              </>
             )}
-          </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
-          {/* Generating state */}
-          {state.phase === 'generating' && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner className="size-4" />
-              Generating {state.language} code...
+      {/* Validation warnings */}
+      {validationWarnings.length > 0 && (
+        <Alert variant="warning">
+          <AlertTitle>Validation warnings</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-4">
+              {validationWarnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* CF Turnstile challenge — hosted deploys only; first generation per session */}
+      {turnstileNeeded && turnstileSiteKey && (
+        <div className="flex items-center justify-center py-2" data-testid="turnstile-widget-container">
+          <Turnstile
+            siteKey={turnstileSiteKey}
+            onSuccess={(token) => setTurnstileToken(token)}
+            onExpire={() => setTurnstileToken(null)}
+            onError={() => setTurnstileToken(null)}
+            options={{ action: 'export-code', theme: 'auto', size: 'flexible' }}
+          />
+        </div>
+      )}
+
+      {/* Language selector + generate button */}
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium">Target language:</label>
+        <Select value={language} onValueChange={setLanguage} disabled={state.phase === 'generating'}>
+          <SelectTrigger size="sm" className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {KNOWN_GENERATORS.map((gen) => (
+              <SelectItem key={gen.id} value={gen.id}>
+                {gen.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {state.phase === 'generating' ? (
+          <Button variant="secondary" size="sm" onClick={handleCancel}>
+            Cancel
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={handleGenerate}
+            disabled={serviceAvailable === false || (turnstileNeeded && turnstileToken === null)}
+          >
+            Generate
+          </Button>
+        )}
+      </div>
+
+      {/* Generating state */}
+      {state.phase === 'generating' && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="size-4" />
+          Generating {state.language} code...
+        </div>
+      )}
+
+      {/* Error state — degraded UX (T028) with specific messages for
+            the known Worker error shapes. */}
+      {state.phase === 'error' && (
+        <div
+          className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive"
+          data-testid="export-error"
+          data-error-status={state.details.status ?? ''}
+        >
+          {renderErrorBody(state.details)}
+        </div>
+      )}
+
+      {/* Results */}
+      {state.phase === 'done' && (
+        <>
+          {state.result.errors.length > 0 && (
+            <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm">
+              <p className="font-medium text-destructive mb-1">{state.result.errors.length} error(s):</p>
+              <ul className="list-disc pl-4 text-destructive">
+                {state.result.errors.map((err: GenerationError, i: number) => (
+                  <li key={`${err.sourceFile ?? ''}-${err.message}-${i}`}>
+                    {err.sourceFile && <span className="font-mono">{err.sourceFile}: </span>}
+                    {err.message}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {/* Error state — degraded UX (T028) with specific messages for
-              the known Worker error shapes. */}
-          {state.phase === 'error' && (
-            <div
-              className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm text-destructive"
-              data-testid="export-error"
-              data-error-status={state.details.status ?? ''}
-            >
-              {renderErrorBody(state.details)}
-            </div>
-          )}
-
-          {/* Results */}
-          {state.phase === 'done' && (
-            <>
-              {state.result.errors.length > 0 && (
-                <div className="px-3 py-2 bg-destructive/10 border border-destructive/20 rounded text-sm">
-                  <p className="font-medium text-destructive mb-1">{state.result.errors.length} error(s):</p>
-                  <ul className="list-disc pl-4 text-destructive">
-                    {state.result.errors.map((err: GenerationError, i: number) => (
-                      <li key={`${err.sourceFile ?? ''}-${err.message}-${i}`}>
-                        {err.sourceFile && <span className="font-mono">{err.sourceFile}: </span>}
-                        {err.message}
-                      </li>
-                    ))}
-                  </ul>
+          {state.result.files.length > 0 && (
+            <div className="flex flex-1 min-h-0 gap-3">
+              {/* File list */}
+              <div className="w-48 flex-shrink-0 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-muted-foreground">{state.result.files.length} file(s)</span>
+                  <Button variant="ghost" size="sm" onClick={handleDownloadAll}>
+                    Download all
+                  </Button>
                 </div>
-              )}
+                <ScrollArea className="flex-1 border border-border rounded">
+                  <div className="p-1">
+                    {state.result.files.map((file: GeneratedFile) => {
+                      const shortName = file.path.split('/').pop() ?? file.path;
+                      return (
+                        <button
+                          key={file.path}
+                          className={`w-full text-left px-2 py-1 text-xs font-mono rounded truncate ${
+                            selectedFile?.path === file.path ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+                          }`}
+                          onClick={() => setSelectedFile(file)}
+                          title={file.path}
+                        >
+                          {shortName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </div>
 
-              {state.result.files.length > 0 && (
-                <div className="flex flex-1 min-h-0 gap-3">
-                  {/* File list */}
-                  <div className="w-48 flex-shrink-0 flex flex-col">
+              {/* Code preview */}
+              <div className="flex-1 min-w-0 flex flex-col">
+                {selectedFile && (
+                  <>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {state.result.files.length} file(s)
-                      </span>
-                      <Button variant="ghost" size="sm" onClick={handleDownloadAll}>
-                        Download all
+                      <span className="text-xs font-mono text-muted-foreground truncate">{selectedFile.path}</span>
+                      <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(selectedFile)}>
+                        Download
                       </Button>
                     </div>
-                    <ScrollArea className="flex-1 border border-border rounded">
-                      <div className="p-1">
-                        {state.result.files.map((file: GeneratedFile) => {
-                          const shortName = file.path.split('/').pop() ?? file.path;
-                          return (
-                            <button
-                              key={file.path}
-                              className={`w-full text-left px-2 py-1 text-xs font-mono rounded truncate ${
-                                selectedFile?.path === file.path ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
-                              }`}
-                              onClick={() => setSelectedFile(file)}
-                              title={file.path}
-                            >
-                              {shortName}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </ScrollArea>
-                  </div>
-
-                  {/* Code preview */}
-                  <div className="flex-1 min-w-0 flex flex-col">
-                    {selectedFile && (
-                      <>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-mono text-muted-foreground truncate">{selectedFile.path}</span>
-                          <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(selectedFile)}>
-                            Download
-                          </Button>
-                        </div>
-                        {/* Self-scrolling <pre> with .studio-scroll chrome —
-                            previously double-wrapped in a Radix <ScrollArea>
-                            (same anti-pattern PR #217 fixed for
-                            NamespaceExplorer: outer Radix viewport's pretty
-                            scrollbar appears but the inner element already
-                            owns the overflow, so the visible scrollbar
-                            doesn't actually drive the scroll). Drop the
-                            wrapper, let the <pre> handle its own scroll
-                            via the shared .studio-scroll class. */}
-                        <pre className="studio-scroll flex-1 border border-border rounded bg-muted/30 p-3 text-xs font-mono whitespace-pre overflow-auto">
-                          {selectedFile.content}
-                        </pre>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {state.result.files.length === 0 && state.result.errors.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No files generated. The model may not contain exportable constructs.
-                </p>
-              )}
-            </>
+                    {/* Self-scrolling <pre> with .studio-scroll chrome —
+                          previously double-wrapped in a Radix <ScrollArea>
+                          (same anti-pattern PR #217 fixed for
+                          NamespaceExplorer: outer Radix viewport's pretty
+                          scrollbar appears but the inner element already
+                          owns the overflow, so the visible scrollbar
+                          doesn't actually drive the scroll). Drop the
+                          wrapper, let the <pre> handle its own scroll
+                          via the shared .studio-scroll class. */}
+                    <pre className="studio-scroll flex-1 border border-border rounded bg-muted/30 p-3 text-xs font-mono whitespace-pre overflow-auto">
+                      {selectedFile.content}
+                    </pre>
+                  </>
+                )}
+              </div>
+            </div>
           )}
-        </div>
-      </DialogContent>
-    </Dialog>
+
+          {state.result.files.length === 0 && state.result.errors.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No files generated. The model may not contain exportable constructs.
+            </p>
+          )}
+        </>
+      )}
+    </InteractiveDialog>
   );
 }

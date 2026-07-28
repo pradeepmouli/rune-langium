@@ -9,7 +9,6 @@
  */
 
 import { memo, useCallback } from 'react';
-import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Plus, Minus } from 'lucide-react';
 import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
@@ -19,7 +18,7 @@ import type { StructureDataNode, StructureExpansionKey, StructureRow } from '../
 import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText, formatCardinality } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId, useNodeMetaErrors } from './NavigationContext.js';
-import { NodeKindBadge } from './NodeKindBadge.js';
+import { BaseFlowNode } from './BaseFlowNode.js';
 import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import { useDiagnosticsForRange, diagnosticSeverityClass } from '../../hooks/useDiagnosticsForRange.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
@@ -347,7 +346,7 @@ function StructureDataRow({
 export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
   const members = ((d as any).attributes ?? []) as any[];
-  const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
+  const { onNavigateToType, allNodeIds, layoutDirection, pendingHydrationNamespaces } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
   // Validation errors live on the node.meta sibling (not on data) — read
   // them out of the ReactFlow store by node id.
@@ -418,16 +417,21 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
     const ownerInstancePath: ReadonlyArray<string> = [...(instancePath ?? []), id];
 
     return (
-      <div className={`rune-node rune-node-data rune-node-data--structure${selected ? ' rune-node-selected' : ''}`}>
-        <div className="rune-node-header">
-          <NodeKindBadge kind="data" />
-          <span>{data.name}</span>
+      <BaseFlowNode
+        id={id}
+        kind="data"
+        name={data.name}
+        className="rune-node-data rune-node-data--structure"
+        selected={selected}
+        hydrating={Boolean(data.deferred) && pendingHydrationNamespaces.includes(data.namespaceUri)}
+        metaIndicators={
           <StructureMetaIndicators
             definition={data.definition}
             annotations={data.annotations}
             conditions={data.conditions}
           />
-        </div>
+        }
+      >
         <div className="rune-node-body rune-node-body--two-col">
           <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
             {rows.map((row: StructureRow) => {
@@ -488,17 +492,20 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
             childLeftX={connectorGeometry.childLeftX}
           />
         ) : null}
-      </div>
+      </BaseFlowNode>
     );
   }
 
   return (
-    <div className={`rune-node rune-node-data${selected ? ' rune-node-selected' : ''}`} data-summary={summary}>
-      <Handle type="target" position={handles.target} />
-      <div className="rune-node-header">
-        <NodeKindBadge kind="data" />
-        <span>{d.name}</span>
-      </div>
+    <BaseFlowNode
+      id={id}
+      kind="data"
+      name={d.name}
+      className="rune-node-data"
+      selected={selected}
+      dataSummary={summary}
+      handles={handles}
+    >
       <div className="rune-node-summary">{summary}</div>
       <div className="rune-node-body">
         {members.length > 0 && (
@@ -540,7 +547,6 @@ export const DataNode = memo(function DataNode({ data, selected, id }: NodeProps
           </div>
         )}
       </div>
-      <Handle type="source" position={handles.source} />
-    </div>
+    </BaseFlowNode>
   );
 });

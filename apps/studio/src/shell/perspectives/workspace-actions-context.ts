@@ -54,3 +54,8 @@ export function useWorkspaceActions(): WorkspaceActions {
   if (!v) throw new Error('useWorkspaceActions must be used within a WorkspaceActionsContext provider');
   return v;
 }
+
+/** Null-tolerant variant for shell chrome that must render without a workspace (Settings). */
+export function useWorkspaceActionsOptional(): WorkspaceActions | null {
+  return useContext(WorkspaceActionsContext);
+}

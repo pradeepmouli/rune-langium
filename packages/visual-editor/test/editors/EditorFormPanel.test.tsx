@@ -398,4 +398,63 @@ describe('EditorFormPanel', () => {
     // DataTypeForm must NOT be rendered for refOnly entries.
     expect(panel.querySelector('[data-slot="data-type-form"]')).toBeNull();
   });
+
+  // ---- isHydrating loading state -------------------------------------------
+
+  it('renders a loading state instead of a form when isHydrating is true', () => {
+    // A deferred placeholder's data is a stub ({$type, name} only) while its
+    // namespace's on-demand hydration round-trip is in flight — the panel
+    // must show a loading state, not dispatch the stub into a form with no
+    // fields (see docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md).
+    render(
+      <EditorFormPanel
+        nodeData={{ $type: 'Data', name: 'Trade' } as unknown as AnyGraphNode}
+        meta={testMeta('cdm.product', { deferred: true })}
+        nodeId="node-1"
+        isHydrating={true}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    expect(screen.getByText('Loading cdm.product…')).toBeDefined();
+    // Neither the empty-state message nor a real form should render.
+    expect(screen.queryByText('Select a node to edit')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Data' })).toBeNull();
+  });
+
+  it('does not render the loading state when isHydrating is false (default)', () => {
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({ $type: 'Data' })}
+        meta={testMeta('test.model')}
+        nodeId="node-1"
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    expect(screen.queryByLabelText('Loading namespace')).toBeNull();
+    expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ---- synonymSourceOptions threading -------------------------------------
+
+  it('accepts synonymSourceOptions without error and renders the DataTypeForm', () => {
+    // The prop is optional; supplying it must not crash the panel or the form.
+    // Full rendering of the source picker UI is tested in Task 5 (MetadataSection).
+    const synonymSourceOptions = [{ value: 'ns.FpML', label: 'FpML', namespace: 'ns' }];
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({ $type: 'Data' })}
+        nodeId="node-1"
+        availableTypes={AVAILABLE_TYPES}
+        synonymSourceOptions={synonymSourceOptions}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    expect(panel.querySelector('[data-slot="data-type-form"]')).not.toBeNull();
+  });
 });

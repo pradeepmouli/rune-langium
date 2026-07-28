@@ -17,6 +17,20 @@ export const RUNTIME_HELPER_SOURCE: string =
   `\n` +
   `const runeAttrExists = (v: unknown): boolean =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
+  `\n` +
+  `const runeToDate = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToTime = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToDateTime = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToZonedDateTime = (v: unknown): string | undefined =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)\n` +
+  `    ? v\n` +
+  `    : undefined;\n` +
   `// --- end runtime helpers ---`;
 
 /**
@@ -36,6 +50,20 @@ export const RUNTIME_HELPER_JS_SOURCE: string =
   `\n` +
   `const runeAttrExists = (v) =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
+  `\n` +
+  `const runeToDate = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToTime = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToDateTime = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;\n` +
+  `\n` +
+  `const runeToZonedDateTime = (v) =>\n` +
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)\n` +
+  `    ? v\n` +
+  `    : undefined;\n` +
   `// --- end runtime helpers ---`;
 
 /**
@@ -67,3 +95,104 @@ export const runeCount = (arr: unknown[] | undefined | null): number => arr?.len
  */
 export const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-date`: returns the string
+ * unchanged when it matches `YYYY-MM-DD`, else undefined.
+ *
+ * Runtime representation of `date` is a plain ISO string (see ts-emitter's
+ * builtin type map); Tier 3 `ToDateOperation` semantics per the parity spec.
+ */
+export const runeToDate = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined;
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-time`: `HH:MM:SS` with an
+ * optional fractional-seconds suffix.
+ */
+export const runeToTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-date-time`: local ISO-8601
+ * `YYYY-MM-DDTHH:MM:SS` with optional fractional seconds, no zone offset.
+ */
+export const runeToDateTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(v) ? v : undefined;
+
+/**
+ * Validate-shape-and-passthrough for Rune `to-zoned-date-time`: ISO-8601
+ * datetime with a required zone offset (`Z` or `+HH:MM`), optional IANA
+ * zone-id suffix (`[Region/City]`).
+ */
+export const runeToZonedDateTime = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})(\[[^\]]+\])?$/.test(v)
+    ? v
+    : undefined;
+
+/**
+ * The seven z-free runtime helper names, in the fixed order they're
+ * declared/imported everywhere (inlined source, sidecar exports, and the
+ * `import { ... } from './runtime(.zod).js'` line emitted by both
+ * `ts-emitter.ts` and `zod-emitter.ts` when `suppressBoilerplate: true`).
+ *
+ * Single source of truth for that ordering — used to build the import
+ * line's name list and to recognize the header/body boundary when
+ * concatenating per-namespace files into a single-file bundle.
+ */
+export const RUNE_HELPER_NAMES = [
+  'runeCheckOneOf',
+  'runeCount',
+  'runeAttrExists',
+  'runeToDate',
+  'runeToTime',
+  'runeToDateTime',
+  'runeToZonedDateTime'
+] as const;
+
+/**
+ * The z-free helpers' bodies as `export const` declarations, one blank
+ * line between each — the shape shared by the TypeScript and Zod runtime
+ * sidecars (`runtime.ts` / `runtime.zod.ts`). Each language profile
+ * appends its own target-specific tail (TS: `isLeapYear`; Zod: the
+ * `z`-dependent `runeExtendChoice`, from `zod-runtime-helpers.ts`).
+ *
+ * Kept as literal template lines (not derived from the plain-const
+ * declarations above via reflection) so the emitted formatting stays
+ * exact and independent of how this module's own source is written.
+ */
+export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = [
+  `export const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>`,
+  `  values.filter((v) => v !== undefined && v !== null).length === 1;`,
+  ``,
+  `export const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;`,
+  ``,
+  `export const runeAttrExists = (v: unknown): boolean =>`,
+  `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,
+  ``,
+  `export const runeToDate = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(v) ? v : undefined;`,
+  ``,
+  `export const runeToTime = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' && /^\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;`,
+  ``,
+  `export const runeToDateTime = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?$/.test(v) ? v : undefined;`,
+  ``,
+  `export const runeToZonedDateTime = (v: unknown): string | undefined =>`,
+  `  typeof v === 'string' &&`,
+  `  /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})(\\[[^\\]]+\\])?$/.test(v)`,
+  `    ? v`,
+  `    : undefined;`
+];
+
+/**
+ * The `import { runeCheckOneOf, ..., runeToZonedDateTime } from '<from>';`
+ * line emitted at the top of per-namespace files when
+ * `suppressBoilerplate: true` (bundled layouts import the sidecar
+ * instead of inlining `RUNTIME_HELPER_SOURCE`). `extra` appends further
+ * names (Zod also imports `runeExtendChoice`).
+ */
+export function buildRuntimeHelperImportLine(from: string, extra: readonly string[] = []): string {
+  return `import { ${[...RUNE_HELPER_NAMES, ...extra].join(', ')} } from '${from}';`;
+}

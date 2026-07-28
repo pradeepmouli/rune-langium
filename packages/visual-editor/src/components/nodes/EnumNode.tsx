@@ -12,11 +12,10 @@
  */
 
 import { memo } from 'react';
-import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import type { AnyGraphNode } from '../../types.js';
 import type { StructureEnumNode } from '../../types/structure-view.js';
-import { NodeKindBadge } from './NodeKindBadge.js';
+import { BaseFlowNode } from './BaseFlowNode.js';
 import { getHandlePositions, useNavigation, useNodeMetaErrors } from './NavigationContext.js';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +32,7 @@ function isStructureEnum(d: unknown): d is StructureEnumNodeData {
 
 export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
-  const { layoutDirection } = useNavigation();
+  const { layoutDirection, pendingHydrationNamespaces } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
   // Validation errors live on the node.meta sibling (not on data).
   const nodeErrors = useNodeMetaErrors(id);
@@ -48,11 +47,14 @@ export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps
     // e2e-batch fix #12: per-node rows-column width from the layout.
     const rowsColWidth = (data as { rowsColWidth?: number }).rowsColWidth;
     return (
-      <div className={`rune-node rune-node-enum rune-node-enum--structure${selected ? ' rune-node-selected' : ''}`}>
-        <div className="rune-node-header">
-          <NodeKindBadge kind="enum" />
-          <span>{data.name}</span>
-        </div>
+      <BaseFlowNode
+        id={id}
+        kind="enum"
+        name={data.name}
+        className="rune-node-enum rune-node-enum--structure"
+        selected={selected}
+        hydrating={Boolean(data.deferred) && pendingHydrationNamespaces.includes(data.namespaceUri)}
+      >
         <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
           {values.map((value) => (
             <div key={value} className="rune-node-row" data-attr={value}>
@@ -60,7 +62,7 @@ export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps
             </div>
           ))}
         </div>
-      </div>
+      </BaseFlowNode>
     );
   }
 
@@ -71,12 +73,15 @@ export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps
   const summary = members.length === 0 ? 'No values' : `${members.length} value${members.length === 1 ? '' : 's'}`;
 
   return (
-    <div className={`rune-node rune-node-enum${selected ? ' rune-node-selected' : ''}`} data-summary={summary}>
-      <Handle type="target" position={handles.target} />
-      <div className="rune-node-header">
-        <NodeKindBadge kind="enum" />
-        <span>{d.name}</span>
-      </div>
+    <BaseFlowNode
+      id={id}
+      kind="enum"
+      name={d.name}
+      className="rune-node-enum"
+      selected={selected}
+      dataSummary={summary}
+      handles={handles}
+    >
       <div className="rune-node-summary">{summary}</div>
       <div className="rune-node-body">
         {members.length > 0 && (
@@ -96,7 +101,6 @@ export const EnumNode = memo(function EnumNode({ data, selected, id }: NodeProps
           </div>
         )}
       </div>
-      <Handle type="source" position={handles.source} />
-    </div>
+    </BaseFlowNode>
   );
 });

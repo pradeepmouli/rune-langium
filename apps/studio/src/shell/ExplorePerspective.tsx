@@ -49,6 +49,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   ExpressionEditorSlotProps,
   FunctionScope,
@@ -65,15 +66,17 @@ import { SourceEditor } from '../components/SourceEditor.js';
 import type { SourceEditorRef } from '../components/SourceEditor.js';
 import { ConnectionStatus } from '../components/ConnectionStatus.js';
 import { LspConnectionBadge } from '../components/LspConnectionBadge.js';
-import { SyncStatusBadge } from '../components/SyncStatusBadge.js';
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel.js';
 import { ExportDialog } from '../components/ExportDialog.js';
+import { ImportDialog } from '../components/ImportDialog.js';
 import { ModelLoader } from '../components/ModelLoader.js';
+import { LanguageLensEditor } from '../components/LanguageLensEditor.js';
+import { JsonSchemaImportOptionsFormAdapter } from '../codegen-forms/JsonSchemaImportOptionsFormAdapter.js';
+import { OpenApiImportOptionsFormAdapter } from '../codegen-forms/OpenApiImportOptionsFormAdapter.js';
+import { SqlImportOptionsFormAdapter } from '../codegen-forms/SqlImportOptionsFormAdapter.js';
+import { XsdImportOptionsFormAdapter } from '../codegen-forms/XsdImportOptionsFormAdapter.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Separator } from '@rune-langium/design-system/ui/separator';
-import { Avatar, AvatarFallback } from '@rune-langium/design-system/ui/avatar';
-import { Kbd } from '@rune-langium/design-system/ui/kbd';
-import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -81,33 +84,15 @@ import {
   DialogHeader,
   DialogTitle
 } from '@rune-langium/design-system/ui/dialog';
-import {
-  Maximize2,
-  LayoutGrid,
-  Network,
-  Check,
-  Download,
-  Share2,
-  Zap,
-  Search,
-  ChevronDown,
-  Plus,
-  LogOut
-} from 'lucide-react';
-import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
+import { Maximize2, LayoutGrid, Network } from 'lucide-react';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { DockShell } from './DockShell.js';
-import { usePerspectiveStore } from '../store/perspective-store.js';
-import type { WorkspaceFile } from '../services/workspace.js';
-import { linkDocument, createBlankWorkspaceFile } from '../services/workspace.js';
+import { linkDocument } from '../services/workspace.js';
 import { useLspDiagnosticsBridge } from '../hooks/useLspDiagnosticsBridge.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
 import { CodePreviewPanel } from '../components/CodePreviewPanel.js';
 import type { SourceEditorHandle } from '../components/CodePreviewPanel.js';
-import { FontScaleButton } from '../components/FontScaleButton.js';
-import { mergeSerializedIntoSource } from '../utils/source-merge.js';
-import { subscribeToEngine, resolveConflict } from '../services/git-sync.js';
-import type { SyncStatus } from '@rune-langium/git-sync-engine';
+import { subscribeToEngine } from '../services/git-sync.js';
 import { usePreviewStore, type FormPreviewTarget } from '../store/preview-store.js';
 import { FormPreviewPanel as FormPreviewPanelShell } from './panels/FormPreviewPanel.js';
 import { CenterStackPanel } from './panels/CenterStackPanel.js';
@@ -116,9 +101,12 @@ import { useWorkspace } from './providers/workspace-context.js';
 import { useLsp } from './providers/lsp-context.js';
 import { useWorkspaceActions } from './perspectives/workspace-actions-context.js';
 import type { DeferredExportEntry } from '../workers/parser-worker.js';
-import type { LspDiagnostic } from '../store/diagnostics-store.js';
-import { uriToPath, pathToUri } from '../utils/uri.js';
+import { pathToUri } from '../utils/uri.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { combineFileDiagnostics, countDiagnostics } from './explore-diagnostics.js';
+import { useExploreFileNavStore } from './explore-file-nav-store.js';
+import { useExportDialogStore } from './export-dialog-store.js';
+import { useImportDialogStore } from './import-dialog-store.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -140,44 +128,17 @@ const EMPTY_PARSE_ERRORS: ReadonlyMap<string, string[]> = new Map();
  */
 const EMPTY_RANGE_DIAGNOSTICS: readonly RangeDiagnostic[] = Object.freeze([]);
 
-function normalizeDiagnosticFilePath(uri: string, files: readonly WorkspaceFile[]): string {
-  const path = uriToPath(uri);
-  const match = files.find(
-    (file) =>
-      file.path === path || file.name === path || path.endsWith(`/${file.path}`) || path.endsWith(`/${file.name}`)
-  );
-  return match?.path ?? path;
-}
+const IMPORT_OPTIONS_FORMS_BY_FORMAT = {
+  'json-schema': JsonSchemaImportOptionsFormAdapter,
+  openapi: OpenApiImportOptionsFormAdapter,
+  sql: SqlImportOptionsFormAdapter,
+  xsd: XsdImportOptionsFormAdapter
+} as const;
 
-function toParserDiagnostics(messages: readonly string[]): LspDiagnostic[] {
-  return messages.map((message, index) => ({
-    range: {
-      start: { line: index, character: 0 },
-      end: { line: index, character: 0 }
-    },
-    severity: 1,
-    source: 'parser',
-    message
-  }));
-}
-
-function countDiagnostics(fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>): {
-  errors: number;
-  warnings: number;
-  total: number;
-} {
-  let errors = 0;
-  let warnings = 0;
-  let total = 0;
-  for (const diagnostics of fileDiagnostics.values()) {
-    for (const diagnostic of diagnostics) {
-      total += 1;
-      if (diagnostic.severity === 2) warnings += 1;
-      else if (diagnostic.severity === 1) errors += 1;
-    }
-  }
-  return { errors, warnings, total };
-}
+// normalizeDiagnosticFilePath / toParserDiagnostics / countDiagnostics moved to
+// explore-diagnostics.ts (shared-perspective-chrome plan, Task 3 prep) so the
+// future ExploreCenterSlot component can recompute the same combined
+// diagnostics this component's footer uses, without a duplicate copy.
 
 // ---------------------------------------------------------------------------
 // Adapter: TypeGraphNode[] → AdapterDocument
@@ -283,6 +244,7 @@ function graphNodesToAdapterDocument(
         $type: 'Data',
         name: dd.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         extends: dd.superType?.$refText,
         // `attributes` on Dehydrated<Data> has the same structural shape as
         // AdapterAttribute: { name, typeCall: { type?: { $refText? } }, card: { inf, sup?, unbounded } }
@@ -307,6 +269,7 @@ function graphNodesToAdapterDocument(
         $type: 'Choice',
         name: dc.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         choiceOptions: (dc.attributes ?? []) as ReadonlyArray<AdapterChoiceOption>,
         // Phase A — type metadata. Choice declarations carry doc + annotations
         // (and may carry conditions in the grammar); project all via the shared
@@ -320,6 +283,7 @@ function graphNodesToAdapterDocument(
         $type: 'Enum',
         name: de.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         values: (de.enumValues ?? []) as Array<{ name: string }>
       });
     } else if (effectiveType === 'RosettaRecordType') {
@@ -348,6 +312,7 @@ function graphNodesToAdapterDocument(
         $type: 'Function',
         name: df.name,
         namespace,
+        deferred: rfNode.meta?.deferred,
         inputs: (df.inputs ?? []) as AdapterNode['inputs'],
         output: (df.output ?? null) as AdapterNode['output'],
         // Phase A — type metadata (doc / annotations / conditions). Functions
@@ -416,27 +381,6 @@ function formatUnknownKind(rawType: string): string {
   return spaced.charAt(0) + spaced.slice(1).toLowerCase();
 }
 
-function getFileKindBadge(name: string): string {
-  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : '';
-  switch (ext) {
-    case 'rosetta':
-      return 'DSL';
-    case 'json':
-      return 'JSON';
-    case 'yaml':
-    case 'yml':
-      return 'YAML';
-    case 'ts':
-      return 'TS';
-    case 'js':
-      return 'JS';
-    case 'md':
-      return 'MD';
-    default:
-      return ext ? ext.slice(0, 4).toUpperCase() : 'FILE';
-  }
-}
-
 function resolveResponsiveLayoutDirection(
   width: number,
   height: number,
@@ -448,87 +392,9 @@ function resolveResponsiveLayoutDirection(
   return previous;
 }
 
-/** Count error (severity 1) and warning (severity 2) diagnostics for a file. */
-function countFileDiagnostics(diagnostics: readonly LspDiagnostic[] | undefined): {
-  errors: number;
-  warnings: number;
-} {
-  let errors = 0;
-  let warnings = 0;
-  if (diagnostics) {
-    for (const d of diagnostics) {
-      if (d.severity === 1) errors += 1;
-      else if (d.severity === 2) warnings += 1;
-    }
-  }
-  return { errors, warnings };
-}
-
-function FileTabStrip({
-  files,
-  activeFile,
-  onSelectFile,
-  onCreateFile,
-  fileDiagnostics
-}: {
-  files: readonly WorkspaceFile[];
-  activeFile: string | undefined;
-  onSelectFile: (path: string) => void;
-  onCreateFile: () => void;
-  fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>;
-}) {
-  const userFiles = files.filter((f) => !f.readOnly);
-
-  return (
-    <div className="studio-topbar__tabs">
-      {userFiles.map((f) => {
-        const { errors, warnings } = countFileDiagnostics(fileDiagnostics.get(f.path));
-        return (
-          <button
-            key={f.path}
-            type="button"
-            className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
-            onClick={() => onSelectFile(f.path)}
-            title={f.path}
-            // Explicit label so screen readers don't read the diagnostics
-            // chiclets as bare numbers (e.g. "a.rosetta 2 1").
-            aria-label={`${f.name}${f.dirty ? ', unsaved' : ''}${
-              errors > 0 ? `, ${errors} error${errors === 1 ? '' : 's'}` : ''
-            }${warnings > 0 ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}`}
-          >
-            <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
-            <span className="studio-topbar__tab-name">{f.name}</span>
-            {errors > 0 && (
-              <span className="studio-topbar__tab-count is-error" title={`${errors} error${errors === 1 ? '' : 's'}`}>
-                {errors}
-              </span>
-            )}
-            {warnings > 0 && (
-              <span
-                className="studio-topbar__tab-count is-warning"
-                title={`${warnings} warning${warnings === 1 ? '' : 's'}`}
-              >
-                {warnings}
-              </span>
-            )}
-            <span className="studio-topbar__tab-badge" aria-hidden="true">
-              {getFileKindBadge(f.name)}
-            </span>
-          </button>
-        );
-      })}
-      <button
-        type="button"
-        className="studio-topbar__tab-new"
-        aria-label="New file"
-        title="New file"
-        onClick={onCreateFile}
-      >
-        <Plus className="size-3.5" />
-      </button>
-    </div>
-  );
-}
+// getFileKindBadge / countFileDiagnostics / FileTabStrip moved verbatim to
+// perspectives/explore-chrome.tsx (ExploreCenterSlot) — shared-perspective-
+// chrome plan, Task 3.
 
 export function ExplorePerspective() {
   // Workspace model data — formerly props, now from WorkspaceProvider.
@@ -538,7 +404,6 @@ export function ExplorePerspective() {
   const parseErrors = workspace.parseErrors ?? EMPTY_PARSE_ERRORS;
   const workspaceId = workspace.workspaceId ?? 'default';
   const workspaceKind = workspace.workspaceKind;
-  const workspaceName = workspace.workspaceName;
   const fileCount = workspace.fileCount;
   const studioVersion = STUDIO_VERSION;
 
@@ -548,44 +413,44 @@ export function ExplorePerspective() {
   const onReconnect = reconnect;
 
   // Workspace actions — formerly props, now from the actions context.
-  const { onFilesChange, onClose, onSwitchWorkspace, onCreateWorkspace } = useWorkspaceActions();
+  // onClose/onSwitchWorkspace/onCreateWorkspace moved to AppHeader's
+  // WorkspaceSwitcherTrigger (shared-perspective-chrome plan, Task 3).
+  const { onFilesChange } = useWorkspaceActions();
 
   const graphRef = useRef<RuneTypeGraphRef>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
   const sourceEditorRef = useRef<SourceEditorRef>(null);
-  const [showExportDialog, setShowExportDialog] = useState(false);
+  // Export dialog open-state is shared with the header's Export code/Generate
+  // buttons (moving into ExploreActions in Task 3) — lifted to a store rather
+  // than local useState (export-dialog-store.ts; shared-perspective-chrome
+  // plan, Task 3 hazard #2).
+  const showExportDialog = useExportDialogStore((s) => s.open);
+  const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
+  const showImportDialog = useImportDialogStore((s) => s.open);
+  const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
   // Curated Models modal — wired from the ActivityBar's Database button.
   // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
   // reuse the same component in a Dialog so the affordance stays discoverable
   // once a workspace is open. A richer bottom-bar multi-selector is deferred
   // to a future task; the modal is the minimal landing.
   const [showCuratedModels, setShowCuratedModels] = useState(false);
-  // Topbar workspace dropdown — populated lazily when the popover opens
-  // so we don't read IDB on every EditorPage mount. Recents list is filtered
-  // to exclude the current workspace (no point switching to where you are).
-  const [workspaceMenuRecents, setWorkspaceMenuRecents] = useState<RecentWorkspaceRecord[]>([]);
-  const handleWorkspaceMenuOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) {
-        void listRecents().then((rows) => {
-          setWorkspaceMenuRecents(rows.filter((r) => r.id !== workspaceId));
-        });
-      }
-    },
-    [workspaceId]
-  );
+  // Topbar workspace dropdown state moved to AppHeader's WorkspaceSwitcherTrigger
+  // (shared-perspective-chrome plan, Task 3).
   const [groupedLayout, setGroupedLayout] = useState(false);
   const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
   const groupedLayoutRef = useRef(groupedLayout);
   groupedLayoutRef.current = groupedLayout;
   const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
-  // File tabs are an Explore-only affordance (perspective-registry.showsFileTabs).
-  // Hide them when the user switches to Git / Export / Settings / Workspaces.
-  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
-  const [activeEditorFile, setActiveEditorFile] = useState<string | undefined>(undefined);
+  // Active file + git-sync status are shared with the header's FileTabStrip
+  // (moving into ExploreCenterSlot in Task 3) — lifted to a store rather than
+  // local useState (explore-file-nav-store.ts; shared-perspective-chrome
+  // plan, Task 3 hazard #3).
+  const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+  const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
+  const storeOpenFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
   const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
   const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
   const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -601,18 +466,20 @@ export function ExplorePerspective() {
   );
   const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-  // Git sync status — only meaningful for git-backed workspaces.
+  // Git sync status — only meaningful for git-backed workspaces. The value
+  // is read by AppHeader's SyncStatusBadge (via the same store); this
+  // component only owns the subscription that keeps it fresh.
   // Uses subscribeToEngine so the subscription survives async engine creation:
   // the badge will receive state even if the engine is created after this effect
   // runs (which is the common case on first boot).
-  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const setSyncStatus = useExploreFileNavStore((s) => s.setSyncStatus);
   useEffect(() => {
     if (workspaceKind !== 'git-backed') return;
     // Reset to null immediately on workspace switch so the badge never shows
     // the previous workspace's status while the new engine initialises.
     setSyncStatus(null);
     return subscribeToEngine(workspaceId, setSyncStatus);
-  }, [workspaceId, workspaceKind]);
+  }, [workspaceId, workspaceKind, setSyncStatus]);
 
   const storeNodes = useEditorStore((s) => s.nodes);
   const storeNodesById = useEditorStore((s) => s.nodesById);
@@ -621,6 +488,8 @@ export function ExplorePerspective() {
   // parseEpoch gates source serialization: only USER edits (not parse-driven
   // graph rebuilds) get written back to source — see useModelSourceSync.
   const storeParseEpoch = useEditorStore((s) => s.parseEpoch);
+  const storePendingEditPatches = useEditorStore((s) => s.pendingEditPatches);
+  const storePendingInversePatches = useEditorStore((s) => s.pendingInversePatches);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const visibility = useEditorStore((s) => s.visibility);
   const expandedNamespaces = visibility.expandedNamespaces;
@@ -775,6 +644,18 @@ export function ExplorePerspective() {
   }, [selectedNodeId, nodeRepository]);
   const selectedNodeDataRef = useRef<AnyGraphNode | null>(selectedNodeData);
   selectedNodeDataRef.current = selectedNodeData;
+
+  // On-demand curated hydration (docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md,
+  // trigger B): a selected deferred placeholder node's `data` is a stub
+  // ({$type, name} only) until its namespace's server round-trip resolves.
+  // Surface that as a loading state in the inspector rather than silently
+  // dispatching the stub into a form with no fields — see EditorFormPanel's
+  // `isHydrating` prop.
+  const pendingHydrationNamespaces = useEditorStore((s) => s.pendingHydrationNamespaces);
+  const selectedNodeIsHydrating = useMemo(
+    () => Boolean(selectedNodeMeta?.deferred && pendingHydrationNamespaces.includes(selectedNodeMeta.namespace)),
+    [selectedNodeMeta, pendingHydrationNamespaces]
+  );
 
   const previewTargets: FormPreviewTarget[] = useMemo(() => {
     const sourceByTargetId = new Map<string, Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>>();
@@ -1015,9 +896,35 @@ export function ExplorePerspective() {
     };
   }, [selectedNodeData]);
 
+  // Lightweight per-session UI toggle (component state only — not a
+  // persisted user setting, and not wired into the shared AppHeader /
+  // perspective-chrome registry). 'builder' stays the default; the small
+  // toggle below flips a condition's expression editor to the TypeScript
+  // lens for manual QA and everyday use.
+  const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
+
   const renderExpressionEditor = useCallback(
-    (props: ExpressionEditorSlotProps) => <ExpressionBuilder {...props} scope={functionScope} />,
-    [functionScope]
+    (props: ExpressionEditorSlotProps) => (
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="link"
+            size="xs"
+            className="h-auto p-0 text-muted-foreground"
+            onClick={() => setExpressionEditorMode((m) => (m === 'lens' ? 'builder' : 'lens'))}
+          >
+            {expressionEditorMode === 'lens' ? 'Use builder' : 'Try TypeScript view'}
+          </Button>
+        </div>
+        {expressionEditorMode === 'lens' ? (
+          <LanguageLensEditor {...props} />
+        ) : (
+          <ExpressionBuilder {...props} scope={functionScope} />
+        )}
+      </div>
+    ),
+    [functionScope, expressionEditorMode]
   );
 
   const filesRef = useRef(files);
@@ -1059,6 +966,17 @@ export function ExplorePerspective() {
     }
     return map;
   }, [resolvedModelFiles]);
+
+  // Invert namespaceToFile against the current file content so the CST-reuse
+  // serializer has the original source text to slice for clean subtrees.
+  const originalSourceByNamespace = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [ns, filePath] of namespaceToFile) {
+      const file = files.find((f) => f.path === filePath);
+      if (file) map.set(ns, file.content);
+    }
+    return map;
+  }, [files, namespaceToFile]);
 
   const nodeIdToFilePath = useMemo(() => {
     const map = new Map<string, string>();
@@ -1126,17 +1044,13 @@ export function ExplorePerspective() {
   const deferredExportsRef = useRef(deferredExports);
   deferredExportsRef.current = deferredExports;
 
-  const openFileInSource = useCallback((filePath: string) => {
-    setActiveEditorFile(filePath);
-  }, []);
+  // Bound directly to the store action (same identity across renders, like
+  // the old useCallback with an empty dep array) so every call site below
+  // works unchanged.
+  const openFileInSource = storeOpenFileInSource;
 
-  // "+" new-file affordance — mirrors FileLoader's start-page "New" flow:
-  // mint the next available untitled[.rosetta] file, append it, and open it.
-  const handleCreateFile = useCallback(() => {
-    const file = createBlankWorkspaceFile(filesRef.current);
-    onFilesChange?.([...filesRef.current, file]);
-    openFileInSource(file.path);
-  }, [onFilesChange, openFileInSource]);
+  // "+" new-file affordance moved to ExploreCenterSlot (shared-perspective-
+  // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().
 
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
@@ -1236,35 +1150,20 @@ export function ExplorePerspective() {
   );
 
   const handleModelChanged = useCallback(
-    async (serialized: Map<string, string>) => {
-      // Smart-merge serialized output into the original source so we don't
-      // erase root elements the serializer can't emit (Function bodies,
-      // TypeAlias, Rule, Report, RecordType, BasicType, …). See
-      // `mergeSerializedIntoSource` and PR #221's Codex P1 review for the
-      // history. Wholesale-overwriting `f.content` with `text` was a
-      // data-loss regression strictly worse than the bug it fixed.
+    (serialized: Map<string, string>) => {
+      // The CST-reuse serializer (buildSourceForNamespaces) already produces
+      // full merged file text — no separate mergeSerializedIntoSource step.
       const filesAtStart = filesRef.current;
-      const mergedEntries = await Promise.all(
-        filesAtStart.map(async (f) => {
-          for (const [ns, text] of serialized) {
-            if (namespaceToFile.get(ns) !== f.path) continue;
-            const merged = await mergeSerializedIntoSource(f.content, text);
-            // Avoid marking the file dirty when the merge collapsed to a
-            // no-op (effect re-fired but content actually matched). This
-            // mirrors the visual-editor source-sync's own equality guard.
-            if (merged === f.content) return f;
-            return { ...f, content: merged, dirty: true };
-          }
-          return f;
-        })
-      );
-      // Discard the result if the underlying files array changed under us
-      // mid-await — the next handler invocation will produce a fresh merge
-      // from the up-to-date baseline.
-      if (filesRef.current !== filesAtStart) return;
-      const changed = mergedEntries.some((entry, i) => entry !== filesAtStart[i]);
-      if (!changed) return;
-      onFilesChange?.(mergedEntries);
+      const merged = filesAtStart.map((f) => {
+        for (const [ns, text] of serialized) {
+          if (namespaceToFile.get(ns) !== f.path) continue;
+          if (text === f.content) return f;
+          return { ...f, content: text, dirty: true };
+        }
+        return f;
+      });
+      if (!merged.some((e, i) => e !== filesAtStart[i])) return;
+      onFilesChange?.(merged);
     },
     [namespaceToFile, onFilesChange]
   );
@@ -1274,22 +1173,22 @@ export function ExplorePerspective() {
   // Previously this subscription lived inside RuneTypeGraph, which is only
   // mounted when the Graph pane is active; Structure-pane edits never reached
   // the source pane (2026-05-21, fix/inspector-source-sync).
-  useModelSourceSync(storeNodes, storeEdges, handleModelChanged, storeParseEpoch);
+  useModelSourceSync(
+    storeNodes,
+    storeEdges,
+    handleModelChanged,
+    storeParseEpoch,
+    storePendingEditPatches,
+    originalSourceByNamespace,
+    storePendingInversePatches
+  );
 
   useLspDiagnosticsBridge(lspClient);
   const { fileDiagnostics } = useDiagnosticsStore();
-  const combinedFileDiagnostics = useMemo(() => {
-    const merged = new Map<string, LspDiagnostic[]>();
-    for (const [uri, diagnostics] of fileDiagnostics) {
-      merged.set(normalizeDiagnosticFilePath(uri, files), [...diagnostics]);
-    }
-    for (const [filePath, messages] of parseErrors) {
-      if (messages.length === 0) continue;
-      const existing = merged.get(filePath) ?? [];
-      merged.set(filePath, [...toParserDiagnostics(messages), ...existing]);
-    }
-    return merged;
-  }, [fileDiagnostics, files, parseErrors]);
+  const combinedFileDiagnostics = useMemo(
+    () => combineFileDiagnostics(fileDiagnostics, files, parseErrors),
+    [fileDiagnostics, files, parseErrors]
+  );
   const combinedDiagnostics = useMemo(() => countDiagnostics(combinedFileDiagnostics), [combinedFileDiagnostics]);
 
   useEffect(() => {
@@ -1399,6 +1298,20 @@ export function ExplorePerspective() {
     return [...builtinOptions, ...graphOptions];
   }, [storeNodes]);
 
+  const synonymSourceOptions: SourceRefOption[] = useMemo(() => {
+    const out: SourceRefOption[] = [];
+    for (const { model } of resolvedModelFiles) {
+      const namespace = namespaceFromModelName(model.name) ?? undefined;
+      for (const element of model.elements ?? []) {
+        if ((element as { $type?: string }).$type === 'RosettaSynonymSource') {
+          const name = (element as { name: string }).name;
+          out.push({ value: namespace ? `${namespace}.${name}` : name, label: name, namespace });
+        }
+      }
+    }
+    return out;
+  }, [resolvedModelFiles]);
+
   const editorActions: EditorFormActions = useMemo(() => {
     const s = useEditorStore.getState;
     return {
@@ -1417,6 +1330,10 @@ export function ExplorePerspective() {
       removeEnumValue: (nodeId, name) => s().removeEnumValue(nodeId, name),
       updateEnumValue: (nodeId, oldN, newN, display) => s().updateEnumValue(nodeId, oldN, newN, display),
       reorderEnumValue: (nodeId, from, to) => s().reorderEnumValue(nodeId, from, to),
+      addEnumValueSynonym: (nodeId, valueIndex, source, value) =>
+        s().addEnumValueSynonym(nodeId, valueIndex, source, value),
+      removeEnumValueSynonym: (nodeId, valueIndex, synIndex) =>
+        s().removeEnumValueSynonym(nodeId, valueIndex, synIndex),
       setEnumParent: (nodeId, parentId) => s().setEnumParent(nodeId, parentId),
       addChoiceOption: (nodeId, type) => s().addChoiceOption(nodeId, type),
       removeChoiceOption: (nodeId, type) => s().removeChoiceOption(nodeId, type),
@@ -1425,6 +1342,7 @@ export function ExplorePerspective() {
       updateInputParam: (nodeId, oldN, newN, type, card) => s().updateInputParam(nodeId, oldN, newN, type, card),
       reorderInputParam: (nodeId, from, to) => s().reorderInputParam(nodeId, from, to),
       updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
+      updateTypeAliasType: (nodeId, type) => s().updateTypeAliasType(nodeId, type),
       updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
       addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
       removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),
@@ -1523,17 +1441,30 @@ export function ExplorePerspective() {
 
   const InspectorPanelMounted = useCallback(() => <div data-testid="panel-inspector" />, []);
 
+  // Wrapped in the same `data-testid="panel-problems"` / `data-component`
+  // container `ProblemsPanel.tsx` (the DEFAULT_PANEL_REGISTRY entry for
+  // `workspace.problems`) uses — this perspective overrides that registry
+  // entry to pass `onNavigate`, but the override previously rendered
+  // `DiagnosticsPanel` bare, silently dropping the wrapper markers every
+  // other consumer of the `workspace.problems` panel id relies on (found
+  // live against production: `panel-problems` never mounts in the Explore
+  // perspective, the perspective every prod-ux journey exercises, breaking
+  // any locator scoped to that testid).
   const ProblemsPanelMounted = useCallback(
     () => (
-      <DiagnosticsPanel
-        fileDiagnostics={combinedFileDiagnostics}
-        onNavigate={(uri) => {
-          const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-          const fileName = normPath.split('/').pop() ?? normPath;
-          const file = files.find((f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? ''));
-          if (file) openFileInSource(file.path ?? file.name);
-        }}
-      />
+      <div data-testid="panel-problems" data-component="workspace.problems" className="h-full">
+        <DiagnosticsPanel
+          fileDiagnostics={combinedFileDiagnostics}
+          onNavigate={(uri) => {
+            const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
+            const fileName = normPath.split('/').pop() ?? normPath;
+            const file = files.find(
+              (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
+            );
+            if (file) openFileInSource(file.path ?? file.name);
+          }}
+        />
+      </div>
     ),
     [combinedFileDiagnostics, files, openFileInSource]
   );
@@ -1706,7 +1637,9 @@ export function ExplorePerspective() {
           meta={selectedNodeMeta}
           nodeId={selectedNodeId}
           refOnly={selectedNodeIsRefOnly}
+          isHydrating={selectedNodeIsHydrating}
           availableTypes={availableTypes}
+          synonymSourceOptions={synonymSourceOptions}
           actions={editorActions}
           allNodes={storeNodes}
           nodeRepository={nodeRepository}
@@ -1723,7 +1656,9 @@ export function ExplorePerspective() {
       selectedNodeMeta,
       selectedNodeId,
       selectedNodeIsRefOnly,
+      selectedNodeIsHydrating,
       availableTypes,
+      synonymSourceOptions,
       editorActions,
       storeNodes,
       nodeRepository,
@@ -1923,6 +1858,7 @@ export function ExplorePerspective() {
         onNodeSelect={(canonicalId) => storeSelectNode(canonicalId, { reapplyFocusMode: false })}
         onNavigateToEnumType={handleStructureNavigateToEnumType}
         structureDiagnostics={structureDiagnostics}
+        pendingHydrationNamespaces={pendingHydrationNamespaces}
       />
     ),
     [
@@ -1934,7 +1870,8 @@ export function ExplorePerspective() {
       structureUnsupportedSelectedType,
       storeSelectNode,
       handleStructureNavigateToEnumType,
-      structureDiagnostics
+      structureDiagnostics,
+      pendingHydrationNamespaces
     ]
   );
 
@@ -1974,7 +1911,6 @@ export function ExplorePerspective() {
     ]
   );
 
-  const workspaceFileCount = fileCount;
   const totalProblemCount = useMemo(() => combinedDiagnostics.total, [combinedDiagnostics.total]);
   const panelTabMeta = useMemo(
     () => ({
@@ -2006,141 +1942,6 @@ export function ExplorePerspective() {
       onKeyDown={handleEditorPageKeyDown}
       tabIndex={-1}
     >
-      <header className="studio-topbar" aria-label="Studio workspace header">
-        <div className="studio-topbar__left">
-          <div className="studio-brand">
-            <div className="studio-brand__mark">R</div>
-            <span className="studio-brand__name">Rune Studio</span>
-          </div>
-          <span className="studio-topbar__divider" />
-          <Popover onOpenChange={handleWorkspaceMenuOpenChange}>
-            <PopoverTrigger
-              render={
-                <button
-                  type="button"
-                  className="studio-topbar__ws-btn"
-                  aria-label={`Workspace menu — ${workspaceName || 'workspace'}`}
-                  title="Switch / create / close workspace"
-                >
-                  <span className="studio-topbar__ws-mark" aria-hidden="true">
-                    {(workspaceName || 'Workspace').trim().charAt(0).toUpperCase()}
-                  </span>
-                  <span className="studio-topbar__ws-name">{workspaceName || 'Untitled workspace'}</span>
-                  <span className="studio-topbar__ws-sub">
-                    {workspaceFileCount} file{workspaceFileCount === 1 ? '' : 's'}
-                  </span>
-                  <ChevronDown className="size-3" />
-                </button>
-              }
-            />
-            <PopoverContent align="start" sideOffset={6} className="w-72 p-1.5">
-              {/* Switch-to section — only shown when callback is provided AND
-                  there are recents OTHER than the current workspace. The
-                  dropdown was the user-reported gap (workspace tab had a
-                  ChevronDown that promised a menu but only fired onClose). */}
-              {onSwitchWorkspace && workspaceMenuRecents.length > 0 && (
-                <>
-                  <p className="px-2 py-1 text-3xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Switch to
-                  </p>
-                  <ul className="space-y-0.5" role="menu">
-                    {workspaceMenuRecents.slice(0, 6).map((r) => (
-                      <li key={r.id} role="none">
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
-                          onClick={() => onSwitchWorkspace(r.id)}
-                        >
-                          <span className="font-medium truncate flex-1">{r.name}</span>
-                          <span className="shrink-0 text-3xs px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
-                            {r.kind === 'git-backed' ? 'GIT' : r.kind === 'folder-backed' ? 'FOLDER' : 'BROWSER'}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="my-1 border-t border-border" />
-                </>
-              )}
-              {onCreateWorkspace && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left"
-                  onClick={onCreateWorkspace}
-                >
-                  <Plus className="size-3.5 text-muted-foreground" />
-                  <span>New workspace</span>
-                </button>
-              )}
-              {onClose && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm hover:bg-accent/50 cursor-pointer text-left text-destructive"
-                  onClick={onClose}
-                  aria-label={`Close ${workspaceName || 'workspace'} and return to start page`}
-                >
-                  <LogOut className="size-3.5" />
-                  <span>Close workspace</span>
-                </button>
-              )}
-            </PopoverContent>
-          </Popover>
-        </div>
-        {activePerspective === 'explore' && (
-          <FileTabStrip
-            files={files}
-            activeFile={activeEditorFile}
-            onSelectFile={openFileInSource}
-            onCreateFile={handleCreateFile}
-            fileDiagnostics={combinedFileDiagnostics}
-          />
-        )}
-        <div className="studio-topbar__right">
-          <button type="button" className="studio-topbar__cmdk" aria-label="Search">
-            <Search className="size-3.5" />
-            <span>Search types, files, commands…</span>
-            <Kbd>⌘K</Kbd>
-          </button>
-          {workspaceKind === 'git-backed' && syncStatus && (
-            <SyncStatusBadge
-              status={syncStatus}
-              onResolve={(choice) => {
-                resolveConflict(workspaceId, choice);
-              }}
-            />
-          )}
-          <span className="studio-topbar__divider" />
-          <FontScaleButton />
-          <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
-            <Check />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Export code"
-            title="Export code"
-            onClick={() => setShowExportDialog(true)}
-          >
-            <Download />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
-            <Share2 />
-          </Button>
-          <button type="button" className="studio-topbar__generate" onClick={() => setShowExportDialog(true)}>
-            <Zap className="size-3.5" />
-            Generate
-          </button>
-          <span className="studio-topbar__divider" />
-          <Avatar render={<button type="button" aria-label="Account" />} className="size-7 cursor-pointer">
-            <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-2xs font-bold">
-              PM
-            </AvatarFallback>
-          </Avatar>
-        </div>
-      </header>
       <div className="flex flex-1 min-h-0">
         <DockShell
           studioVersion={studioVersion}
@@ -2171,6 +1972,16 @@ export function ExplorePerspective() {
         onClose={() => setShowExportDialog(false)}
         getUserFiles={getSerializedFiles}
         validateModel={validateModelForExport}
+      />
+
+      <ImportDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        files={files}
+        onFilesChange={(next) => onFilesChange?.(next)}
+        onFileFocused={openFileInSource}
+        namespaceToFile={namespaceToFile}
+        optionsFormsByFormat={IMPORT_OPTIONS_FORMS_BY_FORMAT}
       />
 
       {/*

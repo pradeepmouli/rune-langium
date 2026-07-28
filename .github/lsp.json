@@ -1,0 +1,25 @@
+{
+  "lspServers": {
+    "typescript": {
+      "command": "tsserver",
+      "args": [],
+      "fileExtensions": {
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".mts": "typescript",
+        ".cts": "typescript",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".mjs": "javascript",
+        ".cjs": "javascript"
+      }
+    },
+    "rust": {
+      "command": "rust-analyzer",
+      "args": [],
+      "fileExtensions": {
+        ".rs": "rust"
+      }
+    }
+  }
+}

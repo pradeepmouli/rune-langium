@@ -24,7 +24,11 @@ class_name = "TelemetryAggregator"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["TelemetryAggregator"]
+# KV-backed DO namespaces (new_classes) are no longer creatable on this
+# account (CF error 10099) — new classes must use SQLite-backed storage.
+# No code change needed: counters.ts only uses state.storage.get/put/list,
+# which SQLite-backed DOs support identically.
+new_sqlite_classes = ["TelemetryAggregator"]
 
 [observability]
 enabled = true

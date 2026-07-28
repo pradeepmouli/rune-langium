@@ -7,28 +7,25 @@ name: rune-langium-codegen
 
 Documentation site and generated agent skills for rune-langium APIs
 
-Use `generate()` when you need emitted files for a concrete target, and
-`generatePreviewSchemas()` when UI tooling needs structured field metadata and
-source maps for a selected data type. This package expects parsed Langium
-documents from `@rune-langium/core`.
+Spec 021 Phase 2's subpath restructure ("CLEAN FLIP") splits this
+package's public API by direction — nothing in it is genuinely shared
+between the two, so the main barrel exports nothing:
 
-## Configuration
+- `@rune-langium/codegen/export` — the outbound (Rune → target-language)
+  surface: `generate()`, `generatePreviewSchemas()`, every emitter
+  contract/option type, `TARGET_DESCRIPTORS`, etc.
+- `@rune-langium/codegen/import` — the inbound (source → Rune) surface:
+  `importModel()`, `SourceModel`/`ConstraintIR` types, the CLI's
+  `runImport`, and import diagnostics.
+- `@rune-langium/codegen/rosetta` — UNCHANGED: the shared, browser-safe
+  `.rosetta` render-core consumed by both directions (the outbound
+  emitters render Rune AST to `.rosetta` text; the inbound importer
+  renders its built AST-shaped nodes the same way).
 
-9 configuration interfaces — see references/config.md for details.
-
-## Quick Reference
-
-38 exports (4 functions, 2 classes, 28 types, 4 constants) — see references/ for full API.
-
-## References
-
-Load these on demand — do NOT read all at once:
-
-- When calling any function → read `references/functions.md` for full signatures, parameters, and return types
-- When using a class → read `references/classes.md` for properties, methods, and inheritance
-- When defining typed variables or function parameters → read `references/types.md`
-- When using exported constants → read `references/variables.md`
-- When configuring options → read `references/config.md` for all settings and defaults
+Import from the subpath that matches what you need; do not add exports
+here unless a symbol is genuinely used by both `/export` and `/import`
+(as of this restructure, nothing is — `/rosetta` already covers the one
+case that legitimately spans both directions).
 
 ## Links
 

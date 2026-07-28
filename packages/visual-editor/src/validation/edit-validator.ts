@@ -62,12 +62,7 @@ export function detectCircularInheritance(childId: string, parentId: string, edg
  * When `nodeId` is provided, checks for duplicate attribute names within
  * that node instead of type names.
  */
-export function detectDuplicateName(
-  name: string,
-  namespace: string,
-  nodes: TypeGraphNode[],
-  nodeId?: string
-): boolean {
+export function detectDuplicateName(name: string, namespace: string, nodes: TypeGraphNode[], nodeId?: string): boolean {
   if (nodeId) {
     // Check for duplicate attribute within a node
     const node = nodes.find((n) => n.id === nodeId);
@@ -132,11 +127,7 @@ export function validateCardinality(input: string): string | null {
 /**
  * Check if an enum value name already exists within the specified enum node.
  */
-export function detectDuplicateEnumValue(
-  valueName: string,
-  nodeId: string,
-  nodes: TypeGraphNode[]
-): boolean {
+export function detectDuplicateEnumValue(valueName: string, nodeId: string, nodes: TypeGraphNode[]): boolean {
   const node = nodes.find((n) => n.id === nodeId);
   if (!node) return false;
   const d = node.data as AnyGraphNode;

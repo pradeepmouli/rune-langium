@@ -427,7 +427,11 @@ describe('POST /api/parse — dependencyGraph (spec 2026-05-14 §5.2)', () => {
       archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
       history: [],
       namespaces: {
-        'cdm.math': { deps: [], exports: [{ type: 'Data', name: 'Quantity' }], artifact: 'artifacts/ns/cdm.math.json.gz' }
+        'cdm.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: 'artifacts/ns/cdm.math.json.gz'
+        }
       }
     } as never);
     vi.spyOn(curatedFetchModule, 'fetchCuratedNamespace').mockResolvedValue([]);

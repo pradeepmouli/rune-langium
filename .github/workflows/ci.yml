@@ -24,7 +24,7 @@ jobs:
         # production target — every wrangler.toml in the repo enables
         # `nodejs_compat`, which selects Node 22 LTS API surface regardless of
         # the specific compatibility_date used.
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22.x'
           cache: 'pnpm'
@@ -45,7 +45,7 @@ jobs:
 
       - name: Cache CDM / Rune DSL / Rune FpML fixtures
         id: fixture-cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .resources
           key: ${{ steps.fixture-versions.outputs.cache-key }}
@@ -124,7 +124,7 @@ jobs:
           version: 11.5.0
 
       - name: Use Node.js 22.x
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22.x'
           cache: 'pnpm'
@@ -179,7 +179,7 @@ jobs:
           version: 11.5.0
 
       - name: Use Node.js 22.x
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '22.x'
           cache: 'pnpm'

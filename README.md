@@ -96,7 +96,8 @@ Requires **Node.js ≥ 20** and **pnpm ≥ 10** for local development.
 Parse a Rune file and walk the AST:
 
 ```typescript
-import { parse, serializeModel } from '@rune-langium/core';
+import { parse } from '@rune-langium/core';
+import { renderModel } from '@rune-langium/codegen/rosetta';
 
 const source = `
 namespace demo
@@ -116,8 +117,8 @@ for (const element of model.elements) {
   console.log(element.$type, element.name);
 }
 
-// Round-trip back to source
-console.log(serializeModel(model));
+// Render the model back to .rosetta source
+console.log(renderModel(model));
 ```
 
 Validate a workspace of `.rosetta` files from the CLI:

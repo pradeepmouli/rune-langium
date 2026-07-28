@@ -23,6 +23,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -30,7 +31,8 @@ import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { z } from 'zod';
-import { generate } from '../src/index.js';
+import { generate, generatePreviewSchemas } from '../src/export.js';
+import { jsonCodec } from '../src/instances/json-codec.js';
 import type { GeneratorOutput } from '../src/types.js';
 
 const execFileAsync = promisify(execFile);
@@ -228,7 +230,7 @@ describe('cdm-smoke: json-schema target', () => {
   it('generates JSON Schema for US1 fixture documents and validates against 2020-12 meta-schema (FR-019)', async () => {
     // Inline import so the test file doesn't require ajv at the top level
     // (avoids impacting tests that don't need it)
-    const { default: Ajv } = await import('ajv/dist/2020.js');
+    const { Ajv2020 } = await import('./emit/ajv-2020.js');
 
     const fixtureNames = ['basic-types', 'cardinality', 'enums', 'inheritance', 'circular', 'reserved-words'];
 
@@ -238,7 +240,7 @@ describe('cdm-smoke: json-schema target', () => {
     const outputs = await generate(docs, { target: 'json-schema' });
     expect(outputs.length).toBeGreaterThan(0);
 
-    const ajv = new Ajv({ strict: false });
+    const ajv = new Ajv2020({ strict: false });
 
     // Validate every emitted .schema.json against the 2020-12 meta-schema
     for (const output of outputs) {
@@ -671,5 +673,79 @@ describe('cdm-smoke: json-battery (T078, FR-024)', () => {
       const messages = r.error.issues.map((e) => e.message);
       expect(messages.some((m) => m.includes('IfFlagThenValue'))).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Prototype Workspace Phase 1 (spec 023, Task 16) — CDM smoke coverage.
+//
+// Verifies the eager `generatePreviewSchemas` pipeline (which replaced the
+// reverted lazy field-resolver design — see commit 7274b81d) terminates
+// cleanly against a real, deep CDM type, and that `jsonCodec` parses
+// real CDM-shaped JSON without a parse-level diagnostic.
+//
+// Per CLAUDE.md: tests that depend on `.resources/` are guarded with
+// `describe.skipIf(!CDM_EXISTS)`, following `us12-cdm-corpus.test.ts`'s
+// convention, so CI/dev environments without the corpus skip cleanly.
+// ---------------------------------------------------------------------------
+
+const CDM_DIR = resolve(new URL('.', import.meta.url).pathname, '../../../.resources/cdm');
+const CDM_EXISTS = existsSync(CDM_DIR);
+
+/**
+ * Load and build all CDM .rosetta documents from `CDM_DIR` using a fresh
+ * Langium service instance. Mirrors us12-cdm-corpus.test.ts's loadCdmDocs.
+ */
+async function loadCdmDocs() {
+  const files = readdirSync(CDM_DIR).filter((f) => f.endsWith('.rosetta'));
+  const { RuneDsl } = createRuneDslServices();
+  const docs = [];
+
+  for (const file of files) {
+    const content = readFileSync(join(CDM_DIR, file), 'utf-8');
+    const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      content,
+      URI.parse(`inmemory:///cdm/${file}`)
+    );
+    docs.push(doc);
+  }
+
+  await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
+  return { docs, fileCount: files.length };
+}
+
+describe.skipIf(!CDM_EXISTS)('Prototype Workspace Phase 1 — CDM smoke', () => {
+  it('generates a full preview schema for a deep real CDM type without hanging', async () => {
+    const { docs } = await loadCdmDocs();
+    const [schema] = generatePreviewSchemas(docs, { targetId: 'cdm.event.common.TradeState' });
+    expect(schema).toBeDefined();
+    expect(schema!.fields.length).toBeGreaterThan(0);
+    // The eager pipeline's own maxDepth/seenTypes cycle guard (preview-schema.ts,
+    // objectField) is what keeps this from hanging on TradeState's real depth/cycles —
+    // this test's job is proving that guard actually terminates cleanly against real
+    // corpus data, not reimplementing depth logic here.
+  }, 60_000);
+
+  it('imports real CDM-shaped JSON via jsonCodec without a parse-level diagnostic', async () => {
+    const validPath = join(FIXTURES_DIR, 'cdm-instances', 'trade-state-valid.json');
+    const invalidPath = join(FIXTURES_DIR, 'cdm-instances', 'trade-state-missing-required.json');
+    if (!existsSync(validPath) || !existsSync(invalidPath)) {
+      // No real sample available in this environment/corpus checkout — document the gap,
+      // do not fabricate one. See Task 16 correction notes.
+      return;
+    }
+    const goodJson = await readFile(validPath, 'utf-8');
+    const badJson = await readFile(invalidPath, 'utf-8');
+
+    const good = jsonCodec.import(goodJson, 'cdm.event.common.TradeState');
+    expect(good.diagnostics).toEqual([]);
+
+    const bad = jsonCodec.import(badJson, 'cdm.event.common.TradeState');
+    // jsonCodec itself only reports parse errors — schema errors are the
+    // caller's job (instance-store's validate dispatch, Task 9/10), so this
+    // asserts the codec parsed it (valid JSON, invalid instance is NOT a
+    // codec-level diagnostic).
+    expect(bad.diagnostics).toEqual([]);
+    expect(bad.data).toBeDefined();
   });
 });

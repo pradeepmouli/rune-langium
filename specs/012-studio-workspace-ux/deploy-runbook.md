@@ -79,7 +79,13 @@ flow to users.
 
 The telemetry Worker has no secrets at this time — IP hashing uses an
 in-memory daily-rotating salt and the closed schema cannot leak PII.
-The only post-deploy task is exposing `/v1/stats` to admins:
+The Worker itself performs NO code-level authorization on its two admin
+routes (`GET /v1/stats`, `GET /v1/digest`) — both rely entirely on CF
+Access being configured at the edge, per this step. **This is a REQUIRED
+post-deploy task, not optional**: `/v1/digest` in particular returns the
+full fleet rollup (per-op duration histograms AND `signatureCounts` across
+every event/day) — deploying without this step leaves that endpoint
+publicly fetchable by anyone who knows the URL.
 
 ```bash
 # Already part of the wrangler config; no secret to put.
@@ -88,11 +94,22 @@ pnpm --filter @rune-langium/telemetry-worker exec wrangler tail \
   --search 'TelemetryAggregator' --format pretty
 ```
 
-If you want non-admin access blocked at the edge, in CF dashboard:
-**Zero Trust → Access → Applications → Add → Self-hosted**
+In CF dashboard: **Zero Trust → Access → Applications → Add → Self-hosted**
+— create ONE application per admin route below (a broad `/v1/*` wildcard
+would also gate `/v1/event`, which must stay open for anonymous client
+POSTs, so don't use one):
 - Application URL: `https://www.daikonic.dev/rune-studio/api/telemetry/v1/stats`
-- Policy: Allow your admin email allowlist.
-- Leave `/v1/event` open (anonymous, schema-validated, rate-limited).
+- Application URL: `https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest`
+- Policy (both applications): Allow your admin email allowlist.
+- Leave `/v1/event` with no Access application (anonymous, schema-validated,
+  rate-limited).
+
+**Any future admin route added to this Worker needs its own Access
+Application here** — the Worker enforces none of this in code by design
+(external, edge-level auth), so a new route is publicly exposed by default
+until this step is done for it. `/v1/digest` itself shipped without this
+update initially — check this list is current whenever the Worker's route
+table changes.
 
 ---
 

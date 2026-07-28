@@ -1,0 +1,7 @@
+namespace test.decxns.product
+version "0.0.0"
+
+import test.decxns.base.*
+
+type TransferableProduct extends Asset:
+    weight number (0..1)

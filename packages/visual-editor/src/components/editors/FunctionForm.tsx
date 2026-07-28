@@ -50,7 +50,7 @@ import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
-import { getTypeRefText, parseCardinality } from '../../adapters/model-helpers.js';
+import { getTypeRefText, parseCardinality, getExpressionDisplayText } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { functionFormRegistry } from '../forms/rows/index.js';
@@ -74,19 +74,8 @@ const EMPTY_GROUPS: InheritedGroup[] = [];
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract preserved CST text from an AST node (tries $cstText then $cstNode.text). */
-function getCstText(node: unknown): string {
-  if (node && typeof node === 'object') {
-    const obj = node as Record<string, unknown>;
-    if (typeof obj.$cstText === 'string') return obj.$cstText.trim();
-    const cst = obj.$cstNode;
-    if (cst && typeof cst === 'object') {
-      const text = (cst as Record<string, unknown>).text;
-      if (typeof text === 'string') return text.trim();
-    }
-  }
-  return '';
-}
+/** Extract display text from an AST expression node. See {@link getExpressionDisplayText}. */
+const getCstText = getExpressionDisplayText;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -155,7 +144,8 @@ function FunctionForm({
   const { form } = useZodForm(RosettaFunctionSchema, {
     defaultValues: formValuesProjection<typeof RosettaFunctionSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry: functionFormRegistry
+    formRegistry: functionFormRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different

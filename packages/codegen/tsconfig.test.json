@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "bin/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test/fixtures"]
+}

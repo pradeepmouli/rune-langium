@@ -8,12 +8,13 @@
  * status state machine, commit, dirty-tree detection.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import git from 'isomorphic-git';
 import { createOpfsRoot } from '../setup/opfs-mock.js';
 import { OpfsFs } from '../../src/opfs/opfs-fs.js';
 import { InMemoryFs } from '../../src/services/in-memory-fs.js';
 import { initRepo, stageAndCommit, detectSyncState } from '../../src/services/git-backing.js';
+import { useOutputStore } from '../../src/store/output-store.js';
 
 let fs: OpfsFs;
 const WS = 'ws-git-1';
@@ -70,6 +71,29 @@ describe('detectSyncState (T055)', () => {
     });
     await fs.writeFile(`/${WS}/files/a.rosetta`, 'edited\n');
     expect(await detectSyncState(fs, WS)).toBe('ahead');
+  });
+});
+
+describe('stageAndCommit — working-tree scan failure (op-log)', () => {
+  it('logs an op-log error when the working-tree scan fails, since a swallowed readdir would otherwise push an incomplete tree', async () => {
+    useOutputStore.setState({ lines: [] });
+    await fs.mkdir(`/${WS}/files`);
+    await initRepo(fs, WS, { defaultBranch: 'main' });
+    await fs.writeFile(`/${WS}/files/a.rosetta`, 'namespace a\n');
+
+    vi.spyOn(fs, 'readdir').mockRejectedValue(new Error('permission denied'));
+
+    // walk() catches the readdir failure internally rather than propagating
+    // it, so the commit still succeeds — just with whatever partial tree
+    // could be scanned.
+    await expect(
+      stageAndCommit(fs, WS, { message: 'partial', authorName: 'T', authorEmail: 't@e.com' })
+    ).resolves.toEqual(expect.any(String));
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'git');
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('error');
+    expect(entry?.text).toContain('working tree scan failed');
   });
 });
 

@@ -11,7 +11,7 @@
     "seed:local": "NODE_OPTIONS='--max-old-space-size=4096' tsx scripts/seed-local-curated-mirror.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@rune-langium/core": "workspace:*",

@@ -12,20 +12,41 @@ packages:
 #   - workerd: its binary is fetched on demand by wrangler/miniflare.
 #   - msw: the postinstall is a no-op (worker is set up via `msw init`).
 #   - simple-git-hooks: hooks are installed by the root `prepare` script.
+#   - @l1xnan/tree-sitter-sql / tree-sitter: the SQL reader (spec 021 Phase 2c)
+#     only consumes @l1xnan/tree-sitter-sql's prebuilt tree-sitter-sql.wasm
+#     file via web-tree-sitter — it never imports the package's native N-API
+#     binding (bindings/node), so `tree-sitter`'s own node-gyp/binding.gyp
+#     build (pulled in transitively as a peer dependency) is unnecessary.
 allowBuilds:
+  '@l1xnan/tree-sitter-sql': false
   esbuild: false
   msw: false
   sharp: false
   simple-git-hooks: false
+  tree-sitter: false
   workerd: false
 
 minimumReleaseAgeExclude:
-  - langium-zod@0.9.0
+  - langium-zod@0.11.2
+  - '@zod-to-form/react@0.11.0'
+  - '@zod-to-form/vite@0.4.5'
+  # PR #353: @lspeasy/client 3.1.5 pulls in @lspeasy/core 2.6.0 as a new
+  # transitive resolution; both were too freshly-published for the age gate,
+  # which blocked `pnpm install` (not a real breaking change in the bump).
+  - '@lspeasy/client@3.1.5'
+  - '@lspeasy/core@2.6.0'
 
 # pnpm 10/11 read dependency overrides + patches from here (NOT the package.json
 # `pnpm` field, which they ignore). Migrated from package.json so the
 # lockfile's overrides match the running config under pnpm@11.x.
 overrides:
+  # Exact-pinned (not a caret range) like langium-zod/@zod-to-form below:
+  # codegen's sql-node-types.ts is GENERATED from this exact version's
+  # shipped src/node-types.json (spec 021 Phase 2c Addendum 2) — a silent
+  # version drift would desync the generated file from the installed
+  # grammar's real shape. Bump deliberately + regenerate
+  # (`pnpm --filter @rune-langium/codegen run generate:sql-node-types`).
+  '@l1xnan/tree-sitter-sql': 0.4.7
   # Pin react + react-dom to the SAME exact version. design-system and
   # visual-editor declare react-dom as a floating peer (`react-dom: ">=18.0.0"`),
   # which let react-dom drift to a newer patch (19.2.7) than react (19.2.6).
@@ -34,11 +55,10 @@ overrides:
   # to one version regardless of the peer ranges.
   react: 19.2.7
   react-dom: 19.2.7
-  langium-zod: 0.9.0
+  langium-zod: 0.11.2
   x-to-zod: ^0.8.0
   '@zod-to-form/core': 0.11.1
-  '@zod-to-form/react': 0.10.2
-  '@zod-to-form/vite': 0.4.4
+  '@zod-to-form/react': 0.11.0
   codemirror: 6.0.2
   '@radix-ui/react-compose-refs': 1.1.2
   '@radix-ui/react-primitive': 2.1.4

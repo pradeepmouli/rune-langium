@@ -4,6 +4,7 @@
 import type { LangiumDocument } from 'langium';
 import {
   isAnnotation,
+  isChoice,
   isData,
   isRosettaEnumeration,
   isRosettaExternalFunction,
@@ -12,6 +13,7 @@ import {
   isRosettaRule,
   isRosettaTypeAlias,
   type Annotation,
+  type Choice,
   type Data,
   type RosettaEnumeration,
   type RosettaExternalFunction,
@@ -33,6 +35,8 @@ export interface NamespaceWalkResult {
   readonly reportsByName: ReadonlyMap<string, RosettaReport>;
   readonly annotationsByName: ReadonlyMap<string, Annotation>;
   readonly libraryFuncsByName: ReadonlyMap<string, RosettaExternalFunction>;
+  /** W2: `choice` declarations, keyed by name — mirrors dataByName's treatment. */
+  readonly choiceByName: ReadonlyMap<string, Choice>;
   readonly emitOrder: readonly string[];
   readonly cyclicTypes: ReadonlySet<string>;
   readonly graph: TypeReferenceGraph;
@@ -50,6 +54,7 @@ export function walkNamespace(docs: LangiumDocument[], namespace: string): Names
   const reportsByName = new Map<string, RosettaReport>();
   const annotationsByName = new Map<string, Annotation>();
   const libraryFuncsByName = new Map<string, RosettaExternalFunction>();
+  const choiceByName = new Map<string, Choice>();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -58,6 +63,8 @@ export function walkNamespace(docs: LangiumDocument[], namespace: string): Names
     for (const element of model.elements) {
       if (isData(element)) {
         dataByName.set(element.name, element);
+      } else if (isChoice(element)) {
+        choiceByName.set(element.name, element);
       } else if (isRosettaEnumeration(element)) {
         enumByName.set(element.name, element);
       } else if (isRosettaTypeAlias(element)) {
@@ -88,6 +95,7 @@ export function walkNamespace(docs: LangiumDocument[], namespace: string): Names
     reportsByName,
     annotationsByName,
     libraryFuncsByName,
+    choiceByName,
     emitOrder,
     cyclicTypes,
     graph

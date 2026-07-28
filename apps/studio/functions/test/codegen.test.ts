@@ -245,11 +245,22 @@ type Quantity:
     const mod = await import('../lib/curated-fetch.js');
     const V = '2026-05-22';
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
-      schemaVersion: 2, modelId: 'cdm', version: V,
-      sha256: 'a'.repeat(64), sizeBytes: 1, generatedAt: 'now', upstreamCommit: 'c', upstreamRef: 'r',
-      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz', history: [],
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
       namespaces: {
-        'cdm.base.math': { deps: [], exports: [{ type: 'Data', name: 'Quantity' }], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` }
+        'cdm.base.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: `artifacts/${V}/ns/cdm.base.math.json.gz`
+        }
       }
     } as never);
     vi.spyOn(mod, 'fetchCuratedNamespace').mockResolvedValue([curatedDoc]);
@@ -284,11 +295,22 @@ type Quantity:
     const mod = await import('../lib/curated-fetch.js');
     const V = '2026-05-22';
     vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
-      schemaVersion: 2, modelId: 'cdm', version: V,
-      sha256: 'a'.repeat(64), sizeBytes: 1, generatedAt: 'now', upstreamCommit: 'c', upstreamRef: 'r',
-      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz', history: [],
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
       namespaces: {
-        'cdm.base.math': { deps: [], exports: [{ type: 'Data', name: 'Quantity' }], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` }
+        'cdm.base.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: `artifacts/${V}/ns/cdm.base.math.json.gz`
+        }
       }
     } as never);
     vi.spyOn(mod, 'fetchCuratedNamespace').mockResolvedValue([curatedDoc]);
@@ -296,7 +318,9 @@ type Quantity:
     const res = await onRequestPost({
       request: makeRequest({
         // user file imports cdm.base.math so it becomes a closure seed
-        files: [{ path: 'user.rune', content: 'namespace user\nimport cdm.base.math\n\ntype Trade:\n  id string (1..1)\n' }],
+        files: [
+          { path: 'user.rune', content: 'namespace user\nimport cdm.base.math\n\ntype Trade:\n  id string (1..1)\n' }
+        ],
         target: 'json-schema',
         options: { 'json-schema': { layout: 'single-file' } },
         curatedBundles: [{ id: 'cdm', version: 'latest' }]
@@ -370,20 +394,62 @@ type Quantity:
 
   const CG_VERSION = '2026-05-22';
   const CG_MANIFEST = {
-    schemaVersion: 2, modelId: 'cdm', version: CG_VERSION,
-    sha256: 'a'.repeat(64), sizeBytes: 1, generatedAt: 'now', upstreamCommit: 'c', upstreamRef: 'r',
-    archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz', history: [],
+    schemaVersion: 2,
+    modelId: 'cdm',
+    version: CG_VERSION,
+    sha256: 'a'.repeat(64),
+    sizeBytes: 1,
+    generatedAt: 'now',
+    upstreamCommit: 'c',
+    upstreamRef: 'r',
+    archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+    history: [],
     namespaces: {
-      'cdm.base.math': { deps: [], exports: [{ type: 'Data', name: 'Quantity' }], artifact: `artifacts/${CG_VERSION}/ns/cdm.base.math.json.gz` },
-      'cdm.other': { deps: [], exports: [{ type: 'Data', name: 'Unrelated' }], artifact: `artifacts/${CG_VERSION}/ns/cdm.other.json.gz` }
+      'cdm.base.math': {
+        deps: [],
+        exports: [{ type: 'Data', name: 'Quantity' }],
+        artifact: `artifacts/${CG_VERSION}/ns/cdm.base.math.json.gz`
+      },
+      'cdm.other': {
+        deps: [],
+        exports: [{ type: 'Data', name: 'Unrelated' }],
+        artifact: `artifacts/${CG_VERSION}/ns/cdm.other.json.gz`
+      }
     }
   };
   function cgSM(name: string, importNs: string[] = []): string {
-    return JSON.stringify({ $type: 'RosettaModel', name, imports: importNs.map((ns) => ({ importedNamespace: ns })), elements: [] });
+    return JSON.stringify({
+      $type: 'RosettaModel',
+      name,
+      imports: importNs.map((ns) => ({ importedNamespace: ns })),
+      elements: []
+    });
   }
-  const CG_NS_DOCS: Record<string, Array<{ uri: string; content: string; serializedModel: string; exports: Array<{ type: string; name: string; path: string }> }>> = {
-    'cdm.base.math': [{ uri: 'cdm/base/math.rosetta', content: '', serializedModel: cgSM('cdm.base.math'), exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }] }],
-    'cdm.other': [{ uri: 'cdm/other/other.rosetta', content: '', serializedModel: cgSM('cdm.other'), exports: [{ type: 'Data', name: 'Unrelated', path: 'cdm.other.Unrelated' }] }]
+  const CG_NS_DOCS: Record<
+    string,
+    Array<{
+      uri: string;
+      content: string;
+      serializedModel: string;
+      exports: Array<{ type: string; name: string; path: string }>;
+    }>
+  > = {
+    'cdm.base.math': [
+      {
+        uri: 'cdm/base/math.rosetta',
+        content: '',
+        serializedModel: cgSM('cdm.base.math'),
+        exports: [{ type: 'Data', name: 'Quantity', path: 'cdm.base.math.Quantity' }]
+      }
+    ],
+    'cdm.other': [
+      {
+        uri: 'cdm/other/other.rosetta',
+        content: '',
+        serializedModel: cgSM('cdm.other'),
+        exports: [{ type: 'Data', name: 'Unrelated', path: 'cdm.other.Unrelated' }]
+      }
+    ]
   };
 
   it('path C: closure-scoped curated load — whole-bundle never fetched, unrelated ns skipped', async () => {
@@ -397,7 +463,8 @@ type Quantity:
 
     const res = await onRequestPost({
       request: new Request('http://x/api/codegen', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           files: [{ path: 'app.rune', content: 'namespace app\nimport cdm.base.math\n' }],
           target: 'typescript',
@@ -408,7 +475,9 @@ type Quantity:
     } as never);
 
     expect(bundleSpy).not.toHaveBeenCalled();
-    const arts: string[] = (mod.fetchCuratedNamespace as ReturnType<typeof vi.spyOn>).mock.calls.map((c: unknown[]) => c[2] as string);
+    const arts: string[] = (mod.fetchCuratedNamespace as ReturnType<typeof vi.spyOn>).mock.calls.map(
+      (c: unknown[]) => c[2] as string
+    );
     expect(arts.some((a: string) => a.includes('/ns/cdm.base.math.json.gz'))).toBe(true);
     expect(arts.some((a: string) => a.includes('/ns/cdm.other.json.gz'))).toBe(false); // unrelated → not loaded
     expect(res.status).not.toBe(503);
@@ -420,9 +489,15 @@ type Quantity:
     const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
     const res = await onRequestPost({
       request: new Request('http://x/api/codegen', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: [{ path: 'app.rune', content: 'namespace app\nimport cdm.base.math\n' }], target: 'typescript', curatedBundles: [{ id: 'cdm', version: 'latest' }] })
-      }), env: {}
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: [{ path: 'app.rune', content: 'namespace app\nimport cdm.base.math\n' }],
+          target: 'typescript',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }]
+        })
+      }),
+      env: {}
     } as never);
     expect(res.status).toBe(502);
     expect(bundleSpy).not.toHaveBeenCalled();
@@ -442,9 +517,11 @@ type Quantity:
 
     await onRequestPost({
       request: new Request('http://x/api/codegen', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files: [], target: 'typescript', curatedBundles: [{ id: 'cdm', version: 'latest' }] })
-      }), env: {}
+      }),
+      env: {}
     } as never);
 
     const arts: string[] = (mod.fetchCuratedNamespace as ReturnType<typeof vi.spyOn>).mock.calls.map(

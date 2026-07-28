@@ -26,6 +26,7 @@
 
 import { useEffect, useCallback, useRef, useMemo, Component, memo } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
+import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { DataTypeForm } from '../editors/DataTypeForm.js';
 import { EnumForm } from '../editors/EnumForm.js';
 import { ChoiceForm } from '../editors/ChoiceForm.js';
@@ -38,6 +39,7 @@ import type {
   GraphNodeMeta,
   AnyGraphNode,
   TypeOption,
+  SourceRefOption,
   EditorFormActions,
   TypeGraphNode,
   ExpressionEditorSlotProps
@@ -125,8 +127,18 @@ export interface EditorFormPanelProps {
    * understands why edits are disabled.
    */
   refOnly?: boolean;
+  /**
+   * True while the selected node's namespace is a deferred curated
+   * placeholder currently being hydrated on-demand (server round-trip in
+   * flight — see docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md).
+   * Renders a loading state instead of dispatching the placeholder's stub
+   * data ({@link GraphNodeMeta.deferred}) into a form with no fields.
+   */
+  isHydrating?: boolean;
   /** Available type options for type selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** All editor form actions. */
   actions: EditorFormActions;
   /** All graph nodes (for inherited member resolution). */
@@ -154,7 +166,9 @@ const EditorFormPanel = memo(function EditorFormPanel({
   nodeId,
   isReadOnly = false,
   refOnly = false,
+  isHydrating = false,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   allNodes = [],
   nodeRepository,
@@ -211,6 +225,27 @@ const EditorFormPanel = memo(function EditorFormPanel({
     );
   }
 
+  // ---- Hydrating -> loading state -------------------------------------------
+  // A deferred curated placeholder's `data` is a minimal stub ({$type, name}
+  // only, see buildDeferredPlaceholderNodes) -- dispatching it into a real
+  // form would render fields with nothing in them. Show a loading state
+  // instead while the on-demand hydration round-trip is in flight.
+
+  if (isHydrating) {
+    return (
+      <aside
+        ref={panelRef}
+        data-slot="editor-form-panel"
+        aria-label="Loading namespace"
+        className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground"
+        tabIndex={-1}
+      >
+        <Spinner className="size-5" />
+        <span>Loading {nodeMeta.namespace || 'namespace'}…</span>
+      </aside>
+    );
+  }
+
   // ---- refOnly → OtherForm (lowest-risk: no source text, Reference Only badge) ----
   // refOnly curated entries are truly non-editable (no source to back edits)
   // even for covered kinds. Route them to OtherForm with the "Reference Only"
@@ -255,6 +290,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             meta={nodeMeta}
             availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
             actions={actions}
             allNodes={allNodes}
             renderExpressionEditor={renderExpressionEditor}
@@ -272,6 +308,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             meta={nodeMeta}
             availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
             actions={actions}
             allNodes={allNodes}
             onNavigateToNode={onNavigateToNode}
@@ -288,6 +325,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             data={nodeData!}
             meta={nodeMeta}
             availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
             actions={actions}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}

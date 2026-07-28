@@ -70,6 +70,11 @@ test.describe('Workspace chrome & graph panel', () => {
     await expect(graphToolbar.getByRole('button', { name: 'Fit View' })).toBeVisible();
     await expect(graphToolbar.getByRole('button', { name: 'Re-layout' })).toBeVisible();
     await expect(graphToolbar.getByRole('button', { name: 'Grouped' })).toBeVisible();
+
+    // The utilities toggle/reset-layout toolbar (studio-layout-presets) must
+    // stay visible — it was regressed to `display: none` in a past commit.
+    await expect(page.getByTestId('toggle-utilities')).toBeVisible();
+    await expect(page.getByTestId('reset-layout')).toBeVisible();
   });
 
   test('should keep explorer, graph, and source surfaces visible together', async ({ page }) => {

@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { Parser } from 'node-sql-parser';
-import { generate } from '../src/index.js';
+import { generate } from '../src/export.js';
 
 async function gen(source: string, sql: Record<string, unknown> = {}) {
   const { RuneDsl } = createRuneDslServices();

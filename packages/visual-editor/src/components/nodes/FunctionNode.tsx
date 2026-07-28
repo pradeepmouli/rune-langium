@@ -23,7 +23,8 @@ import { memo } from 'react';
 import type { NodeProps } from '@xyflow/react';
 import { TypeChip } from '../editors/structure/TypeChip.js';
 import type { StructureFunctionNode, StructureRow } from '../../types/structure-view.js';
-import { NodeKindBadge } from './NodeKindBadge.js';
+import { BaseFlowNode } from './BaseFlowNode.js';
+import { useNavigation } from './NavigationContext.js';
 import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 
 interface StructureFunctionNodeData extends StructureFunctionNode {
@@ -67,20 +68,14 @@ function FunctionRow({ row, isOutput }: { row: StructureRow; isOutput?: boolean 
   );
 }
 
-export const FunctionNode = memo(function FunctionNode({ data, selected }: NodeProps) {
+export const FunctionNode = memo(function FunctionNode({ data, selected, id }: NodeProps) {
+  const { pendingHydrationNamespaces } = useNavigation();
   // FunctionNode is only registered for the structure `'function'` node type, so
   // `data` is always the structure shape. Guard defensively anyway so a stray
   // graph-variant payload renders a minimal header instead of crashing.
   if (!isStructureFunction(data)) {
     const name = (data as { name?: string } | undefined)?.name ?? '';
-    return (
-      <div className={`rune-node rune-node-func${selected ? ' rune-node-selected' : ''}`}>
-        <div className="rune-node-header">
-          <NodeKindBadge kind="func" />
-          <span>{name}</span>
-        </div>
-      </div>
-    );
+    return <BaseFlowNode id={id} kind="func" name={name} className="rune-node-func" selected={selected} />;
   }
 
   const inputRows = data.inputRows as ReadonlyArray<StructureRow>;
@@ -88,16 +83,21 @@ export const FunctionNode = memo(function FunctionNode({ data, selected }: NodeP
   const rowsColWidth = data.rowsColWidth;
 
   return (
-    <div className={`rune-node rune-node-func rune-node-func--structure${selected ? ' rune-node-selected' : ''}`}>
-      <div className="rune-node-header">
-        <NodeKindBadge kind="func" />
-        <span>{data.name}</span>
+    <BaseFlowNode
+      id={id}
+      kind="func"
+      name={data.name}
+      className="rune-node-func rune-node-func--structure"
+      selected={selected}
+      hydrating={Boolean(data.deferred) && pendingHydrationNamespaces.includes(data.namespaceUri)}
+      metaIndicators={
         <StructureMetaIndicators
           definition={data.definition}
           annotations={data.annotations}
           conditions={data.conditions}
         />
-      </div>
+      }
+    >
       <div className="rune-node-body">
         <div className="rune-node-rows" style={rowsColWidth ? { width: rowsColWidth } : undefined}>
           {inputRows.map((row) => (
@@ -111,6 +111,6 @@ export const FunctionNode = memo(function FunctionNode({ data, selected }: NodeP
           ) : null}
         </div>
       </div>
-    </div>
+    </BaseFlowNode>
   );
 });

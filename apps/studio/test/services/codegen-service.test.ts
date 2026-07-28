@@ -11,8 +11,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   BrowserCodegenProxy,
+  createInstanceGenerateSchemaMessage,
   createPreviewGenerateMessage,
   createPreviewSetFilesMessage,
+  isInstanceGenerateSchemaResultMessage,
+  isInstanceGenerateSchemaStaleMessage,
   isPreviewWorkerMessage
 } from '../../src/services/codegen-service.js';
 
@@ -323,5 +326,53 @@ describe('preview worker message helpers', () => {
   it('rejects malformed preview worker messages that only match on type', () => {
     expect(isPreviewWorkerMessage({ type: 'preview:result', targetId: 'x' })).toBe(false);
     expect(isPreviewWorkerMessage({ type: 'preview:stale', reason: 'no-files' })).toBe(false);
+  });
+});
+
+describe('instance schema worker message helpers (finding #6/#7 — own channel, not preview:generate)', () => {
+  it('serializes instance:generateSchema with the type FQN and a requestId', () => {
+    expect(createInstanceGenerateSchemaMessage('test.instance.Party', 'schema:test.instance.Party:1')).toEqual({
+      type: 'instance:generateSchema',
+      typeFqn: 'test.instance.Party',
+      requestId: 'schema:test.instance.Party:1'
+    });
+  });
+
+  it('recognizes a well-formed instance:generateSchemaResult message', () => {
+    expect(
+      isInstanceGenerateSchemaResultMessage({
+        type: 'instance:generateSchemaResult',
+        requestId: 'schema:test.instance.Party:1',
+        schema: {
+          schemaVersion: 1,
+          targetId: 'test.instance.Party',
+          title: 'Party',
+          status: 'ready',
+          fields: []
+        }
+      })
+    ).toBe(true);
+    expect(isInstanceGenerateSchemaResultMessage({ type: 'preview:result', requestId: 'x', schema: {} })).toBe(false);
+    expect(isInstanceGenerateSchemaResultMessage({ type: 'instance:generateSchemaResult' })).toBe(false);
+  });
+
+  it('recognizes a well-formed instance:generateSchemaStale message', () => {
+    expect(
+      isInstanceGenerateSchemaStaleMessage({
+        type: 'instance:generateSchemaStale',
+        requestId: 'schema:test.instance.Party:1',
+        reason: 'unsupported-target',
+        message: 'No form preview schema is available for test.instance.Party.'
+      })
+    ).toBe(true);
+    expect(
+      isInstanceGenerateSchemaStaleMessage({
+        type: 'instance:generateSchemaStale',
+        requestId: 'x',
+        reason: 'mystery',
+        message: 'x'
+      })
+    ).toBe(false);
+    expect(isInstanceGenerateSchemaStaleMessage({ type: 'preview:stale', requestId: 'x' })).toBe(false);
   });
 });

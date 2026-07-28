@@ -75,7 +75,8 @@ import { getNodeHeight, getNodeWidth } from '../layout/node-dimensions.js';
 import { STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { shouldReplaceLayoutPositions } from './layout-sync.js';
 import { modelsToAst } from '../adapters/model-to-ast.js';
-import { serializeModel, indexById } from '@rune-langium/core';
+import { indexById } from '@rune-langium/core';
+import { renderModel } from '@rune-langium/codegen/rosetta';
 import { validateGraph } from '../validation/edit-validator.js';
 import { useEditorStore } from '../store/editor-store.js';
 import { selectNodeRepository } from '../store/node-repository.js';
@@ -273,6 +274,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const selectNode = useEditorStore((s) => s.selectNode);
   const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
   const focusMode = useEditorStore((s) => s.focusMode);
+  const pendingHydrationNamespaces = useEditorStore((s) => s.pendingHydrationNamespaces);
 
   // Derive visible nodes/edges from store, respecting namespace, kind, and individual visibility
   const { visibleNodes, visibleEdges } = useMemo(() => {
@@ -748,9 +750,10 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     return {
       onNavigateToType: callbacks?.onNavigateToType,
       allNodeIds,
-      layoutDirection: activeLayout.direction ?? 'TB'
+      layoutDirection: activeLayout.direction ?? 'TB',
+      pendingHydrationNamespaces
     };
-  }, [activeLayout.direction, storeNodes, callbacks?.onNavigateToType]);
+  }, [activeLayout.direction, storeNodes, callbacks?.onNavigateToType, pendingHydrationNamespaces]);
 
   // Node double-click handler
   const handleNodeDoubleClick = useCallback(
@@ -830,12 +833,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         const result = new Map<string, string>();
         for (const model of outputModels) {
           try {
-            // Use the real serializer from @rune-langium/core. The prior
-            // placeholder emitted a single-line comment instead of actual
-            // .rosetta text, so inspector/structure edits never reached the
-            // source pane downstream of onModelChanged (2026-05-20 prod-smoke
-            // check, Defect B).
-            result.set(model.name, serializeModel(model));
+            result.set(model.name, renderModel(model));
           } catch {
             result.set(model.name, `// Error serializing ${model.name}`);
           }
@@ -857,7 +855,17 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         return validateGraph(storeNodes, storeEdges);
       }
     }),
-    [activeLayout, graphNodes, storeNodes, storeNodesById, storeEdges, mergedConfig, runViewportAction, setNodes, callbacks]
+    [
+      activeLayout,
+      graphNodes,
+      storeNodes,
+      storeNodesById,
+      storeEdges,
+      mergedConfig,
+      runViewportAction,
+      setNodes,
+      callbacks
+    ]
   );
 
   // Context menu state

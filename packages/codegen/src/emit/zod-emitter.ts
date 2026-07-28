@@ -17,10 +17,12 @@ import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { getElementNamespace } from '@rune-langium/core';
 import {
+  isChoice,
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
   isData as _isData,
+  type Choice,
   type Data,
   type Attribute,
   type RosettaEnumeration,
@@ -32,14 +34,16 @@ import {
   type RosettaExternalFunction
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
-import { RUNTIME_HELPER_SOURCE } from '../helpers.js';
+import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
+import { RUNE_EXTEND_CHOICE_HELPER_SOURCE } from './zod-runtime-helpers.js';
 import {
   decodeCardinality,
-  buildAttributeTypesMap,
+  buildConditionTranspilerContext,
   activeConditions,
   mergeProfileTypeMaps,
   buildReportRulesLines,
-  buildCrossNsImportLines
+  buildCrossNsImportLines,
+  choiceOptionFieldName
 } from './base-namespace-emitter.js';
 import {
   transpileCondition,
@@ -67,6 +71,8 @@ interface EmissionContext {
   namespace: string;
   /** All Data nodes keyed by name for lookup. */
   dataByName: ReadonlyMap<string, Data>;
+  /** All Choice nodes keyed by name for lookup (W2). */
+  choiceByName: ReadonlyMap<string, Choice>;
   /** All Enumeration nodes keyed by name for lookup. */
   enumByName: ReadonlyMap<string, RosettaEnumeration>;
   /** All RosettaTypeAlias nodes keyed by name for lookup. */
@@ -175,6 +181,7 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     diagnostics: [],
     namespace: model.namespace,
     dataByName: model.dataByName,
+    choiceByName: model.choiceByName,
     enumByName: model.enumByName,
     typeAliasByName: model.typeAliasByName,
     rulesByName: model.rulesByName,
@@ -253,6 +260,18 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     this.sections.push('');
   }
 
+  /**
+   * W2: emit a `choice` declaration as `z.union([...])` of per-option
+   * `z.object` shapes (key-presence discrimination — `z.discriminatedUnion`
+   * doesn't apply, there is no literal tag field), mirroring emitData's
+   * schema + z.infer-alias pairing.
+   */
+  emitChoice(choice: Choice): void {
+    this.sections.push(this.emitChoiceSchema(choice));
+    this.sections.push(`export type ${choice.name} = z.infer<typeof ${choice.name}Schema>;`);
+    this.sections.push('');
+  }
+
   emitRule(rule: RosettaRule): void {
     const result = this.emitRuleValidator(rule);
     if (result) {
@@ -318,12 +337,48 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       if (parentRef) {
         trackRef(parentRef, `${parentRef.name}Schema`);
       }
+      // Multi-level Data-extends-Choice (buildSuperTypeSchemaExpr's
+      // choice-ancestor branch): the emitted schema is ONE
+      // `runeExtendChoice(<ChoiceAncestor>Schema, {...})` call that (a)
+      // references the Choice ANCESTOR's schema — which sits 2+ links up
+      // the chain, possibly in a namespace the immediate-parent tracking
+      // above never sees — and (b) folds the own attributes of the
+      // immediate Data parent and every further intermediate INLINE into
+      // THIS file (buildRuneExtendChoiceExpr's `[data, superRef,
+      // ...intermediates]` fold), so those attributes' schema refs are
+      // emitted here too and must be imported relative to THIS namespace,
+      // even though the attribute-tracking loop below only ever iterates
+      // this namespace's own data. (The DIRECT Data-extends-Choice case
+      // needs neither: the immediate parentRef IS the Choice, covered by
+      // the unconditional trackRef above, and no foreign attributes are
+      // folded.) Reuses findChoiceAncestor — same walk, same cycle guard.
+      if (parentRef && isData(parentRef)) {
+        const choiceAncestor = ZodNamespaceEmitter.findChoiceAncestor(parentRef);
+        if (choiceAncestor) {
+          trackRef(choiceAncestor.choice, `${choiceAncestor.choice.name}Schema`);
+          for (const link of [parentRef, ...choiceAncestor.intermediates]) {
+            for (const attr of link.attributes) {
+              const attrTypeRef = attr.typeCall?.type?.ref;
+              if (attrTypeRef && (isData(attrTypeRef) || isRosettaEnumeration(attrTypeRef))) {
+                trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+              }
+            }
+          }
+        }
+      }
       // Check attribute types
       for (const attr of data.attributes) {
         const attrTypeRef = attr.typeCall?.type?.ref;
         if (attrTypeRef && isData(attrTypeRef)) {
           trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
         } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
+          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
+        } else if (attrTypeRef && isChoice(attrTypeRef)) {
+          // Item 3 (docs/superpowers/specs/2026-07-02-emitter-crossns-
+          // hardening-design.md): a Choice-typed attribute resolves to
+          // `<Choice>Schema` via resolveTypeExpr (isChoice branch, W2) —
+          // same $import convention as Data/Enum attribute types, was
+          // previously untracked.
           trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
         }
       }
@@ -369,6 +424,10 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         if (this.ctx.dataByName.has(refText)) {
           return `${refText}Schema`;
         }
+        // Check if it's a choice in the current namespace (W2)
+        if (this.ctx.choiceByName.has(refText)) {
+          return `${refText}Schema`;
+        }
         // Unknown but named — emit schema reference optimistically
         this.ctx.diagnostics.push({
           severity: 'warning',
@@ -408,6 +467,12 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       return `${typeRef.name}Schema`;
     }
 
+    if (isChoice(typeRef)) {
+      // W2: reference to a choice → use the choice union schema name
+      // (was falling to z.unknown() — isChoice was never consulted here).
+      return `${typeRef.name}Schema`;
+    }
+
     // Unknown reference type — try $refText fallback
     if (refText) {
       const builtinZod = this.ctx.builtinTypeMap[refText];
@@ -420,6 +485,37 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       message: `Unknown type reference kind for attribute '${attr.name}'; emitting z.unknown()`
     });
     return 'z.unknown()';
+  }
+
+  // ---------------------------------------------------------------------------
+  // W2: Choice emission
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Emit `export const <ChoiceName>Schema = z.union([z.object({ opt: OptSchema }), ...]);`
+   * — key-presence discrimination via z.union of single-key object shapes,
+   * mirroring emitObjectBody's per-attribute z.object conventions.
+   */
+  private emitChoiceSchema(choice: Choice): string {
+    const name = choice.name;
+    const schemaName = `${name}Schema`;
+
+    const optionSchemas = choice.attributes.map((option) => {
+      const optionTypeRef = option.typeCall?.type;
+      const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
+      const fieldName = choiceOptionFieldName(optionTypeName);
+      const optionSchemaExpr = this.ctx.builtinTypeMap[optionTypeName] ?? `${optionTypeName}Schema`;
+      // .strict(): non-strict objects allow unknown keys, so {cash, commodity}
+      // would satisfy the first arm — strict arms make multi-option objects
+      // fail every arm, enforcing the exactly-one-of Choice semantics.
+      return `z.strictObject({ ${fieldName}: ${optionSchemaExpr} })`;
+    });
+
+    if (optionSchemas.length === 0) {
+      return `export const ${schemaName} = z.never();`;
+    }
+
+    return `export const ${schemaName} = z.union([${optionSchemas.join(', ')}]);`;
   }
 
   /**
@@ -448,6 +544,137 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   /**
+   * Walk UP a Data's `extends` chain (NOT including `data` itself) and
+   * report whether it bottoms out at a Choice, and if so which Data nodes
+   * sit between `data` and that Choice (nearest-first).
+   *
+   * Needed because a Data parent that is ITSELF Choice-derived emits as
+   * `runeExtendChoice(...)`, whose result is a `z.union(...)` — like the
+   * Choice itself, a union has no `.extend()` method. So `${parentSchema}
+   * .extend({...})` is only safe when the immediate parent's OWN schema is
+   * a plain `z.object`/`.extend()` chain, i.e. when the parent's chain does
+   * NOT reach a Choice. Multi-level `Data extends Data extends Choice`
+   * (spec's Semantics: "extras accumulate down to the Choice ancestor")
+   * must instead emit ONE `runeExtendChoice(<ChoiceAncestor>Schema, {...})`
+   * call at the point where the chain first reaches the Choice, folding in
+   * every intermediate Data's own attributes — not a chain of `.extend()`
+   * calls on top of a union result.
+   *
+   * A visited-set guards a malformed cyclic `extends` chain, mirroring
+   * `buildAttributeTypesMap`'s cycle guard (base-namespace-emitter.ts).
+   */
+  private static findChoiceAncestor(data: Data): { choice: Choice; intermediates: Data[] } | undefined {
+    const intermediates: Data[] = [];
+    const visited = new Set<string>([data.name]);
+    let current: unknown = data.superType?.ref;
+    while (current) {
+      if (isChoice(current)) {
+        return { choice: current, intermediates };
+      }
+      if (!isData(current) || visited.has(current.name)) {
+        return undefined;
+      }
+      visited.add(current.name);
+      intermediates.push(current);
+      current = current.superType?.ref;
+    }
+    return undefined;
+  }
+
+  /**
+   * Build the base (pre-condition, pre-lazy) schema expression for a Data
+   * type's superType chain, at a given attribute-line indentation.
+   *
+   * Cases, in order:
+   *  - The `extends` chain (from `data`, inclusive of `data`'s own
+   *    superType) reaches a Choice ancestor (Data-extends-Choice, possibly
+   *    through intermediate Data links — see docs/superpowers/specs/
+   *    2026-07-02-data-extends-choice-design.md): emit ONE
+   *    `runeExtendChoice(<ChoiceAncestor>Schema, {...})` call whose shape
+   *    is the UNION of every intermediate Data's own attributes plus
+   *    `data`'s own attributes (nearest-declared wins on a name collision,
+   *    matching `buildAttributeTypesMap`'s own "nearest wins" rule) — NOT a
+   *    chain of `.extend()` calls on top of a `runeExtendChoice(...)`
+   *    result (a `z.union(...)`  has no `.extend()`; `.extend()` is only
+   *    defined on `z.object`/`z.strictObject`, and calling it on a union
+   *    throws at MODULE-INIT time — this was the real, previously-
+   *    unguarded bug for BOTH the single-level and multi-level cases).
+   *  - No Choice ancestor, but `data.superType?.ref` is a Data:
+   *    `${ParentSchema}.extend({...})` — the ordinary FR-005 path,
+   *    unchanged.
+   *  - No superType: a plain `z.object({...})` body (emitObjectBody).
+   *
+   * `attrIndent` controls the object-body indentation for own attributes,
+   * matching the two call sites' existing formatting conventions (2-space
+   * for the non-conditions path via emitAttribute's own 2-space prefix,
+   * 4-space reindented for the chained conditions path).
+   */
+  private buildSuperTypeSchemaExpr(data: Data, attrIndent: '' | '  '): string {
+    const superRef = data.superType?.ref;
+
+    if (superRef && isChoice(superRef)) {
+      return this.buildRuneExtendChoiceExpr(superRef, [data], attrIndent);
+    }
+
+    if (superRef && isData(superRef)) {
+      // `findChoiceAncestor(superRef)`'s `intermediates` starts its walk
+      // from `superRef.superType.ref` — it never includes `superRef` ITSELF
+      // (findChoiceAncestor's own contract: "NOT including `data` [here,
+      // `superRef`] itself"). `superRef`'s own attributes (e.g.
+      // ObservableItem's `identifier`) must still be folded in — prepend
+      // `superRef` explicitly alongside `data`.
+      const choiceAncestor = ZodNamespaceEmitter.findChoiceAncestor(superRef);
+      if (choiceAncestor) {
+        // Multi-level: fold `data`'s own attrs on top of every intermediate
+        // Data's own attrs (superRef, then each further intermediate up to
+        // — but not including — the Choice), nearest-first, and derive
+        // ONCE from the Choice ancestor's schema.
+        return this.buildRuneExtendChoiceExpr(
+          choiceAncestor.choice,
+          [data, superRef, ...choiceAncestor.intermediates],
+          attrIndent
+        );
+      }
+
+      const parentSchema = `${superRef.name}Schema`;
+      if (data.attributes.length === 0) {
+        return `${parentSchema}.extend({})`;
+      }
+      const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+      const reindented = attrIndent === '' ? attrs.join(',\n') : attrs.map((a) => `${attrIndent}${a}`).join(',\n');
+      return `${parentSchema}.extend({\n${reindented}\n})`;
+    }
+
+    return this.emitObjectBody(data);
+  }
+
+  /**
+   * Build a `runeExtendChoice(<ChoiceName>Schema, {...})` call, folding the
+   * own attributes of every Data in `dataChain` (nearest-declared-wins on a
+   * name collision) into the shape object.
+   */
+  private buildRuneExtendChoiceExpr(choice: Choice, dataChain: Data[], attrIndent: '' | '  '): string {
+    const choiceSchema = `${choice.name}Schema`;
+
+    const seen = new Set<string>();
+    const attrLines: string[] = [];
+    for (const link of dataChain) {
+      for (const attr of link.attributes) {
+        if (seen.has(attr.name)) continue;
+        seen.add(attr.name);
+        attrLines.push(this.emitAttribute(attr));
+      }
+    }
+
+    if (attrLines.length === 0) {
+      return `runeExtendChoice(${choiceSchema}, {})`;
+    }
+    const reindented =
+      attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
+    return `runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`;
+  }
+
+  /**
    * Emit a full schema declaration for a Data type.
    * Handles: plain object, extends, lazy wrapping for cycles, condition blocks.
    * FR-002 (exports), FR-005 (extends), FR-006 (lazy), FR-008 (empty).
@@ -459,22 +686,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     const isLazy = this.ctx.lazyTypes.has(name);
     const hasConditions = activeConditions(data).length > 0;
 
-    let schemaExpr: string;
-
-    if (data.superType?.ref) {
-      const parentName = data.superType.ref.name;
-      const parentSchema = `${parentName}Schema`;
-
-      if (data.attributes.length === 0) {
-        // Empty child: just re-export parent schema shape
-        schemaExpr = `${parentSchema}.extend({})`;
-      } else {
-        const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
-        schemaExpr = `${parentSchema}.extend({\n${attrs.join(',\n')}\n})`;
-      }
-    } else {
-      schemaExpr = this.emitObjectBody(data);
-    }
+    const schemaExpr = this.buildSuperTypeSchemaExpr(data, '');
 
     if (isLazy) {
       // For cyclic types: add explicit ZodType annotation so TS can infer recursive schemas.
@@ -506,20 +718,11 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       //     .refine(...)
       //
       // Strategy: rebuild the object body with 4-space attr indentation, then chain.
-      let chainedObjectExpr: string;
       if (data.superType?.ref) {
-        // extend chain: ParentSchema.extend({...})
-        // For simplicity, emit as non-chained since extend is on a schema ref, not z
-        const parentName = data.superType.ref.name;
-        const parentSchema = `${parentName}Schema`;
-        if (data.attributes.length === 0) {
-          chainedObjectExpr = `${parentSchema}.extend({})`;
-        } else {
-          const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
-          // Reindent attrs to 4 spaces
-          const reindented = attrs.map((a) => `  ${a}`).join(',\n');
-          chainedObjectExpr = `${parentSchema}.extend({\n${reindented}\n})`;
-        }
+        // extend/runeExtendChoice chain: For simplicity, emit as
+        // non-chained since .extend()/runeExtendChoice() reads on a schema
+        // ref (or the helper call), not the bare `z` namespace.
+        const chainedObjectExpr = this.buildSuperTypeSchemaExpr(data, '  ');
         const condIndented = condBlock
           .split('\n')
           .map((line) => `  ${line}`)
@@ -637,15 +840,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     emitMode: 'zod-refine' | 'zod-superRefine',
     conditionName: string
   ): ExpressionTranspilerContext {
-    const attributeTypes = buildAttributeTypesMap(data);
-    return {
-      selfName: 'data',
-      emitMode,
-      conditionName,
-      typeName: data.name,
-      attributeTypes,
-      diagnostics: this.ctx.diagnostics
-    };
+    return buildConditionTranspilerContext(data, emitMode, conditionName, this.ctx.diagnostics);
   }
 
   /**
@@ -872,8 +1067,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       ``,
       `import { z } from 'zod';`,
       ...(this.suppressBoilerplate
-        ? [`import { runeCheckOneOf, runeCount, runeAttrExists } from './runtime.zod.js';`, ``]
-        : ['', RUNTIME_HELPER_SOURCE, ''])
+        ? [buildRuntimeHelperImportLine('./runtime.zod.js', ['runeExtendChoice']), ``]
+        : ['', RUNTIME_HELPER_SOURCE, '', RUNE_EXTEND_CHOICE_HELPER_SOURCE, ''])
     ].join('\n');
   }
 

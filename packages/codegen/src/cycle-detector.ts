@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { LangiumDocument } from 'langium';
-import { isData, isRosettaModel, type RosettaModel } from '@rune-langium/core';
+import { isChoice, isData, isRosettaModel, type RosettaModel } from '@rune-langium/core';
 
 /**
  * A directed graph of type references.
@@ -16,11 +16,36 @@ export interface TypeReferenceGraph {
   edges: Map<string, string[]>;
 }
 
+/** Ensure `name` is present in `nodes`/`edges`, without duplicating either. */
+function ensureNode(name: string, nodes: string[], edges: Map<string, string[]>): void {
+  if (!nodes.includes(name)) {
+    nodes.push(name);
+  }
+  if (!edges.has(name)) {
+    edges.set(name, []);
+  }
+}
+
+/** Add a directed edge `from -> to`, ensuring both endpoints exist as nodes. */
+function addEdge(from: string, to: string, nodes: string[], edges: Map<string, string[]>): void {
+  ensureNode(from, nodes, edges);
+  ensureNode(to, nodes, edges);
+  const fromEdges = edges.get(from)!;
+  if (!fromEdges.includes(to)) {
+    fromEdges.push(to);
+  }
+}
+
 /**
- * Walks all Data nodes in the given Langium documents and builds a
- * directed type-reference graph. Edges are added for:
- * - `extends` relationships (superType → parent type)
- * - `Attribute.typeCall.type` references (type → attribute type)
+ * Walks all Data and Choice nodes in the given Langium documents and builds
+ * a directed type-reference graph. Edges are added for:
+ * - `extends` relationships (an edge from the extending type to its parent:
+ *   `typeName → superType.name`, so parents emit first)
+ * - `Attribute.typeCall.type` references (type → attribute type), including
+ *   attributes typed BY a Choice (mirrors Data's own treatment — W2)
+ * - `Choice.attributes[].typeCall.type` references (Choice → each option's
+ *   Data type) — a Choice must emit AFTER all of its option types, same
+ *   ordering constraint as Data → its attribute types.
  *
  * FR-006 (cycle detection prerequisite).
  *
@@ -37,52 +62,35 @@ export function buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceG
 
     const rosettaModel = model as RosettaModel;
     for (const element of rosettaModel.elements) {
+      if (isChoice(element)) {
+        const choiceName = element.name;
+        ensureNode(choiceName, nodes, edges);
+        for (const option of element.attributes) {
+          const optionTypeRef = option.typeCall?.type?.ref;
+          if (optionTypeRef && (isData(optionTypeRef) || isChoice(optionTypeRef))) {
+            addEdge(choiceName, optionTypeRef.name, nodes, edges);
+          }
+        }
+        continue;
+      }
+
       if (!isData(element)) continue;
 
       const typeName = element.name;
-      if (!nodes.includes(typeName)) {
-        nodes.push(typeName);
-      }
-      if (!edges.has(typeName)) {
-        edges.set(typeName, []);
-      }
-
-      const typeEdges = edges.get(typeName)!;
+      ensureNode(typeName, nodes, edges);
 
       // Add extends edge: this type → parent type
       if (element.superType?.ref) {
-        const parentName = element.superType.ref.name;
-        if (!typeEdges.includes(parentName)) {
-          typeEdges.push(parentName);
-        }
-        // Ensure parent is in nodes
-        if (!nodes.includes(parentName)) {
-          nodes.push(parentName);
-          if (!edges.has(parentName)) {
-            edges.set(parentName, []);
-          }
-        }
+        addEdge(typeName, element.superType.ref.name, nodes, edges);
       }
 
-      // Add attribute type reference edges
+      // Add attribute type reference edges — Data or Choice targets only
+      // (primitives have no emission-order dependency).
       for (const attr of element.attributes) {
         const attrTypeRef = attr.typeCall?.type?.ref;
         if (!attrTypeRef) continue;
-
-        // Only track Data-type references (not primitives)
-        if (!isData(attrTypeRef)) continue;
-
-        const refTypeName = attrTypeRef.name;
-        if (!typeEdges.includes(refTypeName)) {
-          typeEdges.push(refTypeName);
-        }
-        // Ensure referenced type is in nodes
-        if (!nodes.includes(refTypeName)) {
-          nodes.push(refTypeName);
-          if (!edges.has(refTypeName)) {
-            edges.set(refTypeName, []);
-          }
-        }
+        if (!isData(attrTypeRef) && !isChoice(attrTypeRef)) continue;
+        addEdge(typeName, attrTypeRef.name, nodes, edges);
       }
     }
   }

@@ -2,11 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { FormPreviewSchema } from '@rune-langium/codegen';
+import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { useOutputStore } from '../../src/store/output-store.js';
 
 const tradeSchema: FormPreviewSchema = {
   schemaVersion: 1,
@@ -80,6 +82,22 @@ const unsupportedTradeSchema: FormPreviewSchema = {
           description: 'Uses PartyDefaults.name component mapping'
         }
       ]
+    }
+  ]
+};
+
+const unresolvedReferenceTradeSchema: FormPreviewSchema = {
+  ...tradeSchema,
+  status: 'unsupported',
+  unsupportedFeatures: ['unresolved-reference:Instrument', 'unresolved-reference:Party'],
+  fields: [
+    ...tradeSchema.fields,
+    {
+      path: 'instrument',
+      label: 'instrument',
+      kind: 'unknown',
+      required: true,
+      description: 'Type reference Instrument could not be resolved for form preview.'
     }
   ]
 };
@@ -253,6 +271,64 @@ describe('FormPreviewPanel', () => {
     expect(screen.queryByText(/valid sample/i)).not.toBeInTheDocument();
   });
 
+  it('logs an op-log warning when the schema has unsupported preview features', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <FormPreviewPanel
+        schema={unsupportedTradeSchema}
+        status={{ state: 'ready', targetId: unsupportedTradeSchema.targetId }}
+      />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry).toBeDefined();
+    expect(entry?.severity).toBe('warn');
+    expect(entry?.text).toContain('exported-subschema:PartyDefaults');
+    expect(entry?.subject).toBe(unsupportedTradeSchema.targetId);
+  });
+
+  it('does not log an op-log warning when the schema has no unsupported preview features', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(<FormPreviewPanel schema={tradeSchema} status={{ state: 'ready', targetId: tradeSchema.targetId }} />);
+
+    expect(useOutputStore.getState().lines.find((l) => l.op === 'preview')).toBeUndefined();
+  });
+
+  it('surfaces the root cause when a type reference could not be resolved', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <FormPreviewPanel
+        schema={unresolvedReferenceTradeSchema}
+        status={{ state: 'ready', targetId: unresolvedReferenceTradeSchema.targetId }}
+      />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry?.text).toContain('references could not be resolved: Instrument, Party');
+    expect(entry?.text).not.toContain('unresolved-reference:');
+
+    expect(screen.getByText(/references could not be resolved: Instrument, Party/i)).toBeInTheDocument();
+  });
+
+  it('logs only one op-log warning under StrictMode double-invoked effects', () => {
+    useOutputStore.setState({ lines: [] });
+
+    render(
+      <StrictMode>
+        <FormPreviewPanel
+          schema={unsupportedTradeSchema}
+          status={{ state: 'ready', targetId: unsupportedTradeSchema.targetId }}
+        />
+      </StrictMode>
+    );
+
+    const entries = useOutputStore.getState().lines.filter((l) => l.op === 'preview');
+    expect(entries).toHaveLength(1);
+  });
+
   it('renders nested preview metadata without field description annotations', () => {
     render(
       <FormPreviewPanel
@@ -405,5 +481,97 @@ describe('FormPreviewPanel', () => {
   ]
 }`);
     expect(screen.getByText(/sample data copied/i)).toBeInTheDocument();
+  });
+
+  describe('controlled mode (values/onValuesChange props)', () => {
+    it('renders using the given values prop instead of usePreviewStore state', () => {
+      render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'EXT-1', party: { name: 'External Bank' }, aliases: ['Ext alias'] }}
+        />
+      );
+
+      expect(screen.getByLabelText('Trade id')).toHaveValue('EXT-1');
+      expect(screen.getByLabelText('Name')).toHaveValue('External Bank');
+      expect(screen.getByLabelText('Alias 1')).toHaveValue('Ext alias');
+      // The uncontrolled store's sample for this targetId must remain untouched.
+      expect(usePreviewStore.getState().samples.has(validationTradeSchema.targetId)).toBe(false);
+    });
+
+    it('calls onValuesChange with the full merged object on a scalar edit + blur, and does not call updateSample', () => {
+      const updateSampleSpy = vi.spyOn(usePreviewStore.getState(), 'updateSample');
+      const onValuesChange = vi.fn();
+      render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      fireEvent.change(screen.getByLabelText('Trade id'), { target: { value: 'TRD-9' } });
+      fireEvent.blur(screen.getByLabelText('Trade id'));
+
+      expect(onValuesChange).toHaveBeenCalledWith({ tradeId: 'TRD-9', party: { name: '' }, aliases: [] });
+      expect(updateSampleSpy).not.toHaveBeenCalled();
+      updateSampleSpy.mockRestore();
+    });
+
+    it('produces correctly nested onValuesChange payloads for a nested-object field edit and an array add/remove', () => {
+      const onValuesChange = vi.fn();
+      const { rerender } = render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'TRD-1', party: { name: '' }, aliases: [] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      // Nested-object field edit.
+      fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Acme Bank' } });
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'TRD-1',
+        party: { name: 'Acme Bank' },
+        aliases: []
+      });
+
+      // Array add — simulate the parent feeding the updated values back in
+      // (as InstanceFormPanel will via the store), since this component is
+      // controlled and does not track its own values across renders.
+      rerender(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'TRD-1', party: { name: 'Acme Bank' }, aliases: [] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /add aliases item/i }));
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'TRD-1',
+        party: { name: 'Acme Bank' },
+        aliases: ['']
+      });
+
+      // Array remove — feed the added-item state back in, then remove it.
+      rerender(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: 'TRD-1', party: { name: 'Acme Bank' }, aliases: ['Primary alias'] }}
+          onValuesChange={onValuesChange}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /remove alias 1/i }));
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'TRD-1',
+        party: { name: 'Acme Bank' },
+        aliases: []
+      });
+    });
   });
 });

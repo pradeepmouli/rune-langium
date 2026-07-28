@@ -10,11 +10,26 @@ export interface OutputLine {
   text: string;
   severity: OutputSeverity;
   ts: number;
+  /** Structured op-log correlation fields — optional, set by producers that want span/duration tracking (op-log.ts reads these; existing callers are unaffected). */
+  op?: string;
+  subject?: string;
+  durationMs?: number;
+  opId?: number;
+  /** Error/warn dedup grouping key (top stack frame + message) — distinct from `subject`, which other producers use for a general op correlator like a model id. Read by telemetry-shipper.ts's op_spans mapping. */
+  signature?: string;
+}
+
+export interface AddLineMeta {
+  op?: string;
+  subject?: string;
+  durationMs?: number;
+  opId?: number;
+  signature?: string;
 }
 
 interface OutputState {
   lines: OutputLine[];
-  addLine(text: string, severity?: OutputSeverity): void;
+  addLine(text: string, severity?: OutputSeverity, meta?: AddLineMeta): void;
   clearLines(): void;
 }
 
@@ -24,12 +39,13 @@ const MAX_LINES = 500;
 export const useOutputStore = create<OutputState>((set) => ({
   lines: [],
 
-  addLine(text: string, severity: OutputSeverity = 'info'): void {
+  addLine(text: string, severity: OutputSeverity = 'info', meta?: AddLineMeta): void {
     const line: OutputLine = {
       id: ++_idCounter,
       text,
       severity,
-      ts: performance.now() as number
+      ts: performance.now() as number,
+      ...meta
     };
     set((state) => {
       const next = [...state.lines, line];

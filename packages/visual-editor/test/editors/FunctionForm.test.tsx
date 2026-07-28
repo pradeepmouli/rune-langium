@@ -557,3 +557,133 @@ describe('FunctionForm – US3 (Phase 5c) z2f migration contract (FT1–FT4)', (
     expect((actions.removeInputParam as ReturnType<typeof vi.fn>).mock.calls.length).toBe(removeInputCallsBeforeOutput);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 2 (expression-language-lens) — renderExpressionEditor slot contract
+// ---------------------------------------------------------------------------
+//
+// Proves the central premise of the Phase 2 plan: FunctionForm threads each
+// operation's/alias's/empty-state's *bare RHS expression text* (not the full
+// `set output: <expr>` / `add x: <expr>` statement) through the same
+// renderExpressionEditor slot ConditionSection uses, so Phase 1's
+// LanguageLensEditor (unmodified) already works for function bodies with
+// zero new code. See docs/superpowers/plans/2026-07-12-expression-language-lens-phase2.md.
+//
+// The alias (shortcut) slot is covered too, but only for reachability/text
+// shape — its onChange is a deliberate no-op today (alias editing isn't
+// implemented via ANY editor yet, not just the lens; see FunctionForm.tsx's
+// own alias-rendering block), so there is no commit flow to assert there.
+
+describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verification)', () => {
+  it('passes the bare RHS expression text (not the full set/add statement) to renderExpressionEditor for an existing operation', () => {
+    const data = makeFuncData({
+      operations: [
+        {
+          $type: 'Operation',
+          add: false,
+          assignRoot: { $refText: 'result' },
+          expression: { $type: 'RawDsl', text: 'principal * rate', $cstNode: { text: 'principal * rate' } }
+        }
+      ]
+    } as any);
+
+    const renderExpressionEditor = vi.fn((props: any) => <div data-testid="slot-value">{props.value}</div>);
+
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        renderExpressionEditor={renderExpressionEditor}
+      />
+    );
+
+    expect(renderExpressionEditor).toHaveBeenCalled();
+    const call = renderExpressionEditor.mock.calls.find((c: any) => c[0].value === 'principal * rate');
+    expect(
+      call,
+      'renderExpressionEditor must receive the bare RHS text, not "set result: principal * rate"'
+    ).toBeDefined();
+  });
+
+  it('passes the bare RHS expression text to renderExpressionEditor for an alias (shortcut), with a no-op onChange', () => {
+    const data = makeFuncData({
+      operations: [],
+      shortcuts: [
+        {
+          $type: 'ShortcutDeclaration',
+          name: 'discountedRate',
+          expression: { $type: 'RawDsl', text: 'rate * 0.9', $cstNode: { text: 'rate * 0.9' } }
+        }
+      ]
+    } as any);
+
+    const renderExpressionEditor = vi.fn((props: any) => <div data-testid="slot-value">{props.value}</div>);
+    const actions = makeActions();
+
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+        renderExpressionEditor={renderExpressionEditor}
+      />
+    );
+
+    expect(renderExpressionEditor).toHaveBeenCalled();
+    const call = renderExpressionEditor.mock.calls.find((c: any) => c[0].value === 'rate * 0.9');
+    expect(
+      call,
+      'renderExpressionEditor must receive the bare alias RHS text, not "alias discountedRate: rate * 0.9"'
+    ).toBeDefined();
+
+    // Alias editing isn't implemented via ANY editor today (not a lens gap) —
+    // onChange is a deliberate no-op. Confirm it doesn't throw and doesn't
+    // reach any store action.
+    expect(() => call![0].onChange('something else')).not.toThrow();
+    expect(actions.updateExpression).not.toHaveBeenCalled();
+  });
+
+  it('offers an empty-state expression slot when the function has no operations yet, and its onChange reaches updateExpression via the form field on blur', () => {
+    const data = makeFuncData({ operations: [], shortcuts: [], expressionText: '' } as any);
+    const renderExpressionEditor = vi.fn((props: any) => (
+      <div>
+        <button type="button" data-testid="commit" onClick={() => props.onChange('x + 1')}>
+          commit
+        </button>
+        <button type="button" data-testid="commit-blur" onClick={() => props.onBlur()}>
+          blur
+        </button>
+      </div>
+    ));
+    const actions = makeActions();
+
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={data}
+        availableTypes={AVAILABLE_TYPES}
+        actions={actions}
+        renderExpressionEditor={renderExpressionEditor}
+      />
+    );
+
+    expect(renderExpressionEditor).toHaveBeenCalled();
+
+    // The empty-state slot's onChange commits through the form field
+    // (field.onChange), not directly through actions.updateExpression —
+    // updateExpression only fires on blur, via handleExpressionBlur (see
+    // the 'commits valid expression on blur' test above for the same
+    // onChange-then-blur mechanism against the plain-Textarea fallback).
+    fireEvent.click(screen.getByTestId('commit'));
+    expect(actions.updateExpression).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('commit-blur'));
+    expect(actions.updateExpression).toHaveBeenCalledWith('fn1', 'x + 1');
+  });
+});

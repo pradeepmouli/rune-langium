@@ -284,9 +284,7 @@ describe('useInheritedMembers — qualified-name byId resolution', () => {
     const allNodes = [child, parent];
     const repo = selectNodeRepository(new Map(allNodes.map((n) => [n.id, n])));
 
-    const { result } = renderHook(() =>
-      useInheritedMembers(child.data as AnyGraphNode, allNodes, 20, repo)
-    );
+    const { result } = renderHook(() => useInheritedMembers(child.data as AnyGraphNode, allNodes, 20, repo));
     const groups = result.current;
     expect(groups).toHaveLength(1);
     expect(groups[0]!.ancestorName).toBe('Parent');
@@ -300,9 +298,7 @@ describe('useInheritedMembers — qualified-name byId resolution', () => {
     const allNodes = [child, parent];
     const repo = selectNodeRepository(new Map(allNodes.map((n) => [n.id, n])));
 
-    const { result } = renderHook(() =>
-      useInheritedMembers(child.data as AnyGraphNode, allNodes, 20, repo)
-    );
+    const { result } = renderHook(() => useInheritedMembers(child.data as AnyGraphNode, allNodes, 20, repo));
     const groups = result.current;
     expect(groups).toHaveLength(1);
     expect(groups[0]!.ancestorName).toBe('Parent');
@@ -328,9 +324,7 @@ describe('useInheritedMembers — qualified-name byId resolution', () => {
     const allNodes = [child, parentInNsA];
 
     // Called WITHOUT a repository — exercises the array-scan makeNodeId arm
-    const { result } = renderHook(() =>
-      useInheritedMembers(child.data as AnyGraphNode, allNodes)
-    );
+    const { result } = renderHook(() => useInheritedMembers(child.data as AnyGraphNode, allNodes));
     const groups = result.current;
     expect(groups).toHaveLength(1);
     expect(groups[0]!.ancestorName).toBe('Parent');

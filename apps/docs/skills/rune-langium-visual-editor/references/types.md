@@ -11,7 +11,7 @@ typeof TYPE_REF_KINDS[number]
 Drag payload emitted by NamespaceExplorer items and consumed by drop targets.
 
 **Field semantics:**
-- `typeId`   — canonical node id in `ns::Name` format (e.g. `cdm.trade::Trade`).
+- `typeId`   — canonical node id in `ns.Name` format (e.g. `cdm.trade.Trade`).
               Used by `setInheritance` and other operations that reference nodes
               by their fully-qualified id.
 - `typeName` — bare display/AST name (e.g. `Trade`) used in `$refText` writes,
@@ -22,9 +22,9 @@ Drag sources MUST set both fields.
 **Properties:**
 - `rune: "type-ref"`
 - `namespaceUri: string`
-- `typeId: string` — Canonical node id in `ns::Name` format. Used by setInheritance.
+- `typeId: string` — Canonical node id in `ns.Name` format. Used by setInheritance.
 - `typeName: string` — Bare AST/display name used in $refText writes. Used by updateAttributeType.
-- `kind: "Annotation" | "Choice" | "Data" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Func"`
+- `kind: "Data" | "Choice" | "Annotation" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Func"`
 
 ### `StructureExpansionKey`
 Key used in the expansion map; encodes namespace + type + attribute, plus
@@ -48,12 +48,24 @@ field separator and we need to round-trip the path through a single string.
 - `instancePath: readonly string[]` (optional) — Chain of React Flow instance ids of ancestors leading to this row's owner,
 NOT including the owner. Empty/undefined = root-level instance (no ancestors).
 
+### `StructureConditionMeta`
+Display-shaped condition meta surfaced on a Data / Choice / Function node's
+header indicator (Phase A; Function added in Phase C — its `conditions` carry
+both the function's `conditions` and `postConditions`). `name` is the
+condition's source name (may be empty for unnamed conditions — the renderer
+falls back to `preview` or an index label); `preview` is a short text
+rendering of the condition expression produced by `conditionsToDisplay` (no
+hand-rolled expression serialization).
+**Properties:**
+- `name: string`
+- `preview: string`
+
 ### `StructureRow`
 Single row inside a Data node, as the Structure View sees it.
 **Properties:**
 - `attrName: string`
 - `typeName: string`
-- `typeKind: "Choice" | "Data" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Unresolved"`
+- `typeKind: "Data" | "Choice" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Unresolved"`
 - `targetNodeId: string` (optional)
 - `targetNamespaceUri: string` (optional)
 - `cardinality: string`
@@ -64,7 +76,7 @@ Single row inside a Data node, as the Structure View sees it.
 ### `StructureDataNode`
 A Data node in the Structure View graph.
 **Properties:**
-- `id: string` — CANONICAL node id (e.g. `cdm.trade::Party`). Cells / editors look up the
+- `id: string` — CANONICAL node id (e.g. `cdm.trade.Party`). Cells / editors look up the
 shared type description by this id. Multiple visible instances of the same
 type share the same `id` — they are distinguished by `instanceId`.
 - `instanceId: string` (optional) — Per-instance discriminator id (Phase 14e). The adapter emits one
@@ -82,8 +94,21 @@ the layout falls back to `id` so existing fixtures continue to work.
 - `kind: "data"`
 - `name: string`
 - `namespaceUri: string`
+- `deferred: boolean` (optional) — True when this node is a deferred curated placeholder whose namespace
+hasn't been on-demand hydrated yet (forwarded from `GraphNodeMeta.deferred`
+via `AdapterNode`). Drives the same hydrating-spinner treatment as the
+main graph canvas.
 - `extendsName: string` (optional)
 - `extendsNodeId: string` (optional)
+- `definition: string` (optional) — Phase A — type-level documentation (the `definition` string on the AST
+Data node). Surfaced via the header doc (ⓘ) indicator. Undefined / empty
+when the type has no documentation.
+- `annotations: readonly string[]` (optional) — Phase A — annotation display strings (e.g. `metadata`, `rootType`) derived
+from the AST `annotations` via `annotationsToDisplay`. Surfaced via the
+header annotations (@) indicator. Empty / undefined when none.
+- `conditions: readonly StructureConditionMeta[]` (optional) — Phase A — condition display meta derived from the AST `conditions` via
+`conditionsToDisplay`. Surfaced via the header conditions (✓) indicator.
+Empty / undefined when none.
 - `rows: readonly StructureRow[]`
 - `expansions: ReadonlyMap<string, string>` — Direct expansions (attrName → child INSTANCE id). The child id keys into
 `StructureGraphInput.nodes` (which is per-instance keyed).
@@ -94,7 +119,7 @@ Choice arms have no `name` of their own (their identity IS their type) and
 no cardinality (they are alternatives, not multi-valued).
 **Properties:**
 - `typeName: string` — The arm's type name as written in source (e.g., "CashPayment").
-- `typeKind: "Choice" | "Data" | "Enum" | "Record" | "TypeAlias" | "Unresolved" | "Builtin"` — Classification of the referenced type, mirroring StructureRow.typeKind.
+- `typeKind: "Data" | "Choice" | "Enum" | "Record" | "TypeAlias" | "Unresolved" | "Builtin"` — Classification of the referenced type, mirroring StructureRow.typeKind.
 - `targetNodeId: string` (optional) — Canonical id of the referenced node, when resolvable.
 
 ### `StructureChoiceNode`
@@ -105,6 +130,12 @@ A Choice node in the Structure View graph.
 - `kind: "choice"`
 - `name: string`
 - `namespaceUri: string`
+- `deferred: boolean` (optional) — See `StructureDataNode.deferred`.
+- `definition: string` (optional) — Phase A — type-level documentation; see `StructureDataNode.definition`.
+- `annotations: readonly string[]` (optional) — Phase A — annotation display strings; see `StructureDataNode.annotations`.
+- `conditions: readonly StructureConditionMeta[]` (optional) — Phase A — condition display meta; see `StructureDataNode.conditions`.
+Choice declarations may carry conditions in the grammar, so this is
+accepted symmetrically with Data even though it is usually empty.
 - `options: readonly StructureChoiceArm[]`
 - `expansions: ReadonlyMap<string, string>` — Per-arm expansions (Phase 14e/B). Keyed by the arm's `typeName` (since
 arms have no `attrName` — their identity IS the referenced type), value
@@ -125,12 +156,13 @@ cellComponents wiring, no chevrons.
 - `kind: "enum"`
 - `name: string`
 - `namespaceUri: string`
+- `deferred: boolean` (optional) — See `StructureDataNode.deferred`.
 - `values: readonly string[]` — Enum value names in source order.
 
 ### `StructureBaseContainer`
 A base-type GroupContainer wrap.
 **Properties:**
-- `id: string` — Canonical wrapper id (e.g. `cdm.trade::Trade::__base::cdm.trade::TradeBase`).
+- `id: string` — Canonical wrapper id (e.g. `cdm.trade.Trade::__base::cdm.trade.TradeBase`).
 Multiple instances of the same wrapper (one per visible occurrence of the
 outer type) share the canonical id but differ in `instanceId`.
 - `instanceId: string` (optional) — Per-instance discriminator (Phase 14e); see `StructureDataNode.instanceId`.
@@ -144,9 +176,32 @@ target nodes (Data/Choice that the user clicked to expand). Values are
 INSTANCE ids (mirroring StructureDataNode.expansions). Spec §3.2 — base
 level rows can carry their own expansion edges, scoped per-instance.
 
+### `StructureFunctionNode`
+A read-only Function node in the Structure View graph (Phase C). Materialized
+when the user focuses a `RosettaFunction` from the namespace explorer.
+
+Functions are RENDERED as a card with the function's inputs presented as
+stacked Data-style rows (name on top, `type · cardinality` beneath) and a
+distinct output row (`→ ReturnType · card`). Functions are roots only in this
+first cut — no nested expansion of input/output types into subtrees (deferred
+to a later phase), so a function node has no expansion children and renders
+like a simple Data node with no children column.
+**Properties:**
+- `id: string`
+- `instanceId: string` (optional)
+- `kind: "function"`
+- `name: string`
+- `namespaceUri: string`
+- `deferred: boolean` (optional) — See `StructureDataNode.deferred`.
+- `inputRows: readonly StructureRow[]` — Input parameters as stacked Data-style rows (reuses `StructureRow`).
+- `outputRow: StructureRow` (optional) — Output as a single Data-style row; undefined when the function has no output.
+- `definition: string` (optional) — Phase A — type-level documentation; see `StructureDataNode.definition`.
+- `annotations: readonly string[]` (optional) — Phase A — annotation display strings; see `StructureDataNode.annotations`.
+- `conditions: readonly StructureConditionMeta[]` (optional) — Phase A — condition display meta; see `StructureDataNode.conditions`.
+
 ### `StructureNode`
 ```ts
-StructureDataNode | StructureChoiceNode | StructureBaseContainer | StructureEnumNode
+StructureDataNode | StructureChoiceNode | StructureBaseContainer | StructureEnumNode | StructureFunctionNode
 ```
 
 ### `StructureGraphInput`
@@ -163,44 +218,31 @@ materializes whichever the focused type resolves to.
 occurrence of a type is its own entry with its own `expansions` map.
 Look up a node's shared canonical metadata via `.id`.
 
-### `AstNodeModel`
-Mapped type that plucks and recursively serializes fields from any
-Langium AST node type.
+### `DomainNodeData`
+Domain payload of an editor graph node — the discriminated union (on
+`$type`) of `Dehydrated<T>` over every top-level element kind the editor
+renders. This is the PURE domain object: lossless, strict `{ $refText }`
+refs, `$type` required, and NO UI metadata (which lives on `node.meta`).
 
-`$type` is preserved as a readonly literal (derived from the generic parameter)
-for runtime discrimination. All other fields are made mutable for editing.
+Sourced from the generated core `AnyDomain` union (single source of truth;
+the editor no longer hand-maintains the arm list — the langium-zod
+`repository.elementTypes` config drives it).
 ```ts
-{ $type: T["$type"] } & { -readonly [K in Exclude<keyof T, ExcludedFields | "$type">]: SerializeField<T[K]> }
-```
-
-### `AstNodeShape`
-Structural constraint matching Langium's AstNode interface.
-Used instead of importing langium directly (it's not a visual-editor dependency).
-**Properties:**
-- `$type: string`
-- `$container: AstNodeShape` (optional)
-- `$containerProperty: string` (optional)
-- `$containerIndex: number` (optional)
-- `$cstNode: unknown` (optional)
-- `$document: unknown` (optional)
-
-### `GraphNode`
-Top-level graph node data: AstNodeModel with graph/editor metadata.
-Used for elements rendered by ReactFlow (Data, Choice, Enum, Function, etc.).
-```ts
-AstNodeModel<T> & GraphMetadata
+AnyDomain
 ```
 
 ### `AnyGraphNode`
-Union of all GraphNode variants for top-level elements.
+Union of all node-data variants for top-level elements.
 ```ts
-GraphNode<Data> | GraphNode<Choice> | GraphNode<RosettaEnumeration> | GraphNode<RosettaFunction> | GraphNode<RosettaRecordType> | GraphNode<RosettaTypeAlias> | GraphNode<RosettaBasicType> | GraphNode<Annotation>
+DomainNodeData
 ```
 
-### `GraphMetadata`
+### `GraphNodeMeta`
+UI/editor metadata for a graph node, held on `node.meta` — a sibling of the
+pure-domain `node.data` payload. `position` is NOT here — it already lives
+on the ReactFlow node itself.
 **Properties:**
 - `namespace: string`
-- `position: { x: number; y: number }`
 - `errors: ValidationError[]`
 - `isReadOnly: boolean` (optional)
 - `hasExternalRefs: boolean`
@@ -266,6 +308,13 @@ A type option for searchable type selectors.
 - `kind: TypeKind | "builtin"` — Type kind for badge coloring.
 - `namespace: string` (optional) — Namespace for grouping in the dropdown.
 
+### `SourceRefOption`
+Option for the synonym-source reference picker.
+**Properties:**
+- `value: string` — Canonical id of the source declaration (e.g. `ns.FpML`).
+- `label: string` — Display name (bare source name).
+- `namespace: string` (optional) — Namespace for cross-namespace qualification.
+
 ### `CommonFormActions`
 Actions shared by all type kinds.
 
@@ -281,6 +330,9 @@ Choice-specific editor actions.
 ### `FuncFormActions`
 Function-specific editor actions.
 
+### `TypeAliasFormActions`
+TypeAlias-specific editor actions.
+
 ### `FormActionsKindMap`
 Maps each `TypeKind` to its form actions interface.
 **Properties:**
@@ -289,14 +341,14 @@ Maps each `TypeKind` to its form actions interface.
 - `choice: ChoiceFormActions`
 - `func: FuncFormActions`
 - `record: CommonFormActions`
-- `typeAlias: CommonFormActions`
+- `typeAlias: TypeAliasFormActions`
 - `basicType: CommonFormActions`
 - `annotation: CommonFormActions`
 
 ### `AllEditorFormActions`
 Intersection of all kind-specific actions (every method available).
 ```ts
-DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions
+DataFormActions & EnumFormActions & ChoiceFormActions & FuncFormActions & TypeAliasFormActions
 ```
 
 ### `EditorFormActions`
@@ -304,91 +356,5 @@ Kind-aware editor form actions.
 
 When parameterized with a specific kind (e.g. `EditorFormActions<'data'>`),
 only that kind's actions + common actions are available.
-
-When unparameterized (`EditorFormActions`), resolves to the full intersection
-of all kind-specific actions for backward compatibility.
-```ts
-[TypeKind] extends [K] ? AllEditorFormActions : FormActionsKindMap[K]
-```
-
-### `LayoutDirection`
-```ts
-"TB" | "LR" | "BT" | "RL"
-```
-
-### `TypeGraphNode`
-```ts
-Node<AnyGraphNode>
-```
-
-### `TypeGraphEdge`
-```ts
-Edge<EdgeData>
-```
-
-### `NamespaceTreeNode`
-**Properties:**
-- `namespace: string`
-- `types: NamespaceTypeEntry[]`
-- `totalCount: number`
-- `dataCount: number`
-- `choiceCount: number`
-- `enumCount: number`
-- `funcCount: number`
-
-### `NamespaceTypeEntry`
-**Properties:**
-- `nodeId: string`
-- `name: string`
-- `kind: TypeKind`
-- `isSystem: boolean` (optional) — Whether this entry is from a system/base-type file (read-only).
-
-### `VisibilityState`
-**Properties:**
-- `expandedNamespaces: Set<string>` — Namespaces whose types are currently visible on the graph.
-- `hiddenNodeIds: Set<string>` — Individual nodes hidden within expanded namespaces.
-- `explorerOpen: boolean` — Whether the explorer panel is open.
-- `visibleNodeKinds: Set<TypeKind>` — Which node kinds are visible (all visible by default).
-- `visibleEdgeKinds: Set<EdgeKind>` — Which edge kinds are visible (all visible by default).
-
-### `NavigateToNodeCallback`
-Callback for navigating to a type definition by node ID (namespace::name).
-```ts
-(nodeId: string) => void
-```
-
-## components/panels
-
-### `DetailPanelProps`
-**Properties:**
-- `nodeData: AnyGraphNode | null`
-- `onNavigateToNode: NavigateToNodeCallback` (optional) — Callback to navigate to a type's graph node.
-- `allNodeIds: string[]` (optional) — All loaded graph node IDs for resolving type name to node ID.
-- `refOnly: boolean` (optional) — True when the node's source file is a curated reference-only entry
-(no client-side source text). Renders a "Reference Only" pill next
-to the kind badge so users understand why the panel is non-editable.
-
-### `EditorFormPanelProps`
-**Properties:**
-- `nodeData: AnyGraphNode | null` — The selected node's data, or null if nothing is selected.
-- `nodeId: string | null` — Node ID of the selected node.
-- `isReadOnly: boolean` (optional) — Whether the node is read-only (from external/locked source).
-- `refOnly: boolean` (optional) — True when the node's source file is a refOnly curated reference (no
-client-side source text). Forces the read-only fallback view and
-surfaces a "Reference Only" pill in the panel header so the user
-understands why edits are disabled.
-- `availableTypes: TypeOption[]` — Available type options for type selectors.
-- `actions: AllEditorFormActions` — All editor form actions.
-- `allNodes: TypeGraphNode[]` (optional) — All graph nodes (for inherited member resolution).
-- `renderExpressionEditor: (props: ExpressionEditorSlotProps) => ReactNode` (optional) — Optional render-prop for a rich expression editor in FunctionForm.
-When omitted, FunctionForm renders a plain `<Textarea>` fallback.
-- `onClose: () => void` (optional) — Called when the panel requests to close (e.g., Escape key).
-- `onNavigateToNode: (nodeId: string) => void` (optional) — Called when a type reference is clicked to navigate to that type's definition.
-
-### `NamespaceExplorerPanelProps`
-**Properties:**
-- `nodes: TypeGraphNode[]` — All graph nodes (full set, including hidden ones).
-- `expandedNamespaces: Set<string>` — Set of currently expanded (visible) namespaces.
-- `hiddenNodeIds: Set<string>` — Set of individually hidden node IDs.
 
 <!-- truncated -->

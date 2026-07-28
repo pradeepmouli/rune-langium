@@ -12,4 +12,4 @@
  * Keep this as a thin re-export — no studio-local state or React imports.
  */
 
-export { ExcelOptionsSchema as default, ExcelOptionsSchema } from '@rune-langium/codegen';
+export { ExcelOptionsSchema as default, ExcelOptionsSchema } from '@rune-langium/codegen/export';

@@ -23,9 +23,15 @@ export interface NavigationContextValue {
   allNodeIds: Set<string>;
   /** Active dagre layout direction so node handles can choose the opposing connector axis. */
   layoutDirection: GraphLayoutDirection;
+  /** Namespaces currently being on-demand hydrated (see requestNamespaceHydration). */
+  pendingHydrationNamespaces: ReadonlyArray<string>;
 }
 
-const defaultValue: NavigationContextValue = { allNodeIds: new Set(), layoutDirection: 'TB' };
+const defaultValue: NavigationContextValue = {
+  allNodeIds: new Set(),
+  layoutDirection: 'TB',
+  pendingHydrationNamespaces: []
+};
 
 export const NavigationContext = createContext<NavigationContextValue>(defaultValue);
 
@@ -46,6 +52,24 @@ export function useNodeMetaErrors(id: string): ValidationError[] {
     const userNode = s.nodeLookup.get(id)?.internals.userNode as TypeGraphNode | undefined;
     return userNode?.meta?.errors ?? EMPTY_ERRORS;
   });
+}
+
+/**
+ * True while this node is a deferred placeholder (see
+ * `buildDeferredPlaceholderNodes`) whose namespace is actively being
+ * on-demand hydrated. Drives the pending/loading affordance on graph nodes.
+ * Reads `meta.deferred`/`meta.namespace` off the ReactFlow store the same
+ * way `useNodeMetaErrors` does, then cross-references the namespace against
+ * `pendingHydrationNamespaces` threaded through `NavigationContext`.
+ */
+export function useNodeMetaHydrating(id: string): boolean {
+  const meta = useStore((s) => {
+    const userNode = s.nodeLookup.get(id)?.internals.userNode as TypeGraphNode | undefined;
+    return userNode?.meta;
+  });
+  const { pendingHydrationNamespaces } = useNavigation();
+  if (!meta?.deferred) return false;
+  return (pendingHydrationNamespaces ?? []).includes(meta.namespace);
 }
 
 export function getHandlePositions(direction: GraphLayoutDirection): {

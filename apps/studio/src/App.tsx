@@ -19,7 +19,6 @@ import { useModelStore } from './store/model-store.js';
 import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
 import { BASE_TYPE_FILES } from './resources/base-types.js';
-import { studioConfig } from './config.js';
 import * as persistence from './workspace/persistence.js';
 import type { CuratedModelBinding, WorkspaceRecord } from './workspace/persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from './shell/layout-factory.js';
@@ -28,11 +27,18 @@ import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from './store/output-store.js';
 import { useActivityStore } from './store/activity-store.js';
+import { useInstanceStore } from './store/instance-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
+import { AppHeader } from './shell/AppHeader.js';
 import { PerspectiveHost } from './shell/perspectives/PerspectiveHost.js';
 import { StudioProviders } from './shell/providers/StudioProviders.js';
 import { usePerspectiveStore } from './store/perspective-store.js';
+import { hydrateTelemetrySettings, useTelemetrySettingsStore } from './store/telemetry-settings.js';
+import { installTelemetryCapture } from './services/telemetry-capture.js';
+import { installTelemetryShipper } from './services/telemetry-shipper.js';
+import { createTelemetryClient } from './services/telemetry.js';
+import { config } from './config.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
@@ -163,7 +169,7 @@ function AppContent() {
   // preserve them without calling useModelStore.getState() (which is not
   // available in the test mock of useModelStore).
   const loadedModelsRef = useRef<Map<string, LoadedModel>>(new Map());
-  const { showToast } = useStudioToast();
+  const { showToast, showLoadingToast, dismissToast } = useStudioToast();
 
   const reportWorkspaceError = useCallback((message: string, error: unknown) => {
     console.warn(`[App] ${message}:`, error);
@@ -244,6 +250,12 @@ function AppContent() {
     let cancelled = false;
     const hydratedSoFar = useEditorStore.getState().hydratedNamespaces;
     const requested = [...new Set([...hydratedSoFar, ...pendingHydration])];
+    // Background process with no natural "done" UI state of its own (unlike
+    // e.g. ExportDialog's own generating phase) — surface it as a toast so
+    // it's visible even if the user has navigated away from the node/panel
+    // that triggered it.
+    const label = pendingHydration.length === 1 ? pendingHydration[0] : `${pendingHydration.length} namespaces`;
+    const toastId = showLoadingToast({ description: `Loading ${label}…` });
     void parseWorkspaceFiles(files, { hydrateNamespaces: requested })
       .then((result) => {
         if (cancelled) return;
@@ -258,14 +270,18 @@ function AppContent() {
         // can retry by re-selecting/re-expanding them; keep the last valid graph.
         useEditorStore.getState().dequeuePendingHydration(pendingHydration);
         reportWorkspaceError('Failed to hydrate the selected namespace; keeping the last valid graph', err);
+      })
+      .finally(() => {
+        if (!cancelled) dismissToast(toastId);
       });
     return () => {
       cancelled = true;
+      dismissToast(toastId);
     };
     // `files` in deps: an edit during an in-flight hydration re-fires this and
     // issues a second round-trip; the `cancelled` flag discards the stale result,
     // so it's a wasted request but correctness-safe.
-  }, [pendingHydration, files, applyParseResult, reportWorkspaceError]);
+  }, [pendingHydration, files, applyParseResult, reportWorkspaceError, showLoadingToast, dismissToast]);
 
   const syncWorkspaceToEditor = useCallback(
     async (workspaceFiles: WorkspaceFile[]) => {
@@ -523,6 +539,45 @@ function AppContent() {
       document.body.removeAttribute('data-studio-app');
     };
   }, []);
+
+  // Read the persisted per-user telemetry opt-in once at mount. Fire-and-
+  // forget (not awaited) so it never blocks first paint — defaults to
+  // disabled (opt-in, not opt-out) until this resolves.
+  useEffect(() => {
+    void hydrateTelemetrySettings();
+  }, []);
+
+  // Client capture (window.onerror / unhandledrejection / long-task
+  // PerformanceObserver) + shipper are installed only while the user has
+  // actually opted in — never install-then-gate-at-emit-time. Subscribing
+  // to the live `enabled` value (not a one-shot read at mount) means
+  // checking the Settings toggle ON takes effect immediately instead of
+  // requiring a reload, and returning the teardown functions from this
+  // effect means React 19 StrictMode's dev-mode mount->cleanup->mount
+  // tears down cleanly instead of leaking duplicate listeners/intervals.
+  const telemetryEnabled = useTelemetrySettingsStore((s) => s.enabled);
+  useEffect(() => {
+    if (!telemetryEnabled) return;
+    const uninstallCapture = installTelemetryCapture();
+    const uninstallShipper = installTelemetryShipper(
+      // Same deployment configuration model-store.ts's pre-existing client
+      // uses (config.telemetryEndpoint/config.telemetryEnabled), not the
+      // hardcoded-to-prod resolveTelemetryEndpoint()/enabled:true this had
+      // before — a user's per-user opt-in must still respect the
+      // deployment-level VITE_ENABLE_TELEMETRY kill switch and any
+      // staging/custom VITE_TELEMETRY_ENDPOINT override, not bypass them.
+      createTelemetryClient({
+        endpoint: config.telemetryEndpoint,
+        enabled: config.telemetryEnabled && !config.devMode,
+        studioVersion: STUDIO_VERSION,
+        uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
+      })
+    );
+    return () => {
+      uninstallCapture();
+      uninstallShipper();
+    };
+  }, [telemetryEnabled]);
 
   // Theme — defaults to Daikonic. Override via ?theme=<name> query param
   // or localStorage. Use ?theme=default to revert to Refactory Dark.
@@ -813,6 +868,45 @@ function AppContent() {
     };
   }, [getWorkspaceManager, restoredWorkspace]);
 
+  // Instance-store OPFS persistence wiring (spec 023 Task 13 bot-review
+  // finding #1) — mirrors the sync-engine lifecycle effect above, but
+  // unconditional on workspace kind: instance persistence is a data-layer
+  // concern independent of git-backing, so it must wire up for EVERY
+  // workspace (browser-only included), not just git-backed ones. Runs
+  // `useInstanceStore.getState().setOpfsContext(fs, workspaceRoot)` — the
+  // same `OpfsFs` the WorkspaceManager already owns, at that workspace's
+  // `/${id}` root (the convention `WorkspaceManager.create`/`createGitBacked`
+  // already use for `/${id}/files` and `/${id}/.studio`).
+  useEffect(() => {
+    if (!restoredWorkspace) return;
+    const workspaceId = restoredWorkspace.id;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const wm = await getWorkspaceManager();
+        if (cancelled) return; // workspace changed during async getWorkspaceManager
+        useInstanceStore.getState().setOpfsContext(wm.getFs(), `/${workspaceId}`);
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('[instance-store] Failed to wire OPFS persistence context:', err);
+          useOutputStore
+            .getState()
+            .addLine(
+              fmtLine(
+                'workspace',
+                'instance persistence unavailable',
+                err instanceof Error ? err.message : String(err)
+              ),
+              'warn'
+            );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getWorkspaceManager, restoredWorkspace]);
+
   const handleCreateGitBackedWorkspace = useCallback(
     async (input: { name: string; repoUrl: string; branch: string; user: string; token: string }) => {
       const wm = await getWorkspaceManager();
@@ -921,11 +1015,6 @@ function AppContent() {
   const userFiles = files.filter((f) => !f.readOnly);
   const hasWorkspace = userFiles.length > 0;
   const hasExploreContent = hasWorkspace || loadedModels.size > 0;
-  // Reactive perspective read — the global brand header is shown for every
-  // perspective EXCEPT Explore (which renders its own studio-topbar inside
-  // ExplorePerspective). Other call sites in this file use `.getState()` for
-  // imperative transitions; here we need to re-render on change.
-  const activePerspective = usePerspectiveStore((s) => s.activePerspective);
 
   // Build the WorkspaceActionsContext value from App's handlers so
   // WorkspacesPerspective (and any future perspective) can call them
@@ -985,26 +1074,7 @@ function AppContent() {
             {userFiles.length} file(s)
           </span>
         )}
-        {/* Global header — hidden only when the Explore workbench is actually
-         * showing (it renders its own studio-topbar). Gate on `hasWorkspace`
-         * too: PerspectiveHost's requiresWorkspace fallback renders the
-         * Workspaces launcher when the store still says 'explore' but no
-         * workspace is loaded, and that launcher needs the brand header. */}
-        {!(hasExploreContent && activePerspective === 'explore') && (
-          <header className="glass-header flex items-center justify-between px-4 py-2 min-h-[44px]">
-            <div className="studio-brand">
-              <div className="studio-brand__mark">R</div>
-              <span className="studio-brand__name">Rune Studio</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <nav className="studio-links" aria-label="Studio links">
-                <a href={studioConfig.homeUrl}>Home</a>
-                <a href={studioConfig.docsUrl}>Docs</a>
-                <a href={studioConfig.githubUrl}>GitHub</a>
-              </nav>
-            </div>
-          </header>
-        )}
+        <AppHeader hasWorkspace={hasWorkspace} hasExploreContent={hasExploreContent} />
 
         <main className="flex-1 overflow-hidden relative">
           {(bootState === 'checking' || bootState === 'restoring') && (

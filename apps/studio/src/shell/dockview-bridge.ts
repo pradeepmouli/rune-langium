@@ -28,8 +28,20 @@ import type { DockviewApi, AddPanelOptions } from 'dockview-react';
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import type { DockviewPayload, FactoryShape, LayoutNode, LayoutGroup, PanelComponentName } from './layout-types.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_TITLES } from './layout-factory.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
+
+/**
+ * dockview-core hardcodes MINIMUM_DOCKVIEW_GROUP_PANEL_HEIGHT = 100 as a
+ * group's height floor unless the group's own constraints override it.
+ * DockShell's utility-tray collapse (`setUtilitiesCollapsed` →
+ * `group.api.setSize({ height: 0 })`) needs to shrink the bottom group down
+ * to just its tab strip (`--dv-tabs-and-actions-container-height: 24px` in
+ * dock-theme.css) — without this override every "collapsed" request
+ * silently clamps to 100px instead of retracting to the header.
+ */
+const BOTTOM_GROUP_MIN_HEIGHT = 24;
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
@@ -70,6 +82,7 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
     if (unknownPanels.length > 0) {
       throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
     }
+    api.getPanel('workspace.problems')?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
   } catch (err) {
     // The user just lost their saved layout. Don't be silent — log the
     // cause + a sample of the JSON so the bug is filable. layout-migrations
@@ -80,6 +93,12 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
       err: errMessage(err),
       jsonPreview: previewJson(payload.json)
     });
+    // This recovers internally rather than rethrowing, so DockShell's own
+    // applyLayout try/catch (which op-logs + toasts) never sees this error —
+    // without an op-log entry here, the reset is otherwise silent.
+    useOutputStore
+      .getState()
+      .addLine(fmtLine('layout', 'saved layout rejected, using default', errMessage(err)), 'warn');
     api.clear();
     applyFactoryShape(api, defaultFactoryShape(layout));
   }
@@ -133,6 +152,7 @@ function applyFactoryShape(api: DockviewApi, shape: FactoryShape): void {
   }
   const active = api.getPanel(shape.bottomGroup.active);
   if (active) active.api.setActive();
+  firstBottom.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
   if (shape.bottomGroup.collapsed) firstBottom.group.api.setSize({ height: 0 });
 }
 

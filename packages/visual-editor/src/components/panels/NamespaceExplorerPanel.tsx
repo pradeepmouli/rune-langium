@@ -286,7 +286,9 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
 
   const allNodes = nodeRepository.all();
   const totalTypes = allNodes.length;
-  const visibleCount = allNodes.filter((n) => expandedNamespaces.has(n.meta.namespace) && !hiddenNodeIds.has(n.id)).length;
+  const visibleCount = allNodes.filter(
+    (n) => expandedNamespaces.has(n.meta.namespace) && !hiddenNodeIds.has(n.id)
+  ).length;
 
   // Per-kind counts for the filter-pill badges — derived directly from the
   // repository's byType index so they reflect the full node set regardless of

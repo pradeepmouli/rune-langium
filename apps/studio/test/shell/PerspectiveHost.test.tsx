@@ -61,4 +61,10 @@ describe('PerspectiveHost', () => {
     // …and the host falls back to the always-available Workspaces launcher.
     expect(screen.getByTestId('workspaces-perspective')).toBeTruthy();
   });
+
+  it('renders PrototypePerspective when the active perspective is "prototype" (Task 17: was previously a blank pane)', () => {
+    usePerspectiveStore.setState({ activePerspective: 'prototype' });
+    render(<PerspectiveHost hasWorkspace hasExploreContent />);
+    expect(screen.getByTestId('prototype-perspective')).toBeTruthy();
+  });
 });

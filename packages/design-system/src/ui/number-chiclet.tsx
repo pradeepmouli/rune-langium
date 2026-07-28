@@ -42,10 +42,11 @@ export function NumberChiclet({ className, style, ...props }: React.ComponentPro
         // composite surface, consumed from the component vars above. `--chiclet-bg`
         // is a gradient, so it MUST use `bg-[image:…]` — a bare `bg-[var()]` compiles
         // to `background-color`, which silently drops a gradient value.
-        // Hairline width is set self-contained via the shared --hairline token,
-        // NOT the studio-scoped `[class~="border"]` override — so the chiclet keeps
-        // its 0.5px edge even outside the studio shell (e.g. in
-        // @rune-langium/visual-editor, which doesn't load app.css). `border-[color:…]`
+        // Hairline width is set self-contained via the shared --hairline token.
+        // (Historically necessary because the `[class~="border"]` knob was
+        // studio-scoped; that knob now lives in design-system tokens.css, but
+        // the explicit width stays — the chiclet doesn't use the bare `border`
+        // token at all, and self-containment costs nothing.) `border-[color:…]`
         // only sets the color.
         'bg-[image:var(--chiclet-bg)] text-[color:var(--chiclet-fg)] border-[length:var(--hairline)] border-[color:var(--chiclet-border)] shadow-[var(--chiclet-shadow)]',
         className

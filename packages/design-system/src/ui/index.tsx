@@ -16,6 +16,7 @@ export * from './field.js';
 export * from './form.js';
 export * from './heading.js';
 export * from './icon-button-group.js';
+export * from './interactive-dialog.js';
 export * from './input.js';
 export * from './kbd.js';
 export * from './label.js';

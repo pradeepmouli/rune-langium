@@ -18,6 +18,7 @@
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import type { OpfsFs } from '../opfs/opfs-fs.js';
+import { useOutputStore, fmtLine } from '../store/output-store.js';
 
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
 
@@ -231,6 +232,20 @@ async function walk(fs: OpfsFs, base: string, rel: string, out: string[]): Promi
     // partial set.
     // eslint-disable-next-line no-console
     console.error(`[git-backing] walk: readdir(${fullPath}) failed; tree may be incomplete`, err);
+    useOutputStore
+      .getState()
+      .addLine(
+        fmtLine(
+          'git',
+          `working tree scan failed at "${fullPath}", commit may be incomplete`,
+          err instanceof Error ? err.message : String(err)
+        ),
+        'error',
+        {
+          op: 'git',
+          subject: fullPath
+        }
+      );
     return;
   }
   for (const name of names) {

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { ExcelOptions } from './options/excel-options.js';
+import type { OpenApiOptions } from './options/openapi-options.js';
 
 /**
  * Supported generator targets.
@@ -12,6 +13,13 @@ import type { ExcelOptions } from './options/excel-options.js';
  * - `markdown`    — 018 Phase 2 (per-namespace docs emitter)
  * - `excel`       — 018 Phase 1 (whole-model binary emitter, .xlsx)
  * - `graphql`     — 018 Phase 3 (whole-model SDL emitter)
+ * - `openapi`     — 021 Phase 2b (per-namespace; OAS 3.1, composes the
+ *                   JSON Schema emitter's own output + adds constraint
+ *                   keywords, funcs→operations, optional CRUD paths)
+ * - `xsd`         — 021 Phase 3 (per-namespace; W3C XML Schema documents,
+ *                   a from-scratch emitter symmetric to the inbound XSD
+ *                   reader — no func/operation emission, XSD has no RPC
+ *                   verb model)
  *
  * The authoritative contract for each target is `TARGET_DESCRIPTORS[target].contract`;
  * Copilot review on PR #165 caught that this header comment originally listed
@@ -23,7 +31,16 @@ import type { ExcelOptions } from './options/excel-options.js';
  *
  * Task 0.4 wires the dispatch.
  */
-export type Target = 'zod' | 'json-schema' | 'typescript' | 'sql' | 'markdown' | 'excel' | 'graphql';
+export type Target =
+  | 'zod'
+  | 'json-schema'
+  | 'typescript'
+  | 'sql'
+  | 'markdown'
+  | 'excel'
+  | 'graphql'
+  | 'openapi'
+  | 'xsd';
 
 /**
  * Per-target option blocks (019 spec §3.1). Each block carries
@@ -124,6 +141,12 @@ export interface GeneratorOptions {
   // renders it via @zod-to-form). `ExcelOptions` is inferred from
   // `ExcelOptionsSchema` in ./options/excel-options.ts.
   excel?: ExcelOptions;
+  // 021 Phase 2b — OpenAPI emitter options (format + opt-in CRUD
+  // generation). `OpenApiOptions` is inferred from `OpenApiOptionsSchema`
+  // in ./options/openapi-options.ts, same Zod-schema-as-SSoT pattern as Excel.
+  openapi?: OpenApiOptions;
+  // 021 Phase 3 — no per-target option block yet; the XSD emitter has no
+  // configurable knobs (unlike Excel/OpenAPI's Zod-schema option blocks).
 }
 
 /**
@@ -242,6 +265,17 @@ export interface PreviewEnumField extends PreviewFieldBase {
 export interface PreviewObjectField extends PreviewFieldBase {
   kind: 'object';
   children: PreviewField[];
+  /**
+   * `children[].path` values that are Choice-ancestor-derived arms requiring
+   * "exactly one present" enforcement, for a NESTED object field expanded
+   * from a Data-extends-Choice / typeAlias-extends-Choice reference (e.g.
+   * `Trade.constituent: BasketConstituent` where `BasketConstituent extends
+   * Observable`). Mirrors `FormPreviewSchema.choiceArmPaths` — see that
+   * field's doc comment for the full rationale — but scoped to this
+   * object's own children instead of the schema root. Omitted (not an
+   * empty array) when there's no Choice ancestor.
+   */
+  choiceArmPaths?: string[];
 }
 
 export interface PreviewArrayField extends PreviewFieldBase {
@@ -278,6 +312,16 @@ export interface FormPreviewSchema {
   fields: PreviewField[];
   unsupportedFeatures?: string[];
   sourceMap?: PreviewSourceMapEntry[];
+  /**
+   * `fields[].path` values that are Choice-ancestor-derived arms requiring
+   * "exactly one present" enforcement (a Data-extends-Choice or
+   * typeAlias-extends-Choice schema's own top-level `kind` stays
+   * `undefined`/`'typeAlias'` — only a genuine `choice`-kind schema's
+   * `kind` is `'choice'` — so this field is what lets a consumer like
+   * `validatePreviewSample` generalize the enforcement without relying on
+   * `kind`). Omitted (not an empty array) when there's no Choice ancestor.
+   */
+  choiceArmPaths?: string[];
 }
 
 /**
@@ -374,6 +418,24 @@ export const TARGET_DESCRIPTORS: Record<Target, TargetDescriptor> = {
     desc: 'Schema definition language',
     extension: '.graphql',
     mimeType: 'application/graphql'
+  },
+  openapi: {
+    label: 'OpenAPI',
+    contract: 'namespace',
+    desc: 'OAS 3.1 document (schemas + func operations)',
+    // Default extension; the emitter overrides per-output relativePath
+    // to `.openapi.yaml` ONLY when `options.openapi.format === 'yaml'` —
+    // CORRECTED (review finding): there is no output-path override in the
+    // generator API to derive a format from an explicit `.yaml`/`.yml`
+    // request; `options.openapi.format` is the sole selector. See
+    // openapi-emitter.ts's `resolveFormat`.
+    extension: '.openapi.json'
+  },
+  xsd: {
+    label: 'XSD',
+    contract: 'namespace',
+    desc: 'W3C XML Schema document (types, enums, constraints)',
+    extension: '.xsd'
   }
 };
 

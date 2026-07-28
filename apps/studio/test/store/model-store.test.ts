@@ -22,6 +22,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ModelSource, LoadedModel } from '../../src/types/model-types.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { useCodegenStore } from '../../src/store/codegen-store.js';
+import { useOutputStore } from '../../src/store/output-store.js';
+import { useActivityStore } from '../../src/store/activity-store.js';
+import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
 
 // Mock model-loader.js BEFORE the store imports it. The store calls
 // loadModel(source, options) — we capture options.archiveLoader so we can
@@ -33,7 +36,7 @@ vi.mock('../../src/services/model-loader.js', () => ({
 
 // Run the store import AFTER the mock above so the store's transitive
 // loadModel binding picks up our spy.
-const { useModelStore } = await import('../../src/store/model-store.js');
+const { useModelStore, gatedByUserOptIn } = await import('../../src/store/model-store.js');
 
 const CURATED_SOURCE: ModelSource = {
   id: 'cdm',
@@ -203,6 +206,54 @@ describe('useModelStore — archiveLoader DI (T015)', () => {
     expect(usePreviewStore.getState().status).toEqual({ state: 'waiting' });
     expect(useCodegenStore.getState().codePreviewTarget).toBe('zod');
   });
+
+  // Task 6 (2026-07-16 prod-ux-checkout-harness): load() gains its first-ever
+  // Activity/Output logging, tagged op="modelLoad", correlated by a single
+  // allocateOpId() per load() invocation and a real performance.now() span.
+  it('load() publishes a success activity entry with op="modelLoad" and a durationMs', async () => {
+    useOutputStore.setState({ lines: [] });
+    useActivityStore.setState({ entries: [] });
+
+    await useModelStore.getState().load(CURATED_SOURCE);
+
+    const entries = useActivityStore.getState().entries;
+    const modelLoadEntries = entries.filter((e) => e.tag === 'modelLoad');
+    expect(modelLoadEntries).toHaveLength(1);
+    expect(modelLoadEntries[0]?.ok).toBe(true);
+    expect(modelLoadEntries[0]?.subject).toBe('cdm');
+    expect(modelLoadEntries[0]?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(modelLoadEntries[0]?.opId).toBeTypeOf('number');
+
+    const lines = useOutputStore.getState().lines;
+    const modelLoadLines = lines.filter((l) => l.op === 'modelLoad');
+    expect(modelLoadLines).toHaveLength(1);
+    expect(modelLoadLines[0]?.severity).toBe('success');
+    expect(modelLoadLines[0]?.subject).toBe('cdm');
+    expect(modelLoadLines[0]?.opId).toBe(modelLoadEntries[0]?.opId);
+  });
+
+  it('load() publishes a failure activity entry with ok=false on error', async () => {
+    useOutputStore.setState({ lines: [] });
+    useActivityStore.setState({ entries: [] });
+    // Reuse this file's existing loadModelMock (a plain vi.fn()) rejection
+    // convention rather than inventing a new mocking approach.
+    loadModelMock.mockRejectedValueOnce(new Error('network unreachable'));
+
+    await useModelStore.getState().load(CURATED_SOURCE);
+
+    const entries = useActivityStore.getState().entries;
+    const modelLoadEntries = entries.filter((e) => e.tag === 'modelLoad');
+    expect(modelLoadEntries).toHaveLength(1);
+    expect(modelLoadEntries[0]?.ok).toBe(false);
+    expect(modelLoadEntries[0]?.subject).toBe('cdm');
+    expect(modelLoadEntries[0]?.durationMs).toBeGreaterThanOrEqual(0);
+
+    const lines = useOutputStore.getState().lines;
+    const modelLoadLines = lines.filter((l) => l.op === 'modelLoad');
+    expect(modelLoadLines).toHaveLength(1);
+    expect(modelLoadLines[0]?.severity).toBe('error');
+    expect(modelLoadLines[0]?.opId).toBe(modelLoadEntries[0]?.opId);
+  });
 });
 
 describe('useModelStore — setCuratedFiles (refOnly post-/api/parse)', () => {
@@ -334,5 +385,37 @@ describe('useModelStore — setCuratedFiles (refOnly post-/api/parse)', () => {
         { path: 'a.rosetta', content: '', namespace: 'a', refOnly: true, serializedModelJson: json1 }
       ]);
     expect(useModelStore.getState().models.get('cdm')?.files).toHaveLength(1);
+  });
+});
+
+describe('gatedByUserOptIn (Phase 5 — model-store telemetry gated on per-user Settings opt-in)', () => {
+  beforeEach(() => {
+    useTelemetrySettingsStore.setState({ enabled: false, hydrated: true });
+  });
+
+  it('does not forward emits when the user has not opted in', async () => {
+    const inner = { emit: vi.fn(async () => {}) };
+    const gated = gatedByUserOptIn(inner);
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'cdm' } as never);
+    expect(inner.emit).not.toHaveBeenCalled();
+  });
+
+  it('forwards emits once the user has opted in', async () => {
+    useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
+    const inner = { emit: vi.fn(async () => {}) };
+    const gated = gatedByUserOptIn(inner);
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'cdm' } as never);
+    expect(inner.emit).toHaveBeenCalledWith({ event: 'curated_load_attempt', modelId: 'cdm' });
+  });
+
+  it('re-checks the live opt-in on every call rather than a snapshot at construction', async () => {
+    const inner = { emit: vi.fn(async () => {}) };
+    const gated = gatedByUserOptIn(inner);
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'cdm' } as never);
+    expect(inner.emit).not.toHaveBeenCalled();
+
+    useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
+    await gated.emit({ event: 'curated_load_attempt', modelId: 'fpml' } as never);
+    expect(inner.emit).toHaveBeenCalledWith({ event: 'curated_load_attempt', modelId: 'fpml' });
   });
 });

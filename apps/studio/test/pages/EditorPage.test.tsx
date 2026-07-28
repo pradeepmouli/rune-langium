@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, waitFor, screen, act, fireEvent } from '@testing-library/react';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
+import { useExploreFileNavStore } from '../../src/shell/explore-file-nav-store.js';
 import { setRuneStudioTestApi } from '../../src/test-api.js';
 
 const {
@@ -368,7 +369,7 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
 vi.mock('../../src/components/StudioToastProvider.js', () => ({
   StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, {}, children),
-  useStudioToast: () => ({ showToast: showToastSpy })
+  useStudioToast: () => ({ showToast: showToastSpy, showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
 }));
 
 vi.mock('lucide-react', () => ({
@@ -382,7 +383,7 @@ vi.mock('lucide-react', () => ({
   Check: () => React.createElement('span'),
   Download: () => React.createElement('span'),
   Share2: () => React.createElement('span'),
-  Zap: () => React.createElement('span'),
+  Wand2: () => React.createElement('span'),
   Search: () => React.createElement('span'),
   ChevronDown: () => React.createElement('span'),
   ChevronUp: () => React.createElement('span'),
@@ -403,7 +404,8 @@ vi.mock('lucide-react', () => ({
   // perspective-registry icons (ActivityBar now imports from perspective-registry)
   FolderOpen: () => React.createElement('span'),
   GitBranch: () => React.createElement('span'),
-  Package: () => React.createElement('span')
+  Package: () => React.createElement('span'),
+  Boxes: () => React.createElement('span')
 }));
 
 vi.mock('../../src/components/GraphFilterMenu.js', () => ({
@@ -1043,6 +1045,7 @@ describe('EditorPage workspace chrome', () => {
     // EditorPage represents a loaded workspace — Explore must be active so
     // PerspectiveHost renders DockShell (not hidden by display:none).
     usePerspectiveStore.setState({ activePerspective: 'explore' });
+    useExploreFileNavStore.setState({ activeEditorFile: undefined, syncStatus: null });
     editorStoreState.nodes = [];
     editorStoreState.selectedNodeId = undefined;
     vi.clearAllMocks();
@@ -1070,13 +1073,36 @@ describe('EditorPage workspace chrome', () => {
     expect(screen.getByText('Rune Studio')).toBeInTheDocument();
     expect(screen.getByText('CDM Workspace')).toBeInTheDocument();
     expect(screen.getByText('1 file')).toBeInTheDocument();
-    expect(screen.getByText('Generate')).toBeInTheDocument();
+    expect(screen.getByText('Import')).toBeInTheDocument();
 
     const graphToolbar = screen.getByLabelText('Graph toolbar');
     expect(graphToolbar).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fit View' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Re-layout' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Grouped' })).toBeInTheDocument();
+  });
+
+  it('opening a file via the tab strip (explore-file-nav-store) is reflected by the source editor — behavior preserved after the useState→store lift', () => {
+    renderEditorPage({
+      models: [],
+      files: [
+        { name: 'alpha.rosetta', path: 'alpha.rosetta', content: 'namespace alpha', dirty: false },
+        { name: 'beta.rosetta', path: 'beta.rosetta', content: 'namespace beta', dirty: false }
+      ]
+    });
+
+    // The files-loaded effect auto-selects the first file as active.
+    expect(sourceEditorMockState.latestProps?.activeFile).toBe('alpha.rosetta');
+
+    // Clicking a different tab calls onSelectFile (bound to openFileInSource),
+    // which now writes explore-file-nav-store instead of local useState.
+    fireEvent.click(screen.getByRole('button', { name: /beta\.rosetta/ }));
+
+    // The store write is observed by an unrelated consumer (SourceEditor's
+    // activeFile prop) exactly as the old local useState flow was — single
+    // source, no duplication.
+    expect(sourceEditorMockState.latestProps?.activeFile).toBe('beta.rosetta');
+    expect(useExploreFileNavStore.getState().activeEditorFile).toBe('beta.rosetta');
   });
 
   it('requests inspector focus when a node is selected', async () => {

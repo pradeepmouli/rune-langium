@@ -15,8 +15,22 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState } from 'react';
 
 interface FakeGroupSpy {
-  api: { setSize: (s: { width?: number; height?: number }) => void };
+  api: {
+    setSize: (s: { width?: number; height?: number }) => void;
+    setConstraints: (c: {
+      minimumHeight?: number;
+      minimumWidth?: number;
+      maximumHeight?: number;
+      maximumWidth?: number;
+    }) => void;
+  };
   sizeCalls: Array<{ width?: number; height?: number }>;
+  constraintCalls: Array<{
+    minimumHeight?: number;
+    minimumWidth?: number;
+    maximumHeight?: number;
+    maximumWidth?: number;
+  }>;
 }
 
 interface FakePanelSpy {
@@ -29,7 +43,11 @@ interface FakePanelSpy {
 function makeFakeGroup(): FakeGroupSpy {
   const spy: FakeGroupSpy = {
     sizeCalls: [],
-    api: { setSize: (s) => spy.sizeCalls.push(s) }
+    constraintCalls: [],
+    api: {
+      setSize: (s) => spy.sizeCalls.push(s),
+      setConstraints: (c) => spy.constraintCalls.push(c)
+    }
   };
   return spy;
 }

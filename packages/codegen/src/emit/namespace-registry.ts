@@ -78,20 +78,42 @@ export function buildNamespaceRegistry(groupedDocs: Map<string, LangiumDocument[
   return { namespaces };
 }
 
+/**
+ * Compute the relative import path from one namespace's emitted FILE to
+ * another's, matching `getTargetRelativePath`'s layout: a namespace
+ * `a.b.c` is emitted as the FILE `a/b/c.<ext>` (the last segment is the
+ * file name, the earlier segments are directories).
+ *
+ * The relative walk therefore starts from the from-file's DIRECTORY
+ * (`fromParts` minus the final segment), and the final `toParts` segment
+ * is always the target file name — the common-prefix consumption is
+ * capped so that the file segment is never swallowed as a shared
+ * directory (`a.b` → `a` must yield `../a`, not `./`).
+ *
+ * Previously this walked from the namespace path itself (as if `a.b`
+ * were the DIRECTORY `a/b/`), producing one extra `../` on every
+ * cross-namespace import — e.g. sibling namespaces `test.x.product` →
+ * `test.x.base` emitted `'../base.js'` from the file `test/x/product.ts`,
+ * which resolves to `test/base.js` instead of the real `test/x/base.ts`.
+ * Every emitted cross-namespace import was unresolvable on disk; latent
+ * because no test performed real module resolution over multi-file
+ * output until the Data-extends-Choice cross-namespace compile check
+ * (test/emit/data-extends-choice-crossns.test.ts).
+ */
 export function resolveImportPath(fromNamespace: string, toNamespace: string, _registry: NamespaceRegistry): string {
-  const fromParts = fromNamespace.split('.');
+  const fromDirParts = fromNamespace.split('.').slice(0, -1);
   const toParts = toNamespace.split('.');
 
   let commonLen = 0;
-  while (commonLen < fromParts.length && commonLen < toParts.length && fromParts[commonLen] === toParts[commonLen]) {
+  const maxCommon = Math.min(fromDirParts.length, toParts.length - 1);
+  while (commonLen < maxCommon && fromDirParts[commonLen] === toParts[commonLen]) {
     commonLen++;
   }
 
-  const ups = fromParts.length - commonLen;
+  const ups = fromDirParts.length - commonLen;
   const downParts = toParts.slice(commonLen);
   if (ups > 0) {
-    const upSegment = '../'.repeat(ups);
-    return downParts.length > 0 ? upSegment + downParts.join('/') : upSegment.slice(0, -1);
+    return '../'.repeat(ups) + downParts.join('/');
   }
   return './' + downParts.join('/');
 }

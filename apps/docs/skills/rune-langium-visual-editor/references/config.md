@@ -114,6 +114,12 @@ Configuration props for the `RuneTypeGraph` component.
 
 **Type:** `boolean`
 
+#### showLegend
+
+Show the always-on kind/edge legend overlay (default true).
+
+**Type:** `boolean`
+
 #### readOnly
 
 **Type:** `boolean`
@@ -133,6 +139,28 @@ Snapshot of visual editor state tracked by the zustand store.
 #### edges
 
 **Type:** `TypeGraphEdge[]`
+
+**Required:** yes
+
+#### nodesById
+
+Canonical id→node index — the edit SUBSTRATE (Phase 3B). `nodes` above is a
+derived render cache (invariant I1: `nodes === [...nodesById.values()]`).
+Every source-affecting action writes this Map through a chokepoint
+(`mutateGraph`/`updateGraphView`/`loadModels`); the post-undo `store.subscribe`
+re-derives the arrays from the Maps after history restore.
+Do NOT write the Maps ad-hoc from a new action — go through a chokepoint.
+
+**Type:** `Map<string, TypeGraphNode>`
+
+**Required:** yes
+
+#### edgesById
+
+Canonical id→edge index — the edit substrate (invariant I1:
+`edges === [...edgesById.values()]`). See `nodesById` for the write contract.
+
+**Type:** `Map<string, TypeGraphEdge>`
 
 **Required:** yes
 
@@ -246,6 +274,46 @@ initial link ran before the hydration round-trip completed.
 
 **Required:** yes
 
+#### parseEpoch
+
+Monotonically-incrementing counter bumped ONLY when the graph is (re)built
+from a parse result — i.e. inside `loadModels`. (`loadDeferredExports` is a
+state-only stash that does NOT rebuild nodes, so it does not bump it.)
+User-edit actions deliberately do NOT bump it.
+
+`useModelSourceSync` reads this to tell PARSE-origin `nodes`/`edges` changes
+apart from USER-EDIT-origin ones: it only serializes the graph back to
+source text when `parseEpoch` did NOT advance since the last emission.
+Without this, a degraded reparse (worker unavailable → attributes stripped,
+empty `errors`) would re-serialize the truncated graph over the real source
+and corrupt the file. See `loadModels`' degraded-parse guard for the
+complementary protection (rejecting a parse that shrinks the live graph).
+
+**Type:** `number`
+
+**Required:** yes
+
+#### pendingEditPatches
+
+Id-rooted Mutative patches for user edits that have NOT yet round-tripped
+through a reparse. Captured by `mutateGraph` (semantic edit actions), replayed
+by `loadModels` on top of each healthy parse so an edit made just before its
+own reparse lands is not momentarily reverted, then pruned as the parse
+catches up. See `edit-reconcile.ts` for the pure replay logic.
+
+Deliberately excluded from the zundo `partialize` set (`{nodes, edges}`), so
+it is not part of undo history — patches track in-flight intent, not state.
+
+**Type:** `Patches`
+
+**Required:** yes
+
+#### pendingInversePatches
+
+**Type:** `Patches`
+
+**Required:** yes
+
 ## UseTypeRefDropOptions
 
 ### Properties
@@ -268,7 +336,7 @@ registered on `dataTransfer`:
 Drag sources following the recommended dual-MIME contract get the strict
 behavior; single-MIME sources still work but lose dragover-time filtering.
 
-**Type:** `readonly ("Annotation" | "Choice" | "Data" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Func")[]`
+**Type:** `readonly ("Data" | "Choice" | "Annotation" | "Enum" | "BasicType" | "Record" | "TypeAlias" | "Func")[]`
 
 **Required:** yes
 

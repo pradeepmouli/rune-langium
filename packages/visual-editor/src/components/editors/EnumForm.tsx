@@ -51,6 +51,7 @@ import type {
   AnyGraphNode,
   GraphNodeMeta,
   TypeOption,
+  SourceRefOption,
   TypeGraphNode,
   EditorFormActions,
   NavigateToNodeCallback
@@ -69,6 +70,8 @@ export interface EnumFormProps {
   data: AnyGraphNode;
   /** Available type options for selectors. */
   availableTypes: TypeOption[];
+  /** Available synonym source options for the source-ref picker. */
+  synonymSourceOptions?: SourceRefOption[];
   /** Enum-specific editor form action callbacks. */
   actions: EditorFormActions<'enum'>;
   /** All graph nodes for inherited member resolution. */
@@ -98,6 +101,7 @@ function EnumForm({
   nodeId,
   data,
   availableTypes,
+  synonymSourceOptions = [],
   actions,
   allNodes = EMPTY_NODES,
   onNavigateToNode,
@@ -118,7 +122,8 @@ function EnumForm({
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
     defaultValues: formValuesProjection<typeof RosettaEnumerationSchema>(data, nodeMeta),
     mode: 'onChange',
-    formRegistry
+    formRegistry,
+    errorDisplay: 'afterTouched'
   });
 
   // Re-bind pristine field state when the caller swaps to a different node
@@ -312,6 +317,7 @@ function EnumForm({
               onRevertOverride={handleRevertEnumOverride}
               onOverrideInherited={handleOverrideInheritedValue}
               isReadOnly={isReadOnly}
+              synonymSourceOptions={synonymSourceOptions}
             />
           </FieldSet>
 
@@ -320,7 +326,7 @@ function EnumForm({
               callbacks from the EditorActionsProvider above. No imperative
               wiring needed at this site. */}
           <AnnotationSection />
-          <MetadataSection />
+          <MetadataSection synonymSourceOptions={synonymSourceOptions} />
         </div>
       </EditorActionsProvider>
     </FormProvider>
@@ -353,6 +359,8 @@ interface PaginatedEnumValuesProps {
   onOverrideInherited: (name: string, displayName: string) => void;
   /** When true, hides Override buttons on inherited rows to prevent mutations on locked types. */
   isReadOnly?: boolean;
+  /** Available synonym source options threaded from EnumForm to each value row. */
+  synonymSourceOptions?: SourceRefOption[];
 }
 
 function PaginatedEnumValues({
@@ -364,7 +372,8 @@ function PaginatedEnumValues({
   onReorder,
   onRevertOverride,
   onOverrideInherited,
-  isReadOnly
+  isReadOnly,
+  synonymSourceOptions
 }: PaginatedEnumValuesProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -394,6 +403,7 @@ function PaginatedEnumValues({
             onReorder={onReorder}
             isOverride={entry.isOverride}
             onRevert={entry.isOverride ? () => onRevertOverride(entry.name) : undefined}
+            synonymSourceOptions={synonymSourceOptions}
           />
         ) : (
           <InheritedEnumValueRow

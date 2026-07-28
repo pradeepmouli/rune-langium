@@ -17,11 +17,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsgo -b",
+    "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",
-    "type-check": "tsgo --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
     "isomorphic-git": "^1.37.6"
@@ -29,7 +29,7 @@
   "devDependencies": {
     "@types/node": "^26.0.1",
     "isomorphic-git": "^1.38.5",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.9"
   },
   "publishConfig": {

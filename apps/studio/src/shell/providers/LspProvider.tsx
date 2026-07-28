@@ -12,6 +12,7 @@ import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
 import { useStudioToast } from '../../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
 import { useActivityStore } from '../../store/activity-store.js';
+import { allocateOpId } from '../../services/op-log.js';
 
 export function LspProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const { files } = useWorkspace();
@@ -27,6 +28,7 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     showToastRef.current = showToast;
   }, [showToast]);
   const prevStatusRef = useRef<TransportState['status']>('disconnected');
+  const hasConnectedOnceRef = useRef(false);
 
   useEffect(() => {
     if (!config.lspEnabled) {
@@ -35,13 +37,26 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
       lspClientRef.current = null;
       return undefined;
     }
+    const connectOpId = allocateOpId();
+    const connectStartedAt = performance.now();
     const provider = createTransportProvider({ workspaceId: getLspSessionId() });
     providerRef.current = provider;
     const unsub = provider.onStateChange((state) => {
       setTransportState(state);
       if (state.status === 'connected') {
-        useOutputStore.getState().addLine(fmtLine('lsp', 'connected'), 'success');
-        useActivityStore.getState().addActivity('lsp', true, 'connected');
+        // Only the FIRST connected transition after mount is the "initial
+        // connect" — later connected transitions (a reconnect() call, or the
+        // transport auto-reconnecting) are attributed to their own span
+        // (reconnect's own opId/startedAt), not this mount-time one, so we
+        // don't double-log a reconnect with a stale/inflated durationMs.
+        if (!hasConnectedOnceRef.current) {
+          hasConnectedOnceRef.current = true;
+          const durationMs = performance.now() - connectStartedAt;
+          useOutputStore
+            .getState()
+            .addLine(fmtLine('lsp', 'connected'), 'success', { op: 'lsp', opId: connectOpId, durationMs });
+          useActivityStore.getState().addActivity('lsp', true, 'connected', { opId: connectOpId, durationMs });
+        }
       } else if (state.status === 'disconnected' && prevStatusRef.current === 'connected') {
         useOutputStore.getState().addLine(fmtLine('lsp', 'disconnected'), 'warn');
         useActivityStore.getState().addActivity('lsp', false, 'disconnected');
@@ -51,10 +66,24 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     const client = createLspClientService({ transportProvider: provider });
     lspClientRef.current = client;
     client.connect().catch((err) => {
+      // Close the initial-connect span on failure, exactly like a successful
+      // connect does. Otherwise, if a LATER connected transition arrives via
+      // reconnect() (which re-fires this still-subscribed mount-time
+      // onStateChange listener) or the transport's own retry, this listener
+      // would still treat it as the "first" connected transition and log a
+      // stale entry using this failed attempt's connectOpId/connectStartedAt
+      // alongside the reconnect callback's own correct log — double-logging.
+      hasConnectedOnceRef.current = true;
       const msg = err instanceof Error ? err.message : String(err);
+      const durationMs = performance.now() - connectStartedAt;
       console.error('[LspProvider] LSP connect failed:', err);
-      useOutputStore.getState().addLine(fmtLine('lsp', 'connect failed', msg), 'error');
-      useActivityStore.getState().addActivity('lsp', false, `connect failed · ${msg}`);
+      useOutputStore
+        .getState()
+        .addLine(fmtLine('lsp', 'connect failed', msg), 'error', { op: 'lsp', opId: connectOpId, durationMs });
+      useActivityStore.getState().addActivity('lsp', false, `connect failed · ${msg}`, {
+        opId: connectOpId,
+        durationMs
+      });
       showToastRef.current({
         title: 'Language server unavailable',
         description:
@@ -76,13 +105,28 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
 
   const reconnect = useCallback(() => {
     void (async () => {
+      if (!lspClientRef.current) {
+        useOutputStore
+          .getState()
+          .addLine(fmtLine('lsp', 'reconnect unavailable — language server is disabled'), 'warn');
+        useActivityStore.getState().addActivity('lsp', false, 'reconnect unavailable — language server is disabled');
+        return;
+      }
+      const opId = allocateOpId();
+      const startedAt = performance.now();
       try {
-        await lspClientRef.current?.reconnect();
+        await lspClientRef.current.reconnect();
+        const durationMs = performance.now() - startedAt;
+        useOutputStore.getState().addLine(fmtLine('lsp', 'reconnected'), 'success', { op: 'lsp', opId, durationMs });
+        useActivityStore.getState().addActivity('lsp', true, 'reconnected', { opId, durationMs });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const durationMs = performance.now() - startedAt;
         console.error('[LspProvider] LSP reconnect failed:', err);
-        useOutputStore.getState().addLine(fmtLine('lsp', 'reconnect failed', msg), 'error');
-        useActivityStore.getState().addActivity('lsp', false, `reconnect failed · ${msg}`);
+        useOutputStore
+          .getState()
+          .addLine(fmtLine('lsp', 'reconnect failed', msg), 'error', { op: 'lsp', opId, durationMs });
+        useActivityStore.getState().addActivity('lsp', false, `reconnect failed · ${msg}`, { opId, durationMs });
         showToast({
           title: 'LSP reconnect failed',
           description: err instanceof Error ? err.message : 'Could not reconnect to the language server.',

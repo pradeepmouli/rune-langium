@@ -1,0 +1,7 @@
+namespace test.dedxns.product
+version "0.0.0"
+
+import test.dedxns.base.*
+
+type Dog extends Animal:
+    breed string (1..1)

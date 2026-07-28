@@ -107,10 +107,7 @@ export function useInheritedMembers(
         nodeRepository?.byId(currentParentName) ??
         allNodes.find((n) => {
           const pd = n.data as AnyGraphNode;
-          return (
-            pd.name === currentParentName ||
-            makeNodeId(n.meta.namespace, pd.name as string) === currentParentName
-          );
+          return pd.name === currentParentName || makeNodeId(n.meta.namespace, pd.name as string) === currentParentName;
         });
 
       if (!parentNode) break;

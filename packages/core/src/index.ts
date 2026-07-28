@@ -24,6 +24,8 @@ export * from './generated/domain.js';
 // Parse API
 export { parse, parseWorkspace } from './api/parse.js';
 export type { ParseResult } from './api/parse.js';
+export { parseExpression } from './api/parse-expression.js';
+export type { ExpressionParseResult } from './api/parse-expression.js';
 
 // Services
 export { createRuneDslServices, RuneDslModule, RuneDslSharedModule } from './services/rune-dsl-module.js';
@@ -48,7 +50,6 @@ export { parsedAdapter } from './adapters/parsed-adapter.js';
 export { curatedAdapter } from './adapters/curated-adapter.js';
 
 // Serializer
-export { serializeModel, serializeElement, serializeModels } from './serializer/rosetta-serializer.js';
 export { RUNE_SERIALIZE_OPTIONS, runeBigIntReplacer, serializeRuneModel } from './serializer/rune-serialize.js';
 export { preserveCstText } from './serializer/preserve-cst-text.js';
 export { deserializeRuneModel, hydrateModelDocument } from './serializer/hydrate-model-document.js';

@@ -12,6 +12,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from '@rune-langium/core';
+import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
 import { createEditorStore } from '../../src/store/editor-store.js';
 import {
   COMBINED_MODEL_SOURCE,
@@ -157,16 +158,21 @@ describe('EditorStore — new actions', () => {
   // -----------------------------------------------------------------------
 
   describe('addSynonym', () => {
-    it('adds a synonym to a node', () => {
-      const nodes = store.getState().nodes;
-      const tradeNode = nodes.find((n) => n.data.name === 'Trade');
+    it('adds a class synonym from a source ref (Data)', () => {
+      const node = store.getState().nodes.find((n) => n.data.name === 'Trade')!;
+      store.getState().addSynonym(node.id, 'FpML');
+      const syns = (store.getState().nodes.find((n) => n.id === node.id)!.data as any).synonyms;
+      expect(syns[0].$type).toBe('RosettaClassSynonym');
+      expect(syns[0].sources[0].$refText).toBe('FpML');
+    });
 
-      store.getState().addSynonym(tradeNode!.id, 'FpML_Trade');
-
-      const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
-      const syns = (updated!.data as any).synonyms;
-      expect(syns).toHaveLength(1);
-      expect(syns[0].value.name).toBe('FpML_Trade');
+    it('sets a value on the synonym when provided', () => {
+      const node = store.getState().nodes.find((n) => n.data.name === 'Trade')!;
+      store.getState().addSynonym(node.id, 'FpML', 'Trade');
+      const syns = (store.getState().nodes.find((n) => n.id === node.id)!.data as any).synonyms;
+      expect(syns[0].$type).toBe('RosettaClassSynonym');
+      expect(syns[0].sources[0].$refText).toBe('FpML');
+      expect(syns[0].value).toEqual({ name: 'Trade' });
     });
 
     it('appends to existing synonyms', () => {
@@ -179,8 +185,8 @@ describe('EditorStore — new actions', () => {
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
       const syns = (updated!.data as any).synonyms;
       expect(syns).toHaveLength(2);
-      expect(syns[0].value.name).toBe('FpML_Trade');
-      expect(syns[1].value.name).toBe('FIX_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FpML_Trade');
+      expect(syns[1].sources[0].$refText).toBe('FIX_Trade');
     });
   });
 
@@ -196,7 +202,7 @@ describe('EditorStore — new actions', () => {
       const updated = store.getState().nodes.find((n) => n.id === tradeNode!.id);
       const syns = (updated!.data as any).synonyms;
       expect(syns).toHaveLength(1);
-      expect(syns[0].value.name).toBe('FIX_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FIX_Trade');
     });
 
     it('negative / out-of-range index is a true no-op (does not delete the last synonym)', () => {
@@ -209,7 +215,68 @@ describe('EditorStore — new actions', () => {
       store.getState().removeSynonym(tradeNode!.id, 99); // out of range
 
       const syns = (store.getState().nodes.find((n) => n.id === tradeNode!.id)!.data as any).synonyms;
-      expect(syns.map((s: any) => s.value.name)).toEqual(['FpML_Trade', 'FIX_Trade']); // both intact
+      expect(syns.map((s: any) => s.sources[0].$refText)).toEqual(['FpML_Trade', 'FIX_Trade']); // both intact
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addEnumValueSynonym / removeEnumValueSynonym (separate model)
+// ---------------------------------------------------------------------------
+
+describe('EditorStore — enum-value synonym actions', () => {
+  let store: ReturnType<typeof createEditorStore>;
+
+  beforeEach(async () => {
+    store = createEditorStore();
+    const result = await parse(ENUM_MODEL_SOURCE);
+    store.getState().loadModels(result.value);
+  });
+
+  describe('addEnumValueSynonym', () => {
+    it('adds a RosettaEnumSynonym to enumValues[0].enumSynonyms', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration')!;
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FIX', 'TD');
+      const ev = (store.getState().nodes.find((n) => n.id === enumNode.id)!.data as any).enumValues[0];
+      expect(ev.enumSynonyms[0]).toMatchObject({
+        $type: 'RosettaEnumSynonym',
+        sources: [{ $refText: 'FIX' }],
+        synonymValue: 'TD'
+      });
+    });
+
+    it('is a no-op for a non-RosettaEnumeration node', () => {
+      // USD is an enumValue name, but the nodeId must be the enum itself.
+      // Using a non-existent nodeId — should silently no-op.
+      const patchesBefore = store.getState().pendingEditPatches.length;
+      store.getState().addEnumValueSynonym('non-existent-id', 0, 'FIX', 'TD');
+      expect(store.getState().pendingEditPatches.length).toBe(patchesBefore);
+    });
+  });
+
+  describe('removeEnumValueSynonym', () => {
+    it('removes the enum-value synonym at synIndex', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration')!;
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FIX', 'TD');
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FpML', 'TradeDate');
+      store.getState().removeEnumValueSynonym(enumNode.id, 0, 0); // remove first
+
+      const ev = (store.getState().nodes.find((n) => n.id === enumNode.id)!.data as any).enumValues[0];
+      expect(ev.enumSynonyms).toHaveLength(1);
+      expect(ev.enumSynonyms[0].sources[0].$refText).toBe('FpML');
+    });
+
+    it('negative / out-of-range synIndex is a true no-op (does not delete the last entry)', () => {
+      const enumNode = store.getState().nodes.find((n) => (n.data as any).$type === 'RosettaEnumeration')!;
+      store.getState().addEnumValueSynonym(enumNode.id, 0, 'FIX', 'TD');
+      const patchesBefore = store.getState().pendingEditPatches.length;
+
+      store.getState().removeEnumValueSynonym(enumNode.id, 0, -1); // would delete last
+      store.getState().removeEnumValueSynonym(enumNode.id, 0, 99); // out of range
+
+      const ev = (store.getState().nodes.find((n) => n.id === enumNode.id)!.data as any).enumValues[0];
+      expect(ev.enumSynonyms).toHaveLength(1); // entry preserved
       expect(store.getState().pendingEditPatches.length).toBe(patchesBefore); // no spurious patch
     });
   });
@@ -883,7 +950,12 @@ describe('EditorStore — condition and expression operations', () => {
       const conditions = (updated!.data as any).conditions ?? [];
       expect(conditions.length).toBe(1);
       expect(conditions[0].name).toBe('ValidDate');
-      expect(conditions[0].expression.$cstText).toBe('tradeDate exists');
+      // Edited expressions are represented as a RawDsl leaf (B1 task 4b fix —
+      // spreading the stale structural node + overwriting $cstText left the
+      // OLD $type intact, which the structural-first renderer would re-render
+      // instead of the edit).
+      expect(conditions[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(conditions[0].expression.text).toBe('tradeDate exists');
     });
   });
 
@@ -947,7 +1019,9 @@ describe('EditorStore — condition and expression operations', () => {
       const updated = store.getState().nodes.find((n) => n.id === dataNode!.id);
       const conditions = (updated!.data as any).conditions ?? [];
       expect(conditions[0].name).toBe('C1_Updated');
-      expect(conditions[0].expression.$cstText).toBe('new expression');
+      // RawDsl leaf — see the addCondition test above for rationale.
+      expect(conditions[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(conditions[0].expression.text).toBe('new expression');
     });
   });
 
@@ -1134,7 +1208,9 @@ describe('EditorStore — condition and expression operations', () => {
       expect(postConditions.length).toBe(2);
       expect(postConditions[0].name).toBe('P1');
       expect(postConditions[1].name).toBe('P2_Updated');
-      expect(postConditions[1].expression.$cstText).toBe('p2_new');
+      // RawDsl leaf — see the addCondition test above for rationale.
+      expect(postConditions[1].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(postConditions[1].expression.text).toBe('p2_new');
     });
 
     it('is a no-op (no patch) when index is out of bounds', () => {
@@ -1200,8 +1276,81 @@ describe('EditorStore — condition and expression operations', () => {
       const updated = funcStore.getState().nodes.find((n) => n.id === funcNode!.id);
       const ops = (updated!.data as any).operations ?? [];
       expect(ops.length).toBeGreaterThan(0);
-      expect(ops[0].expression.$cstText).toBe('x * 2');
+      // RawDsl leaf — see the addCondition test above for rationale.
+      expect(ops[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(ops[0].expression.text).toBe('x * 2');
       expect((updated!.data as any).expressionText).toBe('x * 2');
+    });
+
+    it('creates operations[0] targeting output when the function has no operations yet', async () => {
+      const funcStore = createEditorStore();
+      const funcResult = await parse(`
+        namespace test.func
+        version "test"
+
+        func MyFunc:
+          inputs:
+            x int (1..1)
+          output:
+            result int (1..1)
+      `);
+      funcStore.getState().loadModels(funcResult.value);
+
+      const funcNode = funcStore.getState().nodes.find((n) => n.data.name === 'MyFunc');
+      expect(funcNode).toBeDefined();
+      expect(((funcNode!.data as any).operations ?? []).length).toBe(0);
+
+      funcStore.getState().updateExpression(funcNode!.id, 'x + 1');
+
+      const updated = funcStore.getState().nodes.find((n) => n.id === funcNode!.id);
+      const ops = (updated!.data as any).operations ?? [];
+      expect(ops.length).toBe(1);
+      expect(ops[0].add).toBe(false);
+      expect(ops[0].assignRoot.$refText).toBe('result');
+      expect(ops[0].expression.$type).toBe(RAW_DSL_TYPE);
+      expect(ops[0].expression.text).toBe('x + 1');
+    });
+
+    it('undo reverts a lens-driven commit and redo re-applies it', async () => {
+      const funcStore = createEditorStore();
+      const funcResult = await parse(`
+        namespace test.func
+        version "test"
+
+        func MyFunc:
+          inputs:
+            x int (1..1)
+          output:
+            result int (1..1)
+          set result:
+            x + 1
+      `);
+      funcStore.getState().loadModels(funcResult.value);
+      const funcNode = funcStore.getState().nodes.find((n) => n.data.name === 'MyFunc');
+      const nodeId = funcNode!.id;
+
+      // The freshly-parsed body is a structural `ArithmeticOperation` AST node
+      // (left/operator/right), not a RawDsl `{ $type, text }` leaf — that
+      // conversion only happens once a lens-driven `updateExpression` commit
+      // runs (see editor-store.ts's RosettaFunction branch). So the first
+      // commit here establishes a RawDsl baseline; undo below reverts to
+      // *this* commit, not to the pre-edit structural parse (which has no
+      // `.text` field to assert against).
+      funcStore.getState().updateExpression(nodeId, 'x + 1');
+      const afterFirstEdit = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterFirstEdit!.data as any).operations[0].expression.text).toBe('x + 1');
+
+      funcStore.getState().updateExpression(nodeId, 'x * 2');
+      const afterSecondEdit = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterSecondEdit!.data as any).operations[0].expression.text).toBe('x * 2');
+
+      funcStore.temporal.getState().undo();
+      const afterUndo = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterUndo!.data as any).operations[0].expression.text).toBe('x + 1');
+
+      funcStore.temporal.getState().redo();
+      const afterRedo = funcStore.getState().nodes.find((n) => n.id === nodeId);
+      expect((afterRedo!.data as any).operations[0].expression.text).toBe('x * 2');
     });
   });
 });
@@ -1864,7 +2013,8 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
   });
 
   // -----------------------------------------------------------------------
-  // updateExpression — nodes-rooted patch covering BOTH operations[0].expression.$cstText AND expressionText
+  // updateExpression — nodes-rooted patch covering BOTH operations[0].expression
+  // (a RawDsl leaf — see the addCondition test above) AND expressionText
   // -----------------------------------------------------------------------
 
   describe('updateExpression — id-rooted patch (Wave D)', () => {
@@ -1885,7 +2035,7 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
       expect(newPatches[0]!.path[1]).toBe(nodeId);
     });
 
-    it('patches BOTH operations[0].expression.$cstText AND expressionText', () => {
+    it('patches BOTH operations[0].expression (RawDsl leaf) AND expressionText', () => {
       const nodes = store.getState().nodes;
       const funcNode = nodes.find((n) => n.data.name === 'Add');
       expect(funcNode).toBeDefined();
@@ -1896,7 +2046,8 @@ describe('EditorStore — function actions — id-rooted patches (Wave D)', () =
       const updated = store.getState().nodes.find((n) => n.id === nodeId);
       const data = updated!.data as any;
       // Both fields must be written
-      expect(data.operations?.[0]?.expression?.$cstText).toBe('a * b');
+      expect(data.operations?.[0]?.expression?.$type).toBe(RAW_DSL_TYPE);
+      expect(data.operations?.[0]?.expression?.text).toBe('a * b');
       expect(data.expressionText).toBe('a * b');
     });
   });
@@ -2079,7 +2230,7 @@ describe('EditorStore — metadata actions — id-rooted patches (Wave F)', () =
       const updated = store.getState().nodes.find((n) => n.id === nodeId);
       const syns = (updated!.data as any).synonyms ?? [];
       expect(syns[0].$type).toBe('RosettaClassSynonym');
-      expect(syns[0].value.name).toBe('FpML_Trade');
+      expect(syns[0].sources[0].$refText).toBe('FpML_Trade');
     });
   });
 

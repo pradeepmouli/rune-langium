@@ -206,31 +206,25 @@ describe('buildSegmentedNamespaceTree', () => {
   // -------------------------------------------------------------------------
 
   it('children are sorted by segment name (locale, case-insensitive)', () => {
-    const roots = buildSegmentedNamespaceTree(repoOf([
-      makeNode('z.alpha', 'ZA'),
-      makeNode('z.beta', 'ZB'),
-      makeNode('z.Gamma', 'ZG')
-    ]));
+    const roots = buildSegmentedNamespaceTree(
+      repoOf([makeNode('z.alpha', 'ZA'), makeNode('z.beta', 'ZB'), makeNode('z.Gamma', 'ZG')])
+    );
     const z = roots.find((r) => r.segment === 'z')!;
     expect(z.children.map((c) => c.segment.toLowerCase())).toEqual(['alpha', 'beta', 'gamma']);
   });
 
   it('types within a node are sorted by name', () => {
-    const roots = buildSegmentedNamespaceTree(repoOf([
-      makeNode('ns', 'Zebra'),
-      makeNode('ns', 'Apple'),
-      makeNode('ns', 'Mango')
-    ]));
+    const roots = buildSegmentedNamespaceTree(
+      repoOf([makeNode('ns', 'Zebra'), makeNode('ns', 'Apple'), makeNode('ns', 'Mango')])
+    );
     const ns = roots[0]!;
     expect(ns.types.map((t) => t.name)).toEqual(['Apple', 'Mango', 'Zebra']);
   });
 
   it('root segments are sorted (locale, case-insensitive)', () => {
-    const roots = buildSegmentedNamespaceTree(repoOf([
-      makeNode('z.ns', 'TypeZ'),
-      makeNode('a.ns', 'TypeA'),
-      makeNode('m.ns', 'TypeM')
-    ]));
+    const roots = buildSegmentedNamespaceTree(
+      repoOf([makeNode('z.ns', 'TypeZ'), makeNode('a.ns', 'TypeA'), makeNode('m.ns', 'TypeM')])
+    );
     expect(roots.map((r) => r.segment.toLowerCase())).toEqual(['a', 'm', 'z']);
   });
 
@@ -245,12 +239,14 @@ describe('buildSegmentedNamespaceTree', () => {
   });
 
   it('correctly resolves kind for all four node kinds', () => {
-    const roots = buildSegmentedNamespaceTree(repoOf([
-      makeNode('ns', 'D', 'data'),
-      makeNode('ns', 'C', 'choice'),
-      makeNode('ns', 'E', 'enum'),
-      makeNode('ns', 'F', 'func')
-    ]));
+    const roots = buildSegmentedNamespaceTree(
+      repoOf([
+        makeNode('ns', 'D', 'data'),
+        makeNode('ns', 'C', 'choice'),
+        makeNode('ns', 'E', 'enum'),
+        makeNode('ns', 'F', 'func')
+      ])
+    );
     const types = roots[0]!.types;
     const byName = Object.fromEntries(types.map((t) => [t.name, t.kind]));
     expect(byName).toMatchObject({ D: 'data', C: 'choice', E: 'enum', F: 'func' });
@@ -829,7 +825,9 @@ describe('filterSegmentedTreeByKind', () => {
   });
 
   it('prunes now-empty parent segments while keeping matching descendants', () => {
-    const roots = buildSegmentedNamespaceTree(repoOf([makeNode('a.keep', 'K', 'data'), makeNode('a.drop', 'D', 'choice')]));
+    const roots = buildSegmentedNamespaceTree(
+      repoOf([makeNode('a.keep', 'K', 'data'), makeNode('a.drop', 'D', 'choice')])
+    );
     const filtered = filterSegmentedTreeByKind(roots, new Set<TypeKind>(['data']));
     expect(findByPath(filtered, 'a.keep')).toBeDefined();
     expect(findByPath(filtered, 'a.drop')).toBeUndefined();

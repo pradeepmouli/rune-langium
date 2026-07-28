@@ -19,7 +19,6 @@
  */
 
 import { memo, useCallback } from 'react';
-import { Handle } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { Plus, Minus } from 'lucide-react';
 import { RowGlyph } from '@rune-langium/design-system/ui/row-glyph';
@@ -34,7 +33,7 @@ import type {
 import { expansionKey } from '../../types/structure-view.js';
 import { getTypeRefText } from '../../adapters/model-helpers.js';
 import { getHandlePositions, useNavigation, resolveTypeNodeId, useNodeMetaErrors } from './NavigationContext.js';
-import { NodeKindBadge } from './NodeKindBadge.js';
+import { BaseFlowNode } from './BaseFlowNode.js';
 import { StructureMetaIndicators } from './StructureMetaIndicators.js';
 import type { RangeDiagnostic } from '../../hooks/useDiagnosticsForRange.js';
 import { STRUCTURE_LAYOUT_CONSTANTS } from '../../layout/structure-layout.js';
@@ -310,7 +309,7 @@ function StructureChoiceArmRow({
 
 export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeProps) {
   const d = data as unknown as AnyGraphNode;
-  const { onNavigateToType, allNodeIds, layoutDirection } = useNavigation();
+  const { onNavigateToType, allNodeIds, layoutDirection, pendingHydrationNamespaces } = useNavigation();
   const handles = getHandlePositions(layoutDirection);
   // Validation errors live on the node.meta sibling (not on data).
   const nodeErrors = useNodeMetaErrors(id);
@@ -350,16 +349,21 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
     const rowsColWidth = data.rowsColWidth;
 
     return (
-      <div className={`rune-node rune-node-choice rune-node-choice--structure${selected ? ' rune-node-selected' : ''}`}>
-        <div className="rune-node-header">
-          <NodeKindBadge kind="choice" />
-          <span>{data.name}</span>
+      <BaseFlowNode
+        id={id}
+        kind="choice"
+        name={data.name}
+        className="rune-node-choice rune-node-choice--structure"
+        selected={selected}
+        hydrating={Boolean(data.deferred) && pendingHydrationNamespaces.includes(data.namespaceUri)}
+        metaIndicators={
           <StructureMetaIndicators
             definition={data.definition}
             annotations={data.annotations}
             conditions={data.conditions}
           />
-        </div>
+        }
+      >
         {/* Body wrapper mirrors DataNode's DOM (PR #210 follow-up to a Codex
             review on PR #210's commit 616f71e5: the existing CSS rule
             `.rune-node-choice--structure .rune-node-body--two-col` never
@@ -425,7 +429,7 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
             childLeftX={connectorGeometry.childLeftX}
           />
         ) : null}
-      </div>
+      </BaseFlowNode>
     );
   }
 
@@ -444,12 +448,15 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   );
 
   return (
-    <div className={`rune-node rune-node-choice${selected ? ' rune-node-selected' : ''}`} data-summary={summary}>
-      <Handle type="target" position={handles.target} />
-      <div className="rune-node-header">
-        <NodeKindBadge kind="choice" />
-        <span>{d.name}</span>
-      </div>
+    <BaseFlowNode
+      id={id}
+      kind="choice"
+      name={d.name}
+      className="rune-node-choice"
+      selected={selected}
+      dataSummary={summary}
+      handles={handles}
+    >
       <div className="rune-node-summary">{summary}</div>
       <div className="rune-node-body">
         {members.length > 0 && (
@@ -485,7 +492,6 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
           </div>
         )}
       </div>
-      <Handle type="source" position={handles.source} />
-    </div>
+    </BaseFlowNode>
   );
 });

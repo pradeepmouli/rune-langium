@@ -29,3 +29,8 @@ export function useWorkspace(): WorkspaceState {
   }
   return ctx;
 }
+
+/** Null-tolerant variant for shell chrome that must render without a workspace (Settings). */
+export function useWorkspaceOptional(): WorkspaceState | null {
+  return useContext(WorkspaceStateContext);
+}

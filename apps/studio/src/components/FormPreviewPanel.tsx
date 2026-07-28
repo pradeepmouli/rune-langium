@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { useCallback, useEffect, useId, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
-import { z } from 'zod';
-import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from 'react';
+import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { Input } from '@rune-langium/design-system/ui/input';
@@ -19,6 +18,7 @@ import {
   type PreviewStatus
 } from '../store/preview-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { fieldLeafKey, fieldRootKey, validatePreviewSample } from '../services/preview-validator.js';
 
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
@@ -26,6 +26,8 @@ export interface FormPreviewPanelProps {
   target?: FormPreviewTarget;
   getFieldSource?: (fieldPath: string) => PreviewSourceMapEntry | undefined;
   onExecute?: (funcName: string, inputs: Record<string, unknown>) => void;
+  values?: Record<string, unknown>;
+  onValuesChange?: (values: Record<string, unknown>) => void;
 }
 
 export function FormPreviewPanel({
@@ -33,12 +35,20 @@ export function FormPreviewPanel({
   status,
   target: _target,
   getFieldSource,
-  onExecute
+  onExecute,
+  values,
+  onValuesChange
 }: FormPreviewPanelProps): ReactElement {
+  const isControlled = values !== undefined;
   const ensureSample = usePreviewStore((s) => s.ensureSample);
   const updateSample = usePreviewStore((s) => s.updateSample);
   const resetSample = usePreviewStore((s) => s.resetSample);
   const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
+  const [controlledMeta, setControlledMeta] = useState<{
+    errors: Record<string, string>;
+    valid: boolean;
+    validated: boolean;
+  }>({ errors: {}, valid: true, validated: false });
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
   const [executionResult, setExecutionResult] = useState<unknown>(undefined);
@@ -46,6 +56,7 @@ export function FormPreviewPanel({
 
   const funcName = schema?.kind === 'function' ? schema.title : undefined;
   const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
+  const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
 
   useEffect(() => {
     if (!storeExecResult) return;
@@ -63,6 +74,19 @@ export function FormPreviewPanel({
     setExecutionError(null);
   }, [funcName]);
 
+  useEffect(() => {
+    if (!schema?.unsupportedFeatures?.length) return;
+    if (loggedUnsupportedSchemaRef.current === schema) return;
+    loggedUnsupportedSchemaRef.current = schema;
+    useOutputStore
+      .getState()
+      .addLine(
+        fmtLine('preview', 'unsupported preview features', summarizeUnsupportedFeatures(schema.unsupportedFeatures)),
+        'warn',
+        { op: 'preview', subject: schema.targetId }
+      );
+  }, [schema]);
+
   const defaultValues = useMemo(
     () => (schema ? (buildDefaultValues(schema.fields) as Record<string, unknown>) : {}),
     [schema]
@@ -74,12 +98,23 @@ export function FormPreviewPanel({
   );
 
   useEffect(() => {
-    if (!schema) return;
+    if (isControlled || !schema) return;
     ensureSample(schema.targetId, defaultValues);
-  }, [defaultValues, ensureSample, schema]);
+  }, [defaultValues, ensureSample, isControlled, schema]);
 
   const activeSample = useMemo<PreviewSampleState | undefined>(() => {
     if (!schema) return undefined;
+    if (isControlled) {
+      return {
+        targetId: schema.targetId,
+        values: values ?? defaultValues,
+        serialized: JSON.stringify(values ?? defaultValues, null, 2),
+        errors: controlledMeta.errors,
+        valid: controlledMeta.valid,
+        validated: controlledMeta.validated,
+        updatedAt: 0
+      };
+    }
     return (
       sample ?? {
         targetId: schema.targetId,
@@ -91,7 +126,7 @@ export function FormPreviewPanel({
         updatedAt: 0
       }
     );
-  }, [defaultValues, sample, schema]);
+  }, [controlledMeta, defaultValues, isControlled, sample, schema, values]);
 
   const showStatusOnly = !schema || status.state === 'unavailable' || schema.schemaVersion !== 1;
 
@@ -101,9 +136,14 @@ export function FormPreviewPanel({
       const result = validated
         ? validatePreviewSample(schema, nextValues)
         : { errors: {} as Record<string, string>, valid: true };
+      if (isControlled) {
+        setControlledMeta({ errors: result.errors, valid: result.valid, validated });
+        onValuesChange?.(nextValues);
+        return;
+      }
       updateSample(schema.targetId, nextValues, result.errors, result.valid, validated);
     },
-    [schema, updateSample]
+    [isControlled, onValuesChange, schema, updateSample]
   );
 
   const handleFieldBlur = useCallback(() => {
@@ -180,9 +220,14 @@ export function FormPreviewPanel({
 
   const handleReset = useCallback(() => {
     if (!schema) return;
-    resetSample(schema.targetId, defaultValues);
+    if (isControlled) {
+      setControlledMeta({ errors: {}, valid: true, validated: false });
+      onValuesChange?.(defaultValues);
+    } else {
+      resetSample(schema.targetId, defaultValues);
+    }
     setCopyFeedback(null);
-  }, [defaultValues, resetSample, schema]);
+  }, [defaultValues, isControlled, onValuesChange, resetSample, schema]);
 
   const handleCopySample = useCallback(async () => {
     if (!activeSample) {
@@ -287,7 +332,7 @@ export function FormPreviewPanel({
         )}
         {schema.unsupportedFeatures?.length ? (
           <div role="status" className="text-xs text-muted-foreground">
-            Unsupported preview features: {schema.unsupportedFeatures.join(', ')}
+            Unsupported preview features: {summarizeUnsupportedFeatures(schema.unsupportedFeatures)}
           </div>
         ) : null}
         {schema.kind === 'function' ? (
@@ -696,6 +741,37 @@ function getStatusOnlyMessage(schema: FormPreviewSchema | undefined, status: Pre
   return status.state === 'unavailable' ? status.message : 'Preview unavailable.';
 }
 
+function summarizeUnsupportedFeatures(features: string[]): string {
+  const unresolvedRefs: string[] = [];
+  const recursiveRefs: string[] = [];
+  const other: string[] = [];
+
+  for (const feature of features) {
+    if (feature.startsWith('unresolved-reference:')) {
+      unresolvedRefs.push(feature.slice('unresolved-reference:'.length));
+    } else if (feature.startsWith('recursive-reference:')) {
+      recursiveRefs.push(feature.slice('recursive-reference:'.length));
+    } else {
+      other.push(feature);
+    }
+  }
+
+  const parts: string[] = [];
+  if (unresolvedRefs.length > 0) {
+    parts.push(
+      `reference${unresolvedRefs.length === 1 ? '' : 's'} could not be resolved: ${unresolvedRefs.join(', ')}`
+    );
+  }
+  if (recursiveRefs.length > 0) {
+    parts.push(`recursive reference${recursiveRefs.length === 1 ? '' : 's'} skipped: ${recursiveRefs.join(', ')}`);
+  }
+  if (other.length > 0) {
+    parts.push(other.join(', '));
+  }
+
+  return parts.join('; ');
+}
+
 function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sample?: PreviewSampleState): string {
   if (schema.status === 'unsupported') {
     return 'Limited preview — unsupported features are listed below.';
@@ -773,15 +849,6 @@ function getInputValue(field: PreviewField, event: ChangeEvent<HTMLInputElement>
     return Number.isNaN(event.target.valueAsNumber) ? undefined : event.target.valueAsNumber;
   }
   return event.target.value;
-}
-
-function fieldRootKey(path: string): string {
-  return path.split('.')[0]!.split('[]').join('');
-}
-
-function fieldLeafKey(path: string): string {
-  const parts = path.split('.');
-  return parts[parts.length - 1]!.split('[]').join('');
 }
 
 function pathToSegments(path: string, arrayIndices: number[] = []): Array<string | number> {
@@ -869,97 +936,4 @@ function removeValueAtPath(value: unknown, segments: Array<string | number>): un
   }
   record[head] = removeValueAtPath(record[head], rest);
   return record;
-}
-
-function validatePreviewSample(
-  schema: FormPreviewSchema,
-  values: Record<string, unknown>
-): { errors: Record<string, string>; valid: boolean } {
-  const validator = buildSchemaValidator(schema.fields);
-  const result = validator.safeParse(values);
-
-  if (result.success) {
-    return { errors: {}, valid: true };
-  }
-
-  const errors: Record<string, string> = {};
-  for (const issue of result.error.issues) {
-    const key = formatIssuePath(issue.path);
-    errors[key] = issue.message;
-  }
-  return { errors, valid: false };
-}
-
-function buildSchemaValidator(fields: PreviewField[]): z.ZodObject<Record<string, z.ZodTypeAny>> {
-  return z.object(Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildFieldValidator(field)])));
-}
-
-function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
-  switch (field.kind) {
-    case 'string': {
-      return field.required
-        ? z.preprocess(
-            (value) => (typeof value === 'string' ? value : ''),
-            z.string().trim().min(1, `${field.label} is required`)
-          )
-        : z.preprocess((value) => (value === '' ? undefined : value), z.string().trim().optional());
-    }
-    case 'number': {
-      const base = z.preprocess(
-        (value) => {
-          if (value === '' || value === undefined || value === null) return undefined;
-          if (typeof value === 'number') return value;
-          if (typeof value === 'string') return Number(value);
-          return value;
-        },
-        z.number({ error: `${field.label} must be a number` })
-      );
-      return field.required ? base : base.optional();
-    }
-    case 'boolean':
-      return field.required ? z.boolean() : z.boolean().optional();
-    case 'enum': {
-      const values = (field.enumValues ?? []).map((value) => value.value);
-      if (values.length === 0) return z.string();
-      const schema = z.enum(values as [string, ...string[]]);
-      return field.required
-        ? z.preprocess((value) => (value === '' ? undefined : value), schema)
-        : z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
-    }
-    case 'object': {
-      const childShape = Object.fromEntries(
-        (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildFieldValidator(child)])
-      );
-      const objectSchema = z.object(childShape);
-      return field.required ? objectSchema : objectSchema.optional();
-    }
-    case 'array': {
-      const [child] = field.children ?? [];
-      const item = child ? buildFieldValidator(child) : z.string();
-      let arraySchema = z.array(item);
-      if (field.cardinality?.min !== undefined) {
-        arraySchema = arraySchema.min(
-          field.cardinality.min,
-          `Add at least ${field.cardinality.min} ${field.label.toLowerCase()} item${field.cardinality.min === 1 ? '' : 's'}`
-        );
-      }
-      if (typeof field.cardinality?.max === 'number') {
-        arraySchema = arraySchema.max(
-          field.cardinality.max,
-          `Use at most ${field.cardinality.max} ${field.label.toLowerCase()} item${field.cardinality.max === 1 ? '' : 's'}`
-        );
-      }
-      return arraySchema;
-    }
-    default:
-      return z.any();
-  }
-}
-
-function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
-  return path
-    .filter((segment): segment is string | number => typeof segment === 'string' || typeof segment === 'number')
-    .map((segment) => (typeof segment === 'number' ? `[${segment}]` : segment))
-    .join('.')
-    .replace('.[', '[');
 }

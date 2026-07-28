@@ -309,6 +309,9 @@ export function astToModel(
           });
         }
       }
+    } else if ($type === 'Annotation') {
+      // Attribute reference edges (same convention as Data attributes).
+      edges.push(...getAttributeEdges(node.id, (d.attributes ?? []) as unknown as MemberLikeRef[], nameToNodeId));
     }
   }
 

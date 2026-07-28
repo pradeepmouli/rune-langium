@@ -10,6 +10,8 @@
  * form components can share them.
  */
 
+import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
+
 // ---------------------------------------------------------------------------
 // Cardinality
 // ---------------------------------------------------------------------------
@@ -106,23 +108,30 @@ export interface ConditionDisplayInfo {
 }
 
 /**
- * Get expression text from a condition model.
- * Tries $cstText (preserved by worker) then falls back to empty.
+ * Extract display text from an expression AST node.
+ * Tries the RawDsl leaf's `text` (edited, pending reparse — see RAW_DSL_TYPE),
+ * then $cstText (preserved by parser worker), then $cstNode.text, then empty.
+ * Shared by condition/operation/shortcut display helpers so all expression
+ * body readers agree on precedence (DRY — see FunctionForm.tsx's getCstText).
  */
-function getExpressionText(condition: ConditionShape): string {
-  const expr = condition.expression;
+export function getExpressionDisplayText(expr: unknown): string {
   if (expr && typeof expr === 'object') {
-    // Try $cstText (preserved by parser worker before structured clone)
-    const cstText = (expr as Record<string, unknown>).$cstText;
+    const rec = expr as Record<string, unknown>;
+    if (rec.$type === RAW_DSL_TYPE && typeof rec.text === 'string') return rec.text.trim();
+    const cstText = rec.$cstText;
     if (typeof cstText === 'string') return cstText.trim();
-    // Try $cstNode.text (available if CST survived)
-    const cstNode = (expr as Record<string, unknown>).$cstNode;
+    const cstNode = rec.$cstNode;
     if (cstNode && typeof cstNode === 'object') {
       const text = (cstNode as Record<string, unknown>).text;
       if (typeof text === 'string') return text.trim();
     }
   }
   return '';
+}
+
+/** Get expression text from a condition model. See {@link getExpressionDisplayText}. */
+function getExpressionText(condition: ConditionShape): string {
+  return getExpressionDisplayText(condition.expression);
 }
 
 /** Convert condition models to display-friendly objects. */
