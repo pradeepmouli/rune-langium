@@ -10,29 +10,21 @@
  * the WorkspacesPerspective panel in Task 6. The click-to-open tests are
  * skipped until the new trigger is wired up.
  *
- * QUARANTINED (both previously-active tests below): this file reliably
- * crashes the vitest worker fork with a V8 "JavaScript heap out of memory"
- * error — reproduced deterministically running this file completely alone
- * (`vitest run test/pages/EditorPage-curated-models.test.tsx`), on the very
- * first `renderEditorPage(...)` call, with 0ms of reported test-assertion
- * time before the crash. That signature (near-zero test time, several
- * seconds of CPU burn, then heap exhaustion) is the fingerprint of an
- * infinite React re-render loop somewhere in the real (unmocked)
- * `ExplorePerspective`/`CodegenProvider`/`AppHeader` tree this file renders
- * via `renderEditorPage`, triggered by this file's specific mock shapes —
- * NOT a data-size or too-many-open-files problem (ruled out: this suite's
- * broader worker-fork OOM crash in CI/local full-suite runs traces back to
- * exactly this one file; sharding and fork-count caps do not help, since
- * even a single-file run of just this file crashes). Ruled out as the
- * trigger: the missing `diagnostics-store.js` and `CenterStackPanel.js`
- * mocks present in the sibling `EditorPage.test.tsx` (which does NOT
- * crash) — adding both to this file did not fix it either.
- *
- * Root-causing the actual infinite-loop line needs a render-count guard
- * instrumented into the suspect components or a live debugger session
- * (`--inspect-brk`), not more log/mock bisection — tracked as follow-up
- * work. Skipped here so this file stops crashing every CI run in the
- * meantime; re-enable once the underlying loop is fixed.
+ * OOM regression note (fixed): this file used to crash the vitest worker
+ * fork with a V8 "JavaScript heap out of memory" error on the first
+ * `renderEditorPage(...)` call. Root cause: the `useStudioToast` mock below
+ * returned a FRESH `showToast: vi.fn()` object on every call, violating the
+ * real hook's identity contract (the real provider returns a
+ * useMemo/useCallback-stable context value). `CodegenProvider`'s
+ * `handlePreviewWorkerFailure` useCallback depends on `showToast`, and its
+ * worker-init useEffect depends on that callback and calls
+ * `setCodegenWorker(new Worker(...))` — so every render produced a new
+ * callback, re-ran the init effect, set new worker state, and re-rendered,
+ * forever. Passive-effect loops never trip React's "Maximum update depth
+ * exceeded" guard, so the loop allocated Workers until heap exhaustion.
+ * The fix hoists the toast spies so `useStudioToast` returns stable
+ * function identities (see the mock below); any hook mock consumed by
+ * effect dependency arrays must preserve referential stability.
  */
 
 import React, { useImperativeHandle } from 'react';
@@ -165,11 +157,22 @@ vi.mock('../../src/services/workspace.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/components/StudioToastProvider.js', () => ({
-  StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
-    React.createElement(React.Fragment, {}, children),
-  useStudioToast: () => ({ showToast: vi.fn(), showLoadingToast: vi.fn(() => 'toast-id'), dismissToast: vi.fn() })
-}));
+vi.mock('../../src/components/StudioToastProvider.js', () => {
+  // IMPORTANT: these spies must be hoisted OUTSIDE the useStudioToast mock body.
+  // The real useStudioToast returns useCallback-stable functions; CodegenProvider
+  // depends on `showToast` identity (useCallback → worker-init useEffect →
+  // setCodegenWorker). Returning a fresh vi.fn() per call re-ran that effect on
+  // every render, creating a new Worker + state update each time — an infinite
+  // passive-effect loop that OOM'd the vitest worker fork.
+  const showToast = vi.fn();
+  const showLoadingToast = vi.fn(() => 'toast-id');
+  const dismissToast = vi.fn();
+  return {
+    StudioToastProvider: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, {}, children),
+    useStudioToast: () => ({ showToast, showLoadingToast, dismissToast })
+  };
+});
 
 import { renderEditorPage } from './editor-page-harness.js';
 
@@ -193,10 +196,7 @@ describe('EditorPage — Curated Models button wiring', () => {
     cleanup();
   });
 
-  // QUARANTINED — see file-level doc comment above. renderEditorPage(...)
-  // here crashes the vitest worker with a heap OOM (infinite re-render
-  // loop), 0ms into the test.
-  it.skip('does not render the curated models dialog on mount', () => {
+  it('does not render the curated models dialog on mount', () => {
     renderEditorPage({
       models: [],
       files: [{ name: 'trade.rosetta', path: 'trade.rosetta', content: 'namespace alpha', dirty: false }]
@@ -205,11 +205,7 @@ describe('EditorPage — Curated Models button wiring', () => {
     expect(screen.queryByTestId('model-loader')).not.toBeInTheDocument();
   });
 
-  // QUARANTINED — see file-level doc comment above. Same crash as the
-  // previous test (root cause reproduces on the first renderEditorPage(...)
-  // call regardless of props, before this test's own deferredExports
-  // content is even relevant).
-  it.skip('mounts the Explore workbench for deferred-only curated bundles', () => {
+  it('mounts the Explore workbench for deferred-only curated bundles', () => {
     renderEditorPage({
       models: [],
       files: [],
