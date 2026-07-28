@@ -258,4 +258,36 @@ describe('deleteWorkspaceFiles — serializes with the save queue (#416 follow-u
     await expect(saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')])).resolves.toBeUndefined();
     await expect(opfsRoot.getDirectoryHandle(id)).rejects.toThrow();
   });
+
+  it('clears the deletion tombstone when the delete itself fails, so the still-active workspace can keep saving', async () => {
+    const id = 'ws-delete-race-4';
+
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'browser-only' })
+    });
+
+    await saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')]);
+
+    // Simulate a real (non-NotFoundError) OPFS failure during delete, e.g.
+    // a permission or quota error — deletion doesn't actually happen.
+    const injectedError = new Error('simulated OPFS permission failure');
+    const originalRemoveEntry = opfsRoot.removeEntry.bind(opfsRoot);
+    opfsRoot.removeEntry = async (name: string, opts?: { recursive?: boolean }) => {
+      if (name === id) {
+        throw injectedError;
+      }
+      return originalRemoveEntry(name, opts);
+    };
+
+    await expect(deleteWorkspaceFiles(id)).rejects.toBe(injectedError);
+    opfsRoot.removeEntry = originalRemoveEntry;
+
+    // The caller (handleDeleteWorkspace) surfaces this error and leaves the
+    // workspace active — a subsequent save must actually persist, not
+    // silently no-op because the tombstone was never cleared.
+    await expect(saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a\ntype X:')])).resolves.toBeUndefined();
+    const content = new TextDecoder().decode(await readBytes(opfsRoot, id, 'files', 'a.rosetta'));
+    expect(content).toBe('namespace a\ntype X:');
+  });
 });

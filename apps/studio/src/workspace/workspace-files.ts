@@ -252,12 +252,17 @@ export async function deleteWorkspaceFiles(workspaceId: string): Promise<void> {
     }
   }
 
-  const root = await deps.getOpfsRoot();
   try {
+    const root = await deps.getOpfsRoot();
     await root.removeEntry(workspaceId, { recursive: true });
   } catch (error) {
-    if (!isNotFoundError(error)) {
-      throw error;
+    if (isNotFoundError(error)) {
+      return;
     }
+    // The delete didn't actually happen — the caller (handleDeleteWorkspace)
+    // surfaces this error and leaves the workspace active, so don't leave
+    // it permanently unable to save: clear the tombstone before rethrowing.
+    deletedWorkspaceIds.delete(workspaceId);
+    throw error;
   }
 }
