@@ -305,7 +305,10 @@ export const NamespaceExplorerPanel = memo(function NamespaceExplorerPanel({
   }, [nodeRepository]);
 
   return (
-    <TooltipProvider>
+    // Explicit 0: the tree's dependency/ref-count rows want instant tooltips
+    // (dense, frequently-hovered UI) — preserve that pre-existing behavior
+    // against the shared TooltipProvider's now-nonzero default (tooltip.tsx).
+    <TooltipProvider delayDuration={0}>
       <div className={`flex flex-col h-full bg-card ${className ?? ''}`} data-testid="namespace-explorer">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b">
