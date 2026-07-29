@@ -70,23 +70,30 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // fill it in via AttributeRow.tsx's data-slot markers.
     await page.locator('[data-slot="add-attribute-btn"]').click();
     const newRow = page.locator('[data-slot="attribute-row"]').last();
+    const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
     await newRow.locator('[data-slot="attribute-name"]').fill('notes');
     // Attribute name commits via a 500ms debounce (AttributeRow's
-    // useAutoSave(commitName, 500)) — no wait needed here: the later
-    // `preReloadSource` toContainText('notes') assertion already polls
-    // until the commit lands, so a fixed wait would only ever add latency,
-    // never correctness.
+    // useAutoSave(commitName, 500)). Drain it — wait for the resulting
+    // save to actually START, then COMPLETE — before moving on, rather
+    // than just letting a later assertion catch the eventual result. If
+    // this debounce fired AFTER the cardinality-set baseline below is
+    // captured but BEFORE that click's own save starts,
+    // waitForPerfLogStart there would return THIS edit's opId instead —
+    // the cardinality save could then still be in flight when the test
+    // reloads, exactly the race waitForPerfLogOpId is meant to prevent,
+    // just one step earlier (found via review — first attempt removed
+    // this wait entirely, reasoning the later toContainText('notes')
+    // assertion already polls for it, which is true for THAT assertion
+    // but not for keeping opId correlation race-free below).
+    const attributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAttributeName);
+    await waitForPerfLogOpId(page, 'workspaceSave', attributeSaveOpId);
     await evidence.checkpoint('attribute-added');
 
     // Set cardinality via CardinalityPicker — trigger + role="option"
-    // preset (commits immediately, no debounce). The opId captured here
-    // (not after the rename below) is for the LAST edit confirmed to reach
-    // useModelSourceSync/files — the rename's finding right below
-    // establishes it does NOT, so it never triggers a workspaceSave to
-    // wait on. Captured BEFORE the click (not after) so waitForPerfLogStart
-    // can detect the NEW opId this specific click causes, distinguishing it
-    // from whatever workspaceSave (if any) the attribute-add above already
-    // triggered.
+    // preset (commits immediately, no debounce). Safe to capture the
+    // baseline right before this click now: the attribute-name edit's own
+    // save is fully drained above, so no unrelated in-flight/pending save
+    // can be mistaken for this one.
     const opIdBeforeCardinalitySet = await lastStartedPerfOpId(page, 'workspaceSave');
     await newRow.locator('[data-slot="cardinality-picker"]').click();
     await page.getByRole('option', { name: '0..*' }).click();
@@ -219,6 +226,12 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     await expect(sourceEditor).toBeVisible({ timeout: 10000 });
     await expect(sourceEditor).toContainText(`type ${TYPE_NAME}:`);
     await expect(sourceEditor).toContainText('notes');
+    // The cardinality-set edit specifically — not just that 'notes' exists,
+    // but that its cardinality change also survived the reload. Previously
+    // unchecked here (only asserted pre-reload's own toContainText('notes')
+    // above ever ran), so a lost cardinality-set save would have silently
+    // passed.
+    await expect(sourceEditor).toContainText('(0..*)');
 
     const sourceText = (await sourceEditor.textContent()) ?? '';
     const declarationMatches = sourceText.match(new RegExp(`type ${TYPE_NAME}:`, 'g')) ?? [];
