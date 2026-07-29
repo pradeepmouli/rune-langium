@@ -56,6 +56,18 @@ export interface JourneyRecord {
 /** Exported so test suites (e.g. fixtures.test.ts) can back up/restore the on-disk manifest around their own writes. */
 export const REPORT_DIR = path.join(process.cwd(), 'test/prod-ux/report');
 
+/**
+ * Upper bound on how long `finish()` waits for in-flight response-body reads.
+ * A stalled or continuously-streamed response body must not block teardown
+ * forever — after this timeout, `finish()` proceeds with whatever's already
+ * recorded (the status-only line, for any entry whose body hadn't finished).
+ */
+const BODY_READ_TIMEOUT_MS = 5000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class EvidenceCollector {
   private readonly startedAt: number;
   private readonly consoleErrors: string[] = [];
@@ -174,7 +186,9 @@ export class EvidenceCollector {
     // Response bodies can still be mid-read when the journey ends (e.g. a slow
     // or streaming error response) — wait for them so failedRequests carries
     // the full body instead of silently falling back to the status-only line.
-    await Promise.all(this.pendingBodyReads);
+    // Bounded: see BODY_READ_TIMEOUT_MS — a body that never completes must
+    // not block this record from ever being written.
+    await Promise.race([Promise.all(this.pendingBodyReads), delay(BODY_READ_TIMEOUT_MS)]);
     return {
       id: this.journeyId,
       title: this.title,
