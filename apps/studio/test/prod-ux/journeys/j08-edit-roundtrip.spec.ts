@@ -229,6 +229,12 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // established pattern) — confirm the type (still under its original
     // name — see the rename finding above) is navigable post-reload.
     await page.reload();
+    // markNavigation() right after reload, not before — evidence.opLog's
+    // dedup key needs everything captured above (captureOpLogSnapshot) to
+    // stay in the PREVIOUS generation, and only entries read from this
+    // point on (the fixture teardown's final recordOpLog call) to fall
+    // into the new one. See EvidenceCollector.markNavigation's doc comment.
+    evidence.markNavigation();
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
     const namespaceSearch = page.getByTestId('namespace-search');

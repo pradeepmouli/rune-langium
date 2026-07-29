@@ -89,6 +89,12 @@ export class EvidenceCollector {
    */
   private readonly accumulatedOpLog: OpLogEntry[] = [];
   private readonly seenOpLogKeys = new Set<string>();
+  /**
+   * Bumped by `markNavigation()`, and folded into `recordOpLog`'s dedup
+   * key — see that method's doc comment for why sourceId/ts/message alone
+   * aren't a safe cross-navigation identity.
+   */
+  private navigationGeneration = 0;
 
   constructor(
     private readonly page: Page,
@@ -204,16 +210,34 @@ export class EvidenceCollector {
       // navigation. It alone isn't enough across a `page.reload()` though:
       // the underlying id counters reset on reload just like
       // performance.now() does, so a post-reload entry can legitimately
-      // reuse a pre-reload entry's sourceId. Keying on sourceId + ts +
-      // message together makes an accidental cross-navigation collision
-      // vanishingly unlikely (all three would have to coincide) while
-      // still catching every SAME-navigation duplicate (a re-read of the
-      // same growing snapshot array) via sourceId alone.
-      const key = `${entry.panel}:${entry.op}:${entry.sourceId}:${entry.ts}:${entry.message}`;
+      // reuse a pre-reload entry's sourceId — and ts/message aren't safe
+      // tie-breakers either: a fixed startup log line firing at a similar
+      // early performance.now() offset on every load can genuinely repeat
+      // sourceId, ts (clamped), AND message across two navigations
+      // (correction: an earlier version of this comment called that
+      // "vanishingly unlikely" — it isn't, for exactly this boilerplate-
+      // message case). navigationGeneration (bumped by `markNavigation`,
+      // which a journey calls right after each `page.reload()`) is the
+      // only thing that's actually guaranteed to differ across
+      // navigations, so it anchors the key instead of relying on
+      // probabilistic collision-avoidance.
+      const key = `${this.navigationGeneration}:${entry.panel}:${entry.op}:${entry.sourceId}:${entry.ts}:${entry.message}`;
       if (this.seenOpLogKeys.has(key)) continue;
       this.seenOpLogKeys.add(key);
       this.accumulatedOpLog.push(entry);
     }
+  }
+
+  /**
+   * Call right after any `page.reload()` (or other navigation that tears
+   * down the page's JS context) — bumps `navigationGeneration` so
+   * `recordOpLog`'s dedup key can't mistake a NEW navigation's entry for a
+   * duplicate of one from BEFORE the reload, even if they happen to share
+   * every other field (sourceId, ts, message all reset/repeat per
+   * navigation in the same way).
+   */
+  markNavigation(): void {
+    this.navigationGeneration += 1;
   }
 
   /**
