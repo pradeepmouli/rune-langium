@@ -131,9 +131,21 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // actually true: the Inspector reflects the typed name; the Source pane
     // and reloaded workspace still key off the ORIGINAL type name.
     await nameInput.fill(RENAMED_TYPE_NAME);
-    // toHaveValue already polls until the debounced commit lands — no fixed
-    // wait needed (and, per the finding above, this edit never reaches
-    // files/useModelSourceSync at all, so there's no save to wait for here).
+    // Correction (review): `fill()` sets the controlled input's OWN value
+    // immediately — `toHaveValue` below reflects that local render state
+    // on the spot, regardless of whether the 500ms debounced
+    // `useAutoSave`/commitName has actually fired yet. It does NOT "poll
+    // until the debounced commit lands", despite what an earlier version
+    // of this comment claimed. And unlike the attribute-name/cardinality
+    // edits above, this commit never reaches files/workspaceSave (per the
+    // finding below) — so there's no perf-log signal to correlate against
+    // either. With no observable effect of the debounced commit available
+    // in a production build (the test-only window.__runeStudioTestApi
+    // hook is compiled out there), an explicit wait for the known
+    // debounce is the only option: without it, the test could proceed
+    // into undo/redo while the rename is still purely local form state,
+    // never actually committed.
+    await page.waitForTimeout(700);
     await expect(nameInput).toHaveValue(RENAMED_TYPE_NAME);
     await evidence.checkpoint('renamed');
 

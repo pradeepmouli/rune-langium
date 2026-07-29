@@ -196,15 +196,20 @@ export class EvidenceCollector {
   recordOpLog(entries: readonly OpLogEntry[]): void {
     const sorted = [...entries].sort((a, b) => a.ts - b.ts);
     for (const entry of sorted) {
-      // `opId` disambiguates entries from perf-log.ts and anything else
-      // that allocates one, but plenty of Output/Activity panel entries
-      // (e.g. CodePreviewPanel logging every codegen diagnostic in a
-      // synchronous loop) don't carry one at all — and browsers can clamp
-      // performance.now()'s resolution, so several distinct opId-less
-      // entries can legitimately share the same `ts`. Without `message`
-      // in the key, (panel, op, '', ts) collides across all of them and
-      // every entry but the first is silently dropped as a "duplicate".
-      const key = `${entry.panel}:${entry.op}:${entry.opId ?? ''}:${entry.ts}:${entry.message}`;
+      // sourceId (op-log.ts's OutputLine.id / ActivityEntry.id / perf-log's
+      // opId — see its doc comment) is the real per-entry identity: unlike
+      // `opId` (often absent) or `message` (two distinct entries — e.g.
+      // two diagnostics with the same code — can share identical text),
+      // it's guaranteed unique among entries produced by the SAME page
+      // navigation. It alone isn't enough across a `page.reload()` though:
+      // the underlying id counters reset on reload just like
+      // performance.now() does, so a post-reload entry can legitimately
+      // reuse a pre-reload entry's sourceId. Keying on sourceId + ts +
+      // message together makes an accidental cross-navigation collision
+      // vanishingly unlikely (all three would have to coincide) while
+      // still catching every SAME-navigation duplicate (a re-read of the
+      // same growing snapshot array) via sourceId alone.
+      const key = `${entry.panel}:${entry.op}:${entry.sourceId}:${entry.ts}:${entry.message}`;
       if (this.seenOpLogKeys.has(key)) continue;
       this.seenOpLogKeys.add(key);
       this.accumulatedOpLog.push(entry);

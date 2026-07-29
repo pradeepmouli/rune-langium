@@ -76,6 +76,8 @@ export interface OpLogEntry {
   durationMs?: number;
   ts: number;
   panel: 'output' | 'activity' | 'perf';
+  /** See op-log.ts's OpLogEntry.sourceId doc comment — the source store's own unique id, used as EvidenceCollector.recordOpLog's real dedup identity. */
+  sourceId: number;
 }
 
 // Playwright's page.evaluate callback type-checks against the DOM lib's own
@@ -118,7 +120,11 @@ export async function readCombinedOpLog(page: Page): Promise<OpLogEntry[]> {
     message: `${entry.op} ${entry.ok ? 'completed' : 'failed'}`,
     durationMs: entry.durationMs,
     ts: entry.ts,
-    panel: 'perf'
+    panel: 'perf',
+    // perf-log.ts's opId is already unique per entry (allocateOpId() at
+    // the start of each operation instance), so it doubles as sourceId
+    // here — no separate counter needed for this panel.
+    sourceId: entry.opId
   }));
   return [...opLog, ...fromPerf].sort((a, b) => a.ts - b.ts);
 }

@@ -21,6 +21,20 @@ export interface OpLogEntry {
    * perf-log.ts entries too, merged in test-side by prod-ux/fixtures.ts.
    */
   panel: 'output' | 'activity' | 'perf';
+  /**
+   * The source store's own unique id for this entry (`OutputLine.id` /
+   * `ActivityEntry.id`, each a monotonic per-store counter — for
+   * `panel: 'perf'` entries, reuse `opId`, which perf-log.ts already
+   * guarantees unique per entry). `(panel, sourceId)` is a genuinely
+   * unique composite key, unlike `(op, opId, ts, message)`: `opId` is
+   * often absent, `ts` can collide (browsers may clamp
+   * `performance.now()`'s resolution), and two DIFFERENT entries can
+   * share identical message text (e.g. two diagnostics with the same
+   * code emitted synchronously). Exists specifically so
+   * `EvidenceCollector.recordOpLog`'s dedup key has a real identity to
+   * key on instead of guessing from content.
+   */
+  sourceId: number;
 }
 
 let _opIdCounter = 0;
@@ -53,7 +67,8 @@ export function getOpLogSnapshot(): OpLogEntry[] {
     message: line.text,
     durationMs: line.durationMs,
     ts: line.ts,
-    panel: 'output'
+    panel: 'output',
+    sourceId: line.id
   }));
 
   const fromActivity: OpLogEntry[] = useActivityStore.getState().entries.map((entry) => ({
@@ -64,7 +79,8 @@ export function getOpLogSnapshot(): OpLogEntry[] {
     message: entry.msg,
     durationMs: entry.durationMs,
     ts: entry.ts,
-    panel: 'activity'
+    panel: 'activity',
+    sourceId: entry.id
   }));
 
   return [...fromOutput, ...fromActivity].sort((a, b) => a.ts - b.ts);
