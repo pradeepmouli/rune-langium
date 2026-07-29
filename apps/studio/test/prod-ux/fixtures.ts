@@ -50,10 +50,17 @@ export const checkout = base.extend<CheckoutFixtures>({
     // BLOCKED explicitly here rather than falling through the PASS/FAIL check.
     const baseVerdict: JourneyRecord['verdict'] =
       testInfo.status === 'skipped' ? 'BLOCKED' : testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
-    const opLog = await readOpLog(page);
-    const degraded = collector.hasSoftFindings || exceedsBudget(opLog);
+    // Merge BEFORE computing the verdict — not after — so a budget
+    // violation captured pre-reload (via captureOpLogSnapshot, currently
+    // J8) is visible to exceedsBudget here too, not just to whatever ends
+    // up in the persisted record. Checking only this fresh post-test read
+    // (which for a journey that reloads only reflects entries from AFTER
+    // the reload) could mark a journey PASS while its own manifest opLog
+    // shows a budget-exceeding entry.
+    collector.recordOpLog(await readCombinedOpLog(page));
+    const degraded = collector.hasSoftFindings || exceedsBudget(collector.opLog);
     const verdict = baseVerdict === 'PASS' && degraded ? 'DEGRADED' : baseVerdict;
-    const record: JourneyRecord = await collector.finish(verdict, opLog);
+    const record: JourneyRecord = await collector.finish(verdict);
     await appendJourneyRecord(record);
   }
 });
@@ -68,7 +75,9 @@ export interface OpLogEntry {
   message: string;
   durationMs?: number;
   ts: number;
-  panel: 'output' | 'activity';
+  panel: 'output' | 'activity' | 'perf';
+  /** See op-log.ts's OpLogEntry.sourceId doc comment — the source store's own unique id, used as EvidenceCollector.recordOpLog's real dedup identity. */
+  sourceId: number;
 }
 
 // Playwright's page.evaluate callback type-checks against the DOM lib's own
@@ -85,6 +94,155 @@ declare global {
 /** Reads window.__runeStudioOpLog.snapshot() from the page — installed by op-log-window-bridge.ts (Task 4). */
 export async function readOpLog(page: Page): Promise<OpLogEntry[]> {
   return page.evaluate(() => window.__runeStudioOpLog?.snapshot() ?? []);
+}
+
+/**
+ * Reads BOTH readOpLog (Activity/Output panels) and readPerfLog
+ * (perf-log.ts — deliberately not panel-rendered) and merges them into one
+ * manifest-shaped list, so a journey's persisted `opLog` still captures
+ * real wall-clock timing for high-frequency ops even though they're kept
+ * out of the user-visible panels.
+ *
+ * `page.reload()` tears down the page's JS context, wiping BOTH stores'
+ * in-memory state — a journey that reloads (J8, J02, J16, ...) must call
+ * `captureOpLogSnapshot` BEFORE reloading if it wants pre-reload entries
+ * to survive into the manifest; reading only after the fact (as the
+ * `checkout` fixture's teardown does, for journeys that never reload) will
+ * see an empty/reset log for anything that happened pre-reload.
+ */
+export async function readCombinedOpLog(page: Page): Promise<OpLogEntry[]> {
+  const [opLog, perfLog] = await Promise.all([readOpLog(page), readPerfLog(page)]);
+  const fromPerf: OpLogEntry[] = perfLog.map((entry) => ({
+    opId: entry.opId,
+    op: entry.op,
+    subject: entry.subject,
+    level: entry.ok ? 'success' : 'error',
+    message: `${entry.op} ${entry.ok ? 'completed' : 'failed'}`,
+    durationMs: entry.durationMs,
+    ts: entry.ts,
+    panel: 'perf',
+    // perf-log.ts's opId is already unique per entry (allocateOpId() at
+    // the start of each operation instance), so it doubles as sourceId
+    // here — no separate counter needed for this panel.
+    sourceId: entry.opId
+  }));
+  return [...opLog, ...fromPerf].sort((a, b) => a.ts - b.ts);
+}
+
+/**
+ * Reads the current combined op-log (see `readCombinedOpLog`) and folds it
+ * into `evidence`'s accumulator (`EvidenceCollector.recordOpLog`), which
+ * survives a subsequent `page.reload()` because it lives in the Node/
+ * Playwright process, not the page. Call this immediately before any
+ * `page.reload()` in a journey that wants its pre-reload op-log/perf-log
+ * entries (e.g. a `workspaceSave`/`reparse` this journey just waited on)
+ * to actually reach the persisted manifest.
+ */
+export async function captureOpLogSnapshot(page: Page, evidence: EvidenceCollector): Promise<void> {
+  evidence.recordOpLog(await readCombinedOpLog(page));
+}
+
+/**
+ * High-frequency operation timing (a debounced reparse, a workspace
+ * autosave) that perf-log.ts deliberately keeps OUT of the Activity/Output
+ * panels — and therefore out of `readOpLog` above too — to avoid flooding
+ * them with a row per keystroke. Mirrors perf-log.ts's PerfLogEntry.
+ */
+export interface PerfLogEntry {
+  op: string;
+  subject?: string;
+  ok: boolean;
+  durationMs: number;
+  ts: number;
+  opId: number;
+}
+
+declare global {
+  interface Window {
+    __runeStudioPerfLog?: {
+      snapshot(): PerfLogEntry[];
+      lastStartedOpId(op: string): number | undefined;
+    };
+  }
+}
+
+/** Reads window.__runeStudioPerfLog.snapshot() from the page — installed by perf-log-window-bridge.ts. */
+export async function readPerfLog(page: Page): Promise<PerfLogEntry[]> {
+  return page.evaluate(() => window.__runeStudioPerfLog?.snapshot() ?? []);
+}
+
+/**
+ * The opId most recently allocated for `op` (perf-log.ts's
+ * `recordPerfStart`, called synchronously the moment the operation
+ * starts, before any await). Read this right after triggering an edit to
+ * learn exactly which operation instance it started, then wait for that
+ * SPECIFIC opId to complete via `waitForPerfLogOpId` — the only race-free
+ * way to correlate a specific edit to a specific completion when multiple
+ * instances of the same op (e.g. several `workspaceSave` calls from rapid
+ * edits) can be in flight and complete out of order. A timestamp- or
+ * count-based wait can't tell an unrelated straggler's completion apart
+ * from the one actually being waited on — found the hard way: an earlier
+ * "wait for quiescence" (no new entry for a short interval) still raced,
+ * because a lull before the NEXT completion looks identical to "nothing
+ * more is coming."
+ */
+export async function lastStartedPerfOpId(page: Page, op: string): Promise<number | undefined> {
+  return page.evaluate((opArg) => window.__runeStudioPerfLog?.lastStartedOpId(opArg), op);
+}
+
+/**
+ * Polls until `lastStartedPerfOpId(page, op)` differs from `previousOpId`,
+ * returning the new opId. Use when the triggering interaction (e.g. a
+ * `.click()`) might resolve before the resulting React state update has
+ * flushed through to the op-starting code, so reading
+ * `lastStartedPerfOpId` immediately afterward could still see the OLD
+ * value.
+ */
+export async function waitForPerfLogStart(
+  page: Page,
+  op: string,
+  previousOpId: number | undefined,
+  options: { timeout?: number } = {}
+): Promise<number> {
+  const { timeout = 5000 } = options;
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const current = await lastStartedPerfOpId(page, op);
+    if (current !== undefined && current !== previousOpId) return current;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out after ${timeout}ms waiting for a new perf-log op="${op}" to start (previous opId=${previousOpId})`
+      );
+    }
+    await page.waitForTimeout(20);
+  }
+}
+
+/**
+ * Polls window.__runeStudioPerfLog for the completed entry with this
+ * EXACT `op` + `opId` (from `lastStartedPerfOpId`/`waitForPerfLogStart`),
+ * returning it (with real `durationMs`) as soon as it appears — instead
+ * of a fixed `waitForTimeout` standing in for an operation with no
+ * otherwise-observable completion signal (a debounced reparse, a
+ * fire-and-forget workspace save).
+ */
+export async function waitForPerfLogOpId(
+  page: Page,
+  op: string,
+  opId: number,
+  options: { timeout?: number } = {}
+): Promise<PerfLogEntry> {
+  const { timeout = 10000 } = options;
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const entries = await readPerfLog(page);
+    const match = entries.find((e) => e.op === op && e.opId === opId);
+    if (match) return match;
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out after ${timeout}ms waiting for perf-log op="${op}" opId=${opId} to complete`);
+    }
+    await page.waitForTimeout(50);
+  }
 }
 
 export const CDM_BUTTON = 'CDM (Common Domain Model)';

@@ -27,6 +27,8 @@ import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from './store/output-store.js';
 import { useActivityStore } from './store/activity-store.js';
+import { allocateOpId } from './services/op-log.js';
+import { recordPerf, recordPerfStart } from './services/perf-log.js';
 import { useInstanceStore } from './store/instance-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
@@ -701,27 +703,89 @@ function AppContent() {
       // LSP doc-set sync runs in LspProvider on the `files` change it observes.
 
       if (restoredWorkspace) {
-        void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
-          reportWorkspaceError('Failed to save workspace changes to browser storage; edits remain in memory', err);
-        });
+        // Fire-and-forget from this caller's perspective (never awaited), so
+        // its real completion time is otherwise invisible to anything
+        // outside this closure. Fires on every editor transaction (up to
+        // once per keystroke), so this is recorded via perf-log — NOT
+        // useActivityStore.addActivity — to avoid flooding the user-visible
+        // Activity panel's 200-entry ring buffer with a row per keystroke
+        // and evicting the meaningful, infrequent entries it's meant to
+        // hold. See perf-log.ts.
+        const saveOpId = allocateOpId();
+        recordPerfStart('workspaceSave', saveOpId);
+        const saveStartedAt = performance.now();
+        void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles)
+          .then(() => {
+            recordPerf({
+              op: 'workspaceSave',
+              ok: true,
+              durationMs: performance.now() - saveStartedAt,
+              ts: performance.now(),
+              opId: saveOpId
+            });
+          })
+          .catch((err) => {
+            recordPerf({
+              op: 'workspaceSave',
+              ok: false,
+              durationMs: performance.now() - saveStartedAt,
+              ts: performance.now(),
+              opId: saveOpId
+            });
+            reportWorkspaceError('Failed to save workspace changes to browser storage; edits remain in memory', err);
+          });
       }
 
-      // Debounced reparse — wait for typing to settle
+      // Debounced reparse — wait for typing to settle. Same observability
+      // rationale as the save above (perf-log, not the Activity panel): the
+      // 500ms debounce plus the parse itself has no externally visible
+      // completion signal otherwise, and fires up to once per keystroke.
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
       editParseTokenRef.current += 1;
       const token = editParseTokenRef.current;
+      const reparseOpId = allocateOpId();
+      recordPerfStart('reparse', reparseOpId);
+      // Captured BEFORE the timer is scheduled, not inside its callback —
+      // the debounce wait is real, user-observed latency (the time from
+      // "stopped typing" to "graph reflects it"), not just the parse call
+      // itself. Measuring only the callback body would systematically
+      // under-report by ~500ms.
+      const reparseStartedAt = performance.now();
       reparseTimerRef.current = setTimeout(async () => {
         try {
           const result = await parseWorkspaceFiles(updatedFiles, {
             hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
           });
+          // Superseded by a newer edit before this one finished — not the
+          // operation that settled, so no perf entry for it.
           if (token !== editParseTokenRef.current) return;
           // Preserve the last valid graph/model while the user is mid-edit on
           // syntactically invalid text. The Problems panel still updates from
           // `parseErrors`, but the semantic workbench no longer flickers into a
           // partial recovery state for transient CodeMirror transactions.
           applyParseResult(result, { preserveSemanticModelOnErrors: true });
+          recordPerf({
+            op: 'reparse',
+            ok: true,
+            durationMs: performance.now() - reparseStartedAt,
+            ts: performance.now(),
+            opId: reparseOpId
+          });
         } catch (error) {
+          // Superseded by a newer edit before this one finished — same
+          // check as the success path above. Without it, a stale reparse
+          // that's already been discarded (a newer one is authoritative,
+          // and may well have succeeded) still recorded itself as a
+          // 'reparse failed' perf entry and surfaced a misleading error
+          // toast for an attempt nothing depends on anymore.
+          if (token !== editParseTokenRef.current) return;
+          recordPerf({
+            op: 'reparse',
+            ok: false,
+            durationMs: performance.now() - reparseStartedAt,
+            ts: performance.now(),
+            opId: reparseOpId
+          });
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
         }
       }, 500);

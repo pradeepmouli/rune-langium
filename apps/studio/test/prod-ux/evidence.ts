@@ -78,6 +78,23 @@ export class EvidenceCollector {
   private seq = 0;
   /** In-flight response-body reads from the `response` handler below — awaited by `finish()` so a body that's still being read when the journey ends isn't silently dropped. */
   private readonly pendingBodyReads: Promise<void>[] = [];
+  /**
+   * Op-log/perf-log entries a journey explicitly captured mid-run (see
+   * fixtures.ts's `captureOpLogSnapshot`) — survives a `page.reload()`
+   * because it lives here (Node/Playwright process), not in the page,
+   * unlike a fresh `readOpLog`/`readPerfLog` call after the fact. Merged
+   * into `finish()`'s final opLog, deduped against it so an entry snapshot
+   * both mid-run and again at teardown (e.g. a journey that never
+   * reloads) isn't double-counted.
+   */
+  private readonly accumulatedOpLog: OpLogEntry[] = [];
+  private readonly seenOpLogKeys = new Set<string>();
+  /**
+   * Bumped by `markNavigation()`, and folded into `recordOpLog`'s dedup
+   * key — see that method's doc comment for why sourceId/ts/message alone
+   * aren't a safe cross-navigation identity.
+   */
+  private navigationGeneration = 0;
 
   constructor(
     private readonly page: Page,
@@ -163,10 +180,71 @@ export class EvidenceCollector {
   }
 
   /**
+   * Folds op-log/perf-log entries into this collector's own accumulator —
+   * call via fixtures.ts's `captureOpLogSnapshot` right before a
+   * `page.reload()` (or anything else that tears down the page's JS
+   * context) so entries produced before that point still reach the
+   * persisted manifest instead of being silently wiped along with the
+   * page's in-memory op-log/perf-log stores.
+   *
+   * Every `entry.ts` here is a `performance.now()` value, which is
+   * relative to the PAGE's own navigation — its origin resets on
+   * `page.reload()`. Entries from one `recordOpLog` call are comparable
+   * among themselves (same page context, sorted here), but NOT
+   * comparable against entries from a DIFFERENT call that happened across
+   * a reload — a small post-reload `ts` is not "earlier" than a large
+   * pre-reload one. Call order is the only ordering signal that survives
+   * a reload (this collector accumulates in the order the journey called
+   * it, which is always chronological test-execution order), so entries
+   * are appended in per-call sorted batches, never globally re-sorted by
+   * `ts` across calls — see `finish()`.
+   */
+  recordOpLog(entries: readonly OpLogEntry[]): void {
+    const sorted = [...entries].sort((a, b) => a.ts - b.ts);
+    for (const entry of sorted) {
+      // sourceId (op-log.ts's OutputLine.id / ActivityEntry.id / perf-log's
+      // opId — see its doc comment) is the real per-entry identity: unlike
+      // `opId` (often absent) or `message` (two distinct entries — e.g.
+      // two diagnostics with the same code — can share identical text),
+      // it's guaranteed unique among entries produced by the SAME page
+      // navigation. It alone isn't enough across a `page.reload()` though:
+      // the underlying id counters reset on reload just like
+      // performance.now() does, so a post-reload entry can legitimately
+      // reuse a pre-reload entry's sourceId — and ts/message aren't safe
+      // tie-breakers either: a fixed startup log line firing at a similar
+      // early performance.now() offset on every load can genuinely repeat
+      // sourceId, ts (clamped), AND message across two navigations
+      // (correction: an earlier version of this comment called that
+      // "vanishingly unlikely" — it isn't, for exactly this boilerplate-
+      // message case). navigationGeneration (bumped by `markNavigation`,
+      // which a journey calls right after each `page.reload()`) is the
+      // only thing that's actually guaranteed to differ across
+      // navigations, so it anchors the key instead of relying on
+      // probabilistic collision-avoidance.
+      const key = `${this.navigationGeneration}:${entry.panel}:${entry.op}:${entry.sourceId}:${entry.ts}:${entry.message}`;
+      if (this.seenOpLogKeys.has(key)) continue;
+      this.seenOpLogKeys.add(key);
+      this.accumulatedOpLog.push(entry);
+    }
+  }
+
+  /**
+   * Call right after any `page.reload()` (or other navigation that tears
+   * down the page's JS context) — bumps `navigationGeneration` so
+   * `recordOpLog`'s dedup key can't mistake a NEW navigation's entry for a
+   * duplicate of one from BEFORE the reload, even if they happen to share
+   * every other field (sourceId, ts, message all reset/repeat per
+   * navigation in the same way).
+   */
+  markNavigation(): void {
+    this.navigationGeneration += 1;
+  }
+
+  /**
    * Records J18's per-root closure-walk results for inclusion in the next
    * `finish()` call. A setter rather than a `finish()` parameter — the
    * generic `checkout` fixture teardown in fixtures.ts always calls
-   * `collector.finish(verdict, opLog)` with no knowledge of `typeClosure`
+   * `collector.finish(verdict)` with no knowledge of `typeClosure`
    * (a J18-specific field); routing it through mutable state here means
    * that teardown call picks it up automatically, with no risk of the
    * double-manifest-append a J18-local `finish()`/`appendJourneyRecord`
@@ -182,13 +260,34 @@ export class EvidenceCollector {
     return this.softFindings.length > 0;
   }
 
-  async finish(verdict: JourneyRecord['verdict'], opLog: OpLogEntry[] = []): Promise<JourneyRecord> {
+  /**
+   * The full op-log accumulated so far via `recordOpLog` — including any
+   * pre-reload entries a journey explicitly captured mid-run. The fixture
+   * teardown reads this (after its own final `recordOpLog` call) to
+   * compute the DEGRADED verdict via `exceedsBudget`, so a budget
+   * violation captured before a reload isn't silently invisible to the
+   * verdict just because it wasn't in the LAST `readCombinedOpLog` call —
+   * `finish()`'s returned record and the verdict passed into it must
+   * agree on the same underlying log.
+   */
+  get opLog(): OpLogEntry[] {
+    return [...this.accumulatedOpLog];
+  }
+
+  async finish(verdict: JourneyRecord['verdict']): Promise<JourneyRecord> {
     // Response bodies can still be mid-read when the journey ends (e.g. a slow
     // or streaming error response) — wait for them so failedRequests carries
     // the full body instead of silently falling back to the status-only line.
     // Bounded: see BODY_READ_TIMEOUT_MS — a body that never completes must
     // not block this record from ever being written.
     await Promise.race([Promise.all(this.pendingBodyReads), delay(BODY_READ_TIMEOUT_MS)]);
+    // No opLog parameter here (unlike an earlier version) — callers must
+    // `recordOpLog` everything BEFORE calling finish(), and use `.opLog`
+    // to compute the verdict from the SAME merged data finish() returns.
+    // Passing a separate fresh-read `opLog` in here (merged only as a
+    // final step) let the verdict be computed from a different, smaller
+    // set than what the manifest ultimately recorded.
+    const mergedOpLog = this.opLog;
     return {
       id: this.journeyId,
       title: this.title,
@@ -199,7 +298,7 @@ export class EvidenceCollector {
       failedRequests: this.failedRequests,
       softFindings: this.softFindings,
       retry: this.retry,
-      opLog,
+      opLog: mergedOpLog,
       typeClosure: this.typeClosureRecords.length > 0 ? this.typeClosureRecords : undefined
     };
   }

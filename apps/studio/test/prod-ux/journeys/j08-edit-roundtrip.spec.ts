@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { checkout as test, expect, authorScratchType } from '../fixtures.js';
+import {
+  checkout as test,
+  expect,
+  authorScratchType,
+  lastStartedPerfOpId,
+  waitForPerfLogStart,
+  waitForPerfLogOpId,
+  captureOpLogSnapshot
+} from '../fixtures.js';
 import type { Page } from '@playwright/test';
 
 const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -60,18 +68,45 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // Add an attribute via the graphical form (DataTypeForm.tsx). A fresh
     // row gets an empty name (makeAttributeAstItem('', 'string', '(1..1)'));
     // fill it in via AttributeRow.tsx's data-slot markers.
+    //
+    // The add-attribute click itself changes the graph and triggers its
+    // OWN asynchronous, effect-driven workspace save (separate from the
+    // name field's later debounced one) — baseline captured BEFORE the
+    // click, not after, so that save is drained (started AND completed)
+    // before the name field is even touched. Getting this ordering wrong
+    // one level up caused the same class of bug the name-edit fix below
+    // addresses: a baseline read AFTER the click can race the click's own
+    // save actually starting, letting a later wait mistake THAT save for
+    // the one it's actually after.
+    const opIdBeforeAddAttribute = await lastStartedPerfOpId(page, 'workspaceSave');
     await page.locator('[data-slot="add-attribute-btn"]').click();
     const newRow = page.locator('[data-slot="attribute-row"]').last();
-    await newRow.locator('[data-slot="attribute-name"]').fill('notes');
+    const addAttributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAddAttribute);
+    await waitForPerfLogOpId(page, 'workspaceSave', addAttributeSaveOpId);
+
     // Attribute name commits via a 500ms debounce (AttributeRow's
-    // useAutoSave(commitName, 500)) — wait it out before checking source.
-    await page.waitForTimeout(700);
+    // useAutoSave(commitName, 500)). Baseline captured here is now safe:
+    // the add-attribute click's own save is fully drained above, so no
+    // unrelated in-flight/pending save can be mistaken for the name
+    // commit's. Drain this one too (start AND complete) — a later
+    // assertion polling for 'notes' would eventually catch the same
+    // result, but only THIS gives the cardinality-set baseline right
+    // after a save-free starting point, which opId correlation needs.
+    const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
+    await newRow.locator('[data-slot="attribute-name"]').fill('notes');
+    const attributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAttributeName);
+    await waitForPerfLogOpId(page, 'workspaceSave', attributeSaveOpId);
     await evidence.checkpoint('attribute-added');
 
     // Set cardinality via CardinalityPicker — trigger + role="option"
-    // preset (commits immediately, no debounce).
+    // preset (commits immediately, no debounce). Safe to capture the
+    // baseline right before this click now: the attribute-name edit's own
+    // save is fully drained above, so no unrelated in-flight/pending save
+    // can be mistaken for this one.
+    const opIdBeforeCardinalitySet = await lastStartedPerfOpId(page, 'workspaceSave');
     await newRow.locator('[data-slot="cardinality-picker"]').click();
     await page.getByRole('option', { name: '0..*' }).click();
+    const targetSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeCardinalitySet);
     await evidence.checkpoint('cardinality-set');
 
     // Rename via TypeHeader's editable name input (500ms debounced
@@ -96,6 +131,20 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // actually true: the Inspector reflects the typed name; the Source pane
     // and reloaded workspace still key off the ORIGINAL type name.
     await nameInput.fill(RENAMED_TYPE_NAME);
+    // Correction (review): `fill()` sets the controlled input's OWN value
+    // immediately — `toHaveValue` below reflects that local render state
+    // on the spot, regardless of whether the 500ms debounced
+    // `useAutoSave`/commitName has actually fired yet. It does NOT "poll
+    // until the debounced commit lands", despite what an earlier version
+    // of this comment claimed. And unlike the attribute-name/cardinality
+    // edits above, this commit never reaches files/workspaceSave (per the
+    // finding below) — so there's no perf-log signal to correlate against
+    // either. With no observable effect of the debounced commit available
+    // in a production build (the test-only window.__runeStudioTestApi
+    // hook is compiled out there), an explicit wait for the known
+    // debounce is the only option: without it, the test could proceed
+    // into undo/redo while the rename is still purely local form state,
+    // never actually committed.
     await page.waitForTimeout(700);
     await expect(nameInput).toHaveValue(RENAMED_TYPE_NAME);
     await evidence.checkpoint('renamed');
@@ -138,9 +187,7 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
 
     // Confirm the Source pane reflects the attribute-add + cardinality-set
     // (the changes that DO propagate — see the rename finding above) before
-    // reloading, and give the OPFS write an extra beat to settle, since the
-    // workspace save that follows the source-sync effect isn't awaited by
-    // the caller (see useModelSourceSync's "fire-and-forget" handler call).
+    // reloading.
     await ensureSourcePaneOpen(page);
     const preReloadSource = page.getByTestId('source-editor').locator('.cm-content');
     await expect(preReloadSource).toContainText(`type ${TYPE_NAME}:`, { timeout: 10000 });
@@ -156,12 +203,38 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
       preReloadDeclarationMatches,
       'expected exactly one type ScratchOrder: declaration (no duplication) after add-attribute + cardinality-set, before reload'
     ).toHaveLength(1);
-    await page.waitForTimeout(1500);
+
+    // The workspace save that follows the source-sync effect is fire-and-
+    // forget from its caller's perspective (never awaited — see
+    // App.tsx's handleFilesChange), so it isn't guaranteed to have landed
+    // in OPFS by the time the reparse-driven assertions above pass. Wait
+    // for the EXACT opId the cardinality-set click started (targetSaveOpId
+    // above) to complete — not "any recent workspaceSave completion" and
+    // not "no new completion for a short interval": both were tried and
+    // both can still race, because an unrelated earlier/later save
+    // completing (or a lull before the next one) is indistinguishable from
+    // "the save this journey cares about has settled" without correlating
+    // to the specific opId that save started under.
+    await waitForPerfLogOpId(page, 'workspaceSave', targetSaveOpId);
+
+    // page.reload() below tears down the page's JS context, wiping
+    // perf-log.ts's in-memory entries (including the workspaceSave/reparse
+    // completions just waited on) along with it — capture them into
+    // evidence's accumulator first so they still reach the manifest; a
+    // fresh readOpLog/readPerfLog call after the reload would see them
+    // gone.
+    await captureOpLogSnapshot(page, evidence);
 
     // Reload: workspace persistence lives in OPFS/IndexedDB (J02's
     // established pattern) — confirm the type (still under its original
     // name — see the rename finding above) is navigable post-reload.
     await page.reload();
+    // markNavigation() right after reload, not before — evidence.opLog's
+    // dedup key needs everything captured above (captureOpLogSnapshot) to
+    // stay in the PREVIOUS generation, and only entries read from this
+    // point on (the fixture teardown's final recordOpLog call) to fall
+    // into the new one. See EvidenceCollector.markNavigation's doc comment.
+    evidence.markNavigation();
     await page.waitForLoadState('domcontentloaded');
     await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
     const namespaceSearch = page.getByTestId('namespace-search');
@@ -180,6 +253,12 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     await expect(sourceEditor).toBeVisible({ timeout: 10000 });
     await expect(sourceEditor).toContainText(`type ${TYPE_NAME}:`);
     await expect(sourceEditor).toContainText('notes');
+    // The cardinality-set edit specifically — not just that 'notes' exists,
+    // but that its cardinality change also survived the reload. Previously
+    // unchecked here (only asserted pre-reload's own toContainText('notes')
+    // above ever ran), so a lost cardinality-set save would have silently
+    // passed.
+    await expect(sourceEditor).toContainText('(0..*)');
 
     const sourceText = (await sourceEditor.textContent()) ?? '';
     const declarationMatches = sourceText.match(new RegExp(`type ${TYPE_NAME}:`, 'g')) ?? [];
