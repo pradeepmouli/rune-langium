@@ -571,7 +571,67 @@ type Quantity:
     expect(nsFile).toMatch(/QuantitySchema/);
   });
 
-  it('path A wins over curatedBundles when both are present (no fetch)', async () => {
+  it('curatedBundles wins over curatedDocs when both are present (fetches the manifest closure)', async () => {
+    // Hardening (2026-07 codegen-400 investigation): curatedDocs reflects
+    // whatever the client's workspace has ALREADY hydrated via on-demand
+    // navigation, which is not guaranteed to cover the full dependency-closed
+    // `namespaces` selection — trusting it unconditionally produced
+    // "unknown-attribute"/"unresolved-enum-reference" diagnostics for
+    // namespaces one `extends`/`import` hop away from what was actually
+    // hydrated. The server now independently fetches + closes the correct
+    // set from the manifest whenever bundle info is available, ignoring a
+    // possibly-incomplete curatedDocs even if both are sent.
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const mod = await import('../lib/curated-fetch.js');
+    const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: 'latest',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: 'artifacts/latest/ns/cdm.base.math.json.gz'
+        }
+      }
+    } as never);
+    const nsSpy = vi.spyOn(mod, 'fetchCuratedNamespace').mockResolvedValue([curatedDoc]);
+    const bundleSpy = vi.spyOn(mod, 'fetchCuratedBundle');
+
+    const res = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        // Deliberately a DIFFERENT (stale) doc than the manifest fetch
+        // returns, so a passing assertion below proves the fetched version
+        // was actually used, not the possibly-incomplete curatedDocs.
+        curatedDocs: [{ uri: 'cdm/base/math.rosetta', serializedModel: '{}' }],
+        curatedBundles: [{ id: 'cdm', version: 'latest' }],
+        namespaces: ['cdm.base.math']
+      })
+    } as never);
+
+    expect(res.status).toBe(200);
+    expect(manifestSpy).toHaveBeenCalledTimes(1);
+    expect(nsSpy).toHaveBeenCalledTimes(1);
+    expect(bundleSpy).not.toHaveBeenCalled();
+    const zip = await JSZip.loadAsync(new Uint8Array(await res.arrayBuffer()));
+    expect(Object.keys(zip.files)).toContain('cdm/base/math.zod.ts');
+    const nsFile = await zip.files['cdm/base/math.zod.ts']!.async('string');
+    expect(nsFile).toMatch(/QuantitySchema/);
+  });
+
+  it('path A fallback: deserializes curatedDocs when no bundle info is supplied', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
@@ -586,15 +646,18 @@ type Quantity:
         files: [],
         target: 'zod',
         curatedDocs: [{ uri: curatedDoc.uri, serializedModel: curatedDoc.serializedModel }],
-        curatedBundles: [{ id: 'cdm', version: 'latest' }], // present, but must be ignored
+        // No curatedBundles — nothing to independently verify/fetch against.
         namespaces: ['cdm.base.math']
       })
     } as never);
 
     expect(res.status).toBe(200);
-    // curatedDocs wins → the fetch path is never taken despite curatedBundles.
     expect(manifestSpy).not.toHaveBeenCalled();
     expect(nsSpy).not.toHaveBeenCalled();
     expect(bundleSpy).not.toHaveBeenCalled();
+    const zip = await JSZip.loadAsync(new Uint8Array(await res.arrayBuffer()));
+    expect(Object.keys(zip.files)).toContain('cdm/base/math.zod.ts');
+    const nsFile = await zip.files['cdm/base/math.zod.ts']!.async('string');
+    expect(nsFile).toMatch(/QuantitySchema/);
   });
 });

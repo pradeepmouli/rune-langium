@@ -1075,11 +1075,23 @@ export async function downloadTargetViaRouter(
   curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
 ): Promise<void> {
   const body: Record<string, unknown> = { files, target, options };
+  // Send BOTH when available — NOT mutually exclusive. The server prefers
+  // curatedBundles (it independently fetches + dependency-closes the
+  // correct namespace set from the manifest) and only falls back to
+  // curatedDocs when no bundle info was supplied at all. curatedDocs alone
+  // can be silently incomplete relative to `namespaces`: it reflects
+  // whatever the client's workspace has ALREADY hydrated via on-demand
+  // navigation, which doesn't necessarily cover the full dependency-closed
+  // selection this request asks for (found via the 2026-07 /api/codegen
+  // 400 investigation — a Download for one curated anchor type produced
+  // "unknown-attribute"/"unresolved-enum-reference" diagnostics for
+  // completely unrelated types, because curatedDocs was missing a few
+  // namespaces one `extends`/`import` hop away that the server trusted as
+  // complete purely because it was non-empty).
   if (curatedDocs.length > 0) {
-    // Path A — server deserializes these, no fetch
     body.curatedDocs = curatedDocs;
-  } else if (curatedBundles.length > 0) {
-    // Path C fallback — server fetches corpus server-to-server
+  }
+  if (curatedBundles.length > 0) {
     body.curatedBundles = curatedBundles;
   }
   // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
