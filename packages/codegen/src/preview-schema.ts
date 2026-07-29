@@ -613,12 +613,12 @@ function buildFunctionSchema(
 
 function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
   addSourceMapEntry(ctx.sourceMap, ctx.path, attr, ctx.sourceUri);
-  const card = attr.card;
   const base = buildBaseField(attr, ctx);
-  const cardinality = getCardinality(card);
-  const { lower } = decodeCardinality(card);
+  const decoded = decodeCardinality(attr.card);
+  const { lower } = decoded;
+  const cardinality = getCardinality(decoded);
 
-  if (isArrayCardinality(card)) {
+  if (isArrayCardinality(decoded)) {
     return {
       path: ctx.path,
       label: ctx.label,
@@ -800,13 +800,12 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
   };
 }
 
-function isArrayCardinality(card: RosettaCardinality): boolean {
-  const { upper } = decodeCardinality(card);
-  return upper === null || upper > 1;
+function isArrayCardinality(decoded: { lower: number; upper: number | null }): boolean {
+  return decoded.upper === null || decoded.upper > 1;
 }
 
-function getCardinality(card: RosettaCardinality): PreviewField['cardinality'] {
-  const { lower, upper } = decodeCardinality(card);
+function getCardinality(decoded: { lower: number; upper: number | null }): PreviewField['cardinality'] {
+  const { lower, upper } = decoded;
   if (lower === 1 && upper === 1) return undefined;
   return {
     min: lower,

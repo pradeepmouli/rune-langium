@@ -1156,7 +1156,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const paramFields = attrs
       .map((attr) => {
         const typeName = this.resolveTypeExprAsTs(attr);
-        const optional = attr.card && attr.card.inf === 0 ? '?' : '';
+        const optional = decodeCardinality(attr.card).lower === 0 ? '?' : '';
         return `  ${attr.name}${optional}: ${typeName};`;
       })
       .join('\n');
