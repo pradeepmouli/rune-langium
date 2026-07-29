@@ -28,7 +28,7 @@ import type {
   PreviewFieldKind,
   PreviewSourceMapEntry
 } from './types.js';
-import { choiceOptionFieldName } from './emit/base-namespace-emitter.js';
+import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
 
 function humanizeLabel(name: string): string {
   return name
@@ -613,16 +613,17 @@ function buildFunctionSchema(
 
 function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
   addSourceMapEntry(ctx.sourceMap, ctx.path, attr, ctx.sourceUri);
-  const card = attr.card;
   const base = buildBaseField(attr, ctx);
-  const cardinality = getCardinality(card);
+  const decoded = decodeCardinality(attr.card);
+  const { lower } = decoded;
+  const cardinality = getCardinality(decoded);
 
-  if (isArrayCardinality(card)) {
+  if (isArrayCardinality(decoded)) {
     return {
       path: ctx.path,
       label: ctx.label,
       kind: 'array',
-      required: card.inf > 0,
+      required: lower > 0,
       cardinality,
       children: [asArrayItem(base, ctx)]
     };
@@ -630,7 +631,7 @@ function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
 
   return {
     ...base,
-    required: card.inf > 0,
+    required: lower > 0,
     ...(cardinality ? { cardinality } : {})
   };
 }
@@ -799,16 +800,15 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
   };
 }
 
-function isArrayCardinality(card: RosettaCardinality): boolean {
-  const upper = card.unbounded ? null : (card.sup ?? card.inf);
-  return upper === null || upper > 1;
+function isArrayCardinality(decoded: { lower: number; upper: number | null }): boolean {
+  return decoded.upper === null || decoded.upper > 1;
 }
 
-function getCardinality(card: RosettaCardinality): PreviewField['cardinality'] {
-  const upper = card.unbounded ? null : (card.sup ?? card.inf);
-  if (card.inf === 1 && upper === 1) return undefined;
+function getCardinality(decoded: { lower: number; upper: number | null }): PreviewField['cardinality'] {
+  const { lower, upper } = decoded;
+  if (lower === 1 && upper === 1) return undefined;
   return {
-    min: card.inf,
+    min: lower,
     max: upper === null ? 'unbounded' : upper
   };
 }
