@@ -193,6 +193,33 @@ describe('hydrateModelDocuments', () => {
     expect(ref?.ref).toBeDefined();
   });
 
+  it('resolves a 3-document reference chain (A -> B -> C) regardless of input order', () => {
+    // Regression for the P1 gap in the original two-pass fix: a chain
+    // spanning 3+ documents needs the reference INSIDE the resolved
+    // sibling to also be resolved, not just the direct reference itself.
+    // A single extra pass resolves A -> B (B is registered, even if
+    // still-unlinked) then freezes it before B -> C gets fixed later in
+    // the same pass, leaving A pointing at a stale, still-unresolved B.
+    const { services } = makeCrossRefFakeServices();
+    const c = JSON.stringify({ self: 'c' });
+    const b = JSON.stringify({ self: 'b', refUri: 'mem:///c' });
+    const a = JSON.stringify({ self: 'a', refUri: 'mem:///b' });
+
+    const results = hydrateModelDocuments(services as never, [
+      { uri: 'mem:///a', json: a },
+      { uri: 'mem:///b', json: b },
+      { uri: 'mem:///c', json: c }
+    ]);
+
+    const aResult = results.find((r) => (r.model as { self: string }).self === 'a')!;
+    const aRef = (aResult.model as { ref?: { ref?: unknown } }).ref;
+    expect(aRef?.ref).toBeDefined();
+    const bNode = aRef!.ref as { self: string; ref?: { ref?: unknown } };
+    expect(bNode.self).toBe('b');
+    expect(bNode.ref?.ref).toBeDefined();
+    expect((bNode.ref!.ref as { self: string }).self).toBe('c');
+  });
+
   it('an entry already registered before the call still gets relinked against this batch', () => {
     const { services } = makeCrossRefFakeServices();
     const base = JSON.stringify({ self: 'base' });

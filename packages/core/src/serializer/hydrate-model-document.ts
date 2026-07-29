@@ -79,21 +79,42 @@ export function hydrateModelDocument(
  * JSON, identical options, only the hydration ORDER differed between a
  * run where the reference resolved and one where it didn't.
  *
- * Fix: two passes. Pass 1 deserializes and registers every document in
- * the batch (accepting that cross-document refs may come back unresolved
- * at this point — every OTHER document in the batch isn't registered yet
- * either). Pass 2 re-deserializes each entry's SAME raw JSON a second
- * time — now that every sibling URI in the batch is registered, any
- * reference targeting another document in this batch resolves correctly
- * — and replaces the pass-1 placeholder in `LangiumDocuments` with the
- * correctly-linked pass-2 result, so any other document's reference that
- * resolves via `documents.getDocument(uri)` also sees the relinked
- * version rather than the stale pass-1 one.
+ * Fix: pass 1 deserializes and registers every document in the batch
+ * (accepting that cross-document refs may come back unresolved at this
+ * point — every OTHER document in the batch isn't registered yet either).
+ * Then a series of re-link ROUNDS repeats: re-deserialize every entry's
+ * SAME raw JSON against the registry state left by the PREVIOUS round,
+ * and only swap the round's results into `LangiumDocuments` once every
+ * entry has been read — never mid-round.
  *
- * Does NOT fix references to documents outside this batch (those need
- * their own two-pass treatment, or must already be registered before
- * this call) — the caller is responsible for including every document
- * whose cross-references need resolving in one `entries` call.
+ * That last point matters for chains spanning 3+ documents (e.g.
+ * `Data.superType` -> `Data.superType` -> `Data`, three levels deep, each
+ * in its own document): a naive single extra pass that re-deserializes
+ * and swaps entries one at a time, in a fixed order, resolves an
+ * early-in-the-pass entry's reference against whatever (possibly
+ * still-unlinked) sibling happens to be registered AT THAT MOMENT, then
+ * freezes it — the sibling's OWN fix later in the same pass never
+ * propagates back, since a `Reference`'s resolved target is a one-shot
+ * object-identity capture, not a live indirection through the registry.
+ * Reading the whole round before writing any of it avoids that: a
+ * reference resolved this round always sees LAST round's fully-swapped-in
+ * state, so each round resolves one additional hop of chain depth.
+ *
+ * Runs exactly `entries.length` rounds unconditionally — the same
+ * argument that bounds Bellman-Ford's shortest-path relaxation to V-1
+ * rounds applies here: one round resolves every reference whose target
+ * chain (within the batch) is at most as many hops deep as rounds run so
+ * far, so `entries.length` rounds covers the worst case of an N-document
+ * batch whose deepest reference chain spans every document. Cheap to run
+ * in full for the realistic batch sizes this hydrates (one curated
+ * namespace closure per fetch, not an unbounded corpus) — correctness
+ * matters more here than shaving redundant rounds off the common case
+ * where most batches only need 1–2.
+ *
+ * Does NOT fix references to documents outside this batch (those must
+ * already be registered, or need their own `hydrateModelDocuments` call)
+ * — the caller is responsible for including every document whose
+ * cross-references need resolving in one `entries` call.
  */
 export function hydrateModelDocuments(
   services: HydrateServices,
@@ -103,26 +124,33 @@ export function hydrateModelDocuments(
   const factory = services.shared.workspace.LangiumDocumentFactory;
   const resolvedUris = entries.map((e) => (typeof e.uri === 'string' ? URI.parse(e.uri) : e.uri));
 
-  // Pass 1 — deserialize + register every document. Skips entries whose
-  // URI is already registered (idempotent, matching hydrateModelDocument),
-  // but still re-links them in pass 2 below: an already-registered
-  // document from a PRIOR call may itself have unresolved references into
-  // THIS batch.
+  // Pass 1 — deserialize + register a placeholder for every not-yet-
+  // registered entry, so the first re-link round below has something to
+  // resolve sibling references against. Skips entries whose URI is
+  // already registered (idempotent, matching hydrateModelDocument), but
+  // the round loop still re-links them: an already-registered document
+  // from a PRIOR call may itself have unresolved references into THIS
+  // batch.
   for (let i = 0; i < entries.length; i++) {
     if (documents.getDocument(resolvedUris[i]!)) continue;
     const model = deserializeRuneModel(services, entries[i]!.json);
     documents.addDocument(factory.fromModel(model, resolvedUris[i]!));
   }
 
-  // Pass 2 — re-deserialize each entry now that every sibling URI in the
-  // batch is registered, then swap the registered document for this
-  // correctly-linked version.
-  return entries.map((entry, i) => {
-    const uri = resolvedUris[i]!;
-    const model = deserializeRuneModel(services, entry.json);
-    const document = factory.fromModel(model, uri);
-    documents.deleteDocument?.(uri);
-    documents.addDocument(document);
-    return { model, document };
-  });
+  let results: Array<{ model: RosettaModel; document: LangiumDocument }> = [];
+  for (let round = 0; round < entries.length; round++) {
+    // Read every entry against the registry state left by the previous
+    // round first; swap all of them in only after the whole round has
+    // been read (see doc comment above for why mid-round swaps break
+    // 3+-document chains).
+    results = entries.map((entry, i) => {
+      const model = deserializeRuneModel(services, entry.json);
+      return { model, document: factory.fromModel(model, resolvedUris[i]!) };
+    });
+    for (let i = 0; i < entries.length; i++) {
+      documents.deleteDocument?.(resolvedUris[i]!);
+      documents.addDocument(results[i]!.document);
+    }
+  }
+  return results;
 }
