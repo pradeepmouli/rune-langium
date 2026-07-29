@@ -68,23 +68,32 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // Add an attribute via the graphical form (DataTypeForm.tsx). A fresh
     // row gets an empty name (makeAttributeAstItem('', 'string', '(1..1)'));
     // fill it in via AttributeRow.tsx's data-slot markers.
+    //
+    // The add-attribute click itself changes the graph and triggers its
+    // OWN asynchronous, effect-driven workspace save (separate from the
+    // name field's later debounced one) — baseline captured BEFORE the
+    // click, not after, so that save is drained (started AND completed)
+    // before the name field is even touched. Getting this ordering wrong
+    // one level up caused the same class of bug the name-edit fix below
+    // addresses: a baseline read AFTER the click can race the click's own
+    // save actually starting, letting a later wait mistake THAT save for
+    // the one it's actually after.
+    const opIdBeforeAddAttribute = await lastStartedPerfOpId(page, 'workspaceSave');
     await page.locator('[data-slot="add-attribute-btn"]').click();
     const newRow = page.locator('[data-slot="attribute-row"]').last();
+    const addAttributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAddAttribute);
+    await waitForPerfLogOpId(page, 'workspaceSave', addAttributeSaveOpId);
+
+    // Attribute name commits via a 500ms debounce (AttributeRow's
+    // useAutoSave(commitName, 500)). Baseline captured here is now safe:
+    // the add-attribute click's own save is fully drained above, so no
+    // unrelated in-flight/pending save can be mistaken for the name
+    // commit's. Drain this one too (start AND complete) — a later
+    // assertion polling for 'notes' would eventually catch the same
+    // result, but only THIS gives the cardinality-set baseline right
+    // after a save-free starting point, which opId correlation needs.
     const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
     await newRow.locator('[data-slot="attribute-name"]').fill('notes');
-    // Attribute name commits via a 500ms debounce (AttributeRow's
-    // useAutoSave(commitName, 500)). Drain it — wait for the resulting
-    // save to actually START, then COMPLETE — before moving on, rather
-    // than just letting a later assertion catch the eventual result. If
-    // this debounce fired AFTER the cardinality-set baseline below is
-    // captured but BEFORE that click's own save starts,
-    // waitForPerfLogStart there would return THIS edit's opId instead —
-    // the cardinality save could then still be in flight when the test
-    // reloads, exactly the race waitForPerfLogOpId is meant to prevent,
-    // just one step earlier (found via review — first attempt removed
-    // this wait entirely, reasoning the later toContainText('notes')
-    // assertion already polls for it, which is true for THAT assertion
-    // but not for keeping opId correlation race-free below).
     const attributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAttributeName);
     await waitForPerfLogOpId(page, 'workspaceSave', attributeSaveOpId);
     await evidence.checkpoint('attribute-added');

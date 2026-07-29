@@ -180,9 +180,22 @@ export class EvidenceCollector {
    * context) so entries produced before that point still reach the
    * persisted manifest instead of being silently wiped along with the
    * page's in-memory op-log/perf-log stores.
+   *
+   * Every `entry.ts` here is a `performance.now()` value, which is
+   * relative to the PAGE's own navigation — its origin resets on
+   * `page.reload()`. Entries from one `recordOpLog` call are comparable
+   * among themselves (same page context, sorted here), but NOT
+   * comparable against entries from a DIFFERENT call that happened across
+   * a reload — a small post-reload `ts` is not "earlier" than a large
+   * pre-reload one. Call order is the only ordering signal that survives
+   * a reload (this collector accumulates in the order the journey called
+   * it, which is always chronological test-execution order), so entries
+   * are appended in per-call sorted batches, never globally re-sorted by
+   * `ts` across calls — see `finish()`.
    */
   recordOpLog(entries: readonly OpLogEntry[]): void {
-    for (const entry of entries) {
+    const sorted = [...entries].sort((a, b) => a.ts - b.ts);
+    for (const entry of sorted) {
       const key = `${entry.panel}:${entry.op}:${entry.opId ?? ''}:${entry.ts}`;
       if (this.seenOpLogKeys.has(key)) continue;
       this.seenOpLogKeys.add(key);
@@ -220,8 +233,12 @@ export class EvidenceCollector {
     // Fold in anything explicitly captured mid-run (recordOpLog) that
     // `opLog` (a fresh post-test read) wouldn't otherwise carry — see
     // recordOpLog's doc comment for why that can differ after a reload.
+    // This call always happens last, chronologically after any mid-run
+    // captureOpLogSnapshot calls, so appending here (not re-sorting the
+    // whole accumulator by `ts`, which isn't comparable across a reload)
+    // keeps pre-reload segments before this final post-test one.
     this.recordOpLog(opLog);
-    const mergedOpLog = [...this.accumulatedOpLog].sort((a, b) => a.ts - b.ts);
+    const mergedOpLog = [...this.accumulatedOpLog];
     return {
       id: this.journeyId,
       title: this.title,
