@@ -70,10 +70,15 @@ interface CodegenRequestBody {
    */
   curatedBundles?: Array<{ id: string; version: string }>;
   /**
-   * Pre-loaded serialized curated docs (path A). When present, the server
-   * deserializes these directly and performs NO manifest/namespace fetch —
-   * the studio passes the closure it already loaded via /api/parse. Mutually
-   * exclusive with curatedBundles; if both are sent, curatedDocs wins.
+   * Pre-loaded serialized curated docs (path A). Used only when
+   * `curatedBundles` is absent — see `loadAllDocuments`. When present
+   * without `curatedBundles`, the server deserializes these directly and
+   * performs NO manifest/namespace fetch. NOT trusted as complete when
+   * `curatedBundles` is also present: the studio's on-demand hydration can
+   * leave this set missing namespaces the dependency-closed `namespaces`
+   * selection actually needs, so `curatedBundles`'s independently-fetched
+   * closure takes priority whenever both are sent (2026-07 codegen-400
+   * investigation).
    */
   curatedDocs?: Array<{ uri: string; serializedModel: string }>;
   /**
@@ -244,24 +249,20 @@ async function loadAllDocuments(
     }
   }
 
-  // Path A — client pre-loaded the curated docs via /api/parse and sends them
-  // in the request. Deserialize each entry directly; skip all manifest/
-  // namespace fetching entirely. curatedDocs wins when both are present.
-  if (curatedDocs.length > 0) {
-    for (const cd of curatedDocs) {
-      const { document } = hydrateModelDocument(
-        { RuneDsl, shared: RuneDsl.shared },
-        URI.parse(`curated:///${cd.uri}`),
-        cd.serializedModel,
-        { register: 'idempotent' }
-      );
-      docs.push(document);
-    }
-  } else {
-    // Path C — fetch only the import closure via the manifest. This avoids
-    // loading the whole serialized workspace artifact (which OOMs on CDM at
-    // 128 MiB). The manifest records the dependency graph so we walk it here
-    // without fetching+parsing any documents upfront.
+  // Path C — fetch only the import closure via the manifest. Preferred
+  // whenever bundle info is available, even if curatedDocs was ALSO sent:
+  // curatedDocs reflects whatever the client's workspace happens to have
+  // ALREADY hydrated via on-demand navigation, which is not guaranteed to
+  // cover the full dependency-closed `namespaces` selection this request
+  // asks for. Trusting an incomplete curatedDocs set silently produced
+  // "unknown-attribute"/"unresolved-enum-reference" diagnostics for
+  // namespaces one `extends`/`import` hop away from what was actually
+  // hydrated — diagnostics that looked like real corpus/codegen bugs but
+  // were actually missing input (2026-07 codegen-400 investigation). This
+  // avoids loading the whole serialized workspace artifact (which OOMs on
+  // CDM at 128 MiB) — the manifest records the dependency graph so we walk
+  // it here without fetching+parsing any documents upfront.
+  if (curatedBundles.length > 0) {
     for (const bundle of curatedBundles) {
       try {
         const manifest = await fetchCuratedManifest(bundle.id, bundle.version, curatedFetcher);
@@ -322,6 +323,19 @@ async function loadAllDocuments(
         }
         throw err;
       }
+    }
+  } else if (curatedDocs.length > 0) {
+    // Path A fallback — no bundle info was supplied at all, so there's no
+    // manifest to independently verify/backfill against. Deserialize
+    // exactly what the client sent, same as before this hardening.
+    for (const cd of curatedDocs) {
+      const { document } = hydrateModelDocument(
+        { RuneDsl, shared: RuneDsl.shared },
+        URI.parse(`curated:///${cd.uri}`),
+        cd.serializedModel,
+        { register: 'idempotent' }
+      );
+      docs.push(document);
     }
   }
 

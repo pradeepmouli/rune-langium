@@ -229,7 +229,13 @@ describe('downloadTargetViaRouter', () => {
     expect(body.curatedDocs).toBeUndefined();
   });
 
-  it('sends curatedDocs (path A) when curated serialized models are loaded', async () => {
+  it('sends BOTH curatedDocs and curatedBundles when curated serialized models are loaded', async () => {
+    // Hardening (2026-07 codegen-400 investigation): curatedDocs alone can
+    // be silently incomplete relative to the dependency-closed `namespaces`
+    // selection (on-demand hydration lagging what the selection actually
+    // needs). curatedBundles is now sent alongside it whenever available so
+    // the server can independently fetch + close the correct set from the
+    // manifest rather than trusting curatedDocs unconditionally.
     const fetchMock = mockFetch(
       () =>
         new Response('x', {
@@ -256,7 +262,7 @@ describe('downloadTargetViaRouter', () => {
     const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.curatedDocs).toHaveLength(1);
     expect(body.curatedDocs[0].uri).toBe('cdm/base/math.rosetta');
-    // path A: curatedBundles omitted when curatedDocs present
-    expect(body.curatedBundles).toBeUndefined();
+    expect(body.curatedBundles).toHaveLength(1);
+    expect(body.curatedBundles[0]).toEqual({ id: 'cdm', version: 'latest' });
   });
 });
