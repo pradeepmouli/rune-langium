@@ -81,18 +81,23 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // entirely — no `files` change, so `handleFilesChange` never fires.
     // The row is still visible locally because the Inspector's list comes
     // straight from `useFieldArray`'s store-backed `fields`, independent of
-    // the source round-trip. So the baseline for the FIRST real save is
-    // captured before the click (nothing intervenes between the click and
-    // the name fill below), not after it.
-    const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
+    // the source round-trip — so the click itself needs no baseline/wait at
+    // all.
     await page.locator('[data-slot="add-attribute-btn"]').click();
     const newRow = page.locator('[data-slot="attribute-row"]').last();
 
     // Attribute name commits via a 500ms debounce (AttributeRow's
     // useAutoSave(commitName, 500)) — the first edit in this sequence that
-    // actually reaches `files`/workspaceSave. Drain it (start AND
-    // complete) so the cardinality-set baseline below starts from a
-    // save-free point, which opId correlation needs.
+    // actually reaches `files`/workspaceSave. Baseline captured immediately
+    // before the fill (review finding, PR #430): capturing it any earlier
+    // (e.g. before the click above) widens the window during which some
+    // unrelated save could start and be mistaken for this one, even though
+    // nothing is expected to fire in that window — the same "don't rely on
+    // what's merely expected" rigor that motivated opId correlation in the
+    // first place. Drain it (start AND complete) so the cardinality-set
+    // baseline below starts from a save-free point, which opId correlation
+    // needs.
+    const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
     await newRow.locator('[data-slot="attribute-name"]').fill('notes');
     const attributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAttributeName);
     await waitForPerfLogOpId(page, 'workspaceSave', attributeSaveOpId);
