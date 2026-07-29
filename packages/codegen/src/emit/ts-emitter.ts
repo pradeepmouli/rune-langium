@@ -799,7 +799,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       const isOpt = TsNamespaceEmitter.isOptionalCardinality(card);
 
       if (isArray) {
-        const lower = card.inf;
+        const { lower } = decodeCardinality(card);
         if (lower > 0) {
           lines.push(`  if (!Array.isArray((${obj} as Record<string, unknown>).${attr.name})) return false;`);
         } else {

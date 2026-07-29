@@ -12,9 +12,9 @@
  * introduced by the W1/W2 work.
  */
 
-import { describe, it, expect } from 'vitest';
-import { parseWorkspace, isData, type Data } from '@rune-langium/core';
-import { buildAttributeTypesMap } from '../../src/emit/base-namespace-emitter.js';
+import { describe, it, expect, vi } from 'vitest';
+import { parseWorkspace, isData, type Data, type RosettaCardinality } from '@rune-langium/core';
+import { buildAttributeTypesMap, decodeCardinality } from '../../src/emit/base-namespace-emitter.js';
 
 async function parseSingleNamespaceDataByName(source: string): Promise<Map<string, Data>> {
   const [result] = await parseWorkspace([{ uri: 'inmemory:///model.rosetta', content: source }]);
@@ -202,5 +202,30 @@ type Leaf extends Asset:
     const { dataByName } = await parseSingleNamespaceDataAndChoiceByName(source);
     const leaf = dataByName.get('Leaf')!;
     expect(() => buildAttributeTypesMap(leaf)).not.toThrow();
+  });
+});
+
+describe('decodeCardinality', () => {
+  it('decodes a normal bounded cardinality', () => {
+    const card = { inf: 0, sup: 1, unbounded: false } as RosettaCardinality;
+    expect(decodeCardinality(card)).toEqual({ lower: 0, upper: 1 });
+  });
+
+  it('decodes an unbounded cardinality', () => {
+    const card = { inf: 1, unbounded: true } as RosettaCardinality;
+    expect(decodeCardinality(card)).toEqual({ lower: 1, upper: null });
+  });
+
+  // Regression: a deserialized curated document (hydrateModelDocument's JSON
+  // round-trip) can carry an attribute whose cardinality didn't survive the
+  // round-trip. Before this fix, `card.inf` on `undefined` crashed the ENTIRE
+  // multi-namespace generation with an unhandled TypeError (2026-07
+  // codegen-500 investigation) instead of degrading the one affected field.
+  it('defaults to (0..*) instead of throwing when cardinality is missing', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(() => decodeCardinality(undefined)).not.toThrow();
+    expect(decodeCardinality(undefined)).toEqual({ lower: 0, upper: null });
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

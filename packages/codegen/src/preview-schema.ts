@@ -28,7 +28,7 @@ import type {
   PreviewFieldKind,
   PreviewSourceMapEntry
 } from './types.js';
-import { choiceOptionFieldName } from './emit/base-namespace-emitter.js';
+import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
 
 function humanizeLabel(name: string): string {
   return name
@@ -616,13 +616,14 @@ function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
   const card = attr.card;
   const base = buildBaseField(attr, ctx);
   const cardinality = getCardinality(card);
+  const { lower } = decodeCardinality(card);
 
   if (isArrayCardinality(card)) {
     return {
       path: ctx.path,
       label: ctx.label,
       kind: 'array',
-      required: card.inf > 0,
+      required: lower > 0,
       cardinality,
       children: [asArrayItem(base, ctx)]
     };
@@ -630,7 +631,7 @@ function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
 
   return {
     ...base,
-    required: card.inf > 0,
+    required: lower > 0,
     ...(cardinality ? { cardinality } : {})
   };
 }
@@ -800,15 +801,15 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
 }
 
 function isArrayCardinality(card: RosettaCardinality): boolean {
-  const upper = card.unbounded ? null : (card.sup ?? card.inf);
+  const { upper } = decodeCardinality(card);
   return upper === null || upper > 1;
 }
 
 function getCardinality(card: RosettaCardinality): PreviewField['cardinality'] {
-  const upper = card.unbounded ? null : (card.sup ?? card.inf);
-  if (card.inf === 1 && upper === 1) return undefined;
+  const { lower, upper } = decodeCardinality(card);
+  if (lower === 1 && upper === 1) return undefined;
   return {
-    min: card.inf,
+    min: lower,
     max: upper === null ? 'unbounded' : upper
   };
 }
