@@ -772,6 +772,13 @@ function AppContent() {
             opId: reparseOpId
           });
         } catch (error) {
+          // Superseded by a newer edit before this one finished — same
+          // check as the success path above. Without it, a stale reparse
+          // that's already been discarded (a newer one is authoritative,
+          // and may well have succeeded) still recorded itself as a
+          // 'reparse failed' perf entry and surfaced a misleading error
+          // toast for an attempt nothing depends on anymore.
+          if (token !== editParseTokenRef.current) return;
           recordPerf({
             op: 'reparse',
             ok: false,

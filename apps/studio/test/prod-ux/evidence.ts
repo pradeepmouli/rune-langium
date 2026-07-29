@@ -196,7 +196,15 @@ export class EvidenceCollector {
   recordOpLog(entries: readonly OpLogEntry[]): void {
     const sorted = [...entries].sort((a, b) => a.ts - b.ts);
     for (const entry of sorted) {
-      const key = `${entry.panel}:${entry.op}:${entry.opId ?? ''}:${entry.ts}`;
+      // `opId` disambiguates entries from perf-log.ts and anything else
+      // that allocates one, but plenty of Output/Activity panel entries
+      // (e.g. CodePreviewPanel logging every codegen diagnostic in a
+      // synchronous loop) don't carry one at all — and browsers can clamp
+      // performance.now()'s resolution, so several distinct opId-less
+      // entries can legitimately share the same `ts`. Without `message`
+      // in the key, (panel, op, '', ts) collides across all of them and
+      // every entry but the first is silently dropped as a "duplicate".
+      const key = `${entry.panel}:${entry.op}:${entry.opId ?? ''}:${entry.ts}:${entry.message}`;
       if (this.seenOpLogKeys.has(key)) continue;
       this.seenOpLogKeys.add(key);
       this.accumulatedOpLog.push(entry);
