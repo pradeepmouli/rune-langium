@@ -28,8 +28,24 @@ export abstract class BaseNamespaceEmitter {
 // Shared emitter helpers — co-located with the base class; imported by subclasses.
 // ---------------------------------------------------------------------------
 
-/** Decode a RosettaCardinality into lower/upper bounds (`upper === null` = unbounded). */
-export function decodeCardinality(card: RosettaCardinality): { lower: number; upper: number | null } {
+/**
+ * Decode a RosettaCardinality into lower/upper bounds (`upper === null` = unbounded).
+ *
+ * `card` is typed as required, but a deserialized curated document (built
+ * via `hydrateModelDocument`'s JSON round-trip rather than a live Langium
+ * parse+link) can carry an attribute whose cardinality field didn't survive
+ * that round-trip. One malformed attribute crashing the ENTIRE multi-
+ * namespace generation (this ran inside a loop over every Data type in
+ * every requested namespace) is strictly worse than degrading that one
+ * field to the most permissive cardinality and letting everything else
+ * emit correctly — so this defends against `card` being missing rather
+ * than throwing (found via the 2026-07 codegen-400/500 investigation).
+ */
+export function decodeCardinality(card: RosettaCardinality | undefined): { lower: number; upper: number | null } {
+  if (!card) {
+    console.warn('[codegen] decodeCardinality: attribute had no cardinality — defaulting to (0..*)');
+    return { lower: 0, upper: null };
+  }
   const lower = card.inf;
   const upper = card.unbounded ? null : (card.sup ?? lower);
   return { lower, upper };
