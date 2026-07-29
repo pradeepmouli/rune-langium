@@ -191,6 +191,37 @@ function toRosettaUri(name: string, URI: typeof import('langium').URI): import('
 }
 
 /**
+ * Convert a curated-doc key (`${bundleId}/${docPath}` — the format every
+ * `cd.uri`/`curatedDoc.uri` in this file is always in) to the EXACT URI
+ * scheme the curated-mirror bakes into serialized cross-document
+ * references: `file:///[${bundleId}]/${docPath}`.
+ *
+ * `apps/curated-mirror-worker/src/namespace-graph.ts::refUriToCuratedKey`
+ * is the inverse of this conversion — it's how the manifest's per-
+ * namespace `deps` graph gets built from the SAME embedded refs, and its
+ * own doc comment documents the exact scheme:
+ * `file:///%5Bcdm%5D/<doc.path>#/elements@0` (URL-encoded `file:///[cdm]/...`).
+ *
+ * Registering hydrated documents under any OTHER scheme (this code
+ * previously used `curated:///${cd.uri}`) means a cross-document
+ * reference can never resolve, regardless of hydration order — Langium's
+ * JsonSerializer resolves `.ref` by looking up the reference's embedded
+ * target URI (fixed at serialization time, unrelated to whatever scheme
+ * the consumer later registers documents under) in `LangiumDocuments`.
+ * Confirmed live: an unresolved `Data.superType.ref`'s error was literally
+ * "Could not find document for URI: file:///%5Bcdm%5D/.../event-workflow-
+ * type.rosetta..." while this file registered that same document under
+ * `curated:/cdm/.../event-workflow-type.rosetta` — same document, wrong
+ * scheme, so the lookup always missed (2026-07 cross-document reference
+ * resolution investigation).
+ */
+function curatedKeyToUri(key: string, URI: typeof import('langium').URI): import('langium').URI {
+  const slash = key.indexOf('/');
+  if (slash < 0) return URI.parse(`file:///[${key}]`);
+  return URI.parse(`file:///[${key.slice(0, slash)}]/${key.slice(slash + 1)}`);
+}
+
+/**
  * Combined loader for user-authored files + curated-bundle documents.
  * Hydrates both into a single `LangiumDocument[]` that `generate()`
  * can consume.
@@ -215,7 +246,7 @@ async function loadAllDocuments(
   requestedNamespaces: readonly string[],
   curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }>
 ): Promise<{ docs: import('langium').LangiumDocument[]; curatedError?: Response }> {
-  const [{ createRuneDslServices, hydrateModelDocument }, { EmptyFileSystem, URI }] = await Promise.all([
+  const [{ createRuneDslServices, hydrateModelDocuments }, { EmptyFileSystem, URI }] = await Promise.all([
     import('@rune-langium/core'),
     import('langium')
   ]);
@@ -247,16 +278,20 @@ async function loadAllDocuments(
   // Path A — client pre-loaded the curated docs via /api/parse and sends them
   // in the request. Deserialize each entry directly; skip all manifest/
   // namespace fetching entirely. curatedDocs wins when both are present.
+  //
+  // hydrateModelDocuments (batch, not hydrateModelDocument per-doc) is
+  // required here: Langium's JsonSerializer resolves a cross-document
+  // reference via a one-shot lookup against whatever's ALREADY registered
+  // at deserialize time, so hydrating one document at a time permanently
+  // bakes in an unresolved `.ref` for anything pointing at a sibling
+  // document later in the list. See hydrateModelDocuments' own doc comment
+  // (2026-07 cross-document reference resolution investigation).
   if (curatedDocs.length > 0) {
-    for (const cd of curatedDocs) {
-      const { document } = hydrateModelDocument(
-        { RuneDsl, shared: RuneDsl.shared },
-        URI.parse(`curated:///${cd.uri}`),
-        cd.serializedModel,
-        { register: 'idempotent' }
-      );
-      docs.push(document);
-    }
+    const results = hydrateModelDocuments(
+      { RuneDsl, shared: RuneDsl.shared },
+      curatedDocs.map((cd) => ({ uri: curatedKeyToUri(cd.uri, URI), json: cd.serializedModel }))
+    );
+    docs.push(...results.map((r) => r.document));
   } else {
     // Path C — fetch only the import closure via the manifest. This avoids
     // loading the whole serialized workspace artifact (which OOMs on CDM at
@@ -287,6 +322,14 @@ async function loadAllDocuments(
         const closure = seeds.size > 0 ? closeNamespacesFromManifest(seeds, nsGraph) : new Set(Object.keys(nsGraph));
         const closureNs = [...closure].filter((ns) => nsGraph[ns]);
         const FETCH_CONCURRENCY = 8;
+        // Fetch windows stay concurrent for network efficiency, but ALL
+        // fetched entries are hydrated together in one batch AFTER every
+        // fetch completes — cross-namespace references need every sibling
+        // in the closure registered before any of them is deserialized for
+        // the final time (see hydrateModelDocuments' own doc comment).
+        // Hydrating window-by-window would reintroduce the same
+        // order-dependent bug this is fixing, just at a coarser grain.
+        const fetchedEntries: Array<{ uri: import('langium').URI; json: string }> = [];
         for (let i = 0; i < closureNs.length; i += FETCH_CONCURRENCY) {
           const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
           const fetched = await Promise.all(
@@ -294,16 +337,12 @@ async function loadAllDocuments(
           );
           for (const nsDocs of fetched) {
             for (const cd of nsDocs) {
-              const { document } = hydrateModelDocument(
-                { RuneDsl, shared: RuneDsl.shared },
-                URI.parse(`curated:///${cd.uri}`),
-                cd.serializedModel,
-                { register: 'idempotent' }
-              );
-              docs.push(document);
+              fetchedEntries.push({ uri: curatedKeyToUri(cd.uri, URI), json: cd.serializedModel });
             }
           }
         }
+        const results = hydrateModelDocuments({ RuneDsl, shared: RuneDsl.shared }, fetchedEntries);
+        docs.push(...results.map((r) => r.document));
       } catch (err) {
         if (err instanceof CuratedBundleUnavailableError) {
           return {
@@ -325,10 +364,12 @@ async function loadAllDocuments(
     }
   }
 
-  // Build only the user-file docs; the curated docs are pre-built and
-  // their cross-references resolved at serialization time on the mirror.
-  // Builder.build on a deserialized doc would try to re-link references
-  // and fail since the Langium service hasn't indexed them.
+  // Build only the user-file docs. Curated docs are hydrated (not
+  // Langium-linked): hydrateModelDocuments already resolves their
+  // cross-document references via its own two-pass registration (see its
+  // doc comment) — Builder.build on a hydrated doc would try to re-link
+  // references through the normal Linker/ScopeProvider path and fail
+  // since the Langium service hasn't indexed them that way.
   if (files.length > 0) {
     const userDocs = docs.slice(0, files.length);
     await builder.build(userDocs, { validation: false });

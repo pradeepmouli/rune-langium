@@ -11,6 +11,7 @@ export interface HydrateServices {
       LangiumDocuments: {
         getDocument(uri: URI): LangiumDocument | undefined;
         addDocument(document: LangiumDocument): void;
+        deleteDocument?(uri: URI): LangiumDocument | undefined;
       };
     };
   };
@@ -57,4 +58,111 @@ export function hydrateModelDocument(
     documents.addDocument(document);
   }
   return { model, document };
+}
+
+/**
+ * Hydrate a BATCH of serialized documents together, resolving
+ * cross-document references correctly regardless of input order.
+ *
+ * Langium's `JsonSerializer.deserialize()` resolves a cross-document
+ * reference (one whose serialized `$ref` names another document's URI)
+ * via a ONE-SHOT synchronous lookup against whatever documents are
+ * ALREADY registered in `LangiumDocuments` at that exact moment — not a
+ * live/lazy getter re-checked later. Hydrating documents one at a time via
+ * `hydrateModelDocument` in whatever order a fetch/BFS happened to produce
+ * permanently bakes in an unresolved reference (`.ref === undefined`) for
+ * any reference whose target document hadn't been registered yet — e.g. a
+ * `Data.superType` pointing at a type in a namespace fetched later in the
+ * same batch, or two files in the same namespace processed out of order.
+ * Found and isolated via a minimal, order-controlled repro (2026-07
+ * codegen cross-document resolution investigation): identical serialized
+ * JSON, identical options, only the hydration ORDER differed between a
+ * run where the reference resolved and one where it didn't.
+ *
+ * Fix: pass 1 deserializes and registers every document in the batch
+ * (accepting that cross-document refs may come back unresolved at this
+ * point — every OTHER document in the batch isn't registered yet either).
+ * Then a series of re-link ROUNDS repeats: re-deserialize every entry's
+ * SAME raw JSON against the registry state left by the PREVIOUS round,
+ * and only swap the round's results into `LangiumDocuments` once every
+ * entry has been read — never mid-round.
+ *
+ * That last point matters for chains spanning 3+ documents (e.g.
+ * `Data.superType` -> `Data.superType` -> `Data`, three levels deep, each
+ * in its own document): a naive single extra pass that re-deserializes
+ * and swaps entries one at a time, in a fixed order, resolves an
+ * early-in-the-pass entry's reference against whatever (possibly
+ * still-unlinked) sibling happens to be registered AT THAT MOMENT, then
+ * freezes it — the sibling's OWN fix later in the same pass never
+ * propagates back, since a `Reference`'s resolved target is a one-shot
+ * object-identity capture, not a live indirection through the registry.
+ * Reading the whole round before writing any of it avoids that: a
+ * reference resolved this round always sees LAST round's fully-swapped-in
+ * state, so each round resolves one additional hop of chain depth.
+ *
+ * The same argument that bounds Bellman-Ford's shortest-path relaxation to
+ * V-1 rounds applies here: one round resolves every reference whose target
+ * chain (within the batch) is at most as many hops deep as rounds run so
+ * far, so `entries.length` rounds would cover the true worst case of an
+ * N-document batch whose deepest reference chain spans every document.
+ * Running the full `entries.length` rounds unconditionally is O(N²)
+ * deserializations, though, which is too expensive for the "no namespace
+ * seeds -> load the whole bundle" request this also serves (a few hundred
+ * curated documents would mean tens of thousands of re-deserializations).
+ * Real Rune/Rosetta `extends`/attribute-type reference chains are shallow
+ * in practice (a handful of hops at most), so rounds are capped at
+ * `MAX_RELINK_ROUNDS` instead — enough for any realistic corpus, trading
+ * away correctness only for a batch with a pathologically long linear
+ * reference chain approaching that cap, which does not occur in the real
+ * curated corpus this hydrates. If that assumption ever breaks, the right
+ * fix is a proper incremental worklist (only re-deserialize entries whose
+ * dependencies actually changed since they were last built) rather than
+ * raising this constant.
+ *
+ * Does NOT fix references to documents outside this batch (those must
+ * already be registered, or need their own `hydrateModelDocuments` call)
+ * — the caller is responsible for including every document whose
+ * cross-references need resolving in one `entries` call.
+ */
+/** See the "Real Rune/Rosetta ... reference chains are shallow" note in {@link hydrateModelDocuments}'s doc comment. */
+const MAX_RELINK_ROUNDS = 8;
+
+export function hydrateModelDocuments(
+  services: HydrateServices,
+  entries: ReadonlyArray<{ uri: URI | string; json: string }>
+): Array<{ model: RosettaModel; document: LangiumDocument }> {
+  const documents = services.shared.workspace.LangiumDocuments;
+  const factory = services.shared.workspace.LangiumDocumentFactory;
+  const resolvedUris = entries.map((e) => (typeof e.uri === 'string' ? URI.parse(e.uri) : e.uri));
+  const rounds = Math.min(entries.length, MAX_RELINK_ROUNDS);
+
+  // Pass 1 — deserialize + register a placeholder for every not-yet-
+  // registered entry, so the first re-link round below has something to
+  // resolve sibling references against. Skips entries whose URI is
+  // already registered (idempotent, matching hydrateModelDocument), but
+  // the round loop still re-links them: an already-registered document
+  // from a PRIOR call may itself have unresolved references into THIS
+  // batch.
+  for (let i = 0; i < entries.length; i++) {
+    if (documents.getDocument(resolvedUris[i]!)) continue;
+    const model = deserializeRuneModel(services, entries[i]!.json);
+    documents.addDocument(factory.fromModel(model, resolvedUris[i]!));
+  }
+
+  let results: Array<{ model: RosettaModel; document: LangiumDocument }> = [];
+  for (let round = 0; round < rounds; round++) {
+    // Read every entry against the registry state left by the previous
+    // round first; swap all of them in only after the whole round has
+    // been read (see doc comment above for why mid-round swaps break
+    // 3+-document chains).
+    results = entries.map((entry, i) => {
+      const model = deserializeRuneModel(services, entry.json);
+      return { model, document: factory.fromModel(model, resolvedUris[i]!) };
+    });
+    for (let i = 0; i < entries.length; i++) {
+      documents.deleteDocument?.(resolvedUris[i]!);
+      documents.addDocument(results[i]!.document);
+    }
+  }
+  return results;
 }
