@@ -28,7 +28,7 @@ import { StudioToastProvider, useStudioToast } from './components/StudioToastPro
 import { useOutputStore, fmtLine } from './store/output-store.js';
 import { useActivityStore } from './store/activity-store.js';
 import { allocateOpId } from './services/op-log.js';
-import { recordPerf } from './services/perf-log.js';
+import { recordPerf, recordPerfStart } from './services/perf-log.js';
 import { useInstanceStore } from './store/instance-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
@@ -712,6 +712,7 @@ function AppContent() {
         // and evicting the meaningful, infrequent entries it's meant to
         // hold. See perf-log.ts.
         const saveOpId = allocateOpId();
+        recordPerfStart('workspaceSave', saveOpId);
         const saveStartedAt = performance.now();
         void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles)
           .then(() => {
@@ -743,6 +744,7 @@ function AppContent() {
       editParseTokenRef.current += 1;
       const token = editParseTokenRef.current;
       const reparseOpId = allocateOpId();
+      recordPerfStart('reparse', reparseOpId);
       // Captured BEFORE the timer is scheduled, not inside its callback —
       // the debounce wait is real, user-observed latency (the time from
       // "stopped typing" to "graph reflects it"), not just the parse call

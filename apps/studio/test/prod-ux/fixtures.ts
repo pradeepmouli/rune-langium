@@ -92,11 +92,16 @@ export async function readOpLog(page: Page): Promise<OpLogEntry[]> {
  * (perf-log.ts — deliberately not panel-rendered) and merges them into one
  * manifest-shaped list, so a journey's persisted `opLog` still captures
  * real wall-clock timing for high-frequency ops even though they're kept
- * out of the user-visible panels. Used by the `checkout` fixture's
- * teardown below, not by journeys directly — a journey wanting to WAIT on
- * a perf-log signal should use `waitForPerfLogQuiescence`.
+ * out of the user-visible panels.
+ *
+ * `page.reload()` tears down the page's JS context, wiping BOTH stores'
+ * in-memory state — a journey that reloads (J8, J02, J16, ...) must call
+ * `captureOpLogSnapshot` BEFORE reloading if it wants pre-reload entries
+ * to survive into the manifest; reading only after the fact (as the
+ * `checkout` fixture's teardown does, for journeys that never reload) will
+ * see an empty/reset log for anything that happened pre-reload.
  */
-async function readCombinedOpLog(page: Page): Promise<OpLogEntry[]> {
+export async function readCombinedOpLog(page: Page): Promise<OpLogEntry[]> {
   const [opLog, perfLog] = await Promise.all([readOpLog(page), readPerfLog(page)]);
   const fromPerf: OpLogEntry[] = perfLog.map((entry) => ({
     opId: entry.opId,
@@ -109,6 +114,19 @@ async function readCombinedOpLog(page: Page): Promise<OpLogEntry[]> {
     panel: 'perf'
   }));
   return [...opLog, ...fromPerf].sort((a, b) => a.ts - b.ts);
+}
+
+/**
+ * Reads the current combined op-log (see `readCombinedOpLog`) and folds it
+ * into `evidence`'s accumulator (`EvidenceCollector.recordOpLog`), which
+ * survives a subsequent `page.reload()` because it lives in the Node/
+ * Playwright process, not the page. Call this immediately before any
+ * `page.reload()` in a journey that wants its pre-reload op-log/perf-log
+ * entries (e.g. a `workspaceSave`/`reparse` this journey just waited on)
+ * to actually reach the persisted manifest.
+ */
+export async function captureOpLogSnapshot(page: Page, evidence: EvidenceCollector): Promise<void> {
+  evidence.recordOpLog(await readCombinedOpLog(page));
 }
 
 /**
@@ -128,7 +146,10 @@ export interface PerfLogEntry {
 
 declare global {
   interface Window {
-    __runeStudioPerfLog?: { snapshot(): PerfLogEntry[] };
+    __runeStudioPerfLog?: {
+      snapshot(): PerfLogEntry[];
+      lastStartedOpId(op: string): number | undefined;
+    };
   }
 }
 
@@ -138,53 +159,76 @@ export async function readPerfLog(page: Page): Promise<PerfLogEntry[]> {
 }
 
 /**
- * The page's own `performance.now()` clock — use as
- * `waitForPerfLogQuiescence`'s `baselineTs` so it only matches entries
- * produced AFTER the action under test, not a stale entry left over from
- * earlier in the journey.
+ * The opId most recently allocated for `op` (perf-log.ts's
+ * `recordPerfStart`, called synchronously the moment the operation
+ * starts, before any await). Read this right after triggering an edit to
+ * learn exactly which operation instance it started, then wait for that
+ * SPECIFIC opId to complete via `waitForPerfLogOpId` — the only race-free
+ * way to correlate a specific edit to a specific completion when multiple
+ * instances of the same op (e.g. several `workspaceSave` calls from rapid
+ * edits) can be in flight and complete out of order. A timestamp- or
+ * count-based wait can't tell an unrelated straggler's completion apart
+ * from the one actually being waited on — found the hard way: an earlier
+ * "wait for quiescence" (no new entry for a short interval) still raced,
+ * because a lull before the NEXT completion looks identical to "nothing
+ * more is coming."
  */
-export async function pageNow(page: Page): Promise<number> {
-  return page.evaluate(() => performance.now());
+export async function lastStartedPerfOpId(page: Page, op: string): Promise<number | undefined> {
+  return page.evaluate((opArg) => window.__runeStudioPerfLog?.lastStartedOpId(opArg), op);
 }
 
 /**
- * Polls window.__runeStudioPerfLog until entries matching `op` newer than
- * `baselineTs` stop growing across two consecutive checks, then returns
- * all of them — instead of a fixed `waitForTimeout` standing in for an
- * operation with no otherwise-observable completion signal (a debounced
- * reparse, a fire-and-forget workspace save).
- *
- * Deliberately NOT "return on the first matching entry": for a
- * high-frequency op like `workspaceSave`, an EARLIER edit's save can still
- * be in flight when a LATER edit's save starts, and finish AFTER
- * `baselineTs` purely by luck of scheduling — a first-match wait would
- * then resolve on that unrelated straggler while the save the caller
- * actually cares about is still pending, letting e.g. a reload race it.
- * Waiting for the whole recent run to go quiet (no new entry for
- * `quietMs`) means every save in flight when this was called — not just
- * one specific one — has settled by the time this returns.
+ * Polls until `lastStartedPerfOpId(page, op)` differs from `previousOpId`,
+ * returning the new opId. Use when the triggering interaction (e.g. a
+ * `.click()`) might resolve before the resulting React state update has
+ * flushed through to the op-starting code, so reading
+ * `lastStartedPerfOpId` immediately afterward could still see the OLD
+ * value.
  */
-export async function waitForPerfLogQuiescence(
+export async function waitForPerfLogStart(
   page: Page,
   op: string,
-  options: { baselineTs?: number; timeout?: number; quietMs?: number } = {}
-): Promise<PerfLogEntry[]> {
-  const { baselineTs = 0, timeout = 10000, quietMs = 200 } = options;
+  previousOpId: number | undefined,
+  options: { timeout?: number } = {}
+): Promise<number> {
+  const { timeout = 5000 } = options;
   const deadline = Date.now() + timeout;
-  let previousCount = -1;
   for (;;) {
-    const entries = await readPerfLog(page);
-    const matches = entries.filter((e) => e.op === op && e.ts > baselineTs);
-    if (matches.length > 0 && matches.length === previousCount) {
-      return matches;
-    }
-    previousCount = matches.length;
+    const current = await lastStartedPerfOpId(page, op);
+    if (current !== undefined && current !== previousOpId) return current;
     if (Date.now() >= deadline) {
       throw new Error(
-        `Timed out after ${timeout}ms waiting for perf-log op="${op}" to quiesce (newer than ts=${baselineTs}, saw ${matches.length} entries but count kept changing)`
+        `Timed out after ${timeout}ms waiting for a new perf-log op="${op}" to start (previous opId=${previousOpId})`
       );
     }
-    await page.waitForTimeout(quietMs);
+    await page.waitForTimeout(20);
+  }
+}
+
+/**
+ * Polls window.__runeStudioPerfLog for the completed entry with this
+ * EXACT `op` + `opId` (from `lastStartedPerfOpId`/`waitForPerfLogStart`),
+ * returning it (with real `durationMs`) as soon as it appears — instead
+ * of a fixed `waitForTimeout` standing in for an operation with no
+ * otherwise-observable completion signal (a debounced reparse, a
+ * fire-and-forget workspace save).
+ */
+export async function waitForPerfLogOpId(
+  page: Page,
+  op: string,
+  opId: number,
+  options: { timeout?: number } = {}
+): Promise<PerfLogEntry> {
+  const { timeout = 10000 } = options;
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const entries = await readPerfLog(page);
+    const match = entries.find((e) => e.op === op && e.opId === opId);
+    if (match) return match;
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out after ${timeout}ms waiting for perf-log op="${op}" opId=${opId} to complete`);
+    }
+    await page.waitForTimeout(50);
   }
 }
 

@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { checkout as test, expect, authorScratchType, pageNow, waitForPerfLogQuiescence } from '../fixtures.js';
+import {
+  checkout as test,
+  expect,
+  authorScratchType,
+  lastStartedPerfOpId,
+  waitForPerfLogStart,
+  waitForPerfLogOpId,
+  captureOpLogSnapshot
+} from '../fixtures.js';
 import type { Page } from '@playwright/test';
 
 const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -71,14 +79,18 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     await evidence.checkpoint('attribute-added');
 
     // Set cardinality via CardinalityPicker — trigger + role="option"
-    // preset (commits immediately, no debounce). Baseline captured here
-    // (not after the rename below) because this is the LAST edit
-    // confirmed to reach useModelSourceSync/files — the rename's finding
-    // right below establishes it does NOT, so it never triggers a
-    // workspaceSave the later wait could match against.
-    const lastFileMutationBaseline = await pageNow(page);
+    // preset (commits immediately, no debounce). The opId captured here
+    // (not after the rename below) is for the LAST edit confirmed to reach
+    // useModelSourceSync/files — the rename's finding right below
+    // establishes it does NOT, so it never triggers a workspaceSave to
+    // wait on. Captured BEFORE the click (not after) so waitForPerfLogStart
+    // can detect the NEW opId this specific click causes, distinguishing it
+    // from whatever workspaceSave (if any) the attribute-add above already
+    // triggered.
+    const opIdBeforeCardinalitySet = await lastStartedPerfOpId(page, 'workspaceSave');
     await newRow.locator('[data-slot="cardinality-picker"]').click();
     await page.getByRole('option', { name: '0..*' }).click();
+    const targetSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeCardinalitySet);
     await evidence.checkpoint('cardinality-set');
 
     // Rename via TypeHeader's editable name input (500ms debounced
@@ -168,16 +180,22 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // forget from its caller's perspective (never awaited — see
     // App.tsx's handleFilesChange), so it isn't guaranteed to have landed
     // in OPFS by the time the reparse-driven assertions above pass. Wait
-    // for the real 'workspaceSave' completion instead of guessing a fixed
-    // delay — App.tsx now records one (with real durationMs) precisely so
-    // this can be observed rather than assumed. Quiescence (not "first
-    // match") matters here: an earlier edit's save can still be in flight
-    // when this baseline is captured and complete AFTER it purely by luck
-    // of scheduling, which would satisfy a first-match wait while the
-    // cardinality-set save this is actually waiting on is still pending.
-    // Real duration is captured for free — the fixture teardown persists
-    // the full op-log (including this entry) into the manifest already.
-    await waitForPerfLogQuiescence(page, 'workspaceSave', { baselineTs: lastFileMutationBaseline });
+    // for the EXACT opId the cardinality-set click started (targetSaveOpId
+    // above) to complete — not "any recent workspaceSave completion" and
+    // not "no new completion for a short interval": both were tried and
+    // both can still race, because an unrelated earlier/later save
+    // completing (or a lull before the next one) is indistinguishable from
+    // "the save this journey cares about has settled" without correlating
+    // to the specific opId that save started under.
+    await waitForPerfLogOpId(page, 'workspaceSave', targetSaveOpId);
+
+    // page.reload() below tears down the page's JS context, wiping
+    // perf-log.ts's in-memory entries (including the workspaceSave/reparse
+    // completions just waited on) along with it — capture them into
+    // evidence's accumulator first so they still reach the manifest; a
+    // fresh readOpLog/readPerfLog call after the reload would see them
+    // gone.
+    await captureOpLogSnapshot(page, evidence);
 
     // Reload: workspace persistence lives in OPFS/IndexedDB (J02's
     // established pattern) — confirm the type (still under its original

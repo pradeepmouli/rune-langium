@@ -78,6 +78,17 @@ export class EvidenceCollector {
   private seq = 0;
   /** In-flight response-body reads from the `response` handler below — awaited by `finish()` so a body that's still being read when the journey ends isn't silently dropped. */
   private readonly pendingBodyReads: Promise<void>[] = [];
+  /**
+   * Op-log/perf-log entries a journey explicitly captured mid-run (see
+   * fixtures.ts's `captureOpLogSnapshot`) — survives a `page.reload()`
+   * because it lives here (Node/Playwright process), not in the page,
+   * unlike a fresh `readOpLog`/`readPerfLog` call after the fact. Merged
+   * into `finish()`'s final opLog, deduped against it so an entry snapshot
+   * both mid-run and again at teardown (e.g. a journey that never
+   * reloads) isn't double-counted.
+   */
+  private readonly accumulatedOpLog: OpLogEntry[] = [];
+  private readonly seenOpLogKeys = new Set<string>();
 
   constructor(
     private readonly page: Page,
@@ -163,6 +174,23 @@ export class EvidenceCollector {
   }
 
   /**
+   * Folds op-log/perf-log entries into this collector's own accumulator —
+   * call via fixtures.ts's `captureOpLogSnapshot` right before a
+   * `page.reload()` (or anything else that tears down the page's JS
+   * context) so entries produced before that point still reach the
+   * persisted manifest instead of being silently wiped along with the
+   * page's in-memory op-log/perf-log stores.
+   */
+  recordOpLog(entries: readonly OpLogEntry[]): void {
+    for (const entry of entries) {
+      const key = `${entry.panel}:${entry.op}:${entry.opId ?? ''}:${entry.ts}`;
+      if (this.seenOpLogKeys.has(key)) continue;
+      this.seenOpLogKeys.add(key);
+      this.accumulatedOpLog.push(entry);
+    }
+  }
+
+  /**
    * Records J18's per-root closure-walk results for inclusion in the next
    * `finish()` call. A setter rather than a `finish()` parameter — the
    * generic `checkout` fixture teardown in fixtures.ts always calls
@@ -189,6 +217,11 @@ export class EvidenceCollector {
     // Bounded: see BODY_READ_TIMEOUT_MS — a body that never completes must
     // not block this record from ever being written.
     await Promise.race([Promise.all(this.pendingBodyReads), delay(BODY_READ_TIMEOUT_MS)]);
+    // Fold in anything explicitly captured mid-run (recordOpLog) that
+    // `opLog` (a fresh post-test read) wouldn't otherwise carry — see
+    // recordOpLog's doc comment for why that can differ after a reload.
+    this.recordOpLog(opLog);
+    const mergedOpLog = [...this.accumulatedOpLog].sort((a, b) => a.ts - b.ts);
     return {
       id: this.journeyId,
       title: this.title,
@@ -199,7 +232,7 @@ export class EvidenceCollector {
       failedRequests: this.failedRequests,
       softFindings: this.softFindings,
       retry: this.retry,
-      opLog,
+      opLog: mergedOpLog,
       typeClosure: this.typeClosureRecords.length > 0 ? this.typeClosureRecords : undefined
     };
   }
