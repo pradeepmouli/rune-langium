@@ -64,6 +64,8 @@ export class EvidenceCollector {
   private readonly softFindings: SoftFinding[] = [];
   private typeClosureRecords: TypeClosureRecord[] = [];
   private seq = 0;
+  /** In-flight response-body reads from the `response` handler below — awaited by `finish()` so a body that's still being read when the journey ends isn't silently dropped. */
+  private readonly pendingBodyReads: Promise<void>[] = [];
 
   constructor(
     private readonly page: Page,
@@ -109,14 +111,16 @@ export class EvidenceCollector {
       // fall back to the status-only line above on failure rather than
       // throwing out of an event handler.
       if ((response.headers()['content-type'] ?? '').includes('application/json')) {
-        response
-          .text()
-          .then((body) => {
-            this.failedRequests[index] = `${line} — ${body.slice(0, 4000)}`;
-          })
-          .catch(() => {
-            // Body unavailable (evicted/consumed) — the status-only line already recorded stands.
-          });
+        this.pendingBodyReads.push(
+          response
+            .text()
+            .then((body) => {
+              this.failedRequests[index] = `${line} — ${body.slice(0, 4000)}`;
+            })
+            .catch(() => {
+              // Body unavailable (evicted/consumed) — the status-only line already recorded stands.
+            })
+        );
       }
     });
   }
@@ -167,6 +171,10 @@ export class EvidenceCollector {
   }
 
   async finish(verdict: JourneyRecord['verdict'], opLog: OpLogEntry[] = []): Promise<JourneyRecord> {
+    // Response bodies can still be mid-read when the journey ends (e.g. a slow
+    // or streaming error response) — wait for them so failedRequests carries
+    // the full body instead of silently falling back to the status-only line.
+    await Promise.all(this.pendingBodyReads);
     return {
       id: this.journeyId,
       title: this.title,
