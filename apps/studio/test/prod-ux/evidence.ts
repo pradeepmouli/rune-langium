@@ -215,7 +215,7 @@ export class EvidenceCollector {
    * Records J18's per-root closure-walk results for inclusion in the next
    * `finish()` call. A setter rather than a `finish()` parameter — the
    * generic `checkout` fixture teardown in fixtures.ts always calls
-   * `collector.finish(verdict, opLog)` with no knowledge of `typeClosure`
+   * `collector.finish(verdict)` with no knowledge of `typeClosure`
    * (a J18-specific field); routing it through mutable state here means
    * that teardown call picks it up automatically, with no risk of the
    * double-manifest-append a J18-local `finish()`/`appendJourneyRecord`
@@ -231,22 +231,34 @@ export class EvidenceCollector {
     return this.softFindings.length > 0;
   }
 
-  async finish(verdict: JourneyRecord['verdict'], opLog: OpLogEntry[] = []): Promise<JourneyRecord> {
+  /**
+   * The full op-log accumulated so far via `recordOpLog` — including any
+   * pre-reload entries a journey explicitly captured mid-run. The fixture
+   * teardown reads this (after its own final `recordOpLog` call) to
+   * compute the DEGRADED verdict via `exceedsBudget`, so a budget
+   * violation captured before a reload isn't silently invisible to the
+   * verdict just because it wasn't in the LAST `readCombinedOpLog` call —
+   * `finish()`'s returned record and the verdict passed into it must
+   * agree on the same underlying log.
+   */
+  get opLog(): OpLogEntry[] {
+    return [...this.accumulatedOpLog];
+  }
+
+  async finish(verdict: JourneyRecord['verdict']): Promise<JourneyRecord> {
     // Response bodies can still be mid-read when the journey ends (e.g. a slow
     // or streaming error response) — wait for them so failedRequests carries
     // the full body instead of silently falling back to the status-only line.
     // Bounded: see BODY_READ_TIMEOUT_MS — a body that never completes must
     // not block this record from ever being written.
     await Promise.race([Promise.all(this.pendingBodyReads), delay(BODY_READ_TIMEOUT_MS)]);
-    // Fold in anything explicitly captured mid-run (recordOpLog) that
-    // `opLog` (a fresh post-test read) wouldn't otherwise carry — see
-    // recordOpLog's doc comment for why that can differ after a reload.
-    // This call always happens last, chronologically after any mid-run
-    // captureOpLogSnapshot calls, so appending here (not re-sorting the
-    // whole accumulator by `ts`, which isn't comparable across a reload)
-    // keeps pre-reload segments before this final post-test one.
-    this.recordOpLog(opLog);
-    const mergedOpLog = [...this.accumulatedOpLog];
+    // No opLog parameter here (unlike an earlier version) — callers must
+    // `recordOpLog` everything BEFORE calling finish(), and use `.opLog`
+    // to compute the verdict from the SAME merged data finish() returns.
+    // Passing a separate fresh-read `opLog` in here (merged only as a
+    // final step) let the verdict be computed from a different, smaller
+    // set than what the manifest ultimately recorded.
+    const mergedOpLog = this.opLog;
     return {
       id: this.journeyId,
       title: this.title,

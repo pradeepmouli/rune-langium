@@ -50,10 +50,17 @@ export const checkout = base.extend<CheckoutFixtures>({
     // BLOCKED explicitly here rather than falling through the PASS/FAIL check.
     const baseVerdict: JourneyRecord['verdict'] =
       testInfo.status === 'skipped' ? 'BLOCKED' : testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
-    const opLog = await readCombinedOpLog(page);
-    const degraded = collector.hasSoftFindings || exceedsBudget(opLog);
+    // Merge BEFORE computing the verdict — not after — so a budget
+    // violation captured pre-reload (via captureOpLogSnapshot, currently
+    // J8) is visible to exceedsBudget here too, not just to whatever ends
+    // up in the persisted record. Checking only this fresh post-test read
+    // (which for a journey that reloads only reflects entries from AFTER
+    // the reload) could mark a journey PASS while its own manifest opLog
+    // shows a budget-exceeding entry.
+    collector.recordOpLog(await readCombinedOpLog(page));
+    const degraded = collector.hasSoftFindings || exceedsBudget(collector.opLog);
     const verdict = baseVerdict === 'PASS' && degraded ? 'DEGRADED' : baseVerdict;
-    const record: JourneyRecord = await collector.finish(verdict, opLog);
+    const record: JourneyRecord = await collector.finish(verdict);
     await appendJourneyRecord(record);
   }
 });
