@@ -50,7 +50,7 @@ export const checkout = base.extend<CheckoutFixtures>({
     // BLOCKED explicitly here rather than falling through the PASS/FAIL check.
     const baseVerdict: JourneyRecord['verdict'] =
       testInfo.status === 'skipped' ? 'BLOCKED' : testInfo.status === testInfo.expectedStatus ? 'PASS' : 'FAIL';
-    const opLog = await readOpLog(page);
+    const opLog = await readCombinedOpLog(page);
     const degraded = collector.hasSoftFindings || exceedsBudget(opLog);
     const verdict = baseVerdict === 'PASS' && degraded ? 'DEGRADED' : baseVerdict;
     const record: JourneyRecord = await collector.finish(verdict, opLog);
@@ -68,7 +68,7 @@ export interface OpLogEntry {
   message: string;
   durationMs?: number;
   ts: number;
-  panel: 'output' | 'activity';
+  panel: 'output' | 'activity' | 'perf';
 }
 
 // Playwright's page.evaluate callback type-checks against the DOM lib's own
@@ -88,39 +88,103 @@ export async function readOpLog(page: Page): Promise<OpLogEntry[]> {
 }
 
 /**
- * The page's own `performance.now()` clock — use as `waitForOpLogEntry`'s
- * `baselineTs` so it only matches entries produced AFTER the action under
- * test, not a stale entry left over from earlier in the journey.
+ * Reads BOTH readOpLog (Activity/Output panels) and readPerfLog
+ * (perf-log.ts — deliberately not panel-rendered) and merges them into one
+ * manifest-shaped list, so a journey's persisted `opLog` still captures
+ * real wall-clock timing for high-frequency ops even though they're kept
+ * out of the user-visible panels. Used by the `checkout` fixture's
+ * teardown below, not by journeys directly — a journey wanting to WAIT on
+ * a perf-log signal should use `waitForPerfLogQuiescence`.
+ */
+async function readCombinedOpLog(page: Page): Promise<OpLogEntry[]> {
+  const [opLog, perfLog] = await Promise.all([readOpLog(page), readPerfLog(page)]);
+  const fromPerf: OpLogEntry[] = perfLog.map((entry) => ({
+    opId: entry.opId,
+    op: entry.op,
+    subject: entry.subject,
+    level: entry.ok ? 'success' : 'error',
+    message: `${entry.op} ${entry.ok ? 'completed' : 'failed'}`,
+    durationMs: entry.durationMs,
+    ts: entry.ts,
+    panel: 'perf'
+  }));
+  return [...opLog, ...fromPerf].sort((a, b) => a.ts - b.ts);
+}
+
+/**
+ * High-frequency operation timing (a debounced reparse, a workspace
+ * autosave) that perf-log.ts deliberately keeps OUT of the Activity/Output
+ * panels — and therefore out of `readOpLog` above too — to avoid flooding
+ * them with a row per keystroke. Mirrors perf-log.ts's PerfLogEntry.
+ */
+export interface PerfLogEntry {
+  op: string;
+  subject?: string;
+  ok: boolean;
+  durationMs: number;
+  ts: number;
+  opId: number;
+}
+
+declare global {
+  interface Window {
+    __runeStudioPerfLog?: { snapshot(): PerfLogEntry[] };
+  }
+}
+
+/** Reads window.__runeStudioPerfLog.snapshot() from the page — installed by perf-log-window-bridge.ts. */
+export async function readPerfLog(page: Page): Promise<PerfLogEntry[]> {
+  return page.evaluate(() => window.__runeStudioPerfLog?.snapshot() ?? []);
+}
+
+/**
+ * The page's own `performance.now()` clock — use as
+ * `waitForPerfLogQuiescence`'s `baselineTs` so it only matches entries
+ * produced AFTER the action under test, not a stale entry left over from
+ * earlier in the journey.
  */
 export async function pageNow(page: Page): Promise<number> {
   return page.evaluate(() => performance.now());
 }
 
 /**
- * Polls window.__runeStudioOpLog for an entry matching `op` newer than
- * `baselineTs`, returning it (including its real `durationMs`) as soon as
- * it appears — instead of a fixed `waitForTimeout` standing in for an
+ * Polls window.__runeStudioPerfLog until entries matching `op` newer than
+ * `baselineTs` stop growing across two consecutive checks, then returns
+ * all of them — instead of a fixed `waitForTimeout` standing in for an
  * operation with no otherwise-observable completion signal (a debounced
- * reparse, a fire-and-forget workspace save). Faster than a worst-case
- * guess in the common case, safer under load than a fixed timeout too
- * short for a slow run, and the returned `durationMs` is real wall-clock
- * cost a caller can fold into its own evidence checkpoints.
+ * reparse, a fire-and-forget workspace save).
+ *
+ * Deliberately NOT "return on the first matching entry": for a
+ * high-frequency op like `workspaceSave`, an EARLIER edit's save can still
+ * be in flight when a LATER edit's save starts, and finish AFTER
+ * `baselineTs` purely by luck of scheduling — a first-match wait would
+ * then resolve on that unrelated straggler while the save the caller
+ * actually cares about is still pending, letting e.g. a reload race it.
+ * Waiting for the whole recent run to go quiet (no new entry for
+ * `quietMs`) means every save in flight when this was called — not just
+ * one specific one — has settled by the time this returns.
  */
-export async function waitForOpLogEntry(
+export async function waitForPerfLogQuiescence(
   page: Page,
   op: string,
-  options: { baselineTs?: number; timeout?: number } = {}
-): Promise<OpLogEntry> {
-  const { baselineTs = 0, timeout = 10000 } = options;
+  options: { baselineTs?: number; timeout?: number; quietMs?: number } = {}
+): Promise<PerfLogEntry[]> {
+  const { baselineTs = 0, timeout = 10000, quietMs = 200 } = options;
   const deadline = Date.now() + timeout;
+  let previousCount = -1;
   for (;;) {
-    const entries = await readOpLog(page);
-    const match = entries.find((e) => e.op === op && e.ts > baselineTs);
-    if (match) return match;
-    if (Date.now() >= deadline) {
-      throw new Error(`Timed out after ${timeout}ms waiting for op-log entry op="${op}" newer than ts=${baselineTs}`);
+    const entries = await readPerfLog(page);
+    const matches = entries.filter((e) => e.op === op && e.ts > baselineTs);
+    if (matches.length > 0 && matches.length === previousCount) {
+      return matches;
     }
-    await page.waitForTimeout(50);
+    previousCount = matches.length;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out after ${timeout}ms waiting for perf-log op="${op}" to quiesce (newer than ts=${baselineTs}, saw ${matches.length} entries but count kept changing)`
+      );
+    }
+    await page.waitForTimeout(quietMs);
   }
 }
 

@@ -14,7 +14,13 @@ export interface OpLogEntry {
   message: string;
   durationMs?: number;
   ts: number;
-  panel: 'output' | 'activity';
+  /**
+   * `'perf'` is never produced by `getOpLogSnapshot` below (it stays a pure
+   * mirror of the Activity/Output panels — see op-log-window-bridge.ts's
+   * doc comment) — it's here only so `JourneyRecord.opLog` can carry
+   * perf-log.ts entries too, merged in test-side by prod-ux/fixtures.ts.
+   */
+  panel: 'output' | 'activity' | 'perf';
 }
 
 let _opIdCounter = 0;

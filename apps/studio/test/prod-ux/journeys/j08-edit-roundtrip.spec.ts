@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { checkout as test, expect, authorScratchType, pageNow, waitForOpLogEntry } from '../fixtures.js';
+import { checkout as test, expect, authorScratchType, pageNow, waitForPerfLogQuiescence } from '../fixtures.js';
 import type { Page } from '@playwright/test';
 
 const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -168,12 +168,16 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // forget from its caller's perspective (never awaited — see
     // App.tsx's handleFilesChange), so it isn't guaranteed to have landed
     // in OPFS by the time the reparse-driven assertions above pass. Wait
-    // for the real 'workspaceSave' activity entry instead of guessing a
-    // fixed delay — App.tsx now emits one (with real durationMs) precisely
-    // so this can be observed rather than assumed.
+    // for the real 'workspaceSave' completion instead of guessing a fixed
+    // delay — App.tsx now records one (with real durationMs) precisely so
+    // this can be observed rather than assumed. Quiescence (not "first
+    // match") matters here: an earlier edit's save can still be in flight
+    // when this baseline is captured and complete AFTER it purely by luck
+    // of scheduling, which would satisfy a first-match wait while the
+    // cardinality-set save this is actually waiting on is still pending.
     // Real duration is captured for free — the fixture teardown persists
     // the full op-log (including this entry) into the manifest already.
-    await waitForOpLogEntry(page, 'workspaceSave', { baselineTs: lastFileMutationBaseline });
+    await waitForPerfLogQuiescence(page, 'workspaceSave', { baselineTs: lastFileMutationBaseline });
 
     // Reload: workspace persistence lives in OPFS/IndexedDB (J02's
     // established pattern) — confirm the type (still under its original
