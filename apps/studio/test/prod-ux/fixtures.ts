@@ -87,6 +87,43 @@ export async function readOpLog(page: Page): Promise<OpLogEntry[]> {
   return page.evaluate(() => window.__runeStudioOpLog?.snapshot() ?? []);
 }
 
+/**
+ * The page's own `performance.now()` clock — use as `waitForOpLogEntry`'s
+ * `baselineTs` so it only matches entries produced AFTER the action under
+ * test, not a stale entry left over from earlier in the journey.
+ */
+export async function pageNow(page: Page): Promise<number> {
+  return page.evaluate(() => performance.now());
+}
+
+/**
+ * Polls window.__runeStudioOpLog for an entry matching `op` newer than
+ * `baselineTs`, returning it (including its real `durationMs`) as soon as
+ * it appears — instead of a fixed `waitForTimeout` standing in for an
+ * operation with no otherwise-observable completion signal (a debounced
+ * reparse, a fire-and-forget workspace save). Faster than a worst-case
+ * guess in the common case, safer under load than a fixed timeout too
+ * short for a slow run, and the returned `durationMs` is real wall-clock
+ * cost a caller can fold into its own evidence checkpoints.
+ */
+export async function waitForOpLogEntry(
+  page: Page,
+  op: string,
+  options: { baselineTs?: number; timeout?: number } = {}
+): Promise<OpLogEntry> {
+  const { baselineTs = 0, timeout = 10000 } = options;
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const entries = await readOpLog(page);
+    const match = entries.find((e) => e.op === op && e.ts > baselineTs);
+    if (match) return match;
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out after ${timeout}ms waiting for op-log entry op="${op}" newer than ts=${baselineTs}`);
+    }
+    await page.waitForTimeout(50);
+  }
+}
+
 export const CDM_BUTTON = 'CDM (Common Domain Model)';
 const WORKSPACE_FILE_NAME = 'starter.rosetta';
 const WORKSPACE_FILE_CONTENT = 'namespace example\n';

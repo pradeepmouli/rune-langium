@@ -27,6 +27,7 @@ import { WorkspaceManager } from './workspace/workspace-manager.js';
 import { StudioToastProvider, useStudioToast } from './components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from './store/output-store.js';
 import { useActivityStore } from './store/activity-store.js';
+import { allocateOpId } from './services/op-log.js';
 import { useInstanceStore } from './store/instance-store.js';
 import { getOrCreateSyncEngine, disposeSyncEngine } from './services/git-sync.js';
 import { ActivityBar } from './shell/ActivityBar.js';
@@ -701,27 +702,61 @@ function AppContent() {
       // LSP doc-set sync runs in LspProvider on the `files` change it observes.
 
       if (restoredWorkspace) {
-        void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles).catch((err) => {
-          reportWorkspaceError('Failed to save workspace changes to browser storage; edits remain in memory', err);
-        });
+        // Fire-and-forget from this caller's perspective (never awaited), so
+        // its real completion time is otherwise invisible to anything
+        // outside this closure — an activity entry (with real durationMs,
+        // same opId/allocateOpId/performance.now() idiom as LspProvider's
+        // connect timing) is the only way a caller (e.g. a prod-ux journey
+        // polling window.__runeStudioOpLog) can observe when this actually
+        // lands, instead of guessing a fixed wait.
+        const saveOpId = allocateOpId();
+        const saveStartedAt = performance.now();
+        void saveWorkspaceFiles(restoredWorkspace.id, updatedFiles)
+          .then(() => {
+            useActivityStore.getState().addActivity('workspaceSave', true, 'workspace saved', {
+              durationMs: performance.now() - saveStartedAt,
+              opId: saveOpId
+            });
+          })
+          .catch((err) => {
+            useActivityStore.getState().addActivity('workspaceSave', false, 'workspace save failed', {
+              durationMs: performance.now() - saveStartedAt,
+              opId: saveOpId
+            });
+            reportWorkspaceError('Failed to save workspace changes to browser storage; edits remain in memory', err);
+          });
       }
 
-      // Debounced reparse — wait for typing to settle
+      // Debounced reparse — wait for typing to settle. Same observability
+      // rationale as the save above: the 500ms debounce plus the parse
+      // itself has no externally visible completion signal otherwise.
       if (reparseTimerRef.current) clearTimeout(reparseTimerRef.current);
       editParseTokenRef.current += 1;
       const token = editParseTokenRef.current;
+      const reparseOpId = allocateOpId();
       reparseTimerRef.current = setTimeout(async () => {
+        const reparseStartedAt = performance.now();
         try {
           const result = await parseWorkspaceFiles(updatedFiles, {
             hydrateNamespaces: useEditorStore.getState().activeHydrationNamespaces()
           });
+          // Superseded by a newer edit before this one finished — not the
+          // operation that settled, so no activity entry for it.
           if (token !== editParseTokenRef.current) return;
           // Preserve the last valid graph/model while the user is mid-edit on
           // syntactically invalid text. The Problems panel still updates from
           // `parseErrors`, but the semantic workbench no longer flickers into a
           // partial recovery state for transient CodeMirror transactions.
           applyParseResult(result, { preserveSemanticModelOnErrors: true });
+          useActivityStore.getState().addActivity('reparse', true, 'reparse settled', {
+            durationMs: performance.now() - reparseStartedAt,
+            opId: reparseOpId
+          });
         } catch (error) {
+          useActivityStore.getState().addActivity('reparse', false, 'reparse failed', {
+            durationMs: performance.now() - reparseStartedAt,
+            opId: reparseOpId
+          });
           reportWorkspaceError('Failed to re-parse updated files; keeping the last valid graph', error);
         }
       }, 500);

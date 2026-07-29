@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { checkout as test, expect, authorScratchType } from '../fixtures.js';
+import { checkout as test, expect, authorScratchType, pageNow, waitForOpLogEntry } from '../fixtures.js';
 import type { Page } from '@playwright/test';
 
 const platformModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -64,12 +64,19 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     const newRow = page.locator('[data-slot="attribute-row"]').last();
     await newRow.locator('[data-slot="attribute-name"]').fill('notes');
     // Attribute name commits via a 500ms debounce (AttributeRow's
-    // useAutoSave(commitName, 500)) — wait it out before checking source.
-    await page.waitForTimeout(700);
+    // useAutoSave(commitName, 500)) — no wait needed here: the later
+    // `preReloadSource` toContainText('notes') assertion already polls
+    // until the commit lands, so a fixed wait would only ever add latency,
+    // never correctness.
     await evidence.checkpoint('attribute-added');
 
     // Set cardinality via CardinalityPicker — trigger + role="option"
-    // preset (commits immediately, no debounce).
+    // preset (commits immediately, no debounce). Baseline captured here
+    // (not after the rename below) because this is the LAST edit
+    // confirmed to reach useModelSourceSync/files — the rename's finding
+    // right below establishes it does NOT, so it never triggers a
+    // workspaceSave the later wait could match against.
+    const lastFileMutationBaseline = await pageNow(page);
     await newRow.locator('[data-slot="cardinality-picker"]').click();
     await page.getByRole('option', { name: '0..*' }).click();
     await evidence.checkpoint('cardinality-set');
@@ -96,7 +103,9 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // actually true: the Inspector reflects the typed name; the Source pane
     // and reloaded workspace still key off the ORIGINAL type name.
     await nameInput.fill(RENAMED_TYPE_NAME);
-    await page.waitForTimeout(700);
+    // toHaveValue already polls until the debounced commit lands — no fixed
+    // wait needed (and, per the finding above, this edit never reaches
+    // files/useModelSourceSync at all, so there's no save to wait for here).
     await expect(nameInput).toHaveValue(RENAMED_TYPE_NAME);
     await evidence.checkpoint('renamed');
 
@@ -138,9 +147,7 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
 
     // Confirm the Source pane reflects the attribute-add + cardinality-set
     // (the changes that DO propagate — see the rename finding above) before
-    // reloading, and give the OPFS write an extra beat to settle, since the
-    // workspace save that follows the source-sync effect isn't awaited by
-    // the caller (see useModelSourceSync's "fire-and-forget" handler call).
+    // reloading.
     await ensureSourcePaneOpen(page);
     const preReloadSource = page.getByTestId('source-editor').locator('.cm-content');
     await expect(preReloadSource).toContainText(`type ${TYPE_NAME}:`, { timeout: 10000 });
@@ -156,7 +163,17 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
       preReloadDeclarationMatches,
       'expected exactly one type ScratchOrder: declaration (no duplication) after add-attribute + cardinality-set, before reload'
     ).toHaveLength(1);
-    await page.waitForTimeout(1500);
+
+    // The workspace save that follows the source-sync effect is fire-and-
+    // forget from its caller's perspective (never awaited — see
+    // App.tsx's handleFilesChange), so it isn't guaranteed to have landed
+    // in OPFS by the time the reparse-driven assertions above pass. Wait
+    // for the real 'workspaceSave' activity entry instead of guessing a
+    // fixed delay — App.tsx now emits one (with real durationMs) precisely
+    // so this can be observed rather than assumed.
+    // Real duration is captured for free — the fixture teardown persists
+    // the full op-log (including this entry) into the manifest already.
+    await waitForOpLogEntry(page, 'workspaceSave', { baselineTs: lastFileMutationBaseline });
 
     // Reload: workspace persistence lives in OPFS/IndexedDB (J02's
     // established pattern) — confirm the type (still under its original
