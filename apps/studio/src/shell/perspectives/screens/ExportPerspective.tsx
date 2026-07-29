@@ -30,7 +30,7 @@ import {
   downloadTargetViaRouter,
   CodegenDownloadError,
   collectCuratedBundlesFromWorkspace,
-  collectCuratedDocsFromWorkspace,
+  collectCuratedSourcesForCodegen,
   type WorkspaceFile
 } from '../../../services/workspace.js';
 import { useCodegenStore } from '../../../store/codegen-store.js';
@@ -97,8 +97,7 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
       setDownloadModalTarget(undefined);
       const fileList = files ?? [];
       const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
-      const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
-      const curatedDocs = collectCuratedDocsFromWorkspace(fileList);
+      const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
       const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
       const layoutOption = config.layout ? { layout: config.layout } : {};
       const options = config.layout || config.options ? { [newTarget]: { ...targetOptions, ...layoutOption } } : {};

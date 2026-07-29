@@ -24,7 +24,7 @@ import {
   downloadTargetViaRouter,
   CodegenDownloadError,
   collectCuratedBundlesFromWorkspace,
-  collectCuratedDocsFromWorkspace,
+  collectCuratedSourcesForCodegen,
   type WorkspaceFile
 } from '../services/workspace.js';
 import { CodegenTargetsTable } from './CodegenTargetsTable.js';
@@ -182,8 +182,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
       setDownloadModalTarget(undefined);
       const fileList = files ?? [];
       const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
-      const curatedBundles = collectCuratedBundlesFromWorkspace(fileList);
-      const curatedDocs = collectCuratedDocsFromWorkspace(fileList);
+      const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
       // Merge layout + target-specific options (e.g. excel sheet toggles) into
       // the options bag. The order of spreading means explicit options from the
       // form can include a layout key, but the layout radio always wins here.

@@ -17,6 +17,7 @@ import {
   readFileList,
   mergeModelFiles,
   collectCuratedDocsFromWorkspace,
+  collectCuratedSourcesForCodegen,
   BUNDLE_MARKER_SUFFIX
 } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
@@ -399,6 +400,59 @@ describe('collectCuratedDocsFromWorkspace', () => {
     const docs = collectCuratedDocsFromWorkspace(files);
     expect(docs).toHaveLength(1);
     expect(docs[0]!.uri).toBe('[cdm]/types/Trade.rosetta');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// collectCuratedSourcesForCodegen (issue #401 fix — don't send a redundant,
+// unboundedly large curatedDocs payload when curatedBundles already gives
+// the server everything Path C needs)
+// ---------------------------------------------------------------------------
+describe('collectCuratedSourcesForCodegen', () => {
+  it('omits curatedDocs when curatedBundles is non-empty, even if serialized docs are loaded', () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: 'Trade.rosetta',
+        path: '[cdm]/types/Trade.rosetta',
+        content: '',
+        dirty: false,
+        readOnly: true,
+        serializedModelJson: '{"$type":"RosettaModel","elements":[]}',
+        bundleId: 'cdm',
+        bundleVersion: '2026-04-25'
+      }
+    ];
+    const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(files);
+    expect(curatedBundles).toEqual([{ id: 'cdm', version: '2026-04-25' }]);
+    expect(curatedDocs).toEqual([]);
+  });
+
+  it('falls back to curatedDocs when no bundle info is present at all', () => {
+    const files: WorkspaceFile[] = [
+      {
+        name: 'Trade.rosetta',
+        path: '[cdm]/types/Trade.rosetta',
+        content: '',
+        dirty: false,
+        readOnly: true,
+        serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
+        // no bundleId/bundleVersion
+      }
+    ];
+    const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(files);
+    expect(curatedBundles).toEqual([]);
+    expect(curatedDocs).toHaveLength(1);
+    expect(curatedDocs[0]).toEqual({
+      uri: '[cdm]/types/Trade.rosetta',
+      serializedModel: '{"$type":"RosettaModel","elements":[]}'
+    });
+  });
+
+  it('returns empty arrays for a workspace with only user files', () => {
+    const files: WorkspaceFile[] = [{ name: 'my.rosetta', path: 'my.rosetta', content: 'namespace my', dirty: false }];
+    const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(files);
+    expect(curatedBundles).toEqual([]);
+    expect(curatedDocs).toEqual([]);
   });
 });
 

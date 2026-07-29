@@ -421,6 +421,35 @@ export function collectCuratedDocsFromWorkspace(
 }
 
 /**
+ * Resolve the curated source to send with an `/api/codegen` download
+ * request (issue #401 fix). `downloadTargetViaRouter`'s own doc comment
+ * establishes that the server prefers `curatedBundles` — it independently
+ * fetches and dependency-closes the correct namespace set from the
+ * manifest (Path C) — and only falls back to `curatedDocs` when no bundle
+ * info is present at all.
+ *
+ * Both call sites (CodePreviewPanel, ExportPerspective) previously
+ * collected AND sent both unconditionally. `collectCuratedDocsFromWorkspace`
+ * walks every hydrated curated file across the WHOLE workspace (not scoped
+ * to this download's own dependency closure), so on a workspace where a
+ * user has browsed many curated namespaces over a session this can balloon
+ * to tens of MB — confirmed live (23MB for a single-anchor `cdm.base.datetime`
+ * download) — large enough on its own to trip Cloudflare's request-size/CPU
+ * limits and 503, even though the server was always going to ignore it once
+ * `curatedBundles` was also present. Skip collecting `curatedDocs` entirely
+ * whenever `curatedBundles` is non-empty so the client's send behavior
+ * actually matches the server's documented precedence.
+ */
+export function collectCuratedSourcesForCodegen(files: ReadonlyArray<WorkspaceFile>): {
+  curatedBundles: Array<{ id: string; version: string }>;
+  curatedDocs: Array<{ uri: string; serializedModel: string }>;
+} {
+  const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+  const curatedDocs = curatedBundles.length === 0 ? collectCuratedDocsFromWorkspace(files) : [];
+  return { curatedBundles, curatedDocs };
+}
+
+/**
  * Parse all files in the workspace and return models.
  *
  * Primary path (019 Phase 0): delegates to the /api/parse Pages Function via
