@@ -97,7 +97,27 @@ export class EvidenceCollector {
         sameOrigin = false;
       }
       if (!sameOrigin) return;
-      this.failedRequests.push(`${response.request().method()} ${response.url()} — HTTP ${status}`);
+      const line = `${response.request().method()} ${response.url()} — HTTP ${status}`;
+      const index = this.failedRequests.push(line) - 1;
+      // Best-effort: append the response body (e.g. Pages Functions' `{ ok:
+      // false, diagnostics, error }` envelopes) so a triager doesn't have to
+      // manually reproduce the request to see WHY it failed — a truncated
+      // console.error (browser-side [Object] serialization) was previously
+      // the only signal, which required exactly that. Chrome's DevTools
+      // protocol can legitimately evict a response body from its buffer
+      // before this read runs, so this is genuinely best-effort — silently
+      // fall back to the status-only line above on failure rather than
+      // throwing out of an event handler.
+      if ((response.headers()['content-type'] ?? '').includes('application/json')) {
+        response
+          .text()
+          .then((body) => {
+            this.failedRequests[index] = `${line} — ${body.slice(0, 4000)}`;
+          })
+          .catch(() => {
+            // Body unavailable (evicted/consumed) — the status-only line already recorded stands.
+          });
+      }
     });
   }
 
