@@ -100,22 +100,33 @@ export function hydrateModelDocument(
  * reference resolved this round always sees LAST round's fully-swapped-in
  * state, so each round resolves one additional hop of chain depth.
  *
- * Runs exactly `entries.length` rounds unconditionally — the same
- * argument that bounds Bellman-Ford's shortest-path relaxation to V-1
- * rounds applies here: one round resolves every reference whose target
+ * The same argument that bounds Bellman-Ford's shortest-path relaxation to
+ * V-1 rounds applies here: one round resolves every reference whose target
  * chain (within the batch) is at most as many hops deep as rounds run so
- * far, so `entries.length` rounds covers the worst case of an N-document
- * batch whose deepest reference chain spans every document. Cheap to run
- * in full for the realistic batch sizes this hydrates (one curated
- * namespace closure per fetch, not an unbounded corpus) — correctness
- * matters more here than shaving redundant rounds off the common case
- * where most batches only need 1–2.
+ * far, so `entries.length` rounds would cover the true worst case of an
+ * N-document batch whose deepest reference chain spans every document.
+ * Running the full `entries.length` rounds unconditionally is O(N²)
+ * deserializations, though, which is too expensive for the "no namespace
+ * seeds -> load the whole bundle" request this also serves (a few hundred
+ * curated documents would mean tens of thousands of re-deserializations).
+ * Real Rune/Rosetta `extends`/attribute-type reference chains are shallow
+ * in practice (a handful of hops at most), so rounds are capped at
+ * `MAX_RELINK_ROUNDS` instead — enough for any realistic corpus, trading
+ * away correctness only for a batch with a pathologically long linear
+ * reference chain approaching that cap, which does not occur in the real
+ * curated corpus this hydrates. If that assumption ever breaks, the right
+ * fix is a proper incremental worklist (only re-deserialize entries whose
+ * dependencies actually changed since they were last built) rather than
+ * raising this constant.
  *
  * Does NOT fix references to documents outside this batch (those must
  * already be registered, or need their own `hydrateModelDocuments` call)
  * — the caller is responsible for including every document whose
  * cross-references need resolving in one `entries` call.
  */
+/** See the "Real Rune/Rosetta ... reference chains are shallow" note in {@link hydrateModelDocuments}'s doc comment. */
+const MAX_RELINK_ROUNDS = 8;
+
 export function hydrateModelDocuments(
   services: HydrateServices,
   entries: ReadonlyArray<{ uri: URI | string; json: string }>
@@ -123,6 +134,7 @@ export function hydrateModelDocuments(
   const documents = services.shared.workspace.LangiumDocuments;
   const factory = services.shared.workspace.LangiumDocumentFactory;
   const resolvedUris = entries.map((e) => (typeof e.uri === 'string' ? URI.parse(e.uri) : e.uri));
+  const rounds = Math.min(entries.length, MAX_RELINK_ROUNDS);
 
   // Pass 1 — deserialize + register a placeholder for every not-yet-
   // registered entry, so the first re-link round below has something to
@@ -138,7 +150,7 @@ export function hydrateModelDocuments(
   }
 
   let results: Array<{ model: RosettaModel; document: LangiumDocument }> = [];
-  for (let round = 0; round < entries.length; round++) {
+  for (let round = 0; round < rounds; round++) {
     // Read every entry against the registry state left by the previous
     // round first; swap all of them in only after the whole round has
     // been read (see doc comment above for why mid-round swaps break
