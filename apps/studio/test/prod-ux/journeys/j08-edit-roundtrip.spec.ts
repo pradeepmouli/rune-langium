@@ -69,30 +69,30 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     // row gets an empty name (makeAttributeAstItem('', 'string', '(1..1)'));
     // fill it in via AttributeRow.tsx's data-slot markers.
     //
-    // The add-attribute click itself changes the graph and triggers its
-    // OWN asynchronous, effect-driven workspace save (separate from the
-    // name field's later debounced one) — baseline captured BEFORE the
-    // click, not after, so that save is drained (started AND completed)
-    // before the name field is even touched. Getting this ordering wrong
-    // one level up caused the same class of bug the name-edit fix below
-    // addresses: a baseline read AFTER the click can race the click's own
-    // save actually starting, letting a later wait mistake THAT save for
-    // the one it's actually after.
-    const opIdBeforeAddAttribute = await lastStartedPerfOpId(page, 'workspaceSave');
+    // VERIFIED (this session, against the deployed instance): the
+    // add-attribute click on its own does NOT trigger a workspaceSave — an
+    // earlier version of this comment claimed it did (an unverified
+    // assumption from PR review that this journey's own live-instance run
+    // was supposed to catch, and did). Polled the perf-log for 15s straight
+    // after the click with nothing happening: `useModelSourceSync` renders
+    // an attribute with an empty name as producing no source-text change
+    // (an unnamed attribute can't serialize to valid Rune DSL), so its
+    // no-op/byte-identical skip suppresses the `onModelChanged` emission
+    // entirely — no `files` change, so `handleFilesChange` never fires.
+    // The row is still visible locally because the Inspector's list comes
+    // straight from `useFieldArray`'s store-backed `fields`, independent of
+    // the source round-trip. So the baseline for the FIRST real save is
+    // captured before the click (nothing intervenes between the click and
+    // the name fill below), not after it.
+    const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
     await page.locator('[data-slot="add-attribute-btn"]').click();
     const newRow = page.locator('[data-slot="attribute-row"]').last();
-    const addAttributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAddAttribute);
-    await waitForPerfLogOpId(page, 'workspaceSave', addAttributeSaveOpId);
 
     // Attribute name commits via a 500ms debounce (AttributeRow's
-    // useAutoSave(commitName, 500)). Baseline captured here is now safe:
-    // the add-attribute click's own save is fully drained above, so no
-    // unrelated in-flight/pending save can be mistaken for the name
-    // commit's. Drain this one too (start AND complete) — a later
-    // assertion polling for 'notes' would eventually catch the same
-    // result, but only THIS gives the cardinality-set baseline right
-    // after a save-free starting point, which opId correlation needs.
-    const opIdBeforeAttributeName = await lastStartedPerfOpId(page, 'workspaceSave');
+    // useAutoSave(commitName, 500)) — the first edit in this sequence that
+    // actually reaches `files`/workspaceSave. Drain it (start AND
+    // complete) so the cardinality-set baseline below starts from a
+    // save-free point, which opId correlation needs.
     await newRow.locator('[data-slot="attribute-name"]').fill('notes');
     const attributeSaveOpId = await waitForPerfLogStart(page, 'workspaceSave', opIdBeforeAttributeName);
     await waitForPerfLogOpId(page, 'workspaceSave', attributeSaveOpId);
@@ -191,7 +191,11 @@ test.describe('J8 — Edit round-trip (workspace file only, never curated)', () 
     await ensureSourcePaneOpen(page);
     const preReloadSource = page.getByTestId('source-editor').locator('.cm-content');
     await expect(preReloadSource).toContainText(`type ${TYPE_NAME}:`, { timeout: 10000 });
-    await expect(preReloadSource).toContainText('notes');
+    // Same generous timeout as the assertion above, not Playwright's 5000ms
+    // default — both depend on the identical reparse/render pipeline, and a
+    // production run flaked here once on a slow first navigation while the
+    // default window elapsed a few hundred ms too early.
+    await expect(preReloadSource).toContainText('notes', { timeout: 10000 });
 
     // Regression isolation: prove the $cstRange fix holds immediately after
     // add-attribute + cardinality-set, not just after reload — the manual
