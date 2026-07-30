@@ -643,6 +643,57 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    'rewrites a Choice arm’s OWN nested array descendant through both container kinds (Codex review, PR #433 round 3)',
+    async () => {
+      // Regression test, round 3: rewritePathPrefix's round-2 fix recursed
+      // through 'object' fields but explicitly stopped at 'array' fields —
+      // a Data-typed Choice arm with its OWN nested array attribute
+      // (`Commodity.legs (0..*)` below) had its array field's own path
+      // rewritten (`variants.commodity.legs` → `variants[].commodity.legs`)
+      // but never descended into the array's single item field, leaving
+      // the deeper `[]`-suffixed path (`variants.commodity.legs[].price`)
+      // stale — pointing outside the rewritten array item's subtree.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Leg:
+        price number (1..1)
+
+      type Commodity:
+        name string (1..1)
+        legs Leg (0..*)
+
+      choice Observable:
+        Commodity
+
+      type Trade:
+        variants Observable (0..*)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      const variantsField = trade?.fields.find((field) => field.path === 'variants');
+      const item =
+        variantsField && 'children' in variantsField ? (variantsField.children?.[0] as PreviewField) : undefined;
+      const commodityArm =
+        item && 'children' in item ? item.children?.find((c) => c.path === 'variants[].commodity') : undefined;
+      const legsField =
+        commodityArm && 'children' in commodityArm
+          ? commodityArm.children?.find((c) => c.path === 'variants[].commodity.legs')
+          : undefined;
+      expect(legsField).toMatchObject({ path: 'variants[].commodity.legs', kind: 'array' });
+      const legItem = legsField && 'children' in legsField ? (legsField.children?.[0] as PreviewField) : undefined;
+      expect(legItem).toMatchObject({ path: 'variants[].commodity.legs[]', kind: 'object' });
+      const legItemChildPaths = legItem && 'children' in legItem ? legItem.children?.map((c) => c.path) : undefined;
+      expect(legItemChildPaths).toEqual(['variants[].commodity.legs[].price']);
+    }
+  );
+
+  skipIfNodeLt22(
     'includes Choice-ancestor option fields when a typeAlias resolves to a Data-extends-Choice type',
     async () => {
       // Regression test (follow-up to round-5 finding #1): buildTypeAliasSchema's

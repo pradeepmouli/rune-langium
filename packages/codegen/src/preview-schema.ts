@@ -920,26 +920,42 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
 }
 
 /**
- * Recursively rewrites `field.path` — and, for an 'object' field, every
- * descendant's `path` at ANY depth plus `choiceArmPaths` entries at every
- * level — from `oldPrefix` (or `oldPrefix.*`) form to `newPrefix` form.
+ * Recursively rewrites `field.path` — and, for an 'object' or 'array'
+ * field, every descendant's `path` at ANY depth (through BOTH container
+ * kinds) plus 'object' `choiceArmPaths` entries at every level — from
+ * `oldPrefix` (or `oldPrefix.*`) form to `newPrefix` form.
  *
  * Used by `asArrayItem` to convert an array item's WHOLE subtree from
  * `parent.child.grandchild` to `parent[].child.grandchild`, not just its
- * immediate children. Codex review on PR #433 (round 2): the original
- * one-level-only rewrite correctly updated a Choice arm's own path (e.g.
- * `variant.commodity` → `variant[].commodity`) but left that arm's OWN
- * nested attributes (e.g. a Data-typed arm's `variant.commodity.name`)
- * untouched — a grandchild path pointing outside the rewritten array
- * item's subtree entirely, making a Data-backed Choice arm's fields
- * impossible to populate correctly. This defect predates Choice support
- * entirely (any sufficiently nested object inside an array hit it), just
- * newly exercised by the Choice-array regression test.
+ * immediate children. Codex review on PR #433:
+ *   - round 2: the original one-level-only rewrite correctly updated a
+ *     Choice arm's own path (e.g. `variant.commodity` →
+ *     `variant[].commodity`) but left that arm's OWN nested attributes
+ *     (e.g. a Data-typed arm's `variant.commodity.name`) untouched — a
+ *     grandchild path pointing outside the rewritten array item's subtree
+ *     entirely, making a Data-backed Choice arm's fields impossible to
+ *     populate correctly. Fixed by recursing through 'object' fields.
+ *   - round 3: that recursion still stopped at 'array' fields (e.g. a
+ *     Data-typed Choice arm with its OWN nested array attribute,
+ *     `variant.commodity.legs[]`) — rewriting the array field's own path
+ *     but never descending into its single item field, leaving the deeper
+ *     `[]`-suffixed descendant path stale. Recurses through both
+ *     container kinds now.
+ * This defect predates Choice support entirely (any sufficiently nested
+ * structure inside an array would hit it), just newly exercised by the
+ * Choice-array regression tests.
  */
 function rewritePathPrefix(field: PreviewField, oldPrefix: string, newPrefix: string): PreviewField {
   const rewrite = (p: string): string =>
     p === oldPrefix || p.startsWith(`${oldPrefix}.`) ? newPrefix + p.slice(oldPrefix.length) : p;
   const path = rewrite(field.path);
+  if (field.kind === 'array') {
+    return {
+      ...field,
+      path,
+      children: [rewritePathPrefix(field.children[0], oldPrefix, newPrefix)]
+    };
+  }
   if (field.kind !== 'object') {
     return { ...field, path };
   }
