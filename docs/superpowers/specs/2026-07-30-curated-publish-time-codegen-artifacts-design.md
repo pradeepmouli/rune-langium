@@ -125,13 +125,39 @@ Two recorded lessons make this the only acceptable design:
 
 Note the request-time direction also fixes a latent correctness gap: user docs are parsed *without* the curated closure registered, so their cross-boundary `.ref`s are unresolved anyway — the current pipeline only works because the closure is hydrated first. Shapes make the boundary explicit instead of incidental.
 
-## 6. Cross-boundary reference resolution — the one open design problem
+## 6. Cross-boundary reference resolution — RESOLVED (Phase 0 spike: GO)
 
 When a user attribute names `Quantity`, deciding *which* `Quantity` (local shadows import — the probe result from the #366 work) is scoping. Reimplementing scoping over shape indexes would be a forbidden parallel implementation of `RuneDslScopeProvider`.
 
-The DRY-clean direction: **run the real scope machinery over descriptions, not documents.** Langium's global scope operates on `AstNodeDescription`s (name, type, document URI, path) — which is precisely what the publish-time `exports` index contains. Seed the request's `IndexManager` with descriptions synthesized from the manifest exports (no ASTs), parse user docs with `eagerLinking: false`, and for each unresolved reference ask the **real** `ScopeProvider` for the winning candidate description — then map that description to its shape-index entry. Real scoping semantics; zero AST hydration. The studio's on-demand hydration (`deferredExports`) already registers export descriptions without hydrated documents, so in-repo precedent exists.
+The DRY-clean direction: **run the real scope machinery over descriptions, not documents.** Langium's global scope operates on `AstNodeDescription`s (name, type, document URI, path) — which is precisely what the publish-time `exports` index contains. Seed the request's index with descriptions synthesized from the manifest exports (no ASTs), and for each cross-boundary reference consume the **real** `ScopeProvider`'s winning candidate description directly — never dereference it into a live node — then map that description to its shape-index entry.
 
-**Phase 0 spike (gate for the whole design)**: prove `ScopeProvider` returns correct candidates from a description-seeded index with no backing documents, including the local-shadows-import case and qualified names. If this fails, the fallback is hydrating only the *directly referenced* curated documents (a much smaller set than the closure) — worse, but still bounded.
+### 6.1 Spike result (2026-07-30): confirmed, and better than assumed
+
+The premise isn't just theoretically sound — it's already shipped in production for a related purpose:
+
+- **`RuneDslIndexManager.registerExports`** (`packages/core/src/services/rune-dsl-index-manager.ts`, ADR 007 Phase 4) already registers `AstNodeDescription[]` for a URI with **no backing document** — the parser worker uses this today for curated on-demand hydration.
+- **`RuneDslLinker.loadAstNode`** (`packages/core/src/services/rune-dsl-linker.ts`) already treats `description.node === undefined` as the normal case, lazily materializing a real node via `DeferredModelProvider` only when `.ref` is actually dereferenced — otherwise leaving it unmaterialized.
+- **Mechanically**, Langium's `DefaultLinker.doLink` (`node_modules/langium/lib/references/linker.js:90-104`) runs scope resolution and sets `ref._nodeDescription = description` **before** calling `loadAstNode(description)` — scope resolution and node materialization are genuinely separate steps. Consuming `reference.$nodeDescription` instead of `reference.ref` is what lets Phase B skip materialization (and therefore hydration) entirely.
+
+Empirically proven (scratch test, 3/3 cases, deleted after — will be rewritten as a real fixture-backed test when Phase B lands):
+
+1. A bare stub description (`{type: 'Data', name: 'Quantity', path, documentUri}`, no node, no `DeferredModelProvider`) registered via `registerExports`, referenced from a parsed user document: `.ref` correctly fails to materialize (nothing to load), but `ref.$nodeDescription` resolves correctly — name, type, path, documentUri all present.
+2. Same via a qualified `import` — resolves identically.
+3. **Local-shadow case**: the user document defines its own `Quantity` (`Data`) while a curated stub of the same bare name is also registered, deliberately typed `Choice` so a wrong hit is detectable — resolution correctly picks the **local** node (`$nodeDescription.type === 'Data'`), and being local, `.ref` also resolves directly.
+
+**APIs for Phase B**: `RuneDslIndexManager.registerExports(uri, descriptions)` seeded from the manifest's exports at request time (no parse of curated content needed to register); user documents built normally (no special `eagerLinking` handling needed — real linking runs, it just never needs to materialize the curated side); consume `reference.$nodeDescription` (never `.ref`) to key the `NamespaceShapes` lookup.
+
+**Not yet spiked** (low-risk, confirm when Phase B lands): alias imports (`import x.* as y`) resolve through `RuneDslScopeProvider.getGlobalScope`'s `AliasResolvingScope`, which is purely description/string-based — nothing in it appears to depend on live nodes, but no test has exercised it yet.
+
+The fallback documented in the original draft (hydrate only directly-referenced curated documents) is no longer needed as a hedge — it remains a reasonable *degradation* path for a bundle whose artifacts predate the shape schema (§8's version-skew case), not a risk mitigation for this design.
+
+### 6.2 One services instance per request — required, not optional
+
+The curated descriptions and the user documents must be registered against the **same** `RuneDsl.shared.workspace.IndexManager` instance within a request — Langium resolves a cross-reference by querying one shared index/scope; there is no mechanism to merge candidates across two separate `IndexManager` instances. This is a hard constraint of how the linker works, not a design preference.
+
+It is also already how `loadAllDocuments` (`apps/studio/functions/api/codegen.ts`) is structured today: one `createRuneDslServices()` call per request, reused for both `factory.fromString(...)` on user files and (currently) curated hydration. Phase B does not restructure this — it changes only what gets registered on the curated side of that same instance (bare export descriptions instead of fully hydrated documents), not the one-instance-per-request shape.
+
+Across process boundaries, instances are necessarily separate — the publisher (curated-mirror-worker, its own process) and the browser's on-demand hydration each have their own `createRuneDslServices()` call — but all three consume the identical `RuneDslIndexManager`/`registerExports` code path. No parallel implementation, three independent instances.
 
 ## 7. Content-addressed caching (independent quick wins)
 
