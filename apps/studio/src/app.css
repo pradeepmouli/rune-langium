@@ -683,37 +683,22 @@ html {
 
   .studio-app .studio-topbar__tab {
     appearance: none;
-    border: var(--hairline) solid transparent;
+    border: 0;
     background: transparent;
     display: flex;
     align-items: center;
     gap: var(--space-2);
     height: 28px;
-    padding: 0 var(--space-3);
-    border-radius: var(--radius-lg);
+    padding: 0;
     color: var(--muted-foreground);
-    max-width: 200px;
+    min-width: 0;
+    flex: 1;
     font-size: var(--text-xs);
     cursor: pointer;
     white-space: nowrap;
     transition:
-      background 0.15s ease,
       color 0.15s ease,
-      box-shadow 0.15s ease,
-      border-color 0.15s ease,
-      transform 0.05s ease;
-  }
-
-  .studio-app .studio-topbar__tab:hover {
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--card) 82%, transparent),
-        color-mix(in srgb, var(--accent) 28%, transparent)
-      );
-    border-color: color-mix(in srgb, var(--border) 84%, transparent);
-    color: var(--foreground);
-    box-shadow: inset 0 -2px 0 0 var(--primary);
+      transform 0.15s ease;
   }
 
   .studio-app .studio-topbar__tab:focus-visible,
@@ -722,18 +707,58 @@ html {
     outline-offset: -2px;
   }
 
-  .studio-app .studio-topbar__tab.is-active {
+  /* Pill background/border/hover/active state now lives on the WRAPPER
+     (not the select-button) so it visually encompasses the delete button
+     too — previously the delete button sat outside the highlighted pill,
+     reading as a disconnected floating element rather than part of the
+     tab it belongs to. */
+  .studio-app .studio-topbar__tab-wrapper:hover {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 82%, transparent),
+        color-mix(in srgb, var(--accent) 28%, transparent)
+      );
+    border-color: color-mix(in srgb, var(--border) 84%, transparent);
+    box-shadow: inset 0 -2px 0 0 var(--primary);
+  }
+
+  /* Optical nudge: the pill's box-shadow is bottom-heavy (2px accent line
+     at the bottom vs. ~1px highlight at the top), which reads as content
+     sitting slightly high within the pill even though it's geometrically
+     centered (verified via getBoundingClientRect — dot/name/badge/delete
+     all share the exact same center). Shifting content up ~1px only in
+     the states that carry that asymmetric shadow restores the optical
+     balance without touching the true geometric centering used elsewhere. */
+  .studio-app .studio-topbar__tab-wrapper:hover .studio-topbar__tab,
+  .studio-app .studio-topbar__tab-wrapper.is-active .studio-topbar__tab {
+    transform: translateY(-1px);
+  }
+
+  .studio-app .studio-topbar__tab-wrapper:hover .studio-topbar__tab-delete,
+  .studio-app .studio-topbar__tab-wrapper.is-active .studio-topbar__tab-delete {
+    transform: translateY(-1px);
+  }
+
+  .studio-app .studio-topbar__tab-wrapper:hover .studio-topbar__tab {
+    color: var(--foreground);
+  }
+
+  .studio-app .studio-topbar__tab-wrapper.is-active {
     background:
       linear-gradient(
         180deg,
         color-mix(in srgb, var(--card) 96%, transparent),
         color-mix(in srgb, var(--primary) 10%, transparent)
       );
-    color: var(--foreground);
     border-color: color-mix(in srgb, var(--primary) 34%, transparent);
     box-shadow:
       inset 0 -2px 0 0 var(--primary),
       inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  }
+
+  .studio-app .studio-topbar__tab-wrapper.is-active .studio-topbar__tab {
+    color: var(--foreground);
   }
 
   .studio-app .studio-topbar__tab-dot {
@@ -773,7 +798,7 @@ html {
     flex-shrink: 0;
   }
 
-  .studio-app .studio-topbar__tab.is-active .studio-topbar__tab-badge {
+  .studio-app .studio-topbar__tab-wrapper.is-active .studio-topbar__tab-badge {
     background: color-mix(in srgb, var(--primary) 14%, transparent);
     border-color: color-mix(in srgb, var(--primary) 28%, transparent);
     color: color-mix(in srgb, var(--primary) 78%, white 22%);
@@ -811,19 +836,25 @@ html {
   }
 
   /* Wraps one tab's select-button + delete-button as siblings (not nested
-     — a <button> inside another <button> is invalid HTML/ARIA) so the
-     delete affordance can be hover/focus-revealed on the pair. */
+     — a <button> inside another <button> is invalid HTML/ARIA) — and now
+     carries the pill background/border/radius itself (moved off the
+     select-button above) so the highlighted pill visually encompasses the
+     delete button too, instead of the delete button floating outside it. */
   .studio-app .studio-topbar__tab-wrapper {
     position: relative;
     display: flex;
     align-items: center;
+    gap: var(--space-1);
     max-width: 200px;
-  }
-
-  .studio-app .studio-topbar__tab-wrapper .studio-topbar__tab {
-    max-width: none;
-    flex: 1;
-    min-width: 0;
+    height: 28px;
+    padding: 0 var(--space-2) 0 var(--space-3);
+    border: var(--hairline) solid transparent;
+    border-radius: var(--radius-lg);
+    box-sizing: border-box;
+    transition:
+      background 0.15s ease,
+      box-shadow 0.15s ease,
+      border-color 0.15s ease;
   }
 
   /* "×" delete-file affordance — hidden until the tab is hovered/focused,
@@ -837,8 +868,6 @@ html {
     justify-content: center;
     width: 16px;
     height: 16px;
-    margin-left: calc(var(--space-1) * -1);
-    margin-right: var(--space-1);
     border-radius: var(--radius-md);
     color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
     cursor: pointer;
@@ -847,7 +876,8 @@ html {
     transition:
       opacity 0.1s ease,
       background 0.15s ease,
-      color 0.15s ease;
+      color 0.15s ease,
+      transform 0.15s ease;
   }
 
   .studio-app .studio-topbar__tab-wrapper:hover .studio-topbar__tab-delete,
@@ -1442,7 +1472,23 @@ html {
   letter-spacing: -0.01em;
   white-space: nowrap;
   cursor: pointer;
-  transition: color var(--motion-fast);
+  transition:
+    color var(--motion-fast),
+    transform 0.15s ease;
+}
+
+/* The shell's bottom-heavy active/hover indicator (box-shadow inset 0
+   -1.5px 0, no compensating top highlight) reads as visually off-center
+   even though the content is mathematically centered — same optical
+   correction as .studio-topbar__tab-wrapper. */
+.studio-source-editor__tab-shell:hover .studio-source-editor__tab,
+.studio-source-editor__tab-shell--active .studio-source-editor__tab {
+  transform: translateY(-1px);
+}
+
+.studio-source-editor__tab-shell:hover .studio-source-editor__tab-close,
+.studio-source-editor__tab-shell--active .studio-source-editor__tab-close {
+  transform: translateY(-1px);
 }
 
 .studio-source-editor__tab--active {
@@ -1485,7 +1531,8 @@ html {
   transition:
     opacity var(--motion-fast),
     color var(--motion-fast),
-    background-color var(--motion-fast);
+    background-color var(--motion-fast),
+    transform 0.15s ease;
 }
 
 .studio-source-editor__tab-shell:hover .studio-source-editor__tab-close,

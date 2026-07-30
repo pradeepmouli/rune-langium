@@ -90,10 +90,10 @@ function FileTabStrip({
       {userFiles.map((f) => {
         const { errors, warnings } = countFileDiagnostics(fileDiagnostics.get(f.path));
         return (
-          <div key={f.path} className="studio-topbar__tab-wrapper">
+          <div key={f.path} className={`studio-topbar__tab-wrapper ${f.path === activeFile ? 'is-active' : ''}`}>
             <button
               type="button"
-              className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
+              className="studio-topbar__tab"
               onClick={() => onSelectFile(f.path)}
               title={f.path}
               // Explicit label so screen readers don't read the diagnostics
