@@ -581,14 +581,23 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
-    'rewrites choiceArmPaths (not just children paths) for a Choice-typed attribute with array cardinality (Codex review, PR #433)',
+    'rewrites choiceArmPaths and Data-arm grandchild paths for a Choice-typed attribute with array cardinality (Codex review, PR #433)',
     async () => {
-      // Regression test: asArrayItem rewrote a Choice-typed array item's
-      // `children[].path` from `variant.arm` to `variant[].arm` but left
-      // `choiceArmPaths` (spread via `...field`) pointing at the stale
+      // Regression test, round 1: asArrayItem rewrote a Choice-typed array
+      // item's `children[].path` from `variant.arm` to `variant[].arm` but
+      // left `choiceArmPaths` (spread via `...field`) pointing at the stale
       // pre-rewrite paths. preview-validator.ts's "exactly one arm present"
       // lookup then found no children matching the stale arm paths and
       // rejected every array item as if no arm were selected.
+      //
+      // Regression test, round 2: fixing round 1 with a one-level-only
+      // children rewrite still left a Data-typed arm's OWN nested
+      // attributes (a grandchild of the array item) at the stale
+      // pre-rewrite path — `variants.commodity.name` instead of
+      // `variants[].commodity.name` — pointing outside the rewritten array
+      // item's subtree entirely and making that field impossible to
+      // populate correctly. `Commodity`'s `name` attribute below is exactly
+      // that grandchild.
       const doc = await parseModel(`
       namespace "test.preview"
       version "1"
@@ -619,10 +628,17 @@ describe('FormPreviewSchema generation', () => {
       expect(item).toMatchObject({ path: 'variants[]', kind: 'object' });
       const itemChildPaths = item && 'children' in item ? item.children?.map((c) => c.path).sort() : [];
       expect(itemChildPaths).toEqual(['variants[].cash', 'variants[].commodity']);
-      // The bug: choiceArmPaths must match children[].path exactly, not the
-      // pre-array-rewrite `variants.*` form.
+      // The round-1 bug: choiceArmPaths must match children[].path exactly,
+      // not the pre-array-rewrite `variants.*` form.
       const itemArmPaths = item && 'choiceArmPaths' in item ? item.choiceArmPaths : undefined;
       expect(itemArmPaths?.slice().sort()).toEqual(['variants[].cash', 'variants[].commodity']);
+      // The round-2 bug: the Commodity arm's OWN `name` attribute (a
+      // grandchild of the array item) must also be rewritten.
+      const commodityArm =
+        item && 'children' in item ? item.children?.find((c) => c.path === 'variants[].commodity') : undefined;
+      const commodityGrandchildPaths =
+        commodityArm && 'children' in commodityArm ? commodityArm.children?.map((c) => c.path) : undefined;
+      expect(commodityGrandchildPaths).toEqual(['variants[].commodity.name']);
     }
   );
 

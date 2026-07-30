@@ -909,33 +909,45 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
 function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
   const itemPath = `${ctx.path}[]`;
   if (field.kind === 'object') {
-    return {
-      ...field,
-      path: itemPath,
-      label: `${ctx.label} item`,
-      required: true,
-      children: field.children?.map((child) => ({
-        ...child,
-        path: child.path.replace(`${ctx.path}.`, `${itemPath}.`)
-      })),
-      // Codex review on PR #433: choiceArmPaths (set by choiceField/
-      // objectField for a Choice-typed or Choice-extending array item)
-      // referenced the PRE-rewrite paths (e.g. `variant.commodity`) while
-      // `children` above was already rewritten to the array-item form
-      // (`variant[].commodity`) — preview-validator.ts's "exactly one arm
-      // present" lookup then found no matching children under the stale
-      // paths and rejected every array item, even a validly-populated one.
-      // Apply the identical rewrite here so both stay in sync.
-      ...(field.choiceArmPaths
-        ? { choiceArmPaths: field.choiceArmPaths.map((armPath) => armPath.replace(`${ctx.path}.`, `${itemPath}.`)) }
-        : {})
-    };
+    return rewritePathPrefix({ ...field, label: `${ctx.label} item`, required: true }, ctx.path, itemPath);
   }
   return {
     ...field,
     path: itemPath,
     label: `${ctx.label} item`,
     required: true
+  };
+}
+
+/**
+ * Recursively rewrites `field.path` — and, for an 'object' field, every
+ * descendant's `path` at ANY depth plus `choiceArmPaths` entries at every
+ * level — from `oldPrefix` (or `oldPrefix.*`) form to `newPrefix` form.
+ *
+ * Used by `asArrayItem` to convert an array item's WHOLE subtree from
+ * `parent.child.grandchild` to `parent[].child.grandchild`, not just its
+ * immediate children. Codex review on PR #433 (round 2): the original
+ * one-level-only rewrite correctly updated a Choice arm's own path (e.g.
+ * `variant.commodity` → `variant[].commodity`) but left that arm's OWN
+ * nested attributes (e.g. a Data-typed arm's `variant.commodity.name`)
+ * untouched — a grandchild path pointing outside the rewritten array
+ * item's subtree entirely, making a Data-backed Choice arm's fields
+ * impossible to populate correctly. This defect predates Choice support
+ * entirely (any sufficiently nested object inside an array hit it), just
+ * newly exercised by the Choice-array regression test.
+ */
+function rewritePathPrefix(field: PreviewField, oldPrefix: string, newPrefix: string): PreviewField {
+  const rewrite = (p: string): string =>
+    p === oldPrefix || p.startsWith(`${oldPrefix}.`) ? newPrefix + p.slice(oldPrefix.length) : p;
+  const path = rewrite(field.path);
+  if (field.kind !== 'object') {
+    return { ...field, path };
+  }
+  return {
+    ...field,
+    path,
+    children: field.children?.map((child) => rewritePathPrefix(child, oldPrefix, newPrefix)),
+    ...(field.choiceArmPaths ? { choiceArmPaths: field.choiceArmPaths.map(rewrite) } : {})
   };
 }
 
