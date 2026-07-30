@@ -653,6 +653,50 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    "a Data-extends-Choice schema's own attribute wins over a colliding inherited Choice option, flagged as unsupported (issue #435)",
+    async () => {
+      // Same collision as the typeAlias/nested-objectField regression tests
+      // below, but exercised directly at buildDataSchema's own call site —
+      // this is the exact scenario from the issue text: `Basket extends
+      // Innermost` declares its own `cash string` attribute while
+      // `Innermost` has a `Cash` option whose real emitted field key
+      // (`choiceOptionFieldName('Cash')`) is also `cash`.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice Innermost:
+        Cash
+        Commodity
+
+      type Basket extends Innermost:
+        cash string (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket).toBeDefined();
+      // The non-colliding Commodity option survives; the colliding Cash
+      // option is dropped in favor of Basket's own `cash string` attribute.
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.fields.find((field) => field.path === 'cash')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+      expect(basket?.choiceArmPaths).toEqual(['commodity']);
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+    }
+  );
+
+  skipIfNodeLt22(
     'expands a Choice-typed attribute (as distinct from Data-extends-Choice) into one field per option (issue #394)',
     async () => {
       // Regression test for issue #394: buildBaseField had no branch for a
@@ -978,13 +1022,20 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
-    "a typeAlias's Data-extends-Choice expansion keeps the Data type's own attribute on a name collision",
+    "a typeAlias's Data-extends-Choice expansion keeps the Data type's own attribute on a name collision, and flags the collision as unsupported (issue #435)",
     async () => {
       // Mirrors buildDataSchema's collision precedence (round-5 finding #1
       // comment at its call site): when a Choice option's real emitted field
       // key collides with one of the Data type's own attribute names, the
       // Data type's own (more-derived) attribute wins and the Choice option
-      // is dropped rather than overwriting it.
+      // is dropped from `fields`/`choiceArmPaths`. The real emitted
+      // `runeExtendChoice` schema merges the Data type's own attributes into
+      // EVERY arm via `.extend()`, which replaces the colliding arm's
+      // distinguishing type entirely — that arm no longer conveys "the Cash
+      // option was selected" at all, so preview-validator.ts's "exactly one
+      // arm present" check would silently under-constrain if the collision
+      // weren't surfaced. `dropCollidingChoiceArmFields` now marks it
+      // `unsupported` instead of dropping it silently.
       const doc = await parseModel(`
       namespace "test.preview"
       version "1"
@@ -1013,6 +1064,8 @@ describe('FormPreviewSchema generation', () => {
         kind: 'string',
         required: true
       });
+      expect(alias?.status).toBe('unsupported');
+      expect(alias?.unsupportedFeatures).toContain('choice-arm-collision:cash');
     }
   );
 
@@ -1151,6 +1204,237 @@ describe('FormPreviewSchema generation', () => {
         kind: 'string',
         required: true
       });
+      // The collision is flagged (issue #435) even though it's nested —
+      // `ctx.unsupportedFeatures` is the SAME Set threaded through the
+      // whole recursive expansion, so it surfaces on the top-level Trade
+      // schema too, not just the constituent field.
+      expect(trade?.status).toBe('unsupported');
+      expect(trade?.unsupportedFeatures).toContain('choice-arm-collision:constituent.cash');
+    }
+  );
+
+  skipIfNodeLt22(
+    'rewrites a choice-arm-collision diagnostic path when the collision is nested inside an array-valued attribute (issue #435 round 2)',
+    async () => {
+      // rewritePathPrefix (used by asArrayItem to convert an array item's
+      // whole subtree from `positions.constituent.cash` to
+      // `positions[].constituent.cash`) only rewrites the returned FIELD
+      // tree — the collision diagnostic was recorded separately into
+      // ctx.unsupportedFeatures BEFORE that rewrite ran, so without
+      // rewriteCollisionDiagnostics it would still name the stale,
+      // non-array path, pointing consumers at a path that doesn't exist in
+      // the returned schema.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice Innermost:
+        Cash
+        Commodity
+
+      type Basket extends Innermost:
+        cash string (1..1)
+
+      type Holder:
+        constituent Basket (1..1)
+
+      type Trade:
+        positions Holder (0..*)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade?.status).toBe('unsupported');
+      expect(trade?.unsupportedFeatures).toContain('choice-arm-collision:positions[].constituent.cash');
+      expect(trade?.unsupportedFeatures).not.toContain('choice-arm-collision:positions.constituent.cash');
+    }
+  );
+
+  skipIfNodeLt22(
+    'removes a descendant choice-arm-collision diagnostic when the whole subtree containing it is dropped by an OUTER collision (issue #435 round 3)',
+    async () => {
+      // Doubly-nested collision: the outer Choice option "Cash" resolves to
+      // a Data type that itself extends ANOTHER Choice and has its OWN
+      // inner collision ("foo" vs. InnerChoice's "Foo" option) — building
+      // that "cash" object field records `choice-arm-collision:cash.foo`.
+      // Then the OUTER Basket's own `cash string` attribute collides with
+      // the outer "Cash" option itself, dropping the ENTIRE "cash" object
+      // field (foo collision and all). Without removing the now-stale
+      // descendant diagnostic, the returned schema would report a
+      // collision at `cash.foo` even though nothing at that path exists —
+      // the final `fields` only has Basket's own scalar `cash`.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Foo:
+        value string (1..1)
+
+      choice InnerChoice:
+        Foo
+
+      type Cash extends InnerChoice:
+        foo string (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice Innermost:
+        Cash
+        Commodity
+
+      type Basket extends Innermost:
+        cash string (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.fields.find((field) => field.path === 'cash')).toMatchObject({ kind: 'string', required: true });
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+      expect(basket?.unsupportedFeatures).not.toContain('choice-arm-collision:cash.foo');
+    }
+  );
+
+  skipIfNodeLt22(
+    "keeps a RETAINED field's own choice-arm-collision diagnostic when a DIFFERENT, discarded arm collides at the same path (issue #435 round 4)",
+    async () => {
+      // Distinct from round 3: there, the diagnostic under the dropped path
+      // belonged to the discarded arm itself (a doubly-nested collision
+      // inside the arm being thrown away). Here, Basket's OWN "cash"
+      // attribute (type Wrapper, which extends InnerChoice and has its own
+      // "foo" vs. InnerChoice's "Foo" option collision) records
+      // `choice-arm-collision:cash.foo` FIRST, while attributeFields are
+      // built — before OuterChoice's "Cash" option is even built. When that
+      // outer "Cash" option (unrelated to Wrapper) then also collides with
+      // Basket's own "cash" attribute name and gets dropped, a path-prefix
+      // removal (the round-3 approach) can't tell "cash.foo" belongs to the
+      // RETAINED Wrapper subtree apart from anything the discarded "Cash"
+      // option itself might have recorded — and would incorrectly delete
+      // it. Only diagnostics newly recorded while building the SPECIFIC
+      // discarded option should be removed.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Foo:
+        value string (1..1)
+
+      choice InnerChoice:
+        Foo
+
+      type Wrapper extends InnerChoice:
+        foo string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice OuterChoice:
+        Cash
+        Commodity
+
+      type Basket extends OuterChoice:
+        cash Wrapper (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash.foo');
+
+      const cashField = basket?.fields.find((field) => field.path === 'cash');
+      if (cashField?.kind !== 'object') throw new Error('expected cash field to be an object');
+      expect(cashField.children.map((child) => child.path)).toEqual(['cash.foo']);
+      expect(cashField.children.find((child) => child.path === 'cash.foo')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+    }
+  );
+
+  skipIfNodeLt22(
+    "keeps a RETAINED field's own choice-arm-collision diagnostic when a discarded arm's UNRELATED array attribute happens to rewrite the same path prefix (issue #435 round 5)",
+    async () => {
+      // Distinct from round 4: there, the discarded arm's OWN build never
+      // touched the retained diagnostic at all. Here, Basket's own "cash"
+      // attribute (type Wrapper) has a nested Data-extends-Choice
+      // collision at "cash.items.foo" — recorded while building
+      // attributeFields, before the choice-options loop even starts. The
+      // discarded "Cash" option ALSO happens to declare its own
+      // array-valued, OBJECT-typed "items" attribute (nothing to do with
+      // Wrapper's) — building it calls asArrayItem's `field.kind ===
+      // 'object'` branch (the only branch that rewrites diagnostics; a
+      // scalar array item can't itself contain a nested collision, so
+      // asArrayItem doesn't bother rewriting for that case), which
+      // rewrites any choice-arm-collision diagnostic under "cash.items" to
+      // "cash.items[]". If that rewrite (or anything else the discarded
+      // option's build does) can reach the RETAINED diagnostic at all —
+      // e.g. by sharing the ambient unsupportedFeatures set instead of an
+      // isolated one per option — the retained diagnostic gets renamed
+      // away and then swept up as "new" when the option is dropped, with
+      // nothing to restore it.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Foo:
+        value string (1..1)
+
+      choice InnerChoice:
+        Foo
+
+      type ItemThing extends InnerChoice:
+        foo string (1..1)
+
+      type Wrapper:
+        items ItemThing (1..1)
+
+      type ItemsHolder:
+        note string (1..1)
+
+      type Cash:
+        items ItemsHolder (0..*)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice OuterChoice:
+        Cash
+        Commodity
+
+      type Basket extends OuterChoice:
+        cash Wrapper (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash.items.foo');
+      expect(basket?.unsupportedFeatures).not.toContain('choice-arm-collision:cash.items[].foo');
+
+      const cashField = basket?.fields.find((field) => field.path === 'cash');
+      if (cashField?.kind !== 'object') throw new Error('expected cash field to be an object');
+      const itemsField = cashField.children.find((child) => child.path === 'cash.items');
+      if (itemsField?.kind !== 'object') throw new Error('expected cash.items field to be an object');
+      expect(itemsField.children.map((child) => child.path)).toEqual(['cash.items.foo']);
     }
   );
 });

@@ -207,6 +207,71 @@ function qualifiedTypeId(node: Data | Choice): string {
 }
 
 /**
+ * Builds Choice-ancestor option fields, dropping any whose `path` collides
+ * with one of the Data type's OWN attribute names and flagging each
+ * collision as unsupported (issue #435) rather than silently omitting it
+ * from `choiceArmPaths`.
+ *
+ * The real emitted `runeExtendChoice(choice, shape)` helper is
+ * `z.union(choice.options.map(arm => arm.extend(shape)))` — `shape` (the
+ * Data's own attributes) is merged into EVERY arm via `.extend()`, which in
+ * Zod v4 REPLACES a colliding key's schema across the WHOLE union, not just
+ * the one arm that named it. A collision therefore destroys that arm's
+ * distinguishing type entirely: the merged schema for it no longer conveys
+ * "this Choice option was selected" at all, so there is no sound shape to
+ * expose as a separate, selectable arm in the form preview. Silently
+ * dropping it from `choiceArmPaths` (the prior behavior, shared by every
+ * call site below) let `preview-validator.ts`'s "exactly one arm present"
+ * check silently under-constrain and potentially reject a
+ * structurally-valid sample. Marking the schema `unsupported` instead makes
+ * the gap explicit, mirroring this file's existing `empty-choice` precedent
+ * for other genuinely-ambiguous real-schema situations.
+ *
+ * Takes the raw `options` plus a `buildOption` callback (rather than an
+ * already-built `PreviewField[]`) so each option can be built ONE AT A TIME
+ * into its OWN, isolated `Set<string>` — `buildOption` receives that local
+ * set to record diagnostics into instead of the ambient `unsupportedFeatures`.
+ * If the option collides, its local set (and everything recorded into it,
+ * including a doubly-nested inner collision — round-5 finding #1 — or any
+ * unrelated recursive-/unresolved-reference diagnostic) is discarded
+ * wholesale, since none of it can name a path the returned schema still
+ * contains. If the option survives, its local set is merged into
+ * `unsupportedFeatures`.
+ *
+ * Two prior approaches were both insufficient: a path-prefix removal
+ * (round 3) can't distinguish a discarded option's own diagnostic from a
+ * RETAINED field's diagnostic that merely shares the same colliding path
+ * (round-4 finding). A before/after snapshot diff of the SHARED set (round
+ * 4) is still fooled when building a discarded option MUTATES (rather than
+ * just adds) an already-present entry — e.g. `asArrayItem`'s
+ * `rewriteCollisionDiagnostics` rewrites any matching path in the whole
+ * shared set, including a retained field's pre-existing diagnostic, which
+ * then reads as "new" and gets swept away with nothing to restore the
+ * original (Codex review round 5 on PR #443). Full isolation via a
+ * per-option local set has no such gap: a discarded option's build can
+ * only ever mutate diagnostics it itself created.
+ */
+function dropCollidingChoiceArmFields<TOption>(
+  options: readonly TOption[],
+  buildOption: (option: TOption, localUnsupportedFeatures: Set<string>) => PreviewField,
+  ownPaths: ReadonlySet<string>,
+  unsupportedFeatures: Set<string>
+): PreviewField[] {
+  const result: PreviewField[] = [];
+  for (const option of options) {
+    const local = new Set<string>();
+    const field = buildOption(option, local);
+    if (ownPaths.has(field.path)) {
+      unsupportedFeatures.add(`choice-arm-collision:${field.path}`);
+      continue;
+    }
+    for (const entry of local) unsupportedFeatures.add(entry);
+    result.push(field);
+  }
+  return result;
+}
+
+/**
  * Result of walking a Data's `extends` chain: its own + inherited
  * `Attribute` AST nodes, PLUS (round-5 finding #1) the Choice the chain
  * terminates at, if any.
@@ -315,18 +380,20 @@ function buildDataSchema(
   // attributes are set before the Choice's options are ever contributed).
   const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
   const choiceFields = choiceAncestor
-    ? choiceAncestor.attributes
-        .map((option) =>
+    ? dropCollidingChoiceArmFields(
+        choiceAncestor.attributes,
+        (option, localUnsupportedFeatures) =>
           buildChoiceOptionField(option, {
             namespace,
-            unsupportedFeatures,
+            unsupportedFeatures: localUnsupportedFeatures,
             sourceUri,
             seenTypes: new Set([qualifiedTypeId(data), qualifiedTypeId(choiceAncestor)]),
             depth: 0,
             maxDepth
-          })
-        )
-        .filter((field) => !ownFieldPaths.has(field.path))
+          }),
+        ownFieldPaths,
+        unsupportedFeatures
+      )
     : [];
 
   const fields = [...choiceFields, ...attributeFields];
@@ -417,18 +484,20 @@ function buildTypeAliasSchema(
     // rationale. On a name collision, the Data type's own attribute wins.
     const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
     const choiceFields = choiceAncestor
-      ? choiceAncestor.attributes
-          .map((option) =>
+      ? dropCollidingChoiceArmFields(
+          choiceAncestor.attributes,
+          (option, localUnsupportedFeatures) =>
             buildChoiceOptionField(option, {
               namespace,
-              unsupportedFeatures,
+              unsupportedFeatures: localUnsupportedFeatures,
               sourceUri,
               seenTypes: new Set([qualifiedTypeId(resolvedData), qualifiedTypeId(choiceAncestor)]),
               depth: 0,
               maxDepth: DEFAULT_MAX_DEPTH
-            })
-          )
-          .filter((field) => !ownFieldPaths.has(field.path))
+            }),
+          ownFieldPaths,
+          unsupportedFeatures
+        )
       : [];
 
     const fields = [...choiceFields, ...attributeFields];
@@ -664,19 +733,21 @@ function buildChoiceOptionField(
       ? (() => {
           const choiceSeen = new Set(nextSeen);
           choiceSeen.add(qualifiedTypeId(choiceAncestor));
-          return choiceAncestor.attributes
-            .map((option) =>
+          return dropCollidingChoiceArmFields(
+            choiceAncestor.attributes,
+            (option, localUnsupportedFeatures) =>
               buildChoiceOptionField(option, {
                 namespace: ctx.namespace,
-                unsupportedFeatures: ctx.unsupportedFeatures,
+                unsupportedFeatures: localUnsupportedFeatures,
                 sourceUri: resolvedSourceUri,
                 pathPrefix: path,
                 seenTypes: choiceSeen,
                 depth: ctx.depth + 1,
                 maxDepth: ctx.maxDepth
-              })
-            )
-            .filter((field) => !ownChildPaths.has(field.path));
+              }),
+            ownChildPaths,
+            ctx.unsupportedFeatures
+          );
         })()
       : [];
 
@@ -896,19 +967,21 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
     ? (() => {
         const choiceSeen = new Set(nextSeen);
         choiceSeen.add(qualifiedTypeId(choiceAncestor));
-        return choiceAncestor.attributes
-          .map((option) =>
+        return dropCollidingChoiceArmFields(
+          choiceAncestor.attributes,
+          (option, localUnsupportedFeatures) =>
             buildChoiceOptionField(option, {
               namespace: ctx.namespace,
-              unsupportedFeatures: ctx.unsupportedFeatures,
+              unsupportedFeatures: localUnsupportedFeatures,
               sourceUri,
               pathPrefix: ctx.path,
               seenTypes: choiceSeen,
               depth: ctx.depth + 1,
               maxDepth: ctx.maxDepth
-            })
-          )
-          .filter((field) => !ownChildPaths.has(field.path));
+            }),
+          ownChildPaths,
+          ctx.unsupportedFeatures
+        );
       })()
     : [];
 
@@ -996,6 +1069,13 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
 function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
   const itemPath = `${ctx.path}[]`;
   if (field.kind === 'object') {
+    // A `choice-arm-collision:<path>` diagnostic (issue #435) recorded
+    // while building this subtree names the PRE-rewrite path (e.g.
+    // `positions.constituent.cash`) — rewritePathPrefix only rewrites the
+    // returned field tree, not `ctx.unsupportedFeatures`, so without this
+    // the diagnostic would name a path that doesn't exist in the returned
+    // schema (Codex review on PR #443).
+    rewriteCollisionDiagnostics(ctx.unsupportedFeatures, ctx.path, itemPath);
     return rewritePathPrefix({ ...field, label: `${ctx.label} item`, required: true }, ctx.path, itemPath);
   }
   return {
@@ -1004,6 +1084,24 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
     label: `${ctx.label} item`,
     required: true
   };
+}
+
+/**
+ * Rewrites any `choice-arm-collision:<path>` diagnostic in
+ * `unsupportedFeatures` whose path is `oldPrefix` or nested under it, to
+ * the equivalent path under `newPrefix` — the same prefix-match rule
+ * `rewritePathPrefix` applies to the field tree itself, kept in sync so an
+ * array-nested collision's diagnostic always names an existing path.
+ */
+function rewriteCollisionDiagnostics(unsupportedFeatures: Set<string>, oldPrefix: string, newPrefix: string): void {
+  const marker = 'choice-arm-collision:';
+  for (const entry of Array.from(unsupportedFeatures)) {
+    if (!entry.startsWith(marker)) continue;
+    const path = entry.slice(marker.length);
+    if (path !== oldPrefix && !path.startsWith(`${oldPrefix}.`)) continue;
+    unsupportedFeatures.delete(entry);
+    unsupportedFeatures.add(`${marker}${newPrefix}${path.slice(oldPrefix.length)}`);
+  }
 }
 
 /**
