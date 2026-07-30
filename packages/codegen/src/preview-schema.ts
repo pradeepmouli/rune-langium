@@ -917,7 +917,18 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
       children: field.children?.map((child) => ({
         ...child,
         path: child.path.replace(`${ctx.path}.`, `${itemPath}.`)
-      }))
+      })),
+      // Codex review on PR #433: choiceArmPaths (set by choiceField/
+      // objectField for a Choice-typed or Choice-extending array item)
+      // referenced the PRE-rewrite paths (e.g. `variant.commodity`) while
+      // `children` above was already rewritten to the array-item form
+      // (`variant[].commodity`) — preview-validator.ts's "exactly one arm
+      // present" lookup then found no matching children under the stale
+      // paths and rejected every array item, even a validly-populated one.
+      // Apply the identical rewrite here so both stay in sync.
+      ...(field.choiceArmPaths
+        ? { choiceArmPaths: field.choiceArmPaths.map((armPath) => armPath.replace(`${ctx.path}.`, `${itemPath}.`)) }
+        : {})
     };
   }
   return {

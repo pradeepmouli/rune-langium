@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generatePreviewSchemas } from '../src/export.js';
+import type { PreviewField } from '../src/types.js';
 
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
 const REAL_CDM_ADJUSTABLE_DATE_FIXTURES = [
@@ -576,6 +577,52 @@ describe('FormPreviewSchema generation', () => {
         'variant.commodity',
         'variant.cash'
       ]);
+    }
+  );
+
+  skipIfNodeLt22(
+    'rewrites choiceArmPaths (not just children paths) for a Choice-typed attribute with array cardinality (Codex review, PR #433)',
+    async () => {
+      // Regression test: asArrayItem rewrote a Choice-typed array item's
+      // `children[].path` from `variant.arm` to `variant[].arm` but left
+      // `choiceArmPaths` (spread via `...field`) pointing at the stale
+      // pre-rewrite paths. preview-validator.ts's "exactly one arm present"
+      // lookup then found no children matching the stale arm paths and
+      // rejected every array item as if no arm were selected.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type Trade:
+        variants Observable (0..*)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      const variantsField = trade?.fields.find((field) => field.path === 'variants');
+      expect(variantsField).toMatchObject({ path: 'variants', kind: 'array' });
+      const item =
+        variantsField && 'children' in variantsField ? (variantsField.children?.[0] as PreviewField) : undefined;
+      expect(item).toMatchObject({ path: 'variants[]', kind: 'object' });
+      const itemChildPaths = item && 'children' in item ? item.children?.map((c) => c.path).sort() : [];
+      expect(itemChildPaths).toEqual(['variants[].cash', 'variants[].commodity']);
+      // The bug: choiceArmPaths must match children[].path exactly, not the
+      // pre-array-rewrite `variants.*` form.
+      const itemArmPaths = item && 'choiceArmPaths' in item ? item.choiceArmPaths : undefined;
+      expect(itemArmPaths?.slice().sort()).toEqual(['variants[].cash', 'variants[].commodity']);
     }
   );
 
