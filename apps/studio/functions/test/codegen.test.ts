@@ -1363,6 +1363,134 @@ type Quantity:
     }
   });
 
+  it('waits for a different-key eviction victim through generate(), even when it was evicted while still PENDING (issue #432 round 10)', async () => {
+    // The round-9 fix registered a request's consumption reservation
+    // AFTER awaiting its own hydration, guarded by
+    // `documentCache.get(cacheKey) === entry`. That left a gap: if a
+    // different-key request evicted THIS entry while it was still
+    // `pending` (before hydration even settled), the entry's
+    // `activeConsumers` was still empty at eviction time — the evictor's
+    // `stalePending` snapshot only captured the hydration promise. Once
+    // hydration settled, the identity check failed (already evicted) and
+    // the reservation never got registered at all — so THIS request's
+    // `generate()` work became completely invisible, and the evictor's
+    // already-snapshotted wait resolved as soon as hydration alone
+    // finished, letting two closures process concurrently regardless.
+    // This test evicts A while it's STILL PENDING (unlike round 9's test,
+    // which waited until A had already reached generate()) to isolate
+    // that specific gap.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    const manifest = (nsKey: string) => ({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        [nsKey]: { deps: [], exports: [], artifact: `artifacts/${V}/ns/${nsKey}.json.gz` }
+      }
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const manifestDeferreds: Array<(value: any) => void> = [];
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockImplementation(
+      () => new Promise((resolve) => manifestDeferreds.push(resolve))
+    );
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    const codegenExportMod = await import('@rune-langium/codegen/export');
+    const generateSpy = vi.mocked(codegenExportMod.generate);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolveGenerateA: ((value: any) => void) | undefined;
+      generateSpy.mockImplementation(() => new Promise((resolve) => (resolveGenerateA = resolve)));
+
+      const responseA = onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces: ['cdm.base.math']
+        })
+      } as never);
+
+      // Flush until A's manifest fetch fires — A is now genuinely
+      // `pending` (hydration hasn't resolved), not yet at generate().
+      for (let i = 0; i < 50 && manifestDeferreds.length < 1; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(manifestDeferreds).toHaveLength(1);
+      expect(__documentCacheIsBusyForTests()).toBe(true);
+
+      // B, for a DIFFERENT key, evicts A's entry WHILE IT'S STILL PENDING.
+      const responseB = onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces: ['cdm.base.other']
+        })
+      } as never);
+
+      for (let i = 0; i < 50; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      // B must not have started its own manifest fetch yet — only A's
+      // original call should exist.
+      expect(manifestDeferreds).toHaveLength(1);
+
+      // A's hydration settles now — A proceeds into generate() and
+      // suspends there (on our deferred generateSpy mock).
+      manifestDeferreds[0]!(manifest('cdm.base.math'));
+      for (let i = 0; i < 50 && !resolveGenerateA; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(resolveGenerateA).toBeDefined();
+
+      // B must STILL be waiting — A's hydration is done, but A's
+      // generate() (tracked by its reservation) is not.
+      for (let i = 0; i < 50; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(manifestDeferreds).toHaveLength(1);
+
+      // A's generate() finishes — its reservation releases.
+      resolveGenerateA!([
+        { relativePath: 'x.zod.ts', content: 'export const x = 1;\n', sourceMap: [], diagnostics: [], funcs: [] }
+      ]);
+      expect((await responseA).status).toBe(200);
+
+      // Only now should B's hydration start.
+      for (let i = 0; i < 50 && manifestDeferreds.length < 2; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(manifestDeferreds).toHaveLength(2);
+      manifestDeferreds[1]!(manifest('cdm.base.other'));
+      generateSpy.mockResolvedValue([
+        { relativePath: 'y.zod.ts', content: 'export const y = 1;\n', sourceMap: [], diagnostics: [], funcs: [] }
+      ] as never);
+      expect((await responseB).status).toBe(200);
+    } finally {
+      generateSpy.mockImplementation(realGenerateHolder.current as never);
+    }
+  });
+
   it('combines user files and curated bundles in one generation', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
