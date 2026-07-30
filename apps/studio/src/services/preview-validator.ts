@@ -13,6 +13,113 @@ export function fieldLeafKey(path: string): string {
   return parts[parts.length - 1]!.split('[]').join('');
 }
 
+/**
+ * Which of `schema`'s (or a nested object field's) own top-level `fields`
+ * are Choice-ancestor-derived arms — the single "which paths are mutually
+ * exclusive arms" derivation shared by every consumer that needs to treat
+ * Choice arms specially (default-value seeding, sample reconciliation, form
+ * rendering, validation's "exactly one arm present" check). A genuine
+ * top-level Choice schema (`kind === 'choice'`) has NO `choiceArmPaths` of
+ * its own — every one of its `fields` already IS an arm — so this derives
+ * that case explicitly rather than making every caller special-case it
+ * (issue #434; DRY — see this repo's CLAUDE.md "NEVER build a parallel
+ * implementation").
+ */
+export function resolveArmPaths(schema: {
+  kind?: FormPreviewSchema['kind'];
+  fields: PreviewField[];
+  choiceArmPaths?: string[];
+}): string[] | undefined {
+  return schema.kind === 'choice' ? schema.fields.map((field) => field.path) : schema.choiceArmPaths;
+}
+
+/**
+ * Splits `fields` into Choice-ancestor-derived arms (per `armPaths`,
+ * `FormPreviewSchema.choiceArmPaths` / `PreviewField.choiceArmPaths`) and
+ * everything else — the shared basis for both rendering (FormPreviewPanel's
+ * `ChoiceFieldGroup` routing) and default/reconciled-value building below,
+ * so both agree on which fields are mutually-exclusive arms (issue #434).
+ */
+export function splitChoiceArmFields(
+  fields: PreviewField[],
+  armPaths: string[] | undefined
+): { armFields: PreviewField[]; otherFields: PreviewField[] } {
+  if (!armPaths || armPaths.length === 0) {
+    return { armFields: [], otherFields: fields };
+  }
+  const armPathSet = new Set(armPaths);
+  return {
+    armFields: fields.filter((field) => armPathSet.has(field.path)),
+    otherFields: fields.filter((field) => !armPathSet.has(field.path))
+  };
+}
+
+/**
+ * A field's ordinary default value. An 'object' field only materializes a
+ * default when `required` — an optional object (including every
+ * Choice-ancestor arm, which is always generated `required: false`) stays
+ * absent unless something else (see `buildArmValue`) forces it to
+ * materialize.
+ */
+export function buildDefaultValue(field: PreviewField): unknown {
+  switch (field.kind) {
+    case 'boolean':
+      return false;
+    case 'enum':
+      return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
+    case 'object':
+      return field.required
+        ? buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey)
+        : undefined;
+    case 'array':
+      return [];
+    default:
+      return '';
+  }
+}
+
+export function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
+  if (field.kind !== 'object') return {};
+  return buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey);
+}
+
+/**
+ * A Choice arm's default value when it becomes the SELECTED arm — unlike
+ * `buildDefaultValue`, always materializes an object arm's fields
+ * (`buildDefaultObjectValue`) regardless of the arm's own `required` flag,
+ * since an arm actively being selected must produce a real value, not
+ * `undefined` (issue #434).
+ */
+export function buildArmValue(arm: PreviewField): unknown {
+  return arm.kind === 'object' ? buildDefaultObjectValue(arm) : buildDefaultValue(arm);
+}
+
+/**
+ * Builds the default-values object for a field list, seeding a real default
+ * for every ordinary field but ONLY the FIRST Choice-ancestor-derived arm
+ * (per `armPaths`) — the rest are omitted so they read as genuinely
+ * unselected rather than every arm starting simultaneously "present" with
+ * its kind's default value (issue #434). Must agree with ChoiceFieldGroup's
+ * own "which arm is active" derivation on which arm counts as "first".
+ */
+export function buildDefaultFieldsObject(
+  fields: PreviewField[],
+  armPaths: string[] | undefined,
+  keyFn: (path: string) => string
+): Record<string, unknown> {
+  const { armFields, otherFields } = splitChoiceArmFields(fields, armPaths);
+  const entries: Array<[string, unknown]> = otherFields.map((field) => [keyFn(field.path), buildDefaultValue(field)]);
+  const [firstArm] = armFields;
+  if (firstArm) {
+    entries.push([keyFn(firstArm.path), buildArmValue(firstArm)]);
+  }
+  return Object.fromEntries(entries);
+}
+
+export function buildDefaultValues(fields: PreviewField[], armPaths?: string[]): Record<string, unknown> {
+  return buildDefaultFieldsObject(fields, armPaths, fieldRootKey);
+}
+
 export function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
   return path
     .filter((segment): segment is string | number => typeof segment === 'string' || typeof segment === 'number')
@@ -184,7 +291,7 @@ export function validatePreviewSample(
   // for those, so `choiceArmPaths` (set by buildDataSchema /
   // buildTypeAliasSchema) is what scopes this block to just the arm fields
   // in that case, instead of every field in `schema.fields`.
-  const armPaths = schema.kind === 'choice' ? schema.fields.map((field) => field.path) : (schema.choiceArmPaths ?? []);
+  const armPaths = resolveArmPaths(schema) ?? [];
   if (armPaths.length > 0) {
     const armFields = schema.fields.filter((field) => armPaths.includes(field.path));
     const presentFields = armFields.filter((field) => values[fieldRootKey(field.path)] !== undefined);

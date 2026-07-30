@@ -780,5 +780,29 @@ describe('FormPreviewPanel', () => {
         constituent: { cleared: false }
       });
     });
+
+    it('does not fabricate a selected arm for a genuinely empty controlled value (issue #434 round 2)', () => {
+      // A freshly created InstanceFormPanel record starts as controlled
+      // `values={}` before anything seeds real defaults into it (the
+      // controlled path deliberately skips this component's own
+      // defaultValues — `values ?? defaultValues` only falls back on
+      // null/undefined, not on a real, empty `{}`). Falling back to
+      // `fields[0]` here would show a radio checked while the persisted
+      // sample has no key for it at all — a visual/data mismatch. No arm
+      // checked is the honest rendering of that state.
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+          values={{}}
+          onValuesChange={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('radio', { name: 'Cash' })).not.toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Commodity' })).not.toBeChecked();
+      expect(screen.queryByRole('textbox', { name: 'Cash' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument();
+    });
   });
 });

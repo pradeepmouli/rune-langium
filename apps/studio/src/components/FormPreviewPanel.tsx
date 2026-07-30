@@ -18,7 +18,15 @@ import {
   type PreviewStatus
 } from '../store/preview-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
-import { fieldLeafKey, fieldRootKey, validatePreviewSample } from '../services/preview-validator.js';
+import {
+  buildArmValue,
+  buildDefaultObjectValue,
+  buildDefaultValue,
+  buildDefaultValues,
+  resolveArmPaths,
+  splitChoiceArmFields,
+  validatePreviewSample
+} from '../services/preview-validator.js';
 
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
@@ -89,13 +97,7 @@ export function FormPreviewPanel({
 
   const defaultValues = useMemo(() => {
     if (!schema) return {};
-    // A genuine top-level Choice schema (kind === 'choice') has NO
-    // schema.choiceArmPaths of its own — every one of its fields already
-    // IS an arm (mirrors validatePreviewSample's identical derivation), so
-    // build that arm-paths list here too rather than skipping the
-    // first-arm-only default seeding for this case (issue #434).
-    const armPaths = schema.kind === 'choice' ? schema.fields.map((field) => field.path) : schema.choiceArmPaths;
-    return buildDefaultValues(schema.fields, armPaths) as Record<string, unknown>;
+    return buildDefaultValues(schema.fields, resolveArmPaths(schema)) as Record<string, unknown>;
   }, [schema]);
   const lookupFieldSource = useCallback(
     (fieldPath: string) =>
@@ -440,30 +442,19 @@ export function FormPreviewPanel({
   );
 }
 
-/**
- * Splits a field list into Choice-ancestor-derived arms (per `armPaths`,
- * `FormPreviewSchema.choiceArmPaths` / `PreviewObjectField.choiceArmPaths`)
- * and everything else. Used at both the schema-root level (a Data-extends-
- * Choice schema whose own top-level `kind` isn't `'choice'`) and inside
- * `PreviewFieldControl`'s object-field branch (a NESTED Data-extends-Choice
- * reference) so arm fields render through `ChoiceFieldGroup`'s single-
- * selection radio UI instead of as ordinary always-present fields — the
- * root cause of issue #434 for scalar/enum/boolean arms, which have no
- * other affordance to become "unselected".
- */
-function splitChoiceArmFields(
-  fields: PreviewField[],
-  armPaths: string[] | undefined
-): { armFields: PreviewField[]; otherFields: PreviewField[] } {
-  if (!armPaths || armPaths.length === 0) {
-    return { armFields: [], otherFields: fields };
-  }
-  const armPathSet = new Set(armPaths);
-  return {
-    armFields: fields.filter((field) => armPathSet.has(field.path)),
-    otherFields: fields.filter((field) => !armPathSet.has(field.path))
-  };
-}
+// splitChoiceArmFields (issue #434) — used at both the schema-root level (a
+// Data-extends-Choice schema whose own top-level `kind` isn't `'choice'`)
+// and inside `PreviewFieldControl`'s object-field branch (a NESTED
+// Data-extends-Choice reference) so arm fields render through
+// `ChoiceFieldGroup`'s single-selection radio UI instead of as ordinary
+// always-present fields. Imported from preview-validator.ts, which also
+// needs it (and the choice-aware default-value builders below) to keep
+// `usePreviewStore`'s sample seeding/reconciliation in agreement with this
+// component's rendering on which fields are mutually-exclusive arms — see
+// that module for the shared implementation (Codex review round 2 on PR
+// #444: a second, Choice-unaware copy of this default-seeding logic in
+// preview-store.ts let the real app's store-seeded initial sample disagree
+// with what this component would have seeded).
 
 // ---------------------------------------------------------------------------
 // ChoiceFieldGroup — renders choice schemas as a radio group
@@ -496,15 +487,20 @@ function ChoiceFieldGroup({
 }: ChoiceFieldGroupProps): ReactElement {
   const groupId = useId();
   // Determine which option is currently active by checking which field has a
-  // value present in the sample. Default to the first option — this must
-  // stay in sync with buildDefaultFieldsObject, which seeds ONLY the first
-  // arm's default value so this lookup and that seeding agree on which arm
-  // starts active (issue #434).
-  const activeField =
-    fields.find((f) => {
-      const v = getValueAtPath(sample?.values ?? {}, pathToSegments(f.path, arrayIndices));
-      return v !== undefined;
-    }) ?? fields[0];
+  // value present in the sample — no fallback to `fields[0]`. Every REAL
+  // sample (uncontrolled, via usePreviewStore's Choice-aware
+  // receivePreviewResult/ensureSample seeding, or a controlled caller that
+  // seeds real defaults) already has the first arm's key present, so this
+  // lookup finds a match without needing one. A fallback here would
+  // fabricate a visually "selected" radio for a genuinely empty sample —
+  // e.g. a freshly created controlled instance whose `values` starts as
+  // `{}` before any default is seeded — contradicting the underlying data
+  // (Codex review round 2 on PR #444). No arm selected is the honest
+  // rendering of that state.
+  const activeField = fields.find((f) => {
+    const v = getValueAtPath(sample?.values ?? {}, pathToSegments(f.path, arrayIndices));
+    return v !== undefined;
+  });
 
   const handleOptionChange = (field: PreviewField) => {
     // Single atomic transformation via onArmSelect — see its definition
@@ -907,73 +903,6 @@ function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sam
   }
 
   return 'Valid sample';
-}
-
-/**
- * Builds the default-values object for a field list, seeding a real default
- * for every ordinary field but ONLY the FIRST Choice-ancestor-derived arm
- * (per `armPaths`) — the rest are omitted so they read as genuinely
- * unselected rather than every arm starting simultaneously "present" with
- * its kind's default value (issue #434). Must agree with ChoiceFieldGroup's
- * own `activeField ?? fields[0]` fallback on which arm counts as "first".
- */
-function buildDefaultFieldsObject(
-  fields: PreviewField[],
-  armPaths: string[] | undefined,
-  keyFn: (path: string) => string
-): Record<string, unknown> {
-  const { armFields, otherFields } = splitChoiceArmFields(fields, armPaths);
-  const entries: Array<[string, unknown]> = otherFields.map((field) => [keyFn(field.path), buildDefaultValue(field)]);
-  const [firstArm] = armFields;
-  if (firstArm) {
-    // The chosen arm must materialize an actual value even when the
-    // generator marks Choice-ancestor arms `required: false` (only one may
-    // be present at a time, so none is individually required) — otherwise
-    // `buildDefaultValue`'s object case returns `undefined` for the arm
-    // ChoiceFieldGroup's own `activeField ?? fields[0]` fallback displays as
-    // selected, and the sample silently omits it (Codex review on PR #444).
-    entries.push([keyFn(firstArm.path), buildArmValue(firstArm)]);
-  }
-  return Object.fromEntries(entries);
-}
-
-function buildDefaultValues(fields: PreviewField[], armPaths?: string[]): Record<string, unknown> {
-  return buildDefaultFieldsObject(fields, armPaths, fieldRootKey);
-}
-
-function buildDefaultValue(field: PreviewField): unknown {
-  switch (field.kind) {
-    case 'boolean':
-      return false;
-    case 'enum':
-      return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
-    case 'object':
-      return field.required
-        ? buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey)
-        : undefined;
-    case 'array':
-      return [];
-    default:
-      return '';
-  }
-}
-
-function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
-  if (field.kind !== 'object') {
-    return {};
-  }
-  return buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey);
-}
-
-/**
- * A Choice arm's default value when it becomes the selected arm — unlike
- * `buildDefaultValue`, always materializes an object arm's fields
- * (`buildDefaultObjectValue`) regardless of the arm's own `required` flag,
- * since an arm the caller is actively selecting must produce a real value,
- * not `undefined` (issue #434, Codex review on PR #444).
- */
-function buildArmValue(arm: PreviewField): unknown {
-  return arm.kind === 'object' ? buildDefaultObjectValue(arm) : buildDefaultValue(arm);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
