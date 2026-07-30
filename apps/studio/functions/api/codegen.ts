@@ -144,21 +144,44 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
  * part of the cache key — caching would risk serving one request's user
  * files' worth of `docs` to a later request with DIFFERENT user file
  * content under the same curated key.
+ *
+ * Capped at ONE retained entry (Codex review round 1 on PR #445) — a
+ * hydrated curated closure (CDM in particular) can itself run tens of MB;
+ * `loadAllDocuments`'s own doc comment notes CDM hydration can approach
+ * the Worker's 128 MiB limit on its own. Bounding only by entry COUNT
+ * (the original design capped at 4) doesn't bound memory: an isolate
+ * cycling through a few large, DISTINCT curated selections within the TTL
+ * window could retain several such closures simultaneously and reproduce
+ * the exact OOM this fix exists to avoid. A single entry still serves the
+ * primary use case (switching target format for the SAME closure) fully,
+ * while capping retained memory to roughly one closure's worth — the same
+ * order of magnitude a single in-flight request already requires.
  */
-const DOCUMENT_CACHE_MAX_ENTRIES = 4;
+const DOCUMENT_CACHE_MAX_ENTRIES = 1;
 const DOCUMENT_CACHE_TTL_MS = 5 * 60 * 1000;
 const documentCache = new Map<string, { docs: import('langium').LangiumDocument[]; cachedAt: number }>();
 
+/**
+ * `JSON.stringify` over sorted arrays, NOT string concatenation (Codex
+ * review round 1 on PR #445) — `namespaces` entries are arbitrary
+ * request-supplied strings (only checked to be `string[]`, never
+ * restricted in content), so joining with `,`/`@`/`|` lets differently-
+ * shaped requests collide: `['cdm.a,cdm.b']` (one namespace whose name
+ * contains a comma) and `['cdm.a', 'cdm.b']` (two namespaces) previously
+ * produced the IDENTICAL key. A collision here isn't just a wasted cache
+ * slot — it can cache one request's (possibly empty/wrong) documents
+ * under a key a later, differently-shaped but colliding request would
+ * then incorrectly hit.
+ */
 function documentCacheKey(
   curatedBundles: ReadonlyArray<{ id: string; version: string }>,
   requestedNamespaces: readonly string[]
 ): string {
-  const bundles = curatedBundles
-    .map((b) => `${b.id}@${b.version}`)
-    .sort()
-    .join(',');
-  const namespaces = [...requestedNamespaces].sort().join(',');
-  return `${bundles}|${namespaces}`;
+  const bundles = [...curatedBundles]
+    .map((b) => [b.id, b.version] as const)
+    .sort(([aId, aVersion], [bId, bVersion]) => aId.localeCompare(bId) || aVersion.localeCompare(bVersion));
+  const namespaces = [...requestedNamespaces].sort();
+  return JSON.stringify([bundles, namespaces]);
 }
 
 /** Evicts expired entries, then the oldest-inserted entries over the cap. */

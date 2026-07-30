@@ -388,6 +388,52 @@ type Quantity:
     expect(namespaceSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('does not collide the document cache key for differently-shaped namespace lists that stringify the same way (issue #432 round 1)', async () => {
+    // `['cdm.a,cdm.b']` (one namespace whose name happens to contain a
+    // comma) and `['cdm.a', 'cdm.b']` (two separate namespaces) must NOT
+    // share a cache key — a string-concatenation key (`namespaces.sort().
+    // join(',')`) produces the identical "cdm.a,cdm.b" for both, letting
+    // the second, differently-shaped request incorrectly reuse the
+    // first's (unrelated) cached documents.
+    const mod = await import('../lib/curated-fetch.js');
+    const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: 'v1',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      // A non-empty manifest that doesn't overlap the requested namespaces
+      // at all — closureNs filters down to nothing either way, but the
+      // manifest itself must be non-empty or loadAllDocuments short-
+      // circuits with a curated_manifest_missing error BEFORE caching ever
+      // runs, which would make this test pass for the wrong reason.
+      namespaces: {
+        'cdm.unrelated': { deps: [], exports: [], artifact: 'artifacts/v1/ns/unrelated.json.gz' }
+      }
+    } as never);
+
+    const request = (namespaces: string[]) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces
+        })
+      } as never);
+
+    await request(['cdm.a,cdm.b']);
+    expect(manifestSpy).toHaveBeenCalledTimes(1);
+
+    await request(['cdm.a', 'cdm.b']);
+    expect(manifestSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('combines user files and curated bundles in one generation', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
