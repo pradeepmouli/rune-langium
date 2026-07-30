@@ -530,6 +530,56 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    'expands a Choice-typed attribute (as distinct from Data-extends-Choice) into one field per option (issue #394)',
+    async () => {
+      // Regression test for issue #394: buildBaseField had no branch for a
+      // DIRECT Choice type reference (an attribute typed `variant:
+      // Observable (1..1)`, not a Data type EXTENDING a Choice) — it fell
+      // through to the unresolved-reference case and reported status
+      // 'unsupported' with kind 'unknown', even though the Choice itself
+      // was fully resolved and navigable elsewhere in the app. Mirrors
+      // zod-emitter.ts's own prior "W2" fix for the identical gap in
+      // resolveTypeExpr's isChoice branch.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type Trade:
+        variant Observable (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      expect(trade?.unsupportedFeatures).toBeUndefined();
+      const variantField = trade?.fields.find((field) => field.path === 'variant');
+      expect(variantField).toMatchObject({ path: 'variant', label: 'Variant', kind: 'object', required: true });
+      expect(variantField && 'children' in variantField ? variantField.children.map((c) => c.path).sort() : []).toEqual(
+        ['variant.cash', 'variant.commodity']
+      );
+      // choiceArmPaths marks both arms so preview-validator.ts can enforce
+      // "exactly one of variant.commodity / variant.cash present" — the
+      // same enforcement the Data-extends-Choice case above gets.
+      expect(variantField && 'choiceArmPaths' in variantField ? variantField.choiceArmPaths : undefined).toEqual([
+        'variant.commodity',
+        'variant.cash'
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
     'includes Choice-ancestor option fields when a typeAlias resolves to a Data-extends-Choice type',
     async () => {
       // Regression test (follow-up to round-5 finding #1): buildTypeAliasSchema's

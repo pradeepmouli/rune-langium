@@ -301,7 +301,16 @@ function buildDataSchema(
   const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
   const choiceFields = choiceAncestor
     ? choiceAncestor.attributes
-        .map((option) => buildChoiceOptionField(option, { namespace, unsupportedFeatures, sourceUri }))
+        .map((option) =>
+          buildChoiceOptionField(option, {
+            namespace,
+            unsupportedFeatures,
+            sourceUri,
+            seenTypes: new Set([data.name, choiceAncestor.name]),
+            depth: 0,
+            maxDepth
+          })
+        )
         .filter((field) => !ownFieldPaths.has(field.path))
     : [];
 
@@ -394,7 +403,16 @@ function buildTypeAliasSchema(
     const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
     const choiceFields = choiceAncestor
       ? choiceAncestor.attributes
-          .map((option) => buildChoiceOptionField(option, { namespace, unsupportedFeatures, sourceUri }))
+          .map((option) =>
+            buildChoiceOptionField(option, {
+              namespace,
+              unsupportedFeatures,
+              sourceUri,
+              seenTypes: new Set([resolvedData.name, choiceAncestor.name]),
+              depth: 0,
+              maxDepth: DEFAULT_MAX_DEPTH
+            })
+          )
           .filter((field) => !ownFieldPaths.has(field.path))
       : [];
 
@@ -448,7 +466,14 @@ function buildChoiceSchema(
 ): FormPreviewSchema {
   const unsupportedFeatures = new Set<string>();
   const fields: PreviewField[] = choice.attributes.map((option: ChoiceOption) =>
-    buildChoiceOptionField(option, { namespace, unsupportedFeatures, sourceUri })
+    buildChoiceOptionField(option, {
+      namespace,
+      unsupportedFeatures,
+      sourceUri,
+      seenTypes: new Set([choice.name]),
+      depth: 0,
+      maxDepth: DEFAULT_MAX_DEPTH
+    })
   );
 
   return {
@@ -478,6 +503,21 @@ function buildChoiceOptionField(
      * unprefixed `path`.
      */
     pathPrefix?: string;
+    /**
+     * Cycle-detection + recursion-depth state, threaded from the caller
+     * (issue #394 fix, round 2). A Choice option's Data type can itself
+     * reference — directly or transitively — the SAME Choice again; a real
+     * CDM cycle hit exactly this and crashed with a stack overflow before
+     * this fix. This function previously discarded whatever ambient state
+     * the caller had and reset both to a fresh
+     * `{seenTypes: new Set([resolvedData.name]), depth: 0}` for its own
+     * nested Data-option expansion — the "doubly-nested" gap this doc
+     * comment used to flag as a deferred follow-up. Every call site now
+     * supplies real state instead of nothing.
+     */
+    seenTypes: Set<string>;
+    depth: number;
+    maxDepth: number;
   }
 ): PreviewField {
   const typeRef = option.typeCall?.type?.ref;
@@ -540,16 +580,28 @@ function buildChoiceOptionField(
       : ctx.namespace.dataByName.get(refText ?? '')?.sourceUri) ?? ctx.sourceUri;
 
   if (resolvedData) {
+    if (ctx.seenTypes.has(resolvedData.name) || ctx.depth >= ctx.maxDepth) {
+      ctx.unsupportedFeatures.add(`recursive-reference:${resolvedData.name}`);
+      return {
+        path,
+        label,
+        kind: 'unknown',
+        required: false,
+        description: `Recursive reference to ${resolvedData.name} is not expanded in form preview.`
+      };
+    }
+    const nextSeen = new Set(ctx.seenTypes);
+    nextSeen.add(resolvedData.name);
     const childCtx: FieldContext = {
       namespace: ctx.namespace,
       unsupportedFeatures: ctx.unsupportedFeatures,
       sourceMap: [],
       sourceUri: resolvedSourceUri,
-      maxDepth: DEFAULT_MAX_DEPTH,
-      depth: 0,
+      maxDepth: ctx.maxDepth,
+      depth: ctx.depth + 1,
       path,
       label,
-      seenTypes: new Set([resolvedData.name])
+      seenTypes: nextSeen
     };
     return {
       path,
@@ -672,6 +724,25 @@ function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
     return objectField(ctx, resolved.node, resolved.sourceUri);
   }
 
+  // Choice type reference (issue #394): mirrors zod-emitter.ts's own W2 fix
+  // for resolveTypeExpr's `isChoice(typeRef)` branch ("was falling to
+  // z.unknown() — isChoice was never consulted here") — the exact same gap,
+  // never propagated to this hand-maintained preview approximation. The real
+  // emitted schema (emitChoiceSchema) is `z.union([z.strictObject({ <field>:
+  // <OptionSchema> }), ...])` — one key per option, exactly one present —
+  // the SAME shape `choiceField` below builds by reusing
+  // `buildChoiceOptionField`, the function that already produces this shape
+  // for a genuine top-level Choice (buildChoiceSchema) and a Data-extends-
+  // Choice ancestor's options (objectField/buildDataSchema).
+  if (typeRef && isChoice(typeRef)) {
+    return choiceField(ctx, typeRef, typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri);
+  }
+
+  if (!typeRef && refText && ctx.namespace.choiceByName.has(refText)) {
+    const resolved = ctx.namespace.choiceByName.get(refText)!;
+    return choiceField(ctx, resolved.node, resolved.sourceUri);
+  }
+
   ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? attr.name}`);
   return unsupportedField(
     ctx,
@@ -750,16 +821,23 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
   // own attribute wins (same precedence as the other two call sites).
   const ownChildPaths = new Set(attributeChildren.map((child) => child.path));
   const choiceFields = choiceAncestor
-    ? choiceAncestor.attributes
-        .map((option) =>
-          buildChoiceOptionField(option, {
-            namespace: ctx.namespace,
-            unsupportedFeatures: ctx.unsupportedFeatures,
-            sourceUri,
-            pathPrefix: ctx.path
-          })
-        )
-        .filter((field) => !ownChildPaths.has(field.path))
+    ? (() => {
+        const choiceSeen = new Set(nextSeen);
+        choiceSeen.add(choiceAncestor.name);
+        return choiceAncestor.attributes
+          .map((option) =>
+            buildChoiceOptionField(option, {
+              namespace: ctx.namespace,
+              unsupportedFeatures: ctx.unsupportedFeatures,
+              sourceUri,
+              pathPrefix: ctx.path,
+              seenTypes: choiceSeen,
+              depth: ctx.depth + 1,
+              maxDepth: ctx.maxDepth
+            })
+          )
+          .filter((field) => !ownChildPaths.has(field.path));
+      })()
     : [];
 
   return {
@@ -775,6 +853,56 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
     // preview-validator.ts can enforce "exactly one arm present" for a
     // NESTED Data-extends-Choice reference too, not just a top-level one.
     ...(choiceAncestor ? { choiceArmPaths: choiceFields.map((field) => field.path) } : {})
+  };
+}
+
+/**
+ * Builds a PreviewField for a Choice-typed attribute (e.g. `attr:
+ * SomeChoice (1..1)`) — as distinct from a Data type EXTENDING a Choice
+ * (see `collectInheritedAttributes`'s `choiceAncestor` / `objectField`'s
+ * expansion of it). Represented the same way `buildChoiceSchema` represents
+ * a genuine top-level Choice target: an 'object' field whose `children` are
+ * one field per `ChoiceOption` (via `buildChoiceOptionField`, so the field
+ * `path`s and shapes match the real emitted schema exactly), with
+ * `choiceArmPaths` listing all of them so `preview-validator.ts` can
+ * enforce "exactly one arm present" — mirroring `FormPreviewSchema.
+ * choiceArmPaths`'/`PreviewObjectField.choiceArmPaths`'s existing contract
+ * for the Choice-ancestor case, just triggered by a direct type reference
+ * instead of `extends`.
+ */
+function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): PreviewField {
+  if (ctx.seenTypes.has(choice.name) || ctx.depth >= ctx.maxDepth) {
+    ctx.unsupportedFeatures.add(`recursive-reference:${choice.name}`);
+    return {
+      path: ctx.path,
+      label: ctx.label,
+      kind: 'unknown',
+      required: true,
+      description: `Recursive reference to ${choice.name} is not expanded in form preview.`
+    };
+  }
+
+  const nextSeen = new Set(ctx.seenTypes);
+  nextSeen.add(choice.name);
+  const children = choice.attributes.map((option) =>
+    buildChoiceOptionField(option, {
+      namespace: ctx.namespace,
+      unsupportedFeatures: ctx.unsupportedFeatures,
+      sourceUri,
+      pathPrefix: ctx.path,
+      seenTypes: nextSeen,
+      depth: ctx.depth + 1,
+      maxDepth: ctx.maxDepth
+    })
+  );
+
+  return {
+    path: ctx.path,
+    label: ctx.label,
+    kind: 'object',
+    required: true,
+    children,
+    choiceArmPaths: children.map((field) => field.path)
   };
 }
 
