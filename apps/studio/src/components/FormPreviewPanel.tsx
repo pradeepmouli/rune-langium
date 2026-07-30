@@ -237,7 +237,7 @@ export function FormPreviewPanel({
         const segments = pathToSegments(arm.path, arrayIndices);
         nextValues = (
           arm.path === selected.path
-            ? setValueAtPath(nextValues, segments, arm.kind === 'object' ? buildDefaultObjectValue(arm) : '')
+            ? setValueAtPath(nextValues, segments, buildArmValue(arm))
             : removeValueAtPath(nextValues, segments)
         ) as Record<string, unknown>;
       }
@@ -926,7 +926,13 @@ function buildDefaultFieldsObject(
   const entries: Array<[string, unknown]> = otherFields.map((field) => [keyFn(field.path), buildDefaultValue(field)]);
   const [firstArm] = armFields;
   if (firstArm) {
-    entries.push([keyFn(firstArm.path), buildDefaultValue(firstArm)]);
+    // The chosen arm must materialize an actual value even when the
+    // generator marks Choice-ancestor arms `required: false` (only one may
+    // be present at a time, so none is individually required) — otherwise
+    // `buildDefaultValue`'s object case returns `undefined` for the arm
+    // ChoiceFieldGroup's own `activeField ?? fields[0]` fallback displays as
+    // selected, and the sample silently omits it (Codex review on PR #444).
+    entries.push([keyFn(firstArm.path), buildArmValue(firstArm)]);
   }
   return Object.fromEntries(entries);
 }
@@ -957,6 +963,17 @@ function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
     return {};
   }
   return buildDefaultFieldsObject(field.children ?? [], field.choiceArmPaths, fieldLeafKey);
+}
+
+/**
+ * A Choice arm's default value when it becomes the selected arm — unlike
+ * `buildDefaultValue`, always materializes an object arm's fields
+ * (`buildDefaultObjectValue`) regardless of the arm's own `required` flag,
+ * since an arm the caller is actively selecting must produce a real value,
+ * not `undefined` (issue #434, Codex review on PR #444).
+ */
+function buildArmValue(arm: PreviewField): unknown {
+  return arm.kind === 'object' ? buildDefaultObjectValue(arm) : buildDefaultValue(arm);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

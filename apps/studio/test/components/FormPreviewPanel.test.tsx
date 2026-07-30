@@ -691,5 +691,94 @@ describe('FormPreviewPanel', () => {
       expect(screen.getByRole('radio', { name: 'Cash' })).toBeChecked();
       expect(screen.getByLabelText('Weight')).toBeInTheDocument();
     });
+
+    it("materializes an OBJECT-kind first arm's default fields into the sample, not just its radio selection (Codex round 2)", () => {
+      // Commodity (an OBJECT arm) is listed FIRST here — the earlier tests
+      // only ever exercised a scalar (Cash) first arm, which never hit
+      // `buildDefaultValue`'s `required: false` → `undefined` short-circuit
+      // for the 'object' case. Without materializing the object arm's own
+      // default via buildDefaultObjectValue, the radio still LOOKS selected
+      // (ChoiceFieldGroup's `?? fields[0]` fallback), but the sample itself
+      // never gains a `commodity` key at all.
+      const objectFirstSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.TradeWithCommodityFirst',
+        title: 'TradeWithCommodityFirst',
+        status: 'ready',
+        fields: [
+          { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+          {
+            path: 'constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['constituent.commodity', 'constituent.cash'],
+            children: [
+              { path: 'constituent.weight', label: 'Weight', kind: 'number', required: true },
+              {
+                path: 'constituent.commodity',
+                label: 'Commodity',
+                kind: 'object',
+                required: false,
+                children: [{ path: 'constituent.commodity.symbol', label: 'Symbol', kind: 'string', required: true }]
+              },
+              { path: 'constituent.cash', label: 'Cash', kind: 'string', required: false }
+            ]
+          }
+        ]
+      };
+
+      render(
+        <FormPreviewPanel
+          schema={objectFirstSchema}
+          status={{ state: 'ready', targetId: objectFirstSchema.targetId }}
+        />
+      );
+
+      expect(screen.getByRole('radio', { name: 'Commodity' })).toBeChecked();
+      expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"commodity": {');
+      expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"symbol": ""');
+    });
+
+    it('selecting a BOOLEAN arm seeds it with `false`, not an empty string the boolean validator rejects (Codex round 2)', async () => {
+      const booleanArmSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.TradeWithFlag',
+        title: 'TradeWithFlag',
+        status: 'ready',
+        fields: [
+          { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+          {
+            path: 'constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['constituent.cash', 'constituent.cleared'],
+            children: [
+              { path: 'constituent.cash', label: 'Cash', kind: 'string', required: false },
+              { path: 'constituent.cleared', label: 'Cleared', kind: 'boolean', required: false }
+            ]
+          }
+        ]
+      };
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+
+      render(
+        <FormPreviewPanel
+          schema={booleanArmSchema}
+          status={{ state: 'ready', targetId: booleanArmSchema.targetId }}
+          values={{ tradeId: 'T1', constituent: { cash: '' } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      await user.click(screen.getByRole('radio', { name: 'Cleared' }));
+
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'T1',
+        constituent: { cleared: false }
+      });
+    });
   });
 });
