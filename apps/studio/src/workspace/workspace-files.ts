@@ -26,7 +26,9 @@ export function setWorkspaceFilesDeps(next: Partial<WorkspaceFilesDeps>): void {
 }
 
 function isNotFoundError(error: unknown): boolean {
-  return error instanceof Error && error.name === 'NotFoundError';
+  // 'NotFoundError' is the DOM exception name (FileSystemDirectoryHandle
+  // APIs); 'ENOENT' is OpfsFs's isomorphic-git-shaped FsError name/code.
+  return error instanceof Error && (error.name === 'NotFoundError' || error.name === 'ENOENT');
 }
 
 function toStoredWorkspaceFiles(files: readonly WorkspaceFile[]): WorkspaceFile[] {
@@ -67,6 +69,20 @@ const saveQueues = new Map<string, SaveQueueEntry>();
 // must not resurrect the just-removed OPFS directory via the
 // getDirectoryHandle(..., { create: true }) calls in saveWorkspaceFilesNow.
 const deletedWorkspaceIds = new Set<string>();
+
+// Per-workspace snapshot of the editor-tracked `.rosetta` paths this module
+// itself last knew about (from `loadWorkspaceFiles` or the previous
+// successful save) — issue #439, round 2. Deliberately NOT a live re-scan of
+// the on-disk `files/` tree: a background git sync (fast-forward/merge) can
+// write a collaborator's new file into that SAME directory independent of
+// any save call, and the sync-status subscription never refreshes the
+// editor's `files` state — diffing against live disk state would misread
+// that freshly-synced file as user-deleted, unlink it, and the following
+// stageAll would stage and push its deletion (silent remote data loss,
+// exactly the failure mode the git-backed branch below exists to prevent).
+// Diffing against this snapshot instead means a path the editor never knew
+// about is simply never a pruning candidate, in either direction.
+const lastKnownTrackedPaths = new Map<string, ReadonlySet<string>>();
 
 export function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
   if (deletedWorkspaceIds.has(workspaceId)) {
@@ -143,13 +159,11 @@ async function saveWorkspaceFilesNow(workspaceId: string, files: readonly Worksp
   // entire `files/` tree and rewriting only the editor's list would delete
   // those untracked files; the subsequent notifySyncOnSave → stageAll would
   // then stage those deletions and push them upstream — silent remote data
-  // loss. Instead, for git-backed workspaces we skip the prune and write
-  // listed files in place, leaving untracked repo files intact.
-  //
-  // Known limitation: editor-side file deletions and renames do not yet
-  // propagate to the working tree for git-backed workspaces. This errs on
-  // the side of keeping files; explicit delete/rename tracking is a
-  // follow-up task.
+  // loss. Instead, for git-backed workspaces we skip the wholesale prune
+  // below and, separately, remove only the specific paths this module
+  // itself previously tracked for this workspace (`lastKnownTrackedPaths`)
+  // that the caller no longer lists (issue #439) — untracked repo files,
+  // and any path the editor never itself loaded/saved, are never touched.
   const ws = await deps.loadWorkspaceFn(workspaceId);
   const isGitBacked = ws?.kind === 'git-backed';
 
@@ -169,9 +183,36 @@ async function saveWorkspaceFilesNow(workspaceId: string, files: readonly Worksp
   await workspaceDir.getDirectoryHandle('.studio', { create: true });
 
   const fs = new OpfsFs(root);
+  const nextPaths = new Set(toStoredWorkspaceFiles(files).map((file) => file.path));
+
+  if (isGitBacked) {
+    // Remove previously-tracked paths the caller no longer lists
+    // (deletions — and, as a side effect, renames, since a rename shows up
+    // here as one path disappearing and a new one appearing in the write
+    // loop below). `git.statusMatrix`-driven `stageAll` (in
+    // notifySyncOnSave's engine) detects the resulting workdir absence and
+    // stages the removal on its own — no separate git-staging step needed
+    // here.
+    const previousPaths = lastKnownTrackedPaths.get(workspaceId) ?? new Set<string>();
+    for (const previousPath of previousPaths) {
+      if (!nextPaths.has(previousPath)) {
+        try {
+          await fs.unlink(`/${workspaceId}/files/${previousPath}`);
+        } catch (error) {
+          // Already gone (e.g. a background sync independently removed it
+          // too) — nothing left to prune.
+          if (!isNotFoundError(error)) {
+            throw error;
+          }
+        }
+      }
+    }
+  }
+
   for (const file of toStoredWorkspaceFiles(files)) {
     await fs.writeFile(`/${workspaceId}/files/${file.path}`, file.content);
   }
+  lastKnownTrackedPaths.set(workspaceId, nextPaths);
   notifySyncOnSave(workspaceId);
 }
 
@@ -181,6 +222,10 @@ export async function loadWorkspaceFiles(workspaceId: string): Promise<Workspace
   const files: WorkspaceFile[] = [];
 
   await walkWorkspaceFiles(fs, `/${workspaceId}/files`, '', files);
+  // Establish/refresh the pruning baseline (issue #439) from what's
+  // actually on disk at load time — the moment the editor genuinely does
+  // know about every currently-tracked path.
+  lastKnownTrackedPaths.set(workspaceId, new Set(files.map((file) => file.path)));
   return files;
 }
 
