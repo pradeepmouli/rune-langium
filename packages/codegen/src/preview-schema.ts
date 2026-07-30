@@ -15,7 +15,6 @@ import {
   type Choice,
   type ChoiceOption,
   type Data,
-  type RosettaCardinality,
   type RosettaEnumeration,
   type RosettaFunction,
   type RosettaModel,

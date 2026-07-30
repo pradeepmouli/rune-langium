@@ -810,6 +810,56 @@ html {
     color: color-mix(in srgb, var(--color-warning) 84%, black 16%);
   }
 
+  /* Wraps one tab's select-button + delete-button as siblings (not nested
+     — a <button> inside another <button> is invalid HTML/ARIA) so the
+     delete affordance can be hover/focus-revealed on the pair. */
+  .studio-app .studio-topbar__tab-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    max-width: 200px;
+  }
+
+  .studio-app .studio-topbar__tab-wrapper .studio-topbar__tab {
+    max-width: none;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* "×" delete-file affordance — hidden until the tab is hovered/focused,
+     matching WorkspaceSwitcher's identical hover-reveal delete pattern. */
+  .studio-app .studio-topbar__tab-delete {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-left: calc(var(--space-1) * -1);
+    margin-right: var(--space-1);
+    border-radius: var(--radius-md);
+    color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
+    cursor: pointer;
+    flex-shrink: 0;
+    opacity: 0;
+    transition:
+      opacity 0.1s ease,
+      background 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .studio-app .studio-topbar__tab-wrapper:hover .studio-topbar__tab-delete,
+  .studio-app .studio-topbar__tab-delete:focus-visible {
+    opacity: 1;
+  }
+
+  .studio-app .studio-topbar__tab-delete:hover {
+    background: color-mix(in srgb, var(--destructive) 16%, transparent);
+    color: var(--destructive);
+  }
+
   /* "+" new-file affordance — ghost icon button, brightens on hover. */
   .studio-app .studio-topbar__tab-new {
     appearance: none;
