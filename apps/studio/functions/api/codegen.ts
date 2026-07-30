@@ -165,10 +165,23 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
  * means a second concurrent request for the same key finds it already
  * registered and just awaits the SAME in-flight work instead of starting
  * its own.
+ *
+ * `cachedAt` is the REGISTRATION time at first, but `pending` exempts the
+ * entry from TTL eviction until hydration actually settles (Codex review
+ * round 6 on PR #445) — a `cachedAt` anchored to registration alone would
+ * make a still-hydrating entry for a large/slow closure eligible for TTL
+ * pruning before it even finishes, so a later request for the same key
+ * could evict it mid-flight and start a REDUNDANT parallel hydration,
+ * defeating the coalescing round 4 added. `cachedAt` is bumped to the
+ * actual completion time on success, so the TTL window measures freshness
+ * from when the entry became usable, not from when hydration started.
  */
 const DOCUMENT_CACHE_MAX_ENTRIES = 1;
 const DOCUMENT_CACHE_TTL_MS = 5 * 60 * 1000;
-const documentCache = new Map<string, { promise: ReturnType<typeof loadAllDocuments>; cachedAt: number }>();
+const documentCache = new Map<
+  string,
+  { promise: ReturnType<typeof loadAllDocuments>; cachedAt: number; pending: boolean }
+>();
 
 /**
  * `JSON.stringify` over structured arrays, NOT string concatenation (Codex
@@ -202,10 +215,14 @@ function documentCacheKey(
   return JSON.stringify([bundles, namespaces]);
 }
 
-/** Evicts expired entries, then the oldest-inserted entries over the cap. */
+/**
+ * Evicts expired SETTLED entries, then the oldest-inserted entries over
+ * the cap. A still-`pending` entry is exempt from TTL eviction (Codex
+ * review round 6 on PR #445) — see the cache's own doc comment.
+ */
 function pruneDocumentCache(now: number): void {
   for (const [key, entry] of documentCache) {
-    if (now - entry.cachedAt >= DOCUMENT_CACHE_TTL_MS) {
+    if (!entry.pending && now - entry.cachedAt >= DOCUMENT_CACHE_TTL_MS) {
       documentCache.delete(key);
     }
   }
@@ -691,7 +708,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           body.namespaces ?? [],
           curatedDocs
         );
-        const newEntry = { promise, cachedAt: now };
+        const newEntry = { promise, cachedAt: now, pending: true };
         entry = newEntry;
         documentCache.set(cacheKey, newEntry);
         // Re-prune immediately after registering (round 3) — the
@@ -700,26 +717,42 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         // an (already empty, or the other's not-yet-registered) cache and
         // each register their own entry, leaving two until something
         // re-prunes. Pruning right after `set` bounds that window to the
-        // gap between two concurrent `set` calls.
+        // gap between two concurrent `set` calls. `newEntry.pending` keeps
+        // this specific entry exempt from the TTL half of that prune until
+        // it settles (round 6).
         pruneDocumentCache(now);
-        // Evict on REJECTION too, not just a resolved `curatedError`
-        // (Codex review round 5 on PR #445) — loadAllDocuments can throw
-        // (e.g. a malformed namespace artifact), not just return a
+        // Settle handling, guarded by identity throughout (only act if
+        // THIS exact entry is still the one registered) so a stale,
+        // now-orphaned hydration's later settlement can't affect a NEWER,
+        // unrelated registration for the same key that replaced it in
+        // between (e.g. key K's slow hydration outlives an interleaved
+        // different-key clear that evicted it, then a third request
+        // re-registers K fresh).
+        //
+        // On success: bump `cachedAt` to the actual completion time and
+        // clear `pending` — the TTL window should measure freshness from
+        // when the entry became usable, not from registration (round 6).
+        // A resolved `curatedError` is left for the awaiting code below to
+        // delete (same effect, no need to duplicate it here).
+        //
+        // On REJECTION: evict outright (round 5) — loadAllDocuments can
+        // throw (e.g. a malformed namespace artifact), not just return a
         // structured error, and a rejected promise left cached would
         // poison every identical request for the rest of the TTL window
-        // even if the failure was transient. Guarded by identity (only
-        // delete if THIS exact entry is still the one registered) so a
-        // stale, now-orphaned hydration's later failure can't evict a
-        // NEWER, unrelated registration for the same key that replaced it
-        // in between (e.g. key K's slow hydration outlives an
-        // interleaved different-key clear that evicted it, then a third
-        // request re-registers K fresh — K's original failure must not
-        // delete that fresh registration).
-        promise.catch(() => {
-          if (documentCache.get(cacheKey) === newEntry) {
-            documentCache.delete(cacheKey);
+        // even if the failure was transient.
+        promise.then(
+          (result) => {
+            if (!result.curatedError && documentCache.get(cacheKey) === newEntry) {
+              newEntry.cachedAt = Date.now();
+              newEntry.pending = false;
+            }
+          },
+          () => {
+            if (documentCache.get(cacheKey) === newEntry) {
+              documentCache.delete(cacheKey);
+            }
           }
-        });
+        );
       }
       const result = await entry.promise;
       if (result.curatedError) {

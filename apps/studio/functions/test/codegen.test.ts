@@ -925,6 +925,96 @@ type Quantity:
     expect(__documentCacheKeysForTests()).toEqual(keysAfterK2);
   });
 
+  it('exempts a still-pending entry from TTL pruning, then TTLs it from its ACTUAL completion time, not registration time (issue #432 round 6)', async () => {
+    // A slow hydration (>= 5 minutes) must not be evicted mid-flight just
+    // because its registration timestamp has aged past the TTL — that
+    // would let a later same-key request see a miss and start a redundant
+    // parallel hydration, defeating round 4's coalescing. Once hydration
+    // DOES settle, the TTL clock must restart from completion, not from
+    // the original registration — otherwise an entry that took 4 minutes
+    // to hydrate would already be within 1 minute of eviction the instant
+    // it becomes usable.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deferreds: Array<{ resolve: (value: any) => void }> = [];
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockImplementation(
+      () => new Promise((resolve) => deferreds.push({ resolve }))
+    );
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockResolvedValue([mathDoc]);
+
+    const dateSpy = vi.spyOn(Date, 'now');
+    const t0 = 1_700_000_000_000;
+    dateSpy.mockReturnValue(t0);
+
+    const responseA = onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm', version: 'latest' }],
+        namespaces: ['cdm.base.math']
+      })
+    } as never);
+
+    for (let i = 0; i < 50 && deferreds.length < 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(1);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+
+    const nonCacheableRequest = () =>
+      onRequestPost({
+        request: makeRequest({ files: [{ path: 'user.rune', content: ONE_NAMESPACE }], target: 'zod' })
+      } as never);
+
+    // Six minutes later (past the 5-minute TTL) the entry is STILL pending
+    // — hydration hasn't resolved yet. A prune that ran unconditionally on
+    // `cachedAt` alone would evict it here; the pending exemption must not.
+    dateSpy.mockReturnValue(t0 + 6 * 60 * 1000);
+    expect((await nonCacheableRequest()).status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+
+    // Hydration settles now (at t0 + 6min) — `cachedAt` should be bumped to
+    // this completion time, not left at the original registration (`t0`).
+    deferreds[0]!.resolve({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base.math': { deps: [], exports: [], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` }
+      }
+    } as never);
+    expect((await responseA).status).toBe(200);
+
+    // Four minutes after completion (t0 + 10min total) — still fresh
+    // relative to completion (4min < 5min TTL). If `cachedAt` were still
+    // anchored to `t0` instead of the completion time, this point (10
+    // minutes after `t0`) would already be well past the TTL and the
+    // entry would be wrongly evicted here.
+    dateSpy.mockReturnValue(t0 + 10 * 60 * 1000);
+    expect((await nonCacheableRequest()).status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+
+    // Six minutes after completion (t0 + 12min total) — now past the TTL
+    // measured from the actual completion time, so pruning must evict it.
+    dateSpy.mockReturnValue(t0 + 12 * 60 * 1000);
+    expect((await nonCacheableRequest()).status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(0);
+
+    dateSpy.mockRestore();
+  });
+
   it('combines user files and curated bundles in one generation', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
