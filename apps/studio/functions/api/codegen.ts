@@ -689,24 +689,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       let entry = documentCache.get(cacheKey);
       if (!entry) {
         // A miss means the cache is either empty or holds a DIFFERENT
-        // (mismatched) entry — clear it BEFORE starting hydration, not
-        // after, so at most one closure is ever resident at a time,
-        // including during hydration itself (round 2). Then register the
-        // hydration PROMISE, synchronously, before awaiting it — this
-        // whole get/clear/create/set/prune sequence contains no `await`,
-        // so it's atomic with respect to any other in-flight request: a
-        // second concurrent request for the SAME key that reaches this
-        // code next finds the promise already registered and just awaits
-        // it, instead of independently fetching+hydrating the same
-        // (possibly CDM-sized) closure a second time (Codex review round 4
-        // on PR #445).
+        // (mismatched) entry. That entry's promise can't be cancelled — if
+        // it's still `pending`, its hydration keeps running to completion
+        // in ITS OWN request handler regardless of what we do here.
+        // Starting a NEW hydration immediately would let two (possibly
+        // CDM-sized) closures process concurrently, doubling peak memory
+        // and risking the very resource-limit crash this cache exists to
+        // prevent (Codex review round 7 on PR #445). Capture it before
+        // clearing so the replacement hydration can be chained to start
+        // only once it vacates.
+        const stalePending = Array.from(documentCache.values())
+          .filter((e) => e.pending)
+          .map((e) => e.promise);
+        // Clear it BEFORE starting hydration, not after, so at most one
+        // entry is ever resident in the MAP at a time, including during
+        // hydration itself (round 2). Then register the hydration PROMISE,
+        // synchronously, before awaiting it — this whole
+        // get/clear/create/set/prune sequence contains no `await`, so it's
+        // atomic with respect to any other in-flight request: a second
+        // concurrent request for the SAME key that reaches this code next
+        // finds the promise already registered and just awaits it, instead
+        // of independently fetching+hydrating the same closure a second
+        // time (round 4). The actual `loadAllDocuments` call is deferred
+        // inside a `.then()` chained after `stalePending` settles, rather
+        // than `await`ed inline here, so this synchronous section still
+        // never yields — a same-key request arriving before `stalePending`
+        // settles still finds this entry already registered and coalesces
+        // onto it normally.
         documentCache.clear();
-        const promise = loadAllDocuments(
-          body.files,
-          curatedBundles,
-          curatedFetcher,
-          body.namespaces ?? [],
-          curatedDocs
+        const promise = (stalePending.length > 0 ? Promise.allSettled(stalePending) : Promise.resolve(undefined)).then(
+          () => loadAllDocuments(body.files, curatedBundles, curatedFetcher, body.namespaces ?? [], curatedDocs)
         );
         const newEntry = { promise, cachedAt: now, pending: true };
         entry = newEntry;

@@ -574,10 +574,13 @@ type Quantity:
   it('re-enforces the one-entry cap when two concurrent requests for DIFFERENT keys both observe a miss (issue #432 round 3)', async () => {
     // The pre-hydration `documentCache.clear()` only protects a SINGLE
     // request's own miss. Two requests racing on the same warm isolate for
-    // DIFFERENT curated selections can each see an empty/mismatched cache,
-    // each clear it, and each suspend inside loadAllDocuments — when both
-    // resume, each calls `.set()` for its OWN key, which (without a
-    // post-insert re-prune) would leave BOTH entries resident.
+    // DIFFERENT curated selections each see an empty/mismatched cache and
+    // each register their OWN entry — without a post-insert re-prune this
+    // would leave BOTH entries resident. (Since round 7, B's actual
+    // hydration work is additionally serialized behind A's — see the
+    // dedicated round-7 test below — so B's `fetchCuratedManifest` call
+    // itself only fires after A settles; the cap invariant this test
+    // checks holds regardless of that ordering.)
     const mathDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
@@ -616,16 +619,16 @@ type Quantity:
     const responseB = request(['cdm.base.other']);
 
     // Flush the event loop (request.json() → validation → loadAllDocuments's
-    // Promise.all imports → fetchCuratedManifest) until BOTH requests have
-    // reached their manifest fetch and suspended on our deferreds — proves
-    // both ran their own pre-hydration clear while the cache was still
-    // empty, i.e. genuinely interleaved, not sequential. Mixes microtask
-    // and macrotask yields since Request.json()/dynamic import() may
-    // schedule via either.
-    for (let i = 0; i < 50 && deferreds.length < 2; i++) {
+    // Promise.all imports → fetchCuratedManifest) until A has reached its
+    // manifest fetch and suspended on our deferred. B's registration (the
+    // synchronous get/clear/set) has already run by this point too — it
+    // evicted A's entry from the map and registered its own — but B's
+    // ACTUAL hydration work is chained behind A's promise (round 7), so
+    // only ONE `fetchCuratedManifest` call exists yet, not two.
+    for (let i = 0; i < 50 && deferreds.length < 1; i++) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    expect(deferreds).toHaveLength(2);
+    expect(deferreds).toHaveLength(1);
 
     const manifest = (nsKey: string) => ({
       schemaVersion: 2,
@@ -643,15 +646,25 @@ type Quantity:
       }
     });
 
-    // Resolve A and let it fully finish (set + post-insert prune) first.
+    // Resolve A and let it fully finish first — this is what unblocks B's
+    // chained hydration, not B's own `.set()` (that already happened when
+    // B registered, evicting A's entry from the map before A ever
+    // resolved).
     deferreds[0]!(manifest('cdm.base.math') as never);
     const resA = await responseA;
     expect(resA.status).toBe(200);
+    // B's registration is the sole resident here — it evicted A's entry
+    // from the map back when B first ran (before A resolved), so A's own
+    // settle-time cleanup found its entry already gone and is a no-op.
     expect(__documentCacheKeysForTests()).toHaveLength(1);
 
-    // Now resolve B — its pre-hydration clear already ran BEFORE A ever
-    // inserted anything, so its own `.set()` would leave two entries
-    // resident without a post-insert re-prune.
+    // B's chained hydration now starts — flush until its manifest fetch
+    // fires. Its own eventual `.set()` (already done at registration) is
+    // what the post-insert re-prune this test originally targeted guards.
+    for (let i = 0; i < 50 && deferreds.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(2);
     deferreds[1]!(manifest('cdm.base.other') as never);
     const resB = await responseB;
     expect(resB.status).toBe(200);
@@ -820,21 +833,31 @@ type Quantity:
     expect(manifestSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('does not evict a NEWER registration when an orphaned, stale hydration for the SAME key later resolves with a curatedError (issue #432 round 5)', async () => {
-    // Three interleaved requests: K (slow, will resolve with a structured
+  it('does not let an evicted, orphaned hydration that resolves with a curatedError delete a NEWER registration (issue #432 round 5)', async () => {
+    // Three interleaved requests: K (will resolve with a structured
     // curatedError), J (different key, evicts K's registration from the
-    // map while K keeps hydrating in the background), then K again (misses
-    // since K's own entry was evicted by J, so it registers a FRESH entry
-    // for the same key). When the ORIGINAL (now-orphaned) K hydration
-    // finally resolves with curatedError, its cleanup must NOT delete the
-    // newer K registration that replaced it.
+    // map), then K again (misses since K's own entry was evicted by J, so
+    // it registers a FRESH entry for the same key). K's cleanup, when it
+    // finally settles, must NOT delete the newer K registration that
+    // replaced it in the map.
+    //
+    // Since round 7 additionally SERIALIZES hydration behind whatever was
+    // evicted (see the dedicated round-7 test below), J's own hydration
+    // work is chained behind K1's settlement, and K2's is chained behind
+    // J's — so K1 is now FORCED to resolve first, not last as in this
+    // test's original round-5 construction. K1's entry is nonetheless
+    // already gone from the map by the time it settles (evicted back at
+    // registration time, well before any deferred resolves), so the
+    // identity guard is still exercised on every run, just deterministically
+    // rather than adversarially timed.
     //
     // Uses the curatedError (not rejection) path deliberately — the
-    // delete-on-curatedError cleanup already existed before this round, so
+    // delete-on-curatedError cleanup already existed before round 5, so
     // this isolates the identity-guard fix itself: an UNGUARDED delete
     // here would already have been present pre-round-5 and would wrongly
-    // evict K2, whereas a rejection-based scenario wouldn't distinguish
-    // the two rounds at all (round 4 had no rejection cleanup whatsoever).
+    // evict whatever replaced K1, whereas a rejection-based scenario
+    // wouldn't distinguish the two rounds at all (round 4 had no rejection
+    // cleanup whatsoever).
     const mathDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
       'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
@@ -868,10 +891,13 @@ type Quantity:
     const responseJ = request(['cdm.base.other']); // different key — evicts K1's registration
     const responseK2 = request(['cdm.base.math']); // K again — misses (K1 was evicted), registers fresh
 
-    for (let i = 0; i < 50 && deferreds.length < 3; i++) {
+    // All three registrations happen synchronously up front (see round-3's
+    // test for why) — only K1's `fetchCuratedManifest` call has actually
+    // fired yet; J's and K2's hydration work is chained behind it.
+    for (let i = 0; i < 50 && deferreds.length < 1; i++) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    expect(deferreds).toHaveLength(3);
+    expect(deferreds).toHaveLength(1);
 
     const cacheKeyK = __documentCacheKeysForTests()[0]!; // only K2's entry should remain resident
     expect(__documentCacheKeysForTests()).toEqual([cacheKeyK]);
@@ -892,20 +918,9 @@ type Quantity:
       }
     });
 
-    // J succeeds first.
-    deferreds[1]!.resolve(manifest('cdm.base.other'));
-    expect((await responseJ).status).toBe(200);
-
-    // K2 (the newer, still-current registration) succeeds.
-    deferreds[2]!.resolve(manifest('cdm.base.math'));
-    expect((await responseK2).status).toBe(200);
-    const keysAfterK2 = __documentCacheKeysForTests();
-    expect(keysAfterK2).toContain(cacheKeyK);
-
-    // K1 (the orphaned, stale attempt) finally resolves with a manifest
-    // that has NO namespaces at all — loadAllDocuments's Path C treats
-    // that as `curated_manifest_missing` and resolves with a curatedError
-    // rather than throwing.
+    // K1 resolves first — with a manifest that has NO namespaces at all,
+    // which loadAllDocuments's Path C treats as `curated_manifest_missing`
+    // and resolves with a curatedError rather than throwing.
     deferreds[0]!.resolve({
       schemaVersion: 2,
       modelId: 'cdm',
@@ -920,9 +935,31 @@ type Quantity:
       namespaces: {}
     });
     expect((await responseK1).status).toBe(502);
+    // K1's curatedError must NOT have evicted K2's still-valid registration
+    // — K1's own entry was already gone (evicted by J at registration
+    // time), so this guard fires every run now, not just adversarially.
+    expect(__documentCacheKeysForTests()).toEqual([cacheKeyK]);
 
-    // K1's curatedError must NOT have evicted K2's still-valid registration.
-    expect(__documentCacheKeysForTests()).toEqual(keysAfterK2);
+    // K1 settling unblocks J's chained hydration — flush for its manifest
+    // fetch (deferred index 1) and resolve it.
+    for (let i = 0; i < 50 && deferreds.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(2);
+    deferreds[1]!.resolve(manifest('cdm.base.other'));
+    expect((await responseJ).status).toBe(200);
+
+    // J settling unblocks K2's chained hydration — flush for its manifest
+    // fetch (deferred index 2) and resolve it.
+    for (let i = 0; i < 50 && deferreds.length < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(3);
+    deferreds[2]!.resolve(manifest('cdm.base.math'));
+    expect((await responseK2).status).toBe(200);
+
+    // K2 (the newer, still-current registration) is the sole survivor.
+    expect(__documentCacheKeysForTests()).toEqual([cacheKeyK]);
   });
 
   it('exempts a still-pending entry from TTL pruning, then TTLs it from its ACTUAL completion time, not registration time (issue #432 round 6)', async () => {
@@ -1013,6 +1050,89 @@ type Quantity:
     expect(__documentCacheKeysForTests()).toHaveLength(0);
 
     dateSpy.mockRestore();
+  });
+
+  it('serializes hydration for a DIFFERENT-key cache miss behind a still-pending entry (issue #432 round 7)', async () => {
+    // A miss for a different key than whatever's currently pending can't
+    // cancel that pending hydration — it keeps running to completion in
+    // its OWN request handler regardless. Starting a second (possibly
+    // CDM-sized) hydration immediately would let two closures process
+    // concurrently, doubling peak memory and risking the very
+    // resource-limit crash this cache exists to prevent. The replacement
+    // hydration's `fetchCuratedManifest` call must not fire until the
+    // evicted entry's hydration has fully settled.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deferreds: Array<{ resolve: (value: any) => void }> = [];
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockImplementation(
+      () => new Promise((resolve) => deferreds.push({ resolve }))
+    );
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    const request = (namespaces: string[]) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces
+        })
+      } as never);
+
+    const responseA = request(['cdm.base.math']);
+    const responseB = request(['cdm.base.other']);
+
+    // Flush well past the point where B's registration (a synchronous
+    // get/clear/set, unaffected by the chained wait) would have run —
+    // only A's `fetchCuratedManifest` call should exist.
+    for (let i = 0; i < 50; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(1);
+    // B's entry is nonetheless already the map's sole resident (its
+    // registration ran synchronously at request time; only its hydration
+    // WORK is deferred) — same eviction-at-registration behavior as
+    // rounds 2-4, unaffected by this round's change.
+    const cacheKeyB = __documentCacheKeysForTests()[0]!;
+    expect(__documentCacheKeysForTests()).toEqual([cacheKeyB]);
+
+    const manifest = (nsKey: string) => ({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        [nsKey]: { deps: [], exports: [], artifact: `artifacts/${V}/ns/${nsKey}.json.gz` }
+      }
+    });
+
+    deferreds[0]!.resolve(manifest('cdm.base.math'));
+    expect((await responseA).status).toBe(200);
+
+    // Only once A settles does B's chained hydration start.
+    for (let i = 0; i < 50 && deferreds.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(2);
+    deferreds[1]!.resolve(manifest('cdm.base.other'));
+    expect((await responseB).status).toBe(200);
   });
 
   it('combines user files and curated bundles in one generation', async () => {
