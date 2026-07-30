@@ -653,6 +653,50 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    "a Data-extends-Choice schema's own attribute wins over a colliding inherited Choice option, flagged as unsupported (issue #435)",
+    async () => {
+      // Same collision as the typeAlias/nested-objectField regression tests
+      // below, but exercised directly at buildDataSchema's own call site —
+      // this is the exact scenario from the issue text: `Basket extends
+      // Innermost` declares its own `cash string` attribute while
+      // `Innermost` has a `Cash` option whose real emitted field key
+      // (`choiceOptionFieldName('Cash')`) is also `cash`.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice Innermost:
+        Cash
+        Commodity
+
+      type Basket extends Innermost:
+        cash string (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket).toBeDefined();
+      // The non-colliding Commodity option survives; the colliding Cash
+      // option is dropped in favor of Basket's own `cash string` attribute.
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.fields.find((field) => field.path === 'cash')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+      expect(basket?.choiceArmPaths).toEqual(['commodity']);
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+    }
+  );
+
+  skipIfNodeLt22(
     'expands a Choice-typed attribute (as distinct from Data-extends-Choice) into one field per option (issue #394)',
     async () => {
       // Regression test for issue #394: buildBaseField had no branch for a
@@ -978,13 +1022,20 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
-    "a typeAlias's Data-extends-Choice expansion keeps the Data type's own attribute on a name collision",
+    "a typeAlias's Data-extends-Choice expansion keeps the Data type's own attribute on a name collision, and flags the collision as unsupported (issue #435)",
     async () => {
       // Mirrors buildDataSchema's collision precedence (round-5 finding #1
       // comment at its call site): when a Choice option's real emitted field
       // key collides with one of the Data type's own attribute names, the
       // Data type's own (more-derived) attribute wins and the Choice option
-      // is dropped rather than overwriting it.
+      // is dropped from `fields`/`choiceArmPaths`. The real emitted
+      // `runeExtendChoice` schema merges the Data type's own attributes into
+      // EVERY arm via `.extend()`, which replaces the colliding arm's
+      // distinguishing type entirely — that arm no longer conveys "the Cash
+      // option was selected" at all, so preview-validator.ts's "exactly one
+      // arm present" check would silently under-constrain if the collision
+      // weren't surfaced. `dropCollidingChoiceArmFields` now marks it
+      // `unsupported` instead of dropping it silently.
       const doc = await parseModel(`
       namespace "test.preview"
       version "1"
@@ -1013,6 +1064,8 @@ describe('FormPreviewSchema generation', () => {
         kind: 'string',
         required: true
       });
+      expect(alias?.status).toBe('unsupported');
+      expect(alias?.unsupportedFeatures).toContain('choice-arm-collision:cash');
     }
   );
 
@@ -1151,6 +1204,12 @@ describe('FormPreviewSchema generation', () => {
         kind: 'string',
         required: true
       });
+      // The collision is flagged (issue #435) even though it's nested —
+      // `ctx.unsupportedFeatures` is the SAME Set threaded through the
+      // whole recursive expansion, so it surfaces on the top-level Trade
+      // schema too, not just the constituent field.
+      expect(trade?.status).toBe('unsupported');
+      expect(trade?.unsupportedFeatures).toContain('choice-arm-collision:constituent.cash');
     }
   );
 });
