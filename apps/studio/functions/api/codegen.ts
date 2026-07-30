@@ -156,13 +156,22 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
  * primary use case (switching target format for the SAME closure) fully,
  * while capping retained memory to roughly one closure's worth — the same
  * order of magnitude a single in-flight request already requires.
+ *
+ * Stores the hydration PROMISE, not just the resolved result (Codex review
+ * round 4 on PR #445) — two concurrent requests for the SAME key could
+ * otherwise both observe a miss and both independently fetch+hydrate the
+ * same (potentially CDM-sized) closure at once, doubling peak memory for
+ * no benefit. Registering the promise synchronously, before awaiting it,
+ * means a second concurrent request for the same key finds it already
+ * registered and just awaits the SAME in-flight work instead of starting
+ * its own.
  */
 const DOCUMENT_CACHE_MAX_ENTRIES = 1;
 const DOCUMENT_CACHE_TTL_MS = 5 * 60 * 1000;
-const documentCache = new Map<string, { docs: import('langium').LangiumDocument[]; cachedAt: number }>();
+const documentCache = new Map<string, { promise: ReturnType<typeof loadAllDocuments>; cachedAt: number }>();
 
 /**
- * `JSON.stringify` over sorted arrays, NOT string concatenation (Codex
+ * `JSON.stringify` over structured arrays, NOT string concatenation (Codex
  * review round 1 on PR #445) — `namespaces` entries are arbitrary
  * request-supplied strings (only checked to be `string[]`, never
  * restricted in content), so joining with `,`/`@`/`|` lets differently-
@@ -172,14 +181,23 @@ const documentCache = new Map<string, { docs: import('langium').LangiumDocument[
  * slot — it can cache one request's (possibly empty/wrong) documents
  * under a key a later, differently-shaped but colliding request would
  * then incorrectly hit.
+ *
+ * `curatedBundles` ORDER is preserved, NOT sorted (Codex review round 4 on
+ * PR #445) — `loadAllDocuments`'s Path C loop processes `curatedBundles`
+ * in request order, and downstream namespace-walking resolves a symbol
+ * that collides across two bundles via last-one-wins `Map.set` semantics.
+ * `[A, B]` and `[B, A]` can therefore produce genuinely different
+ * documents when bundles share a colliding declaration — sorting here
+ * would let a reversed-order request incorrectly reuse a cached result
+ * built with the opposite precedence. `namespaces` order, by contrast, IS
+ * safe to normalize: every consumer (`loadAllDocuments`'s `seeds` Set,
+ * `runGenerate`'s allowlist Set) treats it as an unordered set.
  */
 function documentCacheKey(
   curatedBundles: ReadonlyArray<{ id: string; version: string }>,
   requestedNamespaces: readonly string[]
 ): string {
-  const bundles = [...curatedBundles]
-    .map((b) => [b.id, b.version] as const)
-    .sort(([aId, aVersion], [bId, bVersion]) => aId.localeCompare(bId) || aVersion.localeCompare(bVersion));
+  const bundles = curatedBundles.map((b) => [b.id, b.version] as const);
   const namespaces = [...requestedNamespaces].sort();
   return JSON.stringify([bundles, namespaces]);
 }
@@ -648,21 +666,53 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       body.files.length === 0 && curatedBundles.length > 0
         ? documentCacheKey(curatedBundles, body.namespaces ?? [])
         : undefined;
-    const cached = cacheKey ? documentCache.get(cacheKey) : undefined;
 
     let documents: import('langium').LangiumDocument[];
-    if (cached) {
-      documents = cached.docs;
+    if (cacheKey) {
+      let entry = documentCache.get(cacheKey);
+      if (!entry) {
+        // A miss means the cache is either empty or holds a DIFFERENT
+        // (mismatched) entry — clear it BEFORE starting hydration, not
+        // after, so at most one closure is ever resident at a time,
+        // including during hydration itself (round 2). Then register the
+        // hydration PROMISE, synchronously, before awaiting it — this
+        // whole get/clear/create/set/prune sequence contains no `await`,
+        // so it's atomic with respect to any other in-flight request: a
+        // second concurrent request for the SAME key that reaches this
+        // code next finds the promise already registered and just awaits
+        // it, instead of independently fetching+hydrating the same
+        // (possibly CDM-sized) closure a second time (Codex review round 4
+        // on PR #445).
+        documentCache.clear();
+        const promise = loadAllDocuments(
+          body.files,
+          curatedBundles,
+          curatedFetcher,
+          body.namespaces ?? [],
+          curatedDocs
+        );
+        entry = { promise, cachedAt: now };
+        documentCache.set(cacheKey, entry);
+        // Re-prune immediately after registering (round 3) — the
+        // pre-hydration clear above only protects THIS request's own
+        // miss; two concurrent requests for DIFFERENT keys can each clear
+        // an (already empty, or the other's not-yet-registered) cache and
+        // each register their own entry, leaving two until something
+        // re-prunes. Pruning right after `set` bounds that window to the
+        // gap between two concurrent `set` calls.
+        pruneDocumentCache(now);
+      }
+      const result = await entry.promise;
+      if (result.curatedError) {
+        // Don't leave a failed hydration cached for a later request to
+        // reuse — and .clone() the Response, since this exact instance
+        // may be shared with another request that coalesced onto the same
+        // promise (a Response body can only be consumed once).
+        documentCache.delete(cacheKey);
+        return result.curatedError.clone();
+      }
+      documents = result.docs;
     } else {
-      // A cache miss under a cacheable key means the cache is either empty
-      // or holds a DIFFERENT (mismatched) entry — clear it BEFORE
-      // hydrating, not after, so at most one closure is ever resident at a
-      // time, including during hydration itself. The cap is 1, so
-      // evicting-after-insert alone let the OLD closure stay strongly
-      // referenced for the full duration of hydrating the NEW one —
-      // exactly the peak-memory moment this cache needs to avoid (Codex
-      // review round 2 on PR #445).
-      if (cacheKey) documentCache.clear();
       const result = await loadAllDocuments(
         body.files,
         curatedBundles,
@@ -672,20 +722,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       );
       if (result.curatedError) return result.curatedError;
       documents = result.docs;
-      if (cacheKey) {
-        documentCache.set(cacheKey, { docs: documents, cachedAt: Date.now() });
-        // Re-prune immediately after inserting (Codex review round 3 on PR
-        // #445) — the pre-hydration clear above only protects a SINGLE
-        // request's own miss. Two concurrent cacheable requests for
-        // DIFFERENT keys can each observe a miss, each clear an (already
-        // empty, or the other's not-yet-inserted) cache, and each suspend
-        // in `loadAllDocuments`; when both resume they each `set` their
-        // OWN key, leaving two entries until something re-prunes. Pruning
-        // right after this `set` bounds that window to the gap between two
-        // concurrent `set` calls rather than leaving it open until some
-        // unrelated future request happens to prune.
-        pruneDocumentCache(Date.now());
-      }
     }
 
     const parseErrors = hasParserErrors(documents);

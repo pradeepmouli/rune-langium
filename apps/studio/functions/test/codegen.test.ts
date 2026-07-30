@@ -503,8 +503,12 @@ type Quantity:
 
     // By the time the SECOND request's manifest fetch ran, the first
     // request's cache entry must already be gone — not merely absent
-    // AFTER the second request finishes.
-    expect(cacheKeysWhenSecondManifestFetchStarted).toEqual([]);
+    // AFTER the second request finishes. (The cache now registers the
+    // hydration PROMISE synchronously before awaiting it, so the second
+    // request's OWN key is already present at this point too — the
+    // invariant under test is "the stale FIRST key is gone", not "the
+    // cache is empty".)
+    expect(cacheKeysWhenSecondManifestFetchStarted).not.toContain(firstKey);
     expect(__documentCacheKeysForTests()).not.toContain(firstKey);
   });
 
@@ -652,6 +656,116 @@ type Quantity:
     const resB = await responseB;
     expect(resB.status).toBe(200);
     expect(__documentCacheKeysForTests()).toHaveLength(1);
+  });
+
+  it('coalesces concurrent requests for the SAME key into a single hydration (issue #432 round 4)', async () => {
+    // Two requests for the IDENTICAL curated selection racing on a cold
+    // cache must not each independently fetch+hydrate the same (possibly
+    // CDM-sized) closure — the second should await the first's in-flight
+    // work instead.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let manifestResolve: ((value: any) => void) | undefined;
+    const manifestSpy = vi
+      .spyOn(fetchMod, 'fetchCuratedManifest')
+      .mockImplementation(() => new Promise((resolve) => (manifestResolve = resolve)));
+    const namespaceSpy = vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockResolvedValue([mathDoc]);
+
+    const request = () =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces: ['cdm.base.math']
+        })
+      } as never);
+
+    const responseA = request();
+    const responseB = request();
+
+    for (let i = 0; i < 50 && manifestResolve === undefined; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    // Only ONE hydration started, even with two requests in flight for the
+    // same key.
+    expect(manifestSpy).toHaveBeenCalledTimes(1);
+
+    manifestResolve!({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base.math': { deps: [], exports: [], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` }
+      }
+    });
+
+    const [resA, resB] = await Promise.all([responseA, responseB]);
+    expect(resA.status).toBe(200);
+    expect(resB.status).toBe(200);
+    expect(manifestSpy).toHaveBeenCalledTimes(1);
+    expect(namespaceSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves curatedBundles ORDER in the cache key — reversed bundle order is a cache MISS (issue #432 round 4)', async () => {
+    // loadAllDocuments processes curatedBundles in request order, and a
+    // symbol colliding across two bundles resolves via last-one-wins
+    // semantics downstream — [A, B] and [B, A] can produce genuinely
+    // different documents. A sorted cache key would let a reversed-order
+    // request incorrectly reuse a cached result built with the opposite
+    // precedence.
+    const mod = await import('../lib/curated-fetch.js');
+    const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: 'v1',
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      // Non-overlapping with the requested namespace so no manifest is
+      // empty (which would short-circuit before the cache is ever
+      // touched) but nothing is actually fetched either.
+      namespaces: { 'x.unrelated': { deps: [], exports: [], artifact: 'artifacts/v1/ns/unrelated.json.gz' } }
+    } as never);
+
+    const request = (bundles: Array<{ id: string; version: string }>) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: bundles,
+          namespaces: ['x.a']
+        })
+      } as never);
+
+    await request([
+      { id: 'cdm', version: 'latest' },
+      { id: 'fpml', version: 'latest' }
+    ]);
+    expect(manifestSpy).toHaveBeenCalledTimes(2); // one fetch per bundle
+
+    await request([
+      { id: 'fpml', version: 'latest' },
+      { id: 'cdm', version: 'latest' }
+    ]);
+    // Reversed order must NOT hit the cache from the first request.
+    expect(manifestSpy).toHaveBeenCalledTimes(4);
   });
 
   it('combines user files and curated bundles in one generation', async () => {
