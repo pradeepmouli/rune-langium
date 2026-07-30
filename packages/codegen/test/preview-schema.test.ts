@@ -1256,4 +1256,52 @@ describe('FormPreviewSchema generation', () => {
       expect(trade?.unsupportedFeatures).not.toContain('choice-arm-collision:positions.constituent.cash');
     }
   );
+
+  skipIfNodeLt22(
+    'removes a descendant choice-arm-collision diagnostic when the whole subtree containing it is dropped by an OUTER collision (issue #435 round 3)',
+    async () => {
+      // Doubly-nested collision: the outer Choice option "Cash" resolves to
+      // a Data type that itself extends ANOTHER Choice and has its OWN
+      // inner collision ("foo" vs. InnerChoice's "Foo" option) — building
+      // that "cash" object field records `choice-arm-collision:cash.foo`.
+      // Then the OUTER Basket's own `cash string` attribute collides with
+      // the outer "Cash" option itself, dropping the ENTIRE "cash" object
+      // field (foo collision and all). Without removing the now-stale
+      // descendant diagnostic, the returned schema would report a
+      // collision at `cash.foo` even though nothing at that path exists —
+      // the final `fields` only has Basket's own scalar `cash`.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Foo:
+        value string (1..1)
+
+      choice InnerChoice:
+        Foo
+
+      type Cash extends InnerChoice:
+        foo string (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice Innermost:
+        Cash
+        Commodity
+
+      type Basket extends Innermost:
+        cash string (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.fields.find((field) => field.path === 'cash')).toMatchObject({ kind: 'string', required: true });
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+      expect(basket?.unsupportedFeatures).not.toContain('choice-arm-collision:cash.foo');
+    }
+  );
 });

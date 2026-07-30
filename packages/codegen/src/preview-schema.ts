@@ -233,9 +233,36 @@ function dropCollidingChoiceArmFields(
 ): PreviewField[] {
   return optionFields.filter((field) => {
     if (!ownPaths.has(field.path)) return true;
+    // If `field` is itself a Data type extending ANOTHER Choice (round-5
+    // finding #1's doubly-nested case), building it may already have
+    // recorded its OWN `choice-arm-collision:<field.path>.*` diagnostics
+    // for an INNER collision — those now name a path inside a subtree
+    // that's about to be discarded entirely, not just the collision key
+    // itself. Remove them before recording this (outer) collision, or a
+    // consumer gets a diagnostic for a field that doesn't exist in the
+    // returned schema at all (Codex review on PR #443).
+    removeCollisionDiagnosticsUnder(unsupportedFeatures, field.path);
     unsupportedFeatures.add(`choice-arm-collision:${field.path}`);
     return false;
   });
+}
+
+/**
+ * Removes any `choice-arm-collision:<path>` diagnostic whose path is
+ * `prefix` or nested under it — used when the field at `prefix` is being
+ * dropped entirely (issue #435 round 3), so a descendant collision
+ * recorded while building that now-discarded subtree doesn't linger as a
+ * diagnostic for a path the returned schema no longer contains.
+ */
+function removeCollisionDiagnosticsUnder(unsupportedFeatures: Set<string>, prefix: string): void {
+  const marker = 'choice-arm-collision:';
+  for (const entry of Array.from(unsupportedFeatures)) {
+    if (!entry.startsWith(marker)) continue;
+    const path = entry.slice(marker.length);
+    if (path === prefix || path.startsWith(`${prefix}.`)) {
+      unsupportedFeatures.delete(entry);
+    }
+  }
 }
 
 /**
