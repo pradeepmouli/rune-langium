@@ -694,6 +694,70 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    'expands a doubly-nested Choice — a Choice option whose Data type itself extends another Choice (Codex review, PR #433 round 5)',
+    async () => {
+      // Regression test: this was a documented, deferred gap that predates
+      // this PR — buildChoiceOptionField's Data-option branch discarded
+      // collectInheritedAttributes' `choiceAncestor`, silently dropping the
+      // inherited arms whenever a Choice OPTION's Data type itself extends
+      // a DIFFERENT Choice. A preview sample could validate as complete
+      // while the real emitted `runeExtendChoice` Zod schema rejects it for
+      // missing the inherited arm, with no field offered to supply it.
+      // Mirrors objectField's own choiceAncestor expansion.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Innermost:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Innermost:
+        weight number (1..1)
+
+      choice Observable:
+        BasketConstituent
+
+      type Trade:
+        variant Observable (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      const variantField = trade?.fields.find((field) => field.path === 'variant');
+      const constituentArm =
+        variantField && 'children' in variantField
+          ? variantField.children?.find((c) => c.path === 'variant.basketConstituent')
+          : undefined;
+      expect(constituentArm).toMatchObject({ path: 'variant.basketConstituent', kind: 'object' });
+      const constituentChildPaths =
+        constituentArm && 'children' in constituentArm ? constituentArm.children?.map((c) => c.path).sort() : [];
+      // BasketConstituent's own `weight` PLUS the inherited Innermost arms
+      // (`commodity`/`cash`), all prefixed under `variant.basketConstituent`.
+      expect(constituentChildPaths).toEqual([
+        'variant.basketConstituent.cash',
+        'variant.basketConstituent.commodity',
+        'variant.basketConstituent.weight'
+      ]);
+      const constituentArmPaths =
+        constituentArm && 'choiceArmPaths' in constituentArm ? constituentArm.choiceArmPaths : undefined;
+      expect(constituentArmPaths?.slice().sort()).toEqual([
+        'variant.basketConstituent.cash',
+        'variant.basketConstituent.commodity'
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
     'includes Choice-ancestor option fields when a typeAlias resolves to a Data-extends-Choice type',
     async () => {
       // Regression test (follow-up to round-5 finding #1): buildTypeAliasSchema's

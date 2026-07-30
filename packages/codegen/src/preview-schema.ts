@@ -603,18 +603,53 @@ function buildChoiceOptionField(
       label,
       seenTypes: nextSeen
     };
+    const { attributes, choiceAncestor } = collectInheritedAttributes(resolvedData);
+    const attributeChildren = attributes.map((child) =>
+      buildField(child, {
+        ...childCtx,
+        path: `${path}.${child.name}`,
+        label: humanizeLabel(child.name)
+      })
+    );
+
+    // Doubly-nested Choice (Codex review, PR #433 round 5) — previously a
+    // documented, deferred gap ("a Choice option whose Data type itself
+    // extends a Choice"): a Choice option's Data type can itself EXTEND
+    // another Choice, distinct from that Data type's own plain attributes.
+    // Mirrors objectField's expansion of a choiceAncestor exactly (same
+    // collision precedence, same choiceArmPaths contract) so this level
+    // gets identical treatment to every other Data-extends-Choice call
+    // site instead of silently dropping the inherited arms — which would
+    // let a preview sample validate as complete while the real emitted
+    // `runeExtendChoice` Zod schema rejects it for missing the arm.
+    const ownChildPaths = new Set(attributeChildren.map((child) => child.path));
+    const choiceChildren = choiceAncestor
+      ? (() => {
+          const choiceSeen = new Set(nextSeen);
+          choiceSeen.add(choiceAncestor.name);
+          return choiceAncestor.attributes
+            .map((option) =>
+              buildChoiceOptionField(option, {
+                namespace: ctx.namespace,
+                unsupportedFeatures: ctx.unsupportedFeatures,
+                sourceUri: resolvedSourceUri,
+                pathPrefix: path,
+                seenTypes: choiceSeen,
+                depth: ctx.depth + 1,
+                maxDepth: ctx.maxDepth
+              })
+            )
+            .filter((field) => !ownChildPaths.has(field.path));
+        })()
+      : [];
+
     return {
       path,
       label,
       kind: 'object',
       required: false,
-      children: collectInheritedAttributes(resolvedData).attributes.map((child) =>
-        buildField(child, {
-          ...childCtx,
-          path: `${path}.${child.name}`,
-          label: humanizeLabel(child.name)
-        })
-      )
+      children: [...choiceChildren, ...attributeChildren],
+      ...(choiceAncestor ? { choiceArmPaths: choiceChildren.map((field) => field.path) } : {})
     };
   }
 
