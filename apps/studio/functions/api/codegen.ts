@@ -658,10 +658,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       // or holds a DIFFERENT (mismatched) entry — clear it BEFORE
       // hydrating, not after, so at most one closure is ever resident at a
       // time, including during hydration itself. The cap is 1, so
-      // evicting-after-insert (the round-1 approach) let the OLD closure
-      // stay strongly referenced for the full duration of hydrating the
-      // NEW one — exactly the peak-memory moment this cache needs to avoid
-      // (Codex review round 2 on PR #445).
+      // evicting-after-insert alone let the OLD closure stay strongly
+      // referenced for the full duration of hydrating the NEW one —
+      // exactly the peak-memory moment this cache needs to avoid (Codex
+      // review round 2 on PR #445).
       if (cacheKey) documentCache.clear();
       const result = await loadAllDocuments(
         body.files,
@@ -673,7 +673,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       if (result.curatedError) return result.curatedError;
       documents = result.docs;
       if (cacheKey) {
-        documentCache.set(cacheKey, { docs: documents, cachedAt: now });
+        documentCache.set(cacheKey, { docs: documents, cachedAt: Date.now() });
+        // Re-prune immediately after inserting (Codex review round 3 on PR
+        // #445) — the pre-hydration clear above only protects a SINGLE
+        // request's own miss. Two concurrent cacheable requests for
+        // DIFFERENT keys can each observe a miss, each clear an (already
+        // empty, or the other's not-yet-inserted) cache, and each suspend
+        // in `loadAllDocuments`; when both resume they each `set` their
+        // OWN key, leaving two entries until something re-prunes. Pruning
+        // right after this `set` bounds that window to the gap between two
+        // concurrent `set` calls rather than leaving it open until some
+        // unrelated future request happens to prune.
+        pruneDocumentCache(Date.now());
       }
     }
 

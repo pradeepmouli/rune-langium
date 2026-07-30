@@ -567,6 +567,93 @@ type Quantity:
     dateSpy.mockRestore();
   });
 
+  it('re-enforces the one-entry cap when two concurrent requests for DIFFERENT keys both observe a miss (issue #432 round 3)', async () => {
+    // The pre-hydration `documentCache.clear()` only protects a SINGLE
+    // request's own miss. Two requests racing on the same warm isolate for
+    // DIFFERENT curated selections can each see an empty/mismatched cache,
+    // each clear it, and each suspend inside loadAllDocuments — when both
+    // resume, each calls `.set()` for its OWN key, which (without a
+    // post-insert re-prune) would leave BOTH entries resident.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+
+    // Each fetchCuratedManifest call gets its OWN externally-resolvable
+    // deferred, in call order — lets the test control exactly when each
+    // concurrent request's hydration resumes.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deferreds: Array<(value: any) => void> = [];
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockImplementation(
+      () => new Promise((resolve) => deferreds.push(resolve))
+    );
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    const request = (namespaces: string[]) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces
+        })
+      } as never);
+
+    // Start BOTH requests without awaiting between them.
+    const responseA = request(['cdm.base.math']);
+    const responseB = request(['cdm.base.other']);
+
+    // Flush the event loop (request.json() → validation → loadAllDocuments's
+    // Promise.all imports → fetchCuratedManifest) until BOTH requests have
+    // reached their manifest fetch and suspended on our deferreds — proves
+    // both ran their own pre-hydration clear while the cache was still
+    // empty, i.e. genuinely interleaved, not sequential. Mixes microtask
+    // and macrotask yields since Request.json()/dynamic import() may
+    // schedule via either.
+    for (let i = 0; i < 50 && deferreds.length < 2; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(2);
+
+    const manifest = (nsKey: string) => ({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        [nsKey]: { deps: [], exports: [], artifact: `artifacts/${V}/ns/${nsKey}.json.gz` }
+      }
+    });
+
+    // Resolve A and let it fully finish (set + post-insert prune) first.
+    deferreds[0]!(manifest('cdm.base.math') as never);
+    const resA = await responseA;
+    expect(resA.status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+
+    // Now resolve B — its pre-hydration clear already ran BEFORE A ever
+    // inserted anything, so its own `.set()` would leave two entries
+    // resident without a post-insert re-prune.
+    deferreds[1]!(manifest('cdm.base.other') as never);
+    const resB = await responseB;
+    expect(resB.status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+  });
+
   it('combines user files and curated bundles in one generation', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',
