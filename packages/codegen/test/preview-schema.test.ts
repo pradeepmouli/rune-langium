@@ -36,6 +36,21 @@ async function parseFixture(relativePath: string) {
   return parseModel(source);
 }
 
+async function parseModels(sources: readonly string[]) {
+  const { RuneDsl } = createRuneDslServices();
+  const docs = sources.map((source, i) =>
+    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      source,
+      URI.parse(`inmemory:///preview-schema-${i}.rosetta`)
+    )
+  );
+  await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
+  for (const doc of docs) {
+    expect(doc.parseResult.parserErrors.map((error) => error.message)).toEqual([]);
+  }
+  return docs;
+}
+
 describe('FormPreviewSchema generation', () => {
   skipIfNodeLt22('serializes scalar, optional, array, enum, and nested fields', async () => {
     const doc = await parseModel(`
@@ -167,6 +182,48 @@ describe('FormPreviewSchema generation', () => {
       }
     ]);
   });
+
+  skipIfNodeLt22(
+    'does not spuriously block expansion when two DIFFERENT types in different namespaces share a bare simple name (issue #436)',
+    async () => {
+      // The `seenTypes` recursion guard previously keyed by bare `.name`
+      // alone. `trade.Observable` referencing the UNRELATED
+      // `asset.Observable` (same simple name, different namespace, no
+      // actual cycle) used to trip the guard the moment the outer schema
+      // being generated was ALSO named `Observable` — the guard seeds
+      // itself with the outer type's own bare name, so a same-named nested
+      // reference reads as "already seen" even though it's a distinct type.
+      const docs = await parseModels([
+        `
+          namespace test.crossns.asset
+          version "1"
+
+          type Observable:
+            value number (1..1)
+        `,
+        `
+          namespace test.crossns.trade
+          version "1"
+
+          import test.crossns.asset.*
+
+          type Observable:
+            name string (1..1)
+            linked test.crossns.asset.Observable (0..1)
+        `
+      ]);
+
+      const schemas = generatePreviewSchemas(docs);
+      const tradeObservable = schemas.find((s) => s.targetId === 'test.crossns.trade.Observable');
+
+      expect(tradeObservable?.status).toBe('ready');
+      expect(tradeObservable?.unsupportedFeatures).toBeUndefined();
+      expect(tradeObservable?.fields.find((f) => f.path === 'linked')).toMatchObject({
+        kind: 'object',
+        children: [{ path: 'linked.value', label: 'Value', kind: 'number', required: true }]
+      });
+    }
+  );
 
   skipIfNodeLt22('can return one fully-qualified target schema by id', async () => {
     const doc = await parseModel(`
