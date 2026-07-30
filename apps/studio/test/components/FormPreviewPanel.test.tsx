@@ -574,4 +574,122 @@ describe('FormPreviewPanel', () => {
       });
     });
   });
+
+  describe('Choice-ancestor arm selection (issue #434)', () => {
+    // A Data-extends-Choice reference reached via a NESTED attribute
+    // (`constituent`) — mirrors what buildDataSchema/objectField in
+    // preview-schema.ts actually produce: one field per Choice option
+    // (`cash` scalar, `commodity` object) alongside the Data type's own
+    // attribute (`weight`), with `choiceArmPaths` naming the two arms.
+    const nestedChoiceSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      targetId: 'test.preview.TradeWithConstituent',
+      title: 'TradeWithConstituent',
+      status: 'ready',
+      fields: [
+        { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+        {
+          path: 'constituent',
+          label: 'Constituent',
+          kind: 'object',
+          required: true,
+          choiceArmPaths: ['constituent.cash', 'constituent.commodity'],
+          children: [
+            { path: 'constituent.weight', label: 'Weight', kind: 'number', required: true },
+            { path: 'constituent.cash', label: 'Cash', kind: 'string', required: false },
+            {
+              path: 'constituent.commodity',
+              label: 'Commodity',
+              kind: 'object',
+              required: false,
+              children: [{ path: 'constituent.commodity.symbol', label: 'Symbol', kind: 'string', required: true }]
+            }
+          ]
+        }
+      ]
+    };
+
+    it("renders a NESTED Data-extends-Choice reference's scalar/object arms through a single-selection radio group, not as always-present plain fields", () => {
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+        />
+      );
+
+      expect(screen.getByText('Choose one option')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Cash' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Commodity' })).toBeInTheDocument();
+      // The Data type's own (non-arm) attribute still renders as a plain field.
+      expect(screen.getByLabelText('Weight')).toBeInTheDocument();
+    });
+
+    it('seeds only the FIRST arm with a real default value, so exactly one arm starts selected instead of every scalar arm starting "present"', () => {
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+        />
+      );
+
+      // Cash is the first-listed arm — it should be the initially active
+      // radio option, with its scalar control rendered...
+      expect(screen.getByRole('radio', { name: 'Cash' })).toBeChecked();
+      expect(screen.getByRole('textbox', { name: 'Cash' })).toBeInTheDocument();
+      // ...while Commodity's nested field must NOT be rendered — if every
+      // arm's default value were seeded (the pre-fix bug), both would show
+      // simultaneously with no way to tell which one is "selected".
+      expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument();
+    });
+
+    it("switching the selected arm clears the previously-selected scalar arm's value entirely (not left at its default)", async () => {
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+          values={{ tradeId: 'T1', constituent: { weight: 5, cash: '' } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      await user.click(screen.getByRole('radio', { name: 'Commodity' }));
+
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'T1',
+        constituent: { weight: 5, commodity: { symbol: '' } }
+      });
+    });
+
+    it('renders a TOP-LEVEL Data-extends-Choice schema\'s (kind !== "choice") arms through the same radio group as the nested case', () => {
+      const rootChoiceSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.BasketConstituent',
+        title: 'BasketConstituent',
+        kind: 'data',
+        status: 'ready',
+        choiceArmPaths: ['cash', 'commodity'],
+        fields: [
+          { path: 'weight', label: 'Weight', kind: 'number', required: true },
+          { path: 'cash', label: 'Cash', kind: 'string', required: false },
+          {
+            path: 'commodity',
+            label: 'Commodity',
+            kind: 'object',
+            required: false,
+            children: [{ path: 'commodity.symbol', label: 'Symbol', kind: 'string', required: true }]
+          }
+        ]
+      };
+
+      render(
+        <FormPreviewPanel schema={rootChoiceSchema} status={{ state: 'ready', targetId: rootChoiceSchema.targetId }} />
+      );
+
+      expect(screen.getByText('Choose one option')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Cash' })).toBeChecked();
+      expect(screen.getByLabelText('Weight')).toBeInTheDocument();
+    });
+  });
 });
