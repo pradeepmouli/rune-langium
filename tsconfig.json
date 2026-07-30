@@ -27,11 +27,11 @@
   "exclude": ["node_modules", "dist", "build", "coverage"],
   "files": [],
   "references": [
-    { "path": "packages/core" },
+    { "path": "packages/core/tsconfig.json" },
     { "path": "packages/design-system/tsconfig.json" },
-    { "path": "packages/git-sync-engine" },
-    { "path": "packages/lsp-server" },
-    { "path": "packages/visual-editor" },
-    { "path": "apps/studio" }
+    { "path": "packages/git-sync-engine/tsconfig.json" },
+    { "path": "packages/lsp-server/tsconfig.json" },
+    { "path": "packages/visual-editor/tsconfig.json" },
+    { "path": "apps/studio/tsconfig.json" }
   ]
 }

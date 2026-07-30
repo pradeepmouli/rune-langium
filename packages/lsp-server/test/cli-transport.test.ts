@@ -76,7 +76,7 @@ describe('WebSocketTransport constructor', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('Pre-opened WebSocket transport', () => {
-  it('is not connected until emit("open") is called', () => {
+  it('is connected immediately for an already-open socket, and stays connected after emit("open")', () => {
     const wss = new WebSocketServer({ port: 0 });
     const port = (wss.address() as { port: number }).port;
 
@@ -84,11 +84,14 @@ describe('Pre-opened WebSocket transport', () => {
       wss.on('connection', (ws) => {
         try {
           const transport = new WebSocketTransport({ socket: ws as any });
-          // Before emit('open'), transport may not be connected
-          // because the 'open' event already fired before we set up the listener
-          expect(transport.isConnected()).toBe(false);
+          // @lspeasy/core >=2.7.0: a socket accepted via wss.on('connection', ...)
+          // has already completed the WebSocket handshake (readyState is OPEN
+          // the moment 'connection' fires), so isConnected() reflects that
+          // immediately rather than waiting for a redundant 'open' replay.
+          expect(transport.isConnected()).toBe(true);
 
-          // Emit 'open' to trigger the handler inside WebSocketTransport
+          // Re-emitting 'open' (e.g. a CLI transport replaying it for an
+          // already-open socket) must not flip the state.
           ws.emit('open');
           expect(transport.isConnected()).toBe(true);
 
