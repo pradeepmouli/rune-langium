@@ -429,6 +429,34 @@ describe('FormPreviewSchema generation', () => {
     }
   );
 
+  skipIfNodeLt22(
+    'choice option with a namespace-qualified type reference uses the RESOLVED node name for path/label, not the raw qualified $refText (issue #437)',
+    async () => {
+      // buildChoiceOptionField previously preferred the raw `$refText` over
+      // the resolved node's bare `.name`. For an unqualified reference the
+      // two coincide, masking the bug — a namespace-qualified reference
+      // (`test.preview.Cash`) exposes it: the real emitters
+      // (`emitChoiceSchema`'s `optionTypeRef?.ref?.name ?? ...`) always key
+      // off the resolved node's bare name, so the preview must match.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        type Cash:
+          amount number (1..1)
+
+        choice Collateral:
+          test.preview.Cash
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral');
+
+      expect(choice?.fields).toHaveLength(1);
+      expect(choice?.fields[0]).toMatchObject({ path: 'cash', label: 'Cash' });
+    }
+  );
+
   skipIfNodeLt22('choice with unresolved option type produces unsupported status', async () => {
     const doc = await parseModel(`
         namespace "test.preview"

@@ -542,15 +542,17 @@ function buildChoiceOptionField(
   const typeRef = option.typeCall?.type?.ref;
   const refText = option.typeCall?.type?.$refText;
 
-  // Resolve the option's label from the referenced type name (original DSL
-  // casing, for display) and its `path` from the REAL emitted object key
-  // (lower-camel-cased, per `choiceOptionFieldName`) — the same rule
-  // zod-emitter/json-schema-emitter/ts-emitter apply when generating the
-  // actual schema for a Choice, so instance data keyed by `path` here
-  // round-trips against the real generated schema instead of being
-  // rejected for using the raw (capitalized) DSL type-reference text.
-  const label = refText ?? 'unknown';
-  const basePath = refText ? choiceOptionFieldName(refText) : label;
+  // Resolve the option's label/path from the RESOLVED node's bare name,
+  // falling back to the raw `$refText` only when unresolved — the same
+  // precedence `zod-emitter.ts`'s `emitChoiceSchema` uses
+  // (`optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown'`).
+  // A namespace-qualified reference (e.g. `other.ns.Cash`) resolves to a
+  // typeRef whose bare `.name` is `Cash`; preferring `$refText` here
+  // produced a mismatched key that couldn't round-trip against the real
+  // emitted schema's `cash` key (issue #437).
+  const optionTypeName = typeRef?.name ?? refText ?? 'unknown';
+  const label = optionTypeName;
+  const basePath = choiceOptionFieldName(optionTypeName);
   const path = ctx.pathPrefix ? `${ctx.pathPrefix}.${basePath}` : basePath;
 
   // Primitive type option
