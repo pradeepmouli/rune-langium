@@ -1135,6 +1135,88 @@ type Quantity:
     expect((await responseB).status).toBe(200);
   });
 
+  it('evicts a settled cached closure BEFORE a non-cacheable request that also hydrates curated content (issue #432 round 8)', async () => {
+    // The non-cacheable branch (a request carrying user files) never
+    // touched `documentCache` at all — a settled cached closure from an
+    // earlier curated-only request stays strongly referenced in the map
+    // for its whole TTL window while this request builds a SECOND
+    // (possibly CDM-sized) closure alongside it, doubling peak memory.
+    // Scoped to `curatedBundles.length > 0`: only requests that themselves
+    // hydrate curated content compete for this kind of memory.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    const manifest = (nsKey: string) => ({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        [nsKey]: { deps: [], exports: [], artifact: `artifacts/${V}/ns/${nsKey}.json.gz` }
+      }
+    });
+
+    const manifestSpy = vi
+      .spyOn(fetchMod, 'fetchCuratedManifest')
+      .mockResolvedValue(manifest('cdm.base.math') as never);
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    // Settle a cacheable curated-only request first — its entry stays
+    // resident (not expired, well within the 5-minute TTL).
+    const cacheableRes = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm', version: 'latest' }],
+        namespaces: ['cdm.base.math']
+      })
+    } as never);
+    expect(cacheableRes.status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+
+    // Now reconfigure the manifest mock to suspend on a deferred, so the
+    // second request's own hydration can be inspected mid-flight — before
+    // it completes, not just eventually.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let deferredResolve: ((value: any) => void) | undefined;
+    manifestSpy.mockImplementation(() => new Promise((resolve) => (deferredResolve = resolve)));
+
+    const nonCacheableCuratedResponse = onRequestPost({
+      request: makeRequest({
+        files: [{ path: 'user.rune', content: ONE_NAMESPACE }],
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm', version: 'latest' }],
+        namespaces: ['cdm.base.other']
+      })
+    } as never);
+
+    for (let i = 0; i < 50 && !deferredResolve; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferredResolve).toBeDefined();
+    // The earlier settled entry must already be gone — evicted BEFORE this
+    // request's own hydration started, not left resident throughout it.
+    expect(__documentCacheKeysForTests()).toHaveLength(0);
+
+    deferredResolve!(manifest('cdm.base.other'));
+    expect((await nonCacheableCuratedResponse).status).toBe(200);
+  });
+
   it('combines user files and curated bundles in one generation', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',

@@ -780,6 +780,31 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       }
       documents = result.docs;
     } else {
+      // A non-cacheable request (has user files, so its own document set
+      // can't safely be reused by a later request) can still compete for
+      // memory with whatever's resident in `documentCache` when it ALSO
+      // hydrates curated content (`curatedBundles.length > 0`) — a settled
+      // cached closure stays strongly referenced in the map for its whole
+      // TTL window, and a pending one keeps hydrating regardless of what
+      // this request does. Building a SECOND (possibly CDM-sized) closure
+      // alongside either risks the same resource-limit crash the cache
+      // exists to prevent (Codex review round 8 on PR #445). Evict a
+      // settled entry outright (nothing to wait for — it's just sitting
+      // there) and serialize behind a pending one, exactly as the
+      // cacheable path does (round 7), before starting this request's own
+      // hydration. Scoped to `curatedBundles.length > 0` — a pure
+      // user-file request never competes for curated-closure memory, so
+      // there's nothing to protect against and no reason to pay the
+      // eviction/wait cost.
+      if (curatedBundles.length > 0 && documentCache.size > 0) {
+        const stalePending = Array.from(documentCache.values())
+          .filter((e) => e.pending)
+          .map((e) => e.promise);
+        documentCache.clear();
+        if (stalePending.length > 0) {
+          await Promise.allSettled(stalePending);
+        }
+      }
       const result = await loadAllDocuments(
         body.files,
         curatedBundles,
