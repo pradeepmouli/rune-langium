@@ -254,8 +254,8 @@ function collectInheritedAttributes(data: Data): InheritedAttributesResult {
   const visited = new Set<string>();
   let current: Data | undefined = data;
   let choiceAncestor: Choice | undefined;
-  while (current && !visited.has(current.name)) {
-    visited.add(current.name);
+  while (current && !visited.has(qualifiedTypeId(current))) {
+    visited.add(qualifiedTypeId(current));
     chain.push(current);
     const parent: unknown = current.superType?.ref;
     if (parent && isChoice(parent)) {

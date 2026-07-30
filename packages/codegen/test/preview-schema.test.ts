@@ -225,6 +225,43 @@ describe('FormPreviewSchema generation', () => {
     }
   );
 
+  skipIfNodeLt22(
+    "does not stop early walking an 'extends' chain through a same-simple-name ancestor in a different namespace (issue #436 follow-up)",
+    async () => {
+      // collectInheritedAttributes has its OWN separate `visited` cycle
+      // guard (distinct from buildDataSchema/etc.'s `seenTypes`), which had
+      // the identical bare-name-collision bug: `derived.Observable extends
+      // base.Observable` (same simple name, different namespace) stopped
+      // the walk after the FIRST link, silently dropping the base type's
+      // inherited attributes — a structurally-invalid sample (missing a
+      // required parent field) would have passed preview validation.
+      const docs = await parseModels([
+        `
+          namespace test.crossns2.base
+          version "1"
+
+          type Observable:
+            value number (1..1)
+        `,
+        `
+          namespace test.crossns2.derived
+          version "1"
+
+          import test.crossns2.base.*
+
+          type Observable extends test.crossns2.base.Observable:
+            extra string (1..1)
+        `
+      ]);
+
+      const schemas = generatePreviewSchemas(docs);
+      const derivedObservable = schemas.find((s) => s.targetId === 'test.crossns2.derived.Observable');
+
+      expect(derivedObservable?.status).toBe('ready');
+      expect(derivedObservable?.fields.map((f) => f.path)).toEqual(['value', 'extra']);
+    }
+  );
+
   skipIfNodeLt22('can return one fully-qualified target schema by id', async () => {
     const doc = await parseModel(`
       namespace "test.preview"
