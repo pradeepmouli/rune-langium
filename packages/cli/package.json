@@ -46,10 +46,10 @@
     "@rune-langium/codegen-legacy": "workspace:*",
     "@rune-langium/core": "workspace:*",
     "commander": "^15.0.0",
-    "langium": "^4.3.0"
+    "langium": "^4.3.1"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
+    "@types/node": "^26.1.2",
     "typescript": "^7.0.2"
   },
   "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)",
