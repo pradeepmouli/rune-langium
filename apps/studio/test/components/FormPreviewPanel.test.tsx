@@ -781,6 +781,58 @@ describe('FormPreviewPanel', () => {
       });
     });
 
+    it('keeps a NUMERIC arm selected (radio checked, input rendered) when its value is cleared mid-edit (issue #434 round 3)', async () => {
+      // getInputValue previously returned `undefined` for a cleared number
+      // input; ChoiceFieldGroup's presence check (`value !== undefined`)
+      // then read the arm as unselected the instant the user cleared it,
+      // unchecking its radio and unmounting the input they were editing.
+      const numericArmSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.TradeWithQuantity',
+        title: 'TradeWithQuantity',
+        status: 'ready',
+        fields: [
+          { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+          {
+            path: 'constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['constituent.quantity', 'constituent.symbol'],
+            children: [
+              { path: 'constituent.quantity', label: 'Quantity', kind: 'number', required: false },
+              { path: 'constituent.symbol', label: 'Symbol', kind: 'string', required: false }
+            ]
+          }
+        ]
+      };
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+
+      render(
+        <FormPreviewPanel
+          schema={numericArmSchema}
+          status={{ state: 'ready', targetId: numericArmSchema.targetId }}
+          values={{ tradeId: 'T1', constituent: { quantity: 5 } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      const quantityInput = screen.getByRole('spinbutton', { name: 'Quantity' });
+      await user.clear(quantityInput);
+
+      // This is a controlled component — the test double doesn't feed
+      // emitted values back into `values`, so the DOM never re-renders with
+      // the cleared value. Assert on what was actually EMITTED: the
+      // "quantity" key must still be present (as '', not absent/undefined)
+      // — that's the signal ChoiceFieldGroup's presence check relies on to
+      // keep the arm selected.
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'T1',
+        constituent: { quantity: '' }
+      });
+    });
+
     it('does not fabricate a selected arm for a genuinely empty controlled value (issue #434 round 2)', () => {
       // A freshly created InstanceFormPanel record starts as controlled
       // `values={}` before anything seeds real defaults into it (the

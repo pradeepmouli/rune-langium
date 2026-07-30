@@ -990,9 +990,17 @@ function resolvedFieldLabel(field: PreviewField, arrayIndices?: number[]): strin
 function getInputValue(field: PreviewField, event: ChangeEvent<HTMLInputElement>): unknown {
   if (field.kind === 'number') {
     if (event.target.value === '') {
-      return undefined;
+      // '' (not undefined) — matches buildDefaultValue's own "no value
+      // yet" representation for a number field, and validatePreviewSample's
+      // number preprocessing already normalizes '' and undefined
+      // identically. Returning undefined here made a Choice arm's presence
+      // check (`value !== undefined`) read a cleared numeric arm as
+      // "unselected" mid-edit — unchecking its radio and unmounting the
+      // input the user was actively typing into (Codex review round 3 on
+      // PR #444).
+      return '';
     }
-    return Number.isNaN(event.target.valueAsNumber) ? undefined : event.target.valueAsNumber;
+    return Number.isNaN(event.target.valueAsNumber) ? '' : event.target.valueAsNumber;
   }
   return event.target.value;
 }
