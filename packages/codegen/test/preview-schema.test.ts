@@ -1304,4 +1304,66 @@ describe('FormPreviewSchema generation', () => {
       expect(basket?.unsupportedFeatures).not.toContain('choice-arm-collision:cash.foo');
     }
   );
+
+  skipIfNodeLt22(
+    "keeps a RETAINED field's own choice-arm-collision diagnostic when a DIFFERENT, discarded arm collides at the same path (issue #435 round 4)",
+    async () => {
+      // Distinct from round 3: there, the diagnostic under the dropped path
+      // belonged to the discarded arm itself (a doubly-nested collision
+      // inside the arm being thrown away). Here, Basket's OWN "cash"
+      // attribute (type Wrapper, which extends InnerChoice and has its own
+      // "foo" vs. InnerChoice's "Foo" option collision) records
+      // `choice-arm-collision:cash.foo` FIRST, while attributeFields are
+      // built — before OuterChoice's "Cash" option is even built. When that
+      // outer "Cash" option (unrelated to Wrapper) then also collides with
+      // Basket's own "cash" attribute name and gets dropped, a path-prefix
+      // removal (the round-3 approach) can't tell "cash.foo" belongs to the
+      // RETAINED Wrapper subtree apart from anything the discarded "Cash"
+      // option itself might have recorded — and would incorrectly delete
+      // it. Only diagnostics newly recorded while building the SPECIFIC
+      // discarded option should be removed.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Foo:
+        value string (1..1)
+
+      choice InnerChoice:
+        Foo
+
+      type Wrapper extends InnerChoice:
+        foo string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice OuterChoice:
+        Cash
+        Commodity
+
+      type Basket extends OuterChoice:
+        cash Wrapper (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash.foo');
+
+      const cashField = basket?.fields.find((field) => field.path === 'cash');
+      if (cashField?.kind !== 'object') throw new Error('expected cash field to be an object');
+      expect(cashField.children.map((child) => child.path)).toEqual(['cash.foo']);
+      expect(cashField.children.find((child) => child.path === 'cash.foo')).toMatchObject({
+        kind: 'string',
+        required: true
+      });
+    }
+  );
 });
