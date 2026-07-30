@@ -1366,4 +1366,75 @@ describe('FormPreviewSchema generation', () => {
       });
     }
   );
+
+  skipIfNodeLt22(
+    "keeps a RETAINED field's own choice-arm-collision diagnostic when a discarded arm's UNRELATED array attribute happens to rewrite the same path prefix (issue #435 round 5)",
+    async () => {
+      // Distinct from round 4: there, the discarded arm's OWN build never
+      // touched the retained diagnostic at all. Here, Basket's own "cash"
+      // attribute (type Wrapper) has a nested Data-extends-Choice
+      // collision at "cash.items.foo" — recorded while building
+      // attributeFields, before the choice-options loop even starts. The
+      // discarded "Cash" option ALSO happens to declare its own
+      // array-valued, OBJECT-typed "items" attribute (nothing to do with
+      // Wrapper's) — building it calls asArrayItem's `field.kind ===
+      // 'object'` branch (the only branch that rewrites diagnostics; a
+      // scalar array item can't itself contain a nested collision, so
+      // asArrayItem doesn't bother rewriting for that case), which
+      // rewrites any choice-arm-collision diagnostic under "cash.items" to
+      // "cash.items[]". If that rewrite (or anything else the discarded
+      // option's build does) can reach the RETAINED diagnostic at all —
+      // e.g. by sharing the ambient unsupportedFeatures set instead of an
+      // isolated one per option — the retained diagnostic gets renamed
+      // away and then swept up as "new" when the option is dropped, with
+      // nothing to restore it.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Foo:
+        value string (1..1)
+
+      choice InnerChoice:
+        Foo
+
+      type ItemThing extends InnerChoice:
+        foo string (1..1)
+
+      type Wrapper:
+        items ItemThing (1..1)
+
+      type ItemsHolder:
+        note string (1..1)
+
+      type Cash:
+        items ItemsHolder (0..*)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice OuterChoice:
+        Cash
+        Commodity
+
+      type Basket extends OuterChoice:
+        cash Wrapper (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Basket' });
+      const basket = schemas.find((schema) => schema.targetId === 'test.preview.Basket');
+
+      expect(basket?.status).toBe('unsupported');
+      expect(basket?.fields.map((field) => field.path).sort()).toEqual(['cash', 'commodity']);
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash');
+      expect(basket?.unsupportedFeatures).toContain('choice-arm-collision:cash.items.foo');
+      expect(basket?.unsupportedFeatures).not.toContain('choice-arm-collision:cash.items[].foo');
+
+      const cashField = basket?.fields.find((field) => field.path === 'cash');
+      if (cashField?.kind !== 'object') throw new Error('expected cash field to be an object');
+      const itemsField = cashField.children.find((child) => child.path === 'cash.items');
+      if (itemsField?.kind !== 'object') throw new Error('expected cash.items field to be an object');
+      expect(itemsField.children.map((child) => child.path)).toEqual(['cash.items.foo']);
+    }
+  );
 });
