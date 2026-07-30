@@ -16,7 +16,16 @@ import JSZip from 'jszip';
 
 afterEach(() => vi.restoreAllMocks());
 
-import { onRequestPost } from '../api/codegen.js';
+import { onRequestPost, __resetDocumentCacheForTests } from '../api/codegen.js';
+
+// The module-scope document cache (issue #432) is real singleton state that
+// persists across requests within a warm isolate — including, without this
+// reset, across test CASES in this same process. Several tests below reuse
+// the identical curatedBundles/namespaces combination with `files: []`;
+// without clearing between tests an earlier test's cached documents would
+// silently satisfy a later test, bypassing that test's own
+// fetchCuratedManifest/fetchCuratedNamespace mocks.
+afterEach(() => __resetDocumentCacheForTests());
 
 function makeRequest(body: unknown): Request {
   return new Request('http://example.com/api/codegen', {
@@ -285,6 +294,98 @@ type Quantity:
     expect(names).toContain('runtime.zod.ts');
     const namespaceFile = await zip.files['cdm/base/math.zod.ts']!.async('string');
     expect(namespaceFile).toMatch(/QuantitySchema/);
+  });
+
+  it('reuses the hydrated documents across requests for the SAME curated selection, even across different targets (issue #432)', async () => {
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      `namespace cdm.base.math
+
+type Quantity:
+  amount number (1..1)
+  currency string (0..1)
+`
+    );
+    const mod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    const manifestSpy = vi.spyOn(mod, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base.math': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Quantity' }],
+          artifact: `artifacts/${V}/ns/cdm.base.math.json.gz`
+        }
+      }
+    } as never);
+    const namespaceSpy = vi.spyOn(mod, 'fetchCuratedNamespace').mockResolvedValue([curatedDoc]);
+
+    const request = (target: string, namespaces: string[]) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target,
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces
+        })
+      } as never);
+
+    const first = await request('zod', ['cdm.base.math']);
+    expect(first.status).toBe(200);
+    expect(manifestSpy).toHaveBeenCalledTimes(1);
+    expect(namespaceSpy).toHaveBeenCalledTimes(1);
+
+    // Same curated selection, DIFFERENT target (the studio's Download modal
+    // switching TypeScript → Zod for the same namespace closure) — must NOT
+    // re-fetch the manifest or the namespace artifact; the cached documents
+    // still feed a correct (target-specific) generate() output.
+    const second = await request('json-schema', ['cdm.base.math']);
+    expect(second.status).toBe(200);
+    expect(manifestSpy).toHaveBeenCalledTimes(1);
+    expect(namespaceSpy).toHaveBeenCalledTimes(1);
+    const secondText = await second.text();
+    expect(JSON.parse(secondText).$defs).toHaveProperty('cdm.base.math.Quantity');
+
+    // A DIFFERENT namespace closure is a different cache key — must fetch
+    // again, proving this isn't a blanket "skip fetching" bypass.
+    manifestSpy.mockResolvedValue({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base.other': {
+          deps: [],
+          exports: [{ type: 'Data', name: 'Other' }],
+          artifact: `artifacts/${V}/ns/cdm.base.other.json.gz`
+        }
+      }
+    } as never);
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    namespaceSpy.mockResolvedValue([otherDoc]);
+
+    const third = await request('zod', ['cdm.base.other']);
+    expect(third.status).toBe(200);
+    expect(manifestSpy).toHaveBeenCalledTimes(2);
+    expect(namespaceSpy).toHaveBeenCalledTimes(2);
   });
 
   it('combines user files and curated bundles in one generation', async () => {

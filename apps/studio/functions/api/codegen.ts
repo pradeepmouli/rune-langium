@@ -122,6 +122,73 @@ function jsonError(status: number, error: string, diagnostics: readonly Generato
   });
 }
 
+/**
+ * Module-scope cache of hydrated curated documents, reused across requests
+ * that land on the SAME warm Worker isolate (issue #432). `loadAllDocuments`'s
+ * Path C (curatedBundles present) always fetches the manifest + every
+ * namespace artifact server-to-server and deserializes them — deliberately,
+ * since trusting client-supplied `curatedDocs` as a complete substitute
+ * caused a real incident (silently-incomplete codegen output; see
+ * `loadAllDocuments`'s own doc comment). But re-running that exact same
+ * fetch+deserialize is pure waste when the SAME curated selection is
+ * requested again in short order — most commonly the studio's Download
+ * modal switching target format (TypeScript → Zod) for the identical
+ * namespace closure. Keyed on exactly what determines the fetched
+ * document set (`curatedBundles`, `namespaces`) — never on `target` or
+ * `options`, which only affect what `generate()` does with the SAME
+ * documents afterward — so a hit is guaranteed to be the identical
+ * document set Path C would have produced from scratch.
+ *
+ * Scoped to the curated-only case (`body.files.length === 0`): a request
+ * with user-authored files isn't cached at all, since their content isn't
+ * part of the cache key — caching would risk serving one request's user
+ * files' worth of `docs` to a later request with DIFFERENT user file
+ * content under the same curated key.
+ */
+const DOCUMENT_CACHE_MAX_ENTRIES = 4;
+const DOCUMENT_CACHE_TTL_MS = 5 * 60 * 1000;
+const documentCache = new Map<string, { docs: import('langium').LangiumDocument[]; cachedAt: number }>();
+
+function documentCacheKey(
+  curatedBundles: ReadonlyArray<{ id: string; version: string }>,
+  requestedNamespaces: readonly string[]
+): string {
+  const bundles = curatedBundles
+    .map((b) => `${b.id}@${b.version}`)
+    .sort()
+    .join(',');
+  const namespaces = [...requestedNamespaces].sort().join(',');
+  return `${bundles}|${namespaces}`;
+}
+
+/** Evicts expired entries, then the oldest-inserted entries over the cap. */
+function pruneDocumentCache(now: number): void {
+  for (const [key, entry] of documentCache) {
+    if (now - entry.cachedAt >= DOCUMENT_CACHE_TTL_MS) {
+      documentCache.delete(key);
+    }
+  }
+  while (documentCache.size > DOCUMENT_CACHE_MAX_ENTRIES) {
+    const oldestKey = documentCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    documentCache.delete(oldestKey);
+  }
+}
+
+/**
+ * Test-only escape hatch. `documentCache` is module-scope singleton state
+ * (real production behavior — it must persist across requests within a
+ * warm isolate), but that means it also persists across TEST CASES in the
+ * same file/process, where several existing tests reuse the identical
+ * `{curatedBundles, namespaces}` combination with `files: []`. Without a
+ * reset between tests, an earlier test's cache entry would produce a false
+ * hit in a LATER test, silently skipping that test's own
+ * `fetchCuratedManifest`/`fetchCuratedNamespace` mocks.
+ */
+export function __resetDocumentCacheForTests(): void {
+  documentCache.clear();
+}
+
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
   const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown; curatedDocs?: unknown };
@@ -539,14 +606,33 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     const curatedFetcher = env?.CURATED_MIRROR
       ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
       : undefined;
-    const { docs: documents, curatedError } = await loadAllDocuments(
-      body.files,
-      curatedBundles,
-      curatedFetcher,
-      body.namespaces ?? [],
-      curatedDocs
-    );
-    if (curatedError) return curatedError;
+
+    const cacheKey =
+      body.files.length === 0 && curatedBundles.length > 0
+        ? documentCacheKey(curatedBundles, body.namespaces ?? [])
+        : undefined;
+    const now = Date.now();
+    if (cacheKey) pruneDocumentCache(now);
+    const cached = cacheKey ? documentCache.get(cacheKey) : undefined;
+
+    let documents: import('langium').LangiumDocument[];
+    if (cached) {
+      documents = cached.docs;
+    } else {
+      const result = await loadAllDocuments(
+        body.files,
+        curatedBundles,
+        curatedFetcher,
+        body.namespaces ?? [],
+        curatedDocs
+      );
+      if (result.curatedError) return result.curatedError;
+      documents = result.docs;
+      if (cacheKey) {
+        documentCache.set(cacheKey, { docs: documents, cachedAt: now });
+        pruneDocumentCache(now);
+      }
+    }
 
     const parseErrors = hasParserErrors(documents);
     if (parseErrors.length > 0) {
