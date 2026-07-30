@@ -432,6 +432,34 @@ describe('usePreviewStore', () => {
       serialized: '{\n  "tradeId": "T-1",\n  "quantity": ""\n}'
     });
   });
+
+  it('seeds only the FIRST Choice-ancestor arm default when creating a new sample (issue #434 round 2)', () => {
+    // This is the real app's sample-creation path: CodegenProvider calls
+    // receivePreviewResult before FormPreviewPanel ever mounts, so its own
+    // ensureSample effect is a no-op by the time it runs. Before this fix,
+    // receivePreviewResult seeded via a separate, Choice-unaware
+    // buildDefaultValues copy that treated every field (including every
+    // Choice arm) as independently present — disagreeing with
+    // FormPreviewPanel's own Choice-aware seeding, which starts only the
+    // first arm as selected.
+    usePreviewStore.getState().receivePreviewResult({
+      schemaVersion: 1,
+      targetId: 'alpha.Basket',
+      title: 'Basket',
+      status: 'unsupported',
+      fields: [
+        { path: 'label', label: 'Label', kind: 'string', required: true },
+        { path: 'cash', label: 'Cash', kind: 'string', required: false },
+        { path: 'commodity', label: 'Commodity', kind: 'string', required: false }
+      ],
+      choiceArmPaths: ['cash', 'commodity']
+    });
+
+    const values = usePreviewStore.getState().samples.get('alpha.Basket')?.values;
+    expect(values).toHaveProperty('label');
+    expect(values).toHaveProperty('cash');
+    expect(values).not.toHaveProperty('commodity');
+  });
 });
 
 // Task 1 (2026-07-17 prod-ux-checkout-harness Phase 2): dispatchExecute/

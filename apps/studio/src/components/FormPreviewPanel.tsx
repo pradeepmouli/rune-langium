@@ -18,7 +18,15 @@ import {
   type PreviewStatus
 } from '../store/preview-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
-import { fieldLeafKey, fieldRootKey, validatePreviewSample } from '../services/preview-validator.js';
+import {
+  buildArmValue,
+  buildDefaultObjectValue,
+  buildDefaultValue,
+  buildDefaultValues,
+  resolveArmPaths,
+  splitChoiceArmFields,
+  validatePreviewSample
+} from '../services/preview-validator.js';
 
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
@@ -87,10 +95,10 @@ export function FormPreviewPanel({
       );
   }, [schema]);
 
-  const defaultValues = useMemo(
-    () => (schema ? (buildDefaultValues(schema.fields) as Record<string, unknown>) : {}),
-    [schema]
-  );
+  const defaultValues = useMemo(() => {
+    if (!schema) return {};
+    return buildDefaultValues(schema.fields, resolveArmPaths(schema)) as Record<string, unknown>;
+  }, [schema]);
   const lookupFieldSource = useCallback(
     (fieldPath: string) =>
       getFieldSource?.(fieldPath) ?? schema?.sourceMap?.find((entry) => entry.fieldPath === fieldPath),
@@ -210,6 +218,36 @@ export function FormPreviewPanel({
     [activeSample, applyValidation, schema]
   );
 
+  // Selecting a Choice arm (issue #434) must unset every OTHER arm and set
+  // the chosen one as a single atomic transformation of activeSample.values.
+  // ChoiceFieldGroup previously composed this from separate onObjectToggle/
+  // onFieldChange/onFieldBlur calls, each independently re-reading the SAME
+  // (unchanged-until-next-render) activeSample.values closure — React 18
+  // batches the state updates from all of them into one re-render, so only
+  // the LAST call's transformation actually survived, discarding the
+  // others (a latent bug, never reachable before this fix since
+  // ChoiceFieldGroup was only ever wired to the top-level kind:'choice'
+  // case, which this exact multi-arm-removal path never exercised in
+  // practice). Folding every arm's removal/selection into one `nextValues`
+  // fold, applied in a single applyValidation call, fixes this at the
+  // source rather than papering over one call site.
+  const handleArmSelect = useCallback(
+    (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => {
+      if (!schema || !activeSample) return;
+      let nextValues = activeSample.values;
+      for (const arm of arms) {
+        const segments = pathToSegments(arm.path, arrayIndices);
+        nextValues = (
+          arm.path === selected.path
+            ? setValueAtPath(nextValues, segments, buildArmValue(arm))
+            : removeValueAtPath(nextValues, segments)
+        ) as Record<string, unknown>;
+      }
+      applyValidation(nextValues, true);
+    },
+    [activeSample, applyValidation, schema]
+  );
+
   const handleRun = useCallback(() => {
     if (!funcName || !activeSample || !onExecute) return;
     setExecutionState('running');
@@ -278,6 +316,17 @@ export function FormPreviewPanel({
     );
   }
 
+  // A Data-extends-Choice (or typeAlias-extends-Choice) schema's own
+  // top-level `kind` isn't `'choice'` — schema.choiceArmPaths carries the
+  // same "which fields.path values are Choice-ancestor arms" signal that
+  // PreviewObjectField.choiceArmPaths carries for a NESTED reference
+  // (issue #434). Route those root-level arm fields through
+  // ChoiceFieldGroup too, not just the genuine `kind === 'choice'` case.
+  const { armFields: rootArmFields, otherFields: rootOtherFields } = splitChoiceArmFields(
+    schema.fields,
+    schema.choiceArmPaths
+  );
+
   return (
     <section
       role="region"
@@ -314,21 +363,38 @@ export function FormPreviewPanel({
             onArrayAdd={handleArrayAdd}
             onArrayRemove={handleArrayRemove}
             onObjectToggle={handleObjectToggle}
+            onArmSelect={handleArmSelect}
           />
         ) : (
-          schema.fields.map((field) => (
-            <PreviewFieldControl
-              key={field.path}
-              field={field}
-              sample={activeSample}
-              lookupFieldSource={lookupFieldSource}
-              onFieldBlur={handleFieldBlur}
-              onFieldChange={handleFieldChange}
-              onArrayAdd={handleArrayAdd}
-              onArrayRemove={handleArrayRemove}
-              onObjectToggle={handleObjectToggle}
-            />
-          ))
+          <>
+            {rootArmFields.length > 0 ? (
+              <ChoiceFieldGroup
+                fields={rootArmFields}
+                sample={activeSample}
+                lookupFieldSource={lookupFieldSource}
+                onFieldBlur={handleFieldBlur}
+                onFieldChange={handleFieldChange}
+                onArrayAdd={handleArrayAdd}
+                onArrayRemove={handleArrayRemove}
+                onObjectToggle={handleObjectToggle}
+                onArmSelect={handleArmSelect}
+              />
+            ) : null}
+            {rootOtherFields.map((field) => (
+              <PreviewFieldControl
+                key={field.path}
+                field={field}
+                sample={activeSample}
+                lookupFieldSource={lookupFieldSource}
+                onFieldBlur={handleFieldBlur}
+                onFieldChange={handleFieldChange}
+                onArrayAdd={handleArrayAdd}
+                onArrayRemove={handleArrayRemove}
+                onObjectToggle={handleObjectToggle}
+                onArmSelect={handleArmSelect}
+              />
+            ))}
+          </>
         )}
         {schema.unsupportedFeatures?.length ? (
           <div role="status" className="text-xs text-muted-foreground">
@@ -376,6 +442,20 @@ export function FormPreviewPanel({
   );
 }
 
+// splitChoiceArmFields (issue #434) — used at both the schema-root level (a
+// Data-extends-Choice schema whose own top-level `kind` isn't `'choice'`)
+// and inside `PreviewFieldControl`'s object-field branch (a NESTED
+// Data-extends-Choice reference) so arm fields render through
+// `ChoiceFieldGroup`'s single-selection radio UI instead of as ordinary
+// always-present fields. Imported from preview-validator.ts, which also
+// needs it (and the choice-aware default-value builders below) to keep
+// `usePreviewStore`'s sample seeding/reconciliation in agreement with this
+// component's rendering on which fields are mutually-exclusive arms — see
+// that module for the shared implementation (Codex review round 2 on PR
+// #444: a second, Choice-unaware copy of this default-seeding logic in
+// preview-store.ts let the real app's store-seeded initial sample disagree
+// with what this component would have seeded).
+
 // ---------------------------------------------------------------------------
 // ChoiceFieldGroup — renders choice schemas as a radio group
 // ---------------------------------------------------------------------------
@@ -389,6 +469,8 @@ interface ChoiceFieldGroupProps {
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
   onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
   onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
+  onArmSelect: (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => void;
+  arrayIndices?: number[];
 }
 
 function ChoiceFieldGroup({
@@ -399,30 +481,33 @@ function ChoiceFieldGroup({
   onFieldChange,
   onArrayAdd,
   onArrayRemove,
-  onObjectToggle
+  onObjectToggle,
+  onArmSelect,
+  arrayIndices
 }: ChoiceFieldGroupProps): ReactElement {
   const groupId = useId();
   // Determine which option is currently active by checking which field has a
-  // value present in the sample.  Default to the first option.
-  const activeField =
-    fields.find((f) => {
-      const v = getValueAtPath(sample?.values ?? {}, pathToSegments(f.path));
-      return v !== undefined;
-    }) ?? fields[0];
+  // value present in the sample — no fallback to `fields[0]`. Every REAL
+  // sample (uncontrolled, via usePreviewStore's Choice-aware
+  // receivePreviewResult/ensureSample seeding, or a controlled caller that
+  // seeds real defaults) already has the first arm's key present, so this
+  // lookup finds a match without needing one. A fallback here would
+  // fabricate a visually "selected" radio for a genuinely empty sample —
+  // e.g. a freshly created controlled instance whose `values` starts as
+  // `{}` before any default is seeded — contradicting the underlying data
+  // (Codex review round 2 on PR #444). No arm selected is the honest
+  // rendering of that state.
+  const activeField = fields.find((f) => {
+    const v = getValueAtPath(sample?.values ?? {}, pathToSegments(f.path, arrayIndices));
+    return v !== undefined;
+  });
 
   const handleOptionChange = (field: PreviewField) => {
-    // Remove all other options' values, then ensure this one is present.
-    for (const other of fields) {
-      if (other.path !== field.path) {
-        onObjectToggle(other, false);
-      }
-    }
-    if (field.kind === 'object') {
-      onObjectToggle(field, true);
-    } else {
-      onFieldChange(field.path, '');
-    }
-    onFieldBlur();
+    // Single atomic transformation via onArmSelect — see its definition
+    // for why composing this from separate onObjectToggle/onFieldChange/
+    // onFieldBlur calls (each re-reading the same not-yet-updated sample)
+    // silently discarded all but the last one's effect (issue #434).
+    onArmSelect(fields, field, arrayIndices);
   };
 
   return (
@@ -446,25 +531,19 @@ function ChoiceFieldGroup({
                 <RadioGroupItem id={radioId} value={field.path} />
                 {field.label}
               </label>
-              {isActive &&
-              (field.kind === 'object' || field.kind === 'array') &&
-              field.children &&
-              field.children.length > 0 ? (
-                <div className="ml-5 space-y-1.5 border-l border-border pl-3">
-                  {field.children.map((child) => (
-                    <PreviewFieldControl
-                      key={child.path}
-                      field={child}
-                      sample={sample}
-                      lookupFieldSource={lookupFieldSource}
-                      onFieldBlur={onFieldBlur}
-                      onFieldChange={onFieldChange}
-                      onArrayAdd={onArrayAdd}
-                      onArrayRemove={onArrayRemove}
-                      onObjectToggle={onObjectToggle}
-                    />
-                  ))}
-                </div>
+              {isActive && (field.kind === 'object' || field.kind === 'array') && field.children ? (
+                <ChoiceArmChildren
+                  field={field}
+                  sample={sample}
+                  lookupFieldSource={lookupFieldSource}
+                  onFieldBlur={onFieldBlur}
+                  onFieldChange={onFieldChange}
+                  onArrayAdd={onArrayAdd}
+                  onArrayRemove={onArrayRemove}
+                  onObjectToggle={onObjectToggle}
+                  onArmSelect={onArmSelect}
+                  arrayIndices={arrayIndices}
+                />
               ) : isActive && field.kind !== 'object' && field.kind !== 'array' ? (
                 <div className="ml-5 border-l border-border pl-3">
                   <PreviewFieldControl
@@ -476,6 +555,8 @@ function ChoiceFieldGroup({
                     onArrayAdd={onArrayAdd}
                     onArrayRemove={onArrayRemove}
                     onObjectToggle={onObjectToggle}
+                    onArmSelect={onArmSelect}
+                    arrayIndices={arrayIndices}
                   />
                 </div>
               ) : null}
@@ -484,6 +565,80 @@ function ChoiceFieldGroup({
         })}
       </RadioGroup>
     </FieldSet>
+  );
+}
+
+interface ChoiceArmChildrenProps {
+  field: PreviewField;
+  sample?: PreviewSampleState;
+  lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  onFieldBlur: () => void;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
+  onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
+  onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
+  onArmSelect: (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => void;
+  arrayIndices?: number[];
+}
+
+// Renders an ACTIVE Choice arm's own children (issue #434 round 3) —
+// mirrors PreviewFieldControl's object-kind branch below: when the arm's
+// Data type itself extends ANOTHER Choice (a doubly-nested Choice, carrying
+// its own `field.choiceArmPaths`), those nested arm fields must route
+// through a NESTED ChoiceFieldGroup too, not render as flat always-present
+// controls alongside the arm's ordinary attributes — the "mutually
+// exclusive selection" invariant this whole component exists to enforce,
+// one level deeper. The prior code rendered every child directly, letting
+// multiple mutually-exclusive nested values be entered simultaneously
+// (Codex review round 2 on PR #444).
+function ChoiceArmChildren({
+  field,
+  sample,
+  lookupFieldSource,
+  onFieldBlur,
+  onFieldChange,
+  onArrayAdd,
+  onArrayRemove,
+  onObjectToggle,
+  onArmSelect,
+  arrayIndices
+}: ChoiceArmChildrenProps): ReactElement | null {
+  if (field.kind !== 'object' && field.kind !== 'array') return null;
+  const choiceArmPaths = field.kind === 'object' ? field.choiceArmPaths : undefined;
+  const { armFields, otherFields } = splitChoiceArmFields(field.children ?? [], choiceArmPaths);
+  if (armFields.length === 0 && otherFields.length === 0) return null;
+  return (
+    <div className="ml-5 space-y-1.5 border-l border-border pl-3">
+      {armFields.length > 0 ? (
+        <ChoiceFieldGroup
+          fields={armFields}
+          sample={sample}
+          lookupFieldSource={lookupFieldSource}
+          onFieldBlur={onFieldBlur}
+          onFieldChange={onFieldChange}
+          onArrayAdd={onArrayAdd}
+          onArrayRemove={onArrayRemove}
+          onObjectToggle={onObjectToggle}
+          onArmSelect={onArmSelect}
+          arrayIndices={arrayIndices}
+        />
+      ) : null}
+      {otherFields.map((child) => (
+        <PreviewFieldControl
+          key={child.path}
+          field={child}
+          sample={sample}
+          lookupFieldSource={lookupFieldSource}
+          onFieldBlur={onFieldBlur}
+          onFieldChange={onFieldChange}
+          onArrayAdd={onArrayAdd}
+          onArrayRemove={onArrayRemove}
+          onObjectToggle={onObjectToggle}
+          onArmSelect={onArmSelect}
+          arrayIndices={arrayIndices}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -496,6 +651,7 @@ interface PreviewFieldControlProps {
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
   onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
   onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
+  onArmSelect: (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => void;
   arrayIndices?: number[];
 }
 
@@ -508,6 +664,7 @@ function PreviewFieldControl({
   onArrayAdd,
   onArrayRemove,
   onObjectToggle,
+  onArmSelect,
   arrayIndices
 }: PreviewFieldControlProps): ReactElement {
   const fieldPath = formatFieldPath(field.path, arrayIndices);
@@ -517,6 +674,11 @@ function PreviewFieldControl({
     const value = getValueAtPath(sample?.values ?? {}, pathToSegments(field.path, arrayIndices));
     const isPresent = value !== undefined;
     const objectLabel = resolvedFieldLabel(field, arrayIndices);
+    // A NESTED Data-extends-Choice reference (issue #434) — route its
+    // Choice-ancestor-derived arm children through ChoiceFieldGroup's
+    // single-selection radio UI, same as the schema-root case above; the
+    // Data type's own (non-arm) attributes still render as plain fields.
+    const { armFields, otherFields } = splitChoiceArmFields(field.children ?? [], field.choiceArmPaths);
     return (
       <FieldSet className="gap-1.5 p-2">
         <FieldLegend variant="label" className="text-muted-foreground">
@@ -545,8 +707,22 @@ function PreviewFieldControl({
             ) : null}
           </span>
         </FieldLegend>
+        {(field.required || isPresent) && armFields.length > 0 ? (
+          <ChoiceFieldGroup
+            fields={armFields}
+            sample={sample}
+            lookupFieldSource={lookupFieldSource}
+            onFieldBlur={onFieldBlur}
+            onFieldChange={onFieldChange}
+            onArrayAdd={onArrayAdd}
+            onArrayRemove={onArrayRemove}
+            onObjectToggle={onObjectToggle}
+            onArmSelect={onArmSelect}
+            arrayIndices={arrayIndices}
+          />
+        ) : null}
         {(field.required || isPresent) &&
-          (field.children ?? []).map((child) => (
+          otherFields.map((child) => (
             <PreviewFieldControl
               key={`${child.path}-${arrayIndices?.join('-') ?? 'root'}`}
               field={child}
@@ -557,6 +733,7 @@ function PreviewFieldControl({
               onArrayAdd={onArrayAdd}
               onArrayRemove={onArrayRemove}
               onObjectToggle={onObjectToggle}
+              onArmSelect={onArmSelect}
               arrayIndices={arrayIndices}
             />
           ))}
@@ -624,6 +801,7 @@ function PreviewFieldControl({
                   onArrayAdd={onArrayAdd}
                   onArrayRemove={onArrayRemove}
                   onObjectToggle={onObjectToggle}
+                  onArmSelect={onArmSelect}
                   arrayIndices={[...(arrayIndices ?? []), index]}
                 />
               </div>
@@ -793,38 +971,6 @@ function getSummaryMessage(schema: FormPreviewSchema, status: PreviewStatus, sam
   return 'Valid sample';
 }
 
-function buildDefaultValues(fields: PreviewField[]): Record<string, unknown> {
-  return Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)]));
-}
-
-function buildDefaultValue(field: PreviewField): unknown {
-  switch (field.kind) {
-    case 'boolean':
-      return false;
-    case 'enum':
-      return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
-    case 'object':
-      return field.required
-        ? Object.fromEntries(
-            (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
-          )
-        : undefined;
-    case 'array':
-      return [];
-    default:
-      return '';
-  }
-}
-
-function buildDefaultObjectValue(field: PreviewField): Record<string, unknown> {
-  if (field.kind !== 'object') {
-    return {};
-  }
-  return Object.fromEntries(
-    (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
-  );
-}
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatSourceLocation(source: PreviewSourceMapEntry): string {
   return `${basenameFromUri(source.sourceUri)}:${source.sourceLine}:${source.sourceChar}`;
@@ -844,9 +990,17 @@ function resolvedFieldLabel(field: PreviewField, arrayIndices?: number[]): strin
 function getInputValue(field: PreviewField, event: ChangeEvent<HTMLInputElement>): unknown {
   if (field.kind === 'number') {
     if (event.target.value === '') {
-      return undefined;
+      // '' (not undefined) — matches buildDefaultValue's own "no value
+      // yet" representation for a number field, and validatePreviewSample's
+      // number preprocessing already normalizes '' and undefined
+      // identically. Returning undefined here made a Choice arm's presence
+      // check (`value !== undefined`) read a cleared numeric arm as
+      // "unselected" mid-edit — unchecking its radio and unmounting the
+      // input the user was actively typing into (Codex review round 3 on
+      // PR #444).
+      return '';
     }
-    return Number.isNaN(event.target.valueAsNumber) ? undefined : event.target.valueAsNumber;
+    return Number.isNaN(event.target.valueAsNumber) ? '' : event.target.valueAsNumber;
   }
   return event.target.value;
 }

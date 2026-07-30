@@ -574,4 +574,343 @@ describe('FormPreviewPanel', () => {
       });
     });
   });
+
+  describe('Choice-ancestor arm selection (issue #434)', () => {
+    // A Data-extends-Choice reference reached via a NESTED attribute
+    // (`constituent`) — mirrors what buildDataSchema/objectField in
+    // preview-schema.ts actually produce: one field per Choice option
+    // (`cash` scalar, `commodity` object) alongside the Data type's own
+    // attribute (`weight`), with `choiceArmPaths` naming the two arms.
+    const nestedChoiceSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      targetId: 'test.preview.TradeWithConstituent',
+      title: 'TradeWithConstituent',
+      status: 'ready',
+      fields: [
+        { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+        {
+          path: 'constituent',
+          label: 'Constituent',
+          kind: 'object',
+          required: true,
+          choiceArmPaths: ['constituent.cash', 'constituent.commodity'],
+          children: [
+            { path: 'constituent.weight', label: 'Weight', kind: 'number', required: true },
+            { path: 'constituent.cash', label: 'Cash', kind: 'string', required: false },
+            {
+              path: 'constituent.commodity',
+              label: 'Commodity',
+              kind: 'object',
+              required: false,
+              children: [{ path: 'constituent.commodity.symbol', label: 'Symbol', kind: 'string', required: true }]
+            }
+          ]
+        }
+      ]
+    };
+
+    it("renders a NESTED Data-extends-Choice reference's scalar/object arms through a single-selection radio group, not as always-present plain fields", () => {
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+        />
+      );
+
+      expect(screen.getByText('Choose one option')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Cash' })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Commodity' })).toBeInTheDocument();
+      // The Data type's own (non-arm) attribute still renders as a plain field.
+      expect(screen.getByLabelText('Weight')).toBeInTheDocument();
+    });
+
+    it('seeds only the FIRST arm with a real default value, so exactly one arm starts selected instead of every scalar arm starting "present"', () => {
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+        />
+      );
+
+      // Cash is the first-listed arm — it should be the initially active
+      // radio option, with its scalar control rendered...
+      expect(screen.getByRole('radio', { name: 'Cash' })).toBeChecked();
+      expect(screen.getByRole('textbox', { name: 'Cash' })).toBeInTheDocument();
+      // ...while Commodity's nested field must NOT be rendered — if every
+      // arm's default value were seeded (the pre-fix bug), both would show
+      // simultaneously with no way to tell which one is "selected".
+      expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument();
+    });
+
+    it("switching the selected arm clears the previously-selected scalar arm's value entirely (not left at its default)", async () => {
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+          values={{ tradeId: 'T1', constituent: { weight: 5, cash: '' } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      await user.click(screen.getByRole('radio', { name: 'Commodity' }));
+
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'T1',
+        constituent: { weight: 5, commodity: { symbol: '' } }
+      });
+    });
+
+    it('renders a TOP-LEVEL Data-extends-Choice schema\'s (kind !== "choice") arms through the same radio group as the nested case', () => {
+      const rootChoiceSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.BasketConstituent',
+        title: 'BasketConstituent',
+        kind: 'data',
+        status: 'ready',
+        choiceArmPaths: ['cash', 'commodity'],
+        fields: [
+          { path: 'weight', label: 'Weight', kind: 'number', required: true },
+          { path: 'cash', label: 'Cash', kind: 'string', required: false },
+          {
+            path: 'commodity',
+            label: 'Commodity',
+            kind: 'object',
+            required: false,
+            children: [{ path: 'commodity.symbol', label: 'Symbol', kind: 'string', required: true }]
+          }
+        ]
+      };
+
+      render(
+        <FormPreviewPanel schema={rootChoiceSchema} status={{ state: 'ready', targetId: rootChoiceSchema.targetId }} />
+      );
+
+      expect(screen.getByText('Choose one option')).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Cash' })).toBeChecked();
+      expect(screen.getByLabelText('Weight')).toBeInTheDocument();
+    });
+
+    it("materializes an OBJECT-kind first arm's default fields into the sample, not just its radio selection (Codex round 2)", () => {
+      // Commodity (an OBJECT arm) is listed FIRST here — the earlier tests
+      // only ever exercised a scalar (Cash) first arm, which never hit
+      // `buildDefaultValue`'s `required: false` → `undefined` short-circuit
+      // for the 'object' case. Without materializing the object arm's own
+      // default via buildDefaultObjectValue, the radio still LOOKS selected
+      // (ChoiceFieldGroup's `?? fields[0]` fallback), but the sample itself
+      // never gains a `commodity` key at all.
+      const objectFirstSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.TradeWithCommodityFirst',
+        title: 'TradeWithCommodityFirst',
+        status: 'ready',
+        fields: [
+          { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+          {
+            path: 'constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['constituent.commodity', 'constituent.cash'],
+            children: [
+              { path: 'constituent.weight', label: 'Weight', kind: 'number', required: true },
+              {
+                path: 'constituent.commodity',
+                label: 'Commodity',
+                kind: 'object',
+                required: false,
+                children: [{ path: 'constituent.commodity.symbol', label: 'Symbol', kind: 'string', required: true }]
+              },
+              { path: 'constituent.cash', label: 'Cash', kind: 'string', required: false }
+            ]
+          }
+        ]
+      };
+
+      render(
+        <FormPreviewPanel
+          schema={objectFirstSchema}
+          status={{ state: 'ready', targetId: objectFirstSchema.targetId }}
+        />
+      );
+
+      expect(screen.getByRole('radio', { name: 'Commodity' })).toBeChecked();
+      expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"commodity": {');
+      expect(screen.getByTestId('sample-data-output')).toHaveTextContent('"symbol": ""');
+    });
+
+    it('selecting a BOOLEAN arm seeds it with `false`, not an empty string the boolean validator rejects (Codex round 2)', async () => {
+      const booleanArmSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.TradeWithFlag',
+        title: 'TradeWithFlag',
+        status: 'ready',
+        fields: [
+          { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+          {
+            path: 'constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['constituent.cash', 'constituent.cleared'],
+            children: [
+              { path: 'constituent.cash', label: 'Cash', kind: 'string', required: false },
+              { path: 'constituent.cleared', label: 'Cleared', kind: 'boolean', required: false }
+            ]
+          }
+        ]
+      };
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+
+      render(
+        <FormPreviewPanel
+          schema={booleanArmSchema}
+          status={{ state: 'ready', targetId: booleanArmSchema.targetId }}
+          values={{ tradeId: 'T1', constituent: { cash: '' } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      await user.click(screen.getByRole('radio', { name: 'Cleared' }));
+
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'T1',
+        constituent: { cleared: false }
+      });
+    });
+
+    it('keeps a NUMERIC arm selected (radio checked, input rendered) when its value is cleared mid-edit (issue #434 round 3)', async () => {
+      // getInputValue previously returned `undefined` for a cleared number
+      // input; ChoiceFieldGroup's presence check (`value !== undefined`)
+      // then read the arm as unselected the instant the user cleared it,
+      // unchecking its radio and unmounting the input they were editing.
+      const numericArmSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.TradeWithQuantity',
+        title: 'TradeWithQuantity',
+        status: 'ready',
+        fields: [
+          { path: 'tradeId', label: 'Trade id', kind: 'string', required: true },
+          {
+            path: 'constituent',
+            label: 'Constituent',
+            kind: 'object',
+            required: true,
+            choiceArmPaths: ['constituent.quantity', 'constituent.symbol'],
+            children: [
+              { path: 'constituent.quantity', label: 'Quantity', kind: 'number', required: false },
+              { path: 'constituent.symbol', label: 'Symbol', kind: 'string', required: false }
+            ]
+          }
+        ]
+      };
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+
+      render(
+        <FormPreviewPanel
+          schema={numericArmSchema}
+          status={{ state: 'ready', targetId: numericArmSchema.targetId }}
+          values={{ tradeId: 'T1', constituent: { quantity: 5 } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      const quantityInput = screen.getByRole('spinbutton', { name: 'Quantity' });
+      await user.clear(quantityInput);
+
+      // This is a controlled component — the test double doesn't feed
+      // emitted values back into `values`, so the DOM never re-renders with
+      // the cleared value. Assert on what was actually EMITTED: the
+      // "quantity" key must still be present (as '', not absent/undefined)
+      // — that's the signal ChoiceFieldGroup's presence check relies on to
+      // keep the arm selected.
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        tradeId: 'T1',
+        constituent: { quantity: '' }
+      });
+    });
+
+    it('does not fabricate a selected arm for a genuinely empty controlled value (issue #434 round 2)', () => {
+      // A freshly created InstanceFormPanel record starts as controlled
+      // `values={}` before anything seeds real defaults into it (the
+      // controlled path deliberately skips this component's own
+      // defaultValues — `values ?? defaultValues` only falls back on
+      // null/undefined, not on a real, empty `{}`). Falling back to
+      // `fields[0]` here would show a radio checked while the persisted
+      // sample has no key for it at all — a visual/data mismatch. No arm
+      // checked is the honest rendering of that state.
+      render(
+        <FormPreviewPanel
+          schema={nestedChoiceSchema}
+          status={{ state: 'ready', targetId: nestedChoiceSchema.targetId }}
+          values={{}}
+          onValuesChange={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('radio', { name: 'Cash' })).not.toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Commodity' })).not.toBeChecked();
+      expect(screen.queryByRole('textbox', { name: 'Cash' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument();
+    });
+
+    it("routes a DOUBLY-nested Choice arm's own children through a nested radio group instead of flat always-present controls (issue #434 round 3)", async () => {
+      // The selected "bond" arm is itself a Data type extending ANOTHER
+      // Choice — mirrors what buildChoiceOptionField's doubly-nested branch
+      // in preview-schema.ts actually produces: an 'object' field whose OWN
+      // choiceArmPaths names its own two mutually-exclusive arms
+      // (fixedRate/floatingRate), alongside its own ordinary attribute
+      // (couponFrequency).
+      const doublyNestedSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.Instrument',
+        title: 'Instrument',
+        kind: 'choice',
+        status: 'ready',
+        fields: [
+          {
+            path: 'bond',
+            label: 'Bond',
+            kind: 'object',
+            required: false,
+            choiceArmPaths: ['bond.fixedRate', 'bond.floatingRate'],
+            children: [
+              { path: 'bond.couponFrequency', label: 'Coupon Frequency', kind: 'string', required: true },
+              { path: 'bond.fixedRate', label: 'Fixed Rate', kind: 'number', required: false },
+              { path: 'bond.floatingRate', label: 'Floating Rate', kind: 'number', required: false }
+            ]
+          },
+          { path: 'equity', label: 'Equity', kind: 'string', required: false }
+        ]
+      };
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+
+      render(
+        <FormPreviewPanel
+          schema={doublyNestedSchema}
+          status={{ state: 'ready', targetId: doublyNestedSchema.targetId }}
+          values={{ bond: { couponFrequency: '', fixedRate: 5 } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      // Two nested "Choose one option" groups: the outer Bond/Equity
+      // choice, and the Bond arm's own Fixed/Floating rate choice.
+      expect(screen.getAllByText('Choose one option')).toHaveLength(2);
+      expect(screen.getByRole('radio', { name: 'Fixed Rate' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Floating Rate' })).not.toBeChecked();
+      // The Bond arm's own ordinary attribute still renders as a plain field.
+      expect(screen.getByLabelText('Coupon Frequency')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: 'Floating Rate' }));
+
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        bond: { couponFrequency: '', floatingRate: '' }
+      });
+    });
+  });
 });

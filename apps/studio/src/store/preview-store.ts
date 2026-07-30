@@ -6,6 +6,14 @@ import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@ru
 import { useOutputStore, fmtLine } from './output-store.js';
 import { useActivityStore } from './activity-store.js';
 import { allocateOpId } from '../services/op-log.js';
+import {
+  buildArmValue,
+  buildDefaultValue,
+  buildDefaultValues,
+  fieldLeafKey,
+  resolveArmPaths,
+  splitChoiceArmFields
+} from '../services/preview-validator.js';
 
 export interface FormPreviewTarget {
   id: string;
@@ -97,38 +105,6 @@ function serializeSampleValues(values: Record<string, unknown>): string {
   return JSON.stringify(values, null, 2);
 }
 
-function fieldRootKey(path: string): string {
-  return path.split('.')[0]!.split('[]').join('');
-}
-
-function fieldLeafKey(path: string): string {
-  const parts = path.split('.');
-  return parts[parts.length - 1]!.split('[]').join('');
-}
-
-function buildDefaultValue(field: PreviewField): unknown {
-  switch (field.kind) {
-    case 'boolean':
-      return false;
-    case 'enum':
-      return field.required ? (field.enumValues?.[0]?.value ?? '') : '';
-    case 'object':
-      return field.required
-        ? Object.fromEntries(
-            (field.children ?? []).map((child) => [fieldLeafKey(child.path), buildDefaultValue(child)])
-          )
-        : undefined;
-    case 'array':
-      return [];
-    default:
-      return '';
-  }
-}
-
-function buildDefaultValues(fields: PreviewField[]): Record<string, unknown> {
-  return Object.fromEntries(fields.map((field) => [fieldRootKey(field.path), buildDefaultValue(field)]));
-}
-
 function reconcileScalarValue(field: PreviewField, current: unknown): unknown {
   switch (field.kind) {
     case 'boolean':
@@ -159,13 +135,9 @@ function reconcileFieldValue(field: PreviewField, current: unknown): unknown {
       if (current === undefined && !field.required) {
         return undefined;
       }
-      const record = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
-      return Object.fromEntries(
-        (field.children ?? []).map((child) => [
-          fieldLeafKey(child.path),
-          reconcileFieldValue(child, (record as Record<string, unknown>)[fieldLeafKey(child.path)])
-        ])
-      );
+      const record =
+        current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>) : {};
+      return reconcileFieldsObject(field.children ?? [], field.choiceArmPaths, record);
     }
     case 'array': {
       const items = Array.isArray(current) ? current : [];
@@ -177,14 +149,39 @@ function reconcileFieldValue(field: PreviewField, current: unknown): unknown {
   }
 }
 
+// Reconciles a field list against `current` values while honoring
+// Choice-arm exclusivity (issue #434 round 2): a non-arm field always
+// reconciles independently, but at most ONE Choice-ancestor arm survives —
+// whichever arm is already present in `current`, or the first arm as a
+// fallback that always materializes a real value via `buildArmValue`
+// (mirrors `buildDefaultFieldsObject`'s identical "only the selected/first
+// arm gets a value" invariant, so a schema refresh never leaves a
+// previously-unselected arm's stale default sitting alongside the real
+// selection).
+function reconcileFieldsObject(
+  fields: PreviewField[],
+  armPaths: string[] | undefined,
+  current: Record<string, unknown>
+): Record<string, unknown> {
+  const { armFields, otherFields } = splitChoiceArmFields(fields, armPaths);
+  const entries: Array<[string, unknown]> = otherFields.map((field) => [
+    fieldLeafKey(field.path),
+    reconcileFieldValue(field, current[fieldLeafKey(field.path)])
+  ]);
+  const selected = armFields.find((arm) => current[fieldLeafKey(arm.path)] !== undefined) ?? armFields[0];
+  if (selected) {
+    const reconciled = reconcileFieldValue(selected, current[fieldLeafKey(selected.path)]);
+    entries.push([fieldLeafKey(selected.path), reconciled === undefined ? buildArmValue(selected) : reconciled]);
+  }
+  return Object.fromEntries(entries);
+}
+
 function reconcileSampleValues(
   fields: PreviewField[],
+  armPaths: string[] | undefined,
   values: Record<string, unknown> | undefined
 ): Record<string, unknown> {
-  const current = values ?? {};
-  return Object.fromEntries(
-    fields.map((field) => [fieldRootKey(field.path), reconcileFieldValue(field, current[fieldRootKey(field.path)])])
-  );
+  return reconcileFieldsObject(fields, armPaths, values ?? {});
 }
 
 function sameSourceRange(left: FormPreviewTarget['sourceRange'], right: FormPreviewTarget['sourceRange']): boolean {
@@ -342,9 +339,17 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     schemas.set(schema.targetId, schema);
     const existingSample = get().samples.get(schema.targetId);
     const samples = new Map(get().samples);
+    // Choice-aware seeding (issue #434 round 2) — this is the REAL app's
+    // sample-creation path: CodegenProvider calls receivePreviewResult
+    // before FormPreviewPanel ever mounts, so its own ensureSample effect
+    // is a no-op here. Must use the SAME armPaths derivation and default
+    // builders FormPreviewPanel uses, or the store's initial sample
+    // disagrees with what the panel would have seeded (Codex review round
+    // 2 on PR #444).
+    const armPaths = resolveArmPaths(schema);
     const sampleValues = existingSample
-      ? reconcileSampleValues(schema.fields, existingSample.values)
-      : buildDefaultValues(schema.fields);
+      ? reconcileSampleValues(schema.fields, armPaths, existingSample.values)
+      : buildDefaultValues(schema.fields, armPaths);
     samples.set(schema.targetId, {
       targetId: schema.targetId,
       values: sampleValues,
