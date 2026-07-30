@@ -465,6 +465,26 @@ function buildChoiceSchema(
   targetId: string
 ): FormPreviewSchema {
   const unsupportedFeatures = new Set<string>();
+  // Empty Choice (Codex review, PR #433 round 6): the Rune validator
+  // permits a Choice with zero options (warning-only), but the real
+  // emitted schema (zod-emitter.ts's emitChoiceSchema) is `z.never()` for
+  // one — an uninhabited type that NO value can ever satisfy. Without this
+  // guard, `fields`/`choiceArmPaths` would both come out empty and this
+  // schema would read as a trivially-satisfiable `status: 'ready'` object
+  // accepting `{}`, the opposite of the real "no valid value exists"
+  // semantics. Mark unsupported instead of silently misrepresenting it.
+  if (choice.attributes.length === 0) {
+    unsupportedFeatures.add(`empty-choice:${choice.name}`);
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      kind: 'choice',
+      targetId,
+      title: choice.name,
+      status: 'unsupported',
+      fields: [],
+      unsupportedFeatures: Array.from(unsupportedFeatures).sort()
+    };
+  }
   const fields: PreviewField[] = choice.attributes.map((option: ChoiceOption) =>
     buildChoiceOptionField(option, {
       namespace,
@@ -914,6 +934,21 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
       kind: 'unknown',
       required: true,
       description: `Recursive reference to ${choice.name} is not expanded in form preview.`
+    };
+  }
+
+  // Empty Choice (Codex review, PR #433 round 6) — see buildChoiceSchema's
+  // identical guard for the full rationale: the real emitted schema is
+  // `z.never()` (uninhabited) for a zero-option Choice, so this field must
+  // NOT read as a trivially-satisfiable required object accepting `{}`.
+  if (choice.attributes.length === 0) {
+    ctx.unsupportedFeatures.add(`empty-choice:${choice.name}`);
+    return {
+      path: ctx.path,
+      label: ctx.label,
+      kind: 'unknown',
+      required: true,
+      description: `Choice ${choice.name} has no options and can never be satisfied.`
     };
   }
 

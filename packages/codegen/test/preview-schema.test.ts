@@ -758,6 +758,54 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    'marks an empty Choice-typed attribute as unsupported instead of a trivially-satisfiable object (Codex review, PR #433 round 6)',
+    async () => {
+      // Regression test: a Choice with zero options parses (the Rune
+      // validator only warns), but the real emitted schema
+      // (zod-emitter.ts's emitChoiceSchema) is `z.never()` for one — an
+      // uninhabited type NO value can ever satisfy. Without this guard,
+      // `children`/`choiceArmPaths` both came out empty and the field read
+      // as a trivially-satisfiable required object accepting `{}`, the
+      // opposite of "no valid value exists".
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      choice Impossible:
+
+      type Trade:
+        variant Impossible (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('unsupported');
+      expect(trade?.unsupportedFeatures).toContain('empty-choice:Impossible');
+      const variantField = trade?.fields.find((field) => field.path === 'variant');
+      expect(variantField).toMatchObject({ path: 'variant', kind: 'unknown' });
+    }
+  );
+
+  skipIfNodeLt22('marks an empty top-level Choice schema as unsupported (Codex review, PR #433 round 6)', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      choice Impossible:
+    `);
+
+    const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Impossible' });
+    const impossible = schemas.find((schema) => schema.targetId === 'test.preview.Impossible');
+
+    expect(impossible).toBeDefined();
+    expect(impossible?.status).toBe('unsupported');
+    expect(impossible?.fields).toEqual([]);
+    expect(impossible?.unsupportedFeatures).toContain('empty-choice:Impossible');
+  });
+
+  skipIfNodeLt22(
     'includes Choice-ancestor option fields when a typeAlias resolves to a Data-extends-Choice type',
     async () => {
       // Regression test (follow-up to round-5 finding #1): buildTypeAliasSchema's
