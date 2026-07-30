@@ -1036,6 +1036,13 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
 function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
   const itemPath = `${ctx.path}[]`;
   if (field.kind === 'object') {
+    // A `choice-arm-collision:<path>` diagnostic (issue #435) recorded
+    // while building this subtree names the PRE-rewrite path (e.g.
+    // `positions.constituent.cash`) — rewritePathPrefix only rewrites the
+    // returned field tree, not `ctx.unsupportedFeatures`, so without this
+    // the diagnostic would name a path that doesn't exist in the returned
+    // schema (Codex review on PR #443).
+    rewriteCollisionDiagnostics(ctx.unsupportedFeatures, ctx.path, itemPath);
     return rewritePathPrefix({ ...field, label: `${ctx.label} item`, required: true }, ctx.path, itemPath);
   }
   return {
@@ -1044,6 +1051,24 @@ function asArrayItem(field: PreviewField, ctx: FieldContext): PreviewField {
     label: `${ctx.label} item`,
     required: true
   };
+}
+
+/**
+ * Rewrites any `choice-arm-collision:<path>` diagnostic in
+ * `unsupportedFeatures` whose path is `oldPrefix` or nested under it, to
+ * the equivalent path under `newPrefix` — the same prefix-match rule
+ * `rewritePathPrefix` applies to the field tree itself, kept in sync so an
+ * array-nested collision's diagnostic always names an existing path.
+ */
+function rewriteCollisionDiagnostics(unsupportedFeatures: Set<string>, oldPrefix: string, newPrefix: string): void {
+  const marker = 'choice-arm-collision:';
+  for (const entry of Array.from(unsupportedFeatures)) {
+    if (!entry.startsWith(marker)) continue;
+    const path = entry.slice(marker.length);
+    if (path !== oldPrefix && !path.startsWith(`${oldPrefix}.`)) continue;
+    unsupportedFeatures.delete(entry);
+    unsupportedFeatures.add(`${marker}${newPrefix}${path.slice(oldPrefix.length)}`);
+  }
 }
 
 /**

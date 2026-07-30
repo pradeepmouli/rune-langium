@@ -1212,4 +1212,48 @@ describe('FormPreviewSchema generation', () => {
       expect(trade?.unsupportedFeatures).toContain('choice-arm-collision:constituent.cash');
     }
   );
+
+  skipIfNodeLt22(
+    'rewrites a choice-arm-collision diagnostic path when the collision is nested inside an array-valued attribute (issue #435 round 2)',
+    async () => {
+      // rewritePathPrefix (used by asArrayItem to convert an array item's
+      // whole subtree from `positions.constituent.cash` to
+      // `positions[].constituent.cash`) only rewrites the returned FIELD
+      // tree — the collision diagnostic was recorded separately into
+      // ctx.unsupportedFeatures BEFORE that rewrite ran, so without
+      // rewriteCollisionDiagnostics it would still name the stale,
+      // non-array path, pointing consumers at a path that doesn't exist in
+      // the returned schema.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Cash:
+        amount number (1..1)
+
+      type Commodity:
+        symbol string (1..1)
+
+      choice Innermost:
+        Cash
+        Commodity
+
+      type Basket extends Innermost:
+        cash string (1..1)
+
+      type Holder:
+        constituent Basket (1..1)
+
+      type Trade:
+        positions Holder (0..*)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade?.status).toBe('unsupported');
+      expect(trade?.unsupportedFeatures).toContain('choice-arm-collision:positions[].constituent.cash');
+      expect(trade?.unsupportedFeatures).not.toContain('choice-arm-collision:positions.constituent.cash');
+    }
+  );
 });
