@@ -212,6 +212,11 @@ export function __resetDocumentCacheForTests(): void {
   documentCache.clear();
 }
 
+/** Test-only introspection: which cache keys are currently resident. */
+export function __documentCacheKeysForTests(): string[] {
+  return Array.from(documentCache.keys());
+}
+
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
   const b = body as { files?: unknown; target?: unknown; curatedBundles?: unknown; curatedDocs?: unknown };
@@ -630,18 +635,34 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
       : undefined;
 
+    // Prune unconditionally, regardless of whether THIS request is
+    // cacheable (Codex review round 2 on PR #445) — an isolate that served
+    // one curated-only request and then a run of requests with user files
+    // (never cacheable, cacheKey undefined below) would otherwise never
+    // prune again, leaving an EXPIRED entry strongly referenced for the
+    // isolate's full lifetime instead of the advertised 5-minute TTL.
+    const now = Date.now();
+    pruneDocumentCache(now);
+
     const cacheKey =
       body.files.length === 0 && curatedBundles.length > 0
         ? documentCacheKey(curatedBundles, body.namespaces ?? [])
         : undefined;
-    const now = Date.now();
-    if (cacheKey) pruneDocumentCache(now);
     const cached = cacheKey ? documentCache.get(cacheKey) : undefined;
 
     let documents: import('langium').LangiumDocument[];
     if (cached) {
       documents = cached.docs;
     } else {
+      // A cache miss under a cacheable key means the cache is either empty
+      // or holds a DIFFERENT (mismatched) entry — clear it BEFORE
+      // hydrating, not after, so at most one closure is ever resident at a
+      // time, including during hydration itself. The cap is 1, so
+      // evicting-after-insert (the round-1 approach) let the OLD closure
+      // stay strongly referenced for the full duration of hydrating the
+      // NEW one — exactly the peak-memory moment this cache needs to avoid
+      // (Codex review round 2 on PR #445).
+      if (cacheKey) documentCache.clear();
       const result = await loadAllDocuments(
         body.files,
         curatedBundles,
@@ -653,7 +674,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       documents = result.docs;
       if (cacheKey) {
         documentCache.set(cacheKey, { docs: documents, cachedAt: now });
-        pruneDocumentCache(now);
       }
     }
 

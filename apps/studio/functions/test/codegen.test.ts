@@ -16,7 +16,7 @@ import JSZip from 'jszip';
 
 afterEach(() => vi.restoreAllMocks());
 
-import { onRequestPost, __resetDocumentCacheForTests } from '../api/codegen.js';
+import { onRequestPost, __resetDocumentCacheForTests, __documentCacheKeysForTests } from '../api/codegen.js';
 
 // The module-scope document cache (issue #432) is real singleton state that
 // persists across requests within a warm isolate — including, without this
@@ -432,6 +432,139 @@ type Quantity:
 
     await request(['cdm.a', 'cdm.b']);
     expect(manifestSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('evicts a mismatched cached entry BEFORE hydrating the new one, not after (issue #432 round 2)', async () => {
+    // The cache cap is 1 entry. On a miss for a NEW key, the old (different-
+    // key) entry must already be gone by the time hydration of the new
+    // closure starts — evicting only AFTER the new documents finish loading
+    // would let both closures stay resident simultaneously for the full
+    // duration of that load, which is exactly the peak-memory moment a
+    // one-entry cache exists to avoid.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    let manifestCallCount = 0;
+    let cacheKeysWhenSecondManifestFetchStarted: string[] | undefined;
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockImplementation(async (_id, _version) => {
+      manifestCallCount += 1;
+      // Capture cache state the instant hydration of the SECOND request's
+      // manifest fetch begins — before this call resolves, so it reflects
+      // whatever eviction already happened by request-handling time, not
+      // anything this hydration itself might do.
+      if (manifestCallCount === 2) {
+        cacheKeysWhenSecondManifestFetchStarted = __documentCacheKeysForTests();
+      }
+      return {
+        schemaVersion: 2,
+        modelId: 'cdm',
+        version: V,
+        sha256: 'a'.repeat(64),
+        sizeBytes: 1,
+        generatedAt: 'now',
+        upstreamCommit: 'c',
+        upstreamRef: 'r',
+        archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+        history: [],
+        namespaces: {
+          'cdm.base.math': { deps: [], exports: [], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` },
+          'cdm.base.other': { deps: [], exports: [], artifact: `artifacts/${V}/ns/cdm.base.other.json.gz` }
+        }
+      } as never;
+    });
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    const request = (namespaces: string[]) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces
+        })
+      } as never);
+
+    const first = await request(['cdm.base.math']);
+    expect(first.status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+    const firstKey = __documentCacheKeysForTests()[0];
+
+    const second = await request(['cdm.base.other']);
+    expect(second.status).toBe(200);
+
+    // By the time the SECOND request's manifest fetch ran, the first
+    // request's cache entry must already be gone — not merely absent
+    // AFTER the second request finishes.
+    expect(cacheKeysWhenSecondManifestFetchStarted).toEqual([]);
+    expect(__documentCacheKeysForTests()).not.toContain(firstKey);
+  });
+
+  it('prunes an expired entry even when the CURRENT request is not itself cacheable (issue #432 round 2)', async () => {
+    const curatedDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockResolvedValue({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        'cdm.base.math': { deps: [], exports: [], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` }
+      }
+    } as never);
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockResolvedValue([curatedDoc]);
+
+    const dateSpy = vi.spyOn(Date, 'now');
+    const t0 = 1_700_000_000_000;
+    dateSpy.mockReturnValue(t0);
+
+    const cacheableRes = await onRequestPost({
+      request: makeRequest({
+        files: [],
+        target: 'zod',
+        curatedBundles: [{ id: 'cdm', version: 'latest' }],
+        namespaces: ['cdm.base.math']
+      })
+    } as never);
+    expect(cacheableRes.status).toBe(200);
+    expect(__documentCacheKeysForTests()).toHaveLength(1);
+
+    // Six minutes later (past the 5-minute TTL) — a request that is NOT
+    // itself cacheable (carries a user file, so cacheKey is undefined).
+    dateSpy.mockReturnValue(t0 + 6 * 60 * 1000);
+    const nonCacheableRes = await onRequestPost({
+      request: makeRequest({
+        files: [{ path: 'user.rune', content: ONE_NAMESPACE }],
+        target: 'zod'
+      })
+    } as never);
+    expect(nonCacheableRes.status).toBe(200);
+
+    // The expired entry must be pruned regardless — this request never
+    // touched `cacheKey`/`.set()` at all, so this only passes if pruning
+    // runs unconditionally rather than being gated on THIS request being
+    // cacheable.
+    expect(__documentCacheKeysForTests()).toHaveLength(0);
+
+    dateSpy.mockRestore();
   });
 
   it('combines user files and curated bundles in one generation', async () => {
