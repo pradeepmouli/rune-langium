@@ -768,6 +768,163 @@ type Quantity:
     expect(manifestSpy).toHaveBeenCalledTimes(4);
   });
 
+  it('evicts a REJECTED hydration promise so a later identical request retries instead of reusing the failure (issue #432 round 5)', async () => {
+    // loadAllDocuments can REJECT (throw), not just resolve with a
+    // structured curatedError — e.g. a malformed namespace artifact. A
+    // rejected promise left cached would poison every identical request
+    // for the rest of the TTL window even if the failure was transient.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    const manifestSpy = vi
+      .spyOn(fetchMod, 'fetchCuratedManifest')
+      .mockRejectedValueOnce(new Error('transient network blip'))
+      .mockResolvedValue({
+        schemaVersion: 2,
+        modelId: 'cdm',
+        version: V,
+        sha256: 'a'.repeat(64),
+        sizeBytes: 1,
+        generatedAt: 'now',
+        upstreamCommit: 'c',
+        upstreamRef: 'r',
+        archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+        history: [],
+        namespaces: {
+          'cdm.base.math': { deps: [], exports: [], artifact: `artifacts/${V}/ns/cdm.base.math.json.gz` }
+        }
+      } as never);
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockResolvedValue([mathDoc]);
+
+    const request = () =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces: ['cdm.base.math']
+        })
+      } as never);
+
+    const first = await request();
+    expect(first.status).toBe(500);
+    // The rejected entry must not linger — a fresh request should not
+    // find a stale, poisoned cache entry.
+    expect(__documentCacheKeysForTests()).toHaveLength(0);
+
+    const second = await request();
+    expect(second.status).toBe(200);
+    expect(manifestSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not evict a NEWER registration when an orphaned, stale hydration for the SAME key later resolves with a curatedError (issue #432 round 5)', async () => {
+    // Three interleaved requests: K (slow, will resolve with a structured
+    // curatedError), J (different key, evicts K's registration from the
+    // map while K keeps hydrating in the background), then K again (misses
+    // since K's own entry was evicted by J, so it registers a FRESH entry
+    // for the same key). When the ORIGINAL (now-orphaned) K hydration
+    // finally resolves with curatedError, its cleanup must NOT delete the
+    // newer K registration that replaced it.
+    //
+    // Uses the curatedError (not rejection) path deliberately — the
+    // delete-on-curatedError cleanup already existed before this round, so
+    // this isolates the identity-guard fix itself: an UNGUARDED delete
+    // here would already have been present pre-round-5 and would wrongly
+    // evict K2, whereas a rejection-based scenario wouldn't distinguish
+    // the two rounds at all (round 4 had no rejection cleanup whatsoever).
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deferreds: Array<{ resolve: (value: any) => void }> = [];
+    vi.spyOn(fetchMod, 'fetchCuratedManifest').mockImplementation(
+      () => new Promise((resolve) => deferreds.push({ resolve }))
+    );
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    const request = (namespaces: string[]) =>
+      onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces
+        })
+      } as never);
+
+    const responseK1 = request(['cdm.base.math']); // K, first attempt
+    const responseJ = request(['cdm.base.other']); // different key — evicts K1's registration
+    const responseK2 = request(['cdm.base.math']); // K again — misses (K1 was evicted), registers fresh
+
+    for (let i = 0; i < 50 && deferreds.length < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(deferreds).toHaveLength(3);
+
+    const cacheKeyK = __documentCacheKeysForTests()[0]!; // only K2's entry should remain resident
+    expect(__documentCacheKeysForTests()).toEqual([cacheKeyK]);
+
+    const manifest = (nsKey: string) => ({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        [nsKey]: { deps: [], exports: [], artifact: `artifacts/${V}/ns/${nsKey}.json.gz` }
+      }
+    });
+
+    // J succeeds first.
+    deferreds[1]!.resolve(manifest('cdm.base.other'));
+    expect((await responseJ).status).toBe(200);
+
+    // K2 (the newer, still-current registration) succeeds.
+    deferreds[2]!.resolve(manifest('cdm.base.math'));
+    expect((await responseK2).status).toBe(200);
+    const keysAfterK2 = __documentCacheKeysForTests();
+    expect(keysAfterK2).toContain(cacheKeyK);
+
+    // K1 (the orphaned, stale attempt) finally resolves with a manifest
+    // that has NO namespaces at all — loadAllDocuments's Path C treats
+    // that as `curated_manifest_missing` and resolves with a curatedError
+    // rather than throwing.
+    deferreds[0]!.resolve({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {}
+    });
+    expect((await responseK1).status).toBe(502);
+
+    // K1's curatedError must NOT have evicted K2's still-valid registration.
+    expect(__documentCacheKeysForTests()).toEqual(keysAfterK2);
+  });
+
   it('combines user files and curated bundles in one generation', async () => {
     const curatedDoc = await buildSerializedCuratedDoc(
       'cdm/base/math.rosetta',

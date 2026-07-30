@@ -691,8 +691,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           body.namespaces ?? [],
           curatedDocs
         );
-        entry = { promise, cachedAt: now };
-        documentCache.set(cacheKey, entry);
+        const newEntry = { promise, cachedAt: now };
+        entry = newEntry;
+        documentCache.set(cacheKey, newEntry);
         // Re-prune immediately after registering (round 3) — the
         // pre-hydration clear above only protects THIS request's own
         // miss; two concurrent requests for DIFFERENT keys can each clear
@@ -701,14 +702,35 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         // re-prunes. Pruning right after `set` bounds that window to the
         // gap between two concurrent `set` calls.
         pruneDocumentCache(now);
+        // Evict on REJECTION too, not just a resolved `curatedError`
+        // (Codex review round 5 on PR #445) — loadAllDocuments can throw
+        // (e.g. a malformed namespace artifact), not just return a
+        // structured error, and a rejected promise left cached would
+        // poison every identical request for the rest of the TTL window
+        // even if the failure was transient. Guarded by identity (only
+        // delete if THIS exact entry is still the one registered) so a
+        // stale, now-orphaned hydration's later failure can't evict a
+        // NEWER, unrelated registration for the same key that replaced it
+        // in between (e.g. key K's slow hydration outlives an
+        // interleaved different-key clear that evicted it, then a third
+        // request re-registers K fresh — K's original failure must not
+        // delete that fresh registration).
+        promise.catch(() => {
+          if (documentCache.get(cacheKey) === newEntry) {
+            documentCache.delete(cacheKey);
+          }
+        });
       }
       const result = await entry.promise;
       if (result.curatedError) {
         // Don't leave a failed hydration cached for a later request to
-        // reuse — and .clone() the Response, since this exact instance
-        // may be shared with another request that coalesced onto the same
-        // promise (a Response body can only be consumed once).
-        documentCache.delete(cacheKey);
+        // reuse — identity-guarded for the same reason as the rejection
+        // handler above — and .clone() the Response, since this exact
+        // instance may be shared with another request that coalesced onto
+        // the same promise (a Response body can only be consumed once).
+        if (documentCache.get(cacheKey) === entry) {
+          documentCache.delete(cacheKey);
+        }
         return result.curatedError.clone();
       }
       documents = result.docs;
