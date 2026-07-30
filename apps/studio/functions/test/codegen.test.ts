@@ -14,9 +14,37 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import JSZip from 'jszip';
 
+// `generate` wrapped in a `vi.fn()` that forwards to the REAL implementation
+// by default — every test gets genuine codegen output unless a test
+// explicitly overrides it. `vi.spyOn` can't target this export directly:
+// it's a real external package's ESM namespace, which Vitest cannot
+// redefine properties on ("Module namespace is not configurable in ESM")
+// — only a module owned by this monorepo (like `../lib/curated-fetch.js`
+// elsewhere in this file) supports that.
+//
+// `vi.restoreAllMocks()` in `afterEach` does NOT correctly reset this
+// mock: that only restores spies created via `vi.spyOn` back to their
+// original implementation — a bare `vi.fn(impl)` (this one) instead
+// behaves like `mockReset()`, clearing the implementation to a no-op that
+// returns `undefined`. A test that overrides `generate`'s implementation
+// must restore it back to `realGenerateHolder.current` itself (ideally in
+// a `try/finally`, so a mid-test failure can't leak the broken mock into
+// every later test) — do not rely on the global `afterEach` for this one.
+const realGenerateHolder = vi.hoisted<{ current?: unknown }>(() => ({ current: undefined }));
+vi.mock('@rune-langium/codegen/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@rune-langium/codegen/export')>();
+  realGenerateHolder.current = actual.generate;
+  return { ...actual, generate: vi.fn(actual.generate) };
+});
+
 afterEach(() => vi.restoreAllMocks());
 
-import { onRequestPost, __resetDocumentCacheForTests, __documentCacheKeysForTests } from '../api/codegen.js';
+import {
+  onRequestPost,
+  __resetDocumentCacheForTests,
+  __documentCacheKeysForTests,
+  __documentCacheIsBusyForTests
+} from '../api/codegen.js';
 
 // The module-scope document cache (issue #432) is real singleton state that
 // persists across requests within a warm isolate — including, without this
@@ -1215,6 +1243,124 @@ type Quantity:
 
     deferredResolve!(manifest('cdm.base.other'));
     expect((await nonCacheableCuratedResponse).status).toBe(200);
+  });
+
+  it('keeps an entry busy through generate(), not just hydration, so a concurrent different-key miss waits for it (issue #432 round 9)', async () => {
+    // `pending` only spans hydration — it goes false the moment
+    // loadAllDocuments settles, well before THIS request finishes walking
+    // the resulting documents through generate() (which, for a slow/async
+    // emitter, can itself take real time while still holding the whole
+    // closure in memory). A concurrent different-key miss that only
+    // checked `pending` would see a settled-but-still-being-walked entry
+    // as idle, evict it, and start a second (possibly CDM-sized) hydration
+    // while THIS entry's documents are still alive and in active use on
+    // another request's stack — defeating the serialization rounds 7/8
+    // added.
+    const mathDoc = await buildSerializedCuratedDoc(
+      'cdm/base/math.rosetta',
+      'namespace cdm.base.math\n\ntype Quantity:\n  amount number (1..1)\n'
+    );
+    const otherDoc = await buildSerializedCuratedDoc(
+      'cdm/base/other.rosetta',
+      'namespace cdm.base.other\n\ntype Other:\n  value string (1..1)\n'
+    );
+    const fetchMod = await import('../lib/curated-fetch.js');
+    const V = '2026-05-22';
+    const manifest = (nsKey: string) => ({
+      schemaVersion: 2,
+      modelId: 'cdm',
+      version: V,
+      sha256: 'a'.repeat(64),
+      sizeBytes: 1,
+      generatedAt: 'now',
+      upstreamCommit: 'c',
+      upstreamRef: 'r',
+      archiveUrl: 'https://www.daikonic.dev/curated/cdm/latest.tar.gz',
+      history: [],
+      namespaces: {
+        [nsKey]: { deps: [], exports: [], artifact: `artifacts/${V}/ns/${nsKey}.json.gz` }
+      }
+    });
+
+    const manifestSpy = vi
+      .spyOn(fetchMod, 'fetchCuratedManifest')
+      .mockResolvedValue(manifest('cdm.base.math') as never);
+    vi.spyOn(fetchMod, 'fetchCuratedNamespace').mockImplementation(async (_id, _version, artifactKey) =>
+      artifactKey.includes('other') ? [otherDoc] : [mathDoc]
+    );
+
+    const codegenExportMod = await import('@rune-langium/codegen/export');
+    const generateSpy = vi.mocked(codegenExportMod.generate);
+    // `restoreAllMocks()` in the file-level `afterEach` does NOT correctly
+    // reset this particular mock (see the `vi.mock` factory's own doc
+    // comment above) — restore it manually, in a `finally`, so a mid-test
+    // failure can't leave every LATER test getting `undefined` from
+    // `generate()` instead of real codegen output.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolveGenerateA: ((value: any) => void) | undefined;
+      generateSpy.mockImplementation(() => new Promise((resolve) => (resolveGenerateA = resolve)));
+
+      const responseA = onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces: ['cdm.base.math']
+        })
+      } as never);
+
+      for (let i = 0; i < 50 && !resolveGenerateA; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(resolveGenerateA).toBeDefined();
+      // Hydration has fully settled (A reached generate()) but the entry
+      // must still read as busy — it's actively being walked.
+      expect(__documentCacheKeysForTests()).toHaveLength(1);
+      expect(__documentCacheIsBusyForTests()).toBe(true);
+
+      // Reconfigure the manifest mock for B's (different-key) hydration,
+      // suspending on a deferred so we can observe whether it starts
+      // before A's generate() finishes.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let resolveManifestB: ((value: any) => void) | undefined;
+      manifestSpy.mockImplementation(() => new Promise((resolve) => (resolveManifestB = resolve)));
+
+      const responseB = onRequestPost({
+        request: makeRequest({
+          files: [],
+          target: 'zod',
+          curatedBundles: [{ id: 'cdm', version: 'latest' }],
+          namespaces: ['cdm.base.other']
+        })
+      } as never);
+
+      for (let i = 0; i < 50; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      // B must NOT have started its own hydration yet — A's generate() is
+      // still in flight and holds the only cache entry busy.
+      expect(resolveManifestB).toBeUndefined();
+
+      // A's generate() finishes.
+      resolveGenerateA!([
+        { relativePath: 'x.zod.ts', content: 'export const x = 1;\n', sourceMap: [], diagnostics: [], funcs: [] }
+      ]);
+      expect((await responseA).status).toBe(200);
+
+      // Only now should B's hydration start.
+      for (let i = 0; i < 50 && !resolveManifestB; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      expect(resolveManifestB).toBeDefined();
+      resolveManifestB!(manifest('cdm.base.other'));
+      generateSpy.mockResolvedValue([
+        { relativePath: 'y.zod.ts', content: 'export const y = 1;\n', sourceMap: [], diagnostics: [], funcs: [] }
+      ] as never);
+      expect((await responseB).status).toBe(200);
+    } finally {
+      generateSpy.mockImplementation(realGenerateHolder.current as never);
+    }
   });
 
   it('combines user files and curated bundles in one generation', async () => {
