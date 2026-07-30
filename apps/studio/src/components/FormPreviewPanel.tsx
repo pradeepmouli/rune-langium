@@ -531,27 +531,19 @@ function ChoiceFieldGroup({
                 <RadioGroupItem id={radioId} value={field.path} />
                 {field.label}
               </label>
-              {isActive &&
-              (field.kind === 'object' || field.kind === 'array') &&
-              field.children &&
-              field.children.length > 0 ? (
-                <div className="ml-5 space-y-1.5 border-l border-border pl-3">
-                  {field.children.map((child) => (
-                    <PreviewFieldControl
-                      key={child.path}
-                      field={child}
-                      sample={sample}
-                      lookupFieldSource={lookupFieldSource}
-                      onFieldBlur={onFieldBlur}
-                      onFieldChange={onFieldChange}
-                      onArrayAdd={onArrayAdd}
-                      onArrayRemove={onArrayRemove}
-                      onObjectToggle={onObjectToggle}
-                      onArmSelect={onArmSelect}
-                      arrayIndices={arrayIndices}
-                    />
-                  ))}
-                </div>
+              {isActive && (field.kind === 'object' || field.kind === 'array') && field.children ? (
+                <ChoiceArmChildren
+                  field={field}
+                  sample={sample}
+                  lookupFieldSource={lookupFieldSource}
+                  onFieldBlur={onFieldBlur}
+                  onFieldChange={onFieldChange}
+                  onArrayAdd={onArrayAdd}
+                  onArrayRemove={onArrayRemove}
+                  onObjectToggle={onObjectToggle}
+                  onArmSelect={onArmSelect}
+                  arrayIndices={arrayIndices}
+                />
               ) : isActive && field.kind !== 'object' && field.kind !== 'array' ? (
                 <div className="ml-5 border-l border-border pl-3">
                   <PreviewFieldControl
@@ -573,6 +565,80 @@ function ChoiceFieldGroup({
         })}
       </RadioGroup>
     </FieldSet>
+  );
+}
+
+interface ChoiceArmChildrenProps {
+  field: PreviewField;
+  sample?: PreviewSampleState;
+  lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  onFieldBlur: () => void;
+  onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
+  onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
+  onArrayRemove: (field: PreviewField, index: number, arrayIndices?: number[]) => void;
+  onObjectToggle: (field: PreviewField, present: boolean, arrayIndices?: number[]) => void;
+  onArmSelect: (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => void;
+  arrayIndices?: number[];
+}
+
+// Renders an ACTIVE Choice arm's own children (issue #434 round 3) —
+// mirrors PreviewFieldControl's object-kind branch below: when the arm's
+// Data type itself extends ANOTHER Choice (a doubly-nested Choice, carrying
+// its own `field.choiceArmPaths`), those nested arm fields must route
+// through a NESTED ChoiceFieldGroup too, not render as flat always-present
+// controls alongside the arm's ordinary attributes — the "mutually
+// exclusive selection" invariant this whole component exists to enforce,
+// one level deeper. The prior code rendered every child directly, letting
+// multiple mutually-exclusive nested values be entered simultaneously
+// (Codex review round 2 on PR #444).
+function ChoiceArmChildren({
+  field,
+  sample,
+  lookupFieldSource,
+  onFieldBlur,
+  onFieldChange,
+  onArrayAdd,
+  onArrayRemove,
+  onObjectToggle,
+  onArmSelect,
+  arrayIndices
+}: ChoiceArmChildrenProps): ReactElement | null {
+  if (field.kind !== 'object' && field.kind !== 'array') return null;
+  const choiceArmPaths = field.kind === 'object' ? field.choiceArmPaths : undefined;
+  const { armFields, otherFields } = splitChoiceArmFields(field.children ?? [], choiceArmPaths);
+  if (armFields.length === 0 && otherFields.length === 0) return null;
+  return (
+    <div className="ml-5 space-y-1.5 border-l border-border pl-3">
+      {armFields.length > 0 ? (
+        <ChoiceFieldGroup
+          fields={armFields}
+          sample={sample}
+          lookupFieldSource={lookupFieldSource}
+          onFieldBlur={onFieldBlur}
+          onFieldChange={onFieldChange}
+          onArrayAdd={onArrayAdd}
+          onArrayRemove={onArrayRemove}
+          onObjectToggle={onObjectToggle}
+          onArmSelect={onArmSelect}
+          arrayIndices={arrayIndices}
+        />
+      ) : null}
+      {otherFields.map((child) => (
+        <PreviewFieldControl
+          key={child.path}
+          field={child}
+          sample={sample}
+          lookupFieldSource={lookupFieldSource}
+          onFieldBlur={onFieldBlur}
+          onFieldChange={onFieldChange}
+          onArrayAdd={onArrayAdd}
+          onArrayRemove={onArrayRemove}
+          onObjectToggle={onObjectToggle}
+          onArmSelect={onArmSelect}
+          arrayIndices={arrayIndices}
+        />
+      ))}
+    </div>
   );
 }
 

@@ -804,5 +804,61 @@ describe('FormPreviewPanel', () => {
       expect(screen.queryByRole('textbox', { name: 'Cash' })).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Symbol')).not.toBeInTheDocument();
     });
+
+    it("routes a DOUBLY-nested Choice arm's own children through a nested radio group instead of flat always-present controls (issue #434 round 3)", async () => {
+      // The selected "bond" arm is itself a Data type extending ANOTHER
+      // Choice — mirrors what buildChoiceOptionField's doubly-nested branch
+      // in preview-schema.ts actually produces: an 'object' field whose OWN
+      // choiceArmPaths names its own two mutually-exclusive arms
+      // (fixedRate/floatingRate), alongside its own ordinary attribute
+      // (couponFrequency).
+      const doublyNestedSchema: FormPreviewSchema = {
+        schemaVersion: 1,
+        targetId: 'test.preview.Instrument',
+        title: 'Instrument',
+        kind: 'choice',
+        status: 'ready',
+        fields: [
+          {
+            path: 'bond',
+            label: 'Bond',
+            kind: 'object',
+            required: false,
+            choiceArmPaths: ['bond.fixedRate', 'bond.floatingRate'],
+            children: [
+              { path: 'bond.couponFrequency', label: 'Coupon Frequency', kind: 'string', required: true },
+              { path: 'bond.fixedRate', label: 'Fixed Rate', kind: 'number', required: false },
+              { path: 'bond.floatingRate', label: 'Floating Rate', kind: 'number', required: false }
+            ]
+          },
+          { path: 'equity', label: 'Equity', kind: 'string', required: false }
+        ]
+      };
+      const user = userEvent.setup();
+      const onValuesChange = vi.fn();
+
+      render(
+        <FormPreviewPanel
+          schema={doublyNestedSchema}
+          status={{ state: 'ready', targetId: doublyNestedSchema.targetId }}
+          values={{ bond: { couponFrequency: '', fixedRate: 5 } }}
+          onValuesChange={onValuesChange}
+        />
+      );
+
+      // Two nested "Choose one option" groups: the outer Bond/Equity
+      // choice, and the Bond arm's own Fixed/Floating rate choice.
+      expect(screen.getAllByText('Choose one option')).toHaveLength(2);
+      expect(screen.getByRole('radio', { name: 'Fixed Rate' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Floating Rate' })).not.toBeChecked();
+      // The Bond arm's own ordinary attribute still renders as a plain field.
+      expect(screen.getByLabelText('Coupon Frequency')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('radio', { name: 'Floating Rate' }));
+
+      expect(onValuesChange).toHaveBeenLastCalledWith({
+        bond: { couponFrequency: '', floatingRate: '' }
+      });
+    });
   });
 });
