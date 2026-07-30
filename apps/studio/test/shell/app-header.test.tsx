@@ -113,7 +113,10 @@ describe('AppHeader', () => {
   it('Explore renders the FileTabStrip and the model-actions cluster', () => {
     usePerspectiveStore.getState().setActivePerspective('explore');
     renderAppHeaderWithWorkspace();
-    expect(screen.getByRole('button', { name: /a\.rosetta/ })).toBeInTheDocument();
+    // Exact match (issue #405): the tab strip now also renders a "Delete
+    // a.rosetta" button per tab, which a substring regex here would also
+    // match — the tab itself has an aria-label of exactly "a.rosetta".
+    expect(screen.getByRole('button', { name: 'a.rosetta' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Validate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export code' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument();
@@ -123,7 +126,7 @@ describe('AppHeader', () => {
   it('non-Explore perspectives render neither the FileTabStrip nor Explore actions', () => {
     usePerspectiveStore.getState().setActivePerspective('git');
     renderAppHeaderWithWorkspace();
-    expect(screen.queryByRole('button', { name: /a\.rosetta/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'a.rosetta' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
     expect(screen.queryByText('Import')).not.toBeInTheDocument();
   });
@@ -160,7 +163,7 @@ describe('AppHeader', () => {
     // Bar must show the Workspaces title, not Explore's FileTabStrip/actions —
     // matching what PerspectiveHost renders in the body for this same state.
     expect(screen.getByText('Workspaces / Models')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /a\.rosetta/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'a.rosetta' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
     expect(screen.queryByText('Import')).not.toBeInTheDocument();
   });

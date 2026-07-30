@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Gap 1 — file tabs chrome: per-tab diagnostics counts and the
- * "+" new-file affordance. (No close affordance in this PR.)
+ * Gap 1 — file tabs chrome: per-tab diagnostics counts, the "+" new-file
+ * affordance, and (issue #405) a hover-revealed "×" delete-file affordance.
  *
  * The FileTabStrip is an internal component of ExplorePerspective rendered in
  * the topbar, so it is exercised through the EditorPage harness (the same
@@ -88,6 +88,7 @@ vi.mock('../../src/components/StudioToastProvider.js', () => ({
 
 import { renderEditorPage } from './editor-page-harness.js';
 import { usePerspectiveStore } from '../../src/store/perspective-store.js';
+import { useExploreFileNavStore } from '../../src/shell/explore-file-nav-store.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
 
 const FILE_A = 'a.rosetta';
@@ -118,6 +119,8 @@ describe('FileTabStrip chrome (Gap 1)', () => {
   afterEach(() => {
     useDiagnosticsStore.getState().clearAll();
     usePerspectiveStore.getState().setActivePerspective('workspaces');
+    useExploreFileNavStore.getState().setActiveEditorFile(undefined);
+    vi.restoreAllMocks();
     cleanup();
   });
 
@@ -158,5 +161,55 @@ describe('FileTabStrip chrome (Gap 1)', () => {
     const next = onFilesChange.mock.calls[0]![0] as WorkspaceFile[];
     expect(next).toHaveLength(3);
     expect(next.some((f) => f.path === 'untitled.rosetta')).toBe(true);
+  });
+
+  // Issue #405 — no UI action deleted a workspace file; resolveEffectivePerspective's
+  // "delete last file" fallback path was consequently unreachable from real UI.
+  it('delete button removes the file after the user confirms', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const onFilesChange = vi.fn();
+    renderEditorPage({ files: makeFiles(), onFilesChange });
+
+    fireEvent.click(screen.getByLabelText(`Delete ${FILE_A}`));
+
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(onFilesChange).toHaveBeenCalledTimes(1);
+    const next = onFilesChange.mock.calls[0]![0] as WorkspaceFile[];
+    expect(next.map((f) => f.path)).toEqual([FILE_B]);
+  });
+
+  it('delete button does nothing when the user cancels the confirmation', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const onFilesChange = vi.fn();
+    renderEditorPage({ files: makeFiles(), onFilesChange });
+
+    fireEvent.click(screen.getByLabelText(`Delete ${FILE_A}`));
+
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(onFilesChange).not.toHaveBeenCalled();
+  });
+
+  it('deleting the active file redirects to another remaining user file', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    useExploreFileNavStore.getState().setActiveEditorFile(FILE_A);
+    const onFilesChange = vi.fn();
+    renderEditorPage({ files: makeFiles(), onFilesChange });
+
+    fireEvent.click(screen.getByLabelText(`Delete ${FILE_A}`));
+
+    expect(useExploreFileNavStore.getState().activeEditorFile).toBe(FILE_B);
+  });
+
+  it('deleting the last remaining file clears the active file (exercises the "delete last file" fallback)', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    useExploreFileNavStore.getState().setActiveEditorFile(FILE_A);
+    const onFilesChange = vi.fn();
+    const single: WorkspaceFile[] = [{ name: FILE_A, path: FILE_A, content: 'namespace a', dirty: false }];
+    renderEditorPage({ files: single, onFilesChange });
+
+    fireEvent.click(screen.getByLabelText(`Delete ${FILE_A}`));
+
+    expect(onFilesChange).toHaveBeenCalledWith([]);
+    expect(useExploreFileNavStore.getState().activeEditorFile).toBeUndefined();
   });
 });

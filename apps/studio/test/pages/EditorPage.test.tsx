@@ -1092,7 +1092,9 @@ describe('EditorPage workspace chrome', () => {
 
     // Clicking a different tab calls onSelectFile (bound to openFileInSource),
     // which now writes explore-file-nav-store instead of local useState.
-    fireEvent.click(screen.getByRole('button', { name: /beta\.rosetta/ }));
+    // Exact match (issue #405): a substring regex would also match the
+    // tab's "Delete beta.rosetta" button.
+    fireEvent.click(screen.getByRole('button', { name: 'beta.rosetta' }));
 
     // The store write is observed by an unrelated consumer (SourceEditor's
     // activeFile prop) exactly as the old local useState flow was — single

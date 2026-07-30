@@ -187,21 +187,38 @@ test.describe('J16 — Resilience & chrome', () => {
       }
       await evidence.checkpoint('rail-disabled-no-workspace');
 
-      // SPEC ADAPTATION: "resolveEffectivePerspective fallback (delete last
-      // file while in Explore → lands on Workspaces)" has no reachable UI
-      // trigger — confirmed via source that neither FileTreePanel.tsx
-      // (open-only) nor FileTabStrip in explore-chrome.tsx (select/create
-      // only) exposes any delete/close/remove action. Recorded as a soft
-      // finding rather than driving the store directly (which would bypass
-      // this harness's whole "exercise the real UI" principle) or fabricating
-      // a pass. resolveEffectivePerspective itself remains covered by unit
-      // tests elsewhere in the repo; this is specifically about the E2E
-      // UI-driven trigger the spec describes not existing.
-      evidence.softFinding(
-        'KI-delete-file-unreachable',
-        'No UI action deletes a WorkspaceFile entirely (FileTreePanel is open-only, FileTabStrip is select/create ' +
-          'only) — resolveEffectivePerspective\'s "delete last file" fallback path cannot be exercised via real UI.'
-      );
+      // Issue #405 (closed): FileTabStrip's per-tab "×" delete button now
+      // provides the previously-missing UI trigger for
+      // resolveEffectivePerspective's "delete last file while in Explore →
+      // falls back to Workspaces" path. Reach a fresh single-file scratch
+      // workspace (matches J02's own inline file-input pattern — the
+      // helper isn't exported from fixtures.ts, and every journey that
+      // needs it re-declares these two small constants locally), delete
+      // that one file via the real delete button, and confirm the app
+      // actually lands on the Workspaces launcher instead of a blank
+      // Explore perspective.
+      const WORKSPACE_FILE_NAME = 'starter.rosetta';
+      const WORKSPACE_FILE_CONTENT = 'namespace example\n';
+      await page.goto('./');
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
+      await page
+        .locator('input[type="file"][accept=".rosetta"]')
+        .setInputFiles([
+          { name: WORKSPACE_FILE_NAME, mimeType: 'text/plain', buffer: Buffer.from(WORKSPACE_FILE_CONTENT) }
+        ]);
+      await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
+      await evidence.checkpoint('single-file-workspace-created');
+
+      page.once('dialog', (dialog) => void dialog.accept());
+      await page.getByLabel(`Delete ${WORKSPACE_FILE_NAME}`).click();
+
+      // resolveEffectivePerspective falls back to 'workspaces' the moment
+      // hasExploreContent drops to false — the Workspaces launcher (the
+      // same model-loader surface loadCdm/J02 land on when navigating
+      // there directly) becomes visible without any further navigation.
+      await expect(page.getByTestId('model-loader')).toBeVisible({ timeout: 20000 });
+      await evidence.checkpoint('delete-last-file-fallback-to-workspaces');
     }
   );
 

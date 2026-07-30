@@ -13,7 +13,7 @@
  */
 
 import { useMemo } from 'react';
-import { Check, Download, Share2, Wand2, Plus } from 'lucide-react';
+import { Check, Download, Share2, Wand2, Plus, X } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import type { WorkspaceFile } from '../../services/workspace.js';
 import { createBlankWorkspaceFile } from '../../services/workspace.js';
@@ -73,12 +73,14 @@ function FileTabStrip({
   activeFile,
   onSelectFile,
   onCreateFile,
+  onDeleteFile,
   fileDiagnostics
 }: {
   files: readonly WorkspaceFile[];
   activeFile: string | undefined;
   onSelectFile: (path: string) => void;
   onCreateFile: () => void;
+  onDeleteFile: (path: string) => void;
   fileDiagnostics: ReadonlyMap<string, readonly LspDiagnostic[]>;
 }) {
   const userFiles = files.filter((f) => !f.readOnly);
@@ -88,37 +90,53 @@ function FileTabStrip({
       {userFiles.map((f) => {
         const { errors, warnings } = countFileDiagnostics(fileDiagnostics.get(f.path));
         return (
-          <button
-            key={f.path}
-            type="button"
-            className={`studio-topbar__tab ${f.path === activeFile ? 'is-active' : ''}`}
-            onClick={() => onSelectFile(f.path)}
-            title={f.path}
-            // Explicit label so screen readers don't read the diagnostics
-            // chiclets as bare numbers (e.g. "a.rosetta 2 1").
-            aria-label={`${f.name}${f.dirty ? ', unsaved' : ''}${
-              errors > 0 ? `, ${errors} error${errors === 1 ? '' : 's'}` : ''
-            }${warnings > 0 ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}`}
-          >
-            <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
-            <span className="studio-topbar__tab-name">{f.name}</span>
-            {errors > 0 && (
-              <span className="studio-topbar__tab-count is-error" title={`${errors} error${errors === 1 ? '' : 's'}`}>
-                {errors}
+          <div key={f.path} className={`studio-topbar__tab-wrapper ${f.path === activeFile ? 'is-active' : ''}`}>
+            <button
+              type="button"
+              className="studio-topbar__tab"
+              onClick={() => onSelectFile(f.path)}
+              title={f.path}
+              // Explicit label so screen readers don't read the diagnostics
+              // chiclets as bare numbers (e.g. "a.rosetta 2 1").
+              aria-label={`${f.name}${f.dirty ? ', unsaved' : ''}${
+                errors > 0 ? `, ${errors} error${errors === 1 ? '' : 's'}` : ''
+              }${warnings > 0 ? `, ${warnings} warning${warnings === 1 ? '' : 's'}` : ''}`}
+            >
+              <span className={`studio-topbar__tab-dot ${f.dirty ? 'is-dirty' : ''}`} />
+              <span className="studio-topbar__tab-name">{f.name}</span>
+              {errors > 0 && (
+                <span className="studio-topbar__tab-count is-error" title={`${errors} error${errors === 1 ? '' : 's'}`}>
+                  {errors}
+                </span>
+              )}
+              {warnings > 0 && (
+                <span
+                  className="studio-topbar__tab-count is-warning"
+                  title={`${warnings} warning${warnings === 1 ? '' : 's'}`}
+                >
+                  {warnings}
+                </span>
+              )}
+              <span className="studio-topbar__tab-badge" aria-hidden="true">
+                {getFileKindBadge(f.name)}
               </span>
-            )}
-            {warnings > 0 && (
-              <span
-                className="studio-topbar__tab-count is-warning"
-                title={`${warnings} warning${warnings === 1 ? '' : 's'}`}
-              >
-                {warnings}
-              </span>
-            )}
-            <span className="studio-topbar__tab-badge" aria-hidden="true">
-              {getFileKindBadge(f.name)}
-            </span>
-          </button>
+            </button>
+            <button
+              type="button"
+              className="studio-topbar__tab-delete"
+              aria-label={`Delete ${f.name}`}
+              title={`Delete ${f.name}`}
+              onClick={(e) => {
+                // Own sibling button, not nested inside the select button —
+                // stopPropagation guards against a future markup change
+                // accidentally nesting them and firing both handlers.
+                e.stopPropagation();
+                onDeleteFile(f.path);
+              }}
+            >
+              <X className="size-3" />
+            </button>
+          </div>
         );
       })}
       <button
@@ -140,6 +158,7 @@ export function ExploreCenterSlot() {
   const { fileDiagnostics } = useDiagnosticsStore();
   const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
   const openFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
+  const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
 
   const effectiveParseErrors = parseErrors ?? EMPTY_PARSE_ERRORS;
   const combinedFileDiagnostics = useMemo(
@@ -153,12 +172,34 @@ export function ExploreCenterSlot() {
     openFileInSource(file.path);
   };
 
+  // Issue #405 — no UI action previously deleted a workspace file. Native
+  // confirm(), matching the established shell-wide destructive-action
+  // pattern (WorkspaceSwitcher's handleDelete uses the same
+  // `typeof confirm === 'function'` guard for jsdom/non-browser safety).
+  // Deleting the currently-active file redirects to another remaining
+  // user file, or clears activeEditorFile entirely when none remain —
+  // exercising resolveEffectivePerspective's existing "delete last file"
+  // fallback to the Workspaces launcher instead of stranding the user on
+  // a now-blank Explore perspective.
+  const handleDeleteFile = (path: string) => {
+    const file = files.find((f) => f.path === path);
+    if (!file) return;
+    if (typeof confirm === 'function' && !confirm(`Delete "${file.name}"? This cannot be undone.`)) return;
+    const remaining = files.filter((f) => f.path !== path);
+    onFilesChange?.(remaining);
+    setActiveEditorFile((prev) => {
+      if (prev !== path) return prev;
+      return remaining.find((f) => !f.readOnly)?.path;
+    });
+  };
+
   return (
     <FileTabStrip
       files={files}
       activeFile={activeEditorFile}
       onSelectFile={openFileInSource}
       onCreateFile={handleCreateFile}
+      onDeleteFile={handleDeleteFile}
       fileDiagnostics={combinedFileDiagnostics}
     />
   );
