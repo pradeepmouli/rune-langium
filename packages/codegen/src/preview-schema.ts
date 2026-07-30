@@ -28,6 +28,7 @@ import type {
   PreviewSourceMapEntry
 } from './types.js';
 import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
+import { qualifiedExportPath } from '@rune-langium/core';
 
 function humanizeLabel(name: string): string {
   return name
@@ -191,6 +192,21 @@ function normalizeNamespace(name: unknown): string {
 }
 
 /**
+ * Namespace-qualified identity for a Data/Choice node, for use as a
+ * `seenTypes` recursion-guard key (issue #436). Every top-level Data/Choice
+ * is a direct child of its document's `RosettaModel`, so its namespace is
+ * simply that container's (normalized) `name` — mirrors how
+ * `buildNamespaceIndexes` derives the same namespace string for the SAME
+ * container. Keying by bare `.name` alone let two distinct types in
+ * different namespaces that happen to share a simple name (e.g.
+ * `trade.Observable` vs. `asset.Observable`) collide and spuriously trip
+ * the cycle guard.
+ */
+function qualifiedTypeId(node: Data | Choice): string {
+  return qualifiedExportPath(normalizeNamespace(node.$container.name), node.name);
+}
+
+/**
  * Result of walking a Data's `extends` chain: its own + inherited
  * `Attribute` AST nodes, PLUS (round-5 finding #1) the Choice the chain
  * terminates at, if any.
@@ -238,8 +254,8 @@ function collectInheritedAttributes(data: Data): InheritedAttributesResult {
   const visited = new Set<string>();
   let current: Data | undefined = data;
   let choiceAncestor: Choice | undefined;
-  while (current && !visited.has(current.name)) {
-    visited.add(current.name);
+  while (current && !visited.has(qualifiedTypeId(current))) {
+    visited.add(qualifiedTypeId(current));
     chain.push(current);
     const parent: unknown = current.superType?.ref;
     if (parent && isChoice(parent)) {
@@ -280,7 +296,7 @@ function buildDataSchema(
       depth: 0,
       path: attr.name,
       label: humanizeLabel(attr.name),
-      seenTypes: new Set([data.name])
+      seenTypes: new Set([qualifiedTypeId(data)])
     })
   );
 
@@ -305,7 +321,7 @@ function buildDataSchema(
             namespace,
             unsupportedFeatures,
             sourceUri,
-            seenTypes: new Set([data.name, choiceAncestor.name]),
+            seenTypes: new Set([qualifiedTypeId(data), qualifiedTypeId(choiceAncestor)]),
             depth: 0,
             maxDepth
           })
@@ -391,7 +407,7 @@ function buildTypeAliasSchema(
         depth: 0,
         path: attr.name,
         label: humanizeLabel(attr.name),
-        seenTypes: new Set([resolvedData.name])
+        seenTypes: new Set([qualifiedTypeId(resolvedData)])
       })
     );
 
@@ -407,7 +423,7 @@ function buildTypeAliasSchema(
               namespace,
               unsupportedFeatures,
               sourceUri,
-              seenTypes: new Set([resolvedData.name, choiceAncestor.name]),
+              seenTypes: new Set([qualifiedTypeId(resolvedData), qualifiedTypeId(choiceAncestor)]),
               depth: 0,
               maxDepth: DEFAULT_MAX_DEPTH
             })
@@ -489,7 +505,7 @@ function buildChoiceSchema(
       namespace,
       unsupportedFeatures,
       sourceUri,
-      seenTypes: new Set([choice.name]),
+      seenTypes: new Set([qualifiedTypeId(choice)]),
       depth: 0,
       maxDepth: DEFAULT_MAX_DEPTH
     })
@@ -601,7 +617,7 @@ function buildChoiceOptionField(
       : ctx.namespace.dataByName.get(refText ?? '')?.sourceUri) ?? ctx.sourceUri;
 
   if (resolvedData) {
-    if (ctx.seenTypes.has(resolvedData.name) || ctx.depth >= ctx.maxDepth) {
+    if (ctx.seenTypes.has(qualifiedTypeId(resolvedData)) || ctx.depth >= ctx.maxDepth) {
       ctx.unsupportedFeatures.add(`recursive-reference:${resolvedData.name}`);
       return {
         path,
@@ -612,7 +628,7 @@ function buildChoiceOptionField(
       };
     }
     const nextSeen = new Set(ctx.seenTypes);
-    nextSeen.add(resolvedData.name);
+    nextSeen.add(qualifiedTypeId(resolvedData));
     const childCtx: FieldContext = {
       namespace: ctx.namespace,
       unsupportedFeatures: ctx.unsupportedFeatures,
@@ -647,7 +663,7 @@ function buildChoiceOptionField(
     const choiceChildren = choiceAncestor
       ? (() => {
           const choiceSeen = new Set(nextSeen);
-          choiceSeen.add(choiceAncestor.name);
+          choiceSeen.add(qualifiedTypeId(choiceAncestor));
           return choiceAncestor.attributes
             .map((option) =>
               buildChoiceOptionField(option, {
@@ -842,7 +858,7 @@ function enumField(ctx: FieldContext, enumNode: RosettaEnumeration): PreviewFiel
 }
 
 function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewField {
-  if (ctx.seenTypes.has(data.name) || ctx.depth >= ctx.maxDepth) {
+  if (ctx.seenTypes.has(qualifiedTypeId(data)) || ctx.depth >= ctx.maxDepth) {
     ctx.unsupportedFeatures.add(`recursive-reference:${data.name}`);
     return {
       path: ctx.path,
@@ -854,7 +870,7 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
   }
 
   const nextSeen = new Set(ctx.seenTypes);
-  nextSeen.add(data.name);
+  nextSeen.add(qualifiedTypeId(data));
   const { attributes, choiceAncestor } = collectInheritedAttributes(data);
   const attributeChildren = attributes.map((child) =>
     buildField(child, {
@@ -879,7 +895,7 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
   const choiceFields = choiceAncestor
     ? (() => {
         const choiceSeen = new Set(nextSeen);
-        choiceSeen.add(choiceAncestor.name);
+        choiceSeen.add(qualifiedTypeId(choiceAncestor));
         return choiceAncestor.attributes
           .map((option) =>
             buildChoiceOptionField(option, {
@@ -927,7 +943,7 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
  * instead of `extends`.
  */
 function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): PreviewField {
-  if (ctx.seenTypes.has(choice.name) || ctx.depth >= ctx.maxDepth) {
+  if (ctx.seenTypes.has(qualifiedTypeId(choice)) || ctx.depth >= ctx.maxDepth) {
     ctx.unsupportedFeatures.add(`recursive-reference:${choice.name}`);
     return {
       path: ctx.path,
@@ -954,7 +970,7 @@ function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): Prev
   }
 
   const nextSeen = new Set(ctx.seenTypes);
-  nextSeen.add(choice.name);
+  nextSeen.add(qualifiedTypeId(choice));
   const children = choice.attributes.map((option) =>
     buildChoiceOptionField(option, {
       namespace: ctx.namespace,
