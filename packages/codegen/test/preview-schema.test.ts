@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generatePreviewSchemas } from '../src/export.js';
+import type { PreviewField } from '../src/types.js';
 
 const skipIfNodeLt22 = it.skipIf(Number(process.versions.node.split('.')[0]) < 22);
 const REAL_CDM_ADJUSTABLE_DATE_FIXTURES = [
@@ -528,6 +529,281 @@ describe('FormPreviewSchema generation', () => {
       expect(basketConstituent?.choiceArmPaths).toEqual(['commodity', 'cash']);
     }
   );
+
+  skipIfNodeLt22(
+    'expands a Choice-typed attribute (as distinct from Data-extends-Choice) into one field per option (issue #394)',
+    async () => {
+      // Regression test for issue #394: buildBaseField had no branch for a
+      // DIRECT Choice type reference (an attribute typed `variant:
+      // Observable (1..1)`, not a Data type EXTENDING a Choice) — it fell
+      // through to the unresolved-reference case and reported status
+      // 'unsupported' with kind 'unknown', even though the Choice itself
+      // was fully resolved and navigable elsewhere in the app. Mirrors
+      // zod-emitter.ts's own prior "W2" fix for the identical gap in
+      // resolveTypeExpr's isChoice branch.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type Trade:
+        variant Observable (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      expect(trade?.unsupportedFeatures).toBeUndefined();
+      const variantField = trade?.fields.find((field) => field.path === 'variant');
+      expect(variantField).toMatchObject({ path: 'variant', label: 'Variant', kind: 'object', required: true });
+      expect(variantField && 'children' in variantField ? variantField.children.map((c) => c.path).sort() : []).toEqual(
+        ['variant.cash', 'variant.commodity']
+      );
+      // choiceArmPaths marks both arms so preview-validator.ts can enforce
+      // "exactly one of variant.commodity / variant.cash present" — the
+      // same enforcement the Data-extends-Choice case above gets.
+      expect(variantField && 'choiceArmPaths' in variantField ? variantField.choiceArmPaths : undefined).toEqual([
+        'variant.commodity',
+        'variant.cash'
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
+    'rewrites choiceArmPaths and Data-arm grandchild paths for a Choice-typed attribute with array cardinality (Codex review, PR #433)',
+    async () => {
+      // Regression test, round 1: asArrayItem rewrote a Choice-typed array
+      // item's `children[].path` from `variant.arm` to `variant[].arm` but
+      // left `choiceArmPaths` (spread via `...field`) pointing at the stale
+      // pre-rewrite paths. preview-validator.ts's "exactly one arm present"
+      // lookup then found no children matching the stale arm paths and
+      // rejected every array item as if no arm were selected.
+      //
+      // Regression test, round 2: fixing round 1 with a one-level-only
+      // children rewrite still left a Data-typed arm's OWN nested
+      // attributes (a grandchild of the array item) at the stale
+      // pre-rewrite path — `variants.commodity.name` instead of
+      // `variants[].commodity.name` — pointing outside the rewritten array
+      // item's subtree entirely and making that field impossible to
+      // populate correctly. `Commodity`'s `name` attribute below is exactly
+      // that grandchild.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Observable:
+        Commodity
+        Cash
+
+      type Trade:
+        variants Observable (0..*)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      const variantsField = trade?.fields.find((field) => field.path === 'variants');
+      expect(variantsField).toMatchObject({ path: 'variants', kind: 'array' });
+      const item =
+        variantsField && 'children' in variantsField ? (variantsField.children?.[0] as PreviewField) : undefined;
+      expect(item).toMatchObject({ path: 'variants[]', kind: 'object' });
+      const itemChildPaths = item && 'children' in item ? item.children?.map((c) => c.path).sort() : [];
+      expect(itemChildPaths).toEqual(['variants[].cash', 'variants[].commodity']);
+      // The round-1 bug: choiceArmPaths must match children[].path exactly,
+      // not the pre-array-rewrite `variants.*` form.
+      const itemArmPaths = item && 'choiceArmPaths' in item ? item.choiceArmPaths : undefined;
+      expect(itemArmPaths?.slice().sort()).toEqual(['variants[].cash', 'variants[].commodity']);
+      // The round-2 bug: the Commodity arm's OWN `name` attribute (a
+      // grandchild of the array item) must also be rewritten.
+      const commodityArm =
+        item && 'children' in item ? item.children?.find((c) => c.path === 'variants[].commodity') : undefined;
+      const commodityGrandchildPaths =
+        commodityArm && 'children' in commodityArm ? commodityArm.children?.map((c) => c.path) : undefined;
+      expect(commodityGrandchildPaths).toEqual(['variants[].commodity.name']);
+    }
+  );
+
+  skipIfNodeLt22(
+    'rewrites a Choice arm’s OWN nested array descendant through both container kinds (Codex review, PR #433 round 3)',
+    async () => {
+      // Regression test, round 3: rewritePathPrefix's round-2 fix recursed
+      // through 'object' fields but explicitly stopped at 'array' fields —
+      // a Data-typed Choice arm with its OWN nested array attribute
+      // (`Commodity.legs (0..*)` below) had its array field's own path
+      // rewritten (`variants.commodity.legs` → `variants[].commodity.legs`)
+      // but never descended into the array's single item field, leaving
+      // the deeper `[]`-suffixed path (`variants.commodity.legs[].price`)
+      // stale — pointing outside the rewritten array item's subtree.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Leg:
+        price number (1..1)
+
+      type Commodity:
+        name string (1..1)
+        legs Leg (0..*)
+
+      choice Observable:
+        Commodity
+
+      type Trade:
+        variants Observable (0..*)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      const variantsField = trade?.fields.find((field) => field.path === 'variants');
+      const item =
+        variantsField && 'children' in variantsField ? (variantsField.children?.[0] as PreviewField) : undefined;
+      const commodityArm =
+        item && 'children' in item ? item.children?.find((c) => c.path === 'variants[].commodity') : undefined;
+      const legsField =
+        commodityArm && 'children' in commodityArm
+          ? commodityArm.children?.find((c) => c.path === 'variants[].commodity.legs')
+          : undefined;
+      expect(legsField).toMatchObject({ path: 'variants[].commodity.legs', kind: 'array' });
+      const legItem = legsField && 'children' in legsField ? (legsField.children?.[0] as PreviewField) : undefined;
+      expect(legItem).toMatchObject({ path: 'variants[].commodity.legs[]', kind: 'object' });
+      const legItemChildPaths = legItem && 'children' in legItem ? legItem.children?.map((c) => c.path) : undefined;
+      expect(legItemChildPaths).toEqual(['variants[].commodity.legs[].price']);
+    }
+  );
+
+  skipIfNodeLt22(
+    'expands a doubly-nested Choice — a Choice option whose Data type itself extends another Choice (Codex review, PR #433 round 5)',
+    async () => {
+      // Regression test: this was a documented, deferred gap that predates
+      // this PR — buildChoiceOptionField's Data-option branch discarded
+      // collectInheritedAttributes' `choiceAncestor`, silently dropping the
+      // inherited arms whenever a Choice OPTION's Data type itself extends
+      // a DIFFERENT Choice. A preview sample could validate as complete
+      // while the real emitted `runeExtendChoice` Zod schema rejects it for
+      // missing the inherited arm, with no field offered to supply it.
+      // Mirrors objectField's own choiceAncestor expansion.
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Commodity:
+        name string (1..1)
+
+      type Cash:
+        amount number (1..1)
+
+      choice Innermost:
+        Commodity
+        Cash
+
+      type BasketConstituent extends Innermost:
+        weight number (1..1)
+
+      choice Observable:
+        BasketConstituent
+
+      type Trade:
+        variant Observable (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('ready');
+      const variantField = trade?.fields.find((field) => field.path === 'variant');
+      const constituentArm =
+        variantField && 'children' in variantField
+          ? variantField.children?.find((c) => c.path === 'variant.basketConstituent')
+          : undefined;
+      expect(constituentArm).toMatchObject({ path: 'variant.basketConstituent', kind: 'object' });
+      const constituentChildPaths =
+        constituentArm && 'children' in constituentArm ? constituentArm.children?.map((c) => c.path).sort() : [];
+      // BasketConstituent's own `weight` PLUS the inherited Innermost arms
+      // (`commodity`/`cash`), all prefixed under `variant.basketConstituent`.
+      expect(constituentChildPaths).toEqual([
+        'variant.basketConstituent.cash',
+        'variant.basketConstituent.commodity',
+        'variant.basketConstituent.weight'
+      ]);
+      const constituentArmPaths =
+        constituentArm && 'choiceArmPaths' in constituentArm ? constituentArm.choiceArmPaths : undefined;
+      expect(constituentArmPaths?.slice().sort()).toEqual([
+        'variant.basketConstituent.cash',
+        'variant.basketConstituent.commodity'
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
+    'marks an empty Choice-typed attribute as unsupported instead of a trivially-satisfiable object (Codex review, PR #433 round 6)',
+    async () => {
+      // Regression test: a Choice with zero options parses (the Rune
+      // validator only warns), but the real emitted schema
+      // (zod-emitter.ts's emitChoiceSchema) is `z.never()` for one — an
+      // uninhabited type NO value can ever satisfy. Without this guard,
+      // `children`/`choiceArmPaths` both came out empty and the field read
+      // as a trivially-satisfiable required object accepting `{}`, the
+      // opposite of "no valid value exists".
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      choice Impossible:
+
+      type Trade:
+        variant Impossible (1..1)
+    `);
+
+      const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Trade' });
+      const trade = schemas.find((schema) => schema.targetId === 'test.preview.Trade');
+
+      expect(trade).toBeDefined();
+      expect(trade?.status).toBe('unsupported');
+      expect(trade?.unsupportedFeatures).toContain('empty-choice:Impossible');
+      const variantField = trade?.fields.find((field) => field.path === 'variant');
+      expect(variantField).toMatchObject({ path: 'variant', kind: 'unknown' });
+    }
+  );
+
+  skipIfNodeLt22('marks an empty top-level Choice schema as unsupported (Codex review, PR #433 round 6)', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      choice Impossible:
+    `);
+
+    const schemas = generatePreviewSchemas([doc], { targetId: 'test.preview.Impossible' });
+    const impossible = schemas.find((schema) => schema.targetId === 'test.preview.Impossible');
+
+    expect(impossible).toBeDefined();
+    expect(impossible?.status).toBe('unsupported');
+    expect(impossible?.fields).toEqual([]);
+    expect(impossible?.unsupportedFeatures).toContain('empty-choice:Impossible');
+  });
 
   skipIfNodeLt22(
     'includes Choice-ancestor option fields when a typeAlias resolves to a Data-extends-Choice type',
