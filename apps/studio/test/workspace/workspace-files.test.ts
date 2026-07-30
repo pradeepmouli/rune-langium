@@ -63,6 +63,49 @@ describe('saveWorkspaceFiles — git-backed: preserve untracked tree', () => {
     const content = new TextDecoder().decode(await readBytes(opfsRoot, id, 'files', 'a.rosetta'));
     expect(content).toBe('namespace a\ntype X:');
   });
+
+  it('prunes an editor-tracked .rosetta file no longer in the saved list, while leaving untracked files intact (#439)', async () => {
+    const id = 'ws-git-2';
+
+    await writeBytes(opfsRoot, new TextEncoder().encode('# readme'), id, 'files', 'README.md');
+    await writeBytes(opfsRoot, new TextEncoder().encode('namespace a'), id, 'files', 'a.rosetta');
+    await writeBytes(opfsRoot, new TextEncoder().encode('namespace b'), id, 'files', 'b.rosetta');
+
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'git-backed' })
+    });
+
+    // The editor no longer lists b.rosetta — simulates the delete-file
+    // action's onFilesChange(remaining) call.
+    await saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')]);
+
+    // b.rosetta must actually be gone, not just absent from editor state —
+    // otherwise the next loadWorkspaceFiles scan resurrects it.
+    expect(await fileExists(opfsRoot, id, 'files', 'b.rosetta')).toBe(false);
+    // The still-listed file and the untracked README are both unaffected.
+    expect(await fileExists(opfsRoot, id, 'files', 'a.rosetta')).toBe(true);
+    expect(await fileExists(opfsRoot, id, 'files', 'README.md')).toBe(true);
+  });
+
+  it('propagates a rename as a delete-of-old-path plus write-of-new-path (#439)', async () => {
+    const id = 'ws-git-3';
+
+    await writeBytes(opfsRoot, new TextEncoder().encode('namespace a'), id, 'files', 'old-name.rosetta');
+
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'git-backed' })
+    });
+
+    // The editor now lists the renamed path instead of the old one — no
+    // dedicated rename API exists, so this is exactly what a rename-via-
+    // delete-and-recreate looks like from saveWorkspaceFilesNow's view.
+    await saveWorkspaceFiles(id, [makeFile('new-name.rosetta', 'namespace a')]);
+
+    expect(await fileExists(opfsRoot, id, 'files', 'old-name.rosetta')).toBe(false);
+    expect(await fileExists(opfsRoot, id, 'files', 'new-name.rosetta')).toBe(true);
+  });
 });
 
 describe('saveWorkspaceFiles — browser-only: prune preserves existing behaviour', () => {

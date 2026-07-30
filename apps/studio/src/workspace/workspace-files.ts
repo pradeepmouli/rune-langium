@@ -143,13 +143,11 @@ async function saveWorkspaceFilesNow(workspaceId: string, files: readonly Worksp
   // entire `files/` tree and rewriting only the editor's list would delete
   // those untracked files; the subsequent notifySyncOnSave → stageAll would
   // then stage those deletions and push them upstream — silent remote data
-  // loss. Instead, for git-backed workspaces we skip the prune and write
-  // listed files in place, leaving untracked repo files intact.
-  //
-  // Known limitation: editor-side file deletions and renames do not yet
-  // propagate to the working tree for git-backed workspaces. This errs on
-  // the side of keeping files; explicit delete/rename tracking is a
-  // follow-up task.
+  // loss. Instead, for git-backed workspaces we skip the wholesale prune
+  // below and, separately, remove only the specific editor-tracked
+  // `.rosetta` files the caller no longer lists (issue #439) — the same
+  // `.rosetta`-only scope `walkWorkspaceFiles`/`loadWorkspaceFiles` already
+  // use, so untracked repo files are never touched.
   const ws = await deps.loadWorkspaceFn(workspaceId);
   const isGitBacked = ws?.kind === 'git-backed';
 
@@ -169,6 +167,24 @@ async function saveWorkspaceFilesNow(workspaceId: string, files: readonly Worksp
   await workspaceDir.getDirectoryHandle('.studio', { create: true });
 
   const fs = new OpfsFs(root);
+
+  if (isGitBacked) {
+    // Remove editor-tracked files the caller no longer lists (deletions —
+    // and, as a side effect, renames, since a rename shows up here as one
+    // path disappearing and a new one appearing in the write loop below).
+    // `git.statusMatrix`-driven `stageAll` (in notifySyncOnSave's engine)
+    // detects the resulting workdir absence and stages the removal on its
+    // own — no separate git-staging step needed here.
+    const existingFiles: WorkspaceFile[] = [];
+    await walkWorkspaceFiles(fs, `/${workspaceId}/files`, '', existingFiles);
+    const nextPaths = new Set(toStoredWorkspaceFiles(files).map((file) => file.path));
+    for (const existing of existingFiles) {
+      if (!nextPaths.has(existing.path)) {
+        await fs.unlink(`/${workspaceId}/files/${existing.path}`);
+      }
+    }
+  }
+
   for (const file of toStoredWorkspaceFiles(files)) {
     await fs.writeFile(`/${workspaceId}/files/${file.path}`, file.content);
   }
