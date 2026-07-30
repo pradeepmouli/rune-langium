@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createOpfsRoot, type OpfsRoot, writeBytes, readBytes } from '../setup/opfs-mock.js';
 import {
   deleteWorkspaceFiles,
+  loadWorkspaceFiles,
   saveWorkspaceFiles,
   setWorkspaceFilesDeps
 } from '../../src/workspace/workspace-files.js';
@@ -76,6 +77,11 @@ describe('saveWorkspaceFiles — git-backed: preserve untracked tree', () => {
       loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'git-backed' })
     });
 
+    // Establish the pruning baseline the way a real workspace-open flow
+    // does — the editor must have actually known about b.rosetta for its
+    // later absence to read as a deletion rather than "never tracked".
+    await loadWorkspaceFiles(id);
+
     // The editor no longer lists b.rosetta — simulates the delete-file
     // action's onFilesChange(remaining) call.
     await saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a')]);
@@ -98,6 +104,8 @@ describe('saveWorkspaceFiles — git-backed: preserve untracked tree', () => {
       loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'git-backed' })
     });
 
+    await loadWorkspaceFiles(id);
+
     // The editor now lists the renamed path instead of the old one — no
     // dedicated rename API exists, so this is exactly what a rename-via-
     // delete-and-recreate looks like from saveWorkspaceFilesNow's view.
@@ -105,6 +113,34 @@ describe('saveWorkspaceFiles — git-backed: preserve untracked tree', () => {
 
     expect(await fileExists(opfsRoot, id, 'files', 'old-name.rosetta')).toBe(false);
     expect(await fileExists(opfsRoot, id, 'files', 'new-name.rosetta')).toBe(true);
+  });
+
+  it('does not delete a file written by a background git sync that the editor never learned about (#439 round 2)', async () => {
+    const id = 'ws-git-4';
+
+    await writeBytes(opfsRoot, new TextEncoder().encode('namespace a'), id, 'files', 'a.rosetta');
+
+    setWorkspaceFilesDeps({
+      getOpfsRoot: async () => opfsRoot as unknown as FileSystemDirectoryHandle,
+      loadWorkspaceFn: async (_workspaceId: string) => ({ kind: 'git-backed' })
+    });
+
+    // Establish the baseline the way a real workspace-open flow does.
+    await loadWorkspaceFiles(id);
+
+    // A background git-sync fast-forward/merge writes a collaborator's new
+    // file directly into OPFS, independent of any save call. The sync
+    // engine's status subscription never refreshes the editor's `files`
+    // state, so the editor genuinely has no idea this file exists.
+    await writeBytes(opfsRoot, new TextEncoder().encode('namespace b'), id, 'files', 'new-from-sync.rosetta');
+
+    // The editor makes a routine, unrelated edit and saves — it still only
+    // lists a.rosetta. This must NOT be read as "the user deleted
+    // new-from-sync.rosetta": that path was never in the editor's own
+    // tracked-paths snapshot, so it's not a pruning candidate at all.
+    await saveWorkspaceFiles(id, [makeFile('a.rosetta', 'namespace a\ntype X:')]);
+
+    expect(await fileExists(opfsRoot, id, 'files', 'new-from-sync.rosetta')).toBe(true);
   });
 });
 
