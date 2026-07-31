@@ -61,18 +61,6 @@ export const RENDERER_HANDLED_TYPES = [
   'RosettaEnumSynonym'
 ] as const;
 
-/** Top-level `$type`s the VE's `astToModel` adapter recognizes (a subset of the above, plus record/basicType/annotation). */
-export const TOP_LEVEL_TYPES = [
-  'Data',
-  'Choice',
-  'RosettaEnumeration',
-  'RosettaFunction',
-  'RosettaRecordType',
-  'RosettaTypeAlias',
-  'RosettaBasicType',
-  'Annotation'
-] as const;
-
 /** `$type` → generated schema, covering every renderer-handled type and every top-level type. */
 export const SCHEMA_BY_TYPE: Record<string, z.ZodTypeAny> = {
   Data: DataSchema,

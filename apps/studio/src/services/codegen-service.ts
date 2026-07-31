@@ -17,7 +17,6 @@
  * @see specs/011-export-code-cf/contracts/http-generate.md (hosted)
  */
 
-import { KNOWN_GENERATORS } from '@rune-langium/codegen-legacy';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import type {
   CodeGenerationRequest,
@@ -27,7 +26,6 @@ import type {
 } from '@rune-langium/codegen-legacy';
 
 export type { CodeGenerationRequest, CodeGenerationResult, GeneratedFile };
-export { KNOWN_GENERATORS };
 
 export interface PreviewFileEntry {
   uri: string;
@@ -77,14 +75,6 @@ export interface PreviewExecuteMessage {
   funcName: string;
   inputs: Record<string, unknown>;
   requestId: string;
-}
-
-export function createPreviewExecuteMessage(
-  funcName: string,
-  inputs: Record<string, unknown>,
-  requestId: string
-): PreviewExecuteMessage {
-  return { type: 'preview:execute', funcName, inputs, requestId };
 }
 
 export interface InstanceValidateMessage {

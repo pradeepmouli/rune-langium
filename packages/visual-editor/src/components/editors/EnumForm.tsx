@@ -119,7 +119,7 @@ function EnumForm({
 
   const { form } = useZodForm(RosettaEnumerationSchema, {
     // The graph node is a union (`AnyGraphNode`); the host narrows by
-    // `$type` upstream. `identityProjection` covers the typed gap between
+    // `$type` upstream. `formValuesProjection` covers the typed gap between
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
     defaultValues: formValuesProjection<typeof RosettaEnumerationSchema>(data, nodeMeta),
     mode: 'onChange',

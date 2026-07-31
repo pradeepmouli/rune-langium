@@ -10,10 +10,10 @@
  * - `useZodForm(RosettaTypeAliasSchema, …)` drives validation off the
  *   canonical AST schema (per R1). The graph node is passed straight
  *   into `defaultValues` (per R11) — no projection layer.
- * - `useExternalSync(form, data, identityProjection)` re-binds pristine
- *   field state when the host swaps to a different node (per R4). The
- *   projection is identity since the form consumes the AST shape
- *   directly.
+ * - `useExternalSync(form, data, (n) => formValuesProjection(n, nodeMeta))`
+ *   re-binds pristine field state when the host swaps to a different node
+ *   (per R4). The form consumes the AST shape directly; the projection
+ *   only threads the typed gap and seeds the UI-only `comments` field.
  * - `<EditorActionsProvider>` wraps the form body so any
  *   declaratively-rendered section components (Phase 7 / US5) can
  *   derive their commit callbacks from `EditorFormActions` + `nodeId`
@@ -107,7 +107,7 @@ function TypeAliasForm({
 
   const { form } = useZodForm(RosettaTypeAliasSchema, {
     // RosettaTypeAliasSchema is z.looseObject — extra graph-only keys
-    // are accepted as extras. `identityProjection` covers the typed gap
+    // are accepted as extras. `formValuesProjection` covers the typed gap
     // between the AnyGraphNode runtime shape and z2f's parameterised
     // `Partial<output<Schema>>` constraint.
     defaultValues: formValuesProjection<typeof RosettaTypeAliasSchema>(data, nodeMeta),
