@@ -82,7 +82,11 @@ const lspSessionUrl = env.VITE_LSP_SESSION_URL ?? defaultLspSessionUrl();
 // fallbacks behave the same as `pnpm dev:pages`; in the browser we always
 // resolve to `window.location.origin` and never reach this branch.
 const origin = typeof window === 'undefined' ? 'http://localhost:8788' : window.location.origin;
-const telemetryEndpoint = env.VITE_TELEMETRY_ENDPOINT ?? `${origin}/api/telemetry/v1/event`;
+// Route table: www.daikonic.dev/rune-studio/api/telemetry/* -> rune-telemetry-worker
+// (a dedicated Worker route, distinct from the Pages Function-rooted /api/*
+// paths) — dropping the /rune-studio prefix 404s/503s at the edge before the
+// request ever reaches the Worker.
+const telemetryEndpoint = env.VITE_TELEMETRY_ENDPOINT ?? `${origin}/rune-studio/api/telemetry/v1/event`;
 const lspEnabled = boolFromEnv(env.VITE_ENABLE_LSP, true);
 const telemetryEnabled = boolFromEnv(env.VITE_ENABLE_TELEMETRY, false);
 const githubAuthEnabled = boolFromEnv(env.VITE_ENABLE_GITHUB_AUTH, true);
