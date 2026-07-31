@@ -28,40 +28,67 @@ const fromModelMock = vi.fn((model: unknown, uri: string) => ({
   uri,
   parseResult: { value: model, lexerErrors: [], parserErrors: [] }
 }));
-const documentRegistry = new Map<string, unknown>();
-const getDocumentMock = vi.fn((uri: string) => documentRegistry.get(uri));
+const registered = new Map<string, unknown>();
+const getDocumentMock = vi.fn((uri: string) => registered.get(uri));
 const addDocumentMock = vi.fn((doc: { uri: string }) => {
-  documentRegistry.set(doc.uri, doc);
+  registered.set(doc.uri, doc);
+});
+const deleteDocumentMock = vi.fn((uri: string) => {
+  const existing = registered.get(uri);
+  registered.delete(uri);
+  return existing;
 });
 
-vi.mock('@rune-langium/core', () => ({
-  createRuneDslServices: () => ({
-    RuneDsl: {
-      shared: {
-        workspace: {
-          LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
-          DocumentBuilder: { build: buildMock },
-          LangiumDocuments: { getDocument: getDocumentMock, addDocument: addDocumentMock }
+// `hydrateModelDocuments` (Task 2) is the REAL implementation, not a mock —
+// it only calls getDocument/addDocument/deleteDocument?./LangiumDocumentFactory.fromModel
+// plus JsonSerializer.deserialize, all provided by the mocked services below,
+// so running it here exercises the actual relink loop. Imported directly
+// from its compiled dist submodule rather than via `importOriginal` on the
+// `@rune-langium/core` barrel: the barrel's index.js also re-exports the
+// langium-zod-GENERATED ast/domain modules, which instantiate a real
+// langium `AbstractAstReflection` at import time — that would require this
+// file's minimal `vi.mock('langium', ...)` stub below (just `URI.parse`) to
+// provide the entire real langium API surface just to load. The
+// hydrate-model-document submodule only imports `URI` from 'langium',
+// which the stub already covers.
+const { hydrateModelDocuments: realHydrateModelDocuments } =
+  await import('../../../../packages/core/dist/serializer/hydrate-model-document.js');
+
+vi.mock('@rune-langium/core', () => {
+  return {
+    createRuneDslServices: () => ({
+      RuneDsl: {
+        shared: {
+          workspace: {
+            LangiumDocumentFactory: { fromString: fromStringMock, fromModel: fromModelMock },
+            DocumentBuilder: { build: buildMock },
+            LangiumDocuments: {
+              getDocument: getDocumentMock,
+              addDocument: addDocumentMock,
+              deleteDocument: deleteDocumentMock
+            }
+          }
+        },
+        serializer: {
+          JsonSerializer: { deserialize: deserializeMock }
         }
-      },
-      serializer: {
-        JsonSerializer: { deserialize: deserializeMock }
       }
-    }
-  }),
-  hydrateModelDocument: (_services: unknown, uri: string, json: string, { register }: { register: string }) => {
-    const model = deserializeMock(json);
-    const existing = register === 'idempotent' ? getDocumentMock(uri) : undefined;
-    if (existing) {
-      return { model, document: existing };
-    }
-    const document = fromModelMock(model, uri);
-    if (register === 'always' || register === 'idempotent') {
-      addDocumentMock(document);
-    }
-    return { model, document };
-  }
-}));
+    }),
+    hydrateModelDocument: (_services: unknown, uri: string, json: string, { register }: { register: string }) => {
+      const model = deserializeMock(json);
+      const existing = register === 'idempotent' ? getDocumentMock(uri) : undefined;
+      if (existing) {
+        return { model, document: existing };
+      }
+      const document = fromModelMock(model, uri);
+      if (register === 'always' || register === 'idempotent') {
+        addDocumentMock(document);
+      }
+      return { model, document };
+    },
+    hydrateModelDocuments: realHydrateModelDocuments
+  };
+});
 
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
@@ -136,7 +163,8 @@ describe('codegen-worker preview messages', () => {
       uri,
       parseResult: { value: model, lexerErrors: [], parserErrors: [] }
     }));
-    documentRegistry.clear();
+    registered.clear();
+    deleteDocumentMock.mockClear();
     getDocumentMock.mockClear();
     addDocumentMock.mockClear();
   });
@@ -808,6 +836,91 @@ describe('codegen-worker code preview messages', () => {
     const previewCall = generatePreviewSchemasMock.mock.calls.at(-1);
     const [forwardedDocs] = previewCall!;
     expect(forwardedDocs).toHaveLength(2);
+  });
+});
+
+// Task 2 (curated-document staleness fix): `preview:setFiles` must relink
+// curated documents via the batch `hydrateModelDocuments` fixpoint and cache
+// the result, instead of the old per-entry `hydrateModelDocument(..., {
+// register: 'idempotent' })` loop that returned an already-registered
+// document verbatim — including any previously-failed reference resolution
+// — forever.
+describe('codegen-worker preview:setFiles curated document relinking', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generatePreviewSchemasMock.mockReset();
+    deserializeMock.mockClear();
+    deserializeMock.mockImplementation((json: string) => ({ __deserialized: true, json }));
+    fromModelMock.mockClear();
+    fromModelMock.mockImplementation((model: unknown, uri: string) => ({
+      uri,
+      parseResult: { value: model, lexerErrors: [], parserErrors: [] }
+    }));
+    registered.clear();
+    getDocumentMock.mockClear();
+    addDocumentMock.mockClear();
+    deleteDocumentMock.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("replaces a curated document's registered identity when preview:setFiles resends it, rather than reusing the existing registration", async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      requestId: 'files:1',
+      files: [{ uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' }]
+    });
+    await flushWorker();
+    const firstRegistration = registered.get('curated:///fpml/consolidated/shared/Scheme.rosetta');
+    expect(firstRegistration).toBeDefined();
+
+    // A second preview:setFiles carrying the same curated entry (as happens
+    // whenever ANY new namespace hydrates — the file-sync effect resends the
+    // full curated set every time) must trigger a fresh relink, not a
+    // do-nothing idempotent skip.
+    dispatch({
+      type: 'preview:setFiles',
+      requestId: 'files:2',
+      files: [
+        { uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' },
+        {
+          uri: 'curated:///fpml/consolidated/shared/NormalizedString.rosetta',
+          content: '',
+          serializedModelJson: '{}'
+        }
+      ]
+    });
+    await flushWorker();
+    const secondRegistration = registered.get('curated:///fpml/consolidated/shared/Scheme.rosetta');
+
+    expect(deleteDocumentMock).toHaveBeenCalledWith('curated:///fpml/consolidated/shared/Scheme.rosetta');
+    expect(secondRegistration).not.toBe(firstRegistration);
+  });
+
+  it('does not re-relink when preview:setFiles resends an identical curated set (e.g. after a pure user-file edit)', async () => {
+    const { dispatch } = await loadWorkerModule();
+    const files = [
+      { uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' }
+    ];
+
+    dispatch({ type: 'preview:setFiles', requestId: 'files:1', files });
+    await flushWorker();
+    deleteDocumentMock.mockClear();
+    addDocumentMock.mockClear();
+
+    // Same curated entries, unchanged — as happens when only a user-authored
+    // file was edited and the curated set along for the ride is identical.
+    dispatch({ type: 'preview:setFiles', requestId: 'files:2', files: [...files] });
+    await flushWorker();
+
+    expect(deleteDocumentMock).not.toHaveBeenCalled();
+    expect(addDocumentMock).not.toHaveBeenCalled();
   });
 });
 
