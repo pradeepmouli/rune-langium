@@ -2,7 +2,7 @@
   "name": "@rune-langium/lsp-worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloudflare Worker + Durable Object hosting the Rune DSL Langium LSP for the Studio (feature 014-studio-prod-ready, US3). Per-workspace DOs hold langium services + WS hibernation; the Worker mints HMAC-signed session tokens and gates the WS upgrade.",
+  "description": "Cloudflare Worker + Durable Object hosting the Rune DSL Langium LSP for the Studio (feature 014-studio-prod-ready, US3). DO-only since spec 019 Phase 3 — hosts the RuneLspSession Durable Object that apps/studio/functions/api/lsp/* Pages Functions bind to; HTTP routes (session mint, health, WS upgrade) live there now.",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
@@ -16,9 +16,7 @@
     "@lspeasy/core": "^2.7.0",
     "@rune-langium/curated-schema": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
-    "langium": "^4.3.1",
-    "pino": "^10.3.1",
-    "zod": "^4.4.3"
+    "langium": "^4.3.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260625.1",
