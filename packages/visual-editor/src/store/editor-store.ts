@@ -2206,9 +2206,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           },
 
           markNamespacesHydrated(names: string[]) {
+            const nameSet = new Set(names);
             set((s) => ({
               hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
-              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n)),
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !nameSet.has(n)),
               hydrationNonce: s.hydrationNonce + 1
             }));
           },
@@ -2218,10 +2219,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             return [...new Set([...s.hydratedNamespaces, ...s.pendingHydrationNamespaces])];
           },
 
-          dequeuePendingHydration: (names) =>
+          dequeuePendingHydration: (names) => {
+            const nameSet = new Set(names);
             set((s) => ({
-              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
-            })),
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !nameSet.has(n))
+            }));
+          },
 
           resetHydration() {
             set({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });

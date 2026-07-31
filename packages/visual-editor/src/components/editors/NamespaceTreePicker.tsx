@@ -67,7 +67,8 @@ export function NamespaceTreePicker({
   // Filter options by kind before building the tree (same contract as TypeSelector).
   const filteredOptions = useMemo(() => {
     if (!filterKinds || filterKinds.length === 0) return options;
-    return options.filter((opt) => filterKinds.includes(opt.kind));
+    const kindSet = new Set(filterKinds);
+    return options.filter((opt) => kindSet.has(opt.kind));
   }, [options, filterKinds]);
 
   // Build the segmented tree from the (kind-filtered) options.
@@ -77,9 +78,7 @@ export function NamespaceTreePicker({
   // open without expanding to every leaf. (Search overrides this below.)
   const [treeExpanded, setTreeExpanded] = useState<Set<string>>(() => {
     const initial = new Set<string>();
-    for (const root of buildSegmentedNamespaceTreeFromOptions(
-      filterKinds && filterKinds.length > 0 ? options.filter((opt) => filterKinds.includes(opt.kind)) : options
-    )) {
+    for (const root of roots) {
       initial.add(root.fullPath);
       for (const child of root.children) initial.add(child.fullPath);
     }

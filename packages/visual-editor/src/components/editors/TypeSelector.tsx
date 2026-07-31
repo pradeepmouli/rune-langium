@@ -182,7 +182,8 @@ export function TypeSelector({
   const filteredOptions = useMemo(() => {
     if (!options) return [];
     if (!filterKinds || filterKinds.length === 0) return options;
-    return options.filter((opt) => filterKinds.includes(opt.kind));
+    const kindSet = new Set(filterKinds);
+    return options.filter((opt) => kindSet.has(opt.kind));
   }, [options, filterKinds]);
 
   // Apply search filter
