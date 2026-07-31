@@ -68,25 +68,43 @@ describe('HydrationOrchestrator', () => {
     expect(onRetryB).toHaveBeenCalledTimes(1);
   });
 
-  it('stops requesting once a target hits the retry cap', () => {
-    const { deps, requestNamespaceHydration } = makeDeps();
+  it('stops beginning new retry rounds once a target hits the retry cap', () => {
+    const { deps } = makeDeps();
     const orchestrator = new HydrationOrchestrator(deps);
-    for (let i = 0; i < MAX_HYDRATION_RETRIES_PER_TARGET + 2; i++) {
-      orchestrator.requestHydration(`ns-${i}`, { retryFor: { targetId: 'Scheme', onRetry: vi.fn() } });
+    for (let i = 0; i < MAX_HYDRATION_RETRIES_PER_TARGET; i++) {
+      expect(orchestrator.beginRetryRound('Scheme')).toBe(true);
     }
-    expect(requestNamespaceHydration).toHaveBeenCalledTimes(MAX_HYDRATION_RETRIES_PER_TARGET);
+    expect(orchestrator.beginRetryRound('Scheme')).toBe(false);
   });
 
   it('resets a target attempt counter on markResolved, giving it a fresh budget later', () => {
-    const { deps, requestNamespaceHydration } = makeDeps();
+    const { deps } = makeDeps();
     const orchestrator = new HydrationOrchestrator(deps);
     for (let i = 0; i < MAX_HYDRATION_RETRIES_PER_TARGET; i++) {
-      orchestrator.requestHydration(`ns-${i}`, { retryFor: { targetId: 'Scheme', onRetry: vi.fn() } });
+      orchestrator.beginRetryRound('Scheme');
     }
     expect(orchestrator.getRemainingAttempts('Scheme')).toBe(0);
     orchestrator.markResolved('Scheme');
     expect(orchestrator.getRemainingAttempts('Scheme')).toBe(MAX_HYDRATION_RETRIES_PER_TARGET);
-    orchestrator.requestHydration('ns-fresh', { retryFor: { targetId: 'Scheme', onRetry: vi.fn() } });
-    expect(requestNamespaceHydration).toHaveBeenCalledWith('ns-fresh');
+    expect(orchestrator.beginRetryRound('Scheme')).toBe(true);
+  });
+
+  it('does not exhaust the attempt budget when a single round calls requestHydration for many namespaces', () => {
+    const { deps, requestNamespaceHydration } = makeDeps();
+    const orchestrator = new HydrationOrchestrator(deps);
+
+    expect(orchestrator.beginRetryRound('Scheme')).toBe(true);
+    for (let i = 0; i < 6; i++) {
+      orchestrator.requestHydration(`ns-${i}`, { retryFor: { targetId: 'Scheme', onRetry: vi.fn() } });
+    }
+    expect(requestNamespaceHydration).toHaveBeenCalledTimes(6);
+    // Only ONE attempt was spent for this round, despite 6 requestHydration calls.
+    expect(orchestrator.getRemainingAttempts('Scheme')).toBe(MAX_HYDRATION_RETRIES_PER_TARGET - 1);
+
+    // beginRetryRound still succeeds for rounds 2-5, then fails on round 6.
+    for (let round = 2; round <= MAX_HYDRATION_RETRIES_PER_TARGET; round++) {
+      expect(orchestrator.beginRetryRound('Scheme')).toBe(true);
+    }
+    expect(orchestrator.beginRetryRound('Scheme')).toBe(false);
   });
 });

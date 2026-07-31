@@ -28,14 +28,19 @@ import { HydrationOrchestrator } from '../../services/hydration-orchestrator.js'
 import type { DeferredExportEntry } from '../../workers/parser-worker.js';
 
 /**
- * Looks up which curated namespace exports `name`, so a `preview:result`'s
- * `unresolved-reference:<name>` can be resolved to a namespace the
- * HydrationOrchestrator can hydrate. Returns undefined for names that are
- * not a known deferred (curated, not-yet-hydrated) export — those are
- * genuinely unresolved and must not trigger a retry.
+ * Looks up which curated namespace(s) export `name`, so a `preview:result`'s
+ * `unresolved-reference:<name>` can be resolved to namespaces the
+ * HydrationOrchestrator can hydrate. Returns an empty array for names that
+ * are not a known deferred (curated, not-yet-hydrated) export — those are
+ * genuinely unresolved and must not trigger a retry. Multiple curated
+ * namespaces can export the same type name (e.g. `Scheme` recurs across
+ * standard bodies), and there's no namespace-qualifying info available at
+ * this call site to disambiguate — so every candidate is hydrated; hydrating
+ * one that turns out not to be the reference's actual target is wasted
+ * work, not an incorrectness.
  */
-function findNamespaceForExport(deferredExports: DeferredExportEntry[], name: string): string | undefined {
-  return deferredExports.find((entry) => entry.exports.some((e) => e.name === name))?.namespace;
+function findNamespacesForExport(deferredExports: DeferredExportEntry[], name: string): string[] {
+  return deferredExports.filter((entry) => entry.exports.some((e) => e.name === name)).map((entry) => entry.namespace);
 }
 
 /** Extracts the referenced type names out of a form-preview schema's
@@ -73,6 +78,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
   const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
   const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
   const setHydrationRetriesRemaining = usePreviewStore((s) => s.setHydrationRetriesRemaining);
+  const clearHydrationRetriesRemaining = usePreviewStore((s) => s.clearHydrationRetriesRemaining);
 
   // Owns the HydrationOrchestrator instance for this provider's lifetime.
   // Constructed inside a mount effect (not lazily on render) so it survives
@@ -269,35 +275,46 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         if (orchestrator) {
           if (unresolvedNames.length === 0) {
             orchestrator.markResolved(targetId);
+            clearHydrationRetriesRemaining(targetId);
           } else {
-            for (const name of unresolvedNames) {
-              const namespace = findNamespaceForExport(deferredExports, name);
-              if (!namespace) continue; // not a known curated export — genuinely unresolved, don't retry
-              orchestrator.requestHydration(namespace, {
-                retryFor: {
-                  targetId,
-                  onRetry: () => {
-                    // Deferred by one macrotask: onRetry fires synchronously from
-                    // inside markNamespacesHydrated's zustand set() call, which can
-                    // race ahead of this component's OWN files-sync effect (which
-                    // resends preview:setFiles with the newly-hydrated content one
-                    // React commit later). Without this defer, the retry can reach
-                    // the worker before the new content does and fail identically,
-                    // burning an attempt for no reason (self-healing via the next
-                    // requestHydration round regardless, but this makes it
-                    // deterministic instead of relying on the cap to paper over
-                    // the race — see design doc §Architecture "Retry-post ordering").
-                    setTimeout(() => {
-                      if (!codegenWorker) return;
-                      const requestId = `preview:${targetId}:${++previewRequestSequenceRef.current}`;
-                      currentPreviewRequestIdRef.current = requestId;
-                      codegenWorker.postMessage(createPreviewGenerateMessage(targetId, requestId));
-                    }, 0);
-                  }
+            const canRetry = orchestrator.beginRetryRound(targetId);
+            if (canRetry) {
+              for (const name of unresolvedNames) {
+                const namespaces = findNamespacesForExport(deferredExports, name);
+                for (const namespace of namespaces) {
+                  orchestrator.requestHydration(namespace, {
+                    retryFor: {
+                      targetId,
+                      onRetry: () => {
+                        // Deferred by one macrotask: onRetry fires synchronously from
+                        // inside markNamespacesHydrated's zustand set() call, which can
+                        // race ahead of this component's OWN files-sync effect (which
+                        // resends preview:setFiles with the newly-hydrated content one
+                        // React commit later). Without this defer, the retry can reach
+                        // the worker before the new content does and fail identically,
+                        // burning an attempt for no reason (self-healing via the next
+                        // requestHydration round regardless, but this makes it
+                        // deterministic instead of relying on the cap to paper over
+                        // the race — see design doc §Architecture "Retry-post ordering").
+                        // The live-selection re-check below additionally guards
+                        // against a race with the user switching the Form Preview
+                        // selection to a different target while this retry was
+                        // in flight — without it, this callback would clobber
+                        // currentPreviewRequestIdRef for whatever is now selected.
+                        setTimeout(() => {
+                          if (!codegenWorker) return;
+                          if (usePreviewStore.getState().selectedTargetId !== targetId) return;
+                          const requestId = `preview:${targetId}:${++previewRequestSequenceRef.current}`;
+                          currentPreviewRequestIdRef.current = requestId;
+                          codegenWorker.postMessage(createPreviewGenerateMessage(targetId, requestId));
+                        }, 0);
+                      }
+                    }
+                  });
                 }
-              });
-              setHydrationRetriesRemaining(targetId, orchestrator.getRemainingAttempts(targetId));
+              }
             }
+            setHydrationRetriesRemaining(targetId, orchestrator.getRemainingAttempts(targetId));
           }
         }
       } else {
@@ -337,6 +354,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     receiveExecutionResult,
     receiveExecutionError,
     setHydrationRetriesRemaining,
+    clearHydrationRetriesRemaining,
     setWorkerRef
   ]);
 

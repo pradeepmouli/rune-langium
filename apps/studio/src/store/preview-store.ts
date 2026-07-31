@@ -85,6 +85,7 @@ interface PreviewStoreActions {
   setWorkerRef(worker: Worker | null): void;
   dispatchExecute(funcName: string, inputs: Record<string, unknown>): void;
   setHydrationRetriesRemaining(targetId: string, remaining: number): void;
+  clearHydrationRetriesRemaining(targetId: string): void;
 }
 
 type PreviewStore = PreviewStoreState & PreviewStoreActions;
@@ -548,6 +549,15 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     set((s) => ({
       hydrationRetriesRemaining: { ...s.hydrationRetriesRemaining, [targetId]: remaining }
     }));
+  },
+
+  clearHydrationRetriesRemaining(targetId) {
+    set((s) => {
+      if (!(targetId in s.hydrationRetriesRemaining)) return s;
+      const next = { ...s.hydrationRetriesRemaining };
+      delete next[targetId];
+      return { hydrationRetriesRemaining: next };
+    });
   },
 
   resetPreviewState() {

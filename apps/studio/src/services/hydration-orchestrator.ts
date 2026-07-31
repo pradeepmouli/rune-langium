@@ -30,11 +30,22 @@ export class HydrationOrchestrator {
     this.unsubscribe = deps.subscribeToHydrationChange(() => this.onHydrationChanged());
   }
 
-  requestHydration(namespace: string, { retryFor }: RequestHydrationOptions): void {
-    const attempts = this.attemptsByTarget.get(retryFor.targetId) ?? 0;
-    if (attempts >= MAX_HYDRATION_RETRIES_PER_TARGET) return;
-    this.attemptsByTarget.set(retryFor.targetId, attempts + 1);
+  /**
+   * Spends one retry-round attempt for `targetId`. Call this ONCE per
+   * unresolved `preview:result` (not once per unresolved reference name) —
+   * a target with several simultaneously-unresolved references shares one
+   * budget for that round, not one budget per name. Returns false once the
+   * cap (MAX_HYDRATION_RETRIES_PER_TARGET) is reached; the caller should
+   * skip calling requestHydration for this round when it does.
+   */
+  beginRetryRound(targetId: string): boolean {
+    const attempts = this.attemptsByTarget.get(targetId) ?? 0;
+    if (attempts >= MAX_HYDRATION_RETRIES_PER_TARGET) return false;
+    this.attemptsByTarget.set(targetId, attempts + 1);
+    return true;
+  }
 
+  requestHydration(namespace: string, { retryFor }: RequestHydrationOptions): void {
     if (this.deps.getHydratedNamespaces().includes(namespace)) {
       // Already hydrated by someone else — retry on the next microtask so
       // callers never re-enter synchronously from inside requestHydration.
