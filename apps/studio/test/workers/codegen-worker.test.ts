@@ -51,6 +51,14 @@ const deleteDocumentMock = vi.fn((uri: string) => {
 // provide the entire real langium API surface just to load. The
 // hydrate-model-document submodule only imports `URI` from 'langium',
 // which the stub already covers.
+//
+// Precondition: this reads packages/core's COMPILED dist output, not its
+// TS source, so it requires `pnpm --filter @rune-langium/core build` to
+// have been run first. CI's build:ci already does this before tests run;
+// for a fresh clone or after editing packages/core/src/ locally without
+// rebuilding, this import will module-not-found (fresh clone, no dist/ at
+// all) or silently exercise stale compiled behavior (edited src, stale
+// dist) — rebuild packages/core if this test starts failing unexpectedly.
 const { hydrateModelDocuments: realHydrateModelDocuments } =
   await import('../../../../packages/core/dist/serializer/hydrate-model-document.js');
 
