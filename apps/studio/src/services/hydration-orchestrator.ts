@@ -45,6 +45,18 @@ export class HydrationOrchestrator {
     return true;
   }
 
+  /**
+   * Registers a namespace hydration wait for `retryFor.targetId`, requesting
+   * the namespace be hydrated if it isn't already (or isn't already
+   * pending). Does NOT itself spend a retry-attempt budget — callers that
+   * want a bounded number of attempts must call `beginRetryRound(targetId)`
+   * before their per-round `requestHydration` calls and skip them when it
+   * returns false (see its doc comment). Callers whose retries are already
+   * naturally bounded by something else (e.g. user-driven re-selection,
+   * with no re-entrant retry loop) may skip `beginRetryRound` entirely and
+   * stay uncapped — `apps/studio/src/shell/ExplorePerspective.tsx`'s three
+   * call sites do this deliberately.
+   */
   requestHydration(namespace: string, { retryFor }: RequestHydrationOptions): void {
     if (this.deps.getHydratedNamespaces().includes(namespace)) {
       // Already hydrated by someone else — retry on the next microtask so
@@ -81,10 +93,16 @@ export class HydrationOrchestrator {
 
   private onHydrationChanged(): void {
     const hydrated = new Set(this.deps.getHydratedNamespaces());
+    const firing = new Map<string, HydrationRetryTarget>();
     for (const [namespace, waiters] of [...this.waitingByNamespace.entries()]) {
       if (!hydrated.has(namespace)) continue;
       this.waitingByNamespace.delete(namespace);
-      for (const target of waiters.values()) target.onRetry();
+      for (const [targetId, target] of waiters) {
+        firing.set(targetId, target);
+      }
+    }
+    for (const target of firing.values()) {
+      target.onRetry();
     }
   }
 }

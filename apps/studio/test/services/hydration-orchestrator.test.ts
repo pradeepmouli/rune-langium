@@ -89,6 +89,28 @@ describe('HydrationOrchestrator', () => {
     expect(orchestrator.beginRetryRound('Scheme')).toBe(true);
   });
 
+  it('fires onRetry exactly once for a target waiting on multiple candidate namespaces that hydrate in the same round (final-review Important fix)', () => {
+    const { deps, hydrated, requestNamespaceHydration, fireChange } = makeDeps();
+    const orchestrator = new HydrationOrchestrator(deps);
+    const onRetry = vi.fn();
+    // Same targetId, same onRetry, registered against TWO different candidate
+    // namespaces — the ambiguous-export-name disambiguation case.
+    orchestrator.requestHydration('fpml.consolidated.shared.ns0', {
+      retryFor: { targetId: 'Scheme', onRetry }
+    });
+    orchestrator.requestHydration('fpml.consolidated.shared.ns1', {
+      retryFor: { targetId: 'Scheme', onRetry }
+    });
+    expect(requestNamespaceHydration).toHaveBeenCalledTimes(2);
+
+    // Both namespaces become hydrated before the change listener fires once.
+    hydrated.add('fpml.consolidated.shared.ns0');
+    hydrated.add('fpml.consolidated.shared.ns1');
+    fireChange();
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it('does not exhaust the attempt budget when a single round calls requestHydration for many namespaces', () => {
     const { deps, requestNamespaceHydration } = makeDeps();
     const orchestrator = new HydrationOrchestrator(deps);

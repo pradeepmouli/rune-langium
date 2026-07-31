@@ -162,8 +162,13 @@ function curatedEntriesChanged(next: FileEntry[]): boolean {
  *
  * `serializedModelJson` strings are passed through unchanged from the main
  * thread for a given curated document (they're immutable per-session
- * snapshots), so reference/string equality per index (`curatedEntriesChanged`)
- * is sufficient to skip a no-op resend — no deep diff needed.
+ * snapshots). `curatedEntriesChanged` compares them with `!==`, which for
+ * string primitives is always a full value comparison (JS strings have no
+ * separate "reference identity" the way objects do) — so this is a
+ * complete content comparison of the curated set on every
+ * `preview:setFiles`, not a cheap identity check. It is still far cheaper
+ * than running the relink unconditionally, which is the actual cost this
+ * guards against.
  */
 function hydrateCuratedDocuments(entries: FileEntry[]): void {
   const curatedEntries = entries.filter((e) => Boolean(e.serializedModelJson));

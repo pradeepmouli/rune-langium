@@ -403,6 +403,67 @@ describe('CodegenProvider', () => {
     expect(usePreviewStore.getState().hydrationRetriesRemaining['Scheme']).toBe(4);
   });
 
+  it('clears (not sets) hydrationRetriesRemaining when a retry round dispatches zero hydration requests for a genuinely unresolvable reference (final-review Critical fix)', () => {
+    usePreviewStore.getState().resetPreviewState();
+    usePreviewStore.setState({
+      selectedTargetId: 'Scheme',
+      selectedTarget: { id: 'Scheme', namespace: 'fpml.consolidated.confirmation', name: 'Scheme', kind: 'data' }
+    });
+
+    // deferredExports has no entry exporting `NotACuratedType` at all, so
+    // findNamespacesForExport returns [] and no requestHydration call happens
+    // for this round — a genuine typo / nonexistent type, not a deferred one.
+    const wsWithDeferredExports: WorkspaceState = {
+      ...wsState('ws-hydrate-unresolvable'),
+      deferredExports: [
+        {
+          filePath: 'fpml/consolidated/shared/bundle.rosetta',
+          namespace: 'fpml.consolidated.shared',
+          exports: [{ type: 'data', name: 'NormalizedString' }]
+        }
+      ]
+    };
+
+    render(
+      <WorkspaceStateContext.Provider value={wsWithDeferredExports}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const generateMsg = worker.posted.find((m) => m.type === 'preview:generate' && m.targetId === 'Scheme');
+    expect(generateMsg).toBeDefined();
+
+    act(() => {
+      for (const listener of worker.listeners['message'] ?? []) {
+        listener({
+          data: {
+            type: 'preview:result',
+            targetId: 'Scheme',
+            requestId: generateMsg.requestId,
+            schema: {
+              schemaVersion: 1,
+              kind: 'typeAlias',
+              targetId: 'Scheme',
+              title: 'Scheme',
+              status: 'unsupported',
+              fields: [],
+              unsupportedFeatures: ['unresolved-reference:NotACuratedType']
+            }
+          }
+        });
+      }
+    });
+
+    // No hydration was requested for this round — nothing to wait on.
+    expect(useEditorStore.getState().pendingHydrationNamespaces).toEqual([]);
+    // Must NOT be a positive number: that would show a permanent, never-
+    // recovering "resolving..." spinner and hide the real diagnostic.
+    expect(usePreviewStore.getState().hydrationRetriesRemaining['Scheme']).toBeUndefined();
+  });
+
   it('skips a background hydration retry if the selected target has changed since the retry was scheduled (Finding 1)', async () => {
     usePreviewStore.getState().resetPreviewState();
     usePreviewStore.setState({

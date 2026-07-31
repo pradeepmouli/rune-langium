@@ -278,10 +278,12 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
             clearHydrationRetriesRemaining(targetId);
           } else {
             const canRetry = orchestrator.beginRetryRound(targetId);
+            let requestedAny = false;
             if (canRetry) {
               for (const name of unresolvedNames) {
                 const namespaces = findNamespacesForExport(deferredExports, name);
                 for (const namespace of namespaces) {
+                  requestedAny = true;
                   orchestrator.requestHydration(namespace, {
                     retryFor: {
                       targetId,
@@ -314,7 +316,11 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
                 }
               }
             }
-            setHydrationRetriesRemaining(targetId, orchestrator.getRemainingAttempts(targetId));
+            if (requestedAny) {
+              setHydrationRetriesRemaining(targetId, orchestrator.getRemainingAttempts(targetId));
+            } else {
+              clearHydrationRetriesRemaining(targetId);
+            }
           }
         }
       } else {

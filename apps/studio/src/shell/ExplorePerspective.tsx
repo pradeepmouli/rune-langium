@@ -1034,8 +1034,15 @@ export function ExplorePerspective() {
   // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().
 
   // Owns the HydrationOrchestrator instance for this component's lifetime —
-  // dedups and caps retries for the three on-demand hydration triggers below
-  // (handleExplorerSelectNode, handleToggleNamespace, navigateToNode).
+  // dedups (via waitingByNamespace) the three on-demand hydration triggers
+  // below (handleExplorerSelectNode, handleToggleNamespace, navigateToNode).
+  // Deliberately does NOT call beginRetryRound — these triggers are
+  // user-driven (re-selecting/re-toggling), not auto-retried, so there is
+  // no re-entrant loop to cap, and capping would strand a still-deferred
+  // node's hydration permanently after 5 selections with no markResolved
+  // call anywhere in this file to reset it. See requestHydration's doc
+  // comment in hydration-orchestrator.ts for the opt-in protocol this
+  // relies on.
   // Constructed inside a mount effect (not lazily on render) so it survives
   // React StrictMode's mount→unmount→remount double-invoke cleanly: the
   // cleanup disposes the orchestrator (unsubscribing from useEditorStore),
