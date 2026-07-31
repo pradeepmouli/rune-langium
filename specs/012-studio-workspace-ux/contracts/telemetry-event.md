@@ -92,15 +92,21 @@ success rate) accounts for this best-effort delivery.
 
 ## Aggregation
 
-The receiving worker forwards each event to a Durable Object keyed by
-`<event-name>:<UTC-day>`. The DO holds a single counter per `errorCategory`
-(or `null` for non-erroring events) and persists it via `storage.put` after
-each increment. This satisfies SC-009 (≥95% success rate verifiable via
-`success / (success + failure)` per modelId per day).
+The worker no longer runs its own aggregator. Each accepted, rejected, and
+rate-limited request emits one structured line via Cloudflare Workers Logs
+(`console.log(<object>)` in `apps/telemetry-worker/src/log.ts` — passing the
+raw object, not a JSON string, is what makes individual fields queryable;
+`op_spans` additionally emits one line per span). There is no `/v1/stats` or
+`/v1/digest` route on this worker any more.
 
-`GET /rune-studio/api/telemetry/v1/stats` returns the rolling window. It is
-gated by CF Access (admin email allowlist); end users cannot read the
-aggregate either.
+Aggregation happens by querying the Workers Observability API directly —
+`pnpm --filter @rune-langium/studio run telemetry:digest [--since=YYYY-MM-DD] [--until=YYYY-MM-DD]`
+(`apps/studio/scripts/telemetry-digest.mjs`), which authenticates with a
+plain `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` pair (no CF Access
+client credentials needed — this queries Cloudflare's own account API, not
+a custom worker route). This satisfies SC-009 the same way the old DO did
+(≥95% success rate verifiable via `success / (success + failure)` per
+modelId per day), just computed externally instead of by the worker.
 
 ---
 
