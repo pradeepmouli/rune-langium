@@ -34,7 +34,7 @@ function makeDeps(overrides: Partial<HydrationOrchestratorDeps> = {}) {
 }
 
 describe('HydrationOrchestrator', () => {
-  it('does not request hydration for a namespace that is already hydrated', () => {
+  it('does not request hydration for a namespace that is already hydrated', async () => {
     const { hydrated, deps, requestNamespaceHydration } = makeDeps();
     hydrated.add('fpml.consolidated.shared.scheme');
     const orchestrator = new HydrationOrchestrator(deps);
@@ -43,6 +43,9 @@ describe('HydrationOrchestrator', () => {
       retryFor: { targetId: 'Scheme', onRetry }
     });
     expect(requestNamespaceHydration).not.toHaveBeenCalled();
+    // Verify onRetry is still called via queueMicrotask even though no hydration was requested
+    await Promise.resolve();
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
   it('requests hydration once, then retries every waiting target when the namespace hydrates', () => {
