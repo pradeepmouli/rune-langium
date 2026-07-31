@@ -29,7 +29,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -39,6 +39,7 @@ import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useEffectiveMembers } from '../../hooks/useInheritedMembers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaEnumerationSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
@@ -58,6 +59,7 @@ import type {
 } from '../../types.js';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -101,7 +103,7 @@ function EnumForm({
   nodeId,
   data,
   availableTypes,
-  synonymSourceOptions = [],
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS,
   actions,
   allNodes = EMPTY_NODES,
   onNavigateToNode,
@@ -118,7 +120,7 @@ function EnumForm({
 
   const { form } = useZodForm(RosettaEnumerationSchema, {
     // The graph node is a union (`AnyGraphNode`); the host narrows by
-    // `$type` upstream. `identityProjection` covers the typed gap between
+    // `$type` upstream. `formValuesProjection` covers the typed gap between
     // the discriminated union and z2f's `Partial<output<Schema>>` constraint.
     defaultValues: formValuesProjection<typeof RosettaEnumerationSchema>(data, nodeMeta),
     mode: 'onChange',
@@ -146,8 +148,7 @@ function EnumForm({
   });
 
   // Track the committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
@@ -309,7 +310,12 @@ function EnumForm({
 
             <PaginatedEnumValues
               effectiveValues={effectiveValues}
-              committedRef={committedRef}
+              // Read straight from `d`, NOT `committedRef` — the ref only updates
+              // in a post-commit layout effect, so on the render that swaps
+              // `data` (node switch / external graph push) it would still hold
+              // the PREVIOUS node's enumValues, baking a stale rename anchor
+              // into this row's onUpdate closures (Codex review).
+              committedEnumValues={d.enumValues ?? []}
               nodeId={nodeId}
               onUpdate={handleUpdateValue}
               onRemove={handleRemoveValue}
@@ -350,7 +356,7 @@ interface PaginatedEnumValuesProps {
     isOverride?: boolean;
     ancestorName?: string;
   }>;
-  committedRef: React.RefObject<unknown>;
+  committedEnumValues: Array<{ name?: string; display?: string }>;
   nodeId: string;
   onUpdate: (nodeId: string, oldName: string, newName: string, displayName?: string) => void;
   onRemove: (index: number) => void;
@@ -365,7 +371,7 @@ interface PaginatedEnumValuesProps {
 
 function PaginatedEnumValues({
   effectiveValues,
-  committedRef,
+  committedEnumValues,
   nodeId,
   onUpdate,
   onRemove,
@@ -395,8 +401,8 @@ function PaginatedEnumValues({
           <EnumValueRow
             key={entry.id}
             index={entry.fieldIndex!}
-            name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
-            displayName={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''}
+            name={committedEnumValues[entry.fieldIndex!]?.name ?? ''}
+            displayName={committedEnumValues[entry.fieldIndex!]?.display ?? ''}
             nodeId={nodeId}
             onUpdate={onUpdate}
             onRemove={() => onRemove(entry.fieldIndex!)}

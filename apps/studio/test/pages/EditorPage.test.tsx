@@ -270,6 +270,15 @@ vi.mock('@rune-langium/visual-editor', () => ({
     }),
   useEditorStore,
   useModelSourceSync: () => {},
+  // Mirrors the real hook: a ref synced to the latest value via
+  // useLayoutEffect, not a render-body write.
+  useLatestRef: <T,>(value: T) => {
+    const ref = React.useRef(value);
+    React.useLayoutEffect(() => {
+      ref.current = value;
+    }, [value]);
+    return ref;
+  },
   // Node-id utilities (3A′ dot-form helpers) — exact mirrors of node-projection.ts
   // so ExplorePerspective can call them inside the mock module boundary.
   nameFromNodeId: (nodeId: string) => {

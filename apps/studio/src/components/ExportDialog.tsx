@@ -85,13 +85,32 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
   const sessionCookieAcquiredRef = useRef(false);
   const turnstileNeeded = showTurnstile && !sessionCookieAcquiredRef.current;
 
-  // Check service availability when dialog opens
+  // Reset dialog state on each open — adjusted during render (React's
+  // blessed pattern) rather than in an effect, so the reset lands in the
+  // same render instead of flashing the prior session's state for one
+  // frame first.
+  //
+  // Tracked via useState, NOT a plain ref: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setState/setSelectedFile/
+  // setValidationWarnings calls ARE rolled back (they never committed) — so
+  // a bare `prevOpenRef.current = open` could leave the retry believing the
+  // open transition already happened and skip the reset, reopening with the
+  // prior phase/selected file/validation warnings (Codex review).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setState({ phase: 'idle' });
+      setSelectedFile(null);
+      setValidationWarnings([]);
+    }
+  }
+
+  // Check service availability when dialog opens — inherently async, so
+  // this part stays in an effect.
   useEffect(() => {
     if (!open) return;
-    setState({ phase: 'idle' });
-    setSelectedFile(null);
-    setValidationWarnings([]);
-
     const service = getCodegenService();
     service.isAvailable().then(setServiceAvailable);
   }, [open]);
@@ -371,6 +390,7 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
                       const shortName = file.path.split('/').pop() ?? file.path;
                       return (
                         <button
+                          type="button"
                           key={file.path}
                           className={`w-full text-left px-2 py-1 text-xs font-mono rounded truncate ${
                             selectedFile?.path === file.path ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'

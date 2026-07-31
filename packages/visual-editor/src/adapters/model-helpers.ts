@@ -78,13 +78,28 @@ export interface AnnotationDisplayInfo {
   attribute?: string;
 }
 
+// Cached per raw AnnotationRefShape reference so an unchanged annotation
+// (Mutative preserves object identity for array elements untouched by a
+// mutation, e.g. a reorder of a sibling annotation) yields the SAME display
+// object across calls. Lets consumers key React list items by object
+// identity (see useStableKey) instead of array position, which breaks on
+// reorder for these id-less display shapes.
+const annotationDisplayCache = new WeakMap<AnnotationRefShape, AnnotationDisplayInfo>();
+
 /** Convert Dehydrated<AnnotationRef>[] to display-friendly objects. */
 export function annotationsToDisplay(annotations: AnnotationRefShape[] | undefined): AnnotationDisplayInfo[] {
   if (!annotations || annotations.length === 0) return [];
-  return annotations.map((ref) => ({
-    name: ref.annotation?.$refText ?? 'unknown',
-    attribute: ref.attribute?.$refText
-  }));
+  return annotations.map((ref) => {
+    let display = annotationDisplayCache.get(ref);
+    if (display === undefined) {
+      display = {
+        name: ref.annotation?.$refText ?? 'unknown',
+        attribute: ref.attribute?.$refText
+      };
+      annotationDisplayCache.set(ref, display);
+    }
+    return display;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +149,33 @@ function getExpressionText(condition: ConditionShape): string {
   return getExpressionDisplayText(condition.expression);
 }
 
+// Cached per raw ConditionShape reference — see annotationDisplayCache above
+// for why (Mutative reference stability + reorder-safe React list keys via
+// useStableKey). Pre- and post-conditions share one cache: a raw condition
+// object can only ever appear in one of the two source arrays at a time.
+const conditionDisplayCache = new WeakMap<ConditionShape, ConditionDisplayInfo>();
+
+function conditionToDisplay(c: ConditionShape, isPostCondition: boolean): ConditionDisplayInfo {
+  let display = conditionDisplayCache.get(c);
+  // Also invalidate on a role mismatch, not just a cache miss — the same
+  // raw condition reference could in principle be looked up as a regular
+  // condition in one call and a post-condition in another (e.g. moved
+  // between the two source arrays while keeping its identity), and the
+  // cache must not keep serving the FIRST role it ever saw for that
+  // reference (Codex review).
+  if (display === undefined || display.isPostCondition !== isPostCondition) {
+    display = {
+      name: c.name ?? undefined,
+      definition: c.definition ?? undefined,
+      expressionText: getExpressionText(c),
+      isPostCondition,
+      expressionAst: c.expression
+    };
+    conditionDisplayCache.set(c, display);
+  }
+  return display;
+}
+
 /** Convert condition models to display-friendly objects. */
 export function conditionsToDisplay(
   conditions: ConditionShape[] | undefined,
@@ -141,22 +183,10 @@ export function conditionsToDisplay(
 ): ConditionDisplayInfo[] {
   const result: ConditionDisplayInfo[] = [];
   for (const c of conditions ?? []) {
-    result.push({
-      name: c.name ?? undefined,
-      definition: c.definition ?? undefined,
-      expressionText: getExpressionText(c),
-      isPostCondition: false,
-      expressionAst: c.expression
-    });
+    result.push(conditionToDisplay(c, false));
   }
   for (const c of postConditions ?? []) {
-    result.push({
-      name: c.name ?? undefined,
-      definition: c.definition ?? undefined,
-      expressionText: getExpressionText(c),
-      isPostCondition: true,
-      expressionAst: c.expression
-    });
+    result.push(conditionToDisplay(c, true));
   }
   return result;
 }
@@ -176,26 +206,27 @@ interface EnumSynonymShape {
 /** Extract display strings from Data/Choice class synonyms. */
 export function classExprSynonymsToStrings(synonyms: ClassSynonymShape[] | undefined): string[] {
   if (!synonyms) return [];
-  return synonyms
-    .map((s) => {
-      const name = s.value?.name;
-      const path = s.value?.path;
-      if (!name) return undefined;
-      return path ? `${name}->${path}` : name;
-    })
-    .filter((s): s is string => s !== undefined);
+  const result: string[] = [];
+  for (const s of synonyms) {
+    const name = s.value?.name;
+    const path = s.value?.path;
+    if (!name) continue;
+    result.push(path ? `${name}->${path}` : name);
+  }
+  return result;
 }
 
 /** Extract display strings from Enum synonyms. */
 export function enumSynonymsToStrings(synonyms: EnumSynonymShape[] | undefined): string[] {
   if (!synonyms) return [];
-  return synonyms
-    .flatMap((s) => s.body?.values ?? [])
-    .map((v) => {
-      if (!v.name) return undefined;
-      return v.path ? `${v.name}->${v.path}` : v.name;
-    })
-    .filter((s): s is string => s !== undefined);
+  const result: string[] = [];
+  for (const s of synonyms) {
+    for (const v of s.body?.values ?? []) {
+      if (!v.name) continue;
+      result.push(v.path ? `${v.name}->${v.path}` : v.name);
+    }
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

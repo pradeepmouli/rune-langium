@@ -59,28 +59,65 @@ export function FormPreviewPanel({
   }>({ errors: {}, valid: true, validated: false });
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
-  const [executionResult, setExecutionResult] = useState<unknown>(undefined);
-  const [executionError, setExecutionError] = useState<string | null>(null);
 
   const funcName = schema?.kind === 'function' ? schema.title : undefined;
   const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
   const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
 
-  useEffect(() => {
-    if (!storeExecResult) return;
+  // Seed from any execution result already cached in the store at mount
+  // time — e.g. the dock panel was closed (unmounting this component) then
+  // reopened while the store still holds a prior run's result. Without this,
+  // the sync branch below only reacts to storeExecResult CHANGING, and
+  // useState(storeExecResult) below initializes prevStoreExecResult to that
+  // same already-current value, so the branch never fires and the cached
+  // output stayed hidden until the next execution (Codex review).
+  const [executionResult, setExecutionResult] = useState<unknown>(() =>
+    storeExecResult && !storeExecResult.error ? storeExecResult.output : undefined
+  );
+  const [executionError, setExecutionError] = useState<string | null>(() => storeExecResult?.error ?? null);
+
+  // Adjusted during render (React's blessed pattern) rather than in
+  // effects, so switching functions or a new execution result lands in the
+  // same render instead of flashing the prior function's stale result for
+  // one frame first. Order matters: a funcName change takes priority over a
+  // same-render storeExecResult change, matching the original two-effects'
+  // declaration-order commit sequencing (the funcName effect ran second and
+  // so always won when both fired together).
+  //
+  // Tracked via useState, NOT plain refs: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setExecutionState/
+  // setExecutionResult/setExecutionError calls ARE rolled back (they never
+  // committed) — so a bare `.current = ...` assignment could leave the
+  // retry believing the new function/result was already handled and keep
+  // displaying the previous function's output indefinitely (Codex review).
+  const [prevFuncName, setPrevFuncName] = useState(funcName);
+  const [prevStoreExecResult, setPrevStoreExecResult] = useState(storeExecResult);
+  if (funcName !== prevFuncName) {
+    setExecutionState('idle');
+    // Seed from the NEWLY selected function's own cached result, if it has
+    // one, rather than unconditionally blanking — otherwise switching to a
+    // function that was already executed earlier in this session hides its
+    // cached output until it's re-run, and the trailing prevStoreExecResult
+    // sync below would mark it "seen" so the branch below never picks it up
+    // retroactively either (same root cause as the mount-time case above).
+    if (storeExecResult) {
+      setExecutionResult(storeExecResult.error ? undefined : storeExecResult.output);
+      setExecutionError(storeExecResult.error ?? null);
+    } else {
+      setExecutionResult(undefined);
+      setExecutionError(null);
+    }
+  } else if (storeExecResult && storeExecResult !== prevStoreExecResult) {
     if (storeExecResult.error) {
       setExecutionError(storeExecResult.error);
     } else {
       setExecutionResult(storeExecResult.output);
     }
     setExecutionState('idle');
-  }, [storeExecResult]);
-
-  useEffect(() => {
-    setExecutionState('idle');
-    setExecutionResult(undefined);
-    setExecutionError(null);
-  }, [funcName]);
+  }
+  if (funcName !== prevFuncName) setPrevFuncName(funcName);
+  if (storeExecResult !== prevStoreExecResult) setPrevStoreExecResult(storeExecResult);
 
   useEffect(() => {
     if (!schema?.unsupportedFeatures?.length) return;

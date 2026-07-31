@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const RESOURCES_DIR = resolve(currentDir, '../../../../.resources');
-const CODEGEN_FIXTURES_DIR = resolve(currentDir, '../../../../packages/codegen/test/fixtures');
 
 /**
  * Load a single fixture file by relative path.
@@ -42,22 +41,6 @@ export async function listFixtures(subdir: string): Promise<string[]> {
 }
 
 /**
- * Load all `.rosetta` files from a resource subdirectory.
- *
- * @param subdir - Subdirectory name (e.g., 'cdm')
- * @returns Array of `{ name, content }` objects.
- */
-export async function loadAllFixtures(subdir: string): Promise<Array<{ name: string; content: string }>> {
-  const filenames = await listFixtures(subdir);
-  return Promise.all(
-    filenames.map(async (name) => ({
-      name,
-      content: await loadFixture(join(subdir, name))
-    }))
-  );
-}
-
-/**
  * Load a small subset of CDM files suitable for quick integration tests.
  * Picks files covering data types, enums, and functions.
  */
@@ -80,23 +63,4 @@ export async function loadCdmSubset(): Promise<Array<{ name: string; content: st
     }
   }
   return results;
-}
-
-export interface SharedFormPreviewFixture {
-  input: string;
-  expectedZod: string;
-}
-
-/**
- * Load a shared codegen fixture that Studio tests can reuse for form-preview
- * integration and parity checks.
- */
-export async function loadFormPreviewFixture(fixtureName = 'form-preview'): Promise<SharedFormPreviewFixture> {
-  const fixtureDir = join(CODEGEN_FIXTURES_DIR, fixtureName);
-  const [input, expectedZod] = await Promise.all([
-    readFile(join(fixtureDir, 'input.rune'), 'utf-8'),
-    readFile(join(fixtureDir, 'expected.zod.ts'), 'utf-8')
-  ]);
-
-  return { input, expectedZod };
 }

@@ -485,6 +485,7 @@ function computeOutermostCanonicalId(focused: AdapterNode, doc: AdapterDocument,
 function walkAndExpand(
   node: AdapterNode,
   doc: AdapterDocument,
+  nodesById: ReadonlyMap<string, AdapterNode>,
   opts: BuildOptions,
   out: Map<string, StructureNode>,
   // Canonical ids of `node`'s ancestors in the current recursion stack. A
@@ -537,7 +538,7 @@ function walkAndExpand(
 
   for (const row of rows) {
     if (shouldExpand(row, node.namespace, node.name, opts.expansionMap, childInstancePath) && row.targetNodeId) {
-      const target = doc.nodes.find((n) => n.id === row.targetNodeId);
+      const target = nodesById.get(row.targetNodeId);
       if (!target) continue;
       if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
       if (nextPath.has(target.id)) {
@@ -550,6 +551,7 @@ function walkAndExpand(
         const expandedId = materializeDataWithInheritance(
           target,
           doc,
+          nodesById,
           opts,
           out,
           nextPath,
@@ -567,6 +569,7 @@ function walkAndExpand(
           const armExpansions = expandChoiceArms(
             target,
             doc,
+            nodesById,
             opts,
             out,
             nextPath,
@@ -603,6 +606,7 @@ function walkAndExpand(
 function materializeDataWithInheritance(
   focused: AdapterNode,
   doc: AdapterDocument,
+  nodesById: ReadonlyMap<string, AdapterNode>,
   opts: BuildOptions,
   out: Map<string, StructureNode>,
   path: ReadonlySet<string>,
@@ -682,7 +686,7 @@ function materializeDataWithInheritance(
   // needed is no longer required: each call writes its own per-instance
   // entry into `out` under a unique key, so there is no cross-instance
   // collision to defend against.
-  walkAndExpand(focused, doc, opts, out, path, outerMostCanonicalCache, focusedRfId, focusedPath);
+  walkAndExpand(focused, doc, nodesById, opts, out, path, outerMostCanonicalCache, focusedRfId, focusedPath);
 
   // No inheritance chain → the focused Data node IS the outermost wrapper.
   if (ancestors.length === 0) {
@@ -742,7 +746,7 @@ function materializeDataWithInheritance(
       if (!shouldExpand(row, baseNode.namespace, baseNode.name, opts.expansionMap, childExpansionInstancePath))
         continue;
       if (!row.targetNodeId) continue;
-      const target = doc.nodes.find((n) => n.id === row.targetNodeId);
+      const target = nodesById.get(row.targetNodeId);
       if (!target) continue;
       if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
       if (baseRowPath.has(target.id)) {
@@ -757,6 +761,7 @@ function materializeDataWithInheritance(
         const expandedId = materializeDataWithInheritance(
           target,
           doc,
+          nodesById,
           opts,
           out,
           baseRowPath,
@@ -772,6 +777,7 @@ function materializeDataWithInheritance(
           const armExpansions = expandChoiceArms(
             target,
             doc,
+            nodesById,
             opts,
             out,
             baseRowPath,
@@ -818,6 +824,7 @@ function materializeDataWithInheritance(
 function expandChoiceArms(
   node: AdapterNode,
   doc: AdapterDocument,
+  nodesById: ReadonlyMap<string, AdapterNode>,
   opts: BuildOptions,
   out: Map<string, StructureNode>,
   path: ReadonlySet<string>,
@@ -855,7 +862,7 @@ function expandChoiceArms(
     });
     if (opts.expansionMap.get(key) !== true) continue;
 
-    const target = doc.nodes.find((n) => n.id === arm.targetNodeId);
+    const target = nodesById.get(arm.targetNodeId);
     if (!target) continue;
     if (target.$type !== 'Data' && target.$type !== 'Choice') continue;
     if (nextPath.has(target.id)) continue; // cycle — drop edge, keep chip
@@ -866,6 +873,7 @@ function expandChoiceArms(
       const expandedId = materializeDataWithInheritance(
         target,
         doc,
+        nodesById,
         opts,
         out,
         nextPath,
@@ -881,6 +889,7 @@ function expandChoiceArms(
         const nestedArmExpansions = expandChoiceArms(
           target,
           doc,
+          nodesById,
           opts,
           out,
           nextPath,
@@ -898,7 +907,10 @@ function expandChoiceArms(
 
 export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): StructureGraphInput {
   const nodes = new Map<string, StructureNode>();
-  const root = doc.nodes.find((n) => n.id === opts.focusedTypeId);
+  // Built once and threaded through the whole (mutually recursive) walk below
+  // instead of each recursion level re-scanning doc.nodes with .find().
+  const nodesById: ReadonlyMap<string, AdapterNode> = new Map(doc.nodes.map((n) => [n.id, n]));
+  const root = nodesById.get(opts.focusedTypeId);
   if (!root) {
     return { rootNodeId: opts.focusedTypeId, nodes };
   }
@@ -915,6 +927,7 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     const rootInstanceId = materializeDataWithInheritance(
       root,
       doc,
+      nodesById,
       opts,
       nodes,
       new Set<string>(),
@@ -934,6 +947,7 @@ export function buildStructureGraph(doc: AdapterDocument, opts: BuildOptions): S
     const armExpansions = expandChoiceArms(
       root,
       doc,
+      nodesById,
       opts,
       nodes,
       new Set<string>([root.id]),

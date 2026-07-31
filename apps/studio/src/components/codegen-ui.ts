@@ -3,7 +3,6 @@
 import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
 
 export const CODE_PREVIEW_PANEL_ID = 'code-preview-panel';
-export const FORM_PREVIEW_PANEL_ID = 'form-preview-panel';
 
 // 018 Phase 0 Task 0.7 — derived from TARGET_DESCRIPTORS so this stays
 // in sync with the codegen registry as new targets are added. The old

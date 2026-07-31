@@ -19,6 +19,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import { useLatestRef } from './useLatestRef.js';
 
 /**
  * Returns a debounced callback that auto-saves the latest value after
@@ -32,10 +33,8 @@ export function useAutoSave<T>(onCommit: (value: T) => void, delay = 500): (valu
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestRef = useRef<T | undefined>(undefined);
   const pendingRef = useRef(false);
-  const commitRef = useRef(onCommit);
-
-  // Keep the commit callback ref up to date without re-creating the debounced fn
-  commitRef.current = onCommit;
+  // Keep the commit callback up to date without re-creating the debounced fn.
+  const commitRef = useLatestRef(onCommit);
 
   const debouncedSet = useCallback(
     (value: T) => {

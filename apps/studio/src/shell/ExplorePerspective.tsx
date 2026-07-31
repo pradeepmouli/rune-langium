@@ -40,6 +40,7 @@ import {
   conditionsToDisplay,
   useEditorStore,
   useModelSourceSync,
+  useLatestRef,
   nameFromNodeId,
   splitNodeId,
   selectNodeRepository
@@ -439,8 +440,7 @@ export function ExplorePerspective() {
   const [groupedLayout, setGroupedLayout] = useState(false);
   const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   // Ref so ResizeObserver callbacks always see the latest value without stale closures.
-  const groupedLayoutRef = useRef(groupedLayout);
-  groupedLayoutRef.current = groupedLayout;
+  const groupedLayoutRef = useLatestRef(groupedLayout);
   const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
   const focusMode = useEditorStore((s) => s.focusMode);
   const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
@@ -522,8 +522,6 @@ export function ExplorePerspective() {
     return d?.$type ?? null;
   });
   const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
-  const layoutEngineRef = useRef(storeLayoutEngine);
-  layoutEngineRef.current = storeLayoutEngine;
   const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
   const previewSelectedTarget = usePreviewStore((s) => s.selectedTarget);
   const setPreviewTargets = usePreviewStore((s) => s.setAvailableTargets);
@@ -551,7 +549,7 @@ export function ExplorePerspective() {
     if (direction !== graphLayoutDirectionRef.current) {
       updateGraphLayoutDirection(direction);
       graphRef.current?.relayout({
-        engine: layoutEngineRef.current,
+        engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
         direction,
         groupByInheritance: groupedLayoutRef.current
       });
@@ -585,7 +583,7 @@ export function ExplorePerspective() {
     if (!selectedNodeId) return;
     if (!storeNodes.some((node) => node.id === selectedNodeId)) return;
     graphRef.current?.relayout({
-      engine: layoutEngineRef.current,
+      engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
       direction: getResponsiveGraphDirection(),
       groupByInheritance: groupedLayoutRef.current
     });
@@ -642,8 +640,6 @@ export function ExplorePerspective() {
     if (!selectedNodeId) return undefined;
     return nodeRepository.byId(selectedNodeId)?.meta;
   }, [selectedNodeId, nodeRepository]);
-  const selectedNodeDataRef = useRef<AnyGraphNode | null>(selectedNodeData);
-  selectedNodeDataRef.current = selectedNodeData;
 
   // On-demand curated hydration (docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md,
   // trigger B): a selected deferred placeholder node's `data` is a stub
@@ -853,14 +849,13 @@ export function ExplorePerspective() {
     const relinkedKey = `${hydrationNonce}:${namespace}`;
     if (relinkedRef.current.has(relinkedKey)) return;
     relinkedRef.current.add(relinkedKey);
-    const filePaths = [
-      ...new Set(
-        deferredExportsRef.current
-          .filter((e) => e.namespace === namespace)
-          .map((e) => e.filePath)
-          .filter((fp) => fp && !fp.startsWith('system://'))
-      )
-    ];
+    const filePathSet = new Set<string>();
+    for (const e of deferredExportsRef.current) {
+      if (e.namespace !== namespace) continue;
+      if (!e.filePath || e.filePath.startsWith('system://')) continue;
+      filePathSet.add(e.filePath);
+    }
+    const filePaths = [...filePathSet];
     if (filePaths.length === 0) return;
     const requestWorkspaceId = workspaceId;
     let cancelled = false;
@@ -970,9 +965,10 @@ export function ExplorePerspective() {
   // Invert namespaceToFile against the current file content so the CST-reuse
   // serializer has the original source text to slice for clean subtrees.
   const originalSourceByNamespace = useMemo(() => {
+    const fileByPath = new Map(files.map((f) => [f.path, f]));
     const map = new Map<string, string>();
     for (const [ns, filePath] of namespaceToFile) {
-      const file = files.find((f) => f.path === filePath);
+      const file = fileByPath.get(filePath);
       if (file) map.set(ns, file.content);
     }
     return map;
@@ -1021,28 +1017,12 @@ export function ExplorePerspective() {
     },
     [files, nodeIdToFilePath]
   );
-  // Escape stale-closure re-fires in the hydration relink effect — same
-  // pattern as selectedNodeDataRef. deferredExports (and therefore
-  // nodeIdToFilePath / resolveNodeFile) updates in the same React render
-  // that bumps hydrationNonce; the effect dep array is
-  // [hydrationNonce, selectedNodeId, workspaceId] — resolveNodeFile /
-  // nodeIdToFilePath are intentionally omitted to avoid spurious re-runs,
-  // but without the ref the captured resolveNodeFile would call linkDocument
-  // with the synthetic ${bundleId}/${namespace} path instead of the real
-  // file path, missing the entry in deferredModelJson.
-  const resolveNodeFileRef = useRef(resolveNodeFile);
-  resolveNodeFileRef.current = resolveNodeFile;
-  // Parallel ref for the raw map — kept for resolveNodeFile fallback in other
-  // contexts; the hydration relink effect now uses deferredExportsRef instead.
-  const nodeIdToFilePathRef = useRef(nodeIdToFilePath);
-  nodeIdToFilePathRef.current = nodeIdToFilePath;
   // Ref for the full deferredExports list so the hydration relink effect can
   // link ALL files for the selected namespace, not just the one the per-type
   // map points to. The curated artifacts aggregate namespace-level exports onto
   // the first document, so per-type file mapping is unreliable — linking every
   // file in the namespace ensures the right model is deserialized.
-  const deferredExportsRef = useRef(deferredExports);
-  deferredExportsRef.current = deferredExports;
+  const deferredExportsRef = useLatestRef(deferredExports);
 
   // Bound directly to the store action (same identity across renders, like
   // the old useCallback with an empty dep array) so every call site below
@@ -1359,7 +1339,7 @@ export function ExplorePerspective() {
   }, []);
   const handleRelayout = useCallback(() => {
     graphRef.current?.relayout({
-      engine: layoutEngineRef.current,
+      engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
       direction: getResponsiveGraphDirection(),
       groupByInheritance: groupedLayout
     });
@@ -1370,7 +1350,7 @@ export function ExplorePerspective() {
     if (!nextFocusMode) {
       setTimeout(() => {
         graphRef.current?.relayout({
-          engine: layoutEngineRef.current,
+          engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
           direction: graphLayoutDirectionRef.current,
           groupByInheritance: groupedLayoutRef.current
         });
@@ -1378,18 +1358,19 @@ export function ExplorePerspective() {
     }
   }, [focusMode, storeToggleFocusMode]);
   const handleToggleGroupedLayout = useCallback(() => {
-    setGroupedLayout((prev) => {
-      const next = !prev;
-      setTimeout(() => {
-        graphRef.current?.relayout({
-          engine: layoutEngineRef.current,
-          direction: getResponsiveGraphDirection(),
-          groupByInheritance: next
-        });
-      }, 0);
-      return next;
-    });
-  }, [getResponsiveGraphDirection]);
+    // The relayout side effect lives here in the event handler, not inside
+    // the state updater passed to setGroupedLayout — an updater must stay
+    // pure since React may invoke it more than once.
+    const next = !groupedLayout;
+    setGroupedLayout(next);
+    setTimeout(() => {
+      graphRef.current?.relayout({
+        engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
+        direction: getResponsiveGraphDirection(),
+        groupByInheritance: next
+      });
+    }, 0);
+  }, [groupedLayout, getResponsiveGraphDirection]);
 
   // ---------- panel components rendered inside dockview ----------
 
@@ -1562,7 +1543,9 @@ export function ExplorePerspective() {
       handleRelayout,
       handleToggleFocusMode,
       handleToggleGroupedLayout,
-      navigateToNode
+      navigateToNode,
+      storeLayoutEngine,
+      storeSetLayoutEngine
     ]
   );
 

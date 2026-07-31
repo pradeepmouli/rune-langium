@@ -484,9 +484,11 @@ export async function parseWorkspaceFiles(
   // through and got POSTed to /api/parse as bogus files named
   // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
   // extension '.'" → 500, collapsing the curated catalog to the user closure.
-  const userFiles = files
-    .filter((f) => !f.bundleId && !f.serializedModelJson && !f.refOnly)
-    .map((f) => ({ name: f.path, content: f.content }));
+  const userFiles: Array<{ name: string; content: string }> = [];
+  for (const f of files) {
+    if (f.bundleId || f.serializedModelJson || f.refOnly) continue;
+    userFiles.push({ name: f.path, content: f.content });
+  }
   const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
   try {
@@ -798,16 +800,21 @@ export async function readFileList(
 
   for (let chunk = 0; chunk < indices.length; chunk += CHUNK_SIZE) {
     const end = Math.min(chunk + CHUNK_SIZE, indices.length);
-    for (let j = chunk; j < end; j++) {
-      const file = fileList[indices[j]!]!;
-      const content = await file.text();
-      results.push({
-        name: file.name,
-        path: file.webkitRelativePath || file.name,
-        content,
-        dirty: false
-      });
-    }
+    // Reads within a chunk are independent files, so run them concurrently;
+    // the chunking itself still exists to yield to the UI thread below.
+    const chunkFiles = await Promise.all(
+      Array.from({ length: end - chunk }, async (_, offset): Promise<WorkspaceFile> => {
+        const file = fileList[indices[chunk + offset]!]!;
+        const content = await file.text();
+        return {
+          name: file.name,
+          path: file.webkitRelativePath || file.name,
+          content,
+          dirty: false
+        };
+      })
+    );
+    results.push(...chunkFiles);
     onProgress?.({ phase: 'reading', loaded: results.length, total });
 
     // Yield to the UI thread between chunks
@@ -978,9 +985,10 @@ export async function detectExternalChanges(
 ): Promise<FileChangeEvent[]> {
   const changes: FileChangeEvent[] = [];
   const newFiles = await readFileList(newFileList);
+  const currentByPath = new Map(currentFiles.map((f) => [f.path, f]));
 
   for (const newFile of newFiles) {
-    const existing = currentFiles.find((f) => f.path === newFile.path);
+    const existing = currentByPath.get(newFile.path);
     if (existing && existing.content !== newFile.content) {
       changes.push({ path: newFile.path, newContent: newFile.content });
     }

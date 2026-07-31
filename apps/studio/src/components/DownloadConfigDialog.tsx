@@ -20,8 +20,9 @@
  * Wiring into the real Download handler is the caller's job (§5.3).
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
@@ -178,17 +179,41 @@ export function DownloadConfigDialog({
   const [targetOptions, setTargetOptions] = useState<Record<string, unknown>>({});
   // Use a ref so handleGenerate always reads the latest options without
   // re-creating the callback on every options change.
-  const targetOptionsRef = useRef(targetOptions);
-  targetOptionsRef.current = targetOptions;
+  const targetOptionsRef = useLatestRef(targetOptions);
 
   // Reset draft state whenever the modal (re)opens or the target changes —
   // a fresh open should not inherit a stale narrowing from a prior session.
-  useEffect(() => {
-    if (!open) return;
+  // Adjusted during render (React's blessed pattern for resetting state in
+  // response to a prop change) rather than in an effect, so the reset is
+  // visible in the same render instead of flashing the prior session's
+  // stale draft for one frame before an effect corrects it.
+  //
+  // `resetKey` deliberately does NOT include `open` — folding it into the
+  // compared string previously meant prevResetKeyRef only got updated while
+  // `open` was true (see the `if` below), so closing left it frozen at the
+  // last "open" key; reopening with the SAME target/namespaces then computed
+  // that identical key again and silently skipped the reset, leaking the
+  // prior session's draft into the reopened dialog (Codex review). The
+  // actual open transition is tracked separately via prevOpen instead.
+  //
+  // Both markers are useState, NOT plain refs: a ref mutation made during
+  // render is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setSelected/setLayout/
+  // setTargetOptions calls ARE rolled back (they never committed) — so a
+  // bare `.current = ...` assignment could leave the retry believing this
+  // reset key was already handled and skip it, generating with the prior
+  // namespace selection/layout/target options (Codex review, round 2).
+  const resetKey = `${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  const [prevOpen, setPrevOpen] = useState(open);
+  const justOpened = open && !prevOpen;
+  if (open && (justOpened || prevResetKey !== resetKey)) {
+    setPrevResetKey(resetKey);
     setSelected(new Set(namespaces));
     setLayout(panel?.defaultLayout);
     setTargetOptions({});
-  }, [open, target, namespaces, panel?.defaultLayout]);
+  }
+  if (open !== prevOpen) setPrevOpen(open);
 
   const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
 

@@ -60,9 +60,3 @@ export async function clearCache(sourceId?: string): Promise<void> {
     await db.clear(STORE_NAME);
   }
 }
-
-/** List all cached model source IDs. */
-export async function listCachedModels(): Promise<string[]> {
-  const db = await getDB();
-  return db.getAllKeys(STORE_NAME) as Promise<string[]>;
-}

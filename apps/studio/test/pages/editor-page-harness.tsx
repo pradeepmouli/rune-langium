@@ -61,7 +61,7 @@ export interface EditorPageHarnessProps {
 
 const noop = () => {};
 
-export function EditorPageHarness(props: EditorPageHarnessProps): React.ReactElement {
+function EditorPageHarness(props: EditorPageHarnessProps): React.ReactElement {
   const files = props.files ?? [];
   const workspaceState: WorkspaceState = {
     workspaceId: props.workspaceId ?? 'default',

@@ -1301,11 +1301,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           },
 
           removeAttribute(nodeId: string, attrName: string) {
-            const edgeIdsToDrop = get()
-              .edges.filter(
-                (e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName
-              )
-              .map((e) => e.id);
+            const edgeIdsToDrop: string[] = [];
+            for (const e of get().edges) {
+              if (e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === attrName) {
+                edgeIdsToDrop.push(e.id);
+              }
+            }
             mutateGraph(set, get, (draft) => {
               const node = draft.nodes.get(nodeId);
               if (node) {
@@ -1360,13 +1361,13 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
 
             // For Choice arms, the old edge is a choice-option keyed by old type name;
             // for Data/Annotation it's an attribute-ref keyed by attribute name.
-            const oldEdgeIds = current.edges
-              .filter((e) =>
-                isChoice
-                  ? e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName
-                  : e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName
-              )
-              .map((e) => e.id);
+            const oldEdgeIds: string[] = [];
+            for (const e of current.edges) {
+              const matches = isChoice
+                ? e.source === nodeId && e.data?.kind === 'choice-option' && e.data.label === attrName
+                : e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === attrName;
+              if (matches) oldEdgeIds.push(e.id);
+            }
 
             // New edge unless the attribute points back at its own node.
             const newEdge: TypeGraphEdge | null =
@@ -1427,18 +1428,18 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
 
             // Precompute id-rewrites for the attribute-ref edges (their id encodes
             // the attribute name) from the current base edges.
-            const edgeRewrites = current.edges
-              .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === oldName)
-              .map((e) => {
-                const parsed = parseEdgeId(e.id);
-                const newId = parsed
-                  ? makeEdgeId(parsed.kind, { source: e.source, target: e.target, label: newName })
-                  : e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`); // fallback (should not occur post-3A)
-                return {
-                  oldId: e.id,
-                  newEdge: { ...e, id: newId, data: { ...e.data, label: newName } } as TypeGraphEdge
-                };
+            const edgeRewrites: Array<{ oldId: string; newEdge: TypeGraphEdge }> = [];
+            for (const e of current.edges) {
+              if (!(e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data.label === oldName)) continue;
+              const parsed = parseEdgeId(e.id);
+              const newId = parsed
+                ? makeEdgeId(parsed.kind, { source: e.source, target: e.target, label: newName })
+                : e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`); // fallback (should not occur post-3A)
+              edgeRewrites.push({
+                oldId: e.id,
+                newEdge: { ...e, id: newId, data: { ...e.data, label: newName } } as TypeGraphEdge
               });
+            }
 
             mutateGraph(set, get, (draft) => {
               const n = draft.nodes.get(nodeId);
@@ -1532,9 +1533,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             // patch and replayed, not dropped. See `edit-reconcile.ts`.
             const card = parseCardinalityString(cardinality);
             const { nodes, nodesById, edges } = get();
-            const oldEdgeIds = edges
-              .filter((e) => e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName)
-              .map((e) => e.id);
+            const oldEdgeIds: string[] = [];
+            for (const e of edges) {
+              if (e.source === nodeId && e.data?.kind === 'attribute-ref' && e.data?.label === oldName) {
+                oldEdgeIds.push(e.id);
+              }
+            }
             const targetNodeId = resolveTargetId(nodesById, nodes, nodeId, typeName);
             const newEdge: TypeGraphEdge | null =
               targetNodeId && targetNodeId !== nodeId
@@ -2206,9 +2210,10 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           },
 
           markNamespacesHydrated(names: string[]) {
+            const nameSet = new Set(names);
             set((s) => ({
               hydratedNamespaces: [...new Set([...s.hydratedNamespaces, ...names])],
-              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n)),
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !nameSet.has(n)),
               hydrationNonce: s.hydrationNonce + 1
             }));
           },
@@ -2218,10 +2223,12 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
             return [...new Set([...s.hydratedNamespaces, ...s.pendingHydrationNamespaces])];
           },
 
-          dequeuePendingHydration: (names) =>
+          dequeuePendingHydration: (names) => {
+            const nameSet = new Set(names);
             set((s) => ({
-              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !names.includes(n))
-            })),
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !nameSet.has(n))
+            }));
+          },
 
           resetHydration() {
             set({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });

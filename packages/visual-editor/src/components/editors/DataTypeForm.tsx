@@ -18,7 +18,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
@@ -35,6 +35,7 @@ import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { getRefText, parseCardinality, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
@@ -53,6 +54,7 @@ import type {
 import type { ReactNode } from 'react';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -100,7 +102,7 @@ function DataTypeForm({
   nodeId,
   data,
   availableTypes,
-  synonymSourceOptions = [],
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS,
   actions,
   allNodes = EMPTY_NODES,
   renderExpressionEditor,
@@ -145,8 +147,7 @@ function DataTypeForm({
   });
 
   // Track the committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
@@ -360,9 +361,10 @@ function DataTypeForm({
   // receives `{ isFirst, isLast }` positional context and returns the existing
   // <InheritedAttributeRow> JSX with the override affordance preserved.
   const ghostRowsBefore = useMemo<GhostRow[]>(() => {
-    return effectiveAttributes
-      .filter((entry) => entry.source === 'inherited')
-      .map<GhostRow>((entry) => ({
+    const rows: GhostRow[] = [];
+    for (const entry of effectiveAttributes) {
+      if (entry.source !== 'inherited') continue;
+      rows.push({
         id: entry.id,
         render: (_ctx: GhostRowContext) => (
           <InheritedAttributeRow
@@ -382,7 +384,9 @@ function DataTypeForm({
             allNodeIds={allNodeIds}
           />
         )
-      }));
+      });
+    }
+    return rows;
   }, [effectiveAttributes, isReadOnly, handleOverrideInherited, onNavigateToNode, allNodeIds]);
 
   const inheritedCount = ghostRowsBefore.length;
@@ -485,7 +489,13 @@ function DataTypeForm({
                       <AttributeRow
                         key={field.id}
                         index={index}
-                        committedName={((committedRef.current as any).attributes ?? [])[index]?.name ?? ''}
+                        // Read straight from `data`, NOT `committedRef` — the ref only
+                        // updates in a post-commit layout effect, so on the render
+                        // that swaps `data` (node switch / external graph push) it
+                        // would still hold the PREVIOUS node's name at this index,
+                        // baking a stale rename/retype anchor into this row's
+                        // onUpdate closures (Codex review).
+                        committedName={((data as any).attributes ?? [])[index]?.name ?? ''}
                         availableTypes={availableTypes}
                         onUpdate={handleUpdateAttribute}
                         onRemove={handleRemoveAttribute}

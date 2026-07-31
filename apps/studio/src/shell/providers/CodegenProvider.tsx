@@ -112,7 +112,11 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
   // 186-file corpus costs one parse pass, not cross-reference resolution.
   useEffect(() => {
     if (!codegenWorker) return;
-    const codegenFiles = files.filter((f) => !f.readOnly).map((f) => ({ uri: pathToUri(f.path), content: f.content }));
+    const codegenFiles: Array<{ uri: string; content: string }> = [];
+    for (const f of files) {
+      if (f.readOnly) continue;
+      codegenFiles.push({ uri: pathToUri(f.path), content: f.content });
+    }
     // 019 Task #88 follow-up: thread `serializedModelJson` through to
     // the preview worker so curated bundle files (which ship pre-parsed
     // ASTs and an empty `content`) can be hydrated and previewed.
@@ -122,13 +126,15 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     // exist only so the explorer can surface deferred exports before hydration.
     // Letting them reach the preview worker regresses into Langium's
     // "no services for the extension ''" dead-end.
-    const allFiles = files
-      .filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && (!f.refOnly || Boolean(f.serializedModelJson)))
-      .map((f) => ({
+    const allFiles: Array<{ uri: string; content: string; serializedModelJson?: string }> = [];
+    for (const f of files) {
+      if (f.path.endsWith(BUNDLE_MARKER_SUFFIX) || (f.refOnly && !f.serializedModelJson)) continue;
+      allFiles.push({
         uri: pathToUri(f.path),
         content: f.content,
         ...(f.serializedModelJson ? { serializedModelJson: f.serializedModelJson } : {})
-      }));
+      });
+    }
     const previewRequestId = `preview:files:${++previewRequestSequenceRef.current}`;
     const codegenRequestId = `codegen:files:${++codegenRequestSequenceRef.current}`;
     currentPreviewRequestIdRef.current = previewRequestId;
@@ -302,7 +308,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       codegenWorker.removeEventListener('message', handleCodegenMessage as EventListener);
       codegenWorker.removeEventListener('error', handleCodegenWorkerError as EventListener);
     };
-  }, [codegenWorker]);
+  }, [codegenWorker, showToast]);
 
   // Effect 2: kick off code generation when the active target changes.
   // Mirrors the removed CodePreviewPanel effect (018 Task 0.8).
@@ -332,7 +338,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         variant: 'destructive'
       });
     }
-  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
+  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget, showToast]);
 
   return <>{children}</>;
 }

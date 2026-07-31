@@ -26,6 +26,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type React from 'react';
 import type { DockviewApi, DockviewReadyEvent, IDockviewPanelHeaderProps, IDockviewPanelProps } from 'dockview-react';
 import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
@@ -206,11 +207,11 @@ export function DockShell({
     [studioVersion]
   );
   const { showToast } = useStudioToast();
+  const showToastRef = useLatestRef(showToast);
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const suppressLayoutPersistenceRef = useRef(false);
-  const onLayoutChangeRef = useRef(onLayoutChange);
-  onLayoutChangeRef.current = onLayoutChange;
+  const onLayoutChangeRef = useLatestRef(onLayoutChange);
 
   const [layoutNotice, setLayoutNotice] = useState<string | null>(() => {
     const sanitized = getSanitizedLayout(initialLayout);
@@ -221,18 +222,40 @@ export function DockShell({
     layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
   );
   const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['structure']));
+  const toggleCenterPane = useCallback((pane: CenterPane) => {
+    setActivePanes((prev) => {
+      const next = new Set(prev);
+      if (next.has(pane)) {
+        if (next.size <= 1) return prev;
+        next.delete(pane);
+      } else {
+        next.add(pane);
+        // Graph ↔ Structure mutual exclusion: showing one always hides
+        // the other. They occupy the same conceptual slot (the structural
+        // visualisation of the focused type) and the user reported that
+        // having both visible at once is wasteful when nodes are expanded.
+        if (pane === 'structure' && next.has('graph')) next.delete('graph');
+        if (pane === 'graph' && next.has('structure')) next.delete('structure');
+      }
+      return next;
+    });
+  }, []);
+  // Memoized so CenterPanesContext consumers don't re-render on every
+  // DockShell render — only when activePanes itself actually changes
+  // (toggleCenterPane is stable via the functional setState form above).
+  const centerPanesContextValue = useMemo(
+    () => ({ activePanes, toggle: toggleCenterPane }),
+    [activePanes, toggleCenterPane]
+  );
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
   );
 
-  // Refs kept current on every render so stable callbacks always read
-  // the latest values without needing them as useCallback deps.
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
-  const studioVersionRef = useRef(studioVersion);
-  studioVersionRef.current = studioVersion;
-  const panelTabMetaRef = useRef(panelTabMeta);
-  panelTabMetaRef.current = panelTabMeta;
+  // Refs kept current so stable callbacks always read the latest values
+  // without needing them as useCallback deps.
+  const layoutRef = useLatestRef(layout);
+  const studioVersionRef = useLatestRef(studioVersion);
+  const panelTabMetaRef = useLatestRef(panelTabMeta);
 
   // onReady is called exactly once by dockview (on mount). Including
   // layout/studioVersion as deps would recreate the callback whenever
@@ -309,7 +332,7 @@ export function DockShell({
               fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
               'warn'
             );
-          showToast({
+          showToastRef.current({
             title: 'Layout not saved',
             description: 'Could not persist the current panel arrangement.',
             variant: 'destructive'
@@ -346,6 +369,12 @@ export function DockShell({
   const toggleUtilities = useCallback(() => {
     setUtilitiesCollapsed(!utilitiesCollapsed);
   }, [setUtilitiesCollapsed, utilitiesCollapsed]);
+  // Memoized so UtilityTrayContext consumers don't re-render on every
+  // DockShell render — only when one of these actually changes.
+  const utilityTrayContextValue = useMemo(
+    () => ({ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }),
+    [utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities]
+  );
 
   useEffect(() => {
     return installShellShortcuts(window, (action) => {
@@ -457,32 +486,9 @@ export function DockShell({
           </AlertDescription>
         </Alert>
       ) : null}
-      <CenterPanesContext.Provider
-        value={{
-          activePanes,
-          toggle: (pane: CenterPane) => {
-            setActivePanes((prev) => {
-              const next = new Set(prev);
-              if (next.has(pane)) {
-                if (next.size <= 1) return prev;
-                next.delete(pane);
-              } else {
-                next.add(pane);
-                // Graph ↔ Structure mutual exclusion: showing one always
-                // hides the other. They occupy the same conceptual slot
-                // (the structural visualisation of the focused type) and
-                // the user reported that having both visible at once is
-                // wasteful when nodes are expanded.
-                if (pane === 'structure' && next.has('graph')) next.delete('graph');
-                if (pane === 'graph' && next.has('structure')) next.delete('structure');
-              }
-              return next;
-            });
-          }
-        }}
-      >
+      <CenterPanesContext.Provider value={centerPanesContextValue}>
         <PanelRegistryContext.Provider value={panelRegistry}>
-          <UtilityTrayContext.Provider value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}>
+          <UtilityTrayContext.Provider value={utilityTrayContextValue}>
             <div className="min-h-0 min-w-0 flex-1">
               <DockLayout
                 components={DOCKVIEW_COMPONENTS}

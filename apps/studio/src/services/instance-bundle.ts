@@ -83,48 +83,73 @@ export async function importBundle(
   // (never `workspaceRoot`) before writing anything. This makes a bundle
   // that fails to parse anywhere naturally atomic — nothing has touched the
   // real workspace's instance store yet, so the throw needs no rollback.
-  const finalRecords: InstanceRecord[] = [];
-  for (const entry of manifest.instances) {
-    // Reject a path-unsafe manifest entry id BEFORE it's ever used to build
-    // a read or write path. `writeInstance` (instances-fs.ts) writes to
-    // `${instancesDir(workspaceRoot)}/${record.id}.json` with no path
-    // sanitization of its own, and `listInstanceFiles` only does a flat,
-    // non-recursive `readdir` of that directory — so an id containing `/`
-    // (e.g. "foo/bar") would write into a REAL nested subdirectory that the
-    // app can never see again on a later listing, even though the write
-    // itself succeeds silently (the instance would vanish on next reload).
-    // A denylist (not a strict allowlist tied to today's `ulid()` alphabet —
-    // see instance-store.ts's Phase-1 placeholder note) keeps this future-
-    // proof against a real ULID implementation using different characters.
-    if (entry.id.includes('/') || entry.id.includes('\\') || entry.id.includes('..')) {
-      throw new Error(`Invalid bundle: instance record "${entry.id}" has a path-unsafe id`);
-    }
-    let record: InstanceRecord;
-    try {
-      const raw = await fs.readFile(`${scratchRoot}/instances/${entry.id}.json`, 'utf8');
-      record = JSON.parse(raw as string) as InstanceRecord;
-    } catch (err) {
-      throw new Error(`Invalid bundle: instance record "${entry.id}" could not be parsed (${errMessage(err)})`);
-    }
-    // Reject a payload whose own `id` doesn't match the manifest entry's id
-    // (the file NAME, not its contents) — writeInstance derives its write
-    // path from `record.id`, not `entry.id`, so trusting the payload here
-    // would let a malformed/malicious bundle silently write to an id never
-    // listed in the manifest, potentially clobbering an unrelated instance.
-    if (record.id !== entry.id) {
-      throw new Error(`Invalid bundle: instance record "${entry.id}" has a mismatched id ("${record.id}")`);
-    }
-    const finalRecord: InstanceRecord = stale
-      ? { ...record, stale: { reason: 'model-fingerprint-mismatch', diagnostics: [] } }
-      : record;
-    finalRecords.push(finalRecord);
-  }
+  // Reads are independent per entry, so run them concurrently — the
+  // all-or-nothing atomicity of the parse phase only requires that every
+  // read finishes (successfully or not) before any write starts, which
+  // Promise.all already guarantees.
+  const finalRecords: InstanceRecord[] = await Promise.all(
+    manifest.instances.map(async (entry) => {
+      // Reject a path-unsafe manifest entry id BEFORE it's ever used to build
+      // a read or write path. `writeInstance` (instances-fs.ts) writes to
+      // `${instancesDir(workspaceRoot)}/${record.id}.json` with no path
+      // sanitization of its own, and `listInstanceFiles` only does a flat,
+      // non-recursive `readdir` of that directory — so an id containing `/`
+      // (e.g. "foo/bar") would write into a REAL nested subdirectory that the
+      // app can never see again on a later listing, even though the write
+      // itself succeeds silently (the instance would vanish on next reload).
+      // A denylist (not a strict allowlist tied to today's `ulid()` alphabet —
+      // see instance-store.ts's Phase-1 placeholder note) keeps this future-
+      // proof against a real ULID implementation using different characters.
+      if (entry.id.includes('/') || entry.id.includes('\\') || entry.id.includes('..')) {
+        throw new Error(`Invalid bundle: instance record "${entry.id}" has a path-unsafe id`);
+      }
+      let record: InstanceRecord;
+      try {
+        const raw = await fs.readFile(`${scratchRoot}/instances/${entry.id}.json`, 'utf8');
+        record = JSON.parse(raw as string) as InstanceRecord;
+      } catch (err) {
+        throw new Error(`Invalid bundle: instance record "${entry.id}" could not be parsed (${errMessage(err)})`);
+      }
+      // Reject a payload whose own `id` doesn't match the manifest entry's id
+      // (the file NAME, not its contents) — writeInstance derives its write
+      // path from `record.id`, not `entry.id`, so trusting the payload here
+      // would let a malformed/malicious bundle silently write to an id never
+      // listed in the manifest, potentially clobbering an unrelated instance.
+      if (record.id !== entry.id) {
+        throw new Error(`Invalid bundle: instance record "${entry.id}" has a mismatched id ("${record.id}")`);
+      }
+      return stale ? { ...record, stale: { reason: 'model-fingerprint-mismatch', diagnostics: [] } } : record;
+    })
+  );
 
-  // Write phase: only after every record parsed successfully.
+  // Write phase: only after every record parsed successfully. Each id writes
+  // to its own file (writeInstance's shared `mkdir` is idempotent), so these
+  // are independent and safe to run concurrently. Promise.allSettled (not
+  // Promise.all) — a single write failing must not leave the other in-flight
+  // writes unaccounted for: Promise.all rejects as soon as the FIRST write
+  // fails while the rest keep running in the background, so the caller would
+  // see "import failed" via the thrown error while files still get written
+  // moments later with no visibility into which ones (Codex review).
+  const writeResults = await Promise.allSettled(
+    finalRecords.map(async (finalRecord) => {
+      await writeInstance(fs, workspaceRoot, finalRecord);
+      return finalRecord;
+    })
+  );
   const imported: InstanceRecord[] = [];
-  for (const finalRecord of finalRecords) {
-    await writeInstance(fs, workspaceRoot, finalRecord);
-    imported.push(finalRecord);
+  const writeFailures: string[] = [];
+  for (const [i, result] of writeResults.entries()) {
+    if (result.status === 'fulfilled') {
+      imported.push(result.value);
+    } else {
+      writeFailures.push(`${finalRecords[i]!.id}: ${errMessage(result.reason)}`);
+    }
+  }
+  if (writeFailures.length > 0) {
+    throw new Error(
+      `Bundle import partially failed: ${imported.length}/${finalRecords.length} instances written, ` +
+        `${writeFailures.length} failed (${writeFailures.join('; ')})`
+    );
   }
 
   return { imported, stale };

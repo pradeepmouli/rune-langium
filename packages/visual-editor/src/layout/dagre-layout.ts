@@ -71,11 +71,6 @@ export function clearLayoutCache(): void {
   lastLayoutCacheKey = null;
 }
 
-/** Get the current cache size (for diagnostics). */
-export function getLayoutCacheSize(): number {
-  return positionCache.size;
-}
-
 /**
  * Compute layout positions for ReactFlow nodes using dagre.
  *

@@ -40,7 +40,7 @@
  *
  * @module
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 import { parseExpression } from '@rune-langium/core';
 import type { RosettaExpression } from '@rune-langium/core';
@@ -71,25 +71,43 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
   const [language, setLanguage] = useState<Language>('rune');
   const [foreignDraft, setForeignDraft] = useState('');
   const [foreignError, setForeignError] = useState<string | null>(null);
-  const [projection, setProjection] = useState<string | null>(null);
 
   const descriptor = language === 'rune' ? null : LENSES[language];
 
   // Recompute the foreign-language projection whenever the canonical Rune
   // text or the language mode changes — never cached across a different
-  // `value`.
-  useEffect(() => {
-    if (language === 'rune') return;
-    const activeDescriptor = LENSES[language];
+  // `value`. Purely derived from language/value (never independently set),
+  // so this is a useMemo rather than useState+useEffect.
+  const projection = useMemo(() => {
+    if (language === 'rune') return null;
     const parsed = parseExpression(value);
-    if (parsed.hasErrors) {
-      setProjection(null);
-      return;
-    }
-    const rendered = activeDescriptor.render(parsed.value);
-    setProjection(rendered);
-    if (rendered !== null) setForeignDraft(rendered);
+    if (parsed.hasErrors) return null;
+    return LENSES[language].render(parsed.value);
   }, [language, value]);
+
+  // Seed the editable foreign-language draft with the fresh projection
+  // whenever language/value changes. Adjusted during render (React's
+  // blessed pattern) rather than in an effect, so switching languages
+  // doesn't flash the previous draft for one frame before an effect
+  // corrects it. The user can still freely edit foreignDraft afterward —
+  // this only reseeds on a genuine language/value change.
+  //
+  // Tracked via useState, NOT a plain ref: a ref mutation made during
+  // render is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setForeignDraft call IS
+  // rolled back (it never committed) — so a bare
+  // `prevSeedKeyRef.current = seedKey` could leave the retry believing this
+  // seedKey was already handled and skip reseeding, leaving the editable
+  // box showing a stale draft that a later blur would parse and use to
+  // overwrite the newer canonical value (Codex review). useState's setter
+  // is itself part of the same discarded/retried unit of work, so it stays
+  // in sync with setForeignDraft.
+  const seedKey = `${language}|${value}`;
+  const [prevSeedKey, setPrevSeedKey] = useState(seedKey);
+  if (seedKey !== prevSeedKey) {
+    setPrevSeedKey(seedKey);
+    if (projection !== null) setForeignDraft(projection);
+  }
 
   const handleToggle = useCallback((next: Language) => {
     setForeignError(null);

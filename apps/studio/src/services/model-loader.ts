@@ -161,22 +161,27 @@ export async function loadModel(source: ModelSource, options: LoadOptions = {}):
       total: rosettaFiles.length
     });
 
-    // Phase 3: Read file contents
+    // Phase 3: Read file contents. Reads within a chunk are independent, so
+    // run them concurrently; cancellation and progress are still checked
+    // between chunks (same CHUNK_SIZE convention as readFileList).
     const files: CachedFile[] = [];
     const total = rosettaFiles.length;
+    const CHUNK_SIZE = 10;
 
-    for (let i = 0; i < rosettaFiles.length; i++) {
+    for (let start = 0; start < rosettaFiles.length; start += CHUNK_SIZE) {
       if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
 
-      const filePath = rosettaFiles[i]!;
-      const content = new TextDecoder().decode((await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array);
-      const namespace = extractNamespace(content);
+      const chunk = rosettaFiles.slice(start, start + CHUNK_SIZE);
+      const chunkFiles = await Promise.all(
+        chunk.map(async (filePath): Promise<CachedFile> => {
+          const content = new TextDecoder().decode((await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array);
+          const namespace = extractNamespace(content);
+          return { path: filePath, content, namespace };
+        })
+      );
+      files.push(...chunkFiles);
 
-      files.push({ path: filePath, content, namespace });
-
-      if (i % 10 === 0 || i === total - 1) {
-        onProgress?.({ phase: 'parsing', current: i + 1, total });
-      }
+      onProgress?.({ phase: 'parsing', current: files.length, total });
     }
 
     // Cache the result
@@ -231,27 +236,30 @@ async function discoverRosettaFiles(fs: InMemoryFs, baseDir: string, patterns: s
 async function walkDirectory(fs: InMemoryFs, baseDir: string, relativePath: string): Promise<string[]> {
   const fullPath = relativePath ? `${baseDir}/${relativePath}` : baseDir;
   const entries = (await fs.promises.readdir(fullPath)) as string[];
-  const results: string[] = [];
 
-  for (const entry of entries) {
-    if (entry === '.git') continue;
+  // Each entry's stat (and any subdirectory recursion) is independent of its
+  // siblings, so run them concurrently instead of walking one at a time.
+  const results = await Promise.all(
+    entries.map(async (entry): Promise<string[]> => {
+      if (entry === '.git') return [];
 
-    const entryRelative = relativePath ? `${relativePath}/${entry}` : entry;
-    const entryFull = `${baseDir}/${entryRelative}`;
+      const entryRelative = relativePath ? `${relativePath}/${entry}` : entry;
+      const entryFull = `${baseDir}/${entryRelative}`;
 
-    try {
-      const stat = await fs.promises.stat(entryFull);
-      if (stat.isDirectory()) {
-        results.push(...(await walkDirectory(fs, baseDir, entryRelative)));
-      } else {
-        results.push(entryRelative);
+      try {
+        const stat = await fs.promises.stat(entryFull);
+        if (stat.isDirectory()) {
+          return walkDirectory(fs, baseDir, entryRelative);
+        }
+        return [entryRelative];
+      } catch {
+        // Skip entries that can't be stat'd
+        return [];
       }
-    } catch {
-      // Skip entries that can't be stat'd
-    }
-  }
+    })
+  );
 
-  return results;
+  return results.flat();
 }
 
 /** Simple glob matching for patterns like "src/main/rosetta/**\/*.rosetta". */

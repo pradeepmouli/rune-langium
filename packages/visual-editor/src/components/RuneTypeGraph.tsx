@@ -181,10 +181,11 @@ function buildInheritanceDisplayNodes(nodes: TypeGraphNode[], edges: TypeGraphEd
     for (const node of group.nodes) {
       const width = getNodeWidth(node);
       const height = getNodeHeight(node);
-      minX = Math.min(minX, node.position.x);
-      minY = Math.min(minY, node.position.y);
-      maxX = Math.max(maxX, node.position.x + width);
-      maxY = Math.max(maxY, node.position.y + height);
+      const { x, y } = node.position;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + width);
+      maxY = Math.max(maxY, y + height);
       groupedNodeIds.add(node.id);
     }
 
@@ -307,11 +308,19 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const syncLayoutedNodes = useMemo(() => {
     if (visibleNodes.length === 0 || shouldUseAsyncLayout) return [];
     if (isInitialLoad.current) {
-      isInitialLoad.current = false;
       return computeLayout(visibleNodes, visibleEdges, activeLayout);
     }
     return computeLayoutIncremental(visibleNodes, visibleEdges, activeLayout);
   }, [activeLayout, shouldUseAsyncLayout, visibleEdges, visibleNodes]);
+
+  // Flip the flag only once the initial render has actually committed —
+  // doing this inside the useMemo above would leak into discarded render
+  // work (Strict Mode double-render, Suspense retries, concurrent
+  // prerendering), permanently skipping the one-time full computeLayout
+  // for a render that never committed.
+  useEffect(() => {
+    isInitialLoad.current = false;
+  }, []);
 
   // Async path for large graphs
   useEffect(() => {
@@ -854,17 +863,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         return validateGraph(storeNodes, storeEdges);
       }
     }),
-    [
-      activeLayout,
-      graphNodes,
-      storeNodes,
-      storeNodesById,
-      storeEdges,
-      mergedConfig,
-      runViewportAction,
-      setNodes,
-      callbacks
-    ]
+    [activeLayout, graphNodes, storeNodes, storeNodesById, storeEdges, runViewportAction, setNodes, callbacks]
   );
 
   // Context menu state

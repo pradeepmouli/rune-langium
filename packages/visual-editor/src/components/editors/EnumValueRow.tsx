@@ -81,6 +81,8 @@ export interface EnumValueRowProps {
 // Component
 // ---------------------------------------------------------------------------
 
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
+
 function EnumValueRow({
   name,
   displayName,
@@ -92,7 +94,7 @@ function EnumValueRow({
   disabled = false,
   isOverride = false,
   onRevert,
-  synonymSourceOptions = []
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS
 }: EnumValueRowProps) {
   const { control, getValues, setValue } = useFormContext();
   const editorCtx = useEditorActionsContext();

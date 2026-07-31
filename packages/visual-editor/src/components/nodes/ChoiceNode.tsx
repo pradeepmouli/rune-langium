@@ -313,6 +313,16 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   const handles = getHandlePositions(layoutDirection);
   // Validation errors live on the node.meta sibling (not on data).
   const nodeErrors = useNodeMetaErrors(id);
+  // Hoisted above the structure/default branch below: hooks must run
+  // unconditionally on every render, but the structure variant returns
+  // early, so this can't sit after that branch (rules-of-hooks).
+  const handleTypeClick = useCallback(
+    (e: React.MouseEvent, nodeId: string) => {
+      e.preventDefault();
+      onNavigateToType?.(nodeId);
+    },
+    [onNavigateToType]
+  );
 
   // -------------------------------------------------------------------------
   // Structure variant — reads data.options (StructureChoiceArm[]) from the
@@ -438,14 +448,6 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   // -------------------------------------------------------------------------
   const members = ((d as any).attributes ?? []) as any[];
   const summary = members.length === 0 ? 'No options' : `${members.length} option${members.length === 1 ? '' : 's'}`;
-
-  const handleTypeClick = useCallback(
-    (e: React.MouseEvent, nodeId: string) => {
-      e.preventDefault();
-      onNavigateToType?.(nodeId);
-    },
-    [onNavigateToType]
-  );
 
   return (
     <BaseFlowNode

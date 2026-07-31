@@ -240,10 +240,11 @@ export function validateGraph(nodes: TypeGraphNode[], edges: TypeGraphEdge[]): V
       namespaceNames.set(ns, new Map());
     }
     const names = namespaceNames.get(ns)!;
-    if (!names.has(node.data.name)) {
-      names.set(node.data.name, []);
+    const name = node.data.name;
+    if (!names.has(name)) {
+      names.set(name, []);
     }
-    names.get(node.data.name)!.push(node.id);
+    names.get(name)!.push(node.id);
   }
 
   for (const [_ns, names] of namespaceNames) {

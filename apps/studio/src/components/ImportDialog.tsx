@@ -8,7 +8,7 @@
  * see docs/superpowers/specs/2026-07-06-explorer-import-dialog-design.md).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Input } from '@rune-langium/design-system/ui/input';
@@ -95,20 +95,37 @@ export function ImportDialog({
     () => MergeOptionsSchema.parse({}).onCollision
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setFormat('json-schema');
-    setSourceText('');
-    setNamespaceField('');
-    setPhase({ kind: 'idle' });
-  }, [open]);
+  // Adjusted during render (React's blessed pattern) rather than in
+  // effects, so the reset lands in the same update instead of flashing the
+  // prior session's stale draft for one frame first. Tracked via useState,
+  // NOT a plain ref: a ref mutation made during render is not rolled back
+  // if React discards/retries this render under concurrent rendering, while
+  // the accompanying setFormat/setSourceText/etc. calls above ARE rolled
+  // back (they never committed) — so a bare `prevOpenRef.current = open`
+  // could leave the retry believing the transition already happened and
+  // skip the reset it never actually performed. useState's setter is
+  // itself part of the same discarded/retried unit of work, so it stays in
+  // sync (Codex review).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setFormat('json-schema');
+      setSourceText('');
+      setNamespaceField('');
+      setPhase({ kind: 'idle' });
+    }
+  }
 
   // Format switch invalidates any prior preview — it was run against a
-  // different reader and no longer reflects the selected format.
-  useEffect(() => {
+  // different reader and no longer reflects the selected format. Same
+  // useState-not-ref reasoning as prevOpen above.
+  const [prevFormat, setPrevFormat] = useState(format);
+  if (format !== prevFormat) {
+    setPrevFormat(format);
     setPhase({ kind: 'idle' });
     setFormatOptions({});
-  }, [format]);
+  }
 
   const handlePreview = useCallback(async () => {
     setPhase({ kind: 'previewing' });

@@ -34,7 +34,7 @@
  * @module
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { FormProvider, useFieldArray, Controller, type Control } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
@@ -52,6 +52,8 @@ import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { getTypeRefText, parseCardinality, getExpressionDisplayText } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
+import { useStableKey } from '../../hooks/useStableKey.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
@@ -135,6 +137,7 @@ function FunctionForm({
   meta: nodeMeta
 }: FunctionFormProps) {
   const d = data as any;
+  const getKey = useStableKey();
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -174,8 +177,7 @@ function FunctionForm({
   });
 
   // Track the committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced — preserved per R8) ----------------------
 
@@ -344,7 +346,10 @@ function FunctionForm({
                   key={field.id}
                   index={index}
                   fieldArrayName="inputs"
-                  committedName={((committedRef.current as any).inputs ?? [])[index]?.name ?? ''}
+                  // Read straight from `data`, NOT `committedRef` — see DataTypeForm's
+                  // identical fix; the ref is post-commit-only and can bake a stale
+                  // rename anchor into this row's onUpdate closures.
+                  committedName={(d.inputs ?? [])[index]?.name ?? ''}
                   availableTypes={availableTypes}
                   onUpdate={handleUpdateInput}
                   onRemove={handleRemoveInputByIndex}
@@ -430,7 +435,7 @@ function FunctionForm({
             {(d.shortcuts ?? []).map((shortcut: any, i: number) => {
               const aliasText = getCstText(shortcut.expression);
               return (
-                <div key={`alias-${shortcut.name ?? i}`} data-slot="alias-section" className="flex flex-col gap-1">
+                <div key={getKey(shortcut)} data-slot="alias-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">alias {shortcut.name ?? `#${i}`}</span>
                   {renderExpressionEditor ? (
                     renderExpressionEditor({
@@ -467,7 +472,15 @@ function FunctionForm({
                 'result';
               const isAdd = op.add === true;
               return (
-                <div key={`op-${assignTarget}-${i}`} data-slot="operation-section" className="flex flex-col gap-1">
+                // Index, NOT useStableKey — updateExpression replaces the operation
+                // object wholesale on every expression save (Mutative's produce()
+                // always finalizes a touched item into a new reference), so a
+                // reference-identity WeakMap key changes on every save, remounting
+                // the rich expression editor and resetting its mode/undo
+                // history/palette/selection (Codex review). Same fix as
+                // ConditionSection.tsx's condition rows — operations carry no
+                // stable content-independent id to key by instead.
+                <div key={i} data-slot="operation-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">
                     {isAdd ? 'add' : 'set'} {assignTarget}
                   </span>

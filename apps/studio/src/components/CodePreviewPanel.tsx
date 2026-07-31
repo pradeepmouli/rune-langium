@@ -19,6 +19,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen/export';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import { studioEditorExtensions } from '../lang/editor-theme.js';
 import {
   downloadTargetViaRouter,
@@ -117,10 +118,8 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
-  const sourceEditorRefRef = useRef(sourceEditorRef);
-  const activeFileRef = useRef<CodePreviewFile | undefined>(undefined);
-  sourceEditorRefRef.current = sourceEditorRef;
-  activeFileRef.current = activeFile;
+  const sourceEditorRefRef = useLatestRef(sourceEditorRef);
+  const activeFileRef = useLatestRef<CodePreviewFile | undefined>(activeFile);
 
   // 019 polish — View toggles. Click the eye on the already-active row
   // collapses the preview area; click on a different row swaps it.
@@ -181,7 +180,11 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
       const newTarget = config.target;
       setDownloadModalTarget(undefined);
       const fileList = files ?? [];
-      const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+      const requestFiles: Array<{ path: string; content: string }> = [];
+      for (const f of fileList) {
+        if (f.readOnly) continue;
+        requestFiles.push({ path: f.path, content: f.content });
+      }
       const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
       // Merge layout + target-specific options (e.g. excel sheet toggles) into
       // the options bag. The order of spreading means explicit options from the
@@ -216,7 +219,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
         setDownloadingTarget(undefined);
       }
     },
-    [files]
+    [files, showToast]
   );
 
   const handleLineClick = useCallback((outputLine: number) => {

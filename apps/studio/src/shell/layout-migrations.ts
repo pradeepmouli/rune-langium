@@ -101,7 +101,7 @@ export function sanitizeLayoutWithDiagnostics(input: unknown, ctx: BuildLayoutIn
 
   // Walk + drop unknown component names. Mutation happens on a deep clone
   // so the original (persisted) record stays untouched until a new save.
-  const cloned: PanelLayoutRecord = JSON.parse(JSON.stringify(input));
+  const cloned: PanelLayoutRecord = structuredClone(input);
   if (cloned.version < LAYOUT_SCHEMA_VERSION) {
     cloned.version = LAYOUT_SCHEMA_VERSION;
   }

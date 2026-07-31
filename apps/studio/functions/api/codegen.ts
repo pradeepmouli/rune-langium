@@ -743,9 +743,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
           // settled) plus any active-consumer completions — before clearing,
           // so the replacement hydration can be chained to start only once
           // everything using the evicted entry has vacated.
-          const stalePending = Array.from(documentCache.values())
-            .filter((e) => isDocumentCacheEntryBusy(e))
-            .flatMap((e) => [e.promise, ...e.activeConsumers]);
+          const stalePending: Array<ReturnType<typeof loadAllDocuments> | Promise<void>> = [];
+          for (const e of documentCache.values()) {
+            if (isDocumentCacheEntryBusy(e)) stalePending.push(e.promise, ...e.activeConsumers);
+          }
           // Clear it BEFORE starting hydration, not after, so at most one
           // entry is ever resident in the MAP at a time, including during
           // hydration itself (round 2). Then register the hydration PROMISE,
@@ -878,9 +879,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
         // there's nothing to protect against and no reason to pay the
         // eviction/wait cost.
         if (curatedBundles.length > 0 && documentCache.size > 0) {
-          const stalePending = Array.from(documentCache.values())
-            .filter((e) => isDocumentCacheEntryBusy(e))
-            .flatMap((e) => [e.promise, ...e.activeConsumers]);
+          const stalePending: Array<ReturnType<typeof loadAllDocuments> | Promise<void>> = [];
+          for (const e of documentCache.values()) {
+            if (isDocumentCacheEntryBusy(e)) stalePending.push(e.promise, ...e.activeConsumers);
+          }
           documentCache.clear();
           if (stalePending.length > 0) {
             await Promise.allSettled(stalePending);

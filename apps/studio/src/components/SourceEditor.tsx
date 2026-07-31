@@ -252,15 +252,36 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
 
-  // Sync selectedPath when activeFile prop changes externally
-  useEffect(() => {
-    if (activeFile && activeFile !== selectedPath) {
-      const exists = files.some((f) => f.path === activeFile);
-      if (exists) {
-        setSelectedPath(activeFile);
-      }
+  // Sync selectedPath when activeFile prop changes externally. Adjusted
+  // during render (React's blessed pattern) rather than in an effect, so
+  // external navigation lands in the same render instead of flashing the
+  // stale selectedPath for one frame first. Triggers off activeFile itself
+  // (not selectedPath) so internal tab-clicks — which change selectedPath
+  // without activeFile changing — never re-fire this.
+  //
+  // Tracked via useState, NOT a plain ref: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setSelectedPath call IS
+  // rolled back (it never committed) — so even the conditional
+  // `.current = activeFile` assignment below could leave a retry believing
+  // this activeFile was already handled while the selection update it was
+  // paired with never actually committed (Codex review, round 2).
+  const [prevActiveFile, setPrevActiveFile] = useState(activeFile);
+  if (activeFile && activeFile !== prevActiveFile) {
+    const exists = files.some((f) => f.path === activeFile);
+    if (exists) {
+      setSelectedPath(activeFile);
+      // Only mark this activeFile as "handled" once it actually resolved —
+      // if `files` hasn't hydrated it yet (async navigation race), leave
+      // prevActiveFile stale so a LATER render (once `files` catches up)
+      // still sees activeFile !== prevActiveFile and retries, instead of
+      // silently giving up because this assignment already marked the miss
+      // as "seen".
+      setPrevActiveFile(activeFile);
     }
-  }, [activeFile, files]);
+  } else if (activeFile !== prevActiveFile) {
+    setPrevActiveFile(activeFile);
+  }
 
   // Expose imperative handle for programmatic navigation
   useImperativeHandle(ref, () => {
@@ -526,6 +547,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
               )}
             >
               <button
+                type="button"
                 id={getTabId(file.path)}
                 role="tab"
                 aria-selected={file.path === selectedPath}

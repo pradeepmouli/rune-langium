@@ -466,9 +466,9 @@ function stripTypeAnnotations(tsCode: string): string {
  * react-doctor false positive: this is `new Function`, not `eval`, but the rule
  * flags both. Disable comment preserved.
  */
-// eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-// react-doctor-disable-next-line react-doctor/no-eval
 function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown, returnExpr: string): unknown {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  // react-doctor-disable-next-line react-doctor/no-eval
   const wrapper = new Function(
     argName,
     'fetch',
@@ -582,11 +582,14 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
     // for the zod target — executed here through runInWorkerSandbox so
     // runeAttrExists/runeCount/etc. are in scope. Only Data targets carry
     // conditions; a Choice target (no `dataNode`) has none to evaluate.
-    const conditionDiagnostics: ValidationDiagnostic[] = dataNode
-      ? getActiveConditionPredicates(dataNode)
-          .filter(({ predicate }) => !runInWorkerSandbox('', 'data', data, `(${predicate})`))
-          .map(({ name }) => ({ path: name, message: `Condition '${name}' failed`, conditionName: name }))
-      : [];
+    const conditionDiagnostics: ValidationDiagnostic[] = [];
+    if (dataNode) {
+      for (const { name, predicate } of getActiveConditionPredicates(dataNode)) {
+        if (!runInWorkerSandbox('', 'data', data, `(${predicate})`)) {
+          conditionDiagnostics.push({ path: name, message: `Condition '${name}' failed`, conditionName: name });
+        }
+      }
+    }
 
     scope.postMessage({
       type: 'instance:validateResult',

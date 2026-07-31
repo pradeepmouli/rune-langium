@@ -191,10 +191,11 @@ export function buildFieldValidator(field: PreviewField): z.ZodTypeAny {
       // `path` with however many levels this object field is itself
       // nested under, so this composes correctly at any depth.
       const armPaths = field.choiceArmPaths ?? [];
+      const armPathSet = new Set(armPaths);
       const objectSchemaWithArms =
         armPaths.length > 0
           ? objectSchema.superRefine((value, ctx) => {
-              const armFields = (field.children ?? []).filter((child) => armPaths.includes(child.path));
+              const armFields = (field.children ?? []).filter((child) => armPathSet.has(child.path));
               const presentFields = armFields.filter(
                 (child) => (value as Record<string, unknown>)[fieldLeafKey(child.path)] !== undefined
               );
@@ -293,7 +294,8 @@ export function validatePreviewSample(
   // in that case, instead of every field in `schema.fields`.
   const armPaths = resolveArmPaths(schema) ?? [];
   if (armPaths.length > 0) {
-    const armFields = schema.fields.filter((field) => armPaths.includes(field.path));
+    const armPathSet = new Set(armPaths);
+    const armFields = schema.fields.filter((field) => armPathSet.has(field.path));
     const presentFields = armFields.filter((field) => values[fieldRootKey(field.path)] !== undefined);
     const presentCount = presentFields.length;
     if (presentCount !== 1) {
