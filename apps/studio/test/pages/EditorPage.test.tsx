@@ -55,11 +55,25 @@ const {
 
   const useEditorStore = ((selector: (state: typeof editorStoreState) => unknown) =>
     selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
+  // `subscribe` is required by HydrationOrchestrator (Task 1, wired into both
+  // CodegenProvider — Task 3 — and ExplorePerspective — Task 5), which calls
+  // `useEditorStore.subscribe(listener)` in a mount effect. The real Zustand
+  // store's `subscribe` notifies listeners on every `setState`; mirror that
+  // here (a bare selector function has no `.subscribe` of its own) so those
+  // mount effects don't throw under this hand-rolled mock.
+  const stateListeners = new Set<(state: typeof editorStoreState) => void>();
   Object.assign(useEditorStore, {
     getState: () => editorStoreState,
     setState: vi.fn((partial: Partial<typeof editorStoreState>) => {
       Object.assign(editorStoreState, partial);
-    })
+      for (const listener of stateListeners) listener(editorStoreState);
+    }),
+    subscribe: (listener: (state: typeof editorStoreState) => void) => {
+      stateListeners.add(listener);
+      return () => {
+        stateListeners.delete(listener);
+      };
+    }
   });
 
   const diagnosticsState = { fileDiagnostics: new Map(), totalErrors: 0, totalWarnings: 0 };
@@ -1206,6 +1220,45 @@ describe('EditorPage workspace chrome', () => {
       reapplyFocusMode: true
     });
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  // Characterization test for Task 5 (route ExplorePerspective's existing
+  // hydration triggers through the shared HydrationOrchestrator): asserts
+  // the externally-observable behavior — selecting a deferred explorer node
+  // still requests hydration for its namespace — is unchanged by that
+  // refactor. Written before the refactor as a regression guard, not to
+  // drive new behavior (it already passes against the direct
+  // requestNamespaceHydration call site).
+  it('requests namespace hydration when selecting a deferred explorer node', () => {
+    editorStoreState.edges = [];
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.staticdata.party.DeferredParty',
+        data: { namespace: 'cdm.base.staticdata.party', name: 'DeferredParty', $type: 'data', deferred: true },
+        meta: { namespace: 'cdm.base.staticdata.party', errors: [], hasExternalRefs: false, deferred: true }
+      }
+    ];
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-staticdata-party-type.rosetta',
+          path: 'base-staticdata-party-type.rosetta',
+          content: 'namespace cdm.base.staticdata.party',
+          dirty: false
+        }
+      ]
+    });
+
+    act(() => {
+      namespaceExplorerMockState.latestProps?.onSelectNode?.('cdm.base.staticdata.party.DeferredParty');
+    });
+
+    expect(editorStoreState.selectNode).toHaveBeenCalledWith('cdm.base.staticdata.party.DeferredParty', {
+      reapplyFocusMode: true
+    });
+    expect(editorStoreState.requestNamespaceHydration).toHaveBeenCalledWith('cdm.base.staticdata.party');
   });
 
   it('re-centers navigation targets that have no graph edges', () => {
