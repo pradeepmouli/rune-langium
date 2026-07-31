@@ -157,7 +157,13 @@ const conditionDisplayCache = new WeakMap<ConditionShape, ConditionDisplayInfo>(
 
 function conditionToDisplay(c: ConditionShape, isPostCondition: boolean): ConditionDisplayInfo {
   let display = conditionDisplayCache.get(c);
-  if (display === undefined) {
+  // Also invalidate on a role mismatch, not just a cache miss — the same
+  // raw condition reference could in principle be looked up as a regular
+  // condition in one call and a post-condition in another (e.g. moved
+  // between the two source arrays while keeping its identity), and the
+  // cache must not keep serving the FIRST role it ever saw for that
+  // reference (Codex review).
+  if (display === undefined || display.isPostCondition !== isPostCondition) {
     display = {
       name: c.name ?? undefined,
       definition: c.definition ?? undefined,
