@@ -53,6 +53,7 @@ import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js
 import { getTypeRefText, parseCardinality, getExpressionDisplayText } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
+import { useStableKey } from '../../hooks/useStableKey.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
@@ -136,6 +137,7 @@ function FunctionForm({
   meta: nodeMeta
 }: FunctionFormProps) {
   const d = data as any;
+  const getKey = useStableKey();
 
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
   // Drive validation off the canonical AST schema; pass the graph node
@@ -430,7 +432,7 @@ function FunctionForm({
             {(d.shortcuts ?? []).map((shortcut: any, i: number) => {
               const aliasText = getCstText(shortcut.expression);
               return (
-                <div key={`alias-${shortcut.name ?? i}`} data-slot="alias-section" className="flex flex-col gap-1">
+                <div key={getKey(shortcut)} data-slot="alias-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">alias {shortcut.name ?? `#${i}`}</span>
                   {renderExpressionEditor ? (
                     renderExpressionEditor({
@@ -467,7 +469,7 @@ function FunctionForm({
                 'result';
               const isAdd = op.add === true;
               return (
-                <div key={`op-${assignTarget}-${i}`} data-slot="operation-section" className="flex flex-col gap-1">
+                <div key={getKey(op)} data-slot="operation-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">
                     {isAdd ? 'add' : 'set'} {assignTarget}
                   </span>

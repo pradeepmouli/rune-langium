@@ -37,6 +37,7 @@ import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { conditionsToDisplay, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
+import { useStableKey } from '../../hooks/useStableKey.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -321,6 +322,7 @@ export function ConditionSection({
   renderExpressionEditor
 }: ConditionSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
+  const getKey = useStableKey();
 
   // ------ Declarative-path fallbacks (Phase 7 / US5) ----------------------
   //
@@ -410,7 +412,7 @@ export function ConditionSection({
       <FieldGroup className="gap-1.5">
         {conditions.map((condition, i) => (
           <ConditionRow
-            key={`condition-${condition.name ?? ''}:${i}`}
+            key={getKey(condition)}
             condition={condition}
             index={i}
             total={conditions.length}

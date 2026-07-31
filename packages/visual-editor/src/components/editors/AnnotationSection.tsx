@@ -26,6 +26,7 @@ import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { annotationsToDisplay, type AnnotationDisplayInfo } from '../../adapters/model-helpers.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
+import { useStableKey } from '../../hooks/useStableKey.js';
 
 export interface AnnotationSectionProps {
   /**
@@ -72,6 +73,7 @@ export function AnnotationSection({
   onRemove
 }: AnnotationSectionProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const getKey = useStableKey();
 
   // ------ Declarative-path fallbacks (Phase 7 / US5) ----------------------
   //
@@ -141,11 +143,7 @@ export function AnnotationSection({
       {/* Existing annotations */}
       <div className="flex flex-wrap gap-1 px-1">
         {annotations.map((ann, i) => (
-          <Badge
-            key={`${ann.name}-${ann.attribute ?? ''}-${i}`}
-            variant="annotation"
-            className="gap-1 text-3xs h-5 pl-1.5 pr-1"
-          >
+          <Badge key={getKey(ann)} variant="annotation" className="gap-1 text-3xs h-5 pl-1.5 pr-1">
             [{ann.name}]{ann.attribute && <span className="opacity-60">.{ann.attribute}</span>}
             {!effectiveReadOnly && (
               <button

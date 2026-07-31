@@ -44,9 +44,13 @@ export function SwitchBlock({ node, renderChild }: SwitchBlockProps) {
         // handling — see ast-to-expression-node.ts's convertSwitchCase);
         // render it via renderChild like any other nested expression rather
         // than stringifying, which would print `[object Object]`.
+        // Only fall back to the index when there's truly no stable identifier
+        // (no referenceGuard, no synthetic expression id) — appending `-${i}`
+        // unconditionally would couple an otherwise-stable key to array
+        // position, breaking on reorder.
         const key = guard?.referenceGuard ?? (c.expression as unknown as { id?: string }).id ?? String(i);
         return (
-          <span key={`${key}-${i}`} className="ml-3 inline-flex items-baseline gap-1">
+          <span key={key} className="ml-3 inline-flex items-baseline gap-1">
             <span className="font-mono text-xs opacity-70">
               {guard?.referenceGuard ?? (guard?.literalGuard ? renderChild(guard.literalGuard) : 'default')}:
             </span>
