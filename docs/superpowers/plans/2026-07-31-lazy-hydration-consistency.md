@@ -314,10 +314,18 @@ for (const entry of curatedEntries) {
 
 This test proves the *wiring* is correct (the worker relinks on new curated content rather than reusing a stale registration) without needing the full `generatePreviewSchemas` pipeline to run against realistic ASTs — that deeper "does relinking actually resolve a forward reference" proof belongs in `packages/core`'s own test suite (Step 3), where real Langium services already run without `codegen-worker.test.ts`'s deep-stub chain.
 
-Add targeted spies to the existing mock — do not replace the whole `DocumentBuilder`/`LangiumDocumentFactory` stub chain, just make `LangiumDocuments` backed by a real `Map` so registration/replacement is observable:
+Add targeted spies to the existing mock — do not replace the whole `DocumentBuilder`/`LangiumDocumentFactory` stub chain, just make `LangiumDocuments` backed by a real `Map` so registration/replacement is observable. **Critically, the mock factory must also export the REAL `hydrateModelDocuments`** — the existing `vi.mock('@rune-langium/core', ...)` factory (`codegen-worker.test.ts:37-64`) only exports `createRuneDslServices` and `hydrateModelDocument` today; the worker's new import of `hydrateModelDocuments` would resolve to `undefined` under the current mock and throw a `TypeError` on the very first `preview:setFiles` in every test in this file, not just the new one. Switch the mock factory to the async form and pass the real implementation through:
 
 ```ts
-// In codegen-worker.test.ts's existing '@rune-langium/core' mock factory:
+// In codegen-worker.test.ts's existing '@rune-langium/core' mock:
+vi.mock('@rune-langium/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@rune-langium/core')>();
+  return {
+    // ...all the existing mock exports (createRuneDslServices, hydrateModelDocument, etc.), unchanged...
+    hydrateModelDocuments: actual.hydrateModelDocuments // real implementation, not mocked
+  };
+});
+
 const registered = new Map<string, { uri: string; marker: object }>();
 const getDocumentMock = vi.fn((uri: string) => registered.get(uri));
 const addDocumentMock = vi.fn((doc: { uri: string }) => registered.set(doc.uri, doc));
@@ -326,6 +334,8 @@ const deleteDocumentMock = vi.fn((uri: string) => registered.delete(uri));
 // no-op/return-undefined stubs are there today; leave DocumentBuilder/
 // LangiumDocumentFactory/JsonSerializer mocks as they already are.
 ```
+
+The real `hydrateModelDocuments` only calls `getDocument`/`addDocument`/`deleteDocument?.`/`LangiumDocumentFactory.fromModel` plus `JsonSerializer.deserialize` — all already provided by the existing mock — so running the real implementation against these mocked services exercises the actual relink loop rather than a hand-rolled stand-in.
 
 ```ts
 // Add to apps/studio/test/workers/codegen-worker.test.ts, in the same
@@ -358,6 +368,22 @@ it('replaces a curated document\'s registered identity when preview:setFiles res
 
   expect(deleteDocumentMock).toHaveBeenCalledWith('curated:///fpml/consolidated/shared/Scheme.rosetta');
   expect(secondRegistration).not.toBe(firstRegistration);
+});
+
+it('does not re-relink when preview:setFiles resends an identical curated set (e.g. after a pure user-file edit)', async () => {
+  const { dispatch } = await loadWorkerModule();
+  const files = [{ uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' }];
+
+  await dispatch({ type: 'preview:setFiles', requestId: 'files:1', files });
+  deleteDocumentMock.mockClear();
+  addDocumentMock.mockClear();
+
+  // Same curated entries, unchanged — as happens when only a user-authored
+  // file was edited and the curated set along for the ride is identical.
+  await dispatch({ type: 'preview:setFiles', requestId: 'files:2', files: [...files] });
+
+  expect(deleteDocumentMock).not.toHaveBeenCalled();
+  expect(addDocumentMock).not.toHaveBeenCalled();
 });
 ```
 
@@ -392,13 +418,24 @@ import { hydrateModelDocument, hydrateModelDocuments } from '@rune-langium/core'
 // (add hydrateModelDocuments to the existing import line for hydrateModelDocument)
 ```
 
-Add a module-level cache near `currentPreviewFiles`/`currentCodegenFiles`:
+Add a module-level cache near `currentPreviewFiles`/`currentCodegenFiles`, plus a fingerprint of the last-relinked curated entry set so an identical resend (e.g. `preview:setFiles` re-firing after a pure user-file edit, with the exact same curated entries riding along — confirmed this happens: the file-sync effect resends on every `files` change, curated or not) is a no-op instead of re-running the batch relink:
 
 ```ts
 let cachedCuratedDocuments: LangiumDocument[] = [];
+let lastCuratedEntries: FileEntry[] = [];
+
+function curatedEntriesChanged(next: FileEntry[]): boolean {
+  if (next.length !== lastCuratedEntries.length) return true;
+  return next.some((entry, i) => {
+    const prev = lastCuratedEntries[i];
+    return !prev || prev.uri !== entry.uri || prev.serializedModelJson !== entry.serializedModelJson;
+  });
+}
 
 function hydrateCuratedDocuments(entries: FileEntry[]): void {
   const curatedEntries = entries.filter((e) => Boolean(e.serializedModelJson));
+  if (!curatedEntriesChanged(curatedEntries)) return; // identical set — skip the relink entirely
+  lastCuratedEntries = curatedEntries;
   try {
     cachedCuratedDocuments = hydrateModelDocuments(
       { RuneDsl, shared: RuneDsl.shared },
@@ -416,6 +453,8 @@ function hydrateCuratedDocuments(entries: FileEntry[]): void {
   }
 }
 ```
+
+`serializedModelJson` strings are passed through unchanged from the main thread for a given curated document (they're immutable per-session snapshots), so reference/string equality per index is sufficient — no deep diff needed.
 
 Call `hydrateCuratedDocuments(msg.files)` at the top of the `preview:setFiles` handler (wherever `currentPreviewFiles = msg.files` is currently assigned — call it with the new files BEFORE or right after that assignment).
 
