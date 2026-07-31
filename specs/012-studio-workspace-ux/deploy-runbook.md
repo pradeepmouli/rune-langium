@@ -77,39 +77,34 @@ flow to users.
 
 ## Step 3 — Telemetry secrets + dashboards
 
-The telemetry Worker has no secrets at this time — IP hashing uses an
-in-memory daily-rotating salt and the closed schema cannot leak PII.
-The Worker itself performs NO code-level authorization on its two admin
-routes (`GET /v1/stats`, `GET /v1/digest`) — both rely entirely on CF
-Access being configured at the edge, per this step. **This is a REQUIRED
-post-deploy task, not optional**: `/v1/digest` in particular returns the
-full fleet rollup (per-op duration histograms AND `signatureCounts` across
-every event/day) — deploying without this step leaves that endpoint
-publicly fetchable by anyone who knows the URL.
+The telemetry Worker has ONE secret: `IP_SALT_SECRET` — HMAC key material
+for the daily-rotating IP-hash salt (see `getDailySalt` in
+`apps/telemetry-worker/src/index.ts`). It replaced an earlier
+Durable-Object-backed salt that round-tripped a `salt:<day>` DO instance;
+the deterministic HMAC design needs no DO storage at all.
 
 ```bash
-# Already part of the wrangler config; no secret to put.
-# Verify the DO migration is at v1.
-pnpm --filter @rune-langium/telemetry-worker exec wrangler tail \
-  --search 'TelemetryAggregator' --format pretty
+pnpm --filter @rune-langium/telemetry-worker exec wrangler secret put IP_SALT_SECRET
+# paste any random 32+ byte value when prompted (e.g. `openssl rand -hex 32`)
 ```
 
-In CF dashboard: **Zero Trust → Access → Applications → Add → Self-hosted**
-— create ONE application per admin route below (a broad `/v1/*` wildcard
-would also gate `/v1/event`, which must stay open for anonymous client
-POSTs, so don't use one):
-- Application URL: `https://www.daikonic.dev/rune-studio/api/telemetry/v1/stats`
-- Application URL: `https://www.daikonic.dev/rune-studio/api/telemetry/v1/digest`
-- Policy (both applications): Allow your admin email allowlist.
-- Leave `/v1/event` with no Access application (anonymous, schema-validated,
-  rate-limited).
+There is no `GET /v1/stats` or `GET /v1/digest` route on this Worker any
+more — aggregation is no longer done by the Worker itself. Every accepted,
+rejected, and rate-limited request is logged as a structured Workers Logs
+line instead (`console.log(<object>)`, never `JSON.stringify`'d — see
+`apps/telemetry-worker/src/log.ts`'s comment on why that distinction
+matters for field indexing); query it with
+`pnpm --filter @rune-langium/studio run telemetry:digest`, which
+authenticates with a plain `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`
+pair against Cloudflare's own Workers Observability API — no CF Access
+application needed for this, since it's a Cloudflare account-API call, not
+an HTTP route on the Worker.
 
-**Any future admin route added to this Worker needs its own Access
-Application here** — the Worker enforces none of this in code by design
-(external, edge-level auth), so a new route is publicly exposed by default
-until this step is done for it. `/v1/digest` itself shipped without this
-update initially — check this list is current whenever the Worker's route
-table changes.
+**Cleanup**: the two CF Access applications previously protecting
+`/v1/stats` and `/v1/digest` (Zero Trust → Access → Applications) are now
+protecting routes that no longer exist on the Worker and can be deleted —
+not done automatically as part of this migration; do it explicitly via the
+CF dashboard or API when convenient.
 
 ---
 

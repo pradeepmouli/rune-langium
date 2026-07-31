@@ -152,7 +152,7 @@ State on disk:
 Studio emits closed-schema events (see `specs/012-studio-workspace-ux/contracts/telemetry-event.md`) to `apps/telemetry-worker`. Privacy invariants enforced both in the client and the server:
 
 - No file paths, names, or contents can ever appear in a body — the schema is `.strict()` enums + bounded strings.
-- The server hashes `cf-connecting-ip` with a daily-rotating in-memory salt; raw IPs never log, never persist.
+- The server hashes `cf-connecting-ip` with a daily-rotating salt (deterministic per UTC day via HMAC, no storage); raw IPs never log, never persist.
 - Studio's `services/telemetry.ts` no-ops on `localhost` and when the user has set `telemetry-enabled=false` in Settings.
 - A single `429` response from the server drops the event silently — telemetry never blocks the user.
 

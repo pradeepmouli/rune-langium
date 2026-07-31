@@ -7,7 +7,6 @@
  * Surface (per `contracts/telemetry-event.md`):
  *   POST    /rune-studio/api/telemetry/v1/event
  *   OPTIONS /rune-studio/api/telemetry/v1/event   (CORS preflight)
- *   GET     /rune-studio/api/telemetry/v1/stats   (CF Access enforces admin)
  *
  * Pipeline:
  *   1. Method/route guard.
@@ -17,27 +16,26 @@
  *      throttle, not a precise quota — that's fine for opt-out telemetry.
  *      The map is bounded: stale windows are evicted on every check.
  *   4. JSON parse → Zod schema (.strict()) → reject 400 on schema violation.
- *   5. Hash the IP with a daily salt fetched from a Durable Object (single
- *      salt across all isolates per UTC day, so analytics dedupe works).
- *   6. Forward to the per-event/per-day counter DO; check the response.
- *   7. Log a structured line (no raw IP, no body).
+ *   5. Hash the IP with a daily-rotating deterministic salt (see
+ *      `getDailySalt` below — no DO, no network round-trip).
+ *   6. Log a structured line per event via Cloudflare Workers Logs (one line
+ *      per `op_spans` batch entry) — no raw IP, no request body. Aggregation
+ *      and digests are computed by querying Workers Observability directly
+ *      (`apps/studio/scripts/telemetry-digest.mjs`), not by this Worker.
  */
 
 import { z } from 'zod';
-import type { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { CuratedModelIdSchema, ErrorCategorySchema } from '@rune-langium/curated-schema';
-import { TelemetryAggregator } from './counters.js';
-import { logRequest } from './log.js';
-
-export { TelemetryAggregator };
+import { logRequest, logSpan } from './log.js';
 
 export interface Env {
-  TELEMETRY: DurableObjectNamespace;
   /**
    * Comma-separated allowlist of origins permitted to POST events.
    * Wildcard `*` means any origin (only sensible in local dev).
    */
   ALLOWED_ORIGIN: string;
+  /** HMAC key material for the daily-rotating IP-hash salt. Set via `wrangler secret put`. */
+  IP_SALT_SECRET: string;
 }
 
 // ---------- Schema ----------
@@ -126,26 +124,6 @@ const TelemetryEventBody = z.discriminatedUnion('event', [
 
 type TelemetryEvent = z.infer<typeof TelemetryEventBody>;
 
-// The 10 event literals TelemetryEventBody accepts. Zod's discriminated-union
-// introspection doesn't cleanly flatten the `workspace_*` member's `z.enum`
-// (one option covers 4 literal values, not 1), so this is hand-maintained —
-// TelemetryEventBody above is the source of truth; keep this list in sync
-// with it.
-const KNOWN_EVENTS = [
-  'curated_load_attempt',
-  'curated_load_success',
-  'curated_load_failure',
-  'workspace_open_success',
-  'workspace_open_failure',
-  'workspace_restore_success',
-  'workspace_restore_failure',
-  'lsp_session_opened',
-  'lsp_session_failed',
-  'op_spans'
-] as const;
-
-const MAX_DIGEST_DAYS = 31;
-
 // ---------- In-memory per-IP rate limit (10/min, with eviction) ----------
 
 const RATE_LIMIT = 10;
@@ -189,12 +167,17 @@ export function _resetRateLimitForTesting(): void {
   ipWindows.clear();
 }
 
-// ---------- IP hashing (daily-rotating salt held in a DO) ----------
+// ---------- IP hashing (daily-rotating salt, deterministic per-isolate) ----------
 //
-// The salt rotates per UTC day and is shared across isolates by storing
-// it in the same TelemetryAggregator DO that holds the counters, under
-// id-name `salt:<UTC-day>`. Each isolate caches the salt locally for
-// the day to avoid round-tripping the DO on every request.
+// The salt rotates per UTC day. Rather than round-tripping a DO to share
+// one random salt across isolates (the previous design), it's derived as
+// HMAC-SHA256(env.IP_SALT_SECRET, day) — every isolate computes the same
+// value independently, with no storage, no cross-isolate coordination, and
+// no failure mode (a DO-unreachable fallback used to silently degrade
+// cross-isolate dedup for that request). The day-scoping still means an
+// IP hash from one day can't be correlated with the same IP's hash on
+// another day. Cached per-isolate purely to avoid recomputing the HMAC on
+// every request within the same day.
 
 let cachedSalt: { day: string; salt: string } | null = null;
 
@@ -206,26 +189,19 @@ async function getDailySalt(env: Env, now: Date): Promise<string> {
   const day = utcDay(now);
   if (cachedSalt && cachedSalt.day === day) return cachedSalt.salt;
 
-  const id = env.TELEMETRY.idFromName(`salt:${day}`);
-  const stub = env.TELEMETRY.get(id);
-  const res = await stub.fetch(new Request('https://do/salt'));
-  if (!res.ok) {
-    // DO unreachable — fall back to a per-isolate salt for this request.
-    // The privacy invariant (no raw IP logged) still holds; only cross-
-    // isolate dedup is lost for this one request.
-    return randomSaltHex();
-  }
-  const body = (await res.json()) as { salt: string };
-  cachedSalt = { day, salt: body.salt };
-  return body.salt;
-}
-
-function randomSaltHex(): string {
-  const buf = new Uint8Array(16);
-  crypto.getRandomValues(buf);
-  return Array.from(buf)
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.IP_SALT_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', keyMaterial, new TextEncoder().encode(day));
+  const salt = Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+  cachedSalt = { day, salt };
+  return salt;
 }
 
 async function hashIp(ip: string, salt: string): Promise<string> {
@@ -281,10 +257,6 @@ function getErrorCategory(event: TelemetryEvent): string | null {
   return null;
 }
 
-function doIdName(event: TelemetryEvent, day: string): string {
-  return `${event.event}:${day}`;
-}
-
 // ---------- Worker entry ----------
 
 export default {
@@ -311,6 +283,16 @@ export default {
       // fast — the browser will block the response read regardless, but
       // returning 403 makes the rejection explicit in server logs.
       if (origin && !isOriginAllowed(origin, env.ALLOWED_ORIGIN)) {
+        const salt = await getDailySalt(env, new Date(startedAt));
+        const ipHash = await hashIp(ip, salt);
+        logRequest({
+          ipHash,
+          event: 'rejected',
+          status: 403,
+          durationMs: Date.now() - startedAt,
+          outcome: 'rejected',
+          errorCategory: 'origin_not_allowed'
+        });
         return jsonResponse(403, { error: 'origin_not_allowed' });
       }
 
@@ -334,158 +316,66 @@ export default {
       try {
         raw = await req.json();
       } catch {
+        const salt = await getDailySalt(env, new Date(startedAt));
+        const ipHash = await hashIp(ip, salt);
+        logRequest({
+          ipHash,
+          event: 'rejected',
+          status: 400,
+          durationMs: Date.now() - startedAt,
+          outcome: 'rejected',
+          errorCategory: 'malformed_json'
+        });
         return jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' }, cors);
       }
       const parsed = TelemetryEventBody.safeParse(raw);
       if (!parsed.success) {
+        const salt = await getDailySalt(env, new Date(startedAt));
+        const ipHash = await hashIp(ip, salt);
+        logRequest({
+          ipHash,
+          event: 'rejected',
+          status: 400,
+          durationMs: Date.now() - startedAt,
+          outcome: 'rejected',
+          errorCategory: 'schema_violation'
+        });
         return jsonResponse(400, { error: 'schema_violation', details: parsed.error.issues }, cors);
       }
       const event = parsed.data;
 
-      // Forward to the per-event/per-day counter DO. Failures here MUST
-      // NOT silently 204 — SC-009 is computed off these counters; a DO
-      // outage masquerading as success would make the metric useless.
-      const day = utcDay(new Date(startedAt));
-      const counterId = env.TELEMETRY.idFromName(doIdName(event, day));
-      const stub = env.TELEMETRY.get(counterId);
-      const errorCategory = getErrorCategory(event);
-      const isSpans = event.event === 'op_spans';
-      let stubRes: Response;
-      try {
-        stubRes = await stub.fetch(
-          new Request(isSpans ? 'https://do/inc-spans' : 'https://do/inc', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(isSpans ? { spans: event.spans } : { errorCategory })
-          })
-        );
-      } catch (err) {
-        const salt = await getDailySalt(env, new Date(startedAt));
-        const ipHash = await hashIp(ip, salt);
-        logRequest({
-          ipHash,
-          event: event.event,
-          status: 500,
-          durationMs: Date.now() - startedAt,
-          outcome: 'do_failure',
-          err: errMessage(err)
-        });
-        return jsonResponse(500, { error: 'aggregator_failure' }, cors);
-      }
-      if (!stubRes.ok) {
-        const salt = await getDailySalt(env, new Date(startedAt));
-        const ipHash = await hashIp(ip, salt);
-        logRequest({
-          ipHash,
-          event: event.event,
-          status: stubRes.status,
-          durationMs: Date.now() - startedAt,
-          outcome: 'do_failure'
-        });
-        return jsonResponse(500, { error: 'aggregator_failure' }, cors);
-      }
-
       const salt = await getDailySalt(env, new Date(startedAt));
       const ipHash = await hashIp(ip, salt);
+
+      // One structured log line per span rather than a nested array on the
+      // request line — Workers Observability groups/percentiles on
+      // top-level fields (`op`, `level`, `duration_ms`), not on values
+      // nested inside an array field.
+      if (event.event === 'op_spans') {
+        for (const span of event.spans) {
+          logSpan({
+            ipHash,
+            op: span.op,
+            level: span.level,
+            durationMs: span.durationMs,
+            signature: span.signature
+          });
+        }
+      }
+
       logRequest({
         ipHash,
         event: event.event,
         status: 204,
         durationMs: Date.now() - startedAt,
-        outcome: 'accepted'
+        outcome: 'accepted',
+        errorCategory: getErrorCategory(event),
+        studioVersion: event.studio_version,
+        uaClass: event.ua_class
       });
       return emptyResponse(204, cors);
-    }
-
-    // GET /v1/stats — CF Access enforces the admin allowlist at the route.
-    // The Worker just proxies. Errors here surface to the admin caller as
-    // 500 with a structured body so dashboards can branch on them.
-    if (url.pathname.endsWith('/v1/stats')) {
-      if (req.method !== 'GET') return jsonResponse(405, { error: 'method_not_allowed' });
-      const eventName = url.searchParams.get('event');
-      const date = url.searchParams.get('date') ?? utcDay(new Date(startedAt));
-      if (!eventName) return jsonResponse(400, { error: 'missing_event_query' });
-      try {
-        const id = env.TELEMETRY.idFromName(`${eventName}:${date}`);
-        const stub = env.TELEMETRY.get(id);
-        const res = await stub.fetch(new Request('https://do/stats'));
-        if (!res.ok) {
-          return jsonResponse(500, {
-            error: 'aggregator_failure',
-            event: eventName,
-            date,
-            do_status: res.status
-          });
-        }
-        return res;
-      } catch (err) {
-        return jsonResponse(500, {
-          error: 'aggregator_failure',
-          event: eventName,
-          date,
-          reason: errMessage(err)
-        });
-      }
-    }
-
-    // GET /v1/digest — server-side fan-out across every known event name and
-    // every UTC day in [since, today]. /v1/stats requires one known
-    // (event, day) pair per call; a fleet digest needs all of them merged,
-    // which is what this route exists to do (CF Access enforces the admin
-    // allowlist at the route, same as /v1/stats — nothing to check here).
-    if (url.pathname.endsWith('/v1/digest')) {
-      if (req.method !== 'GET') return jsonResponse(405, { error: 'method_not_allowed' });
-      const since = url.searchParams.get('since');
-      if (!since) return jsonResponse(400, { error: 'missing_since_query' });
-      const sinceDate = new Date(since);
-      if (Number.isNaN(sinceDate.getTime())) return jsonResponse(400, { error: 'invalid_since' });
-
-      const days = enumerateUtcDays(sinceDate, new Date(startedAt));
-      if (days.length > MAX_DIGEST_DAYS) {
-        return jsonResponse(400, { error: 'since_too_far_back', max_days: MAX_DIGEST_DAYS });
-      }
-
-      // Each (event, day) DO instance is independent, so these reads fan
-      // out in parallel — up to KNOWN_EVENTS.length * days.length (bounded
-      // by MAX_DIGEST_DAYS above) concurrent subrequests. Sequential reads
-      // here would turn a 31-day digest into 10-15s+ of serial round-trips
-      // for no reason; nothing about reading N independent DOs requires
-      // waiting on one before starting the next.
-      const reads = KNOWN_EVENTS.flatMap((eventName) =>
-        days.map(async (day) => {
-          try {
-            const id = env.TELEMETRY.idFromName(`${eventName}:${day}`);
-            const stub = env.TELEMETRY.get(id);
-            const res = await stub.fetch(new Request('https://do/stats'));
-            const result = res.ok ? await res.json() : { error: 'aggregator_failure', status: res.status };
-            return { eventName, day, result };
-          } catch (err) {
-            return { eventName, day, result: { error: 'aggregator_failure', reason: errMessage(err) } };
-          }
-        })
-      );
-      const perEvent: Record<string, Record<string, unknown>> = {};
-      for (const { eventName, day, result } of await Promise.all(reads)) {
-        (perEvent[eventName] ??= {})[day] = result;
-      }
-      return jsonResponse(200, { since, until: utcDay(new Date(startedAt)), events: perEvent });
     }
 
     return jsonResponse(404, { error: 'not_found' });
   }
 };
-
-function enumerateUtcDays(from: Date, to: Date): string[] {
-  const days: string[] = [];
-  const cursor = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
-  const end = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
-  while (cursor <= end) {
-    days.push(utcDay(cursor));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return days;
-}
-
-function errMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}

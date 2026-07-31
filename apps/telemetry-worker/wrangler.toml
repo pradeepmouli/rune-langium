@@ -2,8 +2,14 @@
 # Copyright (c) 2026 Pradeep Mouli
 #
 # Cloudflare Worker config for the Studio anonymised telemetry ingester
-# (feature 012-studio-workspace-ux). Opt-out, no PII, schema-validated,
-# DO-per-day counters.
+# (feature 012-studio-workspace-ux). Opt-out, no PII, schema-validated.
+#
+# Aggregation moved from a per-(event,day) Durable Object counter to
+# Cloudflare Workers Logs: every accepted/rejected event and op_spans entry
+# is emitted as a structured console.log line (see src/log.ts), queryable
+# via the Workers Observability API — see
+# apps/studio/scripts/telemetry-digest.mjs. The TelemetryAggregator DO
+# (src/counters.ts, deleted) is retired below.
 
 name = "rune-telemetry-worker"
 main = "src/index.ts"
@@ -16,25 +22,38 @@ workers_dev = false
 pattern = "www.daikonic.dev/rune-studio/api/telemetry/*"
 zone_name = "daikonic.dev"
 
-# DO class for per-day counters. Implemented in T110 (src/counters.ts).
-# Binding name MUST match env.TELEMETRY in src/.
-[[durable_objects.bindings]]
-name = "TELEMETRY"
-class_name = "TelemetryAggregator"
-
+# TelemetryAggregator (per-event/per-day counters + the daily IP-hash salt)
+# is retired — counting moved to Workers Logs, and the salt is now derived
+# deterministically (HMAC over IP_SALT_SECRET, see src/index.ts's
+# getDailySalt), so no DO storage is needed for either purpose. This
+# `deleted_classes` migration is required so wrangler releases the class's
+# provisioned storage; it must stay in the migrations history permanently
+# (removing a `[[migrations]]` entry after it has been applied is an error).
 [[migrations]]
 tag = "v1"
-# KV-backed DO namespaces (new_classes) are no longer creatable on this
-# account (CF error 10099) — new classes must use SQLite-backed storage.
-# No code change needed: counters.ts only uses state.storage.get/put/list,
-# which SQLite-backed DOs support identically.
 new_sqlite_classes = ["TelemetryAggregator"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["TelemetryAggregator"]
 
 [observability]
 enabled = true
 
+  [observability.logs]
+  invocation_logs = true
+  # 100% sampling — telemetry volume is low (opt-in, closed event schema)
+  # and every event matters for the daily digest; no reason to sample.
+  head_sampling_rate = 1
+
 [vars]
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
+
+# IP_SALT_SECRET is set via `wrangler secret put IP_SALT_SECRET` (production)
+# — never committed. Any random 32+ byte value; only used as HMAC key
+# material for the daily-rotating IP-hash salt (src/index.ts::getDailySalt).
+# Rotating it changes IP-hash values from that point forward (does not
+# affect already-logged hashes).
 
 [limits]
 cpu_ms = 5000
