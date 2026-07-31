@@ -111,7 +111,11 @@ export async function stageAndCommit(fs: OpfsFs, workspaceId: string, options: C
   const dir = worktreeDir(workspaceId);
   const gdir = gitDir(workspaceId);
   const fsAdapter = toGitFs(fs);
-  // Walk the working tree and stage every file under files/.
+  // Walk the working tree and stage every file under files/. Deliberately
+  // sequential, not Promise.all: isomorphic-git serializes every git.add()
+  // internally through a single AsyncLock keyed by the index file path
+  // (GitIndexManager.acquire), so concurrent calls would just queue on that
+  // lock — no real parallelism to gain, only lost per-file error context.
   const files = await listWorkingTree(fs, workspaceId);
   for (const f of files) {
     await git.add({ fs: fsAdapter, dir, gitdir: gdir, filepath: f });

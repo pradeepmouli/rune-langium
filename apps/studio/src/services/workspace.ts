@@ -798,16 +798,21 @@ export async function readFileList(
 
   for (let chunk = 0; chunk < indices.length; chunk += CHUNK_SIZE) {
     const end = Math.min(chunk + CHUNK_SIZE, indices.length);
-    for (let j = chunk; j < end; j++) {
-      const file = fileList[indices[j]!]!;
-      const content = await file.text();
-      results.push({
-        name: file.name,
-        path: file.webkitRelativePath || file.name,
-        content,
-        dirty: false
-      });
-    }
+    // Reads within a chunk are independent files, so run them concurrently;
+    // the chunking itself still exists to yield to the UI thread below.
+    const chunkFiles = await Promise.all(
+      Array.from({ length: end - chunk }, async (_, offset): Promise<WorkspaceFile> => {
+        const file = fileList[indices[chunk + offset]!]!;
+        const content = await file.text();
+        return {
+          name: file.name,
+          path: file.webkitRelativePath || file.name,
+          content,
+          dirty: false
+        };
+      })
+    );
+    results.push(...chunkFiles);
     onProgress?.({ phase: 'reading', loaded: results.length, total });
 
     // Yield to the UI thread between chunks
