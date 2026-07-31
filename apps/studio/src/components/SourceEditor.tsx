@@ -531,6 +531,7 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
               )}
             >
               <button
+                type="button"
                 id={getTabId(file.path)}
                 role="tab"
                 aria-selected={file.path === selectedPath}

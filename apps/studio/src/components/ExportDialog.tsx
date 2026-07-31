@@ -380,6 +380,7 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
                       const shortName = file.path.split('/').pop() ?? file.path;
                       return (
                         <button
+                          type="button"
                           key={file.path}
                           className={`w-full text-left px-2 py-1 text-xs font-mono rounded truncate ${
                             selectedFile?.path === file.path ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'

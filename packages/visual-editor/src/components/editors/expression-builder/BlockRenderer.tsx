@@ -221,6 +221,7 @@ function BlockRendererInner({
     >
       {isCollapsible && collapsed ? (
         <button
+          type="button"
           className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-3xs text-muted-foreground hover:bg-accent"
           onClick={handleToggleCollapse}
           data-testid="expand-block"
@@ -234,6 +235,7 @@ function BlockRendererInner({
         <>
           {isCollapsible && (
             <button
+              type="button"
               className="inline-flex items-center rounded text-3xs text-muted-foreground opacity-50 hover:opacity-100"
               onClick={handleToggleCollapse}
               data-testid="collapse-block"

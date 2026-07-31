@@ -76,11 +76,11 @@ export const AttributeEditor = memo(function AttributeEditor({
           className="px-2 py-1 text-sm"
           aria-label="Cardinality"
         />
-        <button onClick={handleAdd} disabled={!name.trim()} className="rune-attribute-editor__submit">
+        <button type="button" onClick={handleAdd} disabled={!name.trim()} className="rune-attribute-editor__submit">
           Add
         </button>
         {onCancel && (
-          <button onClick={onCancel} className="rune-attribute-editor__cancel">
+          <button type="button" onClick={onCancel} className="rune-attribute-editor__cancel">
             Cancel
           </button>
         )}

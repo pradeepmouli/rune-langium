@@ -77,11 +77,11 @@ export const TypeCreator = memo(function TypeCreator({
           className="px-2 py-1 text-sm"
           aria-label="Namespace"
         />
-        <button onClick={handleCreate} disabled={!name.trim()} className="rune-type-creator__submit">
+        <button type="button" onClick={handleCreate} disabled={!name.trim()} className="rune-type-creator__submit">
           Create
         </button>
         {onCancel && (
-          <button onClick={onCancel} className="rune-type-creator__cancel">
+          <button type="button" onClick={onCancel} className="rune-type-creator__cancel">
             Cancel
           </button>
         )}

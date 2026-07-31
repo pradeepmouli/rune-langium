@@ -157,6 +157,7 @@ export function ExpressionBuilder({
       {/* Mode toggle tabs */}
       <div className="flex gap-1 border-b border-border pb-1">
         <button
+          type="button"
           className={`rounded-t px-3 py-1 text-xs font-medium transition-colors ${
             mode === 'builder' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
@@ -166,6 +167,7 @@ export function ExpressionBuilder({
           Builder
         </button>
         <button
+          type="button"
           className={`rounded-t px-3 py-1 text-xs font-medium transition-colors ${
             mode === 'text' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
           }`}
