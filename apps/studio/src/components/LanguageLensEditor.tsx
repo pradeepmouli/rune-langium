@@ -40,7 +40,7 @@
  *
  * @module
  */
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 import { parseExpression } from '@rune-langium/core';
 import type { RosettaExpression } from '@rune-langium/core';
@@ -91,10 +91,21 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
   // doesn't flash the previous draft for one frame before an effect
   // corrects it. The user can still freely edit foreignDraft afterward —
   // this only reseeds on a genuine language/value change.
+  //
+  // Tracked via useState, NOT a plain ref: a ref mutation made during
+  // render is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setForeignDraft call IS
+  // rolled back (it never committed) — so a bare
+  // `prevSeedKeyRef.current = seedKey` could leave the retry believing this
+  // seedKey was already handled and skip reseeding, leaving the editable
+  // box showing a stale draft that a later blur would parse and use to
+  // overwrite the newer canonical value (Codex review). useState's setter
+  // is itself part of the same discarded/retried unit of work, so it stays
+  // in sync with setForeignDraft.
   const seedKey = `${language}|${value}`;
-  const prevSeedKeyRef = useRef(seedKey);
-  if (seedKey !== prevSeedKeyRef.current) {
-    prevSeedKeyRef.current = seedKey;
+  const [prevSeedKey, setPrevSeedKey] = useState(seedKey);
+  if (seedKey !== prevSeedKey) {
+    setPrevSeedKey(seedKey);
     if (projection !== null) setForeignDraft(projection);
   }
 

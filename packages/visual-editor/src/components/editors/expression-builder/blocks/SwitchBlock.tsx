@@ -44,11 +44,16 @@ export function SwitchBlock({ node, renderChild }: SwitchBlockProps) {
         // handling — see ast-to-expression-node.ts's convertSwitchCase);
         // render it via renderChild like any other nested expression rather
         // than stringifying, which would print `[object Object]`.
-        // Only fall back to the index when there's truly no stable identifier
-        // (no referenceGuard, no synthetic expression id) — appending `-${i}`
-        // unconditionally would couple an otherwise-stable key to array
-        // position, breaking on reorder.
-        const key = guard?.referenceGuard ?? (c.expression as unknown as { id?: string }).id ?? String(i);
+        // The case's own body expression always carries a synthetic id
+        // (convertChildRequired never omits one) — key on THAT first, not
+        // referenceGuard: the grammar allows two cases to share the same
+        // referenceGuard text (invalid or in-progress source can reach this
+        // renderer), which would collide two cases onto one React key and
+        // let updates reuse the wrong subtree (Codex review). referenceGuard
+        // is kept as a fallback only for the theoretical case where the body
+        // expression has no id; index is the last resort and, unlike the
+        // other two, is NOT stable across reorder.
+        const key = (c.expression as unknown as { id?: string }).id ?? guard?.referenceGuard ?? String(i);
         return (
           <span key={key} className="ml-3 inline-flex items-baseline gap-1">
             <span className="font-mono text-xs opacity-70">

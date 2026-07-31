@@ -489,7 +489,13 @@ function DataTypeForm({
                       <AttributeRow
                         key={field.id}
                         index={index}
-                        committedName={((committedRef.current as any).attributes ?? [])[index]?.name ?? ''}
+                        // Read straight from `data`, NOT `committedRef` — the ref only
+                        // updates in a post-commit layout effect, so on the render
+                        // that swaps `data` (node switch / external graph push) it
+                        // would still hold the PREVIOUS node's name at this index,
+                        // baking a stale rename/retype anchor into this row's
+                        // onUpdate closures (Codex review).
+                        committedName={((data as any).attributes ?? [])[index]?.name ?? ''}
                         availableTypes={availableTypes}
                         onUpdate={handleUpdateAttribute}
                         onRemove={handleRemoveAttribute}

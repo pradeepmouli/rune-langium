@@ -124,13 +124,33 @@ export async function importBundle(
 
   // Write phase: only after every record parsed successfully. Each id writes
   // to its own file (writeInstance's shared `mkdir` is idempotent), so these
-  // are independent and safe to run concurrently too.
-  const imported = await Promise.all(
+  // are independent and safe to run concurrently. Promise.allSettled (not
+  // Promise.all) — a single write failing must not leave the other in-flight
+  // writes unaccounted for: Promise.all rejects as soon as the FIRST write
+  // fails while the rest keep running in the background, so the caller would
+  // see "import failed" via the thrown error while files still get written
+  // moments later with no visibility into which ones (Codex review).
+  const writeResults = await Promise.allSettled(
     finalRecords.map(async (finalRecord) => {
       await writeInstance(fs, workspaceRoot, finalRecord);
       return finalRecord;
     })
   );
+  const imported: InstanceRecord[] = [];
+  const writeFailures: string[] = [];
+  for (const [i, result] of writeResults.entries()) {
+    if (result.status === 'fulfilled') {
+      imported.push(result.value);
+    } else {
+      writeFailures.push(`${finalRecords[i]!.id}: ${errMessage(result.reason)}`);
+    }
+  }
+  if (writeFailures.length > 0) {
+    throw new Error(
+      `Bundle import partially failed: ${imported.length}/${finalRecords.length} instances written, ` +
+        `${writeFailures.length} failed (${writeFailures.join('; ')})`
+    );
+  }
 
   return { imported, stale };
 }

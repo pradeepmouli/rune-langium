@@ -187,14 +187,25 @@ export function DownloadConfigDialog({
   // response to a prop change) rather than in an effect, so the reset is
   // visible in the same render instead of flashing the prior session's
   // stale draft for one frame before an effect corrects it.
-  const resetKey = `${open}|${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
+  //
+  // `resetKey` deliberately does NOT include `open` — folding it into the
+  // compared string previously meant prevResetKeyRef only got updated while
+  // `open` was true (see the `if` below), so closing left it frozen at the
+  // last "open" key; reopening with the SAME target/namespaces then computed
+  // that identical key again and silently skipped the reset, leaking the
+  // prior session's draft into the reopened dialog (Codex review). The
+  // actual open transition is tracked separately via prevOpenRef instead.
+  const resetKey = `${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
   const prevResetKeyRef = useRef(resetKey);
-  if (open && prevResetKeyRef.current !== resetKey) {
+  const prevOpenRef = useRef(open);
+  const justOpened = open && !prevOpenRef.current;
+  if (open && (justOpened || prevResetKeyRef.current !== resetKey)) {
     prevResetKeyRef.current = resetKey;
     setSelected(new Set(namespaces));
     setLayout(panel?.defaultLayout);
     setTargetOptions({});
   }
+  prevOpenRef.current = open;
 
   const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
 

@@ -37,7 +37,6 @@ import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { conditionsToDisplay, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
 import { useEditorActionsContext } from '../forms/sections/EditorActionsContext.js';
-import { useStableKey } from '../../hooks/useStableKey.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -322,7 +321,6 @@ export function ConditionSection({
   renderExpressionEditor
 }: ConditionSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
-  const getKey = useStableKey();
 
   // ------ Declarative-path fallbacks (Phase 7 / US5) ----------------------
   //
@@ -412,7 +410,17 @@ export function ConditionSection({
       <FieldGroup className="gap-1.5">
         {conditions.map((condition, i) => (
           <ConditionRow
-            key={getKey(condition)}
+            // Index, NOT useStableKey — updateCondition (editor-store.ts) replaces
+            // the condition object wholesale on every field edit (Mutative's
+            // produce() always finalizes a touched item into a new reference, so
+            // there's no way to mutate-in-place and keep identity). A
+            // reference-identity WeakMap key therefore changes on every keystroke,
+            // remounting this row and dropping focus/expansion state after the
+            // first character (Codex review, P1). Conditions carry no stable
+            // content-independent id to key by instead, so this reverts to index
+            // keying — the accepted tradeoff is state-stealing across REORDER,
+            // not across every edit.
+            key={i}
             condition={condition}
             index={i}
             total={conditions.length}

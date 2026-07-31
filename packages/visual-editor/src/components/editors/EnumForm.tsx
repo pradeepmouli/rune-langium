@@ -310,7 +310,12 @@ function EnumForm({
 
             <PaginatedEnumValues
               effectiveValues={effectiveValues}
-              committedRef={committedRef}
+              // Read straight from `d`, NOT `committedRef` — the ref only updates
+              // in a post-commit layout effect, so on the render that swaps
+              // `data` (node switch / external graph push) it would still hold
+              // the PREVIOUS node's enumValues, baking a stale rename anchor
+              // into this row's onUpdate closures (Codex review).
+              committedEnumValues={d.enumValues ?? []}
               nodeId={nodeId}
               onUpdate={handleUpdateValue}
               onRemove={handleRemoveValue}
@@ -351,7 +356,7 @@ interface PaginatedEnumValuesProps {
     isOverride?: boolean;
     ancestorName?: string;
   }>;
-  committedRef: React.RefObject<unknown>;
+  committedEnumValues: Array<{ name?: string; display?: string }>;
   nodeId: string;
   onUpdate: (nodeId: string, oldName: string, newName: string, displayName?: string) => void;
   onRemove: (index: number) => void;
@@ -366,7 +371,7 @@ interface PaginatedEnumValuesProps {
 
 function PaginatedEnumValues({
   effectiveValues,
-  committedRef,
+  committedEnumValues,
   nodeId,
   onUpdate,
   onRemove,
@@ -396,8 +401,8 @@ function PaginatedEnumValues({
           <EnumValueRow
             key={entry.id}
             index={entry.fieldIndex!}
-            name={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.name ?? ''}
-            displayName={((committedRef.current as any).enumValues ?? [])[entry.fieldIndex!]?.display ?? ''}
+            name={committedEnumValues[entry.fieldIndex!]?.name ?? ''}
+            displayName={committedEnumValues[entry.fieldIndex!]?.display ?? ''}
             nodeId={nodeId}
             onUpdate={onUpdate}
             onRemove={() => onRemove(entry.fieldIndex!)}

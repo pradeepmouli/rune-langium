@@ -346,7 +346,10 @@ function FunctionForm({
                   key={field.id}
                   index={index}
                   fieldArrayName="inputs"
-                  committedName={((committedRef.current as any).inputs ?? [])[index]?.name ?? ''}
+                  // Read straight from `data`, NOT `committedRef` — see DataTypeForm's
+                  // identical fix; the ref is post-commit-only and can bake a stale
+                  // rename anchor into this row's onUpdate closures.
+                  committedName={(d.inputs ?? [])[index]?.name ?? ''}
                   availableTypes={availableTypes}
                   onUpdate={handleUpdateInput}
                   onRemove={handleRemoveInputByIndex}

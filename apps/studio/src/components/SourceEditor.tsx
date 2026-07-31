@@ -263,9 +263,17 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
     const exists = files.some((f) => f.path === activeFile);
     if (exists) {
       setSelectedPath(activeFile);
+      // Only mark this activeFile as "handled" once it actually resolved —
+      // if `files` hasn't hydrated it yet (async navigation race), leave
+      // prevActiveFileRef stale so a LATER render (once `files` catches up)
+      // still sees activeFile !== prevActiveFileRef.current and retries,
+      // instead of silently giving up because this unconditional assignment
+      // already marked the miss as "seen" (Codex review).
+      prevActiveFileRef.current = activeFile;
     }
+  } else {
+    prevActiveFileRef.current = activeFile;
   }
-  prevActiveFileRef.current = activeFile;
 
   // Expose imperative handle for programmatic navigation
   useImperativeHandle(ref, () => {
