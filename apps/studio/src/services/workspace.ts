@@ -978,9 +978,10 @@ export async function detectExternalChanges(
 ): Promise<FileChangeEvent[]> {
   const changes: FileChangeEvent[] = [];
   const newFiles = await readFileList(newFileList);
+  const currentByPath = new Map(currentFiles.map((f) => [f.path, f]));
 
   for (const newFile of newFiles) {
-    const existing = currentFiles.find((f) => f.path === newFile.path);
+    const existing = currentByPath.get(newFile.path);
     if (existing && existing.content !== newFile.content) {
       changes.push({ path: newFile.path, newContent: newFile.content });
     }

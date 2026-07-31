@@ -966,9 +966,10 @@ export function ExplorePerspective() {
   // Invert namespaceToFile against the current file content so the CST-reuse
   // serializer has the original source text to slice for clean subtrees.
   const originalSourceByNamespace = useMemo(() => {
+    const fileByPath = new Map(files.map((f) => [f.path, f]));
     const map = new Map<string, string>();
     for (const [ns, filePath] of namespaceToFile) {
-      const file = files.find((f) => f.path === filePath);
+      const file = fileByPath.get(filePath);
       if (file) map.set(ns, file.content);
     }
     return map;
