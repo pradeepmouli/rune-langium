@@ -582,11 +582,14 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
     // for the zod target — executed here through runInWorkerSandbox so
     // runeAttrExists/runeCount/etc. are in scope. Only Data targets carry
     // conditions; a Choice target (no `dataNode`) has none to evaluate.
-    const conditionDiagnostics: ValidationDiagnostic[] = dataNode
-      ? getActiveConditionPredicates(dataNode)
-          .filter(({ predicate }) => !runInWorkerSandbox('', 'data', data, `(${predicate})`))
-          .map(({ name }) => ({ path: name, message: `Condition '${name}' failed`, conditionName: name }))
-      : [];
+    const conditionDiagnostics: ValidationDiagnostic[] = [];
+    if (dataNode) {
+      for (const { name, predicate } of getActiveConditionPredicates(dataNode)) {
+        if (!runInWorkerSandbox('', 'data', data, `(${predicate})`)) {
+          conditionDiagnostics.push({ path: name, message: `Condition '${name}' failed`, conditionName: name });
+        }
+      }
+    }
 
     scope.postMessage({
       type: 'instance:validateResult',

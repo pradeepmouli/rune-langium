@@ -484,9 +484,11 @@ export async function parseWorkspaceFiles(
   // through and got POSTed to /api/parse as bogus files named
   // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
   // extension '.'" → 500, collapsing the curated catalog to the user closure.
-  const userFiles = files
-    .filter((f) => !f.bundleId && !f.serializedModelJson && !f.refOnly)
-    .map((f) => ({ name: f.path, content: f.content }));
+  const userFiles: Array<{ name: string; content: string }> = [];
+  for (const f of files) {
+    if (f.bundleId || f.serializedModelJson || f.refOnly) continue;
+    userFiles.push({ name: f.path, content: f.content });
+  }
   const curatedBundles = collectCuratedBundlesFromWorkspace(files);
 
   try {

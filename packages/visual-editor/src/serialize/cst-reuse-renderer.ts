@@ -236,12 +236,12 @@ export function renderNamespace(args: RenderArgs): string {
   if (fresh.length > 0) {
     let body = parts.join('');
     if (!body.endsWith('\n')) body += '\n';
-    const additions = fresh
-      .map((n) => {
-        const render = makeRender(n.id);
-        return render(n.data as unknown as DehydratedNode, []);
-      })
-      .filter((s) => s !== '');
+    const additions: string[] = [];
+    for (const n of fresh) {
+      const render = makeRender(n.id);
+      const rendered = render(n.data as unknown as DehydratedNode, []);
+      if (rendered !== '') additions.push(rendered);
+    }
     if (additions.length > 0) {
       return body + '\n' + additions.join('\n\n') + '\n';
     }

@@ -361,9 +361,10 @@ function DataTypeForm({
   // receives `{ isFirst, isLast }` positional context and returns the existing
   // <InheritedAttributeRow> JSX with the override affordance preserved.
   const ghostRowsBefore = useMemo<GhostRow[]>(() => {
-    return effectiveAttributes
-      .filter((entry) => entry.source === 'inherited')
-      .map<GhostRow>((entry) => ({
+    const rows: GhostRow[] = [];
+    for (const entry of effectiveAttributes) {
+      if (entry.source !== 'inherited') continue;
+      rows.push({
         id: entry.id,
         render: (_ctx: GhostRowContext) => (
           <InheritedAttributeRow
@@ -383,7 +384,9 @@ function DataTypeForm({
             allNodeIds={allNodeIds}
           />
         )
-      }));
+      });
+    }
+    return rows;
   }, [effectiveAttributes, isReadOnly, handleOverrideInherited, onNavigateToNode, allNodeIds]);
 
   const inheritedCount = ghostRowsBefore.length;

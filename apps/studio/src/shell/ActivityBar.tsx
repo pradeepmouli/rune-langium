@@ -41,11 +41,18 @@ export function ActivityBar({ hasWorkspace, hasExploreContent }: Props): React.R
     );
   };
 
+  const mainButtons: React.ReactElement[] = [];
+  const bottomButtons: React.ReactElement[] = [];
+  for (const p of PERSPECTIVES) {
+    if (p.group === 'main') mainButtons.push(renderButton(p));
+    else if (p.group === 'bottom') bottomButtons.push(renderButton(p));
+  }
+
   return (
     <nav aria-label="Studio activity bar" data-testid="activity-bar" className="studio-rail">
-      <div className="studio-rail__group">{PERSPECTIVES.filter((p) => p.group === 'main').map(renderButton)}</div>
+      <div className="studio-rail__group">{mainButtons}</div>
       <div className="studio-rail__spacer" />
-      <div className="studio-rail__group">{PERSPECTIVES.filter((p) => p.group === 'bottom').map(renderButton)}</div>
+      <div className="studio-rail__group">{bottomButtons}</div>
     </nav>
   );
 }

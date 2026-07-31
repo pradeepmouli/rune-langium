@@ -180,7 +180,11 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
       const newTarget = config.target;
       setDownloadModalTarget(undefined);
       const fileList = files ?? [];
-      const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+      const requestFiles: Array<{ path: string; content: string }> = [];
+      for (const f of fileList) {
+        if (f.readOnly) continue;
+        requestFiles.push({ path: f.path, content: f.content });
+      }
       const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
       // Merge layout + target-specific options (e.g. excel sheet toggles) into
       // the options bag. The order of spreading means explicit options from the

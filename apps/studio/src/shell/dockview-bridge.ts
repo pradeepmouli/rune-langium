@@ -76,9 +76,11 @@ export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
     if (restoredPanels.length === 0) {
       throw new Error('restored layout contains no panels');
     }
-    const unknownPanels = restoredPanels
-      .map((panel) => panel.api.component)
-      .filter((component) => !KNOWN_COMPONENTS.has(component));
+    const unknownPanels: string[] = [];
+    for (const panel of restoredPanels) {
+      const component = panel.api.component;
+      if (!KNOWN_COMPONENTS.has(component)) unknownPanels.push(component);
+    }
     if (unknownPanels.length > 0) {
       throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
     }

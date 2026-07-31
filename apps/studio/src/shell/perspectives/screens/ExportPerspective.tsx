@@ -96,7 +96,11 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
       const newTarget = config.target;
       setDownloadModalTarget(undefined);
       const fileList = files ?? [];
-      const requestFiles = fileList.filter((f) => !f.readOnly).map((f) => ({ path: f.path, content: f.content }));
+      const requestFiles: Array<{ path: string; content: string }> = [];
+      for (const f of fileList) {
+        if (f.readOnly) continue;
+        requestFiles.push({ path: f.path, content: f.content });
+      }
       const { curatedBundles, curatedDocs } = collectCuratedSourcesForCodegen(fileList);
       const targetOptions = (config.options?.[newTarget] ?? {}) as Record<string, unknown>;
       const layoutOption = config.layout ? { layout: config.layout } : {};

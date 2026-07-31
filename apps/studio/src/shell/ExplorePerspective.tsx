@@ -849,14 +849,13 @@ export function ExplorePerspective() {
     const relinkedKey = `${hydrationNonce}:${namespace}`;
     if (relinkedRef.current.has(relinkedKey)) return;
     relinkedRef.current.add(relinkedKey);
-    const filePaths = [
-      ...new Set(
-        deferredExportsRef.current
-          .filter((e) => e.namespace === namespace)
-          .map((e) => e.filePath)
-          .filter((fp) => fp && !fp.startsWith('system://'))
-      )
-    ];
+    const filePathSet = new Set<string>();
+    for (const e of deferredExportsRef.current) {
+      if (e.namespace !== namespace) continue;
+      if (!e.filePath || e.filePath.startsWith('system://')) continue;
+      filePathSet.add(e.filePath);
+    }
+    const filePaths = [...filePathSet];
     if (filePaths.length === 0) return;
     const requestWorkspaceId = workspaceId;
     let cancelled = false;
