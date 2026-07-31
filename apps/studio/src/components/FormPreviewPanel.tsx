@@ -59,12 +59,22 @@ export function FormPreviewPanel({
   }>({ errors: {}, valid: true, validated: false });
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
-  const [executionResult, setExecutionResult] = useState<unknown>(undefined);
-  const [executionError, setExecutionError] = useState<string | null>(null);
 
   const funcName = schema?.kind === 'function' ? schema.title : undefined;
   const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
   const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
+
+  // Seed from any execution result already cached in the store at mount
+  // time — e.g. the dock panel was closed (unmounting this component) then
+  // reopened while the store still holds a prior run's result. Without this,
+  // the sync branch below only reacts to storeExecResult CHANGING, and
+  // useState(storeExecResult) below initializes prevStoreExecResult to that
+  // same already-current value, so the branch never fires and the cached
+  // output stayed hidden until the next execution (Codex review).
+  const [executionResult, setExecutionResult] = useState<unknown>(() =>
+    storeExecResult && !storeExecResult.error ? storeExecResult.output : undefined
+  );
+  const [executionError, setExecutionError] = useState<string | null>(() => storeExecResult?.error ?? null);
 
   // Adjusted during render (React's blessed pattern) rather than in
   // effects, so switching functions or a new execution result lands in the
@@ -85,8 +95,19 @@ export function FormPreviewPanel({
   const [prevStoreExecResult, setPrevStoreExecResult] = useState(storeExecResult);
   if (funcName !== prevFuncName) {
     setExecutionState('idle');
-    setExecutionResult(undefined);
-    setExecutionError(null);
+    // Seed from the NEWLY selected function's own cached result, if it has
+    // one, rather than unconditionally blanking — otherwise switching to a
+    // function that was already executed earlier in this session hides its
+    // cached output until it's re-run, and the trailing prevStoreExecResult
+    // sync below would mark it "seen" so the branch below never picks it up
+    // retroactively either (same root cause as the mount-time case above).
+    if (storeExecResult) {
+      setExecutionResult(storeExecResult.error ? undefined : storeExecResult.output);
+      setExecutionError(storeExecResult.error ?? null);
+    } else {
+      setExecutionResult(undefined);
+      setExecutionError(null);
+    }
   } else if (storeExecResult && storeExecResult !== prevStoreExecResult) {
     if (storeExecResult.error) {
       setExecutionError(storeExecResult.error);
