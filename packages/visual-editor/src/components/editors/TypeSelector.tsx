@@ -223,11 +223,14 @@ export function TypeSelector({
   // Find current selection
   const selected = useMemo(() => options?.find((o) => o.value === value) ?? null, [options, value]);
 
-  const handleSelect = (val: string | null) => {
-    onSelect(val);
-    setOpen(false);
-    setSearchQuery('');
-  };
+  const handleSelect = useCallback(
+    (val: string | null) => {
+      onSelect(val);
+      setOpen(false);
+      setSearchQuery('');
+    },
+    [onSelect]
+  );
 
   const handleToggle = () => {
     if (!disabled) {
@@ -273,8 +276,6 @@ export function TypeSelector({
     (payload: TypeRefPayload) => {
       handleSelect(payload.typeId);
     },
-    // handleSelect is stable per render in this component; including it
-    // is safe and keeps the linter happy.
     [handleSelect]
   );
   const { dragOverHandlers, isOver } = useTypeRefDrop({ accept: acceptKinds, onDrop: handleDrop });

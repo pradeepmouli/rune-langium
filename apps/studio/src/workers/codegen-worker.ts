@@ -466,9 +466,9 @@ function stripTypeAnnotations(tsCode: string): string {
  * react-doctor false positive: this is `new Function`, not `eval`, but the rule
  * flags both. Disable comment preserved.
  */
-// eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-// react-doctor-disable-next-line react-doctor/no-eval
 function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown, returnExpr: string): unknown {
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+  // react-doctor-disable-next-line react-doctor/no-eval
   const wrapper = new Function(
     argName,
     'fetch',
