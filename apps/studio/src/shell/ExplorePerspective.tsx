@@ -1543,7 +1543,9 @@ export function ExplorePerspective() {
       handleRelayout,
       handleToggleFocusMode,
       handleToggleGroupedLayout,
-      navigateToNode
+      navigateToNode,
+      storeLayoutEngine,
+      storeSetLayoutEngine
     ]
   );
 

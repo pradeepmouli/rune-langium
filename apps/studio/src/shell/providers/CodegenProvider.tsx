@@ -302,7 +302,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
       codegenWorker.removeEventListener('message', handleCodegenMessage as EventListener);
       codegenWorker.removeEventListener('error', handleCodegenWorkerError as EventListener);
     };
-  }, [codegenWorker]);
+  }, [codegenWorker, showToast]);
 
   // Effect 2: kick off code generation when the active target changes.
   // Mirrors the removed CodePreviewPanel effect (018 Task 0.8).
@@ -332,7 +332,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
         variant: 'destructive'
       });
     }
-  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget]);
+  }, [codegenWorker, codegenActiveTarget, codegenPreviewTarget, showToast]);
 
   return <>{children}</>;
 }

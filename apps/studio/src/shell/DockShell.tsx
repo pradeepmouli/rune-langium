@@ -207,6 +207,7 @@ export function DockShell({
     [studioVersion]
   );
   const { showToast } = useStudioToast();
+  const showToastRef = useLatestRef(showToast);
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const suppressLayoutPersistenceRef = useRef(false);
@@ -306,7 +307,7 @@ export function DockShell({
               fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
               'warn'
             );
-          showToast({
+          showToastRef.current({
             title: 'Layout not saved',
             description: 'Could not persist the current panel arrangement.',
             variant: 'destructive'

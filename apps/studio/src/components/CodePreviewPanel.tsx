@@ -215,7 +215,7 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
         setDownloadingTarget(undefined);
       }
     },
-    [files]
+    [files, showToast]
   );
 
   const handleLineClick = useCallback((outputLine: number) => {

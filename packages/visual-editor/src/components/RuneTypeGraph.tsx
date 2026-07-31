@@ -862,17 +862,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         return validateGraph(storeNodes, storeEdges);
       }
     }),
-    [
-      activeLayout,
-      graphNodes,
-      storeNodes,
-      storeNodesById,
-      storeEdges,
-      mergedConfig,
-      runViewportAction,
-      setNodes,
-      callbacks
-    ]
+    [activeLayout, graphNodes, storeNodes, storeNodesById, storeEdges, runViewportAction, setNodes, callbacks]
   );
 
   // Context menu state

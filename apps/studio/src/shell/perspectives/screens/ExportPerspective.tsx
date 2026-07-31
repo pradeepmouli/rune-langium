@@ -128,7 +128,7 @@ export function ExportPerspective({ files }: ExportPerspectiveProps): ReactEleme
         setDownloadingTarget(undefined);
       }
     },
-    [files]
+    [files, showToast]
   );
 
   // Derive read-only preview content from the store snapshot.
