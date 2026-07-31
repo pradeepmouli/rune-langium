@@ -160,6 +160,9 @@ export interface EditorFormPanelProps {
 // Component
 // ---------------------------------------------------------------------------
 
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
+const EMPTY_NODES: TypeGraphNode[] = [];
+
 const EditorFormPanel = memo(function EditorFormPanel({
   nodeData,
   meta: metaProp,
@@ -168,9 +171,9 @@ const EditorFormPanel = memo(function EditorFormPanel({
   refOnly = false,
   isHydrating = false,
   availableTypes,
-  synonymSourceOptions = [],
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS,
   actions,
-  allNodes = [],
+  allNodes = EMPTY_NODES,
   nodeRepository,
   renderExpressionEditor,
   onClose,

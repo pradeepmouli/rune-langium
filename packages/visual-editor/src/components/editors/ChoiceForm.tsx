@@ -92,11 +92,13 @@ export interface ChoiceFormProps {
 // Component
 // ---------------------------------------------------------------------------
 
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
+
 function ChoiceForm({
   nodeId,
   data,
   availableTypes,
-  synonymSourceOptions = [],
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS,
   actions,
   onNavigateToNode,
   allNodeIds,

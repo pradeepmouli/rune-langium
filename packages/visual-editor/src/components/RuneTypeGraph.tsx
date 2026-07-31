@@ -181,10 +181,11 @@ function buildInheritanceDisplayNodes(nodes: TypeGraphNode[], edges: TypeGraphEd
     for (const node of group.nodes) {
       const width = getNodeWidth(node);
       const height = getNodeHeight(node);
-      minX = Math.min(minX, node.position.x);
-      minY = Math.min(minY, node.position.y);
-      maxX = Math.max(maxX, node.position.x + width);
-      maxY = Math.max(maxY, node.position.y + height);
+      const { x, y } = node.position;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + width);
+      maxY = Math.max(maxY, y + height);
       groupedNodeIds.add(node.id);
     }
 

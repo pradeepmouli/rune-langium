@@ -59,6 +59,7 @@ import type {
 } from '../../types.js';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -102,7 +103,7 @@ function EnumForm({
   nodeId,
   data,
   availableTypes,
-  synonymSourceOptions = [],
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS,
   actions,
   allNodes = EMPTY_NODES,
   onNavigateToNode,

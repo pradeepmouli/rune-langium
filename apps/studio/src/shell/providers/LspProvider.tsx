@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import type React from 'react';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LspContext, type LspContextValue } from './lsp-context.js';
 import { useWorkspace } from './workspace-context.js';
 import { createLspClientService, type LspClientService } from '../../services/lsp-client.js';
@@ -136,6 +136,13 @@ export function LspProvider({ children }: { children: React.ReactNode }): React.
     })();
   }, [showToast]);
 
-  const value: LspContextValue = { lspClient: lspClientRef.current, transportState, reconnect };
+  // Memoized so LspContext consumers don't re-render on every LspProvider
+  // render — only when transportState or reconnect actually change.
+  // lspClientRef.current changes are always accompanied by a transportState
+  // update in this file, so that's a sufficient trigger for staying fresh.
+  const value: LspContextValue = useMemo(
+    () => ({ lspClient: lspClientRef.current, transportState, reconnect }),
+    [transportState, reconnect]
+  );
   return <LspContext.Provider value={value}>{children}</LspContext.Provider>;
 }

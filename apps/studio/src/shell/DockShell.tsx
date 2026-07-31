@@ -222,6 +222,31 @@ export function DockShell({
     layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
   );
   const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['structure']));
+  const toggleCenterPane = useCallback((pane: CenterPane) => {
+    setActivePanes((prev) => {
+      const next = new Set(prev);
+      if (next.has(pane)) {
+        if (next.size <= 1) return prev;
+        next.delete(pane);
+      } else {
+        next.add(pane);
+        // Graph ↔ Structure mutual exclusion: showing one always hides
+        // the other. They occupy the same conceptual slot (the structural
+        // visualisation of the focused type) and the user reported that
+        // having both visible at once is wasteful when nodes are expanded.
+        if (pane === 'structure' && next.has('graph')) next.delete('graph');
+        if (pane === 'graph' && next.has('structure')) next.delete('structure');
+      }
+      return next;
+    });
+  }, []);
+  // Memoized so CenterPanesContext consumers don't re-render on every
+  // DockShell render — only when activePanes itself actually changes
+  // (toggleCenterPane is stable via the functional setState form above).
+  const centerPanesContextValue = useMemo(
+    () => ({ activePanes, toggle: toggleCenterPane }),
+    [activePanes, toggleCenterPane]
+  );
   const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
     layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
   );
@@ -344,6 +369,12 @@ export function DockShell({
   const toggleUtilities = useCallback(() => {
     setUtilitiesCollapsed(!utilitiesCollapsed);
   }, [setUtilitiesCollapsed, utilitiesCollapsed]);
+  // Memoized so UtilityTrayContext consumers don't re-render on every
+  // DockShell render — only when one of these actually changes.
+  const utilityTrayContextValue = useMemo(
+    () => ({ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }),
+    [utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities]
+  );
 
   useEffect(() => {
     return installShellShortcuts(window, (action) => {
@@ -455,32 +486,9 @@ export function DockShell({
           </AlertDescription>
         </Alert>
       ) : null}
-      <CenterPanesContext.Provider
-        value={{
-          activePanes,
-          toggle: (pane: CenterPane) => {
-            setActivePanes((prev) => {
-              const next = new Set(prev);
-              if (next.has(pane)) {
-                if (next.size <= 1) return prev;
-                next.delete(pane);
-              } else {
-                next.add(pane);
-                // Graph ↔ Structure mutual exclusion: showing one always
-                // hides the other. They occupy the same conceptual slot
-                // (the structural visualisation of the focused type) and
-                // the user reported that having both visible at once is
-                // wasteful when nodes are expanded.
-                if (pane === 'structure' && next.has('graph')) next.delete('graph');
-                if (pane === 'graph' && next.has('structure')) next.delete('structure');
-              }
-              return next;
-            });
-          }
-        }}
-      >
+      <CenterPanesContext.Provider value={centerPanesContextValue}>
         <PanelRegistryContext.Provider value={panelRegistry}>
-          <UtilityTrayContext.Provider value={{ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }}>
+          <UtilityTrayContext.Provider value={utilityTrayContextValue}>
             <div className="min-h-0 min-w-0 flex-1">
               <DockLayout
                 components={DOCKVIEW_COMPONENTS}

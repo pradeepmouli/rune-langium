@@ -95,13 +95,15 @@ type SynonymEntry = {
  * Reads field values from the parent `FormProvider` context. Auto-resize
  * textareas for description and comments; SourceRefField picker for synonyms.
  */
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
+
 export function MetadataSection({
   readOnly,
   onDefinitionCommit,
   onCommentsCommit,
   onSynonymAdd,
   onSynonymRemove,
-  synonymSourceOptions = []
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS
 }: MetadataSectionProps): React.ReactNode {
   const { control, getValues } = useFormContext();
   const [expanded, setExpanded] = useState(true);

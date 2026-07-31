@@ -54,6 +54,7 @@ import type {
 import type { ReactNode } from 'react';
 
 const EMPTY_NODES: TypeGraphNode[] = [];
+const EMPTY_SYNONYM_SOURCE_OPTIONS: SourceRefOption[] = [];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -101,7 +102,7 @@ function DataTypeForm({
   nodeId,
   data,
   availableTypes,
-  synonymSourceOptions = [],
+  synonymSourceOptions = EMPTY_SYNONYM_SOURCE_OPTIONS,
   actions,
   allNodes = EMPTY_NODES,
   renderExpressionEditor,

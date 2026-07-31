@@ -39,7 +39,7 @@ import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
-import { EditorActionsProvider } from '../forms/sections/index.js';
+import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { formValuesProjection } from './identity-projection.js';
 import type {
   AnyGraphNode,
