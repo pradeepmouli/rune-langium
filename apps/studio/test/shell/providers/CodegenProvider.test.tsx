@@ -29,6 +29,10 @@ class FakeWorker {
 beforeEach(() => {
   FakeWorker.instances = [];
   window.__runeStudioTestApi = { createCodegenWorker: () => new FakeWorker() as unknown as Worker };
+  // This file's tests never touched useEditorStore before the hydration-wiring
+  // test below started mutating pendingHydrationNamespaces/hydratedNamespaces;
+  // reset the touched fields so state doesn't leak between tests.
+  useEditorStore.setState({ pendingHydrationNamespaces: [], hydratedNamespaces: [], hydrationNonce: 0 });
 });
 
 import { CodegenProvider } from '../../../src/shell/providers/CodegenProvider.js';
@@ -36,6 +40,7 @@ import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/p
 import { useInstanceStore } from '../../../src/store/instance-store.js';
 import { usePreviewStore } from '../../../src/store/preview-store.js';
 import { useOutputStore } from '../../../src/store/output-store.js';
+import { useEditorStore } from '@rune-langium/visual-editor';
 
 function wsState(id: string): WorkspaceState {
   return {
@@ -244,5 +249,71 @@ describe('CodegenProvider', () => {
     const lines = useOutputStore.getState().lines;
     expect(lines.find((l) => l.op === 'preview')).toBeDefined();
     expect(lines.find((l) => l.text.includes('worker crashed'))).toBeDefined();
+  });
+
+  it('requests hydration and re-generates the failed target when a preview result reports an unresolved curated reference', async () => {
+    usePreviewStore.getState().resetPreviewState();
+    usePreviewStore.setState({
+      selectedTargetId: 'Scheme',
+      selectedTarget: { id: 'Scheme', namespace: 'fpml.consolidated.confirmation', name: 'Scheme', kind: 'data' }
+    });
+
+    const wsWithDeferredExports: WorkspaceState = {
+      ...wsState('ws-hydrate'),
+      deferredExports: [
+        {
+          filePath: 'fpml/consolidated/shared/bundle.rosetta',
+          namespace: 'fpml.consolidated.shared',
+          exports: [{ type: 'data', name: 'NormalizedString' }]
+        }
+      ]
+    };
+
+    render(
+      <WorkspaceStateContext.Provider value={wsWithDeferredExports}>
+        <CodegenProvider>
+          <div />
+        </CodegenProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const generateMsg = worker.posted.find((m) => m.type === 'preview:generate' && m.targetId === 'Scheme');
+    expect(generateMsg).toBeDefined();
+
+    await act(async () => {
+      for (const listener of worker.listeners['message'] ?? []) {
+        listener({
+          data: {
+            type: 'preview:result',
+            targetId: 'Scheme',
+            requestId: generateMsg.requestId,
+            schema: {
+              schemaVersion: 1,
+              kind: 'typeAlias',
+              targetId: 'Scheme',
+              title: 'Scheme',
+              status: 'unsupported',
+              fields: [],
+              unsupportedFeatures: ['unresolved-reference:NormalizedString']
+            }
+          }
+        });
+      }
+    });
+
+    expect(useEditorStore.getState().pendingHydrationNamespaces).toContain('fpml.consolidated.shared');
+    expect(usePreviewStore.getState().hydrationRetriesRemaining['Scheme']).toBe(4);
+
+    await act(async () => {
+      useEditorStore.getState().markNamespacesHydrated(['fpml.consolidated.shared']);
+      // The retry is deliberately deferred by one macrotask (see
+      // CodegenProvider's onRetry comment) — flush it here.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const generateMsgsAfter = worker.posted.filter((m) => m.type === 'preview:generate' && m.targetId === 'Scheme');
+    expect(generateMsgsAfter.length).toBeGreaterThan(1);
+    expect(generateMsgsAfter.at(-1)).not.toBe(generateMsg);
   });
 });
