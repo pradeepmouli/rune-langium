@@ -101,6 +101,15 @@ vi.mock('@rune-langium/visual-editor', () => ({
   resolveNodeKind: () => 'data',
   useEditorStore,
   useModelSourceSync: () => {},
+  // Mirrors the real hook: a ref synced to the latest value via
+  // useLayoutEffect, not a render-body write.
+  useLatestRef: <T,>(value: T) => {
+    const ref = React.useRef(value);
+    React.useLayoutEffect(() => {
+      ref.current = value;
+    }, [value]);
+    return ref;
+  },
   selectNodeRepository: (nodesById: Map<string, unknown>) => ({
     byId: (id: string) => nodesById?.get(id),
     byType: () => [],

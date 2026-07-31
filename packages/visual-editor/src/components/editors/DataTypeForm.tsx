@@ -18,7 +18,7 @@
  * @module
  */
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
@@ -35,6 +35,7 @@ import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { getRefText, parseCardinality, type ConditionDisplayInfo } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { DataSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
@@ -145,8 +146,7 @@ function DataTypeForm({
   });
 
   // Track the committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 

@@ -30,12 +30,13 @@
  * @module
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { RosettaTypeAliasSchema } from '../../generated/zod-schemas.js';
 import { EditorActionsProvider } from '../forms/sections/index.js';
@@ -123,8 +124,7 @@ function TypeAliasForm({
   });
 
   // Track committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 

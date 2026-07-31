@@ -20,8 +20,9 @@
  * Wiring into the real Download handler is the caller's job (§5.3).
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
@@ -178,8 +179,7 @@ export function DownloadConfigDialog({
   const [targetOptions, setTargetOptions] = useState<Record<string, unknown>>({});
   // Use a ref so handleGenerate always reads the latest options without
   // re-creating the callback on every options change.
-  const targetOptionsRef = useRef(targetOptions);
-  targetOptionsRef.current = targetOptions;
+  const targetOptionsRef = useLatestRef(targetOptions);
 
   // Reset draft state whenever the modal (re)opens or the target changes —
   // a fresh open should not inherit a stale narrowing from a prior session.

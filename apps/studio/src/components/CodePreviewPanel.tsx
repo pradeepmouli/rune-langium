@@ -19,6 +19,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import type { Target } from '@rune-langium/codegen/export';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import { studioEditorExtensions } from '../lang/editor-theme.js';
 import {
   downloadTargetViaRouter,
@@ -117,10 +118,8 @@ export function CodePreviewPanel({ sourceEditorRef, files }: CodePreviewPanelPro
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
-  const sourceEditorRefRef = useRef(sourceEditorRef);
-  const activeFileRef = useRef<CodePreviewFile | undefined>(undefined);
-  sourceEditorRefRef.current = sourceEditorRef;
-  activeFileRef.current = activeFile;
+  const sourceEditorRefRef = useLatestRef(sourceEditorRef);
+  const activeFileRef = useLatestRef<CodePreviewFile | undefined>(activeFile);
 
   // 019 polish — View toggles. Click the eye on the already-active row
   // collapses the preview area; click on a different row swaps it.

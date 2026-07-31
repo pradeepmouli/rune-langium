@@ -34,7 +34,7 @@
  * @module
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { FormProvider, useFieldArray, Controller, type Control } from 'react-hook-form';
 import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
@@ -52,6 +52,7 @@ import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { getTypeRefText, parseCardinality, getExpressionDisplayText } from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { functionFormRegistry } from '../forms/rows/index.js';
 import { RosettaFunctionSchema } from '../../generated/zod-schemas.js';
@@ -174,8 +175,7 @@ function FunctionForm({
   });
 
   // Track the committed (graph-confirmed) data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced — preserved per R8) ----------------------
 

@@ -26,6 +26,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type React from 'react';
 import type { DockviewApi, DockviewReadyEvent, IDockviewPanelHeaderProps, IDockviewPanelProps } from 'dockview-react';
 import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import { FileTreePanel } from './panels/FileTreePanel.js';
 import { EditorPanel } from './panels/EditorPanel.js';
 import { InspectorPanel } from './panels/InspectorPanel.js';
@@ -209,8 +210,7 @@ export function DockShell({
   const apiRef = useRef<DockviewApi | null>(null);
   const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
   const suppressLayoutPersistenceRef = useRef(false);
-  const onLayoutChangeRef = useRef(onLayoutChange);
-  onLayoutChangeRef.current = onLayoutChange;
+  const onLayoutChangeRef = useLatestRef(onLayoutChange);
 
   const [layoutNotice, setLayoutNotice] = useState<string | null>(() => {
     const sanitized = getSanitizedLayout(initialLayout);
@@ -225,14 +225,11 @@ export function DockShell({
     layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
   );
 
-  // Refs kept current on every render so stable callbacks always read
-  // the latest values without needing them as useCallback deps.
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
-  const studioVersionRef = useRef(studioVersion);
-  studioVersionRef.current = studioVersion;
-  const panelTabMetaRef = useRef(panelTabMeta);
-  panelTabMetaRef.current = panelTabMeta;
+  // Refs kept current so stable callbacks always read the latest values
+  // without needing them as useCallback deps.
+  const layoutRef = useLatestRef(layout);
+  const studioVersionRef = useLatestRef(studioVersion);
+  const panelTabMetaRef = useLatestRef(panelTabMeta);
 
   // onReady is called exactly once by dockview (on mount). Including
   // layout/studioVersion as deps would recreate the callback whenever

@@ -307,11 +307,19 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   const syncLayoutedNodes = useMemo(() => {
     if (visibleNodes.length === 0 || shouldUseAsyncLayout) return [];
     if (isInitialLoad.current) {
-      isInitialLoad.current = false;
       return computeLayout(visibleNodes, visibleEdges, activeLayout);
     }
     return computeLayoutIncremental(visibleNodes, visibleEdges, activeLayout);
   }, [activeLayout, shouldUseAsyncLayout, visibleEdges, visibleNodes]);
+
+  // Flip the flag only once the initial render has actually committed —
+  // doing this inside the useMemo above would leak into discarded render
+  // work (Strict Mode double-render, Suspense retries, concurrent
+  // prerendering), permanently skipping the one-time full computeLayout
+  // for a render that never committed.
+  useEffect(() => {
+    isInitialLoad.current = false;
+  }, []);
 
   // Async path for large graphs
   useEffect(() => {

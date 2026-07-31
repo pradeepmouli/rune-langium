@@ -18,6 +18,7 @@ import { defaultKeymap } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
 import { cn } from '@rune-langium/design-system/utils';
+import { useLatestRef } from '@rune-langium/visual-editor';
 import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 
 // ---------------------------------------------------------------------------
@@ -82,8 +83,7 @@ function buildExtensions(onChange: (value: string) => void, onBlur: () => void, 
 export function ExpressionEditor({ value, onChange, onBlur, error, placeholder }: ExpressionEditorSlotProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const callbacksRef = useRef({ onChange, onBlur });
-  callbacksRef.current = { onChange, onBlur };
+  const callbacksRef = useLatestRef({ onChange, onBlur });
 
   // Stable callbacks that read from ref — avoids re-creating CM on every render
   const stableOnChange = useCallback((val: string) => callbacksRef.current.onChange(val), []);

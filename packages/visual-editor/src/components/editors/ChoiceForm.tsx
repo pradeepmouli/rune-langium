@@ -32,7 +32,7 @@
  * @module
  */
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { FormProvider } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
@@ -41,6 +41,7 @@ import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
+import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useZodForm, useExternalSync } from '@zod-to-form/react';
 import { ChoiceSchema } from '../../generated/zod-schemas.js';
 import { formRegistry } from '../forms/rows/index.js';
@@ -123,8 +124,7 @@ function ChoiceForm({
   useExternalSync(form, data, (n) => formValuesProjection<typeof ChoiceSchema>(n, nodeMeta), { keepDirty: true });
 
   // Track committed data for diffing
-  const committedRef = useRef(data);
-  committedRef.current = data;
+  const committedRef = useLatestRef(data);
 
   // ---- Name auto-save (debounced) ------------------------------------------
 
