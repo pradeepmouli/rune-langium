@@ -89,13 +89,23 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
   // blessed pattern) rather than in an effect, so the reset lands in the
   // same render instead of flashing the prior session's state for one
   // frame first.
-  const prevOpenRef = useRef(open);
-  if (open && !prevOpenRef.current) {
-    setState({ phase: 'idle' });
-    setSelectedFile(null);
-    setValidationWarnings([]);
+  //
+  // Tracked via useState, NOT a plain ref: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setState/setSelectedFile/
+  // setValidationWarnings calls ARE rolled back (they never committed) — so
+  // a bare `prevOpenRef.current = open` could leave the retry believing the
+  // open transition already happened and skip the reset, reopening with the
+  // prior phase/selected file/validation warnings (Codex review).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setState({ phase: 'idle' });
+      setSelectedFile(null);
+      setValidationWarnings([]);
+    }
   }
-  prevOpenRef.current = open;
 
   // Check service availability when dialog opens — inherently async, so
   // this part stays in an effect.

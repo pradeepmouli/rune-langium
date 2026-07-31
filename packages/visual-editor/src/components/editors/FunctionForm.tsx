@@ -472,7 +472,15 @@ function FunctionForm({
                 'result';
               const isAdd = op.add === true;
               return (
-                <div key={getKey(op)} data-slot="operation-section" className="flex flex-col gap-1">
+                // Index, NOT useStableKey — updateExpression replaces the operation
+                // object wholesale on every expression save (Mutative's produce()
+                // always finalizes a touched item into a new reference), so a
+                // reference-identity WeakMap key changes on every save, remounting
+                // the rich expression editor and resetting its mode/undo
+                // history/palette/selection (Codex review). Same fix as
+                // ConditionSection.tsx's condition rows — operations carry no
+                // stable content-independent id to key by instead.
+                <div key={i} data-slot="operation-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">
                     {isAdd ? 'add' : 'set'} {assignTarget}
                   </span>

@@ -20,7 +20,7 @@
  * Wiring into the real Download handler is the caller's job (§5.3).
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -194,18 +194,26 @@ export function DownloadConfigDialog({
   // last "open" key; reopening with the SAME target/namespaces then computed
   // that identical key again and silently skipped the reset, leaking the
   // prior session's draft into the reopened dialog (Codex review). The
-  // actual open transition is tracked separately via prevOpenRef instead.
+  // actual open transition is tracked separately via prevOpen instead.
+  //
+  // Both markers are useState, NOT plain refs: a ref mutation made during
+  // render is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setSelected/setLayout/
+  // setTargetOptions calls ARE rolled back (they never committed) — so a
+  // bare `.current = ...` assignment could leave the retry believing this
+  // reset key was already handled and skip it, generating with the prior
+  // namespace selection/layout/target options (Codex review, round 2).
   const resetKey = `${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
-  const prevResetKeyRef = useRef(resetKey);
-  const prevOpenRef = useRef(open);
-  const justOpened = open && !prevOpenRef.current;
-  if (open && (justOpened || prevResetKeyRef.current !== resetKey)) {
-    prevResetKeyRef.current = resetKey;
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  const [prevOpen, setPrevOpen] = useState(open);
+  const justOpened = open && !prevOpen;
+  if (open && (justOpened || prevResetKey !== resetKey)) {
+    setPrevResetKey(resetKey);
     setSelected(new Set(namespaces));
     setLayout(panel?.defaultLayout);
     setTargetOptions({});
   }
-  prevOpenRef.current = open;
+  if (open !== prevOpen) setPrevOpen(open);
 
   const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
 

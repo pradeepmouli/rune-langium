@@ -15,7 +15,7 @@
  * EditorPage props (present-tense wiring — no zustand store needed).
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ReactElement } from 'react';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import type { WorkspaceKind } from '../../../workspace/persistence.js';
@@ -63,17 +63,21 @@ export function GitSyncPerspective({ workspaceId, workspaceKind }: GitSyncPerspe
   // pattern) rather than in the subscription effect below, so stale status
   // never even paints for one frame before the effect's cleanup/resubscribe
   // would otherwise correct it.
-  const prevIsGitBackedRef = useRef(isGitBacked);
-  const prevWorkspaceIdRef = useRef(workspaceId);
-  if (
-    isGitBacked &&
-    workspaceId &&
-    (isGitBacked !== prevIsGitBackedRef.current || workspaceId !== prevWorkspaceIdRef.current)
-  ) {
+  //
+  // Tracked via useState, NOT plain refs: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setSyncStatus(null) call IS
+  // rolled back (it never committed) — so a bare `.current = ...` assignment
+  // could leave the retry believing this workspace switch was already
+  // handled and skip the reset, painting the previous workspace's status
+  // until (if ever) subscribeToEngine happens to correct it (Codex review).
+  const [prevIsGitBacked, setPrevIsGitBacked] = useState(isGitBacked);
+  const [prevWorkspaceId, setPrevWorkspaceId] = useState(workspaceId);
+  if (isGitBacked && workspaceId && (isGitBacked !== prevIsGitBacked || workspaceId !== prevWorkspaceId)) {
     setSyncStatus(null);
   }
-  prevIsGitBackedRef.current = isGitBacked;
-  prevWorkspaceIdRef.current = workspaceId;
+  if (isGitBacked !== prevIsGitBacked) setPrevIsGitBacked(isGitBacked);
+  if (workspaceId !== prevWorkspaceId) setPrevWorkspaceId(workspaceId);
 
   useEffect(() => {
     if (!isGitBacked || !workspaceId) return;

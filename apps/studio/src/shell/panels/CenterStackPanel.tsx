@@ -43,9 +43,16 @@ export function CenterStackPanel({
 
   const [fractions, setFractions] = useState<number[]>(() => ordered.map(() => 1 / ordered.length));
 
-  const prevCountRef = useRef(ordered.length);
-  if (ordered.length !== prevCountRef.current) {
-    prevCountRef.current = ordered.length;
+  // Tracked via useState, NOT a plain ref: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setFractions call IS rolled
+  // back (it never committed) — so a bare `.current = ...` assignment could
+  // leave a retry believing this pane-count change was already handled and
+  // skip re-equalizing the split fractions (same class of issue Codex
+  // flagged across several dialogs in this PR).
+  const [prevCount, setPrevCount] = useState(ordered.length);
+  if (ordered.length !== prevCount) {
+    setPrevCount(ordered.length);
     const equal = ordered.map(() => 1 / ordered.length);
     if (JSON.stringify(equal) !== JSON.stringify(fractions)) {
       setFractions(equal);

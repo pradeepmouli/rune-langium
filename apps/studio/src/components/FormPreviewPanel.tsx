@@ -73,13 +73,21 @@ export function FormPreviewPanel({
   // same-render storeExecResult change, matching the original two-effects'
   // declaration-order commit sequencing (the funcName effect ran second and
   // so always won when both fired together).
-  const prevFuncNameRef = useRef(funcName);
-  const prevStoreExecResultRef = useRef(storeExecResult);
-  if (funcName !== prevFuncNameRef.current) {
+  //
+  // Tracked via useState, NOT plain refs: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setExecutionState/
+  // setExecutionResult/setExecutionError calls ARE rolled back (they never
+  // committed) — so a bare `.current = ...` assignment could leave the
+  // retry believing the new function/result was already handled and keep
+  // displaying the previous function's output indefinitely (Codex review).
+  const [prevFuncName, setPrevFuncName] = useState(funcName);
+  const [prevStoreExecResult, setPrevStoreExecResult] = useState(storeExecResult);
+  if (funcName !== prevFuncName) {
     setExecutionState('idle');
     setExecutionResult(undefined);
     setExecutionError(null);
-  } else if (storeExecResult && storeExecResult !== prevStoreExecResultRef.current) {
+  } else if (storeExecResult && storeExecResult !== prevStoreExecResult) {
     if (storeExecResult.error) {
       setExecutionError(storeExecResult.error);
     } else {
@@ -87,8 +95,8 @@ export function FormPreviewPanel({
     }
     setExecutionState('idle');
   }
-  prevFuncNameRef.current = funcName;
-  prevStoreExecResultRef.current = storeExecResult;
+  if (funcName !== prevFuncName) setPrevFuncName(funcName);
+  if (storeExecResult !== prevStoreExecResult) setPrevStoreExecResult(storeExecResult);
 
   useEffect(() => {
     if (!schema?.unsupportedFeatures?.length) return;

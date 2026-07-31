@@ -258,21 +258,29 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   // stale selectedPath for one frame first. Triggers off activeFile itself
   // (not selectedPath) so internal tab-clicks — which change selectedPath
   // without activeFile changing — never re-fire this.
-  const prevActiveFileRef = useRef(activeFile);
-  if (activeFile && activeFile !== prevActiveFileRef.current) {
+  //
+  // Tracked via useState, NOT a plain ref: a ref mutation made during render
+  // is not rolled back if React discards/retries this render under
+  // concurrent rendering, while the accompanying setSelectedPath call IS
+  // rolled back (it never committed) — so even the conditional
+  // `.current = activeFile` assignment below could leave a retry believing
+  // this activeFile was already handled while the selection update it was
+  // paired with never actually committed (Codex review, round 2).
+  const [prevActiveFile, setPrevActiveFile] = useState(activeFile);
+  if (activeFile && activeFile !== prevActiveFile) {
     const exists = files.some((f) => f.path === activeFile);
     if (exists) {
       setSelectedPath(activeFile);
       // Only mark this activeFile as "handled" once it actually resolved —
       // if `files` hasn't hydrated it yet (async navigation race), leave
-      // prevActiveFileRef stale so a LATER render (once `files` catches up)
-      // still sees activeFile !== prevActiveFileRef.current and retries,
-      // instead of silently giving up because this unconditional assignment
-      // already marked the miss as "seen" (Codex review).
-      prevActiveFileRef.current = activeFile;
+      // prevActiveFile stale so a LATER render (once `files` catches up)
+      // still sees activeFile !== prevActiveFile and retries, instead of
+      // silently giving up because this assignment already marked the miss
+      // as "seen".
+      setPrevActiveFile(activeFile);
     }
-  } else {
-    prevActiveFileRef.current = activeFile;
+  } else if (activeFile !== prevActiveFile) {
+    setPrevActiveFile(activeFile);
   }
 
   // Expose imperative handle for programmatic navigation
