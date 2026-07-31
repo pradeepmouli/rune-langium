@@ -252,15 +252,20 @@ export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(funct
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorViewRef = useRef<EditorView | null>(null);
 
-  // Sync selectedPath when activeFile prop changes externally
-  useEffect(() => {
-    if (activeFile && activeFile !== selectedPath) {
-      const exists = files.some((f) => f.path === activeFile);
-      if (exists) {
-        setSelectedPath(activeFile);
-      }
+  // Sync selectedPath when activeFile prop changes externally. Adjusted
+  // during render (React's blessed pattern) rather than in an effect, so
+  // external navigation lands in the same render instead of flashing the
+  // stale selectedPath for one frame first. Triggers off activeFile itself
+  // (not selectedPath) so internal tab-clicks — which change selectedPath
+  // without activeFile changing — never re-fire this.
+  const prevActiveFileRef = useRef(activeFile);
+  if (activeFile && activeFile !== prevActiveFileRef.current) {
+    const exists = files.some((f) => f.path === activeFile);
+    if (exists) {
+      setSelectedPath(activeFile);
     }
-  }, [activeFile, files]);
+  }
+  prevActiveFileRef.current = activeFile;
 
   // Expose imperative handle for programmatic navigation
   useImperativeHandle(ref, () => {

@@ -40,7 +40,7 @@
  *
  * @module
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import type { ExpressionEditorSlotProps } from '@rune-langium/visual-editor';
 import { parseExpression } from '@rune-langium/core';
 import type { RosettaExpression } from '@rune-langium/core';
@@ -71,25 +71,32 @@ export function LanguageLensEditor({ value, onChange, onBlur, error }: Expressio
   const [language, setLanguage] = useState<Language>('rune');
   const [foreignDraft, setForeignDraft] = useState('');
   const [foreignError, setForeignError] = useState<string | null>(null);
-  const [projection, setProjection] = useState<string | null>(null);
 
   const descriptor = language === 'rune' ? null : LENSES[language];
 
   // Recompute the foreign-language projection whenever the canonical Rune
   // text or the language mode changes — never cached across a different
-  // `value`.
-  useEffect(() => {
-    if (language === 'rune') return;
-    const activeDescriptor = LENSES[language];
+  // `value`. Purely derived from language/value (never independently set),
+  // so this is a useMemo rather than useState+useEffect.
+  const projection = useMemo(() => {
+    if (language === 'rune') return null;
     const parsed = parseExpression(value);
-    if (parsed.hasErrors) {
-      setProjection(null);
-      return;
-    }
-    const rendered = activeDescriptor.render(parsed.value);
-    setProjection(rendered);
-    if (rendered !== null) setForeignDraft(rendered);
+    if (parsed.hasErrors) return null;
+    return LENSES[language].render(parsed.value);
   }, [language, value]);
+
+  // Seed the editable foreign-language draft with the fresh projection
+  // whenever language/value changes. Adjusted during render (React's
+  // blessed pattern) rather than in an effect, so switching languages
+  // doesn't flash the previous draft for one frame before an effect
+  // corrects it. The user can still freely edit foreignDraft afterward —
+  // this only reseeds on a genuine language/value change.
+  const seedKey = `${language}|${value}`;
+  const prevSeedKeyRef = useRef(seedKey);
+  if (seedKey !== prevSeedKeyRef.current) {
+    prevSeedKeyRef.current = seedKey;
+    if (projection !== null) setForeignDraft(projection);
+  }
 
   const handleToggle = useCallback((next: Language) => {
     setForeignError(null);

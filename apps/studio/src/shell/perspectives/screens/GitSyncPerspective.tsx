@@ -15,7 +15,7 @@
  * EditorPage props (present-tense wiring — no zustand store needed).
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ReactElement } from 'react';
 import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import type { WorkspaceKind } from '../../../workspace/persistence.js';
@@ -59,10 +59,24 @@ export function GitSyncPerspective({ workspaceId, workspaceKind }: GitSyncPerspe
 
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
+  // Reset on workspace switch — adjusted during render (React's blessed
+  // pattern) rather than in the subscription effect below, so stale status
+  // never even paints for one frame before the effect's cleanup/resubscribe
+  // would otherwise correct it.
+  const prevIsGitBackedRef = useRef(isGitBacked);
+  const prevWorkspaceIdRef = useRef(workspaceId);
+  if (
+    isGitBacked &&
+    workspaceId &&
+    (isGitBacked !== prevIsGitBackedRef.current || workspaceId !== prevWorkspaceIdRef.current)
+  ) {
+    setSyncStatus(null);
+  }
+  prevIsGitBackedRef.current = isGitBacked;
+  prevWorkspaceIdRef.current = workspaceId;
+
   useEffect(() => {
     if (!isGitBacked || !workspaceId) return;
-    // Reset immediately on workspace switch so stale status is never shown.
-    setSyncStatus(null);
     return subscribeToEngine(workspaceId, setSyncStatus);
   }, [isGitBacked, workspaceId]);
 

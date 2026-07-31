@@ -85,13 +85,22 @@ export function ExportDialog({ getUserFiles, getReferenceFiles, open, onClose, v
   const sessionCookieAcquiredRef = useRef(false);
   const turnstileNeeded = showTurnstile && !sessionCookieAcquiredRef.current;
 
-  // Check service availability when dialog opens
-  useEffect(() => {
-    if (!open) return;
+  // Reset dialog state on each open — adjusted during render (React's
+  // blessed pattern) rather than in an effect, so the reset lands in the
+  // same render instead of flashing the prior session's state for one
+  // frame first.
+  const prevOpenRef = useRef(open);
+  if (open && !prevOpenRef.current) {
     setState({ phase: 'idle' });
     setSelectedFile(null);
     setValidationWarnings([]);
+  }
+  prevOpenRef.current = open;
 
+  // Check service availability when dialog opens — inherently async, so
+  // this part stays in an effect.
+  useEffect(() => {
+    if (!open) return;
     const service = getCodegenService();
     service.isAvailable().then(setServiceAvailable);
   }, [open]);

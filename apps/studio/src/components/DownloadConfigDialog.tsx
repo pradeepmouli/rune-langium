@@ -20,7 +20,7 @@
  * Wiring into the real Download handler is the caller's job (§5.3).
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { TARGET_DESCRIPTORS, type Target } from '@rune-langium/codegen/export';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { Button } from '@rune-langium/design-system/ui/button';
@@ -183,12 +183,18 @@ export function DownloadConfigDialog({
 
   // Reset draft state whenever the modal (re)opens or the target changes —
   // a fresh open should not inherit a stale narrowing from a prior session.
-  useEffect(() => {
-    if (!open) return;
+  // Adjusted during render (React's blessed pattern for resetting state in
+  // response to a prop change) rather than in an effect, so the reset is
+  // visible in the same render instead of flashing the prior session's
+  // stale draft for one frame before an effect corrects it.
+  const resetKey = `${open}|${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
+  const prevResetKeyRef = useRef(resetKey);
+  if (open && prevResetKeyRef.current !== resetKey) {
+    prevResetKeyRef.current = resetKey;
     setSelected(new Set(namespaces));
     setLayout(panel?.defaultLayout);
     setTargetOptions({});
-  }, [open, target, namespaces, panel?.defaultLayout]);
+  }
 
   const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
 

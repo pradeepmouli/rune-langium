@@ -66,21 +66,29 @@ export function FormPreviewPanel({
   const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
   const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
 
-  useEffect(() => {
-    if (!storeExecResult) return;
+  // Adjusted during render (React's blessed pattern) rather than in
+  // effects, so switching functions or a new execution result lands in the
+  // same render instead of flashing the prior function's stale result for
+  // one frame first. Order matters: a funcName change takes priority over a
+  // same-render storeExecResult change, matching the original two-effects'
+  // declaration-order commit sequencing (the funcName effect ran second and
+  // so always won when both fired together).
+  const prevFuncNameRef = useRef(funcName);
+  const prevStoreExecResultRef = useRef(storeExecResult);
+  if (funcName !== prevFuncNameRef.current) {
+    setExecutionState('idle');
+    setExecutionResult(undefined);
+    setExecutionError(null);
+  } else if (storeExecResult && storeExecResult !== prevStoreExecResultRef.current) {
     if (storeExecResult.error) {
       setExecutionError(storeExecResult.error);
     } else {
       setExecutionResult(storeExecResult.output);
     }
     setExecutionState('idle');
-  }, [storeExecResult]);
-
-  useEffect(() => {
-    setExecutionState('idle');
-    setExecutionResult(undefined);
-    setExecutionError(null);
-  }, [funcName]);
+  }
+  prevFuncNameRef.current = funcName;
+  prevStoreExecResultRef.current = storeExecResult;
 
   useEffect(() => {
     if (!schema?.unsupportedFeatures?.length) return;

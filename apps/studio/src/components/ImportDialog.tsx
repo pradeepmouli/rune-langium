@@ -8,7 +8,7 @@
  * see docs/superpowers/specs/2026-07-06-explorer-import-dialog-design.md).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@rune-langium/design-system/ui/select';
 import { Input } from '@rune-langium/design-system/ui/input';
@@ -95,20 +95,26 @@ export function ImportDialog({
     () => MergeOptionsSchema.parse({}).onCollision
   );
 
-  useEffect(() => {
-    if (!open) return;
+  // Adjusted during render (React's blessed pattern) rather than in
+  // effects, so the reset lands in the same update instead of flashing the
+  // prior session's stale draft for one frame first.
+  const prevOpenRef = useRef(open);
+  if (open && !prevOpenRef.current) {
     setFormat('json-schema');
     setSourceText('');
     setNamespaceField('');
     setPhase({ kind: 'idle' });
-  }, [open]);
+  }
+  prevOpenRef.current = open;
 
   // Format switch invalidates any prior preview — it was run against a
   // different reader and no longer reflects the selected format.
-  useEffect(() => {
+  const prevFormatRef = useRef(format);
+  if (format !== prevFormatRef.current) {
     setPhase({ kind: 'idle' });
     setFormatOptions({});
-  }, [format]);
+  }
+  prevFormatRef.current = format;
 
   const handlePreview = useCallback(async () => {
     setPhase({ kind: 'previewing' });
