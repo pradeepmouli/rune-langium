@@ -272,21 +272,26 @@ git commit -m "feat(studio): add HydrationOrchestrator for consistent lazy-hydra
 
 ---
 
-### Task 2: Fix `buildDocuments()`'s stale curated-document registration (the mechanical fix)
+### Task 2: Fix curated-document staleness via a cached batch relink on `preview:setFiles` (the mechanical fix)
 
-This is the fix for defect #2: `codegen-worker.ts:261-274` registers each curated document via `hydrateModelDocument(services, uri, json, { register: 'idempotent' })` in a per-entry loop. Per `packages/core/src/serializer/hydrate-model-document.ts:46-52`, an idempotent register on an already-registered URI returns the existing document verbatim — including cached-failed `Reference` resolutions — with no relink, forever. The fix already exists in `packages/core`: `hydrateModelDocuments()` (`hydrate-model-document.ts:130-168`) does a bounded multi-round delete-then-re-add fixpoint over a *batch* of entries, producing fresh `Reference` proxies every call. It is already used in production by `apps/studio/functions/api/codegen.ts`'s `loadAllDocuments`. `runCodegen` and `runPreview` and `runInstanceSchema` (`codegen-worker.ts:350-396`, confirmed to call `buildDocuments()` the same way) all build against the same `RuneDsl.shared.workspace` singleton and all call `buildDocuments()`, so this one fix covers Form Preview, codegen/export, inheritance/`extends` resolution, and instance schema generation together.
+This is the fix for defect #2: `codegen-worker.ts:261-274` registers each curated document via `hydrateModelDocument(services, uri, json, { register: 'idempotent' })` in a per-entry loop, inside `buildDocuments()`. Per `packages/core/src/serializer/hydrate-model-document.ts:46-52`, an idempotent register on an already-registered URI returns the existing document verbatim — including cached-failed `Reference` resolutions — with no relink, forever.
+
+The fix already exists in `packages/core`: `hydrateModelDocuments()` (`hydrate-model-document.ts:130-168`) does a bounded multi-round delete-then-re-add fixpoint over a *batch* of entries, producing fresh `Reference` proxies every call. It is already used in production by `apps/studio/functions/api/codegen.ts`'s `loadAllDocuments`.
+
+**This must NOT be called from inside `buildDocuments()` directly** — `buildDocuments()` runs on every `runPreview`, `runInstanceSchema`, `executeFunction`, and `validateInstance` call (confirmed all four call it), which is far more often than curated content actually changes. Calling the batch relink (which re-deserializes every curated entry, up to 8 rounds) on every one of those calls would be a real performance regression versus today's near-zero-cost idempotent lookup. Instead, the relink runs once, in the `preview:setFiles` message handler (the only message that ever carries new curated content — `codegen:setFiles` carries user-authored files only), and caches the result in a module-level variable that `buildDocuments()` just reads.
 
 **Files:**
 - Modify: `apps/studio/src/workers/codegen-worker.ts`
 - Test: `apps/studio/test/workers/codegen-worker.test.ts`
+- Test: `packages/core/test/serializer/hydrate-model-document.test.ts` (extend only if it doesn't already cover multi-round forward-reference resolution — check first)
 
 **Interfaces:**
-- Consumes: `hydrateModelDocuments` from `@rune-langium/core` (already imported in this file as `hydrateModelDocument` is — add the batch import alongside it).
-- Produces: no new message types, no new exports. `buildDocuments()`'s external behavior (return type `Promise<LangiumDocument[]>`) is unchanged — only its internal curated-document registration changes.
+- Consumes: `hydrateModelDocuments` from `@rune-langium/core` (add to the existing import that already includes `hydrateModelDocument`).
+- Produces: no new message types, no new exports. `buildDocuments()`'s external behavior (return type `Promise<LangiumDocument[]>`) is unchanged.
 
 - [ ] **Step 1: Confirm the current exact code before editing**
 
-Re-read `apps/studio/src/workers/codegen-worker.ts` lines 227-288 directly (line numbers may have shifted since this plan was written). Confirm the curated-entry loop still matches:
+Re-read `apps/studio/src/workers/codegen-worker.ts` lines 227-288 (the `buildDocuments` function) and locate the `preview:setFiles` message handler (search for `case 'preview:setFiles':` or equivalent — line numbers may have shifted since this plan was written). Confirm the curated-entry loop still matches:
 
 ```ts
 const curatedDocuments: LangiumDocument[] = [];
@@ -305,107 +310,136 @@ for (const entry of curatedEntries) {
 }
 ```
 
-- [ ] **Step 2: Write the failing test proving the staleness bug and the fix, using a lighter mock that actually exercises relink logic**
+- [ ] **Step 2: Write a worker-level test proving document identity is replaced, not reused, across `preview:setFiles` calls**
 
-The existing `codegen-worker.test.ts` mock stubs `RuneDsl.shared.workspace.{LangiumDocumentFactory, DocumentBuilder, LangiumDocuments}` and `RuneDsl.serializer.JsonSerializer` all the way down (confirmed at the top of the file). That level of mocking would hide this exact bug class — a test built entirely on those stubs can assert `hydrateModelDocuments` was *called* without proving it *works*. Instead, loosen the mock to match the lighter, more honest pattern already used in `packages/core/test/serializer/hydrate-model-document.test.ts` (a `registered: Map<string, unknown>` plus a real `deserialize` implementation whose own doc comment states the exact Langium contract this bug depends on: *"resolved at deserialize time against whatever is registered right now — never re-checked later"*). Read that file first to match its exact mock shape, then adapt `codegen-worker.test.ts`'s top-of-file mock to use the same `registered`-map-backed fakes for `LangiumDocuments.getDocument`/`addDocument`/`deleteDocument` and `LangiumDocumentFactory.fromModel`, so a reference that points at a symbol not yet in `registered` genuinely resolves to `undefined`, and a reference to a symbol that IS in `registered` genuinely resolves to it — no `vi.fn()` return-value stubbing standing in for real resolution.
+This test proves the *wiring* is correct (the worker relinks on new curated content rather than reusing a stale registration) without needing the full `generatePreviewSchemas` pipeline to run against realistic ASTs — that deeper "does relinking actually resolve a forward reference" proof belongs in `packages/core`'s own test suite (Step 3), where real Langium services already run without `codegen-worker.test.ts`'s deep-stub chain.
+
+Add targeted spies to the existing mock — do not replace the whole `DocumentBuilder`/`LangiumDocumentFactory` stub chain, just make `LangiumDocuments` backed by a real `Map` so registration/replacement is observable:
+
+```ts
+// In codegen-worker.test.ts's existing '@rune-langium/core' mock factory:
+const registered = new Map<string, { uri: string; marker: object }>();
+const getDocumentMock = vi.fn((uri: string) => registered.get(uri));
+const addDocumentMock = vi.fn((doc: { uri: string }) => registered.set(doc.uri, doc));
+const deleteDocumentMock = vi.fn((uri: string) => registered.delete(uri));
+// ...wire these into the existing LangiumDocuments mock in place of whatever
+// no-op/return-undefined stubs are there today; leave DocumentBuilder/
+// LangiumDocumentFactory/JsonSerializer mocks as they already are.
+```
 
 ```ts
 // Add to apps/studio/test/workers/codegen-worker.test.ts, in the same
-// describe block that exercises preview:setFiles/preview:generate:
+// describe block that exercises preview:setFiles:
 
-it('relinks a previously-registered curated document once its dependency becomes available, instead of reusing its stale failed reference', async () => {
+it('replaces a curated document\'s registered identity when preview:setFiles resends it, rather than reusing the existing registration', async () => {
   const { dispatch } = await loadWorkerModule();
 
-  // Round 1: Scheme registers with a reference to NormalizedString, which
-  // is not yet in the registered-document map — resolves to undefined.
   await dispatch({
     type: 'preview:setFiles',
     requestId: 'files:1',
-    files: [
-      {
-        uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta',
-        content: '',
-        serializedModelJson: schemeAliasReferencingNormalizedStringJson
-      }
-    ]
+    files: [{ uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' }]
   });
-  const first = await dispatch({ type: 'preview:generate', targetId: 'Scheme', requestId: 'gen:1' });
-  expect(first.schema.status).toBe('unsupported');
-  expect(first.schema.unsupportedFeatures).toContain('unresolved-reference:NormalizedString');
+  const firstRegistration = registered.get('curated:///fpml/consolidated/shared/Scheme.rosetta');
+  expect(firstRegistration).toBeDefined();
 
-  // Round 2: NormalizedString's namespace hydrates and is sent to the worker
-  // alongside Scheme (unchanged content — same JSON as round 1).
+  // A second preview:setFiles carrying the same curated entry (as happens
+  // whenever ANY new namespace hydrates — the file-sync effect resends the
+  // full curated set every time) must trigger a fresh relink, not a
+  // do-nothing idempotent skip.
   await dispatch({
     type: 'preview:setFiles',
     requestId: 'files:2',
     files: [
-      {
-        uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta',
-        content: '',
-        serializedModelJson: schemeAliasReferencingNormalizedStringJson
-      },
-      {
-        uri: 'curated:///fpml/consolidated/shared/NormalizedString.rosetta',
-        content: '',
-        serializedModelJson: normalizedStringJson
-      }
+      { uri: 'curated:///fpml/consolidated/shared/Scheme.rosetta', content: '', serializedModelJson: '{}' },
+      { uri: 'curated:///fpml/consolidated/shared/NormalizedString.rosetta', content: '', serializedModelJson: '{}' }
     ]
   });
-  const second = await dispatch({ type: 'preview:generate', targetId: 'Scheme', requestId: 'gen:2' });
+  const secondRegistration = registered.get('curated:///fpml/consolidated/shared/Scheme.rosetta');
 
-  // Pre-fix (idempotent per-entry registration), this would still report
-  // unresolved-reference:NormalizedString because Scheme's document object
-  // — and its Reference proxy's cached failed resolution — never changes.
-  expect(second.schema.status).toBe('ready');
-  expect(second.schema.unsupportedFeatures ?? []).not.toContain('unresolved-reference:NormalizedString');
+  expect(deleteDocumentMock).toHaveBeenCalledWith('curated:///fpml/consolidated/shared/Scheme.rosetta');
+  expect(secondRegistration).not.toBe(firstRegistration);
 });
 ```
 
-(`schemeAliasReferencingNormalizedStringJson` / `normalizedStringJson` are small fixture strings matching whatever serialized-model JSON shape the loosened mock's `deserialize` expects — build them the same way `hydrate-model-document.test.ts`'s existing fixtures are built; match that file's exact fixture-construction helper rather than inventing a new one.)
+- [ ] **Step 3: Confirm (or add) a `packages/core` test proving `hydrateModelDocuments` resolves a forward reference across relink rounds**
 
-- [ ] **Step 3: Run test to verify it fails**
+Read `packages/core/test/serializer/hydrate-model-document.test.ts` first. If it already has a test calling `hydrateModelDocuments` with entries where one references another and asserting the reference resolves, this step is done — cite that test's name in the commit message and move on. If not, add one, matching that file's existing fixture-construction style exactly (its `deserialize` fake and `registered`-map pattern):
 
-Run: `pnpm --filter @rune-langium/studio exec vitest run test/workers/codegen-worker.test.ts -t "relinks a previously-registered"`
-Expected: FAIL — `second.schema.status` is still `'unsupported'`, still contains `unresolved-reference:NormalizedString`, proving the pre-fix bug reproduces under the new, honest mock.
+```ts
+it('hydrateModelDocuments resolves a forward reference within a single batch call', () => {
+  const entries = [
+    { uri: 'a', json: /* fixture: alias referencing type at uri "b" */ },
+    { uri: 'b', json: /* fixture: the referenced type */ }
+  ];
+  const results = hydrateModelDocuments(services, entries);
+  const aDoc = results.find((r) => /* matches uri "a" */);
+  // assert aDoc's reference to "b" resolves — exact assertion shape depends
+  // on this file's existing fixture/assertion helpers; match them.
+});
+```
 
-- [ ] **Step 4: Implement the fix**
+- [ ] **Step 4: Run both new tests to verify they fail appropriately**
+
+Run: `pnpm --filter @rune-langium/studio exec vitest run test/workers/codegen-worker.test.ts -t "replaces a curated document"`
+Expected: FAIL — `deleteDocumentMock` never called (current code only ever calls the idempotent `getDocument`-then-maybe-`addDocument` path, never deletes).
+
+If Step 3 added a new test, run it too and confirm it passes already (it's testing existing `packages/core` behavior, not this task's change) — if it does NOT already pass, `hydrateModelDocuments` itself has a bug outside this plan's scope; stop and flag it rather than proceeding.
+
+- [ ] **Step 5: Implement the fix**
 
 ```ts
 import { hydrateModelDocument, hydrateModelDocuments } from '@rune-langium/core';
 // (add hydrateModelDocuments to the existing import line for hydrateModelDocument)
 ```
 
-Replace the curated-entry loop:
+Add a module-level cache near `currentPreviewFiles`/`currentCodegenFiles`:
 
 ```ts
-const services = { RuneDsl, shared: RuneDsl.shared };
-let curatedDocuments: LangiumDocument[] = [];
-try {
-  curatedDocuments = hydrateModelDocuments(
-    services,
-    curatedEntries.map((entry) => ({ uri: entry.uri, json: entry.serializedModelJson! }))
-  ).map((r) => r.document);
-} catch (err) {
-  // hydrateModelDocuments does not isolate per-entry deserialize failures the
-  // way the old per-entry loop did (one bad curated doc now skips the whole
-  // curated batch for this build rather than just itself). Accepted
-  // trade-off — see design doc §Components #3. If this proves too coarse in
-  // practice, add per-entry isolation to hydrateModelDocuments itself in
-  // packages/core, not a local workaround here (DRY).
-  console.warn('[codegen-worker] Failed to hydrate curated documents for this build; excluded from preview.', err);
+let cachedCuratedDocuments: LangiumDocument[] = [];
+
+function hydrateCuratedDocuments(entries: FileEntry[]): void {
+  const curatedEntries = entries.filter((e) => Boolean(e.serializedModelJson));
+  try {
+    cachedCuratedDocuments = hydrateModelDocuments(
+      { RuneDsl, shared: RuneDsl.shared },
+      curatedEntries.map((entry) => ({ uri: entry.uri, json: entry.serializedModelJson! }))
+    ).map((r) => r.document);
+  } catch (err) {
+    // hydrateModelDocuments does not isolate per-entry deserialize failures
+    // the way the old per-entry loop did (one bad curated doc now skips the
+    // whole curated batch for this build rather than just itself). Accepted
+    // trade-off — see design doc §Background/Root Cause. If this proves too
+    // coarse in practice, add per-entry isolation to hydrateModelDocuments
+    // itself in packages/core, not a local workaround here (DRY).
+    console.warn('[codegen-worker] Failed to hydrate curated documents; excluded from preview.', err);
+    cachedCuratedDocuments = [];
+  }
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+Call `hydrateCuratedDocuments(msg.files)` at the top of the `preview:setFiles` handler (wherever `currentPreviewFiles = msg.files` is currently assigned — call it with the new files BEFORE or right after that assignment).
+
+Replace `buildDocuments()`'s curated-entry loop entirely with:
+
+```ts
+const curatedDocuments = cachedCuratedDocuments;
+```
+
+(Remove the now-unused `curatedEntries` computation from `buildDocuments()` itself, since curated-entry filtering now happens inside `hydrateCuratedDocuments`.)
+
+- [ ] **Step 6: Run both tests to verify they pass**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/workers/codegen-worker.test.ts`
-Expected: PASS, whole file — confirms the fix works and nothing else in the file's existing coverage broke from loosening the mock.
+Expected: PASS, whole file.
 
-- [ ] **Step 6: Commit**
+If Step 3 added a new `packages/core` test, run: `pnpm --filter @rune-langium/core exec vitest run test/serializer/hydrate-model-document.test.ts`
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-git add apps/studio/src/workers/codegen-worker.ts apps/studio/test/workers/codegen-worker.test.ts
-git commit -m "fix(studio): relink stale curated documents via hydrateModelDocuments instead of idempotent reuse"
+git add apps/studio/src/workers/codegen-worker.ts apps/studio/test/workers/codegen-worker.test.ts packages/core/test/serializer/hydrate-model-document.test.ts
+git commit -m "fix(studio): relink stale curated documents via cached hydrateModelDocuments on preview:setFiles"
 ```
 
 ---
@@ -441,6 +475,14 @@ Re-read `apps/studio/src/shell/providers/CodegenProvider.tsx` directly (line num
 // render helpers. Confirm the file's existing async-flush idiom (e.g.
 // `await act(async () => {...})` or `waitFor`) by reading an existing async
 // test in this file before writing this one, and match it.
+//
+// This file's existing tests never touch useEditorStore, so nothing resets
+// it between tests today. This new test DOES mutate it (pendingHydrationNamespaces,
+// hydratedNamespaces). Add a reset in this file's existing beforeEach/afterEach
+// (or add one if none exists) restoring useEditorStore to its initial state —
+// e.g. `useEditorStore.setState(useEditorStore.getInitialState(), true)` if
+// the store exposes getInitialState, otherwise reset the specific fields this
+// test touches — so this test doesn't leak state into others in the file.
 
 it('requests hydration and re-generates the failed target when a preview result reports an unresolved curated reference', async () => {
   render(<Host />);
@@ -571,10 +613,22 @@ if (e.data.type === 'preview:result') {
           retryFor: {
             targetId,
             onRetry: () => {
-              if (!codegenWorker) return;
-              const requestId = `preview:${targetId}:${++previewRequestSequenceRef.current}`;
-              currentPreviewRequestIdRef.current = requestId;
-              codegenWorker.postMessage(createPreviewGenerateMessage(targetId, requestId));
+              // Deferred by one macrotask: onRetry fires synchronously from
+              // inside markNamespacesHydrated's zustand set() call, which can
+              // race ahead of this component's OWN files-sync effect (which
+              // resends preview:setFiles with the newly-hydrated content one
+              // React commit later). Without this defer, the retry can reach
+              // the worker before the new content does and fail identically,
+              // burning an attempt for no reason (self-healing via the next
+              // requestHydration round regardless, but this makes it
+              // deterministic instead of relying on the cap to paper over
+              // the race — see design doc §Architecture "Retry-post ordering").
+              setTimeout(() => {
+                if (!codegenWorker) return;
+                const requestId = `preview:${targetId}:${++previewRequestSequenceRef.current}`;
+                currentPreviewRequestIdRef.current = requestId;
+                codegenWorker.postMessage(createPreviewGenerateMessage(targetId, requestId));
+              }, 0);
             }
           }
         });
@@ -717,7 +771,12 @@ orchestratorRef.current?.requestHydration(meta.namespace, {
       // Re-selecting re-reads the AST node fresh. Per Task 4, the parser
       // worker's hydrate handler already does a full-replacement relink on
       // every hydrate round, so no separate relink trigger is needed here —
-      // only re-selecting to force a fresh render.
+      // only re-selecting to force a fresh render. No macrotask defer needed
+      // here (unlike Task 3's CodegenProvider case): App.tsx's existing
+      // hydrate effect calls applyParseResult(result, ...) BEFORE
+      // markNamespacesHydrated in the same synchronous .then() callback, so
+      // by the time this onRetry fires, the store already holds the fresh
+      // data — there's no separate worker round-trip to race against.
       storeSelectNode(nodeId, { reapplyFocusMode: false });
     }
   }
