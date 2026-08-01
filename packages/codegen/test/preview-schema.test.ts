@@ -184,6 +184,54 @@ describe('FormPreviewSchema generation', () => {
   });
 
   skipIfNodeLt22(
+    'detects a cross-namespace mutual reference cycle from BOTH entry points, not just whichever side happens to revisit itself in its own walk',
+    async () => {
+      // Party <-> Identifier is exactly the shape found live in production
+      // (task #34 follow-up): two types in DIFFERENT namespaces reference
+      // each other, and Form Preview generates each as its OWN top-level
+      // target (a separate options.targetId call per user selection), so
+      // each walk starts with a FRESH seenTypes containing only itself and
+      // never revisits the other side within the SAME walk. The local
+      // seenTypes guard alone can never catch this — it only fires when a
+      // walk revisits a type it has ALREADY passed through, and neither
+      // walk here ever passes through itself twice. Before this fix, one
+      // (or both) sides fell through to `unresolved-reference` instead of
+      // `recursive-reference` purely because of which type happened to be
+      // generated first — a whole-graph precomputed cyclicTypes set
+      // (Tarjan's SCC via cycle-detector.ts, reused from the real emitter
+      // pipeline) is required to catch it consistently from both sides.
+      const docs = await parseModels([
+        `
+          namespace test.mutualcycle.a
+          version "1"
+
+          import test.mutualcycle.b.*
+
+          type Identifier:
+            issuerReference test.mutualcycle.b.Party (0..1)
+        `,
+        `
+          namespace test.mutualcycle.b
+          version "1"
+
+          import test.mutualcycle.a.*
+
+          type Party:
+            issuedBy test.mutualcycle.a.Identifier (0..1)
+        `
+      ]);
+
+      const [identifierSchema] = generatePreviewSchemas(docs, { targetId: 'test.mutualcycle.a.Identifier' });
+      const [partySchema] = generatePreviewSchemas(docs, { targetId: 'test.mutualcycle.b.Party' });
+
+      expect(identifierSchema?.unsupportedFeatures).toContain('recursive-reference:Party');
+      expect(identifierSchema?.unsupportedFeatures).not.toContain('unresolved-reference:Party');
+      expect(partySchema?.unsupportedFeatures).toContain('recursive-reference:Identifier');
+      expect(partySchema?.unsupportedFeatures).not.toContain('unresolved-reference:Identifier');
+    }
+  );
+
+  skipIfNodeLt22(
     'does not spuriously block expansion when two DIFFERENT types in different namespaces share a bare simple name (issue #436)',
     async () => {
       // The `seenTypes` recursion guard previously keyed by bare `.name`
