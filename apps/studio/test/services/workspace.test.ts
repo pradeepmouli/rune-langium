@@ -16,12 +16,13 @@ import {
   uniqueFilePath,
   readFileList,
   mergeModelFiles,
+  mergeCuratedRefOnlyFiles,
   collectCuratedDocsFromWorkspace,
   collectCuratedSourcesForCodegen,
   BUNDLE_MARKER_SUFFIX
 } from '../../src/services/workspace.js';
 import type { WorkspaceFile } from '../../src/services/workspace.js';
-import type { LoadedModel } from '../../src/types/model-types.js';
+import type { CachedFile, LoadedModel } from '../../src/types/model-types.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -310,6 +311,105 @@ describe('mergeModelFiles', () => {
       readOnly: true,
       serializedModelJson: '{"$type":"RosettaModel","elements":[]}'
     });
+  });
+});
+
+describe('mergeCuratedRefOnlyFiles', () => {
+  // Regression: App.tsx's on-demand curated namespace hydration effect
+  // previously updated only `models`/`parsedModels`/`deferredExports` (via
+  // applyParseResult) — never `files` — so a reference that only became
+  // resolvable via ON-DEMAND hydration (not present at initial workspace
+  // load) stayed permanently unresolved in Form Preview, identically on
+  // every retry. `CodegenProvider`'s preview-worker file-sync effect is
+  // keyed on `files`, not `models`. Live-repro'd 2026-08-01 via
+  // cdm.base.staticdata.party.Party → BusinessUnit → Identifier: the
+  // hydration toast for cdm.base.staticdata.identifier completed, but
+  // `unresolved-reference:Identifier` repeated identically across all 5
+  // retries.
+
+  const cdmSource = {
+    id: 'cdm',
+    name: 'CDM',
+    repoUrl: 'https://example.com/cdm.git',
+    ref: 'main',
+    paths: ['**/*.rosetta']
+  };
+
+  it('merges a hydrated bundle namespace into `files` with its real serializedModelJson, given the bundle is already a loaded model', () => {
+    const currentFiles: WorkspaceFile[] = [
+      { name: 'a.rosetta', path: 'a.rosetta', content: 'namespace demo', dirty: false }
+    ];
+    const loadedModels = new Map<string, LoadedModel>([
+      ['cdm', { source: cdmSource, commitHash: '2026-04-25', loadedAt: 0, files: [] }]
+    ]);
+    const identifierFile: CachedFile = {
+      path: 'base-staticdata-identifier-type.rosetta',
+      content: '',
+      namespace: 'cdm.base.staticdata.identifier',
+      serializedModelJson: '{"$type":"RosettaModel","elements":["Identifier"]}'
+    };
+
+    const merged = mergeCuratedRefOnlyFiles(currentFiles, { cdm: [identifierFile] }, loadedModels);
+
+    expect(merged).not.toBe(currentFiles);
+    expect(merged.find((f) => f.name === 'a.rosetta')).toBeDefined();
+    const mergedIdentifier = merged.find((f) => f.path === '[cdm]/base-staticdata-identifier-type.rosetta');
+    expect(mergedIdentifier).toMatchObject({
+      readOnly: true,
+      bundleId: 'cdm',
+      serializedModelJson: '{"$type":"RosettaModel","elements":["Identifier"]}'
+    });
+  });
+
+  it('replaces a PRIOR set of files for the same bundle with the new cumulative closure, not appending duplicates', () => {
+    const staleEntry: WorkspaceFile = {
+      name: 'old.rosetta',
+      path: '[cdm]/old.rosetta',
+      content: '',
+      dirty: false,
+      readOnly: true,
+      bundleId: 'cdm',
+      serializedModelJson: '{"stale":true}'
+    };
+    const loadedModels = new Map<string, LoadedModel>([
+      ['cdm', { source: cdmSource, commitHash: '2026-04-25', loadedAt: 0, files: [] }]
+    ]);
+    const freshEntries: CachedFile[] = [
+      { path: 'a.rosetta', content: '', namespace: 'cdm.a', serializedModelJson: '{"fresh":"a"}' },
+      { path: 'b.rosetta', content: '', namespace: 'cdm.b', serializedModelJson: '{"fresh":"b"}' }
+    ];
+
+    const merged = mergeCuratedRefOnlyFiles([staleEntry], { cdm: freshEntries }, loadedModels);
+
+    expect(merged.find((f) => f.path === '[cdm]/old.rosetta')).toBeUndefined();
+    expect(merged.map((f) => f.path).sort()).toEqual(['[cdm]/a.rosetta', '[cdm]/b.rosetta']);
+  });
+
+  it('returns the SAME array reference (no-op) when no bundle id in curatedRefOnlyFiles matches a loaded model', () => {
+    const currentFiles: WorkspaceFile[] = [{ name: 'a.rosetta', path: 'a.rosetta', content: '', dirty: false }];
+    const loadedModels = new Map<string, LoadedModel>();
+    const entries: CachedFile[] = [{ path: 'x.rosetta', content: '', namespace: 'cdm.x' }];
+
+    const merged = mergeCuratedRefOnlyFiles(currentFiles, { cdm: entries }, loadedModels);
+
+    expect(merged).toBe(currentFiles);
+  });
+
+  it('merges each bundle independently when curatedRefOnlyFiles spans multiple bundles', () => {
+    const loadedModels = new Map<string, LoadedModel>([
+      ['cdm', { source: cdmSource, commitHash: '2026-04-25', loadedAt: 0, files: [] }],
+      ['fpml', { source: { ...cdmSource, id: 'fpml', name: 'FpML' }, commitHash: 'v1', loadedAt: 0, files: [] }]
+    ]);
+    const merged = mergeCuratedRefOnlyFiles(
+      [],
+      {
+        cdm: [{ path: 'a.rosetta', content: '', namespace: 'cdm.a' }],
+        fpml: [{ path: 'b.rosetta', content: '', namespace: 'fpml.b' }]
+      },
+      loadedModels
+    );
+
+    expect(merged.map((f) => f.path).sort()).toEqual(['[cdm]/a.rosetta', '[fpml]/b.rosetta']);
   });
 });
 
