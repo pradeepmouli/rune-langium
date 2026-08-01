@@ -232,6 +232,47 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    "preserves a cyclic type's first, still-safe-to-expand fields instead of cutting expansion on mere cycle membership (Codex PR #459 review)",
+    async () => {
+      // A.b -> B, B.bValue (a plain field) + B.a -> A (the actual cycle).
+      // cyclicTypes correctly flags BOTH A and B as cycle members (see the
+      // cross-namespace test above), but that set must only ADD the
+      // `recursive-reference` diagnostic — never gate expansion by itself.
+      // Gating on cyclicTypes membership cut `b` entirely on its FIRST,
+      // still-safe encounter (before B was ever added to `seenTypes`),
+      // silently dropping the legitimate sibling field `b.bValue`. Only an
+      // ACTUAL path-local repeat (`seenTypes`) or the depth cap may cut
+      // expansion; `b.a` — the real repeat — is the one that gets cut.
+      const docs = await parseModels([
+        `
+          namespace test.cyclicexpansion
+          version "1"
+
+          type A:
+            b B (0..1)
+
+          type B:
+            bValue string (0..1)
+            a A (0..1)
+        `
+      ]);
+
+      const [schema] = generatePreviewSchemas(docs, { targetId: 'test.cyclicexpansion.A' });
+      const bField = schema?.fields.find((f) => f.path === 'b');
+
+      expect(bField?.kind).toBe('object');
+      const bChildren = bField && 'children' in bField ? bField.children : undefined;
+      expect(bChildren?.map((c) => c.path)).toContain('b.bValue');
+      const bValueField = bChildren?.find((c) => c.path === 'b.bValue');
+      expect(bValueField?.kind).toBe('string');
+      const bAField = bChildren?.find((c) => c.path === 'b.a');
+      expect(bAField?.kind).toBe('unknown');
+      expect(schema?.unsupportedFeatures).toContain('recursive-reference:B');
+      expect(schema?.unsupportedFeatures).toContain('recursive-reference:A');
+    }
+  );
+
+  skipIfNodeLt22(
     'does not spuriously block expansion when two DIFFERENT types in different namespaces share a bare simple name (issue #436)',
     async () => {
       // The `seenTypes` recursion guard previously keyed by bare `.name`
