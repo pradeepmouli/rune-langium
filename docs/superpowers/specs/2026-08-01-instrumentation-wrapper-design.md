@@ -42,6 +42,17 @@ logging system.
   its stripped "browser mode" with a custom write function — which is
   exactly the sink work below anyway, plus a dependency with documented
   edge-runtime friction.
+- Not migrating function-based code to classes to get native decorators
+  for free. The codegen emitters (see "Wiring mechanism" below) are
+  class-based for a real, independent reason — they accumulate state
+  across method calls (`this.sections`, `this.model`, `this.registry`).
+  Most of the rest of `apps/studio/src` is function-based because it's
+  built on React hooks and zustand (`create<State>((set) => ({...}))`),
+  both idiomatically function-first; reshaping that to fit an
+  instrumentation tool would invert the priority (the tool should adapt to
+  the code, not the reverse) for a large, invasive, low-benefit refactor —
+  the codemod below already solves "wrap without hand-writing every call
+  site" for functions without touching their shape at all.
 
 ## Foundation: extend the existing pipe, don't replace it
 
@@ -98,9 +109,10 @@ are silently dropped rather than queued.
 ### `withInstrumentation(fn, opts): WrappedFn`
 
 The single wrapping primitive. Wraps a sync or async function. Meant to be
-applied to **every** function, manually or (later, once proven) via a
-codemod — see "Retrofit scope, revisited" below. `level` is the actual
-gatekeeper of what gets processed at runtime, not selective wrapping.
+applied to **every** function — see "Wiring mechanism" below for how that
+actually gets applied (decorators for class methods, a codemod for free
+functions/components — not by hand). `level` is the actual gatekeeper of
+what gets processed at runtime, not selective wrapping.
 
 ```ts
 type Level = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -318,32 +330,118 @@ close to verbatim (edge as raw JSON).
   reset/override for tests, mirroring how `useTelemetrySettingsStore`
   already resets between test files.
 
-## Retrofit scope, revisited
+## Retrofit scope and wiring mechanism
 
-Full repo-wide, and — since `level` is now the real gatekeeper of what
-gets processed, not selective wrapping — the target is every function
-across `apps/studio/src`, the two Web Workers, and `apps/studio/functions`,
-not just error-handling sites specifically. Every error-handling site
-(`try/catch`, `.catch()`, give-up/exhausted branches) still gets the same
-treatment as before: retry-cap-exhausted and similar give-up branches that
-don't throw today are changed to throw (a named Error subclass), and the
-call site gets an explicit `try/catch` to preserve existing observable
-behavior — a real, one-time change at each such site, not a transparent
-drop-in.
+**Scope**: full repo-wide, and — since `level` is now the real gatekeeper
+of what gets processed, not selective wrapping — the target is every
+function across `apps/studio/src`, the two Web Workers, and
+`apps/studio/functions`, not just error-handling sites specifically.
+Every error-handling site (`try/catch`, `.catch()`, give-up/exhausted
+branches) still gets the same treatment discussed earlier: retry-cap-
+exhausted and similar give-up branches that don't throw today are changed
+to throw (a named Error subclass), and the call site gets an explicit
+`try/catch` to preserve existing observable behavior — a real, one-time
+change at each such site, not a transparent drop-in.
 
-**Manual first, codemod later — not a compile-time bundler transform.**
-Making `level` the gatekeeper answers the *noise* half of the objection to
-auto-wrapping every function (a build-time transform was raised and set
-aside earlier in this design's discussion), but not the *toolchain* half:
-this repo's Vite setup is `rolldown-vite` (Rust-based), and a custom
-AST-rewrite plugin for it is less-trodden ground than a stock Rollup/Babel
-setup — worth proving the pattern by hand first. Once `withInstrumentation`
-is applied manually across a representative slice of the codebase and the
-default-level/depth heuristic is validated against real usage, a codemod
-(or, if the toolchain cooperates, a build-time transform) to mechanically
-apply it everywhere else is a reasonable follow-up, not a rejected idea —
-just sequenced after the primitive is proven, per this repo's usual
-pilot-before-generalizing convention.
+**Wiring**: not one mechanism — the codebase has two genuinely different
+shapes, and the wiring follows each rather than forcing one tool on both
+(see the "not migrating to classes" non-goal above).
+
+**Class methods (e.g. `packages/codegen/src/emit/*.ts`'s
+`BaseNamespaceEmitter` hierarchy — `ZodNamespaceEmitter.emitData`,
+`.emitChoice`, etc.):** a native TS 5.x method decorator, no codemod, no
+bundler involvement:
+
+```ts
+function instrument(opts?: InstrumentationOptions) {
+  return function (original: Function, ctx: ClassMethodDecoratorContext) {
+    const op = opts?.op ?? String(ctx.name);
+    return function (this: unknown, ...args: unknown[]) {
+      return withInstrumentation(original.bind(this), { op, ...opts })(...args);
+    };
+  };
+}
+
+// Level-named sugar over the same factory — `@debug()` instead of
+// `@instrument({ level: 'debug' })` at every call site:
+type LevelDecoratorOptions = Omit<InstrumentationOptions, 'level'>;
+const trace = (opts?: LevelDecoratorOptions) => instrument({ ...opts, level: 'trace' });
+const debug = (opts?: LevelDecoratorOptions) => instrument({ ...opts, level: 'debug' });
+const info  = (opts?: LevelDecoratorOptions) => instrument({ ...opts, level: 'info' });
+const warn  = (opts?: LevelDecoratorOptions) => instrument({ ...opts, level: 'warn' });
+// no `error` shortcut: errors are captured unconditionally on throw
+// regardless of the success-path level (see withInstrumentation above) —
+// a decorator named `@error()` would misleadingly suggest the SUCCESS
+// path is what's error-level, when what actually matters is that throws
+// always instrument no matter which of these decorates the method.
+```
+
+```ts
+class ZodNamespaceEmitter extends BaseNamespaceEmitter {
+  @debug()
+  emitData(data: Data): void { ... }
+}
+```
+
+Standards-track syntax (no `experimentalDecorators`), so this is the
+lowest-risk piece of the whole design — a language feature, not new
+tooling. The same level-named sugar applies to `withInstrumentation`
+itself for the free-function/codemod path (`withInstrumentation.debug(fn,
+opts)` alongside `.child()`), so the two wiring mechanisms share one
+vocabulary rather than the decorator having ergonomics the function API
+doesn't.
+
+**Free functions (everything else — `apps/studio/src` services/stores,
+both Web Workers, `apps/studio/functions`):** a one-time `ts-morph`
+codemod, not a live bundler transform. `ts-morph` is TypeChecker-aware,
+purpose-built for exactly this ("programmatically rewrite a whole TS
+codebase"), and — critically — runs *before* any bundler ever sees the
+code, so it sidesteps the real toolchain risk a live transform would
+carry: this repo's Vite setup is `rolldown-vite` (Rust-based), and a
+custom bundler AST-rewrite plugin for it is less-trodden ground than a
+stock Rollup/Babel setup. The codemod finds unwrapped exported functions
+and rewrites them to call `withInstrumentation`, defaulting `op` from the
+function's own name; the result is ordinary, reviewable source code, not
+build-time magic. A companion oxlint rule (extending this repo's existing
+custom plugin) flags any *new* unwrapped exported function afterward, so
+coverage doesn't quietly regress as the codebase evolves — the codemod
+covers the initial sweep, the lint rule keeps it true going forward.
+
+**React components:** function components can't take decorator syntax
+(decorators only attach to class declarations/methods/fields — not valid
+above a plain `function`/arrow-function declaration), so they go through
+the same codemod path as any other free function; nothing new needed
+there. Two things specific to components, though:
+
+- This is the hottest path in the app — components re-render far more
+  often than the codegen walkers or Langium linker, which is exactly
+  where `withInstrumentation`'s short-circuit-first level check earns its
+  keep (one comparison per render in the common case, not real work).
+- React Strict Mode double-invokes component bodies in dev to surface
+  side-effect bugs, so dev-mode telemetry will show every render counted
+  twice — not a bug, just something to know when reading the numbers.
+
+**Error Boundary (new, React-specific complement):** wrapping a
+component's own function body doesn't catch everything worth catching —
+an effect (`useEffect`) failing runs detached from the render call
+entirely, and a render crash is a JS exception that propagates past the
+component-body wrapper the same way it always did (consistent with
+`withInstrumentation` never changing control flow) up to whatever catches
+it — which today is nothing; this app has no Error Boundary at all
+(confirmed: no `componentDidCatch`/`getDerivedStateFromError` or
+`react-error-boundary` anywhere in `apps/studio/src`). This design adds
+one — necessarily a class component, since that's the only way React
+supports the API even in React 19 — at (at least) the app root, reporting
+into the same `emit` pipe as everything else here, so a render crash that
+happens to still slip past component-level instrumentation is still
+captured, not just replaced by a blank screen.
+
+**Sequencing:** decorators for the class-based emitters and the
+codemod-plus-lint-rule for free functions/components are both being
+adopted from the start — there is no "manual first" phase. A live
+bundler transform remains explicitly out of scope given the
+`rolldown-vite` toolchain risk noted above; the codemod gets the same
+"don't hand-wire every function" outcome without it.
 
 ## Open follow-ups (not blocking this design)
 
