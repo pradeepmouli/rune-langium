@@ -462,6 +462,63 @@ describe('CodegenProvider', () => {
     // Must NOT be a positive number: that would show a permanent, never-
     // recovering "resolving..." spinner and hide the real diagnostic.
     expect(usePreviewStore.getState().hydrationRetriesRemaining['Scheme']).toBeUndefined();
+
+    // Regression guard (follow-up Bug A): a zero-dispatch round must not
+    // spend any of the target's beginRetryRound budget either — not just
+    // leave the UI-facing mirror cleared. Fire TWO MORE zero-dispatch
+    // rounds for the same target/typo, then a genuinely resolvable round,
+    // and assert the resolvable round still has the FULL budget (minus the
+    // one attempt it itself spends) — not drained by the earlier no-ops.
+    for (let i = 0; i < 2; i++) {
+      act(() => {
+        for (const listener of worker.listeners['message'] ?? []) {
+          listener({
+            data: {
+              type: 'preview:result',
+              targetId: 'Scheme',
+              requestId: generateMsg.requestId,
+              schema: {
+                schemaVersion: 1,
+                kind: 'typeAlias',
+                targetId: 'Scheme',
+                title: 'Scheme',
+                status: 'unsupported',
+                fields: [],
+                unsupportedFeatures: ['unresolved-reference:NotACuratedType']
+              }
+            }
+          });
+        }
+      });
+      expect(useEditorStore.getState().pendingHydrationNamespaces).toEqual([]);
+      expect(usePreviewStore.getState().hydrationRetriesRemaining['Scheme']).toBeUndefined();
+    }
+
+    act(() => {
+      for (const listener of worker.listeners['message'] ?? []) {
+        listener({
+          data: {
+            type: 'preview:result',
+            targetId: 'Scheme',
+            requestId: generateMsg.requestId,
+            schema: {
+              schemaVersion: 1,
+              kind: 'typeAlias',
+              targetId: 'Scheme',
+              title: 'Scheme',
+              status: 'unsupported',
+              fields: [],
+              unsupportedFeatures: ['unresolved-reference:NormalizedString']
+            }
+          }
+        });
+      }
+    });
+
+    expect(useEditorStore.getState().pendingHydrationNamespaces).toContain('fpml.consolidated.shared');
+    // If the 2 preceding zero-dispatch rounds had silently spent budget,
+    // this would read <= 2 instead of 4 (one attempt spent for THIS round).
+    expect(usePreviewStore.getState().hydrationRetriesRemaining['Scheme']).toBe(4);
   });
 
   it('skips a background hydration retry if the selected target has changed since the retry was scheduled (Finding 1)', async () => {

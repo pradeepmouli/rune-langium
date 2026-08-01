@@ -93,12 +93,23 @@ export class HydrationOrchestrator {
 
   private onHydrationChanged(): void {
     const hydrated = new Set(this.deps.getHydratedNamespaces());
+    const pending = new Set(this.deps.getPendingHydrationNamespaces());
     const firing = new Map<string, HydrationRetryTarget>();
     for (const [namespace, waiters] of [...this.waitingByNamespace.entries()]) {
-      if (!hydrated.has(namespace)) continue;
-      this.waitingByNamespace.delete(namespace);
-      for (const [targetId, target] of waiters) {
-        firing.set(targetId, target);
+      if (hydrated.has(namespace)) {
+        this.waitingByNamespace.delete(namespace);
+        for (const [targetId, target] of waiters) firing.set(targetId, target);
+      } else if (!pending.has(namespace)) {
+        // No longer pending and never hydrated: the hydration attempt for
+        // this namespace failed and was dequeued (see
+        // dequeuePendingHydration in editor-store.ts, which now bumps
+        // hydrationNonce on failure too). Fire the waiters anyway so a
+        // fresh preview:generate re-runs — the normal beginRetryRound/cap
+        // logic in the caller decides whether to try again or finally
+        // reveal the real diagnostic, instead of leaving the UI frozen on
+        // "Resolving reference..." with nothing in flight.
+        this.waitingByNamespace.delete(namespace);
+        for (const [targetId, target] of waiters) firing.set(targetId, target);
       }
     }
     for (const target of firing.values()) {

@@ -129,4 +129,38 @@ describe('HydrationOrchestrator', () => {
     }
     expect(orchestrator.beginRetryRound('Scheme')).toBe(false);
   });
+
+  it('fires a waiter once its namespace is no longer pending and never hydrated (failed + dequeued)', () => {
+    const { deps, pending, requestNamespaceHydration, fireChange } = makeDeps();
+    const orchestrator = new HydrationOrchestrator(deps);
+    const onRetry = vi.fn();
+    orchestrator.requestHydration('cdm.base.staticdata.party.Scheme', {
+      retryFor: { targetId: 'Scheme', onRetry }
+    });
+    expect(requestNamespaceHydration).toHaveBeenCalledTimes(1);
+
+    // Simulate a failed hydration attempt: the namespace is removed from
+    // pending without ever being added to hydrated (mirrors
+    // dequeuePendingHydration on the .catch path).
+    pending.delete('cdm.base.staticdata.party.Scheme');
+    fireChange();
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire a waiter while its namespace is still pending (in-flight, not yet resolved either way)', () => {
+    const { deps, requestNamespaceHydration, fireChange } = makeDeps();
+    const orchestrator = new HydrationOrchestrator(deps);
+    const onRetry = vi.fn();
+    orchestrator.requestHydration('cdm.base.staticdata.party.Scheme', {
+      retryFor: { targetId: 'Scheme', onRetry }
+    });
+    expect(requestNamespaceHydration).toHaveBeenCalledTimes(1);
+
+    // Namespace remains in `pending` (still in flight) — a change fires for
+    // some unrelated reason, but this waiter must not fire yet.
+    fireChange();
+
+    expect(onRetry).not.toHaveBeenCalled();
+  });
 });

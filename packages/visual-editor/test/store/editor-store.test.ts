@@ -468,6 +468,14 @@ describe('editor-store on-demand curated hydration', () => {
     expect(store.getState().pendingHydrationNamespaces).toContain('cdm.base.math');
   });
 
+  it('dequeuePendingHydration increments hydrationNonce, matching markNamespacesHydrated (failed hydration must still notify waiters)', () => {
+    const store = createEditorStore();
+    store.setState({ pendingHydrationNamespaces: ['cdm.base.math'], hydratedNamespaces: [], hydrationNonce: 0 });
+    const before = store.getState().hydrationNonce;
+    store.getState().dequeuePendingHydration(['cdm.base.math']);
+    expect(store.getState().hydrationNonce).toBe(before + 1);
+  });
+
   it('placeholder nodes built from deferred entries have meta.deferred === true', async () => {
     // loadDeferredExports stashes entries; buildDeferredPlaceholderNodes runs
     // inside loadModels, so we need a loadModels call to materialise the nodes.
