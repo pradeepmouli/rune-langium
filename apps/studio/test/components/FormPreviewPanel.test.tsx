@@ -313,6 +313,61 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByText(/references could not be resolved: Instrument, Party/i)).toBeInTheDocument();
   });
 
+  it('shows a resolving indicator instead of "could not be resolved" while a retry is in flight', () => {
+    const schemeSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      kind: 'typeAlias',
+      targetId: 'Scheme',
+      title: 'Scheme',
+      status: 'unsupported',
+      fields: [
+        {
+          path: 'value',
+          label: 'Value',
+          kind: 'unknown',
+          required: true,
+          description: 'Type reference NormalizedString could not be resolved for form preview.'
+        }
+      ],
+      unsupportedFeatures: ['unresolved-reference:NormalizedString']
+    };
+
+    usePreviewStore.setState({ hydrationRetriesRemaining: { Scheme: 3 } });
+    render(<FormPreviewPanel schema={schemeSchema} status={{ state: 'ready', targetId: schemeSchema.targetId }} />);
+
+    expect(screen.getByText(/resolving/i)).toBeInTheDocument();
+    expect(screen.queryByText(/could not be resolved/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the real unresolved diagnostic once retries are exhausted', () => {
+    const schemeSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      kind: 'typeAlias',
+      targetId: 'Scheme',
+      title: 'Scheme',
+      status: 'unsupported',
+      fields: [
+        {
+          path: 'value',
+          label: 'Value',
+          kind: 'unknown',
+          required: true,
+          description: 'Type reference NormalizedString could not be resolved for form preview.'
+        }
+      ],
+      unsupportedFeatures: ['unresolved-reference:NormalizedString']
+    };
+
+    usePreviewStore.setState({ hydrationRetriesRemaining: { Scheme: 0 } });
+    render(<FormPreviewPanel schema={schemeSchema} status={{ state: 'ready', targetId: schemeSchema.targetId }} />);
+
+    // Both the per-field diagnostic and the aggregate "Unsupported preview
+    // features" summary independently mention "could not be resolved" for
+    // this single-reference typeAlias fixture (pre-existing, unrelated to
+    // Task 6) — assert at least one is present rather than exactly one.
+    expect(screen.getAllByText(/could not be resolved/i).length).toBeGreaterThan(0);
+  });
+
   it('logs only one op-log warning under StrictMode double-invoked effects', () => {
     useOutputStore.setState({ lines: [] });
 

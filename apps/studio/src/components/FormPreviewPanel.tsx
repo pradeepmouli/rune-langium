@@ -62,6 +62,17 @@ export function FormPreviewPanel({
 
   const funcName = schema?.kind === 'function' ? schema.title : undefined;
   const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
+  // Remaining lazy-hydration retry attempts for the CURRENTLY selected target
+  // (Task 3's hydrationRetriesRemaining, mirrored from
+  // HydrationOrchestrator.getRemainingAttempts()). Per-*target* granularity,
+  // not per-individual-unresolved-reference-name: a Data type with several
+  // simultaneously-unresolved fields shares this one flag, so all of them
+  // switch to a "resolving…" state together rather than each independently
+  // guessing whether ITS OWN reference is the one being retried.
+  const hydrationRetriesRemaining = usePreviewStore((s) =>
+    schema ? s.hydrationRetriesRemaining[schema.targetId] : undefined
+  );
+  const isResolvingReferences = hydrationRetriesRemaining !== undefined && hydrationRetriesRemaining > 0;
   const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
 
   // Seed from any execution result already cached in the store at mount
@@ -395,6 +406,7 @@ export function FormPreviewPanel({
             fields={schema.fields}
             sample={activeSample}
             lookupFieldSource={lookupFieldSource}
+            isResolvingReferences={isResolvingReferences}
             onFieldBlur={handleFieldBlur}
             onFieldChange={handleFieldChange}
             onArrayAdd={handleArrayAdd}
@@ -409,6 +421,7 @@ export function FormPreviewPanel({
                 fields={rootArmFields}
                 sample={activeSample}
                 lookupFieldSource={lookupFieldSource}
+                isResolvingReferences={isResolvingReferences}
                 onFieldBlur={handleFieldBlur}
                 onFieldChange={handleFieldChange}
                 onArrayAdd={handleArrayAdd}
@@ -423,6 +436,7 @@ export function FormPreviewPanel({
                 field={field}
                 sample={activeSample}
                 lookupFieldSource={lookupFieldSource}
+                isResolvingReferences={isResolvingReferences}
                 onFieldBlur={handleFieldBlur}
                 onFieldChange={handleFieldChange}
                 onArrayAdd={handleArrayAdd}
@@ -434,9 +448,19 @@ export function FormPreviewPanel({
           </>
         )}
         {schema.unsupportedFeatures?.length ? (
-          <div role="status" className="text-xs text-muted-foreground">
-            Unsupported preview features: {summarizeUnsupportedFeatures(schema.unsupportedFeatures)}
-          </div>
+          isResolvingReferences ? (
+            <div role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Spinner className="size-3 shrink-0" />
+              <span>
+                Resolving reference… ({hydrationRetriesRemaining}{' '}
+                {hydrationRetriesRemaining === 1 ? 'retry' : 'retries'} left)
+              </span>
+            </div>
+          ) : (
+            <div role="status" className="text-xs text-muted-foreground">
+              Unsupported preview features: {summarizeUnsupportedFeatures(schema.unsupportedFeatures)}
+            </div>
+          )
         ) : null}
         {schema.kind === 'function' ? (
           <div className="preview-panel__function-controls border-t border-border pt-3">
@@ -501,6 +525,7 @@ interface ChoiceFieldGroupProps {
   fields: PreviewField[];
   sample?: PreviewSampleState;
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  isResolvingReferences: boolean;
   onFieldBlur: () => void;
   onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
@@ -514,6 +539,7 @@ function ChoiceFieldGroup({
   fields,
   sample,
   lookupFieldSource,
+  isResolvingReferences,
   onFieldBlur,
   onFieldChange,
   onArrayAdd,
@@ -573,6 +599,7 @@ function ChoiceFieldGroup({
                   field={field}
                   sample={sample}
                   lookupFieldSource={lookupFieldSource}
+                  isResolvingReferences={isResolvingReferences}
                   onFieldBlur={onFieldBlur}
                   onFieldChange={onFieldChange}
                   onArrayAdd={onArrayAdd}
@@ -587,6 +614,7 @@ function ChoiceFieldGroup({
                     field={field}
                     sample={sample}
                     lookupFieldSource={lookupFieldSource}
+                    isResolvingReferences={isResolvingReferences}
                     onFieldBlur={onFieldBlur}
                     onFieldChange={onFieldChange}
                     onArrayAdd={onArrayAdd}
@@ -609,6 +637,7 @@ interface ChoiceArmChildrenProps {
   field: PreviewField;
   sample?: PreviewSampleState;
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  isResolvingReferences: boolean;
   onFieldBlur: () => void;
   onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
@@ -632,6 +661,7 @@ function ChoiceArmChildren({
   field,
   sample,
   lookupFieldSource,
+  isResolvingReferences,
   onFieldBlur,
   onFieldChange,
   onArrayAdd,
@@ -651,6 +681,7 @@ function ChoiceArmChildren({
           fields={armFields}
           sample={sample}
           lookupFieldSource={lookupFieldSource}
+          isResolvingReferences={isResolvingReferences}
           onFieldBlur={onFieldBlur}
           onFieldChange={onFieldChange}
           onArrayAdd={onArrayAdd}
@@ -666,6 +697,7 @@ function ChoiceArmChildren({
           field={child}
           sample={sample}
           lookupFieldSource={lookupFieldSource}
+          isResolvingReferences={isResolvingReferences}
           onFieldBlur={onFieldBlur}
           onFieldChange={onFieldChange}
           onArrayAdd={onArrayAdd}
@@ -683,6 +715,7 @@ interface PreviewFieldControlProps {
   field: PreviewField;
   sample?: PreviewSampleState;
   lookupFieldSource: (fieldPath: string) => PreviewSourceMapEntry | undefined;
+  isResolvingReferences: boolean;
   onFieldBlur: () => void;
   onFieldChange: (fieldPath: string, value: unknown, arrayIndices?: number[]) => void;
   onArrayAdd: (field: PreviewField, arrayIndices?: number[]) => void;
@@ -696,6 +729,7 @@ function PreviewFieldControl({
   field,
   sample,
   lookupFieldSource, // oxlint-disable-line only-used-in-recursion
+  isResolvingReferences,
   onFieldBlur,
   onFieldChange,
   onArrayAdd,
@@ -749,6 +783,7 @@ function PreviewFieldControl({
             fields={armFields}
             sample={sample}
             lookupFieldSource={lookupFieldSource}
+            isResolvingReferences={isResolvingReferences}
             onFieldBlur={onFieldBlur}
             onFieldChange={onFieldChange}
             onArrayAdd={onArrayAdd}
@@ -765,6 +800,7 @@ function PreviewFieldControl({
               field={child}
               sample={sample}
               lookupFieldSource={lookupFieldSource}
+              isResolvingReferences={isResolvingReferences}
               onFieldBlur={onFieldBlur}
               onFieldChange={onFieldChange}
               onArrayAdd={onArrayAdd}
@@ -833,6 +869,7 @@ function PreviewFieldControl({
                   field={child}
                   sample={sample}
                   lookupFieldSource={lookupFieldSource}
+                  isResolvingReferences={isResolvingReferences}
                   onFieldBlur={onFieldBlur}
                   onFieldChange={onFieldChange}
                   onArrayAdd={onArrayAdd}
@@ -888,9 +925,15 @@ function PreviewFieldControl({
   }
 
   if (field.kind === 'unknown') {
+    // While a hydration retry for this target is in flight, suppress the
+    // per-field "could not be resolved" diagnostic — the aggregate
+    // resolving indicator below already communicates the target-level
+    // state, and re-deriving a per-field resolving message here would
+    // contradict the "per-target, not per-reference-name" granularity
+    // hydrationRetriesRemaining is scoped to (Task 6 design doc §Components #6).
     return (
       <div role="status" className="text-xs text-muted-foreground">
-        {field.label}: {field.description ?? 'Unsupported field'}
+        {isResolvingReferences ? field.label : `${field.label}: ${field.description ?? 'Unsupported field'}`}
       </div>
     );
   }

@@ -460,6 +460,19 @@ describe('usePreviewStore', () => {
     expect(values).toHaveProperty('cash');
     expect(values).not.toHaveProperty('commodity');
   });
+
+  it('clearHydrationRetriesRemaining removes an existing key and no-ops on a missing one', () => {
+    usePreviewStore.getState().setHydrationRetriesRemaining('Scheme', 3);
+    expect(usePreviewStore.getState().hydrationRetriesRemaining).toEqual({ Scheme: 3 });
+
+    usePreviewStore.getState().clearHydrationRetriesRemaining('Scheme');
+    expect(usePreviewStore.getState().hydrationRetriesRemaining).toEqual({});
+
+    const stateBefore = usePreviewStore.getState();
+    usePreviewStore.getState().clearHydrationRetriesRemaining('NeverSet');
+    expect(usePreviewStore.getState().hydrationRetriesRemaining).toEqual({});
+    expect(usePreviewStore.getState()).toBe(stateBefore);
+  });
 });
 
 // Task 1 (2026-07-17 prod-ux-checkout-harness Phase 2): dispatchExecute/

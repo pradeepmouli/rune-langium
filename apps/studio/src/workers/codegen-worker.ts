@@ -33,7 +33,7 @@
 
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
-import { createRuneDslServices, hydrateModelDocument } from '@rune-langium/core';
+import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
 import type { Target } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
@@ -114,6 +114,13 @@ let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let cachedFuncCode = new Map<string, string>();
 
+// Curated documents are relinked as a BATCH once per `preview:setFiles`
+// (the only message that ever carries new curated content) and cached here
+// for `buildDocuments()` to read on every `runPreview`/`runInstanceSchema`/
+// `executeFunction`/`validateInstance` call. See `hydrateCuratedDocuments`.
+let cachedCuratedDocuments: LangiumDocument[] = [];
+let lastCuratedEntries: FileEntry[] = [];
+
 function isPreviewUserEntryParseable(entry: FileEntry): boolean {
   const lowerUri = entry.uri.toLowerCase();
   // Defensive guard: preview input should only parse real source files.
@@ -129,6 +136,59 @@ function hasDocumentErrors(document: LangiumDocument): boolean {
   const hasLexerErrors = document.parseResult.lexerErrors.length > 0;
   const hasParserErrors = document.parseResult.parserErrors.length > 0;
   return hasDiagnostics || hasLexerErrors || hasParserErrors;
+}
+
+function curatedEntriesChanged(next: FileEntry[]): boolean {
+  if (next.length !== lastCuratedEntries.length) return true;
+  return next.some((entry, i) => {
+    const prev = lastCuratedEntries[i];
+    return !prev || prev.uri !== entry.uri || prev.serializedModelJson !== entry.serializedModelJson;
+  });
+}
+
+/**
+ * Relinks curated documents as a batch via `hydrateModelDocuments`
+ * (`packages/core`'s bounded multi-round delete-then-re-add fixpoint —
+ * see its doc comment) and caches the result in `cachedCuratedDocuments`
+ * for `buildDocuments()` to read.
+ *
+ * Called once per `preview:setFiles` — the only message that ever carries
+ * new curated content (`codegen:setFiles` carries user-authored files
+ * only) — NOT from inside `buildDocuments()` itself, which runs on every
+ * `runPreview`/`runInstanceSchema`/`executeFunction`/`validateInstance`
+ * call and would turn this batch relink (up to 8 re-deserialize rounds
+ * over every curated entry) into a real performance regression versus the
+ * old idempotent per-entry lookup.
+ *
+ * `serializedModelJson` strings are passed through unchanged from the main
+ * thread for a given curated document (they're immutable per-session
+ * snapshots). `curatedEntriesChanged` compares them with `!==`, which for
+ * string primitives is always a full value comparison (JS strings have no
+ * separate "reference identity" the way objects do) — so this is a
+ * complete content comparison of the curated set on every
+ * `preview:setFiles`, not a cheap identity check. It is still far cheaper
+ * than running the relink unconditionally, which is the actual cost this
+ * guards against.
+ */
+function hydrateCuratedDocuments(entries: FileEntry[]): void {
+  const curatedEntries = entries.filter((e) => Boolean(e.serializedModelJson));
+  if (!curatedEntriesChanged(curatedEntries)) return; // identical set — skip the relink entirely
+  lastCuratedEntries = curatedEntries;
+  try {
+    cachedCuratedDocuments = hydrateModelDocuments(
+      { RuneDsl, shared: RuneDsl.shared },
+      curatedEntries.map((entry) => ({ uri: entry.uri, json: entry.serializedModelJson! }))
+    ).map((r) => r.document);
+  } catch (err) {
+    // hydrateModelDocuments does not isolate per-entry deserialize failures
+    // the way the old per-entry loop did (one bad curated doc now skips the
+    // whole curated batch for this build rather than just itself). Accepted
+    // trade-off — see design doc §Background/Root Cause. If this proves too
+    // coarse in practice, add per-entry isolation to hydrateModelDocuments
+    // itself in packages/core, not a local workaround here (DRY).
+    console.warn('[codegen-worker] Failed to hydrate curated documents; excluded from preview.', err);
+    cachedCuratedDocuments = [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +297,6 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
   // unable to find curated types. Hydrate them via the serializer
   // instead.
   const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson && isPreviewUserEntryParseable(e));
-  const curatedEntries = currentPreviewFiles.filter((e) => Boolean(e.serializedModelJson));
 
   const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
     factory.fromString(content, URI.parse(uri))
@@ -258,20 +317,11 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
   // relies on to resolve cross-references through `.ref`. For curated
   // models with typed fields, refs would silently fail to resolve and
   // the preview / codegen output would be missing typed children.
-  const curatedDocuments: LangiumDocument[] = [];
-  for (const entry of curatedEntries) {
-    try {
-      const { document } = hydrateModelDocument(
-        { RuneDsl, shared: RuneDsl.shared },
-        URI.parse(entry.uri),
-        entry.serializedModelJson!,
-        { register: 'idempotent' }
-      );
-      curatedDocuments.push(document);
-    } catch (err) {
-      console.warn(`[codegen-worker] Failed to deserialize curated AST for ${entry.uri}; excluded from preview.`, err);
-    }
-  }
+  //
+  // The batch relink itself already ran once in `hydrateCuratedDocuments`
+  // (called from the `preview:setFiles` handler) — this just reads the
+  // cached result rather than re-registering/re-linking on every build.
+  const curatedDocuments = cachedCuratedDocuments;
 
   // Filter out user files with parse/lex errors. Corpus files may
   // contain constructs the parser doesn't fully support; excluding them
@@ -637,6 +687,7 @@ if (isWorkerGlobalScope()) {
         }
         runCodegen(lastTarget, lastCodegenRequestId).catch(console.error);
       } else if (msg.type === 'preview:setFiles') {
+        hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
         if (msg.requestId) {
           lastPreviewRequestId = msg.requestId;

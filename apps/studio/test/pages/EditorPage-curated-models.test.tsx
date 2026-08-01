@@ -61,9 +61,22 @@ const { editorStoreState, useEditorStore } = vi.hoisted(() => {
   };
   const useEditorStore = ((selector: (s: typeof editorStoreState) => unknown) =>
     selector(editorStoreState)) as typeof import('@rune-langium/visual-editor').useEditorStore;
+  // `subscribe` is required by HydrationOrchestrator (Task 1, wired into both
+  // CodegenProvider — Task 3 — and ExplorePerspective — Task 5), which calls
+  // `useEditorStore.subscribe(listener)` in a mount effect. Provide a minimal
+  // working implementation so that mount effect doesn't throw under this
+  // hand-rolled mock (this file's tests don't exercise hydration, so the
+  // listener set only needs to be a safe no-op sink).
+  const stateListeners = new Set<(state: typeof editorStoreState) => void>();
   Object.assign(useEditorStore, {
     getState: () => editorStoreState,
-    setState: vi.fn()
+    setState: vi.fn(),
+    subscribe: (listener: (state: typeof editorStoreState) => void) => {
+      stateListeners.add(listener);
+      return () => {
+        stateListeners.delete(listener);
+      };
+    }
   });
   return { editorStoreState, useEditorStore };
 });

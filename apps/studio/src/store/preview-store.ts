@@ -56,6 +56,9 @@ interface PreviewStoreState {
   samples: Map<string, PreviewSampleState>;
   status: PreviewStatus;
   executionResults: Map<string, { output: unknown; error?: string }>;
+  /** Remaining lazy-hydration retry attempts per preview targetId, mirrored
+   *  from HydrationOrchestrator.getRemainingAttempts() for UI display. */
+  hydrationRetriesRemaining: Record<string, number>;
 }
 
 interface PreviewStoreActions {
@@ -81,6 +84,8 @@ interface PreviewStoreActions {
   clearExecutionResult(funcName: string): void;
   setWorkerRef(worker: Worker | null): void;
   dispatchExecute(funcName: string, inputs: Record<string, unknown>): void;
+  setHydrationRetriesRemaining(targetId: string, remaining: number): void;
+  clearHydrationRetriesRemaining(targetId: string): void;
 }
 
 type PreviewStore = PreviewStoreState & PreviewStoreActions;
@@ -93,7 +98,8 @@ const initialState: PreviewStoreState = {
   schemas: new Map(),
   samples: new Map(),
   status: { state: 'waiting' },
-  executionResults: new Map()
+  executionResults: new Map(),
+  hydrationRetriesRemaining: {}
 };
 
 let dispatchExecuteCounter = 0;
@@ -539,6 +545,21 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     });
   },
 
+  setHydrationRetriesRemaining(targetId, remaining) {
+    set((s) => ({
+      hydrationRetriesRemaining: { ...s.hydrationRetriesRemaining, [targetId]: remaining }
+    }));
+  },
+
+  clearHydrationRetriesRemaining(targetId) {
+    set((s) => {
+      if (!(targetId in s.hydrationRetriesRemaining)) return s;
+      const next = { ...s.hydrationRetriesRemaining };
+      delete next[targetId];
+      return { hydrationRetriesRemaining: next };
+    });
+  },
+
   resetPreviewState() {
     set({
       targets: [],
@@ -548,7 +569,8 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
       schemas: new Map(),
       samples: new Map(),
       status: { state: 'waiting' },
-      executionResults: new Map()
+      executionResults: new Map(),
+      hydrationRetriesRemaining: {}
     });
     workerRef = null;
     executeSpans.clear();

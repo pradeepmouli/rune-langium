@@ -108,6 +108,7 @@ import { combineFileDiagnostics, countDiagnostics } from './explore-diagnostics.
 import { useExploreFileNavStore } from './explore-file-nav-store.js';
 import { useExportDialogStore } from './export-dialog-store.js';
 import { useImportDialogStore } from './import-dialog-store.js';
+import { HydrationOrchestrator } from '../services/hydration-orchestrator.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -1032,6 +1033,43 @@ export function ExplorePerspective() {
   // "+" new-file affordance moved to ExploreCenterSlot (shared-perspective-
   // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().
 
+  // Owns the HydrationOrchestrator instance for this component's lifetime —
+  // dedups (via waitingByNamespace) the three on-demand hydration triggers
+  // below (handleExplorerSelectNode, handleToggleNamespace, navigateToNode).
+  // Deliberately does NOT call beginRetryRound — these triggers are
+  // user-driven (re-selecting/re-toggling), not auto-retried, so there is
+  // no re-entrant loop to cap, and capping would strand a still-deferred
+  // node's hydration permanently after 5 selections with no markResolved
+  // call anywhere in this file to reset it. See requestHydration's doc
+  // comment in hydration-orchestrator.ts for the opt-in protocol this
+  // relies on.
+  // Constructed inside a mount effect (not lazily on render) so it survives
+  // React StrictMode's mount→unmount→remount double-invoke cleanly: the
+  // cleanup disposes the orchestrator (unsubscribing from useEditorStore),
+  // and the second mount constructs a fresh one — no leaked subscriptions.
+  // Same pattern as CodegenProvider (Task 3).
+  const orchestratorRef = useRef<HydrationOrchestrator | null>(null);
+  useEffect(() => {
+    let lastHydrationNonce = useEditorStore.getState().hydrationNonce;
+    const orchestrator = new HydrationOrchestrator({
+      getHydratedNamespaces: () => useEditorStore.getState().hydratedNamespaces,
+      getPendingHydrationNamespaces: () => useEditorStore.getState().pendingHydrationNamespaces,
+      requestNamespaceHydration: (ns) => useEditorStore.getState().requestNamespaceHydration(ns),
+      subscribeToHydrationChange: (onChange) =>
+        useEditorStore.subscribe((state) => {
+          if (state.hydrationNonce !== lastHydrationNonce) {
+            lastHydrationNonce = state.hydrationNonce;
+            onChange();
+          }
+        })
+    });
+    orchestratorRef.current = orchestrator;
+    return () => {
+      orchestrator.dispose();
+      orchestratorRef.current = null;
+    };
+  }, []);
+
   const handleExplorerSelectNode = useCallback(
     (nodeId: string) => {
       storeSelectNode(nodeId, { reapplyFocusMode: true });
@@ -1041,7 +1079,23 @@ export function ExplorePerspective() {
       const selectedNode = selectNodeRepository(useEditorStore.getState().nodesById).byId(nodeId);
       const meta = selectedNode?.meta;
       if (meta?.deferred && meta.namespace) {
-        useEditorStore.getState().requestNamespaceHydration(meta.namespace);
+        orchestratorRef.current?.requestHydration(meta.namespace, {
+          retryFor: {
+            targetId: nodeId,
+            onRetry: () => {
+              // Re-selecting re-reads the AST node fresh. Per Task 4, the parser
+              // worker's hydrate handler already does a full-replacement relink on
+              // every hydrate round, so no separate relink trigger is needed here —
+              // only re-selecting to force a fresh render. No macrotask defer needed
+              // here (unlike Task 3's CodegenProvider case): App.tsx's existing
+              // hydrate effect calls applyParseResult(result, ...) BEFORE
+              // markNamespacesHydrated in the same synchronous .then() callback, so
+              // by the time this onRetry fires, the store already holds the fresh
+              // data — there's no separate worker round-trip to race against.
+              storeSelectNode(nodeId, { reapplyFocusMode: false });
+            }
+          }
+        });
       }
     },
     [storeSelectNode]
@@ -1055,7 +1109,22 @@ export function ExplorePerspective() {
       const needsHydration = useEditorStore
         .getState()
         .nodes.some((n) => n.meta.namespace === namespace && n.meta.deferred === true);
-      if (needsHydration) useEditorStore.getState().requestNamespaceHydration(namespace);
+      if (needsHydration) {
+        orchestratorRef.current?.requestHydration(namespace, {
+          retryFor: {
+            targetId: namespace,
+            onRetry: () => {
+              // No re-render trigger needed here: the explorer's node list and
+              // StructureView both read directly from useEditorStore selectors,
+              // so they re-render from the fresh store state once hydration
+              // completes without any extra action. Routed through the
+              // orchestrator purely for retry-cap/dedup consistency with the
+              // other two call sites (Task 5) — see Task 4's finding that
+              // Structure/Inspector degrade gracefully without extra retry logic.
+            }
+          }
+        });
+      }
       storeToggleNamespace(namespace);
     },
     [storeToggleNamespace]
@@ -1092,7 +1161,16 @@ export function ExplorePerspective() {
       storeSelectNode(nodeId, { reapplyFocusMode: true });
       const targetMeta = targetNode?.meta;
       if (targetMeta?.deferred && targetMeta.namespace) {
-        useEditorStore.getState().requestNamespaceHydration(targetMeta.namespace);
+        orchestratorRef.current?.requestHydration(targetMeta.namespace, {
+          retryFor: {
+            targetId: nodeId,
+            onRetry: () => {
+              // See handleExplorerSelectNode above for why no macrotask defer
+              // is needed here (unlike Task 3's CodegenProvider case).
+              storeSelectNode(nodeId, { reapplyFocusMode: false });
+            }
+          }
+        });
       }
       if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
         graphRef.current?.focusNode(nodeId);
