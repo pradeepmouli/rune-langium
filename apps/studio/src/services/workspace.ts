@@ -958,6 +958,49 @@ export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedMode
 }
 
 /**
+ * Merge a `parseWorkspaceFiles`/`ParseWorkspaceFilesResult.curatedRefOnlyFiles`
+ * response into `files` itself, using the same `mergeModelFiles` conversion
+ * every OTHER curated-bundle load already goes through.
+ *
+ * Root cause this closes: on-demand curated namespace hydration
+ * (`App.tsx`'s `pendingHydrationNamespaces` effect) previously updated only
+ * `models`/`parsedModels`/`deferredExports` via `applyParseResult` — never
+ * `files`. `CodegenProvider`'s preview-worker file-sync effect is keyed on
+ * `files`, not `models`, so a reference that only becomes resolvable via
+ * ON-DEMAND hydration (as opposed to being present at initial workspace
+ * load) stayed permanently unresolved in Form Preview — identically on
+ * every retry, past the retry cap — even though Structure/Inspector
+ * (which reads `models`) correctly showed the hydrated namespace.
+ *
+ * `curatedRefOnlyFiles[bundleId]` is expected to carry the FULL cumulative
+ * closure for that bundle (every namespace hydrated so far, not just this
+ * round's delta) — the same assumption `useModelStore.setCuratedFiles`
+ * already relies on for its own wholesale-replace semantics, since the
+ * caller always requests `[...hydratedSoFar, ...pendingHydration]`.
+ * A bundle id with no matching entry in `loadedModels` is skipped: a
+ * namespace-hydration request only ever targets an already-loaded curated
+ * bundle, so this should not happen in practice, but a stale/unknown id
+ * must not throw.
+ *
+ * @returns `currentFiles` unchanged (same reference) if no bundle id in
+ *   `curatedRefOnlyFiles` matched a loaded model — callers can compare by
+ *   reference to skip a no-op `setFiles`.
+ */
+export function mergeCuratedRefOnlyFiles(
+  currentFiles: WorkspaceFile[],
+  curatedRefOnlyFiles: Record<string, CachedFile[]>,
+  loadedModels: ReadonlyMap<string, LoadedModel>
+): WorkspaceFile[] {
+  let mergedFiles = currentFiles;
+  for (const [bundleId, entries] of Object.entries(curatedRefOnlyFiles)) {
+    const existingModel = loadedModels.get(bundleId);
+    if (!existingModel) continue;
+    mergedFiles = mergeModelFiles(mergedFiles, { ...existingModel, files: entries });
+  }
+  return mergedFiles;
+}
+
+/**
  * Remove all files from a specific model source.
  */
 export function removeModelFiles(currentFiles: WorkspaceFile[], sourceId: string): WorkspaceFile[] {

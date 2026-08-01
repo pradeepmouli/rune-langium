@@ -14,7 +14,7 @@ import '@rune-langium/visual-editor/styles.css';
 import type { RosettaModel } from '@rune-langium/core';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import type { WorkspaceFile } from './services/workspace.js';
-import { parseWorkspaceFiles, mergeModelFiles } from './services/workspace.js';
+import { parseWorkspaceFiles, mergeModelFiles, mergeCuratedRefOnlyFiles } from './services/workspace.js';
 import { useModelStore } from './store/model-store.js';
 import { getModelSource } from './services/model-registry.js';
 import type { LoadedModel } from './types/model-types.js';
@@ -262,6 +262,18 @@ function AppContent() {
       .then((result) => {
         if (cancelled) return;
         applyParseResult(result, { preserveSemanticModelOnErrors: true });
+        // Merge the freshly-hydrated curated content into `files` itself —
+        // not just `models`/`deferredExports` (which `applyParseResult`
+        // already updates) — see `mergeCuratedRefOnlyFiles`'s doc comment
+        // for the full root-cause rationale.
+        if (result.curatedRefOnlyFiles) {
+          const mergedFiles = mergeCuratedRefOnlyFiles(
+            filesRef.current,
+            result.curatedRefOnlyFiles,
+            useModelStore.getState().models
+          );
+          if (mergedFiles !== filesRef.current) setFiles(mergedFiles);
+        }
         // Mark exactly the set sent in THIS parse (not whatever is pending when
         // the promise resolves) so a request arriving mid-flight isn't lost.
         useEditorStore.getState().markNamespacesHydrated(pendingHydration);
