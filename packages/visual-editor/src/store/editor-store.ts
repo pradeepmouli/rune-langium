@@ -2226,7 +2226,14 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
           dequeuePendingHydration: (names) => {
             const nameSet = new Set(names);
             set((s) => ({
-              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !nameSet.has(n))
+              pendingHydrationNamespaces: s.pendingHydrationNamespaces.filter((n) => !nameSet.has(n)),
+              // Bump hydrationNonce here too, not just in markNamespacesHydrated:
+              // a failed hydration attempt (this is called from the on-demand
+              // hydration effect's .catch) is still "a hydration round happened"
+              // and must notify HydrationOrchestrator so it can fire (and clear)
+              // any waiters stuck on this namespace instead of leaving them
+              // frozen forever.
+              hydrationNonce: s.hydrationNonce + 1
             }));
           },
 

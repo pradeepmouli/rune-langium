@@ -277,13 +277,25 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
             orchestrator.markResolved(targetId);
             clearHydrationRetriesRemaining(targetId);
           } else {
-            const canRetry = orchestrator.beginRetryRound(targetId);
-            let requestedAny = false;
-            if (canRetry) {
-              for (const name of unresolvedNames) {
-                const namespaces = findNamespacesForExport(deferredExports, name);
-                for (const namespace of namespaces) {
-                  requestedAny = true;
+            const namespacesToHydrate = new Set<string>();
+            for (const name of unresolvedNames) {
+              for (const namespace of findNamespacesForExport(deferredExports, name)) {
+                namespacesToHydrate.add(namespace);
+              }
+            }
+            if (namespacesToHydrate.size === 0) {
+              // No unresolved name maps to a known deferred (curated, not-yet-
+              // hydrated) export -- every one is genuinely unresolved (a typo, a
+              // type absent from the curated manifest, etc). Don't spend a retry
+              // attempt on a round that can't possibly hydrate anything: doing so
+              // would silently drain this target's budget on noise, potentially
+              // starving a LATER round where a real, resolvable reference shows up
+              // on the same target.
+              clearHydrationRetriesRemaining(targetId);
+            } else {
+              const canRetry = orchestrator.beginRetryRound(targetId);
+              if (canRetry) {
+                for (const namespace of namespacesToHydrate) {
                   orchestrator.requestHydration(namespace, {
                     retryFor: {
                       targetId,
@@ -315,11 +327,7 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
                   });
                 }
               }
-            }
-            if (requestedAny) {
               setHydrationRetriesRemaining(targetId, orchestrator.getRemainingAttempts(targetId));
-            } else {
-              clearHydrationRetriesRemaining(targetId);
             }
           }
         }
