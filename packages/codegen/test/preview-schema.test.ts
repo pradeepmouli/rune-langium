@@ -196,10 +196,17 @@ describe('FormPreviewSchema generation', () => {
       // walk revisits a type it has ALREADY passed through, and neither
       // walk here ever passes through itself twice. Before this fix, one
       // (or both) sides fell through to `unresolved-reference` instead of
-      // `recursive-reference` purely because of which type happened to be
+      // any cycle-aware tag purely because of which type happened to be
       // generated first — a whole-graph precomputed cyclicTypes set
       // (Tarjan's SCC via cycle-detector.ts, reused from the real emitter
       // pipeline) is required to catch it consistently from both sides.
+      // `cyclic-type:<name>` (not `recursive-reference:<name>`) is the tag
+      // that reflects this whole-graph knowledge — see FieldContext.
+      // cyclicTypes' doc comment: `recursive-reference` is reserved for an
+      // occurrence that was ACTUALLY truncated (a real `seenTypes` repeat),
+      // which for a top-level Identifier/Party walk is always the type's
+      // own SECOND encounter (Identifier's `issuedBy` grandchild, or
+      // Party's respectively) — not the other side.
       const docs = await parseModels([
         `
           namespace test.mutualcycle.a
@@ -224,9 +231,9 @@ describe('FormPreviewSchema generation', () => {
       const [identifierSchema] = generatePreviewSchemas(docs, { targetId: 'test.mutualcycle.a.Identifier' });
       const [partySchema] = generatePreviewSchemas(docs, { targetId: 'test.mutualcycle.b.Party' });
 
-      expect(identifierSchema?.unsupportedFeatures).toContain('recursive-reference:Party');
+      expect(identifierSchema?.unsupportedFeatures).toContain('cyclic-type:Party');
       expect(identifierSchema?.unsupportedFeatures).not.toContain('unresolved-reference:Party');
-      expect(partySchema?.unsupportedFeatures).toContain('recursive-reference:Identifier');
+      expect(partySchema?.unsupportedFeatures).toContain('cyclic-type:Identifier');
       expect(partySchema?.unsupportedFeatures).not.toContain('unresolved-reference:Identifier');
     }
   );
@@ -237,12 +244,17 @@ describe('FormPreviewSchema generation', () => {
       // A.b -> B, B.bValue (a plain field) + B.a -> A (the actual cycle).
       // cyclicTypes correctly flags BOTH A and B as cycle members (see the
       // cross-namespace test above), but that set must only ADD the
-      // `recursive-reference` diagnostic — never gate expansion by itself.
-      // Gating on cyclicTypes membership cut `b` entirely on its FIRST,
-      // still-safe encounter (before B was ever added to `seenTypes`),
-      // silently dropping the legitimate sibling field `b.bValue`. Only an
-      // ACTUAL path-local repeat (`seenTypes`) or the depth cap may cut
-      // expansion; `b.a` — the real repeat — is the one that gets cut.
+      // informational `cyclic-type` diagnostic — never gate expansion by
+      // itself. Gating on cyclicTypes membership cut `b` entirely on its
+      // FIRST, still-safe encounter (before B was ever added to
+      // `seenTypes`), silently dropping the legitimate sibling field
+      // `b.bValue`. Only an ACTUAL path-local repeat (`seenTypes`) or the
+      // depth cap may cut expansion and add the DISTINCT
+      // `recursive-reference` tag; `b.a` — the real repeat — is the one
+      // that gets cut, while `b` itself only ever earns the informational
+      // `cyclic-type:B` tag (round 2 of this same Codex review: conflating
+      // the two tags made Studio's summary falsely report a fully-expanded
+      // `b` as "skipped").
       const docs = await parseModels([
         `
           namespace test.cyclicexpansion
@@ -267,7 +279,8 @@ describe('FormPreviewSchema generation', () => {
       expect(bValueField?.kind).toBe('string');
       const bAField = bChildren?.find((c) => c.path === 'b.a');
       expect(bAField?.kind).toBe('unknown');
-      expect(schema?.unsupportedFeatures).toContain('recursive-reference:B');
+      expect(schema?.unsupportedFeatures).toContain('cyclic-type:B');
+      expect(schema?.unsupportedFeatures).not.toContain('recursive-reference:B');
       expect(schema?.unsupportedFeatures).toContain('recursive-reference:A');
     }
   );

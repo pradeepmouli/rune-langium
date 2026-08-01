@@ -71,11 +71,23 @@ interface FieldContext {
    * particular top-down walk happens to revisit a type it already passed
    * through; two types that reference each other but are each generated as
    * their OWN top-level schema (e.g. Form Preview regenerating one target at
-   * a time) each start a FRESH `seenTypes`, so the SAME cycle reads as
-   * `recursive-reference` from one entry point and never gets a chance to
-   * (walk order dependent, order never revisits the start). `cyclicTypes`
-   * closes that gap: a type reached for the FIRST time in a walk is still
-   * immediately flagged if the whole graph already knows it is cyclic.
+   * a time) each start a FRESH `seenTypes`, so which side (if either) gets
+   * tagged as cyclic depends purely on walk order.
+   *
+   * `cyclicTypes` closes that gap for VISIBILITY only: every type it
+   * contains gets a `cyclic-type:<name>` entry in `unsupportedFeatures` the
+   * first time it's reached, regardless of walk order — but membership in
+   * `cyclicTypes` must NEVER also cut expansion (Codex PR #459 review,
+   * round 1): a cyclic type's first, still-safe-to-expand visit renders its
+   * own fields normally, same as `seenTypes`-only behavior always did.
+   * Expansion is cut, and the DISTINCT `recursive-reference:<name>` tag
+   * added, only on an ACTUAL path-local repeat (`seenTypes`) or the depth
+   * cap. `cyclic-type` is purely informational ("this type is part of a
+   * cycle somewhere"); only `recursive-reference` means "this specific
+   * occurrence was truncated" — Studio's `summarizeUnsupportedFeatures`
+   * (apps/studio/src/components/FormPreviewPanel.tsx) depends on that
+   * distinction to avoid reporting a fully-expanded field as "skipped"
+   * (Codex PR #459 review, round 2).
    */
   cyclicTypes: ReadonlySet<string>;
 }
@@ -734,10 +746,12 @@ function buildChoiceOptionField(
 
   if (resolvedData) {
     const resolvedDataId = qualifiedTypeId(resolvedData);
-    // See objectField's identical split: tag on cycle membership, but only
-    // CUT on an actual path-local repeat (seenTypes) or depth cap.
+    // See objectField's identical split: tag cycle MEMBERSHIP with the
+    // distinct `cyclic-type` marker, but only CUT (and add the real
+    // `recursive-reference` tag) on an actual path-local repeat
+    // (seenTypes) or depth cap.
     if (ctx.cyclicTypes.has(resolvedDataId)) {
-      ctx.unsupportedFeatures.add(`recursive-reference:${resolvedData.name}`);
+      ctx.unsupportedFeatures.add(`cyclic-type:${resolvedData.name}`);
     }
     if (ctx.seenTypes.has(resolvedDataId) || ctx.depth >= ctx.maxDepth) {
       ctx.unsupportedFeatures.add(`recursive-reference:${resolvedData.name}`);
@@ -987,16 +1001,16 @@ function enumField(ctx: FieldContext, enumNode: RosettaEnumeration): PreviewFiel
 
 function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewField {
   const dataId = qualifiedTypeId(data);
-  // Tag the type as cyclic on every encounter — even one that isn't cut
-  // below — so a mutually-recursive pair is tagged consistently regardless
-  // of which side is the top-level generation target (see FieldContext.
-  // cyclicTypes' doc comment). This must NOT also gate expansion: cutting
-  // on the type's mere cycle membership (rather than on `seenTypes`, an
-  // ACTUAL repeat within this walk) discarded legitimate sibling fields on
-  // a cyclic type's first, still-safe-to-expand visit (Codex PR #459
-  // review).
+  // Tag the type as a cycle MEMBER on every encounter — even one that isn't
+  // cut below — so a mutually-recursive pair is tagged consistently
+  // regardless of which side is the top-level generation target (see
+  // FieldContext.cyclicTypes' doc comment). This is a DISTINCT tag from
+  // `recursive-reference` and must NOT also gate expansion: cutting on the
+  // type's mere cycle membership (rather than on `seenTypes`, an ACTUAL
+  // repeat within this walk) discarded legitimate sibling fields on a
+  // cyclic type's first, still-safe-to-expand visit (Codex PR #459 review).
   if (ctx.cyclicTypes.has(dataId)) {
-    ctx.unsupportedFeatures.add(`recursive-reference:${data.name}`);
+    ctx.unsupportedFeatures.add(`cyclic-type:${data.name}`);
   }
   if (ctx.seenTypes.has(dataId) || ctx.depth >= ctx.maxDepth) {
     ctx.unsupportedFeatures.add(`recursive-reference:${data.name}`);
@@ -1087,10 +1101,12 @@ function objectField(ctx: FieldContext, data: Data, sourceUri: string): PreviewF
  */
 function choiceField(ctx: FieldContext, choice: Choice, sourceUri: string): PreviewField {
   const choiceId = qualifiedTypeId(choice);
-  // See objectField's identical split: tag on cycle membership, but only
-  // CUT on an actual path-local repeat (seenTypes) or depth cap.
+  // See objectField's identical split: tag cycle MEMBERSHIP with the
+  // distinct `cyclic-type` marker, but only CUT (and add the real
+  // `recursive-reference` tag) on an actual path-local repeat (seenTypes)
+  // or depth cap.
   if (ctx.cyclicTypes.has(choiceId)) {
-    ctx.unsupportedFeatures.add(`recursive-reference:${choice.name}`);
+    ctx.unsupportedFeatures.add(`cyclic-type:${choice.name}`);
   }
   if (ctx.seenTypes.has(choiceId) || ctx.depth >= ctx.maxDepth) {
     ctx.unsupportedFeatures.add(`recursive-reference:${choice.name}`);

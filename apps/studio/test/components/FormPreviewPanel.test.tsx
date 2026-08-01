@@ -313,6 +313,28 @@ describe('FormPreviewPanel', () => {
     expect(screen.getByText(/references could not be resolved: Instrument, Party/i)).toBeInTheDocument();
   });
 
+  it('does not report a fully-expanded cyclic type as "skipped" — only an actually-truncated occurrence gets that wording (Codex PR #459 review, round 2)', () => {
+    useOutputStore.setState({ lines: [] });
+
+    const cyclicTradeSchema: FormPreviewSchema = {
+      ...tradeSchema,
+      status: 'unsupported',
+      // 'Party' is a cycle MEMBER but was fully expanded (not truncated)
+      // in this schema; 'Instrument' is the occurrence that actually got
+      // cut. Only 'Instrument' should read as "skipped" in the summary.
+      unsupportedFeatures: ['cyclic-type:Party', 'recursive-reference:Instrument']
+    };
+
+    render(
+      <FormPreviewPanel schema={cyclicTradeSchema} status={{ state: 'ready', targetId: cyclicTradeSchema.targetId }} />
+    );
+
+    const entry = useOutputStore.getState().lines.find((l) => l.op === 'preview');
+    expect(entry?.text).toContain('recursive reference skipped: Instrument');
+    expect(entry?.text).not.toContain('Party');
+    expect(entry?.text).not.toContain('cyclic-type:');
+  });
+
   it('shows a resolving indicator instead of "could not be resolved" while a retry is in flight', () => {
     const schemeSchema: FormPreviewSchema = {
       schemaVersion: 1,

@@ -1009,6 +1009,14 @@ function summarizeUnsupportedFeatures(features: string[]): string {
       unresolvedRefs.push(feature.slice('unresolved-reference:'.length));
     } else if (feature.startsWith('recursive-reference:')) {
       recursiveRefs.push(feature.slice('recursive-reference:'.length));
+    } else if (feature.startsWith('cyclic-type:')) {
+      // Informational only (packages/codegen/src/preview-schema.ts's
+      // FieldContext.cyclicTypes doc comment) — this type participates in
+      // a reference cycle somewhere, but THIS occurrence still rendered
+      // its real fields; it was never truncated, so it must not be
+      // reported alongside `recursive-reference` as "skipped" (Codex PR
+      // #459 review, round 2). Any actually-truncated occurrence of the
+      // same cycle already carries its own `recursive-reference` entry.
     } else {
       other.push(feature);
     }
