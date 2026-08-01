@@ -16,24 +16,26 @@ export interface TypeReferenceGraph {
   edges: Map<string, string[]>;
 }
 
-/** Ensure `name` is present in `nodes`/`edges`, without duplicating either. */
-function ensureNode(name: string, nodes: string[], edges: Map<string, string[]>): void {
-  if (!nodes.includes(name)) {
-    nodes.push(name);
-  }
+/**
+ * Ensure `name` is present in `nodes`/`edges`, without duplicating either.
+ * `edges.has(name)` (a Map lookup) doubles as the node-membership check —
+ * an entry is always added to both `nodes` and `edges` together below — so
+ * this stays O(1) per call instead of the O(n) `nodes.includes` scan that
+ * made graph construction quadratic in the total type count for large
+ * corpora (Codex PR #459 review, P2).
+ */
+function ensureNode(name: string, nodes: string[], edges: Map<string, Set<string>>): void {
   if (!edges.has(name)) {
-    edges.set(name, []);
+    nodes.push(name);
+    edges.set(name, new Set());
   }
 }
 
 /** Add a directed edge `from -> to`, ensuring both endpoints exist as nodes. */
-function addEdge(from: string, to: string, nodes: string[], edges: Map<string, string[]>): void {
+function addEdge(from: string, to: string, nodes: string[], edges: Map<string, Set<string>>): void {
   ensureNode(from, nodes, edges);
   ensureNode(to, nodes, edges);
-  const fromEdges = edges.get(from)!;
-  if (!fromEdges.includes(to)) {
-    fromEdges.push(to);
-  }
+  edges.get(from)!.add(to);
 }
 
 /**
@@ -66,7 +68,7 @@ export function buildTypeReferenceGraph(
   getNodeId: (node: Data | Choice) => string = (node) => node.name
 ): TypeReferenceGraph {
   const nodes: string[] = [];
-  const edges: Map<string, string[]> = new Map();
+  const edges: Map<string, Set<string>> = new Map();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -107,7 +109,11 @@ export function buildTypeReferenceGraph(
     }
   }
 
-  return { nodes, edges };
+  const edgesAsArrays = new Map<string, string[]>();
+  for (const [node, neighbors] of edges) {
+    edgesAsArrays.set(node, [...neighbors]);
+  }
+  return { nodes, edges: edgesAsArrays };
 }
 
 /**
