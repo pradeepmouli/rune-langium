@@ -184,6 +184,149 @@ describe('FormPreviewSchema generation', () => {
   });
 
   skipIfNodeLt22(
+    'detects a cross-namespace mutual reference cycle from BOTH entry points, not just whichever side happens to revisit itself in its own walk',
+    async () => {
+      // Party <-> Identifier is exactly the shape found live in production
+      // (task #34 follow-up): two types in DIFFERENT namespaces reference
+      // each other, and Form Preview generates each as its OWN top-level
+      // target (a separate options.targetId call per user selection), so
+      // each walk starts with a FRESH seenTypes containing only itself and
+      // never revisits the other side within the SAME walk. The local
+      // seenTypes guard alone can never catch this — it only fires when a
+      // walk revisits a type it has ALREADY passed through, and neither
+      // walk here ever passes through itself twice. Before this fix, one
+      // (or both) sides fell through to `unresolved-reference` instead of
+      // any cycle-aware tag purely because of which type happened to be
+      // generated first — a whole-graph precomputed cyclicTypes set
+      // (Tarjan's SCC via cycle-detector.ts, reused from the real emitter
+      // pipeline) is required to catch it consistently from both sides.
+      // `cyclic-type:<name>` (not `recursive-reference:<name>`) is the tag
+      // that reflects this whole-graph knowledge — see FieldContext.
+      // cyclicTypes' doc comment: `recursive-reference` is reserved for an
+      // occurrence that was ACTUALLY truncated (a real `seenTypes` repeat),
+      // which for a top-level Identifier/Party walk is always the type's
+      // own SECOND encounter (Identifier's `issuedBy` grandchild, or
+      // Party's respectively) — not the other side.
+      const docs = await parseModels([
+        `
+          namespace test.mutualcycle.a
+          version "1"
+
+          import test.mutualcycle.b.*
+
+          type Identifier:
+            issuerReference test.mutualcycle.b.Party (0..1)
+        `,
+        `
+          namespace test.mutualcycle.b
+          version "1"
+
+          import test.mutualcycle.a.*
+
+          type Party:
+            issuedBy test.mutualcycle.a.Identifier (0..1)
+        `
+      ]);
+
+      const [identifierSchema] = generatePreviewSchemas(docs, { targetId: 'test.mutualcycle.a.Identifier' });
+      const [partySchema] = generatePreviewSchemas(docs, { targetId: 'test.mutualcycle.b.Party' });
+
+      expect(identifierSchema?.unsupportedFeatures).toContain('cyclic-type:Party');
+      expect(identifierSchema?.unsupportedFeatures).not.toContain('unresolved-reference:Party');
+      expect(partySchema?.unsupportedFeatures).toContain('cyclic-type:Identifier');
+      expect(partySchema?.unsupportedFeatures).not.toContain('unresolved-reference:Identifier');
+    }
+  );
+
+  skipIfNodeLt22(
+    "preserves a cyclic type's first, still-safe-to-expand fields instead of cutting expansion on mere cycle membership (Codex PR #459 review)",
+    async () => {
+      // A.b -> B, B.bValue (a plain field) + B.a -> A (the actual cycle).
+      // cyclicTypes correctly flags BOTH A and B as cycle members (see the
+      // cross-namespace test above), but that set must only ADD the
+      // informational `cyclic-type` diagnostic — never gate expansion by
+      // itself. Gating on cyclicTypes membership cut `b` entirely on its
+      // FIRST, still-safe encounter (before B was ever added to
+      // `seenTypes`), silently dropping the legitimate sibling field
+      // `b.bValue`. Only an ACTUAL path-local repeat (`seenTypes`) or the
+      // depth cap may cut expansion and add the DISTINCT
+      // `recursive-reference` tag; `b.a` — the real repeat — is the one
+      // that gets cut, while `b` itself only ever earns the informational
+      // `cyclic-type:B` tag (round 2 of this same Codex review: conflating
+      // the two tags made Studio's summary falsely report a fully-expanded
+      // `b` as "skipped").
+      const docs = await parseModels([
+        `
+          namespace test.cyclicexpansion
+          version "1"
+
+          type A:
+            b B (0..1)
+
+          type B:
+            bValue string (0..1)
+            a A (0..1)
+        `
+      ]);
+
+      const [schema] = generatePreviewSchemas(docs, { targetId: 'test.cyclicexpansion.A' });
+      const bField = schema?.fields.find((f) => f.path === 'b');
+
+      expect(bField?.kind).toBe('object');
+      const bChildren = bField && 'children' in bField ? bField.children : undefined;
+      expect(bChildren?.map((c) => c.path)).toContain('b.bValue');
+      const bValueField = bChildren?.find((c) => c.path === 'b.bValue');
+      expect(bValueField?.kind).toBe('string');
+      const bAField = bChildren?.find((c) => c.path === 'b.a');
+      expect(bAField?.kind).toBe('unknown');
+      expect(schema?.unsupportedFeatures).toContain('cyclic-type:B');
+      expect(schema?.unsupportedFeatures).not.toContain('recursive-reference:B');
+      expect(schema?.unsupportedFeatures).toContain('recursive-reference:A');
+    }
+  );
+
+  skipIfNodeLt22(
+    'an inheritance-only cycle (A extends B, B extends A) does not falsely flip status to unsupported (Codex PR #459 review, round 3)',
+    async () => {
+      // `buildTypeReferenceGraph` adds an edge for EVERY `extends` clause,
+      // so a circular extends chain (malformed, but Studio builds
+      // documents with validation disabled, so it can still reach Form
+      // Preview) makes cyclicTypes flag both A and B even though
+      // `collectInheritedAttributes`'s own extends-chain `visited` guard
+      // resolves it silently — nothing is ever actually truncated. `A`'s
+      // sole unsupportedFeatures entry is the informational `cyclic-type:A`
+      // tag; `hasReportableUnsupportedFeature` must exclude it from the
+      // 'ready'/'unsupported' status determination, or a fully-successful
+      // schema reads as broken.
+      const docs = await parseModels([
+        `
+          namespace test.extendscycle
+          version "1"
+
+          type Container:
+            contained A (0..1)
+
+          type A extends B:
+            aValue string (0..1)
+
+          type B extends A:
+            bValue string (0..1)
+        `
+      ]);
+
+      const [schema] = generatePreviewSchemas(docs, { targetId: 'test.extendscycle.Container' });
+
+      expect(schema?.status).toBe('ready');
+      expect(schema?.unsupportedFeatures ?? []).toEqual(
+        (schema?.unsupportedFeatures ?? []).filter((f) => f.startsWith('cyclic-type:'))
+      );
+      const containedField = schema?.fields.find((f) => f.path === 'contained');
+      const containedChildren = containedField && 'children' in containedField ? containedField.children : undefined;
+      expect(containedChildren?.map((c) => c.path).sort()).toEqual(['contained.aValue', 'contained.bValue']);
+    }
+  );
+
+  skipIfNodeLt22(
     'does not spuriously block expansion when two DIFFERENT types in different namespaces share a bare simple name (issue #436)',
     async () => {
       // The `seenTypes` recursion guard previously keyed by bare `.name`

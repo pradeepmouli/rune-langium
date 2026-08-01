@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { LangiumDocument } from 'langium';
-import { isChoice, isData, isRosettaModel, type RosettaModel } from '@rune-langium/core';
+import { isChoice, isData, isRosettaModel, type Choice, type Data, type RosettaModel } from '@rune-langium/core';
 
 /**
  * A directed graph of type references.
@@ -16,24 +16,26 @@ export interface TypeReferenceGraph {
   edges: Map<string, string[]>;
 }
 
-/** Ensure `name` is present in `nodes`/`edges`, without duplicating either. */
-function ensureNode(name: string, nodes: string[], edges: Map<string, string[]>): void {
-  if (!nodes.includes(name)) {
-    nodes.push(name);
-  }
+/**
+ * Ensure `name` is present in `nodes`/`edges`, without duplicating either.
+ * `edges.has(name)` (a Map lookup) doubles as the node-membership check —
+ * an entry is always added to both `nodes` and `edges` together below — so
+ * this stays O(1) per call instead of the O(n) `nodes.includes` scan that
+ * made graph construction quadratic in the total type count for large
+ * corpora (Codex PR #459 review, P2).
+ */
+function ensureNode(name: string, nodes: string[], edges: Map<string, Set<string>>): void {
   if (!edges.has(name)) {
-    edges.set(name, []);
+    nodes.push(name);
+    edges.set(name, new Set());
   }
 }
 
 /** Add a directed edge `from -> to`, ensuring both endpoints exist as nodes. */
-function addEdge(from: string, to: string, nodes: string[], edges: Map<string, string[]>): void {
+function addEdge(from: string, to: string, nodes: string[], edges: Map<string, Set<string>>): void {
   ensureNode(from, nodes, edges);
   ensureNode(to, nodes, edges);
-  const fromEdges = edges.get(from)!;
-  if (!fromEdges.includes(to)) {
-    fromEdges.push(to);
-  }
+  edges.get(from)!.add(to);
 }
 
 /**
@@ -50,11 +52,23 @@ function addEdge(from: string, to: string, nodes: string[], edges: Map<string, s
  * FR-006 (cycle detection prerequisite).
  *
  * @param docs - Parsed Langium documents to scan.
+ * @param getNodeId - Derives each node's graph identity from its Data/Choice
+ *   AST node. Defaults to the bare `.name`, which is safe when `docs` is
+ *   scoped to a single namespace (the emitter pipeline's usage via
+ *   `namespace-walker.ts`, where names are already unique). A caller
+ *   building a graph across MULTIPLE namespaces (e.g. the studio's
+ *   cross-namespace Form Preview) must pass a namespace-qualifying
+ *   function instead — two distinct types in different namespaces sharing
+ *   a bare name would otherwise collide into the same graph node and
+ *   produce a false cycle.
  * @returns A TypeReferenceGraph representing all type relationships.
  */
-export function buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceGraph {
+export function buildTypeReferenceGraph(
+  docs: LangiumDocument[],
+  getNodeId: (node: Data | Choice) => string = (node) => node.name
+): TypeReferenceGraph {
   const nodes: string[] = [];
-  const edges: Map<string, string[]> = new Map();
+  const edges: Map<string, Set<string>> = new Map();
 
   for (const doc of docs) {
     const model = doc.parseResult?.value;
@@ -63,12 +77,12 @@ export function buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceG
     const rosettaModel = model as RosettaModel;
     for (const element of rosettaModel.elements) {
       if (isChoice(element)) {
-        const choiceName = element.name;
+        const choiceName = getNodeId(element);
         ensureNode(choiceName, nodes, edges);
         for (const option of element.attributes) {
           const optionTypeRef = option.typeCall?.type?.ref;
           if (optionTypeRef && (isData(optionTypeRef) || isChoice(optionTypeRef))) {
-            addEdge(choiceName, optionTypeRef.name, nodes, edges);
+            addEdge(choiceName, getNodeId(optionTypeRef), nodes, edges);
           }
         }
         continue;
@@ -76,12 +90,12 @@ export function buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceG
 
       if (!isData(element)) continue;
 
-      const typeName = element.name;
+      const typeName = getNodeId(element);
       ensureNode(typeName, nodes, edges);
 
       // Add extends edge: this type → parent type
       if (element.superType?.ref) {
-        addEdge(typeName, element.superType.ref.name, nodes, edges);
+        addEdge(typeName, getNodeId(element.superType.ref), nodes, edges);
       }
 
       // Add attribute type reference edges — Data or Choice targets only
@@ -90,12 +104,16 @@ export function buildTypeReferenceGraph(docs: LangiumDocument[]): TypeReferenceG
         const attrTypeRef = attr.typeCall?.type?.ref;
         if (!attrTypeRef) continue;
         if (!isData(attrTypeRef) && !isChoice(attrTypeRef)) continue;
-        addEdge(typeName, attrTypeRef.name, nodes, edges);
+        addEdge(typeName, getNodeId(attrTypeRef), nodes, edges);
       }
     }
   }
 
-  return { nodes, edges };
+  const edgesAsArrays = new Map<string, string[]>();
+  for (const [node, neighbors] of edges) {
+    edgesAsArrays.set(node, [...neighbors]);
+  }
+  return { nodes, edges: edgesAsArrays };
 }
 
 /**
