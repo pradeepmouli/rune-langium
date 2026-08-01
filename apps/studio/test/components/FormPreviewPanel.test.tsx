@@ -335,6 +335,31 @@ describe('FormPreviewPanel', () => {
     expect(entry?.text).not.toContain('cyclic-type:');
   });
 
+  it('shows neither a warning log nor a blank "Unsupported preview features" banner when every unsupportedFeatures entry is purely informational (Codex PR #459 review, round 3)', () => {
+    useOutputStore.setState({ lines: [] });
+
+    // An inheritance-only cycle (A extends B, B extends A) flags A as a
+    // cycle member even though nothing was ever truncated — real
+    // generatePreviewSchemas output reads `status: 'ready'` here (see
+    // packages/codegen/test/preview-schema.test.ts's matching case), so
+    // this schema shape must never surface as "unsupported" in the UI.
+    const cyclicOnlyTradeSchema: FormPreviewSchema = {
+      ...tradeSchema,
+      status: 'ready',
+      unsupportedFeatures: ['cyclic-type:A']
+    };
+
+    render(
+      <FormPreviewPanel
+        schema={cyclicOnlyTradeSchema}
+        status={{ state: 'ready', targetId: cyclicOnlyTradeSchema.targetId }}
+      />
+    );
+
+    expect(useOutputStore.getState().lines.find((l) => l.op === 'preview')).toBeUndefined();
+    expect(screen.queryByText(/unsupported preview features/i)).not.toBeInTheDocument();
+  });
+
   it('shows a resolving indicator instead of "could not be resolved" while a retry is in flight', () => {
     const schemeSchema: FormPreviewSchema = {
       schemaVersion: 1,

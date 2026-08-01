@@ -286,6 +286,47 @@ describe('FormPreviewSchema generation', () => {
   );
 
   skipIfNodeLt22(
+    'an inheritance-only cycle (A extends B, B extends A) does not falsely flip status to unsupported (Codex PR #459 review, round 3)',
+    async () => {
+      // `buildTypeReferenceGraph` adds an edge for EVERY `extends` clause,
+      // so a circular extends chain (malformed, but Studio builds
+      // documents with validation disabled, so it can still reach Form
+      // Preview) makes cyclicTypes flag both A and B even though
+      // `collectInheritedAttributes`'s own extends-chain `visited` guard
+      // resolves it silently — nothing is ever actually truncated. `A`'s
+      // sole unsupportedFeatures entry is the informational `cyclic-type:A`
+      // tag; `hasReportableUnsupportedFeature` must exclude it from the
+      // 'ready'/'unsupported' status determination, or a fully-successful
+      // schema reads as broken.
+      const docs = await parseModels([
+        `
+          namespace test.extendscycle
+          version "1"
+
+          type Container:
+            contained A (0..1)
+
+          type A extends B:
+            aValue string (0..1)
+
+          type B extends A:
+            bValue string (0..1)
+        `
+      ]);
+
+      const [schema] = generatePreviewSchemas(docs, { targetId: 'test.extendscycle.Container' });
+
+      expect(schema?.status).toBe('ready');
+      expect(schema?.unsupportedFeatures ?? []).toEqual(
+        (schema?.unsupportedFeatures ?? []).filter((f) => f.startsWith('cyclic-type:'))
+      );
+      const containedField = schema?.fields.find((f) => f.path === 'contained');
+      const containedChildren = containedField && 'children' in containedField ? containedField.children : undefined;
+      expect(containedChildren?.map((c) => c.path).sort()).toEqual(['contained.aValue', 'contained.bValue']);
+    }
+  );
+
+  skipIfNodeLt22(
     'does not spuriously block expansion when two DIFFERENT types in different namespaces share a bare simple name (issue #436)',
     async () => {
       // The `seenTypes` recursion guard previously keyed by bare `.name`

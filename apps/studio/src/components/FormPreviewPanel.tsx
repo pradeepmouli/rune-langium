@@ -132,15 +132,19 @@ export function FormPreviewPanel({
 
   useEffect(() => {
     if (!schema?.unsupportedFeatures?.length) return;
+    // `cyclic-type:` entries are informational only (see
+    // summarizeUnsupportedFeatures) — a schema whose ONLY entries are
+    // `cyclic-type:` renders every field successfully and must not log a
+    // blank "unsupported preview features" warning (Codex PR #459 review,
+    // round 3).
+    const summary = summarizeUnsupportedFeatures(schema.unsupportedFeatures);
+    if (!summary) return;
     if (loggedUnsupportedSchemaRef.current === schema) return;
     loggedUnsupportedSchemaRef.current = schema;
-    useOutputStore
-      .getState()
-      .addLine(
-        fmtLine('preview', 'unsupported preview features', summarizeUnsupportedFeatures(schema.unsupportedFeatures)),
-        'warn',
-        { op: 'preview', subject: schema.targetId }
-      );
+    useOutputStore.getState().addLine(fmtLine('preview', 'unsupported preview features', summary), 'warn', {
+      op: 'preview',
+      subject: schema.targetId
+    });
   }, [schema]);
 
   const defaultValues = useMemo(() => {
@@ -339,6 +343,13 @@ export function FormPreviewPanel({
   }, [activeSample]);
 
   const summaryMessage = schema ? getSummaryMessage(schema, status, activeSample) : undefined;
+  // `cyclic-type:` entries are informational only — a schema whose ONLY
+  // unsupportedFeatures entries are `cyclic-type:` rendered every field
+  // successfully and must not show a blank "Unsupported preview features:"
+  // banner (Codex PR #459 review, round 3).
+  const unsupportedSummary = schema?.unsupportedFeatures?.length
+    ? summarizeUnsupportedFeatures(schema.unsupportedFeatures)
+    : '';
 
   if (showStatusOnly) {
     const isWaiting = status.state === 'waiting' && status.targetId;
@@ -447,7 +458,7 @@ export function FormPreviewPanel({
             ))}
           </>
         )}
-        {schema.unsupportedFeatures?.length ? (
+        {isResolvingReferences || unsupportedSummary ? (
           isResolvingReferences ? (
             <div role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Spinner className="size-3 shrink-0" />
@@ -458,7 +469,7 @@ export function FormPreviewPanel({
             </div>
           ) : (
             <div role="status" className="text-xs text-muted-foreground">
-              Unsupported preview features: {summarizeUnsupportedFeatures(schema.unsupportedFeatures)}
+              Unsupported preview features: {unsupportedSummary}
             </div>
           )
         ) : null}

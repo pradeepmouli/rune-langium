@@ -256,6 +256,27 @@ function qualifiedTypeId(node: Data | Choice): string {
 }
 
 /**
+ * `unsupportedFeatures` mixes genuinely-truncated/unresolved markers
+ * (`unresolved-reference:`, `recursive-reference:`, `duplicate-target:`,
+ * `empty-choice:`, `choice-arm-collision:`) with the purely informational
+ * `cyclic-type:` marker (a type participates in a cycle SOMEWHERE, even
+ * when THIS occurrence rendered every field successfully — see
+ * FieldContext.cyclicTypes' doc comment). Only a genuinely-truncated/
+ * unresolved marker may flip `status` to 'unsupported': an inheritance-only
+ * cycle (e.g. `A extends B`, `B extends A`) makes cyclicTypes flag both
+ * ends even though `collectInheritedAttributes`'s own extends-chain guard
+ * resolves it silently with no truncation at all — a schema whose ONLY tag
+ * is `cyclic-type:` must read as 'ready', not 'unsupported' (Codex PR #459
+ * review, round 3).
+ */
+function hasReportableUnsupportedFeature(unsupportedFeatures: ReadonlySet<string>): boolean {
+  for (const feature of unsupportedFeatures) {
+    if (!feature.startsWith('cyclic-type:')) return true;
+  }
+  return false;
+}
+
+/**
  * Builds Choice-ancestor option fields, dropping any whose `path` collides
  * with one of the Data type's OWN attribute names and flagging each
  * collision as unsupported (issue #435) rather than silently omitting it
@@ -454,7 +475,7 @@ function buildDataSchema(
     schemaVersion: SCHEMA_VERSION,
     targetId,
     title: data.name,
-    status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+    status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
     fields,
     ...(sourceMap.length > 0 ? { sourceMap } : {}),
     ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {}),
@@ -561,7 +582,7 @@ function buildTypeAliasSchema(
       kind: 'typeAlias',
       targetId,
       title: alias.name,
-      status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+      status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
       fields,
       ...(sourceMap.length > 0 ? { sourceMap } : {}),
       ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {}),
@@ -642,7 +663,7 @@ function buildChoiceSchema(
     kind: 'choice',
     targetId,
     title: choice.name,
-    status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+    status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
     fields,
     ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
   };
@@ -870,7 +891,7 @@ function buildFunctionSchema(
     targetId,
     title: func.name,
     kind: 'function',
-    status: unsupportedFeatures.size > 0 ? 'unsupported' : 'ready',
+    status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
     fields: inputFields,
     ...(sourceMap.length > 0 ? { sourceMap } : {}),
     ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
