@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -44,6 +45,7 @@ import { config } from './config.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
 import './test-api.js';
 import { setRuneStudioTestApi } from './test-api.js';
+import { withInstrumentation } from './services/instrumentation/core.js';
 
 /**
  * Mount-time workspace boot state machine (T028 / 014-US2).
@@ -1198,10 +1200,13 @@ function AppContent() {
   );
 }
 
-export function App() {
-  return (
-    <StudioToastProvider>
-      <AppContent />
-    </StudioToastProvider>
-  );
-}
+export const App = withInstrumentation(
+  function App() {
+    return (
+      <StudioToastProvider>
+        <AppContent />
+      </StudioToastProvider>
+    );
+  },
+  { op: 'App' }
+);
