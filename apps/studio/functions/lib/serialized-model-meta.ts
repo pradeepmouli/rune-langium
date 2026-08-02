@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -13,6 +14,8 @@
  * or `cdm.base.*`.
  */
 import { namespaceFromModelName } from '@rune-langium/core';
+import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
+
 export interface SerializedModelMeta {
   namespace: string;
   imports: string[];
@@ -22,23 +25,34 @@ function nameToNamespace(name: unknown): string | undefined {
   return namespaceFromModelName(name);
 }
 
-export function readSerializedModelMeta(serializedModel: string): SerializedModelMeta | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(serializedModel);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const m = parsed as { name?: unknown; imports?: unknown };
-  const namespace = nameToNamespace(m.name);
-  if (!namespace) return null;
-  const imports: string[] = [];
-  if (Array.isArray(m.imports)) {
-    for (const imp of m.imports) {
-      const ns = (imp as { importedNamespace?: unknown })?.importedNamespace;
-      if (typeof ns === 'string' && ns.length > 0) imports.push(ns);
+export const readSerializedModelMeta = withInstrumentation(
+  function readSerializedModelMeta(serializedModel: string): SerializedModelMeta | null {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(serializedModel);
+    } catch {
+      return null;
     }
+    if (!parsed || typeof parsed !== 'object') return null;
+    const m = parsed as { name?: unknown; imports?: unknown };
+    const namespace = nameToNamespace(m.name);
+    if (!namespace) return null;
+    const imports: string[] = [];
+    if (Array.isArray(m.imports)) {
+      for (const imp of m.imports) {
+        const ns = (imp as { importedNamespace?: unknown })?.importedNamespace;
+        if (typeof ns === 'string' && ns.length > 0) imports.push(ns);
+      }
+    }
+    return { namespace, imports };
+    // `serializedModel` is raw serialized AST JSON — never captured. Output
+    // namespace/imports are drawn exclusively from curated bundle documents
+    // (this reader exists specifically for curated dependency-closure
+    // computation, per this file's own doc comment) — safe.
+  },
+  {
+    op: 'readSerializedModelMeta',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  return { namespace, imports };
-}
+);

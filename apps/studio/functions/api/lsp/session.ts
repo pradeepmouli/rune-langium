@@ -22,6 +22,7 @@ import {
   type SessionTokenPayload
 } from '../../lib/lsp-auth.js';
 import { logRequest } from '../../lib/lsp-log.js';
+import { withInstrumentation } from '../../../src/services/instrumentation/core.js';
 
 export interface Env {
   LSP_SESSION: DurableObjectNamespace;
@@ -60,84 +61,92 @@ const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 // Pages Function handler
 // ────────────────────────────────────────────────────────────────────────────
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  const startedAt = Date.now();
-  const origin = request.headers.get('Origin');
-  const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
+// Manually wrapped (Cloudflare Pages Function arrow export — codemod-blind).
+// `request`/`env` carry the client IP, Origin header, and
+// `SESSION_SIGNING_KEY` (a literal secret) — never captured. `logRequest`
+// calls above already emit the safe structural fields (route/status/
+// duration/errorCategory) through their own instrumentation.
+export const onRequestPost: PagesFunction<Env> = withInstrumentation(
+  async ({ request, env }) => {
+    const startedAt = Date.now();
+    const origin = request.headers.get('Origin');
+    const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
 
-  if (!isOriginAllowed(origin, env.ALLOWED_ORIGIN)) {
-    const res = jsonResponse(403, { error: 'origin_not_allowed' });
-    logRequest({
-      route: '/api/lsp/session',
-      status: 403,
-      durationMs: Date.now() - startedAt,
-      errorCategory: 'origin_not_allowed'
-    });
+    if (!isOriginAllowed(origin, env.ALLOWED_ORIGIN)) {
+      const res = jsonResponse(403, { error: 'origin_not_allowed' });
+      logRequest({
+        route: '/api/lsp/session',
+        status: 403,
+        durationMs: Date.now() - startedAt,
+        errorCategory: 'origin_not_allowed'
+      });
+      return res;
+    }
+
+    const rl = checkSessionRateLimit(ip);
+    if (!rl.allowed) {
+      const res = jsonResponse(429, { error: 'rate_limited', retry_after_s: rl.retryAfterS });
+      logRequest({
+        route: '/api/lsp/session',
+        status: 429,
+        durationMs: Date.now() - startedAt,
+        errorCategory: 'rate_limited'
+      });
+      return res;
+    }
+
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      const res = jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' });
+      logRequest({
+        route: '/api/lsp/session',
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        errorCategory: 'schema_violation'
+      });
+      return res;
+    }
+
+    const parsed = SessionRequestBody.safeParse(raw);
+    if (!parsed.success) {
+      const res = jsonResponse(400, { error: 'schema_violation', details: parsed.error.issues });
+      logRequest({
+        route: '/api/lsp/session',
+        status: 400,
+        durationMs: Date.now() - startedAt,
+        errorCategory: 'schema_violation'
+      });
+      return res;
+    }
+
+    if (!env.SESSION_SIGNING_KEY) {
+      const res = jsonResponse(500, { error: 'signing_key_not_configured' });
+      logRequest({
+        route: '/api/lsp/session',
+        status: 500,
+        durationMs: Date.now() - startedAt,
+        errorCategory: 'signing_key_not_configured'
+      });
+      return res;
+    }
+
+    const issuedAt = Date.now();
+    const exp = issuedAt + TOKEN_TTL_MS;
+    const payload: SessionTokenPayload = {
+      v: 1,
+      workspaceId: parsed.data.workspaceId,
+      issuedAt,
+      exp,
+      origin: origin!,
+      nonce: newNonceHex()
+    };
+
+    const token = await signSessionToken(env.SESSION_SIGNING_KEY, payload);
+    const res = jsonResponse(200, { token, expiresAt: exp });
+    logRequest({ route: '/api/lsp/session', status: 200, durationMs: Date.now() - startedAt });
     return res;
-  }
-
-  const rl = checkSessionRateLimit(ip);
-  if (!rl.allowed) {
-    const res = jsonResponse(429, { error: 'rate_limited', retry_after_s: rl.retryAfterS });
-    logRequest({
-      route: '/api/lsp/session',
-      status: 429,
-      durationMs: Date.now() - startedAt,
-      errorCategory: 'rate_limited'
-    });
-    return res;
-  }
-
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    const res = jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' });
-    logRequest({
-      route: '/api/lsp/session',
-      status: 400,
-      durationMs: Date.now() - startedAt,
-      errorCategory: 'schema_violation'
-    });
-    return res;
-  }
-
-  const parsed = SessionRequestBody.safeParse(raw);
-  if (!parsed.success) {
-    const res = jsonResponse(400, { error: 'schema_violation', details: parsed.error.issues });
-    logRequest({
-      route: '/api/lsp/session',
-      status: 400,
-      durationMs: Date.now() - startedAt,
-      errorCategory: 'schema_violation'
-    });
-    return res;
-  }
-
-  if (!env.SESSION_SIGNING_KEY) {
-    const res = jsonResponse(500, { error: 'signing_key_not_configured' });
-    logRequest({
-      route: '/api/lsp/session',
-      status: 500,
-      durationMs: Date.now() - startedAt,
-      errorCategory: 'signing_key_not_configured'
-    });
-    return res;
-  }
-
-  const issuedAt = Date.now();
-  const exp = issuedAt + TOKEN_TTL_MS;
-  const payload: SessionTokenPayload = {
-    v: 1,
-    workspaceId: parsed.data.workspaceId,
-    issuedAt,
-    exp,
-    origin: origin!,
-    nonce: newNonceHex()
-  };
-
-  const token = await signSessionToken(env.SESSION_SIGNING_KEY, payload);
-  const res = jsonResponse(200, { token, expiresAt: exp });
-  logRequest({ route: '/api/lsp/session', status: 200, durationMs: Date.now() - startedAt });
-  return res;
-};
+  },
+  { op: 'onRequestPost' }
+);
