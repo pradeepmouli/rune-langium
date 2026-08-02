@@ -13,6 +13,8 @@
  * the same lifetime guarantees as a Cloudflare Worker isolate.
  */
 
+import { withInstrumentation } from '../../../src/services/instrumentation/core.js';
+
 const WORKER_VERSION = '0.1.0';
 
 let langiumLoaded: boolean | null = null;
@@ -43,19 +45,25 @@ async function probeLangium(): Promise<{ loaded: boolean; error: string | null }
 
 const startupMs = Date.now();
 
-export const onRequestGet: PagesFunction = async () => {
-  const { loaded, error } = await probeLangium();
-  return new Response(
-    JSON.stringify({
-      ok: loaded,
-      version: WORKER_VERSION,
-      langium_loaded: loaded,
-      ...(error ? { load_error: error } : {}),
-      uptime_seconds: Math.max(0, Math.floor((Date.now() - startupMs) / 1000))
-    }),
-    {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    }
-  );
-};
+// Manually wrapped (Cloudflare Pages Function arrow export — codemod-blind).
+// Output is a Response object — not safely capturable without consuming
+// its body stream.
+export const onRequestGet: PagesFunction = withInstrumentation(
+  async () => {
+    const { loaded, error } = await probeLangium();
+    return new Response(
+      JSON.stringify({
+        ok: loaded,
+        version: WORKER_VERSION,
+        langium_loaded: loaded,
+        ...(error ? { load_error: error } : {}),
+        uptime_seconds: Math.max(0, Math.floor((Date.now() - startupMs) / 1000))
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  },
+  { op: 'onRequestGet' }
+);

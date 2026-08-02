@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -17,6 +18,7 @@
 
 import pino from 'pino/browser';
 import type { Logger, LoggerOptions } from 'pino';
+import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
 export interface LspWorkerLogEntry {
   /** Route the request hit, e.g. `/api/lsp/session`, `/api/lsp/health`, `/api/lsp/ws/<token>`. */
@@ -80,20 +82,20 @@ export const logger: Logger = pino({
   }
 } as LoggerOptions);
 
-/**
- * Emit one structured log line for a completed Worker request.
- * Shape matches the surrounding workers' `*.request` log convention.
- * pino appends `level` + `time` automatically.
- */
-export function logRequest(entry: LspWorkerLogEntry): void {
-  logger.info(
-    {
-      ts: Date.now(),
-      route: entry.route,
-      status: entry.status,
-      duration_ms: entry.durationMs,
-      ...(entry.errorCategory ? { error_category: entry.errorCategory } : {})
-    },
-    'lsp-worker.request'
-  );
-}
+export const logRequest = withInstrumentation(
+  function logRequest(entry: LspWorkerLogEntry): void {
+    logger.info(
+      {
+        ts: Date.now(),
+        route: entry.route,
+        status: entry.status,
+        duration_ms: entry.durationMs,
+        ...(entry.errorCategory ? { error_category: entry.errorCategory } : {})
+      },
+      'lsp-worker.request'
+    );
+    // `entry` is entirely structural (fixed route path, HTTP status, duration,
+    // a documented error-code enum) — never user/model content. Safe.
+  },
+  { op: 'logRequest', capture: Capture.Input, sanitize: (value) => value }
+);

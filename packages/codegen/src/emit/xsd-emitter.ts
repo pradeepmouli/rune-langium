@@ -171,6 +171,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { recognizeCondition } from './constraint-recognizer.js';
 import type { ConstraintIR } from '../import/source-model.js';
+import { debug } from '../instrument.js';
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema';
 
@@ -287,11 +288,13 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
     this.relativePath = getTargetRelativePath(model.namespace, 'xsd');
   }
 
+  @debug()
   emitEnumeration(enumNode: RosettaEnumeration): void {
     this.usedSimpleTypeNames.add(enumNode.name);
     this.simpleTypeBlocks.push(XsdNamespaceEmitter.renderEnumSimpleType(enumNode));
   }
 
+  @debug()
   emitTypeAlias(_typeAlias: RosettaTypeAlias): void {
     // No XSD equivalent for a Rune type alias in spec.md's Phase 3 vocabulary
     // (the reader never produces one either) — silently no-op, matching
@@ -300,10 +303,12 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
     // whole document has no per-property metadata sidecar to attach one to).
   }
 
+  @debug()
   emitData(data: Data): void {
     this.complexTypeBlocks.push(this.renderDataComplexType(data));
   }
 
+  @debug()
   emitChoice(choice: Choice): void {
     this.complexTypeBlocks.push(this.renderChoiceComplexType(choice));
   }

@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -50,6 +51,7 @@ import { UtilityTrayContext } from './utility-tray-context.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 const DEFAULT_UTILITY_HEIGHT = 220;
@@ -187,319 +189,322 @@ function StudioDockTab({ api, params }: IDockviewPanelHeaderProps<PanelTabMeta>)
   );
 }
 
-export function DockShell({
-  studioVersion,
-  workspaceId,
-  initialLayout,
-  focusPanel,
-  panelComponents,
-  onLayoutChange,
-  onAction,
-  panelTabMeta
-}: DockShellProps): React.ReactElement {
-  const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH);
-  const getSanitizedLayout = useCallback(
-    (candidate: PanelLayoutRecord | null | undefined) =>
-      sanitizeLayoutWithDiagnostics(candidate ?? null, {
-        studioVersion,
-        viewportWidth: getViewportWidth()
-      }),
-    [studioVersion]
-  );
-  const { showToast } = useStudioToast();
-  const showToastRef = useLatestRef(showToast);
-  const apiRef = useRef<DockviewApi | null>(null);
-  const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
-  const suppressLayoutPersistenceRef = useRef(false);
-  const onLayoutChangeRef = useLatestRef(onLayoutChange);
-
-  const [layoutNotice, setLayoutNotice] = useState<string | null>(() => {
-    const sanitized = getSanitizedLayout(initialLayout);
-    return sanitized.notice ?? null;
-  });
-  const [layout, setLayout] = useState<PanelLayoutRecord>(() => getSanitizedLayout(initialLayout).layout);
-  const [_layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
-    layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
-  );
-  const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['structure']));
-  const toggleCenterPane = useCallback((pane: CenterPane) => {
-    setActivePanes((prev) => {
-      const next = new Set(prev);
-      if (next.has(pane)) {
-        if (next.size <= 1) return prev;
-        next.delete(pane);
-      } else {
-        next.add(pane);
-        // Graph ↔ Structure mutual exclusion: showing one always hides
-        // the other. They occupy the same conceptual slot (the structural
-        // visualisation of the focused type) and the user reported that
-        // having both visible at once is wasteful when nodes are expanded.
-        if (pane === 'structure' && next.has('graph')) next.delete('graph');
-        if (pane === 'graph' && next.has('structure')) next.delete('structure');
-      }
-      return next;
-    });
-  }, []);
-  // Memoized so CenterPanesContext consumers don't re-render on every
-  // DockShell render — only when activePanes itself actually changes
-  // (toggleCenterPane is stable via the functional setState form above).
-  const centerPanesContextValue = useMemo(
-    () => ({ activePanes, toggle: toggleCenterPane }),
-    [activePanes, toggleCenterPane]
-  );
-  const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
-    layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
-  );
-
-  // Refs kept current so stable callbacks always read the latest values
-  // without needing them as useCallback deps.
-  const layoutRef = useLatestRef(layout);
-  const studioVersionRef = useLatestRef(studioVersion);
-  const panelTabMetaRef = useLatestRef(panelTabMeta);
-
-  // onReady is called exactly once by dockview (on mount). Including
-  // layout/studioVersion as deps would recreate the callback whenever
-  // those change, but the new function would never be invoked — the old
-  // closure would remain permanently stale. Using refs avoids the dep
-  // while guaranteeing we always read the current value.
-  const onReady = useCallback(
-    (event: DockviewReadyEvent) => {
-      const currentLayout = layoutRef.current;
-      const currentVersion = studioVersionRef.current;
-      apiRef.current = event.api;
-      layoutChangeDisposableRef.current?.dispose();
-      let appliedLayout = currentLayout;
-
-      try {
-        applyLayout(event.api, currentLayout);
-        applyPanelTabMeta(event.api, panelTabMetaRef.current);
-        if (currentLayout.dockview?.shape === 'factory') {
-          setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
-        }
-      } catch (err) {
-        const fallback = buildDefaultLayout({
-          studioVersion: currentVersion,
+export const DockShell = withInstrumentation(
+  function DockShell({
+    studioVersion,
+    workspaceId,
+    initialLayout,
+    focusPanel,
+    panelComponents,
+    onLayoutChange,
+    onAction,
+    panelTabMeta
+  }: DockShellProps): React.ReactElement {
+    const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH);
+    const getSanitizedLayout = useCallback(
+      (candidate: PanelLayoutRecord | null | undefined) =>
+        sanitizeLayoutWithDiagnostics(candidate ?? null, {
+          studioVersion,
           viewportWidth: getViewportWidth()
-        });
-        console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
-        useOutputStore
-          .getState()
-          .addLine(
-            fmtLine(
-              'layout',
-              'failed to apply saved layout, using default',
-              err instanceof Error ? err.message : String(err)
-            ),
-            'warn'
-          );
-        showToast({
-          title: 'Layout restored to default',
-          description: 'Your saved layout could not be applied.',
-          variant: 'default'
-        });
-        appliedLayout = fallback;
-        setLayout(fallback);
-        setLayoutPreset(fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit');
-        setUtilitiesCollapsedState(
-          fallback.dockview?.shape === 'factory' ? fallback.dockview.bottomGroup.collapsed : false
-        );
-        event.api.clear();
-        applyLayout(event.api, fallback);
-        applyPanelTabMeta(event.api, panelTabMetaRef.current);
-      }
+        }),
+      [studioVersion]
+    );
+    const { showToast } = useStudioToast();
+    const showToastRef = useLatestRef(showToast);
+    const apiRef = useRef<DockviewApi | null>(null);
+    const layoutChangeDisposableRef = useRef<{ dispose(): void } | null>(null);
+    const suppressLayoutPersistenceRef = useRef(false);
+    const onLayoutChangeRef = useLatestRef(onLayoutChange);
 
-      // Persist on every layout change. The serialized JSON replaces our
-      // factory-shape layout so subsequent mounts go through fromJSON.
-      layoutChangeDisposableRef.current = event.api.onDidLayoutChange(() => {
-        if (!onLayoutChangeRef.current) return;
-        if (suppressLayoutPersistenceRef.current) return;
-        if (event.api.panels.length === 0) {
-          console.warn('[DockShell] Skipping persistence of empty dock layout');
-          return;
+    const [layoutNotice, setLayoutNotice] = useState<string | null>(() => {
+      const sanitized = getSanitizedLayout(initialLayout);
+      return sanitized.notice ?? null;
+    });
+    const [layout, setLayout] = useState<PanelLayoutRecord>(() => getSanitizedLayout(initialLayout).layout);
+    const [_layoutPreset, setLayoutPreset] = useState<LayoutPreset>(() =>
+      layout.dockview && layout.dockview.shape === 'factory' ? (layout.dockview.preset ?? 'edit') : 'edit'
+    );
+    const [activePanes, setActivePanes] = useState<Set<CenterPane>>(() => new Set<CenterPane>(['structure']));
+    const toggleCenterPane = useCallback((pane: CenterPane) => {
+      setActivePanes((prev) => {
+        const next = new Set(prev);
+        if (next.has(pane)) {
+          if (next.size <= 1) return prev;
+          next.delete(pane);
+        } else {
+          next.add(pane);
+          // Graph ↔ Structure mutual exclusion: showing one always hides
+          // the other. They occupy the same conceptual slot (the structural
+          // visualisation of the focused type) and the user reported that
+          // having both visible at once is wasteful when nodes are expanded.
+          if (pane === 'structure' && next.has('graph')) next.delete('graph');
+          if (pane === 'graph' && next.has('structure')) next.delete('structure');
         }
+        return next;
+      });
+    }, []);
+    // Memoized so CenterPanesContext consumers don't re-render on every
+    // DockShell render — only when activePanes itself actually changes
+    // (toggleCenterPane is stable via the functional setState form above).
+    const centerPanesContextValue = useMemo(
+      () => ({ activePanes, toggle: toggleCenterPane }),
+      [activePanes, toggleCenterPane]
+    );
+    const [utilitiesCollapsed, setUtilitiesCollapsedState] = useState<boolean>(() =>
+      layout.dockview && layout.dockview.shape === 'factory' ? layout.dockview.bottomGroup.collapsed : false
+    );
+
+    // Refs kept current so stable callbacks always read the latest values
+    // without needing them as useCallback deps.
+    const layoutRef = useLatestRef(layout);
+    const studioVersionRef = useLatestRef(studioVersion);
+    const panelTabMetaRef = useLatestRef(panelTabMeta);
+
+    // onReady is called exactly once by dockview (on mount). Including
+    // layout/studioVersion as deps would recreate the callback whenever
+    // those change, but the new function would never be invoked — the old
+    // closure would remain permanently stale. Using refs avoids the dep
+    // while guaranteeing we always read the current value.
+    const onReady = useCallback(
+      (event: DockviewReadyEvent) => {
+        const currentLayout = layoutRef.current;
+        const currentVersion = studioVersionRef.current;
+        apiRef.current = event.api;
+        layoutChangeDisposableRef.current?.dispose();
+        let appliedLayout = currentLayout;
+
         try {
-          const dockviewJson = serializeLayout(event.api);
-          onLayoutChangeRef.current({
-            version: LAYOUT_SCHEMA_VERSION,
-            writtenBy: studioVersionRef.current,
-            dockview: dockviewJson as PanelLayoutRecord['dockview']
-          });
+          applyLayout(event.api, currentLayout);
+          applyPanelTabMeta(event.api, panelTabMetaRef.current);
+          if (currentLayout.dockview?.shape === 'factory') {
+            setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
+          }
         } catch (err) {
-          console.error('[DockShell] Failed to serialize layout change', err);
+          const fallback = buildDefaultLayout({
+            studioVersion: currentVersion,
+            viewportWidth: getViewportWidth()
+          });
+          console.error('[DockShell] Failed to apply layout, falling back to default layout', err);
           useOutputStore
             .getState()
             .addLine(
-              fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
+              fmtLine(
+                'layout',
+                'failed to apply saved layout, using default',
+                err instanceof Error ? err.message : String(err)
+              ),
               'warn'
             );
-          showToastRef.current({
-            title: 'Layout not saved',
-            description: 'Could not persist the current panel arrangement.',
+          showToast({
+            title: 'Layout restored to default',
+            description: 'Your saved layout could not be applied.',
+            variant: 'default'
+          });
+          appliedLayout = fallback;
+          setLayout(fallback);
+          setLayoutPreset(fallback.dockview?.shape === 'factory' ? (fallback.dockview.preset ?? 'edit') : 'edit');
+          setUtilitiesCollapsedState(
+            fallback.dockview?.shape === 'factory' ? fallback.dockview.bottomGroup.collapsed : false
+          );
+          event.api.clear();
+          applyLayout(event.api, fallback);
+          applyPanelTabMeta(event.api, panelTabMetaRef.current);
+        }
+
+        // Persist on every layout change. The serialized JSON replaces our
+        // factory-shape layout so subsequent mounts go through fromJSON.
+        layoutChangeDisposableRef.current = event.api.onDidLayoutChange(() => {
+          if (!onLayoutChangeRef.current) return;
+          if (suppressLayoutPersistenceRef.current) return;
+          if (event.api.panels.length === 0) {
+            console.warn('[DockShell] Skipping persistence of empty dock layout');
+            return;
+          }
+          try {
+            const dockviewJson = serializeLayout(event.api);
+            onLayoutChangeRef.current({
+              version: LAYOUT_SCHEMA_VERSION,
+              writtenBy: studioVersionRef.current,
+              dockview: dockviewJson as PanelLayoutRecord['dockview']
+            });
+          } catch (err) {
+            console.error('[DockShell] Failed to serialize layout change', err);
+            useOutputStore
+              .getState()
+              .addLine(
+                fmtLine('layout', 'failed to persist layout change', err instanceof Error ? err.message : String(err)),
+                'warn'
+              );
+            showToastRef.current({
+              title: 'Layout not saved',
+              description: 'Could not persist the current panel arrangement.',
+              variant: 'destructive'
+            });
+          }
+        });
+        onLayoutChangeRef.current?.(appliedLayout);
+      },
+      [] // stable — reads layout and studioVersion via refs above
+    );
+
+    const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
+
+    const suppressLayoutPersistence = useCallback((work: () => void) => {
+      suppressLayoutPersistenceRef.current = true;
+      try {
+        work();
+      } finally {
+        queueMicrotask(() => {
+          suppressLayoutPersistenceRef.current = false;
+        });
+      }
+    }, []);
+
+    const setUtilitiesCollapsed = useCallback((collapsed: boolean) => {
+      setUtilitiesCollapsedState(collapsed);
+      const problemsPanel = apiRef.current?.getPanel('workspace.problems');
+      if (!problemsPanel) {
+        return;
+      }
+      problemsPanel.group.api.setSize(collapsed ? { height: 0 } : { height: DEFAULT_UTILITY_HEIGHT });
+    }, []);
+
+    const toggleUtilities = useCallback(() => {
+      setUtilitiesCollapsed(!utilitiesCollapsed);
+    }, [setUtilitiesCollapsed, utilitiesCollapsed]);
+    // Memoized so UtilityTrayContext consumers don't re-render on every
+    // DockShell render — only when one of these actually changes.
+    const utilityTrayContextValue = useMemo(
+      () => ({ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }),
+      [utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities]
+    );
+
+    useEffect(() => {
+      return installShellShortcuts(window, (action) => {
+        onAction?.(action);
+      });
+    }, [onAction]);
+
+    useEffect(
+      () => () => {
+        layoutChangeDisposableRef.current?.dispose();
+        layoutChangeDisposableRef.current = null;
+      },
+      []
+    );
+
+    useEffect(() => {
+      applyPanelTabMeta(apiRef.current, panelTabMeta);
+    }, [panelTabMeta]);
+
+    useEffect(() => {
+      if (!focusPanel) {
+        return;
+      }
+      const panel = apiRef.current?.getPanel(focusPanel.component);
+      panel?.api.setActive();
+    }, [focusPanel]);
+
+    function resetLayout(): void {
+      const fresh = buildDefaultLayout({ studioVersion, viewportWidth: getViewportWidth() });
+      setLayout(fresh);
+      setLayoutPreset(fresh.dockview?.shape === 'factory' ? (fresh.dockview.preset ?? 'edit') : 'edit');
+      setUtilitiesCollapsedState(fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false);
+      if (apiRef.current) {
+        try {
+          suppressLayoutPersistence(() => {
+            apiRef.current?.clear();
+            if (!apiRef.current) return;
+            applyLayout(apiRef.current, fresh);
+            applyPanelTabMeta(apiRef.current, panelTabMetaRef.current);
+          });
+        } catch (err) {
+          console.error('[DockShell] Failed to reset layout', err);
+          useOutputStore
+            .getState()
+            .addLine(
+              fmtLine('layout', 'failed to reset layout', err instanceof Error ? err.message : String(err)),
+              'error'
+            );
+          showToast({
+            title: 'Layout reset failed',
+            description: err instanceof Error ? err.message : 'Could not reset the panel layout.',
             variant: 'destructive'
           });
         }
-      });
-      onLayoutChangeRef.current?.(appliedLayout);
-    },
-    [] // stable — reads layout and studioVersion via refs above
-  );
-
-  const panelRegistry = useMemo(() => mergePanelRegistry(panelComponents), [panelComponents]);
-
-  const suppressLayoutPersistence = useCallback((work: () => void) => {
-    suppressLayoutPersistenceRef.current = true;
-    try {
-      work();
-    } finally {
-      queueMicrotask(() => {
-        suppressLayoutPersistenceRef.current = false;
-      });
-    }
-  }, []);
-
-  const setUtilitiesCollapsed = useCallback((collapsed: boolean) => {
-    setUtilitiesCollapsedState(collapsed);
-    const problemsPanel = apiRef.current?.getPanel('workspace.problems');
-    if (!problemsPanel) {
-      return;
-    }
-    problemsPanel.group.api.setSize(collapsed ? { height: 0 } : { height: DEFAULT_UTILITY_HEIGHT });
-  }, []);
-
-  const toggleUtilities = useCallback(() => {
-    setUtilitiesCollapsed(!utilitiesCollapsed);
-  }, [setUtilitiesCollapsed, utilitiesCollapsed]);
-  // Memoized so UtilityTrayContext consumers don't re-render on every
-  // DockShell render — only when one of these actually changes.
-  const utilityTrayContextValue = useMemo(
-    () => ({ utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities }),
-    [utilitiesCollapsed, setUtilitiesCollapsed, toggleUtilities]
-  );
-
-  useEffect(() => {
-    return installShellShortcuts(window, (action) => {
-      onAction?.(action);
-    });
-  }, [onAction]);
-
-  useEffect(
-    () => () => {
-      layoutChangeDisposableRef.current?.dispose();
-      layoutChangeDisposableRef.current = null;
-    },
-    []
-  );
-
-  useEffect(() => {
-    applyPanelTabMeta(apiRef.current, panelTabMeta);
-  }, [panelTabMeta]);
-
-  useEffect(() => {
-    if (!focusPanel) {
-      return;
-    }
-    const panel = apiRef.current?.getPanel(focusPanel.component);
-    panel?.api.setActive();
-  }, [focusPanel]);
-
-  function resetLayout(): void {
-    const fresh = buildDefaultLayout({ studioVersion, viewportWidth: getViewportWidth() });
-    setLayout(fresh);
-    setLayoutPreset(fresh.dockview?.shape === 'factory' ? (fresh.dockview.preset ?? 'edit') : 'edit');
-    setUtilitiesCollapsedState(fresh.dockview?.shape === 'factory' ? fresh.dockview.bottomGroup.collapsed : false);
-    if (apiRef.current) {
-      try {
-        suppressLayoutPersistence(() => {
-          apiRef.current?.clear();
-          if (!apiRef.current) return;
-          applyLayout(apiRef.current, fresh);
-          applyPanelTabMeta(apiRef.current, panelTabMetaRef.current);
-        });
-      } catch (err) {
-        console.error('[DockShell] Failed to reset layout', err);
-        useOutputStore
-          .getState()
-          .addLine(
-            fmtLine('layout', 'failed to reset layout', err instanceof Error ? err.message : String(err)),
-            'error'
-          );
-        showToast({
-          title: 'Layout reset failed',
-          description: err instanceof Error ? err.message : 'Could not reset the panel layout.',
-          variant: 'destructive'
-        });
       }
+      onLayoutChangeRef.current?.(fresh);
     }
-    onLayoutChangeRef.current?.(fresh);
-  }
 
-  return (
-    <div
-      role="application"
-      aria-label="Studio dock shell"
-      className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
-      data-testid="dock-shell"
-      data-workspace-id={workspaceId}
-    >
+    return (
       <div
-        role="toolbar"
-        aria-label="Studio layout presets"
-        className="studio-layout-presets"
-        data-testid="studio-layout-presets"
+        role="application"
+        aria-label="Studio dock shell"
+        className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col"
+        data-testid="dock-shell"
+        data-workspace-id={workspaceId}
       >
-        <div className="studio-layout-presets__group studio-layout-presets__group--actions">
-          <Button
-            type="button"
-            variant="secondary"
-            size="xs"
-            onClick={toggleUtilities}
-            data-testid="toggle-utilities"
-            aria-pressed={!utilitiesCollapsed}
-            className="studio-chrome-button"
-          >
-            {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="xs"
-            onClick={resetLayout}
-            data-testid="reset-layout"
-            className="studio-chrome-button"
-          >
-            Reset layout
-          </Button>
-        </div>
-      </div>
-      {layoutNotice ? (
-        <Alert
-          role="status"
-          aria-live="polite"
-          className="flex items-center justify-between rounded-none border-x-0 border-t-0 bg-muted/60 px-3 py-1.5 text-xs"
-          data-testid="layout-reset-notice"
+        <div
+          role="toolbar"
+          aria-label="Studio layout presets"
+          className="studio-layout-presets"
+          data-testid="studio-layout-presets"
         >
-          <AlertDescription className="grid-cols-[1fr_auto] flex w-full items-center justify-between">
-            <span>{layoutNotice}</span>
-            <button type="button" className="ml-2 font-medium" onClick={() => setLayoutNotice(null)}>
-              Dismiss
-            </button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      <CenterPanesContext.Provider value={centerPanesContextValue}>
-        <PanelRegistryContext.Provider value={panelRegistry}>
-          <UtilityTrayContext.Provider value={utilityTrayContextValue}>
-            <div className="min-h-0 min-w-0 flex-1">
-              <DockLayout
-                components={DOCKVIEW_COMPONENTS}
-                defaultTabComponent={StudioDockTab}
-                onReady={onReady}
-                className="h-full min-w-0 w-full"
-              />
-            </div>
-          </UtilityTrayContext.Provider>
-        </PanelRegistryContext.Provider>
-      </CenterPanesContext.Provider>
-    </div>
-  );
-}
+          <div className="studio-layout-presets__group studio-layout-presets__group--actions">
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={toggleUtilities}
+              data-testid="toggle-utilities"
+              aria-pressed={!utilitiesCollapsed}
+              className="studio-chrome-button"
+            >
+              {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={resetLayout}
+              data-testid="reset-layout"
+              className="studio-chrome-button"
+            >
+              Reset layout
+            </Button>
+          </div>
+        </div>
+        {layoutNotice ? (
+          <Alert
+            role="status"
+            aria-live="polite"
+            className="flex items-center justify-between rounded-none border-x-0 border-t-0 bg-muted/60 px-3 py-1.5 text-xs"
+            data-testid="layout-reset-notice"
+          >
+            <AlertDescription className="grid-cols-[1fr_auto] flex w-full items-center justify-between">
+              <span>{layoutNotice}</span>
+              <button type="button" className="ml-2 font-medium" onClick={() => setLayoutNotice(null)}>
+                Dismiss
+              </button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <CenterPanesContext.Provider value={centerPanesContextValue}>
+          <PanelRegistryContext.Provider value={panelRegistry}>
+            <UtilityTrayContext.Provider value={utilityTrayContextValue}>
+              <div className="min-h-0 min-w-0 flex-1">
+                <DockLayout
+                  components={DOCKVIEW_COMPONENTS}
+                  defaultTabComponent={StudioDockTab}
+                  onReady={onReady}
+                  className="h-full min-w-0 w-full"
+                />
+              </div>
+            </UtilityTrayContext.Provider>
+          </PanelRegistryContext.Provider>
+        </CenterPanesContext.Provider>
+      </div>
+    );
+  },
+  { op: 'DockShell' }
+);

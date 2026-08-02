@@ -3,5 +3,14 @@
   "rules": {
     "rune/no-raw-arbitrary-value": "error",
     "rune/no-raw-node-id": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/**", "functions/**"],
+      "excludeFiles": ["functions/test/**"],
+      "rules": {
+        "rune/no-uninstrumented-export": "error"
+      }
+    }
+  ]
 }

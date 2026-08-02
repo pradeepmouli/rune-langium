@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -12,6 +13,7 @@
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import type { ErrorCategory } from '@rune-langium/curated-schema';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 interface ErrorCopy {
   title: string;
@@ -58,31 +60,34 @@ export interface CuratedLoadErrorPanelProps {
   className?: string;
 }
 
-export function CuratedLoadErrorPanel({
-  category,
-  modelName,
-  onRetry,
-  className
-}: CuratedLoadErrorPanelProps): React.ReactElement {
-  const copy = COPY[category];
-  return (
-    <Alert
-      variant="destructive"
-      aria-live="polite"
-      data-testid="curated-load-error"
-      data-category={category}
-      className={className}
-    >
-      <AlertTitle render={<h3 />}>
-        Loading {modelName} failed: {copy.title}
-      </AlertTitle>
-      <AlertDescription>
-        <p>{copy.body}</p>
-        {copy.hint ? <p>{copy.hint}</p> : null}
-        <Button onClick={onRetry} type="button" size="sm" className="mt-2">
-          Retry
-        </Button>
-      </AlertDescription>
-    </Alert>
-  );
-}
+export const CuratedLoadErrorPanel = withInstrumentation(
+  function CuratedLoadErrorPanel({
+    category,
+    modelName,
+    onRetry,
+    className
+  }: CuratedLoadErrorPanelProps): React.ReactElement {
+    const copy = COPY[category];
+    return (
+      <Alert
+        variant="destructive"
+        aria-live="polite"
+        data-testid="curated-load-error"
+        data-category={category}
+        className={className}
+      >
+        <AlertTitle render={<h3 />}>
+          Loading {modelName} failed: {copy.title}
+        </AlertTitle>
+        <AlertDescription>
+          <p>{copy.body}</p>
+          {copy.hint ? <p>{copy.hint}</p> : null}
+          <Button onClick={onRetry} type="button" size="sm" className="mt-2">
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  },
+  { op: 'CuratedLoadErrorPanel' }
+);

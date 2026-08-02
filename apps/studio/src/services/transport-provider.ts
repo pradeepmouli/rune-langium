@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -28,6 +29,7 @@ import type { Transport } from '@codemirror/lsp-client';
 import { config } from '../config.js';
 import { createWebSocketTransport } from './ws-transport.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -94,220 +96,242 @@ const DEFAULT_BACKOFF_BASE = 500;
 /** Default workspaceId for the session mint until the active workspace is wired in. */
 const DEFAULT_WORKSPACE_ID = '01J7M8AAAAAAAAAAAAAAAAAAAA';
 
-export function createTransportProvider(opts?: TransportProviderOptions): TransportProvider {
-  const wsUri = opts?.wsUri ?? DEFAULT_WS_URI;
-  const connectionTimeout = opts?.connectionTimeout ?? DEFAULT_TIMEOUT;
-  const maxReconnectAttempts = opts?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT;
-  const backoffBase = opts?.backoffBase ?? DEFAULT_BACKOFF_BASE;
-  const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
-  const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
-  const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
-  const preferDirectWebSocket = opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
+export const createTransportProvider = withInstrumentation(
+  function createTransportProvider(opts?: TransportProviderOptions): TransportProvider {
+    const wsUri = opts?.wsUri ?? DEFAULT_WS_URI;
+    const connectionTimeout = opts?.connectionTimeout ?? DEFAULT_TIMEOUT;
+    const maxReconnectAttempts = opts?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT;
+    const backoffBase = opts?.backoffBase ?? DEFAULT_BACKOFF_BASE;
+    const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
+    const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
+    const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
+    const preferDirectWebSocket = opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
 
-  let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
-  let currentTransport: Transport | undefined;
-  const listeners: ((state: TransportState) => void)[] = [];
+    let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
+    let currentTransport: Transport | undefined;
+    const listeners: ((state: TransportState) => void)[] = [];
 
-  function setState(next: TransportState): void {
-    state = next;
-    // eslint-disable-next-line unicorn/no-useless-spread
-    for (const l of [...listeners]) l(state);
-  }
-
-  /** Pause for `ms` milliseconds. */
-  function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /** Attempt a direct WebSocket connection with retries. */
-  async function tryWebSocket(): Promise<Transport> {
-    setState({ mode: 'disconnected', status: 'connecting' });
-
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt <= maxReconnectAttempts; attempt++) {
-      if (attempt > 0) {
-        await delay(backoffBase * 2 ** (attempt - 1));
-      }
-      try {
-        const transport = await createWebSocketTransport(wsUri, connectionTimeout);
-        setState({ mode: 'websocket', status: 'connected' });
-        currentTransport = transport;
-        return transport;
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-      }
+    function setState(next: TransportState): void {
+      state = next;
+      // eslint-disable-next-line unicorn/no-useless-spread
+      for (const l of [...listeners]) l(state);
     }
 
-    throw lastError ?? new Error('WebSocket connection failed');
-  }
-
-  /**
-   * Mint a session token via `POST ${sessionUrl}` and return the parsed
-   * 200 body. Throws an Error tagged with the HTTP status when the mint
-   * is rejected so the caller can branch on 401 / 429 / 5xx.
-   */
-  async function mintSessionToken(): Promise<string> {
-    const res = await fetch(sessionUrl, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workspaceId })
-    });
-    if (!res.ok) {
-      const err = new Error(`session_mint_failed:${res.status}`) as Error & {
-        status: number;
-      };
-      err.status = res.status;
-      throw err;
+    /** Pause for `ms` milliseconds. */
+    function delay(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
     }
-    const body = (await res.json()) as { token: string; expiresAt: number };
-    if (!body || typeof body.token !== 'string') {
-      throw new Error('session_mint_invalid_response');
-    }
-    return body.token;
-  }
 
-  /**
-   * Open a token-gated WS to the Pages Function LSP. Returns a real
-   * Transport via `createWebSocketTransport`; surfaces the underlying WS
-   * error untouched so the caller's retry logic can branch.
-   */
-  async function openPagesFunctionWs(token: string): Promise<Transport> {
-    const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
-    return createWebSocketTransport(wsUrl, connectionTimeout);
-  }
+    /** Attempt a direct WebSocket connection with retries. */
+    async function tryWebSocket(): Promise<Transport> {
+      setState({ mode: 'disconnected', status: 'connecting' });
 
-  /**
-   * Pages Function LSP via session token. On 401 from the mint, refreshes
-   * the token once and retries; on 429 / 5xx surfaces the documented
-   * "language services unavailable" copy from FR-014 and falls through
-   * to the disconnected error state.
-   */
-  async function tryPagesFunction(): Promise<Transport> {
-    setState({ mode: 'pages-function', status: 'connecting' });
-    let token: string;
-    try {
-      token = await mintSessionToken();
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      if (status === 401) {
-        // Per the contract, a 401 from the mint is a stale/missing
-        // signing-key on the server side OR a rotated key that
-        // invalidated the cached token; one retry buys us the happy-path
-        // on a fresh session.
-        try {
-          token = await mintSessionToken();
-        } catch (err2) {
-          throw createPagesFunctionUnavailableError(err2);
+      let lastError: Error | undefined;
+
+      for (let attempt = 0; attempt <= maxReconnectAttempts; attempt++) {
+        if (attempt > 0) {
+          await delay(backoffBase * 2 ** (attempt - 1));
         }
-      } else {
-        throw createPagesFunctionUnavailableError(err);
+        try {
+          const transport = await createWebSocketTransport(wsUri, connectionTimeout);
+          setState({ mode: 'websocket', status: 'connected' });
+          currentTransport = transport;
+          return transport;
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+        }
       }
+
+      throw lastError ?? new Error('WebSocket connection failed');
     }
-    try {
-      const transport = await openPagesFunctionWs(token);
-      setState({ mode: 'pages-function', status: 'connected' });
-      currentTransport = transport;
-      return transport;
-    } catch (err) {
-      // The WS open MAY itself fail with 401 (server rotated the signing
-      // key between mint and connect) — handle that with one retry,
-      // matching the documented state-machine.
+
+    /**
+     * Mint a session token via `POST ${sessionUrl}` and return the parsed
+     * 200 body. Throws an Error tagged with the HTTP status when the mint
+     * is rejected so the caller can branch on 401 / 429 / 5xx.
+     */
+    async function mintSessionToken(): Promise<string> {
+      const res = await fetch(sessionUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId })
+      });
+      if (!res.ok) {
+        const err = new Error(`session_mint_failed:${res.status}`) as Error & {
+          status: number;
+        };
+        err.status = res.status;
+        throw err;
+      }
+      const body = (await res.json()) as { token: string; expiresAt: number };
+      if (!body || typeof body.token !== 'string') {
+        throw new Error('session_mint_invalid_response');
+      }
+      return body.token;
+    }
+
+    /**
+     * Open a token-gated WS to the Pages Function LSP. Returns a real
+     * Transport via `createWebSocketTransport`; surfaces the underlying WS
+     * error untouched so the caller's retry logic can branch.
+     */
+    async function openPagesFunctionWs(token: string): Promise<Transport> {
+      const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
+      return createWebSocketTransport(wsUrl, connectionTimeout);
+    }
+
+    /**
+     * Pages Function LSP via session token. On 401 from the mint, refreshes
+     * the token once and retries; on 429 / 5xx surfaces the documented
+     * "language services unavailable" copy from FR-014 and falls through
+     * to the disconnected error state.
+     */
+    async function tryPagesFunction(): Promise<Transport> {
+      setState({ mode: 'pages-function', status: 'connecting' });
+      let token: string;
       try {
         token = await mintSessionToken();
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status === 401) {
+          // Per the contract, a 401 from the mint is a stale/missing
+          // signing-key on the server side OR a rotated key that
+          // invalidated the cached token; one retry buys us the happy-path
+          // on a fresh session.
+          try {
+            token = await mintSessionToken();
+          } catch (err2) {
+            throw createPagesFunctionUnavailableError(err2);
+          }
+        } else {
+          throw createPagesFunctionUnavailableError(err);
+        }
+      }
+      try {
         const transport = await openPagesFunctionWs(token);
         setState({ mode: 'pages-function', status: 'connected' });
         currentTransport = transport;
         return transport;
-      } catch (err2) {
-        throw createPagesFunctionUnavailableError(err2 ?? err);
+      } catch (err) {
+        // The WS open MAY itself fail with 401 (server rotated the signing
+        // key between mint and connect) — handle that with one retry,
+        // matching the documented state-machine.
+        try {
+          token = await mintSessionToken();
+          const transport = await openPagesFunctionWs(token);
+          setState({ mode: 'pages-function', status: 'connected' });
+          currentTransport = transport;
+          return transport;
+        } catch (err2) {
+          throw createPagesFunctionUnavailableError(err2 ?? err);
+        }
       }
     }
-  }
 
-  /**
-   * Surface the "language services unavailable" terminal state and reject
-   * transport acquisition so the LSP client stays disconnected instead of
-   * timing out on a no-op channel.
-   */
-  function createPagesFunctionUnavailableError(cause: unknown): Error {
-    // e2e-batch fix #7: prefer `window.location.origin + /api/lsp/session` over
-    // `config.lspSessionUrl` in the error message. If VITE_DEV_MODE leaks into
-    // a prod build, `config.lspSessionUrl` can be the dev default (containing
-    // `localhost:5173`) even though the actual fetch happened at the prod
-    // origin via the relative URL fallback. Showing the actual origin keeps
-    // the message accurate when env detection misfires.
-    const actualUrl =
-      typeof window !== 'undefined' ? `${window.location.origin}/api/lsp/session` : config.lspSessionUrl;
-    const errorMessage = config.devMode
-      ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${actualUrl} is reachable from ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
-      : 'Editor running offline — language services unavailable';
-    if (config.devMode) {
-      console.warn('[TransportProvider] Pages Function LSP step failed:', cause);
-      useOutputStore
-        .getState()
-        .addLine(
-          fmtLine('lsp', 'Pages Function step failed', cause instanceof Error ? cause.message : String(cause)),
-          'warn'
-        );
+    /**
+     * Surface the "language services unavailable" terminal state and reject
+     * transport acquisition so the LSP client stays disconnected instead of
+     * timing out on a no-op channel.
+     */
+    function createPagesFunctionUnavailableError(cause: unknown): Error {
+      // e2e-batch fix #7: prefer `window.location.origin + /api/lsp/session` over
+      // `config.lspSessionUrl` in the error message. If VITE_DEV_MODE leaks into
+      // a prod build, `config.lspSessionUrl` can be the dev default (containing
+      // `localhost:5173`) even though the actual fetch happened at the prod
+      // origin via the relative URL fallback. Showing the actual origin keeps
+      // the message accurate when env detection misfires.
+      const actualUrl =
+        typeof window !== 'undefined' ? `${window.location.origin}/api/lsp/session` : config.lspSessionUrl;
+      const errorMessage = config.devMode
+        ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${actualUrl} is reachable from ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
+        : 'Editor running offline — language services unavailable';
+      if (config.devMode) {
+        console.warn('[TransportProvider] Pages Function LSP step failed:', cause);
+        useOutputStore
+          .getState()
+          .addLine(
+            fmtLine('lsp', 'Pages Function step failed', cause instanceof Error ? cause.message : String(cause)),
+            'warn'
+          );
+      }
+      const error = new Error(errorMessage);
+      setState({
+        mode: 'disconnected',
+        status: 'error',
+        error
+      });
+      return error;
     }
-    const error = new Error(errorMessage);
-    setState({
-      mode: 'disconnected',
-      status: 'error',
-      error
-    });
-    return error;
-  }
 
-  function describeCause(err: unknown): string {
-    if (err instanceof Error) return err.message;
-    return String(err);
-  }
-
-  /** Main connection flow: direct WS if explicitly preferred, otherwise Pages Function. */
-  async function connect(): Promise<Transport> {
-    if (!preferDirectWebSocket) {
-      return tryPagesFunction();
+    function describeCause(err: unknown): string {
+      if (err instanceof Error) return err.message;
+      return String(err);
     }
-    try {
-      return await tryWebSocket();
-    } catch {
-      return tryPagesFunction();
+
+    /** Main connection flow: direct WS if explicitly preferred, otherwise Pages Function. */
+    async function connect(): Promise<Transport> {
+      if (!preferDirectWebSocket) {
+        return tryPagesFunction();
+      }
+      try {
+        return await tryWebSocket();
+      } catch {
+        return tryPagesFunction();
+      }
+    }
+
+    return {
+      async getTransport(): Promise<Transport> {
+        if (currentTransport) return currentTransport;
+        return connect();
+      },
+
+      getState(): TransportState {
+        return state;
+      },
+
+      async reconnect(): Promise<Transport> {
+        currentTransport = undefined;
+        return connect();
+      },
+
+      onStateChange(listener: (s: TransportState) => void): () => void {
+        listeners.push(listener);
+        return () => {
+          const idx = listeners.indexOf(listener);
+          if (idx >= 0) listeners.splice(idx, 1);
+        };
+      },
+
+      dispose(): void {
+        currentTransport = undefined;
+        listeners.length = 0;
+        setState({ mode: 'disconnected', status: 'disconnected' });
+      }
+    };
+    // `opts` is app/LSP-infra config (endpoint URLs, timeouts, an opaque
+    // workspace id) — never model/user content — safe to capture. The
+    // returned TransportProvider is a function-bearing object, skipped.
+  },
+  {
+    op: 'createTransportProvider',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [opts] = value as [TransportProviderOptions | undefined];
+      return opts
+        ? {
+            wsUri: opts.wsUri,
+            connectionTimeout: opts.connectionTimeout,
+            maxReconnectAttempts: opts.maxReconnectAttempts,
+            sessionUrl: opts.sessionUrl,
+            cfWsBase: opts.cfWsBase
+          }
+        : undefined;
     }
   }
-
-  return {
-    async getTransport(): Promise<Transport> {
-      if (currentTransport) return currentTransport;
-      return connect();
-    },
-
-    getState(): TransportState {
-      return state;
-    },
-
-    async reconnect(): Promise<Transport> {
-      currentTransport = undefined;
-      return connect();
-    },
-
-    onStateChange(listener: (s: TransportState) => void): () => void {
-      listeners.push(listener);
-      return () => {
-        const idx = listeners.indexOf(listener);
-        if (idx >= 0) listeners.splice(idx, 1);
-      };
-    },
-
-    dispose(): void {
-      currentTransport = undefined;
-      listeners.length = 0;
-      setState({ mode: 'disconnected', status: 'disconnected' });
-    }
-  };
-}
+);
 
 function isSameOriginSessionEndpoint(sessionUrl: string): boolean {
   if (typeof window === 'undefined') {

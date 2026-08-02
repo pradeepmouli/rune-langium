@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -109,6 +110,7 @@ import { useExploreFileNavStore } from './explore-file-nav-store.js';
 import { useExportDialogStore } from './export-dialog-store.js';
 import { useImportDialogStore } from './import-dialog-store.js';
 import { HydrationOrchestrator } from '../services/hydration-orchestrator.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 /**
  * Stable identity used as the default for the optional `deferredExports`
@@ -398,1680 +400,1694 @@ function resolveResponsiveLayoutDirection(
 // perspectives/explore-chrome.tsx (ExploreCenterSlot) — shared-perspective-
 // chrome plan, Task 3.
 
-export function ExplorePerspective() {
-  // Workspace model data — formerly props, now from WorkspaceProvider.
-  const workspace = useWorkspace();
-  const { models, parsedModels, files } = workspace;
-  const deferredExports: DeferredExportEntry[] = workspace.deferredExports ?? EMPTY_DEFERRED_EXPORTS;
-  const parseErrors = workspace.parseErrors ?? EMPTY_PARSE_ERRORS;
-  const workspaceId = workspace.workspaceId ?? 'default';
-  const workspaceKind = workspace.workspaceKind;
-  const fileCount = workspace.fileCount;
-  const studioVersion = STUDIO_VERSION;
+export const ExplorePerspective = withInstrumentation(
+  function ExplorePerspective() {
+    // Workspace model data — formerly props, now from WorkspaceProvider.
+    const workspace = useWorkspace();
+    const { models, parsedModels, files } = workspace;
+    const deferredExports: DeferredExportEntry[] = workspace.deferredExports ?? EMPTY_DEFERRED_EXPORTS;
+    const parseErrors = workspace.parseErrors ?? EMPTY_PARSE_ERRORS;
+    const workspaceId = workspace.workspaceId ?? 'default';
+    const workspaceKind = workspace.workspaceKind;
+    const fileCount = workspace.fileCount;
+    const studioVersion = STUDIO_VERSION;
 
-  // LSP handles — formerly props, now from LspProvider.
-  const { lspClient: lspClientValue, transportState, reconnect } = useLsp();
-  const lspClient = lspClientValue ?? undefined;
-  const onReconnect = reconnect;
+    // LSP handles — formerly props, now from LspProvider.
+    const { lspClient: lspClientValue, transportState, reconnect } = useLsp();
+    const lspClient = lspClientValue ?? undefined;
+    const onReconnect = reconnect;
 
-  // Workspace actions — formerly props, now from the actions context.
-  // onClose/onSwitchWorkspace/onCreateWorkspace moved to AppHeader's
-  // WorkspaceSwitcherTrigger (shared-perspective-chrome plan, Task 3).
-  const { onFilesChange } = useWorkspaceActions();
+    // Workspace actions — formerly props, now from the actions context.
+    // onClose/onSwitchWorkspace/onCreateWorkspace moved to AppHeader's
+    // WorkspaceSwitcherTrigger (shared-perspective-chrome plan, Task 3).
+    const { onFilesChange } = useWorkspaceActions();
 
-  const graphRef = useRef<RuneTypeGraphRef>(null);
-  const graphContainerRef = useRef<HTMLDivElement>(null);
-  const sourceEditorRef = useRef<SourceEditorRef>(null);
-  // Export dialog open-state is shared with the header's Export code/Generate
-  // buttons (moving into ExploreActions in Task 3) — lifted to a store rather
-  // than local useState (export-dialog-store.ts; shared-perspective-chrome
-  // plan, Task 3 hazard #2).
-  const showExportDialog = useExportDialogStore((s) => s.open);
-  const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
-  const showImportDialog = useImportDialogStore((s) => s.open);
-  const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
-  // Curated Models modal — wired from the ActivityBar's Database button.
-  // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
-  // reuse the same component in a Dialog so the affordance stays discoverable
-  // once a workspace is open. A richer bottom-bar multi-selector is deferred
-  // to a future task; the modal is the minimal landing.
-  const [showCuratedModels, setShowCuratedModels] = useState(false);
-  // Topbar workspace dropdown state moved to AppHeader's WorkspaceSwitcherTrigger
-  // (shared-perspective-chrome plan, Task 3).
-  const [groupedLayout, setGroupedLayout] = useState(false);
-  const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
-  // Ref so ResizeObserver callbacks always see the latest value without stale closures.
-  const groupedLayoutRef = useLatestRef(groupedLayout);
-  const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
-  const focusMode = useEditorStore((s) => s.focusMode);
-  const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
-  // Active file + git-sync status are shared with the header's FileTabStrip
-  // (moving into ExploreCenterSlot in Task 3) — lifted to a store rather than
-  // local useState (explore-file-nav-store.ts; shared-perspective-chrome
-  // plan, Task 3 hazard #3).
-  const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
-  const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
-  const storeOpenFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
-  const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
-  const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
-  const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Accumulates corpus models returned by linkDocument so they can be merged into
-  // the graph. Reset when a new workspace is loaded.
-  const corpusModelsRef = useRef<RosettaModel[]>([]);
-  const workspaceIdRef = useRef(workspaceId);
-  const modelsRef = useRef(models);
-  const navigationHistoryRef = useRef<string[]>([]);
-  const { showToast } = useStudioToast();
-  const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
-    new Map()
-  );
-  const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+    const graphRef = useRef<RuneTypeGraphRef>(null);
+    const graphContainerRef = useRef<HTMLDivElement>(null);
+    const sourceEditorRef = useRef<SourceEditorRef>(null);
+    // Export dialog open-state is shared with the header's Export code/Generate
+    // buttons (moving into ExploreActions in Task 3) — lifted to a store rather
+    // than local useState (export-dialog-store.ts; shared-perspective-chrome
+    // plan, Task 3 hazard #2).
+    const showExportDialog = useExportDialogStore((s) => s.open);
+    const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
+    const showImportDialog = useImportDialogStore((s) => s.open);
+    const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
+    // Curated Models modal — wired from the ActivityBar's Database button.
+    // The Welcome screen renders <ModelLoader /> inline; inside EditorPage we
+    // reuse the same component in a Dialog so the affordance stays discoverable
+    // once a workspace is open. A richer bottom-bar multi-selector is deferred
+    // to a future task; the modal is the minimal landing.
+    const [showCuratedModels, setShowCuratedModels] = useState(false);
+    // Topbar workspace dropdown state moved to AppHeader's WorkspaceSwitcherTrigger
+    // (shared-perspective-chrome plan, Task 3).
+    const [groupedLayout, setGroupedLayout] = useState(false);
+    const [graphLayoutDirection, setGraphLayoutDirection] = useState<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
+    // Ref so ResizeObserver callbacks always see the latest value without stale closures.
+    const groupedLayoutRef = useLatestRef(groupedLayout);
+    const graphLayoutDirectionRef = useRef<Extract<LayoutDirection, 'LR' | 'TB'>>('LR');
+    const focusMode = useEditorStore((s) => s.focusMode);
+    const storeToggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
+    // Active file + git-sync status are shared with the header's FileTabStrip
+    // (moving into ExploreCenterSlot in Task 3) — lifted to a store rather than
+    // local useState (explore-file-nav-store.ts; shared-perspective-chrome
+    // plan, Task 3 hazard #3).
+    const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+    const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
+    const storeOpenFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
+    const [inspectorFocusNonce, setInspectorFocusNonce] = useState(0);
+    const pendingRevealRef = useRef<{ line: number; filePath: string } | null>(null);
+    const linkDocumentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Accumulates corpus models returned by linkDocument so they can be merged into
+    // the graph. Reset when a new workspace is loaded.
+    const corpusModelsRef = useRef<RosettaModel[]>([]);
+    const workspaceIdRef = useRef(workspaceId);
+    const modelsRef = useRef(models);
+    const navigationHistoryRef = useRef<string[]>([]);
+    const { showToast } = useStudioToast();
+    const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
+      new Map()
+    );
+    const displayFileTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
-  // Git sync status — only meaningful for git-backed workspaces. The value
-  // is read by AppHeader's SyncStatusBadge (via the same store); this
-  // component only owns the subscription that keeps it fresh.
-  // Uses subscribeToEngine so the subscription survives async engine creation:
-  // the badge will receive state even if the engine is created after this effect
-  // runs (which is the common case on first boot).
-  const setSyncStatus = useExploreFileNavStore((s) => s.setSyncStatus);
-  useEffect(() => {
-    if (workspaceKind !== 'git-backed') return;
-    // Reset to null immediately on workspace switch so the badge never shows
-    // the previous workspace's status while the new engine initialises.
-    setSyncStatus(null);
-    return subscribeToEngine(workspaceId, setSyncStatus);
-  }, [workspaceId, workspaceKind, setSyncStatus]);
+    // Git sync status — only meaningful for git-backed workspaces. The value
+    // is read by AppHeader's SyncStatusBadge (via the same store); this
+    // component only owns the subscription that keeps it fresh.
+    // Uses subscribeToEngine so the subscription survives async engine creation:
+    // the badge will receive state even if the engine is created after this effect
+    // runs (which is the common case on first boot).
+    const setSyncStatus = useExploreFileNavStore((s) => s.setSyncStatus);
+    useEffect(() => {
+      if (workspaceKind !== 'git-backed') return;
+      // Reset to null immediately on workspace switch so the badge never shows
+      // the previous workspace's status while the new engine initialises.
+      setSyncStatus(null);
+      return subscribeToEngine(workspaceId, setSyncStatus);
+    }, [workspaceId, workspaceKind, setSyncStatus]);
 
-  const storeNodes = useEditorStore((s) => s.nodes);
-  const storeNodesById = useEditorStore((s) => s.nodesById);
-  const nodeRepository = selectNodeRepository(storeNodesById);
-  const storeEdges = useEditorStore((s) => s.edges);
-  // parseEpoch gates source serialization: only USER edits (not parse-driven
-  // graph rebuilds) get written back to source — see useModelSourceSync.
-  const storeParseEpoch = useEditorStore((s) => s.parseEpoch);
-  const storePendingEditPatches = useEditorStore((s) => s.pendingEditPatches);
-  const storePendingInversePatches = useEditorStore((s) => s.pendingInversePatches);
-  const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
-  const visibility = useEditorStore((s) => s.visibility);
-  const expandedNamespaces = visibility.expandedNamespaces;
-  const hiddenNodeIds = visibility.hiddenNodeIds;
+    const storeNodes = useEditorStore((s) => s.nodes);
+    const storeNodesById = useEditorStore((s) => s.nodesById);
+    const nodeRepository = selectNodeRepository(storeNodesById);
+    const storeEdges = useEditorStore((s) => s.edges);
+    // parseEpoch gates source serialization: only USER edits (not parse-driven
+    // graph rebuilds) get written back to source — see useModelSourceSync.
+    const storeParseEpoch = useEditorStore((s) => s.parseEpoch);
+    const storePendingEditPatches = useEditorStore((s) => s.pendingEditPatches);
+    const storePendingInversePatches = useEditorStore((s) => s.pendingInversePatches);
+    const selectedNodeId = useEditorStore((s) => s.selectedNodeId);
+    const visibility = useEditorStore((s) => s.visibility);
+    const expandedNamespaces = visibility.expandedNamespaces;
+    const hiddenNodeIds = visibility.hiddenNodeIds;
 
-  const storeSelectNode = useEditorStore((s) => s.selectNode);
-  const storeToggleNamespace = useEditorStore((s) => s.toggleNamespace);
-  const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
-  const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
-  const storeLayoutEngine = useEditorStore((s) => s.layoutOptions.engine ?? 'elk');
+    const storeSelectNode = useEditorStore((s) => s.selectNode);
+    const storeToggleNamespace = useEditorStore((s) => s.toggleNamespace);
+    const storeExpandAllNamespaces = useEditorStore((s) => s.expandAllNamespaces);
+    const storeCollapseAllNamespaces = useEditorStore((s) => s.collapseAllNamespaces);
+    const storeLayoutEngine = useEditorStore((s) => s.layoutOptions.engine ?? 'elk');
 
-  // Structure View store — expansion state for the structure pane
-  const expansionMap = useStructureViewStore((s) => s.expansionMap);
-  // Row-level expansion toggle (Phase 13 / Finding 1). Wired into StructureView
-  // so the per-row chevron rendered by DataNode can flip its store entry.
-  const toggleExpansion = useStructureViewStore((s) => s.toggleExpansion);
+    // Structure View store — expansion state for the structure pane
+    const expansionMap = useStructureViewStore((s) => s.expansionMap);
+    // Row-level expansion toggle (Phase 13 / Finding 1). Wired into StructureView
+    // so the per-row chevron rendered by DataNode can flip its store entry.
+    const toggleExpansion = useStructureViewStore((s) => s.toggleExpansion);
 
-  // Derive $type of the currently-selected node to gate which ids get forwarded
-  // to StructureView as focusedTypeId. Using a separate selector avoids breaking
-  // zustand's referential-equality optimisation that would fire on every nodes mutation.
-  //
-  // `$type` is guaranteed on every node since the typeKind→$type unification
-  // (Phase 2 curated-serializer fix), so the former typeKind/node.type fallback
-  // switch here is retired (Phase 3 prep) — `data.$type` is the single source.
-  const selectedNodeType = useEditorStore((s) => {
-    if (!s.selectedNodeId) return null;
-    const node = s.nodesById.get(s.selectedNodeId);
-    if (!node) return null;
-    const d = node.data as { $type?: string } | undefined;
-    return d?.$type ?? null;
-  });
-  const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
-  const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
-  const previewSelectedTarget = usePreviewStore((s) => s.selectedTarget);
-  const setPreviewTargets = usePreviewStore((s) => s.setAvailableTargets);
-  const selectPreviewTarget = usePreviewStore((s) => s.selectTarget);
+    // Derive $type of the currently-selected node to gate which ids get forwarded
+    // to StructureView as focusedTypeId. Using a separate selector avoids breaking
+    // zustand's referential-equality optimisation that would fire on every nodes mutation.
+    //
+    // `$type` is guaranteed on every node since the typeKind→$type unification
+    // (Phase 2 curated-serializer fix), so the former typeKind/node.type fallback
+    // switch here is retired (Phase 3 prep) — `data.$type` is the single source.
+    const selectedNodeType = useEditorStore((s) => {
+      if (!s.selectedNodeId) return null;
+      const node = s.nodesById.get(s.selectedNodeId);
+      if (!node) return null;
+      const d = node.data as { $type?: string } | undefined;
+      return d?.$type ?? null;
+    });
+    const storeSetLayoutEngine = useEditorStore((s) => s.setLayoutEngine);
+    const previewSelectedTargetId = usePreviewStore((s) => s.selectedTargetId);
+    const previewSelectedTarget = usePreviewStore((s) => s.selectedTarget);
+    const setPreviewTargets = usePreviewStore((s) => s.setAvailableTargets);
+    const selectPreviewTarget = usePreviewStore((s) => s.selectTarget);
 
-  // Structure View: drag-source state for the NamespaceExplorerPanel palette.
-  const dragSource = useStructureViewStore((s) => s.dragSource);
-  const setDragSource = useStructureViewStore((s) => s.setDragSource);
-  const clearDragSource = useStructureViewStore((s) => s.clearDragSource);
-  const updateGraphLayoutDirection = useCallback((nextDirection: Extract<LayoutDirection, 'LR' | 'TB'>) => {
-    graphLayoutDirectionRef.current = nextDirection;
-    setGraphLayoutDirection((prev) => (prev === nextDirection ? prev : nextDirection));
-    return nextDirection;
-  }, []);
-  const getResponsiveGraphDirection = useCallback((): Extract<LayoutDirection, 'LR' | 'TB'> => {
-    const rect = graphContainerRef.current?.getBoundingClientRect();
-    if (!rect) return graphLayoutDirectionRef.current;
-    const nextDirection = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
-    return updateGraphLayoutDirection(nextDirection);
-  }, [updateGraphLayoutDirection]);
-  const syncResponsiveGraphLayout = useCallback(() => {
-    const rect = graphContainerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const direction = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
-    if (direction !== graphLayoutDirectionRef.current) {
-      updateGraphLayoutDirection(direction);
+    // Structure View: drag-source state for the NamespaceExplorerPanel palette.
+    const dragSource = useStructureViewStore((s) => s.dragSource);
+    const setDragSource = useStructureViewStore((s) => s.setDragSource);
+    const clearDragSource = useStructureViewStore((s) => s.clearDragSource);
+    const updateGraphLayoutDirection = useCallback((nextDirection: Extract<LayoutDirection, 'LR' | 'TB'>) => {
+      graphLayoutDirectionRef.current = nextDirection;
+      setGraphLayoutDirection((prev) => (prev === nextDirection ? prev : nextDirection));
+      return nextDirection;
+    }, []);
+    const getResponsiveGraphDirection = useCallback((): Extract<LayoutDirection, 'LR' | 'TB'> => {
+      const rect = graphContainerRef.current?.getBoundingClientRect();
+      if (!rect) return graphLayoutDirectionRef.current;
+      const nextDirection = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
+      return updateGraphLayoutDirection(nextDirection);
+    }, [updateGraphLayoutDirection]);
+    const syncResponsiveGraphLayout = useCallback(() => {
+      const rect = graphContainerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const direction = resolveResponsiveLayoutDirection(rect.width, rect.height, graphLayoutDirectionRef.current);
+      if (direction !== graphLayoutDirectionRef.current) {
+        updateGraphLayoutDirection(direction);
+        graphRef.current?.relayout({
+          engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
+          direction,
+          groupByInheritance: groupedLayoutRef.current
+        });
+        return;
+      }
+      graphRef.current?.fitView();
+    }, [updateGraphLayoutDirection]);
+
+    useEffect(() => {
+      const el = graphContainerRef.current;
+      if (!el) return;
+      const frameId = window.requestAnimationFrame(() => {
+        syncResponsiveGraphLayout();
+      });
+      const observer = new ResizeObserver(() => {
+        syncResponsiveGraphLayout();
+      });
+      const handleWindowResize = () => {
+        syncResponsiveGraphLayout();
+      };
+      observer.observe(el);
+      window.addEventListener('resize', handleWindowResize);
+      return () => {
+        window.cancelAnimationFrame(frameId);
+        observer.disconnect();
+        window.removeEventListener('resize', handleWindowResize);
+      };
+    }, [syncResponsiveGraphLayout]);
+
+    useEffect(() => {
+      if (!selectedNodeId) return;
+      if (!storeNodes.some((node) => node.id === selectedNodeId)) return;
       graphRef.current?.relayout({
         engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
-        direction,
+        direction: getResponsiveGraphDirection(),
         groupByInheritance: groupedLayoutRef.current
       });
-      return;
-    }
-    graphRef.current?.fitView();
-  }, [updateGraphLayoutDirection]);
+    }, [getResponsiveGraphDirection, selectedNodeId, storeNodes]);
 
-  useEffect(() => {
-    const el = graphContainerRef.current;
-    if (!el) return;
-    const frameId = window.requestAnimationFrame(() => {
-      syncResponsiveGraphLayout();
-    });
-    const observer = new ResizeObserver(() => {
-      syncResponsiveGraphLayout();
-    });
-    const handleWindowResize = () => {
-      syncResponsiveGraphLayout();
-    };
-    observer.observe(el);
-    window.addEventListener('resize', handleWindowResize);
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      observer.disconnect();
-      window.removeEventListener('resize', handleWindowResize);
-    };
-  }, [syncResponsiveGraphLayout]);
+    const resolvedModelFiles = useMemo(() => {
+      if (parsedModels && parsedModels.length > 0) {
+        return parsedModels;
+      }
+      return models.flatMap((model, index) => {
+        const file = files[index];
+        return file ? [{ filePath: file.path, model }] : [];
+      });
+    }, [files, models, parsedModels]);
 
-  useEffect(() => {
-    if (!selectedNodeId) return;
-    if (!storeNodes.some((node) => node.id === selectedNodeId)) return;
-    graphRef.current?.relayout({
-      engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
-      direction: getResponsiveGraphDirection(),
-      groupByInheritance: groupedLayoutRef.current
-    });
-  }, [getResponsiveGraphDirection, selectedNodeId, storeNodes]);
+    useEffect(() => {
+      workspaceIdRef.current = workspaceId;
+    }, [workspaceId]);
 
-  const resolvedModelFiles = useMemo(() => {
-    if (parsedModels && parsedModels.length > 0) {
-      return parsedModels;
-    }
-    return models.flatMap((model, index) => {
-      const file = files[index];
-      return file ? [{ filePath: file.path, model }] : [];
-    });
-  }, [files, models, parsedModels]);
+    useEffect(() => {
+      modelsRef.current = models;
+    }, [models]);
 
-  useEffect(() => {
-    workspaceIdRef.current = workspaceId;
-  }, [workspaceId]);
+    useEffect(() => {
+      // Hydrated curated docs live only in `corpusModelsRef` (the routed parse
+      // intentionally keeps them out of workspace `models[]`). Clear that cache
+      // only when the workspace itself changes; clearing on every parse rerender
+      // makes Structure/Inspector populate for a frame and then drop back to the
+      // deferred placeholder graph.
+      if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+      corpusModelsRef.current = [];
+    }, [workspaceId]);
 
-  useEffect(() => {
-    modelsRef.current = models;
-  }, [models]);
+    useEffect(() => {
+      // loadDeferredExports only stashes entries on the store (no node
+      // mutation) — Codex P2 review of PR #164: doing both in one set()
+      // avoids the "mixed stale graph in undo history" state. Then call
+      // loadModels unconditionally — even with `models: []` — so it
+      // materializes the curated placeholder nodes from the stashed
+      // deferredExports. Hydrated curated docs merged through linkDocument live
+      // in `corpusModelsRef`; keep them in the graph across same-workspace parse
+      // rerenders because the routed parser does not echo them back in
+      // `workspace.models`.
+      useEditorStore.getState().loadDeferredExports(deferredExports);
+      useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
+    }, [models, deferredExports, workspaceId]);
 
-  useEffect(() => {
-    // Hydrated curated docs live only in `corpusModelsRef` (the routed parse
-    // intentionally keeps them out of workspace `models[]`). Clear that cache
-    // only when the workspace itself changes; clearing on every parse rerender
-    // makes Structure/Inspector populate for a frame and then drop back to the
-    // deferred placeholder graph.
-    if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
-    corpusModelsRef.current = [];
-  }, [workspaceId]);
+    const selectedNodeData: AnyGraphNode | null = useMemo(() => {
+      if (!selectedNodeId) return null;
+      const node = nodeRepository.byId(selectedNodeId);
+      return (node?.data as unknown as AnyGraphNode) ?? null;
+    }, [selectedNodeId, nodeRepository]);
+    const selectedNodeMeta: GraphNodeMeta | undefined = useMemo(() => {
+      if (!selectedNodeId) return undefined;
+      return nodeRepository.byId(selectedNodeId)?.meta;
+    }, [selectedNodeId, nodeRepository]);
 
-  useEffect(() => {
-    // loadDeferredExports only stashes entries on the store (no node
-    // mutation) — Codex P2 review of PR #164: doing both in one set()
-    // avoids the "mixed stale graph in undo history" state. Then call
-    // loadModels unconditionally — even with `models: []` — so it
-    // materializes the curated placeholder nodes from the stashed
-    // deferredExports. Hydrated curated docs merged through linkDocument live
-    // in `corpusModelsRef`; keep them in the graph across same-workspace parse
-    // rerenders because the routed parser does not echo them back in
-    // `workspace.models`.
-    useEditorStore.getState().loadDeferredExports(deferredExports);
-    useEditorStore.getState().loadModels([...models, ...corpusModelsRef.current] as unknown[]);
-  }, [models, deferredExports, workspaceId]);
+    // On-demand curated hydration (docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md,
+    // trigger B): a selected deferred placeholder node's `data` is a stub
+    // ({$type, name} only) until its namespace's server round-trip resolves.
+    // Surface that as a loading state in the inspector rather than silently
+    // dispatching the stub into a form with no fields — see EditorFormPanel's
+    // `isHydrating` prop.
+    const pendingHydrationNamespaces = useEditorStore((s) => s.pendingHydrationNamespaces);
+    const selectedNodeIsHydrating = useMemo(
+      () => Boolean(selectedNodeMeta?.deferred && pendingHydrationNamespaces.includes(selectedNodeMeta.namespace)),
+      [selectedNodeMeta, pendingHydrationNamespaces]
+    );
 
-  const selectedNodeData: AnyGraphNode | null = useMemo(() => {
-    if (!selectedNodeId) return null;
-    const node = nodeRepository.byId(selectedNodeId);
-    return (node?.data as unknown as AnyGraphNode) ?? null;
-  }, [selectedNodeId, nodeRepository]);
-  const selectedNodeMeta: GraphNodeMeta | undefined = useMemo(() => {
-    if (!selectedNodeId) return undefined;
-    return nodeRepository.byId(selectedNodeId)?.meta;
-  }, [selectedNodeId, nodeRepository]);
-
-  // On-demand curated hydration (docs/superpowers/specs/2026-05-25-curated-on-demand-hydration-design.md,
-  // trigger B): a selected deferred placeholder node's `data` is a stub
-  // ({$type, name} only) until its namespace's server round-trip resolves.
-  // Surface that as a loading state in the inspector rather than silently
-  // dispatching the stub into a form with no fields — see EditorFormPanel's
-  // `isHydrating` prop.
-  const pendingHydrationNamespaces = useEditorStore((s) => s.pendingHydrationNamespaces);
-  const selectedNodeIsHydrating = useMemo(
-    () => Boolean(selectedNodeMeta?.deferred && pendingHydrationNamespaces.includes(selectedNodeMeta.namespace)),
-    [selectedNodeMeta, pendingHydrationNamespaces]
-  );
-
-  const previewTargets: FormPreviewTarget[] = useMemo(() => {
-    const sourceByTargetId = new Map<string, Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>>();
-    for (const entry of resolvedModelFiles) {
-      const model = entry.model;
-      const modelUriValue = (
-        model as unknown as {
-          $document?: { uri?: { path?: string; toString(): string } };
-        }
-      ).$document?.uri;
-      const sourceUri = pathToUri(modelUriValue?.path ?? modelUriValue?.toString() ?? entry.filePath);
-      const namespace = namespaceFromModelName(model.name) ?? 'unknown';
-      for (const [sourceIndex, element] of (model.elements ?? []).entries()) {
-        const name = (element as { name?: string }).name;
-        if (!name) {
-          continue;
-        }
-        const range = (
-          element as {
-            $cstNode?: {
-              range?: {
-                start?: { line?: number; character?: number };
-                end?: { line?: number; character?: number };
+    const previewTargets: FormPreviewTarget[] = useMemo(() => {
+      const sourceByTargetId = new Map<string, Pick<FormPreviewTarget, 'sourceUri' | 'sourceIndex' | 'sourceRange'>>();
+      for (const entry of resolvedModelFiles) {
+        const model = entry.model;
+        const modelUriValue = (
+          model as unknown as {
+            $document?: { uri?: { path?: string; toString(): string } };
+          }
+        ).$document?.uri;
+        const sourceUri = pathToUri(modelUriValue?.path ?? modelUriValue?.toString() ?? entry.filePath);
+        const namespace = namespaceFromModelName(model.name) ?? 'unknown';
+        for (const [sourceIndex, element] of (model.elements ?? []).entries()) {
+          const name = (element as { name?: string }).name;
+          if (!name) {
+            continue;
+          }
+          const range = (
+            element as {
+              $cstNode?: {
+                range?: {
+                  start?: { line?: number; character?: number };
+                  end?: { line?: number; character?: number };
+                };
               };
-            };
-          }
-        ).$cstNode?.range;
-        sourceByTargetId.set(`${namespace}.${name}`, {
-          sourceUri,
-          sourceIndex,
-          sourceRange:
-            range?.start?.line !== undefined &&
-            range?.start?.character !== undefined &&
-            range?.end?.line !== undefined &&
-            range?.end?.character !== undefined
-              ? {
-                  start: {
-                    line: range.start.line,
-                    character: range.start.character
-                  },
-                  end: {
-                    line: range.end.line,
-                    character: range.end.character
+            }
+          ).$cstNode?.range;
+          sourceByTargetId.set(`${namespace}.${name}`, {
+            sourceUri,
+            sourceIndex,
+            sourceRange:
+              range?.start?.line !== undefined &&
+              range?.start?.character !== undefined &&
+              range?.end?.line !== undefined &&
+              range?.end?.character !== undefined
+                ? {
+                    start: {
+                      line: range.start.line,
+                      character: range.start.character
+                    },
+                    end: {
+                      line: range.end.line,
+                      character: range.end.character
+                    }
                   }
-                }
-              : undefined
-        });
-      }
-    }
-
-    return storeNodes
-      .map((node) => {
-        const data = node.data as unknown as {
-          name?: string;
-          $type?: string;
-        };
-        const namespace = node.meta?.namespace;
-        if (!namespace || !data.name) return undefined;
-        return {
-          id: `${namespace}.${data.name}`,
-          namespace,
-          name: data.name,
-          kind: data.$type ?? 'unknown',
-          ...sourceByTargetId.get(`${namespace}.${data.name}`)
-        };
-      })
-      .filter((target): target is FormPreviewTarget => target !== undefined);
-  }, [resolvedModelFiles, storeNodes]);
-
-  useEffect(() => {
-    setPreviewTargets(previewTargets);
-  }, [previewTargets, setPreviewTargets]);
-
-  useEffect(() => {
-    if (!previewSelectedTargetId || !previewSelectedTarget) {
-      return;
-    }
-    if (previewTargets.some((target) => target.id === previewSelectedTargetId)) {
-      return;
-    }
-    const renamedTarget = previewTargets.find((target) => matchesPreviewSourceIdentity(previewSelectedTarget, target));
-    selectPreviewTarget(renamedTarget?.id);
-  }, [previewSelectedTarget, previewSelectedTargetId, previewTargets, selectPreviewTarget]);
-
-  useEffect(() => {
-    if (!selectedNodeId) {
-      return;
-    }
-    const name = (selectedNodeData as unknown as { name?: string } | null)?.name;
-    const namespace = selectedNodeMeta?.namespace;
-    if (!namespace || !name) {
-      return;
-    }
-    selectPreviewTarget(`${namespace}.${name}`);
-  }, [selectedNodeData, selectedNodeMeta, selectedNodeId, selectPreviewTarget]);
-
-  useEffect(() => {
-    if (!selectedNodeId) {
-      return;
-    }
-    // Increments a nonce to signal the inspector to re-focus.
-    // No external resource is acquired here, so no cleanup is required.
-    setInspectorFocusNonce((current) => current + 1);
-    // react-doctor/effect-needs-cleanup: intentional — pure state update, no subscription.
-  }, [selectedNodeId]);
-
-  // Navigate the source editor when a graph node is selected.
-  const prevSelectedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (selectedNodeId === prevSelectedRef.current) return;
-    prevSelectedRef.current = selectedNodeId;
-    if (!selectedNodeId || !selectedNodeData) return;
-
-    const filePath = resolveNodeFile(selectedNodeData, selectedNodeMeta);
-    if (filePath) openFileInSource(filePath);
-
-    const nodeData = selectedNodeData as unknown as Record<string, unknown>;
-    const cstNode = nodeData['$cstNode'] as
-      | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
-      | undefined;
-    const textRegion = nodeData['$textRegion'] as { range?: { start?: { line?: number } } } | undefined;
-    const range = cstNode?._rangeCache ?? cstNode?.range ?? textRegion?.range;
-    if (range?.start?.line !== undefined && filePath) {
-      pendingRevealRef.current = { line: range.start.line + 1, filePath };
-    } else if (filePath) {
-      const typeName = (nodeData as { name?: string }).name;
-      const file = files.find((f) => f.path === filePath);
-      const line = typeName && file ? findDeclarationLine(file.content, typeName) : 0;
-      pendingRevealRef.current = { line: line > 0 ? line : 1, filePath };
-    }
-
-    // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
-    // Skip system:// URIs (base types are always parsed, never deferred).
-    // Debounced so rapid keyboard navigation doesn't queue many worker requests.
-    let cancelled = false;
-    if (filePath && !filePath.startsWith('system://')) {
-      const requestWorkspaceId = workspaceId;
-      if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
-      linkDocumentTimerRef.current = setTimeout(() => {
-        void linkDocument(filePath).then((result) => {
-          if (cancelled || workspaceIdRef.current !== requestWorkspaceId || result.newModels.length === 0) {
-            return;
-          }
-          if (result.newModels.length > 0) {
-            corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
-            // loadModels now re-merges the deferred-export placeholder nodes
-            // automatically from store state — no need to call
-            // loadDeferredExports after this. The store-owned deferredExports
-            // state was populated when /api/parse responded.
-            useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
-          }
-        });
-      }, 150);
-    }
-    return () => {
-      cancelled = true;
-      if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId, selectedNodeData, workspaceId]);
-
-  // Re-link the selected node after an on-demand hydration completes.
-  //
-  // The selection effect above fires once when the node is first selected and
-  // calls linkDocument 150ms later. If the node's namespace wasn't in the
-  // worker yet (deferred / curated), that link fails silently — the worker has
-  // no AST for the file yet. The on-demand hydration parse then completes and
-  // triggers markNamespacesHydrated, which bumps hydrationNonce. This effect
-  // reacts to that nonce change and re-links immediately (no 150ms debounce
-  // needed — we're not racing file edits here, the worker is fully ready).
-  // linkDocument is safe to re-run for an already-linked selection, but this
-  // effect must not depend on the selected node object's identity. `loadModels`
-  // can rebuild placeholder node objects during hydration, and keying this
-  // effect on `selectedNodeData` would cancel the first successful re-link and
-  // immediately issue a second one that returns `newModels: []`.
-  const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
-  // Track which (nonce, namespace) pairs have already been re-linked so that
-  // switching between nodes in the same namespace on the same nonce doesn't
-  // issue redundant linkDocument round-trips.
-  const relinkedRef = useRef(new Set<string>());
-  useEffect(() => {
-    relinkedRef.current = new Set();
-  }, [hydrationNonce, workspaceId]);
-
-  useEffect(() => {
-    if (hydrationNonce === 0 || !selectedNodeId) return;
-    // Link ALL files for the selected node's namespace. The curated artifact
-    // format aggregates namespace-level exports onto the first document's export
-    // list, so per-type file mapping (nodeIdToFilePath) is unreliable — it may
-    // resolve to the enum file even when a data type is selected. Linking every
-    // deferred file in the namespace ensures every model (enum, data, choice)
-    // gets deserialized and merged into the graph.
-    const { namespace } = splitNodeId(selectedNodeId);
-    if (!namespace) return;
-    const relinkedKey = `${hydrationNonce}:${namespace}`;
-    if (relinkedRef.current.has(relinkedKey)) return;
-    relinkedRef.current.add(relinkedKey);
-    const filePathSet = new Set<string>();
-    for (const e of deferredExportsRef.current) {
-      if (e.namespace !== namespace) continue;
-      if (!e.filePath || e.filePath.startsWith('system://')) continue;
-      filePathSet.add(e.filePath);
-    }
-    const filePaths = [...filePathSet];
-    if (filePaths.length === 0) return;
-    const requestWorkspaceId = workspaceId;
-    let cancelled = false;
-    void Promise.all(filePaths.map((fp) => linkDocument(fp))).then((results) => {
-      if (cancelled || workspaceIdRef.current !== requestWorkspaceId) return;
-      const newModels = results.flatMap((r) => r.newModels);
-      if (newModels.length === 0) return;
-      corpusModelsRef.current = [...corpusModelsRef.current, ...newModels];
-      useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
-    });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrationNonce, selectedNodeId, workspaceId]);
-
-  const functionScope: FunctionScope = useMemo(() => {
-    const d = selectedNodeData as any;
-    if (!d || d.$type !== 'RosettaFunction') {
-      return { inputs: [], output: null, aliases: [] };
-    }
-    return {
-      inputs: (d.inputs ?? []).map((p: any) => ({
-        name: p.name,
-        typeName: p.typeCall?.type?.$refText,
-        cardinality: p.card ? `(${p.card.inf}..${p.card.unbounded ? '*' : (p.card.sup ?? p.card.inf)})` : undefined
-      })),
-      output: d.output?.typeCall?.type?.$refText ? { name: 'output', typeName: d.output.typeCall.type.$refText } : null,
-      aliases: (d.shortcuts ?? []).map((s: any) => ({
-        name: s.name,
-        typeName: s.typeCall?.type?.$refText
-      }))
-    };
-  }, [selectedNodeData]);
-
-  // Lightweight per-session UI toggle (component state only — not a
-  // persisted user setting, and not wired into the shared AppHeader /
-  // perspective-chrome registry). 'builder' stays the default; the small
-  // toggle below flips a condition's expression editor to the TypeScript
-  // lens for manual QA and everyday use.
-  const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
-
-  const renderExpressionEditor = useCallback(
-    (props: ExpressionEditorSlotProps) => (
-      <div className="flex flex-col gap-1">
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            variant="link"
-            size="xs"
-            className="h-auto p-0 text-muted-foreground"
-            onClick={() => setExpressionEditorMode((m) => (m === 'lens' ? 'builder' : 'lens'))}
-          >
-            {expressionEditorMode === 'lens' ? 'Use builder' : 'Try TypeScript view'}
-          </Button>
-        </div>
-        {expressionEditorMode === 'lens' ? (
-          <LanguageLensEditor {...props} />
-        ) : (
-          <ExpressionBuilder {...props} scope={functionScope} />
-        )}
-      </div>
-    ),
-    [functionScope, expressionEditorMode]
-  );
-
-  const filesRef = useRef(files);
-  useEffect(() => {
-    filesRef.current = files;
-  }, [files]);
-
-  useEffect(() => {
-    if (files.length === 0) {
-      setActiveEditorFile((prev) => (prev === undefined ? prev : undefined));
-      return;
-    }
-
-    const availablePaths = new Set(files.map((file) => file.path));
-    const preferredFile = files.find((file) => !file.readOnly) ?? files[0]!;
-
-    setActiveEditorFile((prev) => {
-      if (prev && availablePaths.has(prev)) {
-        return prev;
-      }
-      return preferredFile.path;
-    });
-  }, [files]);
-
-  const handleSourceChange = useCallback(
-    (path: string, content: string) => {
-      const updatedFiles = filesRef.current.map((f) => (f.path === path ? { ...f, content, dirty: true } : f));
-      onFilesChange?.(updatedFiles);
-    },
-    [onFilesChange]
-  );
-
-  const namespaceToFile = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of resolvedModelFiles) {
-      const model = entry.model as { name?: unknown };
-      const ns = namespaceFromModelName(model.name) ?? 'unknown';
-      map.set(ns, entry.filePath);
-    }
-    return map;
-  }, [resolvedModelFiles]);
-
-  // Invert namespaceToFile against the current file content so the CST-reuse
-  // serializer has the original source text to slice for clean subtrees.
-  const originalSourceByNamespace = useMemo(() => {
-    const fileByPath = new Map(files.map((f) => [f.path, f]));
-    const map = new Map<string, string>();
-    for (const [ns, filePath] of namespaceToFile) {
-      const file = fileByPath.get(filePath);
-      if (file) map.set(ns, file.content);
-    }
-    return map;
-  }, [files, namespaceToFile]);
-
-  const nodeIdToFilePath = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entry of resolvedModelFiles) {
-      const model = entry.model as {
-        name?: unknown;
-        elements?: Array<{ name?: string }>;
-      };
-      const ns = namespaceFromModelName(model.name) ?? 'unknown';
-      for (const element of model.elements ?? []) {
-        const name = element.name ?? 'unknown';
-        const nodeId = qualifiedExportPath(ns, name);
-        if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
-      }
-    }
-    // Include deferred corpus entries so linkDocument can resolve their file paths.
-    for (const entry of deferredExports) {
-      for (const exp of entry.exports) {
-        const nodeId = qualifiedExportPath(entry.namespace, exp.name);
-        if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
-      }
-    }
-    return map;
-  }, [resolvedModelFiles, deferredExports]);
-
-  const resolveNodeFile = useCallback(
-    (nodeData: AnyGraphNode, meta: GraphNodeMeta | undefined): string | undefined => {
-      const d = nodeData as any;
-      const docPath = d.$container?.$document?.uri?.path as string | undefined;
-      if (docPath) {
-        const match = files.find((f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path));
-        if (match) return match.path;
-        const fileName = docPath.split('/').pop();
-        if (fileName) {
-          const byName = files.find((f) => f.path.endsWith(fileName) || f.name === fileName);
-          if (byName) return byName.path;
+                : undefined
+          });
         }
       }
-      if (!meta?.namespace) return undefined;
-      const nodeId = qualifiedExportPath(meta.namespace, d.name);
-      return nodeIdToFilePath.get(nodeId);
-    },
-    [files, nodeIdToFilePath]
-  );
-  // Ref for the full deferredExports list so the hydration relink effect can
-  // link ALL files for the selected namespace, not just the one the per-type
-  // map points to. The curated artifacts aggregate namespace-level exports onto
-  // the first document, so per-type file mapping is unreliable — linking every
-  // file in the namespace ensures the right model is deserialized.
-  const deferredExportsRef = useLatestRef(deferredExports);
 
-  // Bound directly to the store action (same identity across renders, like
-  // the old useCallback with an empty dep array) so every call site below
-  // works unchanged.
-  const openFileInSource = storeOpenFileInSource;
-
-  // "+" new-file affordance moved to ExploreCenterSlot (shared-perspective-
-  // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().
-
-  // Owns the HydrationOrchestrator instance for this component's lifetime —
-  // dedups (via waitingByNamespace) the three on-demand hydration triggers
-  // below (handleExplorerSelectNode, handleToggleNamespace, navigateToNode).
-  // Deliberately does NOT call beginRetryRound — these triggers are
-  // user-driven (re-selecting/re-toggling), not auto-retried, so there is
-  // no re-entrant loop to cap, and capping would strand a still-deferred
-  // node's hydration permanently after 5 selections with no markResolved
-  // call anywhere in this file to reset it. See requestHydration's doc
-  // comment in hydration-orchestrator.ts for the opt-in protocol this
-  // relies on.
-  // Constructed inside a mount effect (not lazily on render) so it survives
-  // React StrictMode's mount→unmount→remount double-invoke cleanly: the
-  // cleanup disposes the orchestrator (unsubscribing from useEditorStore),
-  // and the second mount constructs a fresh one — no leaked subscriptions.
-  // Same pattern as CodegenProvider (Task 3).
-  const orchestratorRef = useRef<HydrationOrchestrator | null>(null);
-  useEffect(() => {
-    let lastHydrationNonce = useEditorStore.getState().hydrationNonce;
-    const orchestrator = new HydrationOrchestrator({
-      getHydratedNamespaces: () => useEditorStore.getState().hydratedNamespaces,
-      getPendingHydrationNamespaces: () => useEditorStore.getState().pendingHydrationNamespaces,
-      requestNamespaceHydration: (ns) => useEditorStore.getState().requestNamespaceHydration(ns),
-      subscribeToHydrationChange: (onChange) =>
-        useEditorStore.subscribe((state) => {
-          if (state.hydrationNonce !== lastHydrationNonce) {
-            lastHydrationNonce = state.hydrationNonce;
-            onChange();
-          }
+      return storeNodes
+        .map((node) => {
+          const data = node.data as unknown as {
+            name?: string;
+            $type?: string;
+          };
+          const namespace = node.meta?.namespace;
+          if (!namespace || !data.name) return undefined;
+          return {
+            id: `${namespace}.${data.name}`,
+            namespace,
+            name: data.name,
+            kind: data.$type ?? 'unknown',
+            ...sourceByTargetId.get(`${namespace}.${data.name}`)
+          };
         })
-    });
-    orchestratorRef.current = orchestrator;
-    return () => {
-      orchestrator.dispose();
-      orchestratorRef.current = null;
-    };
-  }, []);
+        .filter((target): target is FormPreviewTarget => target !== undefined);
+    }, [resolvedModelFiles, storeNodes]);
 
-  const handleExplorerSelectNode = useCallback(
-    (nodeId: string) => {
-      storeSelectNode(nodeId, { reapplyFocusMode: true });
-      // On-demand curated hydration: only deferred (list-only, un-hydrated
-      // curated) nodes need a server round-trip; user types and already-
-      // hydrated curated types resolve locally.
-      const selectedNode = selectNodeRepository(useEditorStore.getState().nodesById).byId(nodeId);
-      const meta = selectedNode?.meta;
-      if (meta?.deferred && meta.namespace) {
-        orchestratorRef.current?.requestHydration(meta.namespace, {
-          retryFor: {
-            targetId: nodeId,
-            onRetry: () => {
-              // Re-selecting re-reads the AST node fresh. Per Task 4, the parser
-              // worker's hydrate handler already does a full-replacement relink on
-              // every hydrate round, so no separate relink trigger is needed here —
-              // only re-selecting to force a fresh render. No macrotask defer needed
-              // here (unlike Task 3's CodegenProvider case): App.tsx's existing
-              // hydrate effect calls applyParseResult(result, ...) BEFORE
-              // markNamespacesHydrated in the same synchronous .then() callback, so
-              // by the time this onRetry fires, the store already holds the fresh
-              // data — there's no separate worker round-trip to race against.
-              storeSelectNode(nodeId, { reapplyFocusMode: false });
-            }
-          }
-        });
+    useEffect(() => {
+      setPreviewTargets(previewTargets);
+    }, [previewTargets, setPreviewTargets]);
+
+    useEffect(() => {
+      if (!previewSelectedTargetId || !previewSelectedTarget) {
+        return;
       }
-    },
-    [storeSelectNode]
-  );
-
-  // Expanding a namespace header is an equally natural browse gesture that
-  // should trigger hydration. Wrap the bare toggle action so we can also
-  // queue the namespace for on-demand hydration before toggling visibility.
-  const handleToggleNamespace = useCallback(
-    (namespace: string) => {
-      const needsHydration = useEditorStore
-        .getState()
-        .nodes.some((n) => n.meta.namespace === namespace && n.meta.deferred === true);
-      if (needsHydration) {
-        orchestratorRef.current?.requestHydration(namespace, {
-          retryFor: {
-            targetId: namespace,
-            onRetry: () => {
-              // No re-render trigger needed here: the explorer's node list and
-              // StructureView both read directly from useEditorStore selectors,
-              // so they re-render from the fresh store state once hydration
-              // completes without any extra action. Routed through the
-              // orchestrator purely for retry-cap/dedup consistency with the
-              // other two call sites (Task 5) — see Task 4's finding that
-              // Structure/Inspector degrade gracefully without extra retry logic.
-            }
-          }
-        });
+      if (previewTargets.some((target) => target.id === previewSelectedTargetId)) {
+        return;
       }
-      storeToggleNamespace(namespace);
-    },
-    [storeToggleNamespace]
-  );
+      const renamedTarget = previewTargets.find((target) =>
+        matchesPreviewSourceIdentity(previewSelectedTarget, target)
+      );
+      selectPreviewTarget(renamedTarget?.id);
+    }, [previewSelectedTarget, previewSelectedTargetId, previewTargets, selectPreviewTarget]);
 
-  const shouldCenterNavigationTarget = useCallback(
-    (nodeId: string) => {
-      if (!focusMode) return true;
-      const hasIncidentEdge = storeEdges.some((edge) => edge.source === nodeId || edge.target === nodeId);
-      if (!hasIncidentEdge) return true;
-      return useEditorStore.getState().visibility.hiddenNodeIds.size === 0;
-    },
-    [focusMode, storeEdges]
-  );
+    useEffect(() => {
+      if (!selectedNodeId) {
+        return;
+      }
+      const name = (selectedNodeData as unknown as { name?: string } | null)?.name;
+      const namespace = selectedNodeMeta?.namespace;
+      if (!namespace || !name) {
+        return;
+      }
+      selectPreviewTarget(`${namespace}.${name}`);
+    }, [selectedNodeData, selectedNodeMeta, selectedNodeId, selectPreviewTarget]);
 
-  const navigateToNode = useCallback(
-    (nodeId: string) => {
-      const targetNode = nodeRepository.byId(nodeId);
-      const exists = Boolean(targetNode);
+    useEffect(() => {
+      if (!selectedNodeId) {
+        return;
+      }
+      // Increments a nonce to signal the inspector to re-focus.
+      // No external resource is acquired here, so no cleanup is required.
+      setInspectorFocusNonce((current) => current + 1);
+      // react-doctor/effect-needs-cleanup: intentional — pure state update, no subscription.
+    }, [selectedNodeId]);
+
+    // Navigate the source editor when a graph node is selected.
+    const prevSelectedRef = useRef<string | null>(null);
+    useEffect(() => {
+      if (selectedNodeId === prevSelectedRef.current) return;
+      prevSelectedRef.current = selectedNodeId;
+      if (!selectedNodeId || !selectedNodeData) return;
+
+      const filePath = resolveNodeFile(selectedNodeData, selectedNodeMeta);
+      if (filePath) openFileInSource(filePath);
+
+      const nodeData = selectedNodeData as unknown as Record<string, unknown>;
+      const cstNode = nodeData['$cstNode'] as
+        | { range?: { start?: { line?: number } }; _rangeCache?: { start?: { line?: number } } }
+        | undefined;
+      const textRegion = nodeData['$textRegion'] as { range?: { start?: { line?: number } } } | undefined;
+      const range = cstNode?._rangeCache ?? cstNode?.range ?? textRegion?.range;
+      if (range?.start?.line !== undefined && filePath) {
+        pendingRevealRef.current = { line: range.start.line + 1, filePath };
+      } else if (filePath) {
+        const typeName = (nodeData as { name?: string }).name;
+        const file = files.find((f) => f.path === filePath);
+        const line = typeName && file ? findDeclarationLine(file.content, typeName) : 0;
+        pendingRevealRef.current = { line: line > 0 ? line : 1, filePath };
+      }
+
+      // Trigger on-demand linking for the selected node's document (ADR 007 Phase 2).
+      // Skip system:// URIs (base types are always parsed, never deferred).
+      // Debounced so rapid keyboard navigation doesn't queue many worker requests.
+      let cancelled = false;
+      if (filePath && !filePath.startsWith('system://')) {
+        const requestWorkspaceId = workspaceId;
+        if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+        linkDocumentTimerRef.current = setTimeout(() => {
+          void linkDocument(filePath).then((result) => {
+            if (cancelled || workspaceIdRef.current !== requestWorkspaceId || result.newModels.length === 0) {
+              return;
+            }
+            if (result.newModels.length > 0) {
+              corpusModelsRef.current = [...corpusModelsRef.current, ...result.newModels];
+              // loadModels now re-merges the deferred-export placeholder nodes
+              // automatically from store state — no need to call
+              // loadDeferredExports after this. The store-owned deferredExports
+              // state was populated when /api/parse responded.
+              useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
+            }
+          });
+        }, 150);
+      }
+      return () => {
+        cancelled = true;
+        if (linkDocumentTimerRef.current) clearTimeout(linkDocumentTimerRef.current);
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedNodeId, selectedNodeData, workspaceId]);
+
+    // Re-link the selected node after an on-demand hydration completes.
+    //
+    // The selection effect above fires once when the node is first selected and
+    // calls linkDocument 150ms later. If the node's namespace wasn't in the
+    // worker yet (deferred / curated), that link fails silently — the worker has
+    // no AST for the file yet. The on-demand hydration parse then completes and
+    // triggers markNamespacesHydrated, which bumps hydrationNonce. This effect
+    // reacts to that nonce change and re-links immediately (no 150ms debounce
+    // needed — we're not racing file edits here, the worker is fully ready).
+    // linkDocument is safe to re-run for an already-linked selection, but this
+    // effect must not depend on the selected node object's identity. `loadModels`
+    // can rebuild placeholder node objects during hydration, and keying this
+    // effect on `selectedNodeData` would cancel the first successful re-link and
+    // immediately issue a second one that returns `newModels: []`.
+    const hydrationNonce = useEditorStore((s) => s.hydrationNonce);
+    // Track which (nonce, namespace) pairs have already been re-linked so that
+    // switching between nodes in the same namespace on the same nonce doesn't
+    // issue redundant linkDocument round-trips.
+    const relinkedRef = useRef(new Set<string>());
+    useEffect(() => {
+      relinkedRef.current = new Set();
+    }, [hydrationNonce, workspaceId]);
+
+    useEffect(() => {
+      if (hydrationNonce === 0 || !selectedNodeId) return;
+      // Link ALL files for the selected node's namespace. The curated artifact
+      // format aggregates namespace-level exports onto the first document's export
+      // list, so per-type file mapping (nodeIdToFilePath) is unreliable — it may
+      // resolve to the enum file even when a data type is selected. Linking every
+      // deferred file in the namespace ensures every model (enum, data, choice)
+      // gets deserialized and merged into the graph.
+      const { namespace } = splitNodeId(selectedNodeId);
+      if (!namespace) return;
+      const relinkedKey = `${hydrationNonce}:${namespace}`;
+      if (relinkedRef.current.has(relinkedKey)) return;
+      relinkedRef.current.add(relinkedKey);
+      const filePathSet = new Set<string>();
+      for (const e of deferredExportsRef.current) {
+        if (e.namespace !== namespace) continue;
+        if (!e.filePath || e.filePath.startsWith('system://')) continue;
+        filePathSet.add(e.filePath);
+      }
+      const filePaths = [...filePathSet];
+      if (filePaths.length === 0) return;
+      const requestWorkspaceId = workspaceId;
+      let cancelled = false;
+      void Promise.all(filePaths.map((fp) => linkDocument(fp))).then((results) => {
+        if (cancelled || workspaceIdRef.current !== requestWorkspaceId) return;
+        const newModels = results.flatMap((r) => r.newModels);
+        if (newModels.length === 0) return;
+        corpusModelsRef.current = [...corpusModelsRef.current, ...newModels];
+        useEditorStore.getState().loadModels([...modelsRef.current, ...corpusModelsRef.current] as unknown[]);
+      });
+      return () => {
+        cancelled = true;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [hydrationNonce, selectedNodeId, workspaceId]);
+
+    const functionScope: FunctionScope = useMemo(() => {
+      const d = selectedNodeData as any;
+      if (!d || d.$type !== 'RosettaFunction') {
+        return { inputs: [], output: null, aliases: [] };
+      }
+      return {
+        inputs: (d.inputs ?? []).map((p: any) => ({
+          name: p.name,
+          typeName: p.typeCall?.type?.$refText,
+          cardinality: p.card ? `(${p.card.inf}..${p.card.unbounded ? '*' : (p.card.sup ?? p.card.inf)})` : undefined
+        })),
+        output: d.output?.typeCall?.type?.$refText
+          ? { name: 'output', typeName: d.output.typeCall.type.$refText }
+          : null,
+        aliases: (d.shortcuts ?? []).map((s: any) => ({
+          name: s.name,
+          typeName: s.typeCall?.type?.$refText
+        }))
+      };
+    }, [selectedNodeData]);
+
+    // Lightweight per-session UI toggle (component state only — not a
+    // persisted user setting, and not wired into the shared AppHeader /
+    // perspective-chrome registry). 'builder' stays the default; the small
+    // toggle below flips a condition's expression editor to the TypeScript
+    // lens for manual QA and everyday use.
+    const [expressionEditorMode, setExpressionEditorMode] = useState<'builder' | 'lens'>('builder');
+
+    const renderExpressionEditor = useCallback(
+      (props: ExpressionEditorSlotProps) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              className="h-auto p-0 text-muted-foreground"
+              onClick={() => setExpressionEditorMode((m) => (m === 'lens' ? 'builder' : 'lens'))}
+            >
+              {expressionEditorMode === 'lens' ? 'Use builder' : 'Try TypeScript view'}
+            </Button>
+          </div>
+          {expressionEditorMode === 'lens' ? (
+            <LanguageLensEditor {...props} />
+          ) : (
+            <ExpressionBuilder {...props} scope={functionScope} />
+          )}
+        </div>
+      ),
+      [functionScope, expressionEditorMode]
+    );
+
+    const filesRef = useRef(files);
+    useEffect(() => {
+      filesRef.current = files;
+    }, [files]);
+
+    useEffect(() => {
+      if (files.length === 0) {
+        setActiveEditorFile((prev) => (prev === undefined ? prev : undefined));
+        return;
+      }
+
+      const availablePaths = new Set(files.map((file) => file.path));
+      const preferredFile = files.find((file) => !file.readOnly) ?? files[0]!;
+
+      setActiveEditorFile((prev) => {
+        if (prev && availablePaths.has(prev)) {
+          return prev;
+        }
+        return preferredFile.path;
+      });
+    }, [files]);
+
+    const handleSourceChange = useCallback(
+      (path: string, content: string) => {
+        const updatedFiles = filesRef.current.map((f) => (f.path === path ? { ...f, content, dirty: true } : f));
+        onFilesChange?.(updatedFiles);
+      },
+      [onFilesChange]
+    );
+
+    const namespaceToFile = useMemo(() => {
+      const map = new Map<string, string>();
+      for (const entry of resolvedModelFiles) {
+        const model = entry.model as { name?: unknown };
+        const ns = namespaceFromModelName(model.name) ?? 'unknown';
+        map.set(ns, entry.filePath);
+      }
+      return map;
+    }, [resolvedModelFiles]);
+
+    // Invert namespaceToFile against the current file content so the CST-reuse
+    // serializer has the original source text to slice for clean subtrees.
+    const originalSourceByNamespace = useMemo(() => {
+      const fileByPath = new Map(files.map((f) => [f.path, f]));
+      const map = new Map<string, string>();
+      for (const [ns, filePath] of namespaceToFile) {
+        const file = fileByPath.get(filePath);
+        if (file) map.set(ns, file.content);
+      }
+      return map;
+    }, [files, namespaceToFile]);
+
+    const nodeIdToFilePath = useMemo(() => {
+      const map = new Map<string, string>();
+      for (const entry of resolvedModelFiles) {
+        const model = entry.model as {
+          name?: unknown;
+          elements?: Array<{ name?: string }>;
+        };
+        const ns = namespaceFromModelName(model.name) ?? 'unknown';
+        for (const element of model.elements ?? []) {
+          const name = element.name ?? 'unknown';
+          const nodeId = qualifiedExportPath(ns, name);
+          if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
+        }
+      }
+      // Include deferred corpus entries so linkDocument can resolve their file paths.
+      for (const entry of deferredExports) {
+        for (const exp of entry.exports) {
+          const nodeId = qualifiedExportPath(entry.namespace, exp.name);
+          if (!map.has(nodeId)) map.set(nodeId, entry.filePath);
+        }
+      }
+      return map;
+    }, [resolvedModelFiles, deferredExports]);
+
+    const resolveNodeFile = useCallback(
+      (nodeData: AnyGraphNode, meta: GraphNodeMeta | undefined): string | undefined => {
+        const d = nodeData as any;
+        const docPath = d.$container?.$document?.uri?.path as string | undefined;
+        if (docPath) {
+          const match = files.find((f) => f.path === docPath || f.path.endsWith(docPath) || docPath.endsWith(f.path));
+          if (match) return match.path;
+          const fileName = docPath.split('/').pop();
+          if (fileName) {
+            const byName = files.find((f) => f.path.endsWith(fileName) || f.name === fileName);
+            if (byName) return byName.path;
+          }
+        }
+        if (!meta?.namespace) return undefined;
+        const nodeId = qualifiedExportPath(meta.namespace, d.name);
+        return nodeIdToFilePath.get(nodeId);
+      },
+      [files, nodeIdToFilePath]
+    );
+    // Ref for the full deferredExports list so the hydration relink effect can
+    // link ALL files for the selected namespace, not just the one the per-type
+    // map points to. The curated artifacts aggregate namespace-level exports onto
+    // the first document, so per-type file mapping is unreliable — linking every
+    // file in the namespace ensures the right model is deserialized.
+    const deferredExportsRef = useLatestRef(deferredExports);
+
+    // Bound directly to the store action (same identity across renders, like
+    // the old useCallback with an empty dep array) so every call site below
+    // works unchanged.
+    const openFileInSource = storeOpenFileInSource;
+
+    // "+" new-file affordance moved to ExploreCenterSlot (shared-perspective-
+    // chrome plan, Task 3) — it re-derives the same logic from useWorkspace().
+
+    // Owns the HydrationOrchestrator instance for this component's lifetime —
+    // dedups (via waitingByNamespace) the three on-demand hydration triggers
+    // below (handleExplorerSelectNode, handleToggleNamespace, navigateToNode).
+    // Deliberately does NOT call beginRetryRound — these triggers are
+    // user-driven (re-selecting/re-toggling), not auto-retried, so there is
+    // no re-entrant loop to cap, and capping would strand a still-deferred
+    // node's hydration permanently after 5 selections with no markResolved
+    // call anywhere in this file to reset it. See requestHydration's doc
+    // comment in hydration-orchestrator.ts for the opt-in protocol this
+    // relies on.
+    // Constructed inside a mount effect (not lazily on render) so it survives
+    // React StrictMode's mount→unmount→remount double-invoke cleanly: the
+    // cleanup disposes the orchestrator (unsubscribing from useEditorStore),
+    // and the second mount constructs a fresh one — no leaked subscriptions.
+    // Same pattern as CodegenProvider (Task 3).
+    const orchestratorRef = useRef<HydrationOrchestrator | null>(null);
+    useEffect(() => {
+      let lastHydrationNonce = useEditorStore.getState().hydrationNonce;
+      const orchestrator = new HydrationOrchestrator({
+        getHydratedNamespaces: () => useEditorStore.getState().hydratedNamespaces,
+        getPendingHydrationNamespaces: () => useEditorStore.getState().pendingHydrationNamespaces,
+        requestNamespaceHydration: (ns) => useEditorStore.getState().requestNamespaceHydration(ns),
+        subscribeToHydrationChange: (onChange) =>
+          useEditorStore.subscribe((state) => {
+            if (state.hydrationNonce !== lastHydrationNonce) {
+              lastHydrationNonce = state.hydrationNonce;
+              onChange();
+            }
+          })
+      });
+      orchestratorRef.current = orchestrator;
+      return () => {
+        orchestrator.dispose();
+        orchestratorRef.current = null;
+      };
+    }, []);
+
+    const handleExplorerSelectNode = useCallback(
+      (nodeId: string) => {
+        storeSelectNode(nodeId, { reapplyFocusMode: true });
+        // On-demand curated hydration: only deferred (list-only, un-hydrated
+        // curated) nodes need a server round-trip; user types and already-
+        // hydrated curated types resolve locally.
+        const selectedNode = selectNodeRepository(useEditorStore.getState().nodesById).byId(nodeId);
+        const meta = selectedNode?.meta;
+        if (meta?.deferred && meta.namespace) {
+          orchestratorRef.current?.requestHydration(meta.namespace, {
+            retryFor: {
+              targetId: nodeId,
+              onRetry: () => {
+                // Re-selecting re-reads the AST node fresh. Per Task 4, the parser
+                // worker's hydrate handler already does a full-replacement relink on
+                // every hydrate round, so no separate relink trigger is needed here —
+                // only re-selecting to force a fresh render. No macrotask defer needed
+                // here (unlike Task 3's CodegenProvider case): App.tsx's existing
+                // hydrate effect calls applyParseResult(result, ...) BEFORE
+                // markNamespacesHydrated in the same synchronous .then() callback, so
+                // by the time this onRetry fires, the store already holds the fresh
+                // data — there's no separate worker round-trip to race against.
+                storeSelectNode(nodeId, { reapplyFocusMode: false });
+              }
+            }
+          });
+        }
+      },
+      [storeSelectNode]
+    );
+
+    // Expanding a namespace header is an equally natural browse gesture that
+    // should trigger hydration. Wrap the bare toggle action so we can also
+    // queue the namespace for on-demand hydration before toggling visibility.
+    const handleToggleNamespace = useCallback(
+      (namespace: string) => {
+        const needsHydration = useEditorStore
+          .getState()
+          .nodes.some((n) => n.meta.namespace === namespace && n.meta.deferred === true);
+        if (needsHydration) {
+          orchestratorRef.current?.requestHydration(namespace, {
+            retryFor: {
+              targetId: namespace,
+              onRetry: () => {
+                // No re-render trigger needed here: the explorer's node list and
+                // StructureView both read directly from useEditorStore selectors,
+                // so they re-render from the fresh store state once hydration
+                // completes without any extra action. Routed through the
+                // orchestrator purely for retry-cap/dedup consistency with the
+                // other two call sites (Task 5) — see Task 4's finding that
+                // Structure/Inspector degrade gracefully without extra retry logic.
+              }
+            }
+          });
+        }
+        storeToggleNamespace(namespace);
+      },
+      [storeToggleNamespace]
+    );
+
+    const shouldCenterNavigationTarget = useCallback(
+      (nodeId: string) => {
+        if (!focusMode) return true;
+        const hasIncidentEdge = storeEdges.some((edge) => edge.source === nodeId || edge.target === nodeId);
+        if (!hasIncidentEdge) return true;
+        return useEditorStore.getState().visibility.hiddenNodeIds.size === 0;
+      },
+      [focusMode, storeEdges]
+    );
+
+    const navigateToNode = useCallback(
+      (nodeId: string) => {
+        const targetNode = nodeRepository.byId(nodeId);
+        const exists = Boolean(targetNode);
+        if (!exists) {
+          const shortName = nameFromNodeId(nodeId);
+          showToast({
+            description: `Type "${shortName}" not loaded — load the file containing this type`,
+            variant: 'destructive',
+            duration: 3000
+          });
+          return;
+        }
+        const current = useEditorStore.getState().selectedNodeId;
+        if (current) {
+          navigationHistoryRef.current.push(current);
+          if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+        }
+        storeSelectNode(nodeId, { reapplyFocusMode: true });
+        const targetMeta = targetNode?.meta;
+        if (targetMeta?.deferred && targetMeta.namespace) {
+          orchestratorRef.current?.requestHydration(targetMeta.namespace, {
+            retryFor: {
+              targetId: nodeId,
+              onRetry: () => {
+                // See handleExplorerSelectNode above for why no macrotask defer
+                // is needed here (unlike Task 3's CodegenProvider case).
+                storeSelectNode(nodeId, { reapplyFocusMode: false });
+              }
+            }
+          });
+        }
+        if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
+          graphRef.current?.focusNode(nodeId);
+        }
+      },
+      [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]
+    );
+
+    const navigateBack = useCallback(() => {
+      const prev = navigationHistoryRef.current.pop();
+      if (!prev) return;
+      const exists = storeNodes.some((n) => n.id === prev);
       if (!exists) {
-        const shortName = nameFromNodeId(nodeId);
         showToast({
-          description: `Type "${shortName}" not loaded — load the file containing this type`,
+          description: `Previous node "${prev}" is no longer in the graph`,
           variant: 'destructive',
           duration: 3000
         });
         return;
       }
-      const current = useEditorStore.getState().selectedNodeId;
-      if (current) {
-        navigationHistoryRef.current.push(current);
-        if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+      storeSelectNode(prev, { reapplyFocusMode: true });
+      if (!focusMode && shouldCenterNavigationTarget(prev)) {
+        graphRef.current?.focusNode(prev);
       }
-      storeSelectNode(nodeId, { reapplyFocusMode: true });
-      const targetMeta = targetNode?.meta;
-      if (targetMeta?.deferred && targetMeta.namespace) {
-        orchestratorRef.current?.requestHydration(targetMeta.namespace, {
-          retryFor: {
-            targetId: nodeId,
-            onRetry: () => {
-              // See handleExplorerSelectNode above for why no macrotask defer
-              // is needed here (unlike Task 3's CodegenProvider case).
-              storeSelectNode(nodeId, { reapplyFocusMode: false });
+    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
+
+    const handleEditorPageKeyDown = useCallback(
+      (e: KeyboardEvent<HTMLDivElement>) => {
+        if ((e.altKey && e.key === 'ArrowLeft') || (e.metaKey && e.key === '[')) {
+          e.preventDefault();
+          navigateBack();
+        }
+      },
+      [navigateBack]
+    );
+
+    const handleModelChanged = useCallback(
+      (serialized: Map<string, string>) => {
+        // The CST-reuse serializer (buildSourceForNamespaces) already produces
+        // full merged file text — no separate mergeSerializedIntoSource step.
+        const filesAtStart = filesRef.current;
+        const merged = filesAtStart.map((f) => {
+          for (const [ns, text] of serialized) {
+            if (namespaceToFile.get(ns) !== f.path) continue;
+            if (text === f.content) return f;
+            return { ...f, content: text, dirty: true };
+          }
+          return f;
+        });
+        if (!merged.some((e, i) => e !== filesAtStart[i])) return;
+        onFilesChange?.(merged);
+      },
+      [namespaceToFile, onFilesChange]
+    );
+
+    // Source-text sync — fires onModelChanged whenever inspector/structure edits
+    // change the editor-store, regardless of which center pane is mounted.
+    // Previously this subscription lived inside RuneTypeGraph, which is only
+    // mounted when the Graph pane is active; Structure-pane edits never reached
+    // the source pane (2026-05-21, fix/inspector-source-sync).
+    useModelSourceSync(
+      storeNodes,
+      storeEdges,
+      handleModelChanged,
+      storeParseEpoch,
+      storePendingEditPatches,
+      originalSourceByNamespace,
+      storePendingInversePatches
+    );
+
+    useLspDiagnosticsBridge(lspClient);
+    const { fileDiagnostics } = useDiagnosticsStore();
+    const combinedFileDiagnostics = useMemo(
+      () => combineFileDiagnostics(fileDiagnostics, files, parseErrors),
+      [fileDiagnostics, files, parseErrors]
+    );
+    const combinedDiagnostics = useMemo(() => countDiagnostics(combinedFileDiagnostics), [combinedFileDiagnostics]);
+
+    useEffect(() => {
+      if (!lspClient) return;
+      const unsub = lspClient.onDisplayFile(async (uri: string) => {
+        let path: string;
+        try {
+          const parsed = new URL(uri);
+          path = decodeURIComponent(parsed.pathname);
+        } catch {
+          path = uri.startsWith('file://') ? decodeURIComponent(uri.slice(7)) : uri;
+        }
+        const fileName = path.split('/').pop() ?? path;
+        const file = files.find((f) => f.path === path || f.path.endsWith(fileName) || path.endsWith(f.path));
+        if (!file) {
+          // eslint-disable-next-line no-console
+          console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
+          useOutputStore.getState().addLine(fmtLine('editor', `file not found for URI`, fileName), 'warn');
+          return null;
+        }
+        openFileInSource(file.path);
+        return new Promise<import('@codemirror/view').EditorView | null>((resolve) => {
+          const existing = pendingDisplayFileRef.current.get(file.path);
+          if (existing) existing(null);
+          pendingDisplayFileRef.current.set(file.path, resolve);
+          const timerId = setTimeout(() => {
+            displayFileTimersRef.current.delete(timerId);
+            if (pendingDisplayFileRef.current.has(file.path)) {
+              pendingDisplayFileRef.current.delete(file.path);
+              // eslint-disable-next-line no-console
+              console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
+              useOutputStore.getState().addLine(fmtLine('editor', 'editor view timeout', file.path), 'warn');
+              resolve(null);
             }
-          }
+          }, 2000);
+          displayFileTimersRef.current.add(timerId);
+        });
+      });
+      return () => {
+        unsub();
+        for (const id of displayFileTimersRef.current) clearTimeout(id);
+        displayFileTimersRef.current.clear();
+        // Resolve any pending displayFile promises so LSP client doesn't hang.
+        for (const resolve of pendingDisplayFileRef.current.values()) resolve(null);
+        pendingDisplayFileRef.current.clear();
+      };
+    }, [lspClient, files, openFileInSource]);
+
+    const handleEditorViewCreated = useCallback((filePath: string, view: import('@codemirror/view').EditorView) => {
+      const resolve = pendingDisplayFileRef.current.get(filePath);
+      if (resolve) {
+        pendingDisplayFileRef.current.delete(filePath);
+        resolve(view);
+      }
+    }, []);
+
+    const sourceEditorFiles = useMemo(() => {
+      const resolvedActiveFile =
+        (activeEditorFile ? files.find((file) => file.path === activeEditorFile) : undefined) ??
+        files.find((file) => !file.readOnly) ??
+        files[0];
+      return resolvedActiveFile ? [resolvedActiveFile] : [];
+    }, [activeEditorFile, files]);
+
+    useEffect(() => {
+      const pending = pendingRevealRef.current;
+      if (!pending) return;
+      if (sourceEditorFiles.some((f) => f.path === pending.filePath)) {
+        pendingRevealRef.current = null;
+        requestAnimationFrame(() => {
+          sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
         });
       }
-      if (!focusMode && shouldCenterNavigationTarget(nodeId)) {
-        graphRef.current?.focusNode(nodeId);
+    }, [sourceEditorFiles, selectedNodeId]);
+
+    const getSerializedFiles = useCallback((): Map<string, string> => {
+      const rosettaText = graphRef.current?.exportRosetta?.();
+      if (!rosettaText || rosettaText.size === 0) return new Map();
+      return rosettaText;
+    }, []);
+
+    const validateModelForExport = useCallback((): string[] => {
+      const warnings: string[] = [];
+      if (combinedDiagnostics.errors > 0) {
+        warnings.push(
+          `Model has ${combinedDiagnostics.errors} error(s) that may affect code generation output quality.`
+        );
       }
-    },
-    [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]
-  );
-
-  const navigateBack = useCallback(() => {
-    const prev = navigationHistoryRef.current.pop();
-    if (!prev) return;
-    const exists = storeNodes.some((n) => n.id === prev);
-    if (!exists) {
-      showToast({
-        description: `Previous node "${prev}" is no longer in the graph`,
-        variant: 'destructive',
-        duration: 3000
-      });
-      return;
-    }
-    storeSelectNode(prev, { reapplyFocusMode: true });
-    if (!focusMode && shouldCenterNavigationTarget(prev)) {
-      graphRef.current?.focusNode(prev);
-    }
-  }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
-
-  const handleEditorPageKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if ((e.altKey && e.key === 'ArrowLeft') || (e.metaKey && e.key === '[')) {
-        e.preventDefault();
-        navigateBack();
+      if (combinedDiagnostics.warnings > 0) {
+        warnings.push(`Model has ${combinedDiagnostics.warnings} warning(s).`);
       }
-    },
-    [navigateBack]
-  );
+      const serialized = getSerializedFiles();
+      if (serialized.size === 0) warnings.push('No user-authored files found to export.');
+      return warnings;
+    }, [combinedDiagnostics.errors, combinedDiagnostics.warnings, getSerializedFiles]);
 
-  const handleModelChanged = useCallback(
-    (serialized: Map<string, string>) => {
-      // The CST-reuse serializer (buildSourceForNamespaces) already produces
-      // full merged file text — no separate mergeSerializedIntoSource step.
-      const filesAtStart = filesRef.current;
-      const merged = filesAtStart.map((f) => {
-        for (const [ns, text] of serialized) {
-          if (namespaceToFile.get(ns) !== f.path) continue;
-          if (text === f.content) return f;
-          return { ...f, content: text, dirty: true };
-        }
-        return f;
-      });
-      if (!merged.some((e, i) => e !== filesAtStart[i])) return;
-      onFilesChange?.(merged);
-    },
-    [namespaceToFile, onFilesChange]
-  );
+    const availableTypes: TypeOption[] = useMemo(() => {
+      const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
+        value: `builtin::${t}`,
+        label: t,
+        kind: 'builtin' as const
+      }));
+      const graphOptions: TypeOption[] = storeNodes.map((n) => ({
+        value: n.id,
+        label: n.data.name,
+        kind: resolveNodeKind(n) as TypeOption['kind'],
+        namespace: n.meta.namespace
+      }));
+      return [...builtinOptions, ...graphOptions];
+    }, [storeNodes]);
 
-  // Source-text sync — fires onModelChanged whenever inspector/structure edits
-  // change the editor-store, regardless of which center pane is mounted.
-  // Previously this subscription lived inside RuneTypeGraph, which is only
-  // mounted when the Graph pane is active; Structure-pane edits never reached
-  // the source pane (2026-05-21, fix/inspector-source-sync).
-  useModelSourceSync(
-    storeNodes,
-    storeEdges,
-    handleModelChanged,
-    storeParseEpoch,
-    storePendingEditPatches,
-    originalSourceByNamespace,
-    storePendingInversePatches
-  );
-
-  useLspDiagnosticsBridge(lspClient);
-  const { fileDiagnostics } = useDiagnosticsStore();
-  const combinedFileDiagnostics = useMemo(
-    () => combineFileDiagnostics(fileDiagnostics, files, parseErrors),
-    [fileDiagnostics, files, parseErrors]
-  );
-  const combinedDiagnostics = useMemo(() => countDiagnostics(combinedFileDiagnostics), [combinedFileDiagnostics]);
-
-  useEffect(() => {
-    if (!lspClient) return;
-    const unsub = lspClient.onDisplayFile(async (uri: string) => {
-      let path: string;
-      try {
-        const parsed = new URL(uri);
-        path = decodeURIComponent(parsed.pathname);
-      } catch {
-        path = uri.startsWith('file://') ? decodeURIComponent(uri.slice(7)) : uri;
-      }
-      const fileName = path.split('/').pop() ?? path;
-      const file = files.find((f) => f.path === path || f.path.endsWith(fileName) || path.endsWith(f.path));
-      if (!file) {
-        // eslint-disable-next-line no-console
-        console.warn(`[displayFile] No workspace file found matching URI: ${uri} (fileName: ${fileName})`);
-        useOutputStore.getState().addLine(fmtLine('editor', `file not found for URI`, fileName), 'warn');
-        return null;
-      }
-      openFileInSource(file.path);
-      return new Promise<import('@codemirror/view').EditorView | null>((resolve) => {
-        const existing = pendingDisplayFileRef.current.get(file.path);
-        if (existing) existing(null);
-        pendingDisplayFileRef.current.set(file.path, resolve);
-        const timerId = setTimeout(() => {
-          displayFileTimersRef.current.delete(timerId);
-          if (pendingDisplayFileRef.current.has(file.path)) {
-            pendingDisplayFileRef.current.delete(file.path);
-            // eslint-disable-next-line no-console
-            console.warn(`[displayFile] Timed out waiting for EditorView: "${file.path}"`);
-            useOutputStore.getState().addLine(fmtLine('editor', 'editor view timeout', file.path), 'warn');
-            resolve(null);
+    const synonymSourceOptions: SourceRefOption[] = useMemo(() => {
+      const out: SourceRefOption[] = [];
+      for (const { model } of resolvedModelFiles) {
+        const namespace = namespaceFromModelName(model.name) ?? undefined;
+        for (const element of model.elements ?? []) {
+          if ((element as { $type?: string }).$type === 'RosettaSynonymSource') {
+            const name = (element as { name: string }).name;
+            out.push({ value: namespace ? `${namespace}.${name}` : name, label: name, namespace });
           }
-        }, 2000);
-        displayFileTimersRef.current.add(timerId);
-      });
-    });
-    return () => {
-      unsub();
-      for (const id of displayFileTimersRef.current) clearTimeout(id);
-      displayFileTimersRef.current.clear();
-      // Resolve any pending displayFile promises so LSP client doesn't hang.
-      for (const resolve of pendingDisplayFileRef.current.values()) resolve(null);
-      pendingDisplayFileRef.current.clear();
-    };
-  }, [lspClient, files, openFileInSource]);
-
-  const handleEditorViewCreated = useCallback((filePath: string, view: import('@codemirror/view').EditorView) => {
-    const resolve = pendingDisplayFileRef.current.get(filePath);
-    if (resolve) {
-      pendingDisplayFileRef.current.delete(filePath);
-      resolve(view);
-    }
-  }, []);
-
-  const sourceEditorFiles = useMemo(() => {
-    const resolvedActiveFile =
-      (activeEditorFile ? files.find((file) => file.path === activeEditorFile) : undefined) ??
-      files.find((file) => !file.readOnly) ??
-      files[0];
-    return resolvedActiveFile ? [resolvedActiveFile] : [];
-  }, [activeEditorFile, files]);
-
-  useEffect(() => {
-    const pending = pendingRevealRef.current;
-    if (!pending) return;
-    if (sourceEditorFiles.some((f) => f.path === pending.filePath)) {
-      pendingRevealRef.current = null;
-      requestAnimationFrame(() => {
-        sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
-      });
-    }
-  }, [sourceEditorFiles, selectedNodeId]);
-
-  const getSerializedFiles = useCallback((): Map<string, string> => {
-    const rosettaText = graphRef.current?.exportRosetta?.();
-    if (!rosettaText || rosettaText.size === 0) return new Map();
-    return rosettaText;
-  }, []);
-
-  const validateModelForExport = useCallback((): string[] => {
-    const warnings: string[] = [];
-    if (combinedDiagnostics.errors > 0) {
-      warnings.push(`Model has ${combinedDiagnostics.errors} error(s) that may affect code generation output quality.`);
-    }
-    if (combinedDiagnostics.warnings > 0) {
-      warnings.push(`Model has ${combinedDiagnostics.warnings} warning(s).`);
-    }
-    const serialized = getSerializedFiles();
-    if (serialized.size === 0) warnings.push('No user-authored files found to export.');
-    return warnings;
-  }, [combinedDiagnostics.errors, combinedDiagnostics.warnings, getSerializedFiles]);
-
-  const availableTypes: TypeOption[] = useMemo(() => {
-    const builtinOptions: TypeOption[] = BUILTIN_TYPES.map((t) => ({
-      value: `builtin::${t}`,
-      label: t,
-      kind: 'builtin' as const
-    }));
-    const graphOptions: TypeOption[] = storeNodes.map((n) => ({
-      value: n.id,
-      label: n.data.name,
-      kind: resolveNodeKind(n) as TypeOption['kind'],
-      namespace: n.meta.namespace
-    }));
-    return [...builtinOptions, ...graphOptions];
-  }, [storeNodes]);
-
-  const synonymSourceOptions: SourceRefOption[] = useMemo(() => {
-    const out: SourceRefOption[] = [];
-    for (const { model } of resolvedModelFiles) {
-      const namespace = namespaceFromModelName(model.name) ?? undefined;
-      for (const element of model.elements ?? []) {
-        if ((element as { $type?: string }).$type === 'RosettaSynonymSource') {
-          const name = (element as { name: string }).name;
-          out.push({ value: namespace ? `${namespace}.${name}` : name, label: name, namespace });
         }
       }
-    }
-    return out;
-  }, [resolvedModelFiles]);
+      return out;
+    }, [resolvedModelFiles]);
 
-  const editorActions: EditorFormActions = useMemo(() => {
-    const s = useEditorStore.getState;
-    return {
-      renameType: (nodeId, newName) => s().renameType(nodeId, newName),
-      deleteType: (nodeId) => s().deleteType(nodeId),
-      updateDefinition: (nodeId, def) => s().updateDefinition(nodeId, def),
-      updateComments: (nodeId, comments) => s().updateComments(nodeId, comments),
-      addSynonym: (nodeId, synonym) => s().addSynonym(nodeId, synonym),
-      removeSynonym: (nodeId, index) => s().removeSynonym(nodeId, index),
-      addAttribute: (nodeId, name, type, card) => s().addAttribute(nodeId, name, type, card),
-      removeAttribute: (nodeId, name) => s().removeAttribute(nodeId, name),
-      updateAttribute: (nodeId, oldN, newN, type, card) => s().updateAttribute(nodeId, oldN, newN, type, card),
-      reorderAttribute: (nodeId, from, to) => s().reorderAttribute(nodeId, from, to),
-      setInheritance: (childId, parentId) => s().setInheritance(childId, parentId),
-      addEnumValue: (nodeId, name, display) => s().addEnumValue(nodeId, name, display),
-      removeEnumValue: (nodeId, name) => s().removeEnumValue(nodeId, name),
-      updateEnumValue: (nodeId, oldN, newN, display) => s().updateEnumValue(nodeId, oldN, newN, display),
-      reorderEnumValue: (nodeId, from, to) => s().reorderEnumValue(nodeId, from, to),
-      addEnumValueSynonym: (nodeId, valueIndex, source, value) =>
-        s().addEnumValueSynonym(nodeId, valueIndex, source, value),
-      removeEnumValueSynonym: (nodeId, valueIndex, synIndex) =>
-        s().removeEnumValueSynonym(nodeId, valueIndex, synIndex),
-      setEnumParent: (nodeId, parentId) => s().setEnumParent(nodeId, parentId),
-      addChoiceOption: (nodeId, type) => s().addChoiceOption(nodeId, type),
-      removeChoiceOption: (nodeId, type) => s().removeChoiceOption(nodeId, type),
-      addInputParam: (nodeId, name, type) => s().addInputParam(nodeId, name, type),
-      removeInputParam: (nodeId, name) => s().removeInputParam(nodeId, name),
-      updateInputParam: (nodeId, oldN, newN, type, card) => s().updateInputParam(nodeId, oldN, newN, type, card),
-      reorderInputParam: (nodeId, from, to) => s().reorderInputParam(nodeId, from, to),
-      updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
-      updateTypeAliasType: (nodeId, type) => s().updateTypeAliasType(nodeId, type),
-      updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
-      addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
-      removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),
-      addCondition: (nodeId, condition) => s().addCondition(nodeId, condition),
-      removeCondition: (nodeId, index) => s().removeCondition(nodeId, index),
-      updateCondition: (nodeId, index, updates) => s().updateCondition(nodeId, index, updates),
-      reorderCondition: (nodeId, from, to) => s().reorderCondition(nodeId, from, to),
-      validate: () => s().validate()
-    };
-  }, []);
+    const editorActions: EditorFormActions = useMemo(() => {
+      const s = useEditorStore.getState;
+      return {
+        renameType: (nodeId, newName) => s().renameType(nodeId, newName),
+        deleteType: (nodeId) => s().deleteType(nodeId),
+        updateDefinition: (nodeId, def) => s().updateDefinition(nodeId, def),
+        updateComments: (nodeId, comments) => s().updateComments(nodeId, comments),
+        addSynonym: (nodeId, synonym) => s().addSynonym(nodeId, synonym),
+        removeSynonym: (nodeId, index) => s().removeSynonym(nodeId, index),
+        addAttribute: (nodeId, name, type, card) => s().addAttribute(nodeId, name, type, card),
+        removeAttribute: (nodeId, name) => s().removeAttribute(nodeId, name),
+        updateAttribute: (nodeId, oldN, newN, type, card) => s().updateAttribute(nodeId, oldN, newN, type, card),
+        reorderAttribute: (nodeId, from, to) => s().reorderAttribute(nodeId, from, to),
+        setInheritance: (childId, parentId) => s().setInheritance(childId, parentId),
+        addEnumValue: (nodeId, name, display) => s().addEnumValue(nodeId, name, display),
+        removeEnumValue: (nodeId, name) => s().removeEnumValue(nodeId, name),
+        updateEnumValue: (nodeId, oldN, newN, display) => s().updateEnumValue(nodeId, oldN, newN, display),
+        reorderEnumValue: (nodeId, from, to) => s().reorderEnumValue(nodeId, from, to),
+        addEnumValueSynonym: (nodeId, valueIndex, source, value) =>
+          s().addEnumValueSynonym(nodeId, valueIndex, source, value),
+        removeEnumValueSynonym: (nodeId, valueIndex, synIndex) =>
+          s().removeEnumValueSynonym(nodeId, valueIndex, synIndex),
+        setEnumParent: (nodeId, parentId) => s().setEnumParent(nodeId, parentId),
+        addChoiceOption: (nodeId, type) => s().addChoiceOption(nodeId, type),
+        removeChoiceOption: (nodeId, type) => s().removeChoiceOption(nodeId, type),
+        addInputParam: (nodeId, name, type) => s().addInputParam(nodeId, name, type),
+        removeInputParam: (nodeId, name) => s().removeInputParam(nodeId, name),
+        updateInputParam: (nodeId, oldN, newN, type, card) => s().updateInputParam(nodeId, oldN, newN, type, card),
+        reorderInputParam: (nodeId, from, to) => s().reorderInputParam(nodeId, from, to),
+        updateOutputType: (nodeId, type) => s().updateOutputType(nodeId, type),
+        updateTypeAliasType: (nodeId, type) => s().updateTypeAliasType(nodeId, type),
+        updateExpression: (nodeId, expr) => s().updateExpression(nodeId, expr),
+        addAnnotation: (nodeId, name) => s().addAnnotation(nodeId, name),
+        removeAnnotation: (nodeId, index) => s().removeAnnotation(nodeId, index),
+        addCondition: (nodeId, condition) => s().addCondition(nodeId, condition),
+        removeCondition: (nodeId, index) => s().removeCondition(nodeId, index),
+        updateCondition: (nodeId, index, updates) => s().updateCondition(nodeId, index, updates),
+        reorderCondition: (nodeId, from, to) => s().reorderCondition(nodeId, from, to),
+        validate: () => s().validate()
+      };
+    }, []);
 
-  const handleFitView = useCallback(() => {
-    graphRef.current?.fitView();
-  }, []);
-  const handleRelayout = useCallback(() => {
-    graphRef.current?.relayout({
-      engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
-      direction: getResponsiveGraphDirection(),
-      groupByInheritance: groupedLayout
-    });
-  }, [getResponsiveGraphDirection, groupedLayout]);
-  const handleToggleFocusMode = useCallback(() => {
-    const nextFocusMode = !focusMode;
-    storeToggleFocusMode();
-    if (!nextFocusMode) {
-      setTimeout(() => {
-        graphRef.current?.relayout({
-          engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
-          direction: graphLayoutDirectionRef.current,
-          groupByInheritance: groupedLayoutRef.current
-        });
-      }, 0);
-    }
-  }, [focusMode, storeToggleFocusMode]);
-  const handleToggleGroupedLayout = useCallback(() => {
-    // The relayout side effect lives here in the event handler, not inside
-    // the state updater passed to setGroupedLayout — an updater must stay
-    // pure since React may invoke it more than once.
-    const next = !groupedLayout;
-    setGroupedLayout(next);
-    setTimeout(() => {
+    const handleFitView = useCallback(() => {
+      graphRef.current?.fitView();
+    }, []);
+    const handleRelayout = useCallback(() => {
       graphRef.current?.relayout({
         engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
         direction: getResponsiveGraphDirection(),
-        groupByInheritance: next
+        groupByInheritance: groupedLayout
       });
-    }, 0);
-  }, [groupedLayout, getResponsiveGraphDirection]);
+    }, [getResponsiveGraphDirection, groupedLayout]);
+    const handleToggleFocusMode = useCallback(() => {
+      const nextFocusMode = !focusMode;
+      storeToggleFocusMode();
+      if (!nextFocusMode) {
+        setTimeout(() => {
+          graphRef.current?.relayout({
+            engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
+            direction: graphLayoutDirectionRef.current,
+            groupByInheritance: groupedLayoutRef.current
+          });
+        }, 0);
+      }
+    }, [focusMode, storeToggleFocusMode]);
+    const handleToggleGroupedLayout = useCallback(() => {
+      // The relayout side effect lives here in the event handler, not inside
+      // the state updater passed to setGroupedLayout — an updater must stay
+      // pure since React may invoke it more than once.
+      const next = !groupedLayout;
+      setGroupedLayout(next);
+      setTimeout(() => {
+        graphRef.current?.relayout({
+          engine: useEditorStore.getState().layoutOptions.engine ?? 'elk',
+          direction: getResponsiveGraphDirection(),
+          groupByInheritance: next
+        });
+      }, 0);
+    }, [groupedLayout, getResponsiveGraphDirection]);
 
-  // ---------- panel components rendered inside dockview ----------
+    // ---------- panel components rendered inside dockview ----------
 
-  // NamespaceExplorerPanel manages its own scrolling — the virtualizer
-  // (useVirtualTree) must own the scroll element to compute viewport
-  // metrics. Wrapping it in a Radix <ScrollArea> creates a double
-  // scroll container: the inner virtualized div grows to its natural
-  // size and never scrolls, while the outer Radix viewport scrolls
-  // with `scrollbar-width: none` (so no native bar shows) and only
-  // lazy-mounts its custom scrollbar on hover — producing the
-  // "looks nice but un-clickable" scrollbar the user reported.
-  const FileTreePanelMounted = useCallback(
-    () => (
-      <div className="h-full">
-        <NamespaceExplorerPanel
-          nodeRepository={nodeRepository}
-          expandedNamespaces={expandedNamespaces}
-          hiddenNodeIds={hiddenNodeIds}
-          selectedNodeId={selectedNodeId}
-          onToggleNamespace={handleToggleNamespace}
-          onExpandAll={storeExpandAllNamespaces}
-          onCollapseAll={storeCollapseAllNamespaces}
-          onSelectNode={handleExplorerSelectNode}
-          dragSourceId={dragSource?.typeId}
-          onSetDragSource={setDragSource}
-          onClearDragSource={clearDragSource}
-        />
-      </div>
-    ),
-    [
-      nodeRepository,
-      expandedNamespaces,
-      hiddenNodeIds,
-      selectedNodeId,
-      handleToggleNamespace,
-      storeExpandAllNamespaces,
-      storeCollapseAllNamespaces,
-      handleExplorerSelectNode,
-      dragSource,
-      setDragSource,
-      clearDragSource
-    ]
-  );
-
-  // workspace.editor and workspace.inspector are rendered inside CenterStackPanel.
-  // These stubs are kept so the dockview component registry remains complete,
-  // but they are not part of the active layout.
-  const SourceEditorPanelMounted = useCallback(() => <div data-testid="panel-editor" />, []);
-
-  const InspectorPanelMounted = useCallback(() => <div data-testid="panel-inspector" />, []);
-
-  // Wrapped in the same `data-testid="panel-problems"` / `data-component`
-  // container `ProblemsPanel.tsx` (the DEFAULT_PANEL_REGISTRY entry for
-  // `workspace.problems`) uses — this perspective overrides that registry
-  // entry to pass `onNavigate`, but the override previously rendered
-  // `DiagnosticsPanel` bare, silently dropping the wrapper markers every
-  // other consumer of the `workspace.problems` panel id relies on (found
-  // live against production: `panel-problems` never mounts in the Explore
-  // perspective, the perspective every prod-ux journey exercises, breaking
-  // any locator scoped to that testid).
-  const ProblemsPanelMounted = useCallback(
-    () => (
-      <div data-testid="panel-problems" data-component="workspace.problems" className="h-full">
-        <DiagnosticsPanel
-          fileDiagnostics={combinedFileDiagnostics}
-          onNavigate={(uri) => {
-            const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
-            const fileName = normPath.split('/').pop() ?? normPath;
-            const file = files.find(
-              (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
-            );
-            if (file) openFileInSource(file.path ?? file.name);
-          }}
-        />
-      </div>
-    ),
-    [combinedFileDiagnostics, files, openFileInSource]
-  );
-
-  // Stable adapter for CodePreviewPanel cross-file source-map navigation.
-  const sourceEditorHandle = useMemo<SourceEditorHandle>(
-    () => ({
-      revealPosition: (position, filePath) => sourceEditorRef.current?.revealPosition(position, filePath)
-    }),
-    // Intentionally stable — reads ref.current at call time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  // CodePreviewPanel is a pure-display consumer of useCodegenStore. The codegen
-  // worker is owned by CodegenProvider (mounted by StudioProviders), which feeds
-  // results into the store; the panel renders from that store unconditionally.
-  const CodePreviewPanelMounted = useCallback(
-    () => <CodePreviewPanel sourceEditorRef={sourceEditorHandle} files={files} />,
-    [files, sourceEditorHandle]
-  );
-
-  const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
-
-  const renderGraphPane = useCallback(
-    () => (
-      <section
-        aria-label="Graph"
-        data-testid="panel-visualPreview"
-        data-component="workspace.visualPreview"
-        className="flex h-full min-h-0 flex-col overflow-hidden"
-      >
-        <div
-          role="toolbar"
-          aria-label="Graph toolbar"
-          className="glass-toolbar flex flex-wrap items-center gap-1 border-b border-border px-2 py-1"
-        >
-          <Button variant="glass" size="xs" onClick={handleFitView} title="Fit to view">
-            <Maximize2 />
-            Fit View
-          </Button>
-          <Button variant="glass" size="xs" onClick={handleRelayout} title="Re-run auto layout">
-            <LayoutGrid />
-            Re-layout
-          </Button>
-          <Separator orientation="vertical" className="mx-1 h-4" />
-          <Button
-            variant="glass"
-            aria-pressed={focusMode}
-            size="xs"
-            onClick={handleToggleFocusMode}
-            title="Show the selected type, its inheritance chain, and its direct references only"
-          >
-            <Network />
-            Focus
-          </Button>
-          <Button
-            variant="glass"
-            aria-pressed={groupedLayout}
-            size="xs"
-            onClick={handleToggleGroupedLayout}
-            title="Group by inheritance trees"
-          >
-            <LayoutGrid />
-            Grouped
-          </Button>
+    // NamespaceExplorerPanel manages its own scrolling — the virtualizer
+    // (useVirtualTree) must own the scroll element to compute viewport
+    // metrics. Wrapping it in a Radix <ScrollArea> creates a double
+    // scroll container: the inner virtualized div grows to its natural
+    // size and never scrolls, while the outer Radix viewport scrolls
+    // with `scrollbar-width: none` (so no native bar shows) and only
+    // lazy-mounts its custom scrollbar on hover — producing the
+    // "looks nice but un-clickable" scrollbar the user reported.
+    const FileTreePanelMounted = useCallback(
+      () => (
+        <div className="h-full">
+          <NamespaceExplorerPanel
+            nodeRepository={nodeRepository}
+            expandedNamespaces={expandedNamespaces}
+            hiddenNodeIds={hiddenNodeIds}
+            selectedNodeId={selectedNodeId}
+            onToggleNamespace={handleToggleNamespace}
+            onExpandAll={storeExpandAllNamespaces}
+            onCollapseAll={storeCollapseAllNamespaces}
+            onSelectNode={handleExplorerSelectNode}
+            dragSourceId={dragSource?.typeId}
+            onSetDragSource={setDragSource}
+            onClearDragSource={clearDragSource}
+          />
         </div>
-        <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
-          <RuneTypeGraph
-            ref={graphRef}
-            config={{
-              // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
-              // once the container is measured. The container dimensions aren't available yet here.
-              layout: { engine: storeLayoutEngine, direction: graphLayoutDirection, groupByInheritance: groupedLayout },
-              showControls: true,
-              showMinimap: false,
-              readOnly: false
-            }}
-            callbacks={{
-              onNodeDoubleClick: () => {},
-              onModelChanged: handleModelChanged,
-              onLayoutEngineChange: storeSetLayoutEngine,
-              onNavigateToType: navigateToNode
+      ),
+      [
+        nodeRepository,
+        expandedNamespaces,
+        hiddenNodeIds,
+        selectedNodeId,
+        handleToggleNamespace,
+        storeExpandAllNamespaces,
+        storeCollapseAllNamespaces,
+        handleExplorerSelectNode,
+        dragSource,
+        setDragSource,
+        clearDragSource
+      ]
+    );
+
+    // workspace.editor and workspace.inspector are rendered inside CenterStackPanel.
+    // These stubs are kept so the dockview component registry remains complete,
+    // but they are not part of the active layout.
+    const SourceEditorPanelMounted = useCallback(() => <div data-testid="panel-editor" />, []);
+
+    const InspectorPanelMounted = useCallback(() => <div data-testid="panel-inspector" />, []);
+
+    // Wrapped in the same `data-testid="panel-problems"` / `data-component`
+    // container `ProblemsPanel.tsx` (the DEFAULT_PANEL_REGISTRY entry for
+    // `workspace.problems`) uses — this perspective overrides that registry
+    // entry to pass `onNavigate`, but the override previously rendered
+    // `DiagnosticsPanel` bare, silently dropping the wrapper markers every
+    // other consumer of the `workspace.problems` panel id relies on (found
+    // live against production: `panel-problems` never mounts in the Explore
+    // perspective, the perspective every prod-ux journey exercises, breaking
+    // any locator scoped to that testid).
+    const ProblemsPanelMounted = useCallback(
+      () => (
+        <div data-testid="panel-problems" data-component="workspace.problems" className="h-full">
+          <DiagnosticsPanel
+            fileDiagnostics={combinedFileDiagnostics}
+            onNavigate={(uri) => {
+              const normPath = uri.startsWith('file://') ? uri.slice(7) : uri;
+              const fileName = normPath.split('/').pop() ?? normPath;
+              const file = files.find(
+                (f) => f.path === normPath || f.name === fileName || normPath.endsWith(f.path ?? '')
+              );
+              if (file) openFileInSource(file.path ?? file.name);
             }}
           />
         </div>
-      </section>
-    ),
-    [
-      focusMode,
-      groupedLayout,
-      graphLayoutDirection,
-      handleFitView,
-      handleModelChanged,
-      handleRelayout,
-      handleToggleFocusMode,
-      handleToggleGroupedLayout,
-      navigateToNode,
-      storeLayoutEngine,
-      storeSetLayoutEngine
-    ]
-  );
+      ),
+      [combinedFileDiagnostics, files, openFileInSource]
+    );
 
-  const renderSourcePane = useCallback(() => {
-    const activeFile = sourceEditorFiles[0];
-    const fileExt = activeFile?.name.includes('.') ? `.${activeFile.name.split('.').pop()}` : null;
-    const lineEnding = activeFile?.content.includes('\r\n') ? 'CRLF' : 'LF';
-    const lineCount = activeFile?.content.split('\n').length ?? 0;
+    // Stable adapter for CodePreviewPanel cross-file source-map navigation.
+    const sourceEditorHandle = useMemo<SourceEditorHandle>(
+      () => ({
+        revealPosition: (position, filePath) => sourceEditorRef.current?.revealPosition(position, filePath)
+      }),
+      // Intentionally stable — reads ref.current at call time.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      []
+    );
+
+    // CodePreviewPanel is a pure-display consumer of useCodegenStore. The codegen
+    // worker is owned by CodegenProvider (mounted by StudioProviders), which feeds
+    // results into the store; the panel renders from that store unconditionally.
+    const CodePreviewPanelMounted = useCallback(
+      () => <CodePreviewPanel sourceEditorRef={sourceEditorHandle} files={files} />,
+      [files, sourceEditorHandle]
+    );
+
+    const FormPreviewPanelMounted = useCallback(() => <FormPreviewPanelShell />, []);
+
+    const renderGraphPane = useCallback(
+      () => (
+        <section
+          aria-label="Graph"
+          data-testid="panel-visualPreview"
+          data-component="workspace.visualPreview"
+          className="flex h-full min-h-0 flex-col overflow-hidden"
+        >
+          <div
+            role="toolbar"
+            aria-label="Graph toolbar"
+            className="glass-toolbar flex flex-wrap items-center gap-1 border-b border-border px-2 py-1"
+          >
+            <Button variant="glass" size="xs" onClick={handleFitView} title="Fit to view">
+              <Maximize2 />
+              Fit View
+            </Button>
+            <Button variant="glass" size="xs" onClick={handleRelayout} title="Re-run auto layout">
+              <LayoutGrid />
+              Re-layout
+            </Button>
+            <Separator orientation="vertical" className="mx-1 h-4" />
+            <Button
+              variant="glass"
+              aria-pressed={focusMode}
+              size="xs"
+              onClick={handleToggleFocusMode}
+              title="Show the selected type, its inheritance chain, and its direct references only"
+            >
+              <Network />
+              Focus
+            </Button>
+            <Button
+              variant="glass"
+              aria-pressed={groupedLayout}
+              size="xs"
+              onClick={handleToggleGroupedLayout}
+              title="Group by inheritance trees"
+            >
+              <LayoutGrid />
+              Grouped
+            </Button>
+          </div>
+          <div ref={graphContainerRef} className="min-h-0 flex-1 relative studio-graph-canvas">
+            <RuneTypeGraph
+              ref={graphRef}
+              config={{
+                // 'LR' is a safe default — the ResizeObserver corrects direction on the first frame
+                // once the container is measured. The container dimensions aren't available yet here.
+                layout: {
+                  engine: storeLayoutEngine,
+                  direction: graphLayoutDirection,
+                  groupByInheritance: groupedLayout
+                },
+                showControls: true,
+                showMinimap: false,
+                readOnly: false
+              }}
+              callbacks={{
+                onNodeDoubleClick: () => {},
+                onModelChanged: handleModelChanged,
+                onLayoutEngineChange: storeSetLayoutEngine,
+                onNavigateToType: navigateToNode
+              }}
+            />
+          </div>
+        </section>
+      ),
+      [
+        focusMode,
+        groupedLayout,
+        graphLayoutDirection,
+        handleFitView,
+        handleModelChanged,
+        handleRelayout,
+        handleToggleFocusMode,
+        handleToggleGroupedLayout,
+        navigateToNode,
+        storeLayoutEngine,
+        storeSetLayoutEngine
+      ]
+    );
+
+    const renderSourcePane = useCallback(() => {
+      const activeFile = sourceEditorFiles[0];
+      const fileExt = activeFile?.name.includes('.') ? `.${activeFile.name.split('.').pop()}` : null;
+      const lineEnding = activeFile?.content.includes('\r\n') ? 'CRLF' : 'LF';
+      const lineCount = activeFile?.content.split('\n').length ?? 0;
+      return (
+        <div className="flex flex-col min-h-0 h-full">
+          <div className="studio-source-meta" aria-label="Source file path">
+            {fileExt && <span className="studio-source-meta__pill">{fileExt}</span>}
+            <span className="studio-source-meta__path">{activeFile?.path ?? '—'}</span>
+            <span className="studio-source-meta__spacer" />
+            {activeFile && (
+              <span className="studio-source-meta__stat">
+                UTF-8 · {lineEnding} · {lineCount} lines
+              </span>
+            )}
+          </div>
+          <SourceEditor
+            ref={sourceEditorRef}
+            files={sourceEditorFiles}
+            activeFile={activeEditorFile}
+            lspClient={lspClient}
+            onFileSelect={(path) => setActiveEditorFile(path)}
+            onContentChange={handleSourceChange}
+            onNavigateToNode={navigateToNode}
+            onEditorViewCreated={handleEditorViewCreated}
+            hideTabs
+          />
+        </div>
+      );
+    }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
+
+    // Namespaces that belong to refOnly curated files. Earlier revisions
+    // inferred this by matching `deferredExports[i].filePath.split('/')[0]`
+    // against loaded refOnly bundle ids — that false-positive'd for user
+    // files saved under `${bundleId}/foo.rosetta` paths (Codex P2 review
+    // of PR #163). The correct anchor is the workspace file's `refOnly`
+    // flag itself; we resolve each refOnly file's server-side filePath
+    // (the form the server emits in deferredExports, which is
+    // `${bundleId}/${pathInBundle}` without the studio's bracket prefix)
+    // and look up the matching deferredExports entry to recover the
+    // namespace. Pure intersection — no inference required.
+    const refOnlyNamespaces = useMemo(() => {
+      if (deferredExports.length === 0) return new Set<string>();
+      const refOnlyServerPaths = new Set<string>();
+      for (const f of files) {
+        if (!f.refOnly) continue;
+        const m = /^\[([^\]]+)\]\/(.*)$/.exec(f.path);
+        if (m) refOnlyServerPaths.add(`${m[1]}/${m[2]}`);
+      }
+      if (refOnlyServerPaths.size === 0) return new Set<string>();
+      const ns = new Set<string>();
+      for (const d of deferredExports) {
+        if (refOnlyServerPaths.has(d.filePath)) ns.add(d.namespace);
+      }
+      return ns;
+    }, [files, deferredExports]);
+
+    const selectedNodeIsRefOnly = useMemo(() => {
+      const namespace = selectedNodeMeta?.namespace;
+      return !!(namespace && refOnlyNamespaces.has(namespace));
+    }, [selectedNodeMeta, refOnlyNamespaces]);
+
+    const renderInspectorPane = useCallback(
+      () => (
+        <div className="studio-scroll flex flex-col min-h-0 h-full overflow-auto">
+          <EditorFormPanel
+            nodeData={selectedNodeData}
+            meta={selectedNodeMeta}
+            nodeId={selectedNodeId}
+            refOnly={selectedNodeIsRefOnly}
+            isHydrating={selectedNodeIsHydrating}
+            availableTypes={availableTypes}
+            synonymSourceOptions={synonymSourceOptions}
+            actions={editorActions}
+            allNodes={storeNodes}
+            nodeRepository={nodeRepository}
+            renderExpressionEditor={renderExpressionEditor}
+            onClose={() => {
+              /* pane visibility handled by paneswitch */
+            }}
+            onNavigateToNode={navigateToNode}
+          />
+        </div>
+      ),
+      [
+        selectedNodeData,
+        selectedNodeMeta,
+        selectedNodeId,
+        selectedNodeIsRefOnly,
+        selectedNodeIsHydrating,
+        availableTypes,
+        synonymSourceOptions,
+        editorActions,
+        storeNodes,
+        nodeRepository,
+        renderExpressionEditor,
+        navigateToNode
+      ]
+    );
+
+    // Structure pane — focusedTypeId gated by node $type (Data / Choice / Enum only)
+    const structureFocusedTypeId = useMemo(() => {
+      if (!selectedNodeId) return undefined;
+      // Phase C — Functions are now a supported structure-view root alongside
+      // Data / Choice / Enum.
+      if (
+        selectedNodeType === 'Data' ||
+        selectedNodeType === 'Choice' ||
+        selectedNodeType === 'RosettaEnumeration' ||
+        selectedNodeType === 'RosettaFunction'
+      )
+        return selectedNodeId;
+      // Unsupported kind — pass undefined so StructureView shows its empty-selection state
+      return undefined;
+    }, [selectedNodeId, selectedNodeType]);
+
+    // e2e-batch fix #10: when the user has selected a type whose kind isn't
+    // supported in Structure View, expose the name + kind so the empty state can
+    // explain WHY the pane is blank instead of repeating the generic prompt.
+    // Selected-but-supported types fall through to the regular focused-type
+    // render path; unsupported types produce { name, kind } for the targeted
+    // empty state in StructureView.
+    const structureUnsupportedSelectedType = useMemo<{ name: string; kind: string } | undefined>(() => {
+      if (!selectedNodeId || structureFocusedTypeId) return undefined;
+      if (!selectedNodeType) return undefined;
+      const node = nodeRepository.byId(selectedNodeId);
+      const name = (node?.data as { name?: string } | undefined)?.name ?? nameFromNodeId(selectedNodeId);
+      // Map AST $type → user-friendly kind label. Codex review (e2e-batch
+      // adversarial) flagged the previous map as non-exhaustive — it omitted
+      // RosettaTypeAlias, RosettaBasicType, RosettaSynonymSource,
+      // RosettaExternalFunction, RosettaMetaType, RosettaBody, RosettaCorpus,
+      // RosettaSegment, RosettaExternalRuleSource, RosettaReport, RosettaRule,
+      // any of which a user could select from the explorer. Missing entries
+      // previously fell through to the raw $type string (ugly but not crash-y);
+      // now we cover the common cases AND `formatUnknownKind` strips the
+      // `Rosetta` prefix + inserts spaces so unmapped types still render as
+      // "Type alias" / "Basic type" / "Synonym source" etc.
+      const KIND_LABEL: Record<string, string> = {
+        Function: 'Function',
+        RosettaFunction: 'Function',
+        TypeAlias: 'Type alias',
+        RosettaTypeAlias: 'Type alias',
+        Record: 'Record',
+        RosettaRecordType: 'Record',
+        RosettaBasicType: 'Basic type',
+        Annotation: 'Annotation',
+        RosettaMetaType: 'Meta type',
+        RosettaSynonymSource: 'Synonym source',
+        RosettaExternalFunction: 'External function',
+        RosettaBody: 'Body',
+        RosettaCorpus: 'Corpus',
+        RosettaSegment: 'Segment',
+        RosettaExternalRuleSource: 'External rule source',
+        RosettaReport: 'Report',
+        RosettaRule: 'Rule'
+      };
+      return { name, kind: KIND_LABEL[selectedNodeType] ?? formatUnknownKind(selectedNodeType) };
+    }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, nodeRepository]);
+
+    const adapterDocument = useMemo(
+      () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),
+      [storeNodes]
+    );
+
+    // Memoize cell components to preserve prop identity across renders — avoids
+    // unnecessary ReactFlow reconciliation when unrelated EditorPage state changes.
+    // InheritanceCell is not included here because GroupContainerNode (the base-type
+    // wrap) does not expose a cell-injection API; that wiring is a future addition.
+    const structureCellComponents = useMemo(
+      () => ({
+        name: NameCell,
+        type: TypePickerCell,
+        card: CardinalityCell
+      }),
+      []
+    );
+
+    // ---------------------------------------------------------------------------
+    // Spec §8 / §3.3 — enum-nav callback for StructureView (affordance 1).
+    // Sets the focused type in the structure pane to the given enum typeId,
+    // which re-roots the structure graph on that enum. Also selects the node
+    // in the editor store so the inspector + other panels stay in sync.
+    // ---------------------------------------------------------------------------
+    const handleStructureNavigateToEnumType = useCallback(
+      (typeId: string) => {
+        storeSelectNode(typeId, { reapplyFocusMode: false });
+      },
+      [storeSelectNode]
+    );
+
+    // ---------------------------------------------------------------------------
+    // Spec §3.4 — diagnostic left-edge marker for StructureView (affordance 3).
+    //
+    // Strategy (approach b from spec §3.4):
+    //   1. Derive the file URI for the currently focused type from its nodeId.
+    //   2. Retrieve LSP diagnostics for that URI from the diagnostics store.
+    //   3. Precompute a `lineOffsets` array from the file's source text where
+    //      `lineOffsets[line] = character offset of the start of that line`.
+    //      Converting an LSP line/character pair to a character offset is then
+    //      O(1) direct indexing: `lineOffsets[line] + character`. (The reverse
+    //      conversion — offset → line — would need binary search; the previous
+    //      comment claimed binary search here in error. Copilot caught it.)
+    //   4. Map each LspDiagnostic to a RangeDiagnostic and pass the resulting
+    //      array into StructureView. DataNode calls useDiagnosticsForRange per row.
+    //
+    // Keeping the conversion here (rather than in a hook or in DataNode) lets
+    // the memoized lineOffsets array amortize the cost across all rows in one
+    // render pass instead of recomputing it once per row.
+    //
+    // **astRange-threading gap (deferred PR #207 follow-up):** in studio-created
+    // rows today, `StructureRow.astRange` is `undefined` because
+    // `graphNodesToAdapterDocument` forwards attributes from the dehydrated
+    // node data (which carries no `$cstNode`) and never derives an
+    // offset range. The wiring on this side (RangeDiagnostic[] → StructureView →
+    // useDiagnosticsForRange) is correct and exercised by synthetic tests; the
+    // severity marker just won't fire in production until upstream threading
+    // lands.
+    // ---------------------------------------------------------------------------
+
+    // Resolve file path for the focused structure node (ns.TypeName format).
+    const structureFilePath = useMemo(() => {
+      if (!structureFocusedTypeId) return undefined;
+      return nodeIdToFilePath.get(structureFocusedTypeId);
+    }, [structureFocusedTypeId, nodeIdToFilePath]);
+
+    // Source text for the focused file (to build lineOffsets).
+    const structureFileContent = useMemo(() => {
+      if (!structureFilePath) return undefined;
+      return files.find((f) => f.path === structureFilePath)?.content;
+    }, [structureFilePath, files]);
+
+    // Precomputed lineOffsets: lineOffsets[i] = character offset of the start
+    // of line i in structureFileContent. Direct-indexed (O(1)) for the
+    // line/character → offset conversion in `structureDiagnostics` below.
+    const structureLineOffsets = useMemo<readonly number[]>(() => {
+      if (!structureFileContent) return [];
+      const offsets: number[] = [0];
+      for (let i = 0; i < structureFileContent.length; i++) {
+        if (structureFileContent[i] === '\n') {
+          offsets.push(i + 1);
+        }
+      }
+      return offsets;
+    }, [structureFileContent]);
+
+    // Raw LSP diagnostics for the focused file.
+    // `fileDiagnostics` is already subscribed at line ~968 via useDiagnosticsStore() —
+    // reuse that reference here; no duplicate subscriber needed.
+    const structureLspDiagnostics = useMemo(() => {
+      if (!structureFilePath) return undefined;
+      const uri = pathToUri(structureFilePath);
+      return fileDiagnostics.get(uri);
+    }, [structureFilePath, fileDiagnostics]);
+
+    // Convert LSP diagnostics (line/character) to RangeDiagnostic (character offsets).
+    const structureDiagnostics = useMemo<readonly RangeDiagnostic[]>(() => {
+      if (!structureLspDiagnostics || structureLspDiagnostics.length === 0 || structureLineOffsets.length === 0) {
+        return EMPTY_RANGE_DIAGNOSTICS;
+      }
+      const result: RangeDiagnostic[] = [];
+      const lineCount = structureLineOffsets.length;
+      for (const d of structureLspDiagnostics) {
+        const startLine = d.range.start.line;
+        const endLine = d.range.end.line;
+        // Skip diagnostics whose line indices are out of bounds for the current
+        // source — this happens when source has changed but the diagnostic store
+        // hasn't caught up. Previously falling back to offset 0 would map stale
+        // diagnostics to the start of the file and produce false-positive markers
+        // on completely unrelated rows. Copilot caught this on PR #207.
+        if (startLine >= lineCount || endLine >= lineCount) continue;
+        const start = structureLineOffsets[startLine]! + d.range.start.character;
+        const end = structureLineOffsets[endLine]! + d.range.end.character;
+        if (end > start) {
+          result.push({ start, end, severity: d.severity ?? 3, message: d.message });
+        }
+      }
+      return result.length > 0 ? result : EMPTY_RANGE_DIAGNOSTICS;
+    }, [structureLspDiagnostics, structureLineOffsets]);
+
+    const renderStructurePane = useCallback(
+      () => (
+        <StructureView
+          focusedTypeId={structureFocusedTypeId}
+          adapterDoc={adapterDocument}
+          expansionMap={expansionMap}
+          cellComponents={structureCellComponents}
+          onToggleExpansion={toggleExpansion}
+          unsupportedSelectedType={structureUnsupportedSelectedType}
+          onNodeSelect={(canonicalId) => storeSelectNode(canonicalId, { reapplyFocusMode: false })}
+          onNavigateToEnumType={handleStructureNavigateToEnumType}
+          structureDiagnostics={structureDiagnostics}
+          pendingHydrationNamespaces={pendingHydrationNamespaces}
+        />
+      ),
+      [
+        structureFocusedTypeId,
+        adapterDocument,
+        expansionMap,
+        structureCellComponents,
+        toggleExpansion,
+        structureUnsupportedSelectedType,
+        storeSelectNode,
+        handleStructureNavigateToEnumType,
+        structureDiagnostics,
+        pendingHydrationNamespaces
+      ]
+    );
+
+    const VisualPreviewPanelMounted = useCallback(
+      () => (
+        <CenterStackPanel
+          renderGraph={renderGraphPane}
+          renderSource={renderSourcePane}
+          renderInspector={renderInspectorPane}
+          renderStructure={renderStructurePane}
+        />
+      ),
+      [renderGraphPane, renderSourcePane, renderInspectorPane, renderStructurePane]
+    );
+
+    // Memoize the overrides object so DockShell's useMemo([panelComponents])
+    // only recomputes the dockview component map when a callback actually changes,
+    // not on every EditorPage render.
+    const panelComponents = useMemo(
+      () => ({
+        'workspace.fileTree': FileTreePanelMounted,
+        'workspace.editor': SourceEditorPanelMounted,
+        'workspace.inspector': InspectorPanelMounted,
+        'workspace.problems': ProblemsPanelMounted,
+        'workspace.visualPreview': VisualPreviewPanelMounted,
+        'workspace.formPreview': FormPreviewPanelMounted,
+        'workspace.codePreview': CodePreviewPanelMounted
+      }),
+      [
+        FileTreePanelMounted,
+        SourceEditorPanelMounted,
+        InspectorPanelMounted,
+        ProblemsPanelMounted,
+        VisualPreviewPanelMounted,
+        FormPreviewPanelMounted,
+        CodePreviewPanelMounted
+      ]
+    );
+
+    const totalProblemCount = useMemo(() => combinedDiagnostics.total, [combinedDiagnostics.total]);
+    const panelTabMeta = useMemo(
+      () => ({
+        'workspace.problems': { count: totalProblemCount }
+      }),
+      [totalProblemCount]
+    );
+    const focusPanelRequest = useMemo(
+      () =>
+        inspectorFocusNonce > 0 ? { component: 'workspace.inspector' as const, nonce: inspectorFocusNonce } : null,
+      [inspectorFocusNonce]
+    );
+
+    // Empty-content guard (keep-alive hazard): ExplorePerspective is ALWAYS
+    // mounted by PerspectiveHost (display:none when inactive), including before
+    // any user files OR reference models exist. With neither editable files,
+    // materialized models, nor deferred curated exports, the dockview/graph/
+    // structure workbench has nothing meaningful to render, and mounting
+    // DockShell against an empty corpus risks running layout/effects with no
+    // graph data. Deferred-only curated loads are valid Explore content because
+    // loadModels([]) materializes placeholder nodes from deferredExports.
+    if (fileCount === 0 && models.length === 0 && deferredExports.length === 0) {
+      return <div data-testid="explore-workbench" className="flex flex-col h-full overflow-hidden" />;
+    }
+
     return (
-      <div className="flex flex-col min-h-0 h-full">
-        <div className="studio-source-meta" aria-label="Source file path">
-          {fileExt && <span className="studio-source-meta__pill">{fileExt}</span>}
-          <span className="studio-source-meta__path">{activeFile?.path ?? '—'}</span>
-          <span className="studio-source-meta__spacer" />
-          {activeFile && (
-            <span className="studio-source-meta__stat">
-              UTF-8 · {lineEnding} · {lineCount} lines
+      <div
+        className="flex flex-col h-full overflow-hidden"
+        data-testid="explore-workbench"
+        onKeyDown={handleEditorPageKeyDown}
+        tabIndex={-1}
+      >
+        <div className="flex flex-1 min-h-0">
+          <DockShell
+            studioVersion={studioVersion}
+            workspaceId={workspaceId}
+            focusPanel={focusPanelRequest}
+            panelComponents={panelComponents}
+            panelTabMeta={panelTabMeta}
+          />
+        </div>
+
+        <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-xs text-muted-foreground border-t border-border">
+          <span>
+            {models.length} model{models.length === 1 ? '' : 's'}
+          </span>
+          <span>{files.filter((f) => f.dirty).length} modified</span>
+          {selectedNodeId && <span>{selectedNodeId}</span>}
+          {(combinedDiagnostics.errors > 0 || combinedDiagnostics.warnings > 0) && (
+            <span>
+              {combinedDiagnostics.errors} err / {combinedDiagnostics.warnings} warn
             </span>
           )}
-        </div>
-        <SourceEditor
-          ref={sourceEditorRef}
-          files={sourceEditorFiles}
-          activeFile={activeEditorFile}
-          lspClient={lspClient}
-          onFileSelect={(path) => setActiveEditorFile(path)}
-          onContentChange={handleSourceChange}
-          onNavigateToNode={navigateToNode}
-          onEditorViewCreated={handleEditorViewCreated}
-          hideTabs
+          {transportState && <LspConnectionBadge state={transportState} onRetry={onReconnect} />}
+          {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
+        </footer>
+
+        <ExportDialog
+          open={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          getUserFiles={getSerializedFiles}
+          validateModel={validateModelForExport}
         />
+
+        <ImportDialog
+          open={showImportDialog}
+          onClose={() => setShowImportDialog(false)}
+          files={files}
+          onFilesChange={(next) => onFilesChange?.(next)}
+          onFileFocused={openFileInSource}
+          namespaceToFile={namespaceToFile}
+          optionsFormsByFormat={IMPORT_OPTIONS_FORMS_BY_FORMAT}
+        />
+
+        {/*
+    Curated Models dialog — reuses the same <ModelLoader /> the welcome
+    screen mounts. ModelLoader pulls from useModelStore directly so no
+    props need to be threaded through. We leave the dialog open after a
+    load click so the user can see progress/badges. Dismiss paths
+    (Radix defaults): Esc, the X close button, AND click on the overlay
+    outside the dialog content — all close via `onOpenChange(false)`.
+    If "Esc only / outside-click does nothing" is ever wanted, attach
+    `onInteractOutside={(e) => e.preventDefault()}` to DialogContent
+    (Copilot review on PR #215). A future task will replace this with
+    a bottom-bar multi-selector — see PR description.
+  */}
+        <Dialog open={showCuratedModels} onOpenChange={setShowCuratedModels}>
+          <DialogContent
+            className="w-[640px] max-w-[92vw] max-h-[80vh] overflow-y-auto"
+            data-testid="curated-models-dialog"
+            overlayProps={{ 'data-testid': 'curated-models-dialog-overlay' }}
+          >
+            <DialogHeader>
+              <DialogTitle>Reference Models</DialogTitle>
+              <DialogDescription>
+                Load curated reference bundles to explore them alongside your workspace.
+              </DialogDescription>
+            </DialogHeader>
+            <ModelLoader />
+          </DialogContent>
+        </Dialog>
       </div>
     );
-  }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
-
-  // Namespaces that belong to refOnly curated files. Earlier revisions
-  // inferred this by matching `deferredExports[i].filePath.split('/')[0]`
-  // against loaded refOnly bundle ids — that false-positive'd for user
-  // files saved under `${bundleId}/foo.rosetta` paths (Codex P2 review
-  // of PR #163). The correct anchor is the workspace file's `refOnly`
-  // flag itself; we resolve each refOnly file's server-side filePath
-  // (the form the server emits in deferredExports, which is
-  // `${bundleId}/${pathInBundle}` without the studio's bracket prefix)
-  // and look up the matching deferredExports entry to recover the
-  // namespace. Pure intersection — no inference required.
-  const refOnlyNamespaces = useMemo(() => {
-    if (deferredExports.length === 0) return new Set<string>();
-    const refOnlyServerPaths = new Set<string>();
-    for (const f of files) {
-      if (!f.refOnly) continue;
-      const m = /^\[([^\]]+)\]\/(.*)$/.exec(f.path);
-      if (m) refOnlyServerPaths.add(`${m[1]}/${m[2]}`);
-    }
-    if (refOnlyServerPaths.size === 0) return new Set<string>();
-    const ns = new Set<string>();
-    for (const d of deferredExports) {
-      if (refOnlyServerPaths.has(d.filePath)) ns.add(d.namespace);
-    }
-    return ns;
-  }, [files, deferredExports]);
-
-  const selectedNodeIsRefOnly = useMemo(() => {
-    const namespace = selectedNodeMeta?.namespace;
-    return !!(namespace && refOnlyNamespaces.has(namespace));
-  }, [selectedNodeMeta, refOnlyNamespaces]);
-
-  const renderInspectorPane = useCallback(
-    () => (
-      <div className="studio-scroll flex flex-col min-h-0 h-full overflow-auto">
-        <EditorFormPanel
-          nodeData={selectedNodeData}
-          meta={selectedNodeMeta}
-          nodeId={selectedNodeId}
-          refOnly={selectedNodeIsRefOnly}
-          isHydrating={selectedNodeIsHydrating}
-          availableTypes={availableTypes}
-          synonymSourceOptions={synonymSourceOptions}
-          actions={editorActions}
-          allNodes={storeNodes}
-          nodeRepository={nodeRepository}
-          renderExpressionEditor={renderExpressionEditor}
-          onClose={() => {
-            /* pane visibility handled by paneswitch */
-          }}
-          onNavigateToNode={navigateToNode}
-        />
-      </div>
-    ),
-    [
-      selectedNodeData,
-      selectedNodeMeta,
-      selectedNodeId,
-      selectedNodeIsRefOnly,
-      selectedNodeIsHydrating,
-      availableTypes,
-      synonymSourceOptions,
-      editorActions,
-      storeNodes,
-      nodeRepository,
-      renderExpressionEditor,
-      navigateToNode
-    ]
-  );
-
-  // Structure pane — focusedTypeId gated by node $type (Data / Choice / Enum only)
-  const structureFocusedTypeId = useMemo(() => {
-    if (!selectedNodeId) return undefined;
-    // Phase C — Functions are now a supported structure-view root alongside
-    // Data / Choice / Enum.
-    if (
-      selectedNodeType === 'Data' ||
-      selectedNodeType === 'Choice' ||
-      selectedNodeType === 'RosettaEnumeration' ||
-      selectedNodeType === 'RosettaFunction'
-    )
-      return selectedNodeId;
-    // Unsupported kind — pass undefined so StructureView shows its empty-selection state
-    return undefined;
-  }, [selectedNodeId, selectedNodeType]);
-
-  // e2e-batch fix #10: when the user has selected a type whose kind isn't
-  // supported in Structure View, expose the name + kind so the empty state can
-  // explain WHY the pane is blank instead of repeating the generic prompt.
-  // Selected-but-supported types fall through to the regular focused-type
-  // render path; unsupported types produce { name, kind } for the targeted
-  // empty state in StructureView.
-  const structureUnsupportedSelectedType = useMemo<{ name: string; kind: string } | undefined>(() => {
-    if (!selectedNodeId || structureFocusedTypeId) return undefined;
-    if (!selectedNodeType) return undefined;
-    const node = nodeRepository.byId(selectedNodeId);
-    const name = (node?.data as { name?: string } | undefined)?.name ?? nameFromNodeId(selectedNodeId);
-    // Map AST $type → user-friendly kind label. Codex review (e2e-batch
-    // adversarial) flagged the previous map as non-exhaustive — it omitted
-    // RosettaTypeAlias, RosettaBasicType, RosettaSynonymSource,
-    // RosettaExternalFunction, RosettaMetaType, RosettaBody, RosettaCorpus,
-    // RosettaSegment, RosettaExternalRuleSource, RosettaReport, RosettaRule,
-    // any of which a user could select from the explorer. Missing entries
-    // previously fell through to the raw $type string (ugly but not crash-y);
-    // now we cover the common cases AND `formatUnknownKind` strips the
-    // `Rosetta` prefix + inserts spaces so unmapped types still render as
-    // "Type alias" / "Basic type" / "Synonym source" etc.
-    const KIND_LABEL: Record<string, string> = {
-      Function: 'Function',
-      RosettaFunction: 'Function',
-      TypeAlias: 'Type alias',
-      RosettaTypeAlias: 'Type alias',
-      Record: 'Record',
-      RosettaRecordType: 'Record',
-      RosettaBasicType: 'Basic type',
-      Annotation: 'Annotation',
-      RosettaMetaType: 'Meta type',
-      RosettaSynonymSource: 'Synonym source',
-      RosettaExternalFunction: 'External function',
-      RosettaBody: 'Body',
-      RosettaCorpus: 'Corpus',
-      RosettaSegment: 'Segment',
-      RosettaExternalRuleSource: 'External rule source',
-      RosettaReport: 'Report',
-      RosettaRule: 'Rule'
-    };
-    return { name, kind: KIND_LABEL[selectedNodeType] ?? formatUnknownKind(selectedNodeType) };
-  }, [selectedNodeId, selectedNodeType, structureFocusedTypeId, nodeRepository]);
-
-  const adapterDocument = useMemo(
-    () => (storeNodes.length > 0 ? graphNodesToAdapterDocument(storeNodes) : undefined),
-    [storeNodes]
-  );
-
-  // Memoize cell components to preserve prop identity across renders — avoids
-  // unnecessary ReactFlow reconciliation when unrelated EditorPage state changes.
-  // InheritanceCell is not included here because GroupContainerNode (the base-type
-  // wrap) does not expose a cell-injection API; that wiring is a future addition.
-  const structureCellComponents = useMemo(
-    () => ({
-      name: NameCell,
-      type: TypePickerCell,
-      card: CardinalityCell
-    }),
-    []
-  );
-
-  // ---------------------------------------------------------------------------
-  // Spec §8 / §3.3 — enum-nav callback for StructureView (affordance 1).
-  // Sets the focused type in the structure pane to the given enum typeId,
-  // which re-roots the structure graph on that enum. Also selects the node
-  // in the editor store so the inspector + other panels stay in sync.
-  // ---------------------------------------------------------------------------
-  const handleStructureNavigateToEnumType = useCallback(
-    (typeId: string) => {
-      storeSelectNode(typeId, { reapplyFocusMode: false });
-    },
-    [storeSelectNode]
-  );
-
-  // ---------------------------------------------------------------------------
-  // Spec §3.4 — diagnostic left-edge marker for StructureView (affordance 3).
-  //
-  // Strategy (approach b from spec §3.4):
-  //   1. Derive the file URI for the currently focused type from its nodeId.
-  //   2. Retrieve LSP diagnostics for that URI from the diagnostics store.
-  //   3. Precompute a `lineOffsets` array from the file's source text where
-  //      `lineOffsets[line] = character offset of the start of that line`.
-  //      Converting an LSP line/character pair to a character offset is then
-  //      O(1) direct indexing: `lineOffsets[line] + character`. (The reverse
-  //      conversion — offset → line — would need binary search; the previous
-  //      comment claimed binary search here in error. Copilot caught it.)
-  //   4. Map each LspDiagnostic to a RangeDiagnostic and pass the resulting
-  //      array into StructureView. DataNode calls useDiagnosticsForRange per row.
-  //
-  // Keeping the conversion here (rather than in a hook or in DataNode) lets
-  // the memoized lineOffsets array amortize the cost across all rows in one
-  // render pass instead of recomputing it once per row.
-  //
-  // **astRange-threading gap (deferred PR #207 follow-up):** in studio-created
-  // rows today, `StructureRow.astRange` is `undefined` because
-  // `graphNodesToAdapterDocument` forwards attributes from the dehydrated
-  // node data (which carries no `$cstNode`) and never derives an
-  // offset range. The wiring on this side (RangeDiagnostic[] → StructureView →
-  // useDiagnosticsForRange) is correct and exercised by synthetic tests; the
-  // severity marker just won't fire in production until upstream threading
-  // lands.
-  // ---------------------------------------------------------------------------
-
-  // Resolve file path for the focused structure node (ns.TypeName format).
-  const structureFilePath = useMemo(() => {
-    if (!structureFocusedTypeId) return undefined;
-    return nodeIdToFilePath.get(structureFocusedTypeId);
-  }, [structureFocusedTypeId, nodeIdToFilePath]);
-
-  // Source text for the focused file (to build lineOffsets).
-  const structureFileContent = useMemo(() => {
-    if (!structureFilePath) return undefined;
-    return files.find((f) => f.path === structureFilePath)?.content;
-  }, [structureFilePath, files]);
-
-  // Precomputed lineOffsets: lineOffsets[i] = character offset of the start
-  // of line i in structureFileContent. Direct-indexed (O(1)) for the
-  // line/character → offset conversion in `structureDiagnostics` below.
-  const structureLineOffsets = useMemo<readonly number[]>(() => {
-    if (!structureFileContent) return [];
-    const offsets: number[] = [0];
-    for (let i = 0; i < structureFileContent.length; i++) {
-      if (structureFileContent[i] === '\n') {
-        offsets.push(i + 1);
-      }
-    }
-    return offsets;
-  }, [structureFileContent]);
-
-  // Raw LSP diagnostics for the focused file.
-  // `fileDiagnostics` is already subscribed at line ~968 via useDiagnosticsStore() —
-  // reuse that reference here; no duplicate subscriber needed.
-  const structureLspDiagnostics = useMemo(() => {
-    if (!structureFilePath) return undefined;
-    const uri = pathToUri(structureFilePath);
-    return fileDiagnostics.get(uri);
-  }, [structureFilePath, fileDiagnostics]);
-
-  // Convert LSP diagnostics (line/character) to RangeDiagnostic (character offsets).
-  const structureDiagnostics = useMemo<readonly RangeDiagnostic[]>(() => {
-    if (!structureLspDiagnostics || structureLspDiagnostics.length === 0 || structureLineOffsets.length === 0) {
-      return EMPTY_RANGE_DIAGNOSTICS;
-    }
-    const result: RangeDiagnostic[] = [];
-    const lineCount = structureLineOffsets.length;
-    for (const d of structureLspDiagnostics) {
-      const startLine = d.range.start.line;
-      const endLine = d.range.end.line;
-      // Skip diagnostics whose line indices are out of bounds for the current
-      // source — this happens when source has changed but the diagnostic store
-      // hasn't caught up. Previously falling back to offset 0 would map stale
-      // diagnostics to the start of the file and produce false-positive markers
-      // on completely unrelated rows. Copilot caught this on PR #207.
-      if (startLine >= lineCount || endLine >= lineCount) continue;
-      const start = structureLineOffsets[startLine]! + d.range.start.character;
-      const end = structureLineOffsets[endLine]! + d.range.end.character;
-      if (end > start) {
-        result.push({ start, end, severity: d.severity ?? 3, message: d.message });
-      }
-    }
-    return result.length > 0 ? result : EMPTY_RANGE_DIAGNOSTICS;
-  }, [structureLspDiagnostics, structureLineOffsets]);
-
-  const renderStructurePane = useCallback(
-    () => (
-      <StructureView
-        focusedTypeId={structureFocusedTypeId}
-        adapterDoc={adapterDocument}
-        expansionMap={expansionMap}
-        cellComponents={structureCellComponents}
-        onToggleExpansion={toggleExpansion}
-        unsupportedSelectedType={structureUnsupportedSelectedType}
-        onNodeSelect={(canonicalId) => storeSelectNode(canonicalId, { reapplyFocusMode: false })}
-        onNavigateToEnumType={handleStructureNavigateToEnumType}
-        structureDiagnostics={structureDiagnostics}
-        pendingHydrationNamespaces={pendingHydrationNamespaces}
-      />
-    ),
-    [
-      structureFocusedTypeId,
-      adapterDocument,
-      expansionMap,
-      structureCellComponents,
-      toggleExpansion,
-      structureUnsupportedSelectedType,
-      storeSelectNode,
-      handleStructureNavigateToEnumType,
-      structureDiagnostics,
-      pendingHydrationNamespaces
-    ]
-  );
-
-  const VisualPreviewPanelMounted = useCallback(
-    () => (
-      <CenterStackPanel
-        renderGraph={renderGraphPane}
-        renderSource={renderSourcePane}
-        renderInspector={renderInspectorPane}
-        renderStructure={renderStructurePane}
-      />
-    ),
-    [renderGraphPane, renderSourcePane, renderInspectorPane, renderStructurePane]
-  );
-
-  // Memoize the overrides object so DockShell's useMemo([panelComponents])
-  // only recomputes the dockview component map when a callback actually changes,
-  // not on every EditorPage render.
-  const panelComponents = useMemo(
-    () => ({
-      'workspace.fileTree': FileTreePanelMounted,
-      'workspace.editor': SourceEditorPanelMounted,
-      'workspace.inspector': InspectorPanelMounted,
-      'workspace.problems': ProblemsPanelMounted,
-      'workspace.visualPreview': VisualPreviewPanelMounted,
-      'workspace.formPreview': FormPreviewPanelMounted,
-      'workspace.codePreview': CodePreviewPanelMounted
-    }),
-    [
-      FileTreePanelMounted,
-      SourceEditorPanelMounted,
-      InspectorPanelMounted,
-      ProblemsPanelMounted,
-      VisualPreviewPanelMounted,
-      FormPreviewPanelMounted,
-      CodePreviewPanelMounted
-    ]
-  );
-
-  const totalProblemCount = useMemo(() => combinedDiagnostics.total, [combinedDiagnostics.total]);
-  const panelTabMeta = useMemo(
-    () => ({
-      'workspace.problems': { count: totalProblemCount }
-    }),
-    [totalProblemCount]
-  );
-  const focusPanelRequest = useMemo(
-    () => (inspectorFocusNonce > 0 ? { component: 'workspace.inspector' as const, nonce: inspectorFocusNonce } : null),
-    [inspectorFocusNonce]
-  );
-
-  // Empty-content guard (keep-alive hazard): ExplorePerspective is ALWAYS
-  // mounted by PerspectiveHost (display:none when inactive), including before
-  // any user files OR reference models exist. With neither editable files,
-  // materialized models, nor deferred curated exports, the dockview/graph/
-  // structure workbench has nothing meaningful to render, and mounting
-  // DockShell against an empty corpus risks running layout/effects with no
-  // graph data. Deferred-only curated loads are valid Explore content because
-  // loadModels([]) materializes placeholder nodes from deferredExports.
-  if (fileCount === 0 && models.length === 0 && deferredExports.length === 0) {
-    return <div data-testid="explore-workbench" className="flex flex-col h-full overflow-hidden" />;
-  }
-
-  return (
-    <div
-      className="flex flex-col h-full overflow-hidden"
-      data-testid="explore-workbench"
-      onKeyDown={handleEditorPageKeyDown}
-      tabIndex={-1}
-    >
-      <div className="flex flex-1 min-h-0">
-        <DockShell
-          studioVersion={studioVersion}
-          workspaceId={workspaceId}
-          focusPanel={focusPanelRequest}
-          panelComponents={panelComponents}
-          panelTabMeta={panelTabMeta}
-        />
-      </div>
-
-      <footer className="glass-statusbar flex items-center gap-4 px-3 py-1 text-xs text-muted-foreground border-t border-border">
-        <span>
-          {models.length} model{models.length === 1 ? '' : 's'}
-        </span>
-        <span>{files.filter((f) => f.dirty).length} modified</span>
-        {selectedNodeId && <span>{selectedNodeId}</span>}
-        {(combinedDiagnostics.errors > 0 || combinedDiagnostics.warnings > 0) && (
-          <span>
-            {combinedDiagnostics.errors} err / {combinedDiagnostics.warnings} warn
-          </span>
-        )}
-        {transportState && <LspConnectionBadge state={transportState} onRetry={onReconnect} />}
-        {transportState && <ConnectionStatus state={transportState} onReconnect={onReconnect} />}
-      </footer>
-
-      <ExportDialog
-        open={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        getUserFiles={getSerializedFiles}
-        validateModel={validateModelForExport}
-      />
-
-      <ImportDialog
-        open={showImportDialog}
-        onClose={() => setShowImportDialog(false)}
-        files={files}
-        onFilesChange={(next) => onFilesChange?.(next)}
-        onFileFocused={openFileInSource}
-        namespaceToFile={namespaceToFile}
-        optionsFormsByFormat={IMPORT_OPTIONS_FORMS_BY_FORMAT}
-      />
-
-      {/*
-        Curated Models dialog — reuses the same <ModelLoader /> the welcome
-        screen mounts. ModelLoader pulls from useModelStore directly so no
-        props need to be threaded through. We leave the dialog open after a
-        load click so the user can see progress/badges. Dismiss paths
-        (Radix defaults): Esc, the X close button, AND click on the overlay
-        outside the dialog content — all close via `onOpenChange(false)`.
-        If "Esc only / outside-click does nothing" is ever wanted, attach
-        `onInteractOutside={(e) => e.preventDefault()}` to DialogContent
-        (Copilot review on PR #215). A future task will replace this with
-        a bottom-bar multi-selector — see PR description.
-      */}
-      <Dialog open={showCuratedModels} onOpenChange={setShowCuratedModels}>
-        <DialogContent
-          className="w-[640px] max-w-[92vw] max-h-[80vh] overflow-y-auto"
-          data-testid="curated-models-dialog"
-          overlayProps={{ 'data-testid': 'curated-models-dialog-overlay' }}
-        >
-          <DialogHeader>
-            <DialogTitle>Reference Models</DialogTitle>
-            <DialogDescription>
-              Load curated reference bundles to explore them alongside your workspace.
-            </DialogDescription>
-          </DialogHeader>
-          <ModelLoader />
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
+  },
+  { op: 'ExplorePerspective' }
+);

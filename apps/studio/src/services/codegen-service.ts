@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -24,6 +25,7 @@ import type {
   GeneratedFile,
   GenerationError
 } from '@rune-langium/codegen-legacy';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 export type { CodeGenerationRequest, CodeGenerationResult, GeneratedFile };
 
@@ -84,39 +86,76 @@ export interface InstanceValidateMessage {
   requestId: string;
 }
 
-export function createInstanceValidateMessage(
-  typeFqn: string,
-  data: Record<string, unknown>,
-  requestId: string
-): InstanceValidateMessage {
-  return { type: 'instance:validate', typeFqn, data, requestId };
-}
+// `data` is user-entered form/instance data — never captured. `typeFqn` is
+// dropped too: it names a type from the CURRENT workspace's own model,
+// which may or may not be from the curated (public) corpus — not
+// confidently safe either way, so treated as unsafe by default. Only
+// `requestId` (an app-minted UUID) is captured.
+export const createInstanceValidateMessage = withInstrumentation(
+  function createInstanceValidateMessage(
+    typeFqn: string,
+    data: Record<string, unknown>,
+    requestId: string
+  ): InstanceValidateMessage {
+    return { type: 'instance:validate', typeFqn, data, requestId };
+  },
+  {
+    op: 'createInstanceValidateMessage',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { requestId: (value as [string, unknown, string])[2] } : undefined)
+  }
+);
 
-export function isPreviewExecuteResultMessage(msg: unknown): msg is {
-  type: 'preview:execute-result';
-  requestId: string;
-  funcName: string;
-  output: unknown;
-} {
-  return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-result';
-}
+export const isPreviewExecuteResultMessage = withInstrumentation(
+  function isPreviewExecuteResultMessage(msg: unknown): msg is {
+    type: 'preview:execute-result';
+    requestId: string;
+    funcName: string;
+    output: unknown;
+  } {
+    return (
+      typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-result'
+    );
+  },
+  {
+    op: 'isPreviewExecuteResultMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
-export function isPreviewExecuteErrorMessage(msg: unknown): msg is {
-  type: 'preview:execute-error';
-  requestId: string;
-  funcName: string;
-  error: string;
-} {
-  return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-error';
-}
+export const isPreviewExecuteErrorMessage = withInstrumentation(
+  function isPreviewExecuteErrorMessage(msg: unknown): msg is {
+    type: 'preview:execute-error';
+    requestId: string;
+    funcName: string;
+    error: string;
+  } {
+    return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'preview:execute-error';
+  },
+  {
+    op: 'isPreviewExecuteErrorMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
-export function isInstanceValidateResultMessage(msg: unknown): msg is {
-  type: 'instance:validateResult';
-  requestId: string;
-  diagnostics: Array<{ path: string; message: string; conditionName?: string }>;
-} {
-  return typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'instance:validateResult';
-}
+export const isInstanceValidateResultMessage = withInstrumentation(
+  function isInstanceValidateResultMessage(msg: unknown): msg is {
+    type: 'instance:validateResult';
+    requestId: string;
+    diagnostics: Array<{ path: string; message: string; conditionName?: string }>;
+  } {
+    return (
+      typeof msg === 'object' && msg !== null && (msg as Record<string, unknown>).type === 'instance:validateResult'
+    );
+  },
+  {
+    op: 'isInstanceValidateResultMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 /**
  * Own message channel for instance-editing's schema fetches (finding
@@ -138,40 +177,62 @@ export interface InstanceGenerateSchemaMessage {
   requestId: string;
 }
 
-export function createInstanceGenerateSchemaMessage(typeFqn: string, requestId: string): InstanceGenerateSchemaMessage {
-  return { type: 'instance:generateSchema', typeFqn, requestId };
-}
+// typeFqn dropped — see createInstanceValidateMessage's comment above.
+export const createInstanceGenerateSchemaMessage = withInstrumentation(
+  function createInstanceGenerateSchemaMessage(typeFqn: string, requestId: string): InstanceGenerateSchemaMessage {
+    return { type: 'instance:generateSchema', typeFqn, requestId };
+  },
+  {
+    op: 'createInstanceGenerateSchemaMessage',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { requestId: (value as [string, string])[1] } : undefined)
+  }
+);
 
-export function isInstanceGenerateSchemaResultMessage(msg: unknown): msg is {
-  type: 'instance:generateSchemaResult';
-  requestId: string;
-  schema: FormPreviewSchema;
-} {
-  if (typeof msg !== 'object' || msg === null) return false;
-  const candidate = msg as Record<string, unknown>;
-  return (
-    candidate.type === 'instance:generateSchemaResult' &&
-    typeof candidate.requestId === 'string' &&
-    isFormPreviewSchema(candidate.schema)
-  );
-}
+export const isInstanceGenerateSchemaResultMessage = withInstrumentation(
+  function isInstanceGenerateSchemaResultMessage(msg: unknown): msg is {
+    type: 'instance:generateSchemaResult';
+    requestId: string;
+    schema: FormPreviewSchema;
+  } {
+    if (typeof msg !== 'object' || msg === null) return false;
+    const candidate = msg as Record<string, unknown>;
+    return (
+      candidate.type === 'instance:generateSchemaResult' &&
+      typeof candidate.requestId === 'string' &&
+      isFormPreviewSchema(candidate.schema)
+    );
+  },
+  {
+    op: 'isInstanceGenerateSchemaResultMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
-export function isInstanceGenerateSchemaStaleMessage(msg: unknown): msg is {
-  type: 'instance:generateSchemaStale';
-  requestId: string;
-  reason: PreviewStaleMessage['reason'];
-  message: string;
-} {
-  if (typeof msg !== 'object' || msg === null) return false;
-  const candidate = msg as Record<string, unknown>;
-  return (
-    candidate.type === 'instance:generateSchemaStale' &&
-    typeof candidate.requestId === 'string' &&
-    typeof candidate.reason === 'string' &&
-    PREVIEW_STALE_REASONS.has(candidate.reason as PreviewStaleMessage['reason']) &&
-    typeof candidate.message === 'string'
-  );
-}
+export const isInstanceGenerateSchemaStaleMessage = withInstrumentation(
+  function isInstanceGenerateSchemaStaleMessage(msg: unknown): msg is {
+    type: 'instance:generateSchemaStale';
+    requestId: string;
+    reason: PreviewStaleMessage['reason'];
+    message: string;
+  } {
+    if (typeof msg !== 'object' || msg === null) return false;
+    const candidate = msg as Record<string, unknown>;
+    return (
+      candidate.type === 'instance:generateSchemaStale' &&
+      typeof candidate.requestId === 'string' &&
+      typeof candidate.reason === 'string' &&
+      PREVIEW_STALE_REASONS.has(candidate.reason as PreviewStaleMessage['reason']) &&
+      typeof candidate.message === 'string'
+    );
+  },
+  {
+    op: 'isInstanceGenerateSchemaStaleMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 export type PreviewWorkerRequest = PreviewSetFilesMessage | PreviewGenerateMessage;
 export type PreviewWorkerMessage = PreviewResultMessage | PreviewStaleMessage;
@@ -187,36 +248,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
-export function createPreviewSetFilesMessage(files: PreviewFileEntry[], requestId?: string): PreviewSetFilesMessage {
-  return { type: 'preview:setFiles', files, ...(requestId ? { requestId } : {}) };
-}
-
-export function createPreviewGenerateMessage(targetId: string, requestId: string): PreviewGenerateMessage {
-  return { type: 'preview:generate', targetId, requestId };
-}
-
-export function isPreviewWorkerMessage(message: unknown): message is PreviewWorkerMessage {
-  if (!message || typeof message !== 'object') return false;
-  const candidate = message as Record<string, unknown>;
-  const type = candidate.type;
-  if (type === 'preview:result') {
-    return (
-      typeof candidate.targetId === 'string' &&
-      typeof candidate.requestId === 'string' &&
-      isFormPreviewSchema(candidate.schema)
-    );
+// `files[].content`/`serializedModelJson` are raw model source text — never
+// captured; only a count plus the app-minted requestId.
+export const createPreviewSetFilesMessage = withInstrumentation(
+  function createPreviewSetFilesMessage(files: PreviewFileEntry[], requestId?: string): PreviewSetFilesMessage {
+    return { type: 'preview:setFiles', files, ...(requestId ? { requestId } : {}) };
+  },
+  {
+    op: 'createPreviewSetFilesMessage',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [files, requestId] = value as [PreviewFileEntry[], string | undefined];
+      return { fileCount: files.length, requestId };
+    }
   }
-  if (type === 'preview:stale') {
-    return (
-      (candidate.targetId === undefined || typeof candidate.targetId === 'string') &&
-      typeof candidate.requestId === 'string' &&
-      typeof candidate.reason === 'string' &&
-      PREVIEW_STALE_REASONS.has(candidate.reason as PreviewStaleMessage['reason']) &&
-      typeof candidate.message === 'string'
-    );
+);
+
+// targetId dropped — see createInstanceValidateMessage's comment above.
+export const createPreviewGenerateMessage = withInstrumentation(
+  function createPreviewGenerateMessage(targetId: string, requestId: string): PreviewGenerateMessage {
+    return { type: 'preview:generate', targetId, requestId };
+  },
+  {
+    op: 'createPreviewGenerateMessage',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { requestId: (value as [string, string])[1] } : undefined)
   }
-  return false;
-}
+);
+
+export const isPreviewWorkerMessage = withInstrumentation(
+  function isPreviewWorkerMessage(message: unknown): message is PreviewWorkerMessage {
+    if (!message || typeof message !== 'object') return false;
+    const candidate = message as Record<string, unknown>;
+    const type = candidate.type;
+    if (type === 'preview:result') {
+      return (
+        typeof candidate.targetId === 'string' &&
+        typeof candidate.requestId === 'string' &&
+        isFormPreviewSchema(candidate.schema)
+      );
+    }
+    if (type === 'preview:stale') {
+      return (
+        (candidate.targetId === undefined || typeof candidate.targetId === 'string') &&
+        typeof candidate.requestId === 'string' &&
+        typeof candidate.reason === 'string' &&
+        PREVIEW_STALE_REASONS.has(candidate.reason as PreviewStaleMessage['reason']) &&
+        typeof candidate.message === 'string'
+      );
+    }
+    return false;
+  },
+  {
+    op: 'isPreviewWorkerMessage',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 function isFormPreviewSchema(value: unknown): value is FormPreviewSchema {
   if (!isRecord(value)) return false;
@@ -531,9 +620,12 @@ export class BrowserCodegenProxy {
 
 let _instance: BrowserCodegenProxy | undefined;
 
-export function getCodegenService(): BrowserCodegenProxy {
-  if (!_instance) {
-    _instance = new BrowserCodegenProxy();
-  }
-  return _instance;
-}
+export const getCodegenService = withInstrumentation(
+  function getCodegenService(): BrowserCodegenProxy {
+    if (!_instance) {
+      _instance = new BrowserCodegenProxy();
+    }
+    return _instance;
+  },
+  { op: 'getCodegenService' }
+);

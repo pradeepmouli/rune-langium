@@ -1,10 +1,20 @@
 import { defineConfig } from 'vitest/config';
+import { decoratorLoweringPlugin } from './packages/codegen/vitest-decorator-plugin.js';
 
 // Root vitest config for core packages only.
 // Note: visual-editor and apps have their own vitest.config.ts with browser environment.
 // Run `pnpm test` at the root to execute all tests across all packages via `pnpm -r run test`.
+//
+// `decoratorLoweringPlugin` is registered here too (not just in
+// packages/codegen/vitest.config.ts) because this config's `test.include`
+// glob below still resolves packages/codegen's test files when running
+// `pnpm run test:coverage` from the root — without it, any codegen source
+// file using this package's native TC39 decorator syntax (`@debug()` etc.)
+// fails to parse under this config's own transform pipeline. See the
+// plugin's own doc comment for the full rationale.
 
 export default defineConfig({
+  plugins: [decoratorLoweringPlugin()],
   test: {
     globals: true,
     environment: 'node',

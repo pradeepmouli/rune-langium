@@ -1,7 +1,9 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { WorkspaceFile } from './services/workspace.js';
+import { withInstrumentation } from './services/instrumentation/core.js';
 
 export interface RuneStudioTestApi {
   createCodegenWorker?(): Worker;
@@ -34,20 +36,26 @@ declare global {
   }
 }
 
-export function getRuneStudioTestApi(): RuneStudioTestApi | undefined {
-  return IS_TEST_MODE ? window.__runeStudioTestApi : undefined;
-}
+export const getRuneStudioTestApi = withInstrumentation(
+  function getRuneStudioTestApi(): RuneStudioTestApi | undefined {
+    return IS_TEST_MODE ? window.__runeStudioTestApi : undefined;
+  },
+  { op: 'getRuneStudioTestApi' }
+);
 
-export function setRuneStudioTestApi(
-  updater: (current: RuneStudioTestApi | undefined) => RuneStudioTestApi | undefined
-): void {
-  if (!IS_TEST_MODE) {
-    return;
-  }
-  const next = updater(window.__runeStudioTestApi);
-  if (!next || Object.keys(next).length === 0) {
-    delete window.__runeStudioTestApi;
-    return;
-  }
-  window.__runeStudioTestApi = next;
-}
+export const setRuneStudioTestApi = withInstrumentation(
+  function setRuneStudioTestApi(
+    updater: (current: RuneStudioTestApi | undefined) => RuneStudioTestApi | undefined
+  ): void {
+    if (!IS_TEST_MODE) {
+      return;
+    }
+    const next = updater(window.__runeStudioTestApi);
+    if (!next || Object.keys(next).length === 0) {
+      delete window.__runeStudioTestApi;
+      return;
+    }
+    window.__runeStudioTestApi = next;
+  },
+  { op: 'setRuneStudioTestApi' }
+);

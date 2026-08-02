@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useOutputStore, fmtLine } from '../../src/store/output-store.js';
+import { useOutputStore, fmtLine, formatLine } from '../../src/store/output-store.js';
 
 describe('output store', () => {
   beforeEach(() => {
@@ -30,5 +30,10 @@ describe('output store', () => {
     expect(line.subject).toBe('cdm');
     expect(line.durationMs).toBe(4200);
     expect(line.opId).toBe(7);
+  });
+
+  it('the plain formatLine produces identical output to the instrumented fmtLine', () => {
+    expect(formatLine('lsp', 'connected')).toBe(fmtLine('lsp', 'connected'));
+    expect(formatLine('cdmLoad', 'loaded', 'detail')).toBe(fmtLine('cdmLoad', 'loaded', 'detail'));
   });
 });

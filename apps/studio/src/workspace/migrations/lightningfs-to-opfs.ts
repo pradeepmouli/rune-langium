@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -27,6 +28,7 @@
 import { OpfsFs } from '../../opfs/opfs-fs.js';
 import { saveSetting, saveWorkspace, type WorkspaceRecord } from '../persistence.js';
 import { LAYOUT_SCHEMA_VERSION } from '../../shell/layout-factory.js';
+import { withInstrumentation, Capture } from '../../services/instrumentation/core.js';
 
 export const LEGACY_DB_NAMES = ['fs', 'lightning-fs-cache'] as const;
 
@@ -52,101 +54,120 @@ interface ReadResult {
   reason?: string;
 }
 
-export async function migrateLightningFsToOpfs(input: MigrationInput): Promise<MigrationResult> {
-  const collected: LegacyEntry[] = [];
-  let foundAny = false;
+export const migrateLightningFsToOpfs = withInstrumentation(
+  async function migrateLightningFsToOpfs(input: MigrationInput): Promise<MigrationResult> {
+    const collected: LegacyEntry[] = [];
+    let foundAny = false;
 
-  for (const dbName of LEGACY_DB_NAMES) {
-    const present = await openExistingDb(dbName);
-    if (!present) continue;
-    foundAny = true;
-    let read: ReadResult;
+    for (const dbName of LEGACY_DB_NAMES) {
+      const present = await openExistingDb(dbName);
+      if (!present) continue;
+      foundAny = true;
+      let read: ReadResult;
+      try {
+        read = await readAllEntries(present);
+      } finally {
+        present.close();
+      }
+      if (!read.ok) {
+        // Legacy DB read failed mid-walk; preserve everything, surface
+        // partial export so the user can rescue what we did read.
+        return {
+          kind: 'failed',
+          reason: read.reason ?? 'idb_read_failed',
+          exportBlob: buildExportBlob([...collected, ...read.entries])
+        };
+      }
+      collected.push(...read.entries);
+    }
+
+    if (!foundAny) return { kind: 'no-op' };
+
+    // Pre-build a JSON export bundle. We always have it ready in case the
+    // OPFS half fails — the user is never left without a recovery path.
+    const exportBlob = buildExportBlob(collected);
+
+    // Try to write everything into OPFS. If anything throws, the legacy DBs
+    // remain intact and we surface the export.
+    const id = generateUlid();
+    const fs = new OpfsFs(input.opfsRoot);
+    let fileCount = 0;
     try {
-      read = await readAllEntries(present);
-    } finally {
-      present.close();
-    }
-    if (!read.ok) {
-      // Legacy DB read failed mid-walk; preserve everything, surface
-      // partial export so the user can rescue what we did read.
-      return {
-        kind: 'failed',
-        reason: read.reason ?? 'idb_read_failed',
-        exportBlob: buildExportBlob([...collected, ...read.entries])
+      await fs.mkdir(`/${id}`);
+      await fs.mkdir(`/${id}/files`);
+      await fs.mkdir(`/${id}/.studio`);
+      for (const e of collected) {
+        if (!e.bytes) continue;
+        const safe = e.path.replace(/^\/+/, '');
+        if (!safe) continue;
+        await fs.writeFile(`/${id}/files/${safe}`, e.bytes);
+        fileCount++;
+      }
+
+      // Persist the workspace record + bump the migration sentinel BEFORE
+      // we drop the legacy DBs so a crash mid-migration is recoverable from
+      // the persisted state alone.
+      const now = new Date().toISOString();
+      const ws: WorkspaceRecord = {
+        id,
+        name: 'Migrated workspace',
+        createdAt: now,
+        lastOpenedAt: now,
+        kind: 'browser-only',
+        layout: {
+          version: LAYOUT_SCHEMA_VERSION,
+          writtenBy: input.studioVersion,
+          dockview: null
+        },
+        tabs: [],
+        activeTabPath: null,
+        curatedModels: [],
+        schemaVersion: 1
       };
-    }
-    collected.push(...read.entries);
-  }
-
-  if (!foundAny) return { kind: 'no-op' };
-
-  // Pre-build a JSON export bundle. We always have it ready in case the
-  // OPFS half fails — the user is never left without a recovery path.
-  const exportBlob = buildExportBlob(collected);
-
-  // Try to write everything into OPFS. If anything throws, the legacy DBs
-  // remain intact and we surface the export.
-  const id = generateUlid();
-  const fs = new OpfsFs(input.opfsRoot);
-  let fileCount = 0;
-  try {
-    await fs.mkdir(`/${id}`);
-    await fs.mkdir(`/${id}/files`);
-    await fs.mkdir(`/${id}/.studio`);
-    for (const e of collected) {
-      if (!e.bytes) continue;
-      const safe = e.path.replace(/^\/+/, '');
-      if (!safe) continue;
-      await fs.writeFile(`/${id}/files/${safe}`, e.bytes);
-      fileCount++;
-    }
-
-    // Persist the workspace record + bump the migration sentinel BEFORE
-    // we drop the legacy DBs so a crash mid-migration is recoverable from
-    // the persisted state alone.
-    const now = new Date().toISOString();
-    const ws: WorkspaceRecord = {
-      id,
-      name: 'Migrated workspace',
-      createdAt: now,
-      lastOpenedAt: now,
-      kind: 'browser-only',
-      layout: {
-        version: LAYOUT_SCHEMA_VERSION,
-        writtenBy: input.studioVersion,
-        dockview: null
-      },
-      tabs: [],
-      activeTabPath: null,
-      curatedModels: [],
-      schemaVersion: 1
-    };
-    await saveWorkspace(ws);
-    await saveSetting('design-system-version', input.studioVersion);
-  } catch (err) {
-    return {
-      kind: 'failed',
-      reason: err instanceof Error ? err.message : String(err),
-      exportBlob
-    };
-  }
-
-  // Cut-clean: drop the legacy DBs. If ANY deletion is blocked or errors
-  // out, the migration is incomplete — keep the legacy DBs and report
-  // failure rather than re-running on the next launch over a working
-  // OPFS workspace (which would create a second "Migrated workspace").
-  for (const dbName of LEGACY_DB_NAMES) {
-    const r = await deleteDb(dbName);
-    if (r !== 'deleted' && r !== 'not_present') {
+      await saveWorkspace(ws);
+      await saveSetting('design-system-version', input.studioVersion);
+    } catch (err) {
       return {
         kind: 'failed',
-        reason: `legacy_db_${r}: ${dbName}`,
+        reason: err instanceof Error ? err.message : String(err),
         exportBlob
       };
     }
+
+    // Cut-clean: drop the legacy DBs. If ANY deletion is blocked or errors
+    // out, the migration is incomplete — keep the legacy DBs and report
+    // failure rather than re-running on the next launch over a working
+    // OPFS workspace (which would create a second "Migrated workspace").
+    for (const dbName of LEGACY_DB_NAMES) {
+      const r = await deleteDb(dbName);
+      if (r !== 'deleted' && r !== 'not_present') {
+        return {
+          kind: 'failed',
+          reason: `legacy_db_${r}: ${dbName}`,
+          exportBlob
+        };
+      }
+    }
+    return { kind: 'migrated', workspaceId: id, fileCount };
+    // `input.opfsRoot` isn't capturable; `exportBlob` carries raw legacy file
+    // bytes (may be user model content) — never captured. `kind`/`workspaceId`/
+    // `fileCount`/`reason` are all safe structural/technical values.
+  },
+  {
+    op: 'migrateLightningFsToOpfs',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as MigrationResult;
+      return {
+        kind: result.kind,
+        workspaceId: 'workspaceId' in result ? result.workspaceId : undefined,
+        fileCount: 'fileCount' in result ? result.fileCount : undefined,
+        reason: 'reason' in result ? result.reason : undefined
+      };
+    }
   }
-  return { kind: 'migrated', workspaceId: id, fileCount };
-}
+);
 
 // ---------- IndexedDB walk helpers ----------
 

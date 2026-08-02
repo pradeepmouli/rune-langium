@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -34,6 +35,7 @@ import {
 } from '@rune-langium/codegen/export';
 import { fetchCuratedManifest, fetchCuratedNamespace, CuratedBundleUnavailableError } from '../lib/curated-fetch.js';
 import { closeNamespacesFromManifest } from '../lib/curated-closure.js';
+import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
 interface CodegenRequestBody {
   files: Array<{ path: string; content: string }>;
@@ -260,30 +262,33 @@ function pruneDocumentCache(now: number): void {
   }
 }
 
-/**
- * Test-only escape hatch. `documentCache` is module-scope singleton state
- * (real production behavior — it must persist across requests within a
- * warm isolate), but that means it also persists across TEST CASES in the
- * same file/process, where several existing tests reuse the identical
- * `{curatedBundles, namespaces}` combination with `files: []`. Without a
- * reset between tests, an earlier test's cache entry would produce a false
- * hit in a LATER test, silently skipping that test's own
- * `fetchCuratedManifest`/`fetchCuratedNamespace` mocks.
- */
-export function __resetDocumentCacheForTests(): void {
-  documentCache.clear();
-}
+export const __resetDocumentCacheForTests = withInstrumentation(
+  function __resetDocumentCacheForTests(): void {
+    documentCache.clear();
+  },
+  { op: '__resetDocumentCacheForTests' }
+);
 
-/** Test-only introspection: which cache keys are currently resident. */
-export function __documentCacheKeysForTests(): string[] {
-  return Array.from(documentCache.keys());
-}
+// Test-only accessors — cache keys/state never captured (no production
+// telemetry value; keys may embed request-specific identifiers).
+export const __documentCacheKeysForTests = withInstrumentation(
+  function __documentCacheKeysForTests(): string[] {
+    return Array.from(documentCache.keys());
+  },
+  { op: '__documentCacheKeysForTests' }
+);
 
-/** Test-only introspection: is the sole resident entry (if any) `pending` or actively consumed (round 9)? */
-export function __documentCacheIsBusyForTests(): boolean {
-  const [entry] = documentCache.values();
-  return entry !== undefined && isDocumentCacheEntryBusy(entry);
-}
+export const __documentCacheIsBusyForTests = withInstrumentation(
+  function __documentCacheIsBusyForTests(): boolean {
+    const [entry] = documentCache.values();
+    return entry !== undefined && isDocumentCacheEntryBusy(entry);
+  },
+  {
+    op: '__documentCacheIsBusyForTests',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 function isValidRequest(body: unknown): body is CodegenRequestBody {
   if (!body || typeof body !== 'object') return false;
@@ -669,281 +674,291 @@ function applyPagesFunctionDefaults(body: CodegenRequestBody): Record<string, un
   return result;
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  let raw: unknown;
-  try {
-    raw = await request.json();
-  } catch {
-    return jsonError(400, 'Malformed JSON body');
-  }
-  if (!isValidRequest(raw)) {
-    return jsonError(400, 'Request must be { files: [{path, content}], target: <Target>, options?, curatedBundles? }');
-  }
-  const body = raw;
+// Manually wrapped (Cloudflare Pages Function arrow export — codemod-blind).
+// `request`/`env`/the request body (raw model files + codegen options) and
+// the Response outputs all carry raw user model content or may carry
+// secret env bindings — never captured.
+export const onRequestPost: PagesFunction<Env> = withInstrumentation(
+  async ({ request, env }) => {
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      return jsonError(400, 'Malformed JSON body');
+    }
+    if (!isValidRequest(raw)) {
+      return jsonError(
+        400,
+        'Request must be { files: [{path, content}], target: <Target>, options?, curatedBundles? }'
+      );
+    }
+    const body = raw;
 
-  // Target gating. `IMPLEMENTED_TARGETS` is the single source of truth
-  // for which emitters this build has; mirrors the studio table's
-  // filter so the server doesn't accept a click the UI would never
-  // have sent.
-  if (!(IMPLEMENTED_TARGETS as readonly string[]).includes(body.target)) {
-    return jsonError(400, `Target '${body.target}' is not implemented in this build`);
-  }
+    // Target gating. `IMPLEMENTED_TARGETS` is the single source of truth
+    // for which emitters this build has; mirrors the studio table's
+    // filter so the server doesn't accept a click the UI would never
+    // have sent.
+    if (!(IMPLEMENTED_TARGETS as readonly string[]).includes(body.target)) {
+      return jsonError(400, `Target '${body.target}' is not implemented in this build`);
+    }
 
-  const curatedBundles = body.curatedBundles ?? [];
-  const curatedDocs = body.curatedDocs ?? [];
-  // 019 Task #88 — a pure curated workspace ships zero user files but a
-  // non-empty curated source: either curatedBundles (path C) OR pre-loaded
-  // curatedDocs (path A). All three empty is the genuine bad-input case.
-  if (body.files.length === 0 && curatedBundles.length === 0 && curatedDocs.length === 0) {
-    return jsonError(400, 'files / curatedBundles / curatedDocs: at least one must be non-empty');
-  }
+    const curatedBundles = body.curatedBundles ?? [];
+    const curatedDocs = body.curatedDocs ?? [];
+    // 019 Task #88 — a pure curated workspace ships zero user files but a
+    // non-empty curated source: either curatedBundles (path C) OR pre-loaded
+    // curatedDocs (path A). All three empty is the genuine bad-input case.
+    if (body.files.length === 0 && curatedBundles.length === 0 && curatedDocs.length === 0) {
+      return jsonError(400, 'files / curatedBundles / curatedDocs: at least one must be non-empty');
+    }
 
-  try {
-    const curatedFetcher = env?.CURATED_MIRROR
-      ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
-      : undefined;
-
-    // Prune unconditionally, regardless of whether THIS request is
-    // cacheable (Codex review round 2 on PR #445) — an isolate that served
-    // one curated-only request and then a run of requests with user files
-    // (never cacheable, cacheKey undefined below) would otherwise never
-    // prune again, leaving an EXPIRED entry strongly referenced for the
-    // isolate's full lifetime instead of the advertised 5-minute TTL.
-    const now = Date.now();
-    pruneDocumentCache(now);
-
-    const cacheKey =
-      body.files.length === 0 && curatedBundles.length > 0
-        ? documentCacheKey(curatedBundles, body.namespaces ?? [])
+    try {
+      const curatedFetcher = env?.CURATED_MIRROR
+        ? (url: string, init?: RequestInit) => env.CURATED_MIRROR!.fetch(url, init)
         : undefined;
 
-    let documents: import('langium').LangiumDocument[];
-    // Set whenever this request is consuming a cache entry (whether it
-    // just registered it or coalesced onto an existing one) — released in
-    // the outer `finally` below, which now spans from registration all the
-    // way through the response (round 10; see the entry's own doc comment
-    // for why this can no longer be an identity-guarded, post-`await`
-    // registration).
-    let releaseDocumentCacheConsumer: (() => void) | undefined;
-    try {
-      if (cacheKey) {
-        let entry = documentCache.get(cacheKey);
-        if (!entry) {
-          // A miss means the cache is either empty or holds a DIFFERENT
-          // (mismatched) entry. That entry's promise can't be cancelled — if
-          // it's still `pending`, its hydration keeps running to completion
-          // in ITS OWN request handler regardless of what we do here; if
-          // it's already settled but still has active consumers, THEIR
-          // `generate()` calls are still walking its documents (round 9).
-          // Starting a NEW hydration immediately would let two (possibly
-          // CDM-sized) closures process concurrently, doubling peak memory
-          // and risking the very resource-limit crash this cache exists to
-          // prevent (Codex review round 7 on PR #445). Capture whatever to
-          // wait for — the hydration promise (harmless no-op if already
-          // settled) plus any active-consumer completions — before clearing,
-          // so the replacement hydration can be chained to start only once
-          // everything using the evicted entry has vacated.
-          const stalePending: Array<ReturnType<typeof loadAllDocuments> | Promise<void>> = [];
-          for (const e of documentCache.values()) {
-            if (isDocumentCacheEntryBusy(e)) stalePending.push(e.promise, ...e.activeConsumers);
-          }
-          // Clear it BEFORE starting hydration, not after, so at most one
-          // entry is ever resident in the MAP at a time, including during
-          // hydration itself (round 2). Then register the hydration PROMISE,
-          // synchronously, before awaiting it — this whole
-          // get/clear/create/set/prune sequence contains no `await`, so it's
-          // atomic with respect to any other in-flight request: a second
-          // concurrent request for the SAME key that reaches this code next
-          // finds the promise already registered and just awaits it, instead
-          // of independently fetching+hydrating the same closure a second
-          // time (round 4). The actual `loadAllDocuments` call is deferred
-          // inside a `.then()` chained after `stalePending` settles, rather
-          // than `await`ed inline here, so this synchronous section still
-          // never yields — a same-key request arriving before `stalePending`
-          // settles still finds this entry already registered and coalesces
-          // onto it normally.
-          documentCache.clear();
-          const promise = (
-            stalePending.length > 0 ? Promise.allSettled(stalePending) : Promise.resolve(undefined)
-          ).then(() =>
-            loadAllDocuments(body.files, curatedBundles, curatedFetcher, body.namespaces ?? [], curatedDocs)
-          );
-          const newEntry = { promise, cachedAt: now, pending: true, activeConsumers: [] };
-          entry = newEntry;
-          documentCache.set(cacheKey, newEntry);
-          // Re-prune immediately after registering (round 3) — the
-          // pre-hydration clear above only protects THIS request's own
-          // miss; two concurrent requests for DIFFERENT keys can each clear
-          // an (already empty, or the other's not-yet-registered) cache and
-          // each register their own entry, leaving two until something
-          // re-prunes. Pruning right after `set` bounds that window to the
-          // gap between two concurrent `set` calls. `newEntry.pending` keeps
-          // this specific entry exempt from the TTL half of that prune until
-          // it settles (round 6).
-          pruneDocumentCache(now);
-          // Settle handling, guarded by identity throughout (only act if
-          // THIS exact entry is still the one registered) so a stale,
-          // now-orphaned hydration's later settlement can't affect a NEWER,
-          // unrelated registration for the same key that replaced it in
-          // between (e.g. key K's slow hydration outlives an interleaved
-          // different-key clear that evicted it, then a third request
-          // re-registers K fresh).
-          //
-          // On success: bump `cachedAt` to the actual completion time and
-          // clear `pending` — the TTL window should measure freshness from
-          // when the entry became usable, not from registration (round 6).
-          // A resolved `curatedError` is left for the awaiting code below to
-          // delete (same effect, no need to duplicate it here).
-          //
-          // On REJECTION: evict outright (round 5) — loadAllDocuments can
-          // throw (e.g. a malformed namespace artifact), not just return a
-          // structured error, and a rejected promise left cached would
-          // poison every identical request for the rest of the TTL window
-          // even if the failure was transient.
-          promise.then(
-            (result) => {
-              if (!result.curatedError && documentCache.get(cacheKey) === newEntry) {
-                newEntry.cachedAt = Date.now();
-                newEntry.pending = false;
-              }
-            },
-            () => {
-              if (documentCache.get(cacheKey) === newEntry) {
-                documentCache.delete(cacheKey);
-              }
+      // Prune unconditionally, regardless of whether THIS request is
+      // cacheable (Codex review round 2 on PR #445) — an isolate that served
+      // one curated-only request and then a run of requests with user files
+      // (never cacheable, cacheKey undefined below) would otherwise never
+      // prune again, leaving an EXPIRED entry strongly referenced for the
+      // isolate's full lifetime instead of the advertised 5-minute TTL.
+      const now = Date.now();
+      pruneDocumentCache(now);
+
+      const cacheKey =
+        body.files.length === 0 && curatedBundles.length > 0
+          ? documentCacheKey(curatedBundles, body.namespaces ?? [])
+          : undefined;
+
+      let documents: import('langium').LangiumDocument[];
+      // Set whenever this request is consuming a cache entry (whether it
+      // just registered it or coalesced onto an existing one) — released in
+      // the outer `finally` below, which now spans from registration all the
+      // way through the response (round 10; see the entry's own doc comment
+      // for why this can no longer be an identity-guarded, post-`await`
+      // registration).
+      let releaseDocumentCacheConsumer: (() => void) | undefined;
+      try {
+        if (cacheKey) {
+          let entry = documentCache.get(cacheKey);
+          if (!entry) {
+            // A miss means the cache is either empty or holds a DIFFERENT
+            // (mismatched) entry. That entry's promise can't be cancelled — if
+            // it's still `pending`, its hydration keeps running to completion
+            // in ITS OWN request handler regardless of what we do here; if
+            // it's already settled but still has active consumers, THEIR
+            // `generate()` calls are still walking its documents (round 9).
+            // Starting a NEW hydration immediately would let two (possibly
+            // CDM-sized) closures process concurrently, doubling peak memory
+            // and risking the very resource-limit crash this cache exists to
+            // prevent (Codex review round 7 on PR #445). Capture whatever to
+            // wait for — the hydration promise (harmless no-op if already
+            // settled) plus any active-consumer completions — before clearing,
+            // so the replacement hydration can be chained to start only once
+            // everything using the evicted entry has vacated.
+            const stalePending: Array<ReturnType<typeof loadAllDocuments> | Promise<void>> = [];
+            for (const e of documentCache.values()) {
+              if (isDocumentCacheEntryBusy(e)) stalePending.push(e.promise, ...e.activeConsumers);
             }
+            // Clear it BEFORE starting hydration, not after, so at most one
+            // entry is ever resident in the MAP at a time, including during
+            // hydration itself (round 2). Then register the hydration PROMISE,
+            // synchronously, before awaiting it — this whole
+            // get/clear/create/set/prune sequence contains no `await`, so it's
+            // atomic with respect to any other in-flight request: a second
+            // concurrent request for the SAME key that reaches this code next
+            // finds the promise already registered and just awaits it, instead
+            // of independently fetching+hydrating the same closure a second
+            // time (round 4). The actual `loadAllDocuments` call is deferred
+            // inside a `.then()` chained after `stalePending` settles, rather
+            // than `await`ed inline here, so this synchronous section still
+            // never yields — a same-key request arriving before `stalePending`
+            // settles still finds this entry already registered and coalesces
+            // onto it normally.
+            documentCache.clear();
+            const promise = (
+              stalePending.length > 0 ? Promise.allSettled(stalePending) : Promise.resolve(undefined)
+            ).then(() =>
+              loadAllDocuments(body.files, curatedBundles, curatedFetcher, body.namespaces ?? [], curatedDocs)
+            );
+            const newEntry = { promise, cachedAt: now, pending: true, activeConsumers: [] };
+            entry = newEntry;
+            documentCache.set(cacheKey, newEntry);
+            // Re-prune immediately after registering (round 3) — the
+            // pre-hydration clear above only protects THIS request's own
+            // miss; two concurrent requests for DIFFERENT keys can each clear
+            // an (already empty, or the other's not-yet-registered) cache and
+            // each register their own entry, leaving two until something
+            // re-prunes. Pruning right after `set` bounds that window to the
+            // gap between two concurrent `set` calls. `newEntry.pending` keeps
+            // this specific entry exempt from the TTL half of that prune until
+            // it settles (round 6).
+            pruneDocumentCache(now);
+            // Settle handling, guarded by identity throughout (only act if
+            // THIS exact entry is still the one registered) so a stale,
+            // now-orphaned hydration's later settlement can't affect a NEWER,
+            // unrelated registration for the same key that replaced it in
+            // between (e.g. key K's slow hydration outlives an interleaved
+            // different-key clear that evicted it, then a third request
+            // re-registers K fresh).
+            //
+            // On success: bump `cachedAt` to the actual completion time and
+            // clear `pending` — the TTL window should measure freshness from
+            // when the entry became usable, not from registration (round 6).
+            // A resolved `curatedError` is left for the awaiting code below to
+            // delete (same effect, no need to duplicate it here).
+            //
+            // On REJECTION: evict outright (round 5) — loadAllDocuments can
+            // throw (e.g. a malformed namespace artifact), not just return a
+            // structured error, and a rejected promise left cached would
+            // poison every identical request for the rest of the TTL window
+            // even if the failure was transient.
+            promise.then(
+              (result) => {
+                if (!result.curatedError && documentCache.get(cacheKey) === newEntry) {
+                  newEntry.cachedAt = Date.now();
+                  newEntry.pending = false;
+                }
+              },
+              () => {
+                if (documentCache.get(cacheKey) === newEntry) {
+                  documentCache.delete(cacheKey);
+                }
+              }
+            );
+          }
+          // Register a consumption reservation on `entry` SYNCHRONOUSLY, right
+          // here — before awaiting its hydration, not after (Codex review
+          // round 10 on PR #445). Registering it post-`await`, guarded by
+          // `documentCache.get(cacheKey) === entry`, left a race: a
+          // different-key request could evict THIS entry while it was still
+          // `pending` (its `stalePending` capture would correctly wait for
+          // hydration, since `entry.promise` alone was still in scope) but,
+          // once hydration settled, the identity check here would fail (the
+          // entry's gone from the map) and skip registering the reservation
+          // entirely — so THIS request's subsequent `generate()` walk became
+          // completely invisible to any busy-check, and the evictor's already-
+          // snapshotted wait-list had no way to retroactively include it.
+          // Registering synchronously, before the `await`, closes that gap:
+          // `entry` is a plain object this request holds a direct reference
+          // to regardless of whether it's still the map's resident value, so
+          // pushing onto `entry.activeConsumers` needs no identity guard — any
+          // OTHER request that captures `entry` (via `documentCache.values()`)
+          // before evicting it will already see this reservation, whether
+          // `entry` is still pending or has since settled. Released in the
+          // outer `finally` below, which now spans hydration through the
+          // response so every exit path (a `curatedError` return here, a 400,
+          // a thrown error, or success) releases it exactly once.
+          let resolveConsumption!: () => void;
+          const consumption = new Promise<void>((resolve) => {
+            resolveConsumption = resolve;
+          });
+          entry.activeConsumers.push(consumption);
+          releaseDocumentCacheConsumer = () => {
+            resolveConsumption();
+            const index = entry.activeConsumers.indexOf(consumption);
+            if (index !== -1) entry.activeConsumers.splice(index, 1);
+          };
+
+          const result = await entry.promise;
+          if (result.curatedError) {
+            // Don't leave a failed hydration cached for a later request to
+            // reuse — identity-guarded for the same reason as the rejection
+            // handler above — and .clone() the Response, since this exact
+            // instance may be shared with another request that coalesced onto
+            // the same promise (a Response body can only be consumed once).
+            if (documentCache.get(cacheKey) === entry) {
+              documentCache.delete(cacheKey);
+            }
+            return result.curatedError.clone();
+          }
+          documents = result.docs;
+        } else {
+          // A non-cacheable request (has user files, so its own document set
+          // can't safely be reused by a later request) can still compete for
+          // memory with whatever's resident in `documentCache` when it ALSO
+          // hydrates curated content (`curatedBundles.length > 0`) — a settled
+          // cached closure stays strongly referenced in the map for its whole
+          // TTL window, and a pending one keeps hydrating regardless of what
+          // this request does — as can a settled entry still being walked by
+          // another request's `generate()` call (round 9). Building a SECOND
+          // (possibly CDM-sized) closure alongside any of those risks the same
+          // resource-limit crash the cache exists to prevent (Codex review
+          // round 8 on PR #445). Evict an idle settled entry outright (nothing
+          // to wait for) and serialize behind a busy one, exactly as the
+          // cacheable path does (rounds 7/9), before starting this request's
+          // own hydration. Scoped to `curatedBundles.length > 0` — a pure
+          // user-file request never competes for curated-closure memory, so
+          // there's nothing to protect against and no reason to pay the
+          // eviction/wait cost.
+          if (curatedBundles.length > 0 && documentCache.size > 0) {
+            const stalePending: Array<ReturnType<typeof loadAllDocuments> | Promise<void>> = [];
+            for (const e of documentCache.values()) {
+              if (isDocumentCacheEntryBusy(e)) stalePending.push(e.promise, ...e.activeConsumers);
+            }
+            documentCache.clear();
+            if (stalePending.length > 0) {
+              await Promise.allSettled(stalePending);
+            }
+          }
+          const result = await loadAllDocuments(
+            body.files,
+            curatedBundles,
+            curatedFetcher,
+            body.namespaces ?? [],
+            curatedDocs
           );
+          if (result.curatedError) return result.curatedError;
+          documents = result.docs;
         }
-        // Register a consumption reservation on `entry` SYNCHRONOUSLY, right
-        // here — before awaiting its hydration, not after (Codex review
-        // round 10 on PR #445). Registering it post-`await`, guarded by
-        // `documentCache.get(cacheKey) === entry`, left a race: a
-        // different-key request could evict THIS entry while it was still
-        // `pending` (its `stalePending` capture would correctly wait for
-        // hydration, since `entry.promise` alone was still in scope) but,
-        // once hydration settled, the identity check here would fail (the
-        // entry's gone from the map) and skip registering the reservation
-        // entirely — so THIS request's subsequent `generate()` walk became
-        // completely invisible to any busy-check, and the evictor's already-
-        // snapshotted wait-list had no way to retroactively include it.
-        // Registering synchronously, before the `await`, closes that gap:
-        // `entry` is a plain object this request holds a direct reference
-        // to regardless of whether it's still the map's resident value, so
-        // pushing onto `entry.activeConsumers` needs no identity guard — any
-        // OTHER request that captures `entry` (via `documentCache.values()`)
-        // before evicting it will already see this reservation, whether
-        // `entry` is still pending or has since settled. Released in the
-        // outer `finally` below, which now spans hydration through the
-        // response so every exit path (a `curatedError` return here, a 400,
-        // a thrown error, or success) releases it exactly once.
-        let resolveConsumption!: () => void;
-        const consumption = new Promise<void>((resolve) => {
-          resolveConsumption = resolve;
-        });
-        entry.activeConsumers.push(consumption);
-        releaseDocumentCacheConsumer = () => {
-          resolveConsumption();
-          const index = entry.activeConsumers.indexOf(consumption);
-          if (index !== -1) entry.activeConsumers.splice(index, 1);
-        };
 
-        const result = await entry.promise;
-        if (result.curatedError) {
-          // Don't leave a failed hydration cached for a later request to
-          // reuse — identity-guarded for the same reason as the rejection
-          // handler above — and .clone() the Response, since this exact
-          // instance may be shared with another request that coalesced onto
-          // the same promise (a Response body can only be consumed once).
-          if (documentCache.get(cacheKey) === entry) {
-            documentCache.delete(cacheKey);
-          }
-          return result.curatedError.clone();
+        const parseErrors = hasParserErrors(documents);
+        if (parseErrors.length > 0) {
+          return jsonError(400, 'One or more files failed to parse', parseErrors);
         }
-        documents = result.docs;
-      } else {
-        // A non-cacheable request (has user files, so its own document set
-        // can't safely be reused by a later request) can still compete for
-        // memory with whatever's resident in `documentCache` when it ALSO
-        // hydrates curated content (`curatedBundles.length > 0`) — a settled
-        // cached closure stays strongly referenced in the map for its whole
-        // TTL window, and a pending one keeps hydrating regardless of what
-        // this request does — as can a settled entry still being walked by
-        // another request's `generate()` call (round 9). Building a SECOND
-        // (possibly CDM-sized) closure alongside any of those risks the same
-        // resource-limit crash the cache exists to prevent (Codex review
-        // round 8 on PR #445). Evict an idle settled entry outright (nothing
-        // to wait for) and serialize behind a busy one, exactly as the
-        // cacheable path does (rounds 7/9), before starting this request's
-        // own hydration. Scoped to `curatedBundles.length > 0` — a pure
-        // user-file request never competes for curated-closure memory, so
-        // there's nothing to protect against and no reason to pay the
-        // eviction/wait cost.
-        if (curatedBundles.length > 0 && documentCache.size > 0) {
-          const stalePending: Array<ReturnType<typeof loadAllDocuments> | Promise<void>> = [];
-          for (const e of documentCache.values()) {
-            if (isDocumentCacheEntryBusy(e)) stalePending.push(e.promise, ...e.activeConsumers);
-          }
-          documentCache.clear();
-          if (stalePending.length > 0) {
-            await Promise.allSettled(stalePending);
-          }
+
+        // Lazy-import `generate` so the function cold-start doesn't pay
+        // for the codegen bundle on requests that fail at the parse step.
+        //
+        // Apply the Pages Function's opinionated layout default for the
+        // target (019 Phase 0.5.5) — the studio's Download flow delegates
+        // its layout choice to the server, so `body.options.<target>.layout`
+        // is only set when a caller wants to override the server's choice.
+        const { generate } = await import('@rune-langium/codegen/export');
+        const generatorOptions = applyPagesFunctionDefaults(body);
+        const outputs = await generate(documents, generatorOptions);
+
+        const errors = fatalDiagnostics(outputs);
+        if (errors.length > 0) {
+          return jsonError(400, 'Code generation produced errors', errors);
         }
-        const result = await loadAllDocuments(
-          body.files,
-          curatedBundles,
-          curatedFetcher,
-          body.namespaces ?? [],
-          curatedDocs
-        );
-        if (result.curatedError) return result.curatedError;
-        documents = result.docs;
-      }
+        if (outputs.length === 0) {
+          return jsonError(400, 'No output was generated (workspace had no namespaces)');
+        }
 
-      const parseErrors = hasParserErrors(documents);
-      if (parseErrors.length > 0) {
-        return jsonError(400, 'One or more files failed to parse', parseErrors);
+        const filename = downloadFilename(body.target, outputs);
+        if (outputs.length === 1) {
+          return singleArtifactResponse(body.target, outputs[0]!, filename);
+        }
+        return zipResponse(outputs, filename);
+      } finally {
+        // Covers the WHOLE window from cache-entry registration/coalescing
+        // through the response — release the active-consumer reservation
+        // (round 10), if one was registered above, regardless of which exit
+        // path is taken (a `curatedError` return, a 400, a thrown error
+        // caught by the outer `catch`, or success).
+        releaseDocumentCacheConsumer?.();
       }
-
-      // Lazy-import `generate` so the function cold-start doesn't pay
-      // for the codegen bundle on requests that fail at the parse step.
-      //
-      // Apply the Pages Function's opinionated layout default for the
-      // target (019 Phase 0.5.5) — the studio's Download flow delegates
-      // its layout choice to the server, so `body.options.<target>.layout`
-      // is only set when a caller wants to override the server's choice.
-      const { generate } = await import('@rune-langium/codegen/export');
-      const generatorOptions = applyPagesFunctionDefaults(body);
-      const outputs = await generate(documents, generatorOptions);
-
-      const errors = fatalDiagnostics(outputs);
-      if (errors.length > 0) {
-        return jsonError(400, 'Code generation produced errors', errors);
-      }
-      if (outputs.length === 0) {
-        return jsonError(400, 'No output was generated (workspace had no namespaces)');
-      }
-
-      const filename = downloadFilename(body.target, outputs);
-      if (outputs.length === 1) {
-        return singleArtifactResponse(body.target, outputs[0]!, filename);
-      }
-      return zipResponse(outputs, filename);
-    } finally {
-      // Covers the WHOLE window from cache-entry registration/coalescing
-      // through the response — release the active-consumer reservation
-      // (round 10), if one was registered above, regardless of which exit
-      // path is taken (a `curatedError` return, a 400, a thrown error
-      // caught by the outer `catch`, or success).
-      releaseDocumentCacheConsumer?.();
+    } catch (err) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          diagnostics: []
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
-  } catch (err) {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-        diagnostics: []
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-};
+  },
+  { op: 'onRequestPost' }
+);

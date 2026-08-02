@@ -1,7 +1,9 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import { createContext, useContext } from 'react';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export type CenterPane = 'graph' | 'source' | 'inspector' | 'structure';
 
@@ -15,6 +17,9 @@ export const CenterPanesContext = createContext<CenterPanesContextValue>({
   toggle: () => {}
 });
 
-export function useCenterPanes(): CenterPanesContextValue {
-  return useContext(CenterPanesContext);
-}
+export const useCenterPanes = withInstrumentation(
+  function useCenterPanes(): CenterPanesContextValue {
+    return useContext(CenterPanesContext);
+  },
+  { op: 'useCenterPanes' }
+);

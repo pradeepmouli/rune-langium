@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -29,6 +30,7 @@ import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 import { cn } from '@rune-langium/design-system/utils';
 import { flattenDiagnostics } from '../utils/flatten-diagnostics.js';
 import type { FlatDiagnosticRow } from '../utils/flatten-diagnostics.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface DiagnosticsPanelProps {
   fileDiagnostics: Map<string, LspDiagnostic[]>;
@@ -107,50 +109,96 @@ function countProblems(fileDiagnostics: Map<string, LspDiagnostic[]>): ProblemCo
   return counts;
 }
 
-export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPanelProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [visibleSeverities, setVisibleSeverities] = useState<Record<SeverityKind, boolean>>(DEFAULT_VISIBLE_SEVERITIES);
-  const [showSummary, setShowSummary] = useState(true);
+export const DiagnosticsPanel = withInstrumentation(
+  function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPanelProps) {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [visibleSeverities, setVisibleSeverities] =
+      useState<Record<SeverityKind, boolean>>(DEFAULT_VISIBLE_SEVERITIES);
+    const [showSummary, setShowSummary] = useState(true);
 
-  const filteredDiagnostics = useMemo(() => {
-    const filtered = new Map<string, LspDiagnostic[]>();
-    for (const [uri, diagnostics] of fileDiagnostics) {
-      const matching = diagnostics.filter((diagnostic) => visibleSeverities[severityLabel(diagnostic.severity)]);
-      if (matching.length > 0) {
-        filtered.set(uri, matching);
+    const filteredDiagnostics = useMemo(() => {
+      const filtered = new Map<string, LspDiagnostic[]>();
+      for (const [uri, diagnostics] of fileDiagnostics) {
+        const matching = diagnostics.filter((diagnostic) => visibleSeverities[severityLabel(diagnostic.severity)]);
+        if (matching.length > 0) {
+          filtered.set(uri, matching);
+        }
       }
+      return filtered;
+    }, [fileDiagnostics, visibleSeverities]);
+
+    const flatRows = useMemo(() => flattenDiagnostics(filteredDiagnostics), [filteredDiagnostics]);
+    const counts = useMemo(() => countProblems(filteredDiagnostics), [filteredDiagnostics]);
+    const rawCounts = useMemo(() => countProblems(fileDiagnostics), [fileDiagnostics]);
+    const diagnosticsByFile = useMemo(
+      () => new Map(Array.from(filteredDiagnostics.entries(), ([uri, diags]) => [uri, diags.length])),
+      [filteredDiagnostics]
+    );
+    const fileCount = diagnosticsByFile.size;
+    const hasActiveSeverityFilters = SEVERITY_ORDER.some((severity) => !visibleSeverities[severity]);
+    const isEmpty = counts.total === 0;
+    const isFilteredEmpty = rawCounts.total > 0 && isEmpty;
+
+    const toggleSeverity = (severity: SeverityKind) => {
+      setVisibleSeverities((current) => ({ ...current, [severity]: !current[severity] }));
+    };
+
+    const resetFilters = () => {
+      setVisibleSeverities(DEFAULT_VISIBLE_SEVERITIES);
+    };
+
+    const virtualizer = useVirtualizer({
+      count: flatRows.length,
+      getScrollElement: () => scrollRef.current,
+      estimateSize: (index) => (flatRows[index]?.kind === 'file-header' ? FILE_HEADER_HEIGHT : DIAGNOSTIC_ROW_HEIGHT),
+      overscan: 5
+    });
+
+    if (isEmpty) {
+      return (
+        <section
+          className="flex h-full min-h-0 flex-col overflow-hidden"
+          data-testid="diagnostics-panel"
+          aria-label="Diagnostics"
+        >
+          <PanelHeader
+            total={counts.total}
+            rawTotal={rawCounts.total}
+            hasActiveSeverityFilters={hasActiveSeverityFilters}
+            showSummary={showSummary}
+            onToggleSummary={() => setShowSummary((current) => !current)}
+            onResetFilters={resetFilters}
+            visibleSeverities={visibleSeverities}
+            onToggleSeverity={toggleSeverity}
+          />
+          <div className="flex flex-1 items-center justify-center px-4 py-6">
+            <div className="flex max-w-60 flex-col items-center gap-2 text-center">
+              <span className="rounded-full border border-border/70 bg-background/70 p-2 shadow-sm">
+                <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
+              </span>
+              <p className="text-sm font-medium text-foreground">
+                {isFilteredEmpty ? 'No matching problems' : 'No problems detected'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {isFilteredEmpty
+                  ? 'Adjust the active severity filters to bring hidden diagnostics back into view.'
+                  : 'Parser, validation, and linker issues will appear here as you edit.'}
+              </p>
+              {isFilteredEmpty ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:text-primary/80"
+                  onClick={resetFilters}
+                >
+                  Show all severities
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      );
     }
-    return filtered;
-  }, [fileDiagnostics, visibleSeverities]);
 
-  const flatRows = useMemo(() => flattenDiagnostics(filteredDiagnostics), [filteredDiagnostics]);
-  const counts = useMemo(() => countProblems(filteredDiagnostics), [filteredDiagnostics]);
-  const rawCounts = useMemo(() => countProblems(fileDiagnostics), [fileDiagnostics]);
-  const diagnosticsByFile = useMemo(
-    () => new Map(Array.from(filteredDiagnostics.entries(), ([uri, diags]) => [uri, diags.length])),
-    [filteredDiagnostics]
-  );
-  const fileCount = diagnosticsByFile.size;
-  const hasActiveSeverityFilters = SEVERITY_ORDER.some((severity) => !visibleSeverities[severity]);
-  const isEmpty = counts.total === 0;
-  const isFilteredEmpty = rawCounts.total > 0 && isEmpty;
-
-  const toggleSeverity = (severity: SeverityKind) => {
-    setVisibleSeverities((current) => ({ ...current, [severity]: !current[severity] }));
-  };
-
-  const resetFilters = () => {
-    setVisibleSeverities(DEFAULT_VISIBLE_SEVERITIES);
-  };
-
-  const virtualizer = useVirtualizer({
-    count: flatRows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => (flatRows[index]?.kind === 'file-header' ? FILE_HEADER_HEIGHT : DIAGNOSTIC_ROW_HEIGHT),
-    overscan: 5
-  });
-
-  if (isEmpty) {
     return (
       <section
         className="flex h-full min-h-0 flex-col overflow-hidden"
@@ -167,97 +215,55 @@ export function DiagnosticsPanel({ fileDiagnostics, onNavigate }: DiagnosticsPan
           visibleSeverities={visibleSeverities}
           onToggleSeverity={toggleSeverity}
         />
-        <div className="flex flex-1 items-center justify-center px-4 py-6">
-          <div className="flex max-w-60 flex-col items-center gap-2 text-center">
-            <span className="rounded-full border border-border/70 bg-background/70 p-2 shadow-sm">
-              <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
-            </span>
-            <p className="text-sm font-medium text-foreground">
-              {isFilteredEmpty ? 'No matching problems' : 'No problems detected'}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {isFilteredEmpty
-                ? 'Adjust the active severity filters to bring hidden diagnostics back into view.'
-                : 'Parser, validation, and linker issues will appear here as you edit.'}
-            </p>
-            {isFilteredEmpty ? (
-              <button
-                type="button"
-                className="text-xs font-medium text-primary hover:text-primary/80"
-                onClick={resetFilters}
-              >
-                Show all severities
-              </button>
-            ) : null}
+        {showSummary ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-2 text-sm">
+            <SeverityPill severity="error" count={counts.errors} />
+            <SeverityPill severity="warning" count={counts.warnings} />
+            <SeverityPill severity="info" count={counts.info} />
+            <SeverityPill severity="hint" count={counts.hints} />
+            <NumberChiclet title={`${fileCount} file${fileCount === 1 ? '' : 's'}`}>
+              {fileCount} file{fileCount === 1 ? '' : 's'}
+            </NumberChiclet>
+          </div>
+        ) : null}
+
+        <div ref={scrollRef} className="studio-scroll flex-1 overflow-auto">
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative'
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = flatRows[virtualRow.index]!;
+              return (
+                <div
+                  key={virtualRow.key}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`
+                  }}
+                >
+                  {row.kind === 'file-header' ? (
+                    <FileHeaderRow uri={row.uri} count={diagnosticsByFile.get(row.uri) ?? 0} />
+                  ) : (
+                    <DiagnosticItemRow row={row} onNavigate={onNavigate} />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
     );
-  }
-
-  return (
-    <section
-      className="flex h-full min-h-0 flex-col overflow-hidden"
-      data-testid="diagnostics-panel"
-      aria-label="Diagnostics"
-    >
-      <PanelHeader
-        total={counts.total}
-        rawTotal={rawCounts.total}
-        hasActiveSeverityFilters={hasActiveSeverityFilters}
-        showSummary={showSummary}
-        onToggleSummary={() => setShowSummary((current) => !current)}
-        onResetFilters={resetFilters}
-        visibleSeverities={visibleSeverities}
-        onToggleSeverity={toggleSeverity}
-      />
-      {showSummary ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-2 text-sm">
-          <SeverityPill severity="error" count={counts.errors} />
-          <SeverityPill severity="warning" count={counts.warnings} />
-          <SeverityPill severity="info" count={counts.info} />
-          <SeverityPill severity="hint" count={counts.hints} />
-          <NumberChiclet title={`${fileCount} file${fileCount === 1 ? '' : 's'}`}>
-            {fileCount} file{fileCount === 1 ? '' : 's'}
-          </NumberChiclet>
-        </div>
-      ) : null}
-
-      <div ref={scrollRef} className="studio-scroll flex-1 overflow-auto">
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative'
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const row = flatRows[virtualRow.index]!;
-            return (
-              <div
-                key={virtualRow.key}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`
-                }}
-              >
-                {row.kind === 'file-header' ? (
-                  <FileHeaderRow uri={row.uri} count={diagnosticsByFile.get(row.uri) ?? 0} />
-                ) : (
-                  <DiagnosticItemRow row={row} onNavigate={onNavigate} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
+  },
+  { op: 'DiagnosticsPanel' }
+);
 
 function PanelHeader({
   total,

@@ -25,6 +25,7 @@ import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-wal
 import { dialectFor, type Dialect } from './sql-dialect.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { decodeCardinality } from './base-namespace-emitter.js';
+import { debug } from '../instrument.js';
 
 export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly dialect: Dialect;
@@ -93,14 +94,17 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
     this.relativePath = getTargetRelativePath(model.namespace, 'sql');
   }
 
+  @debug()
   emitEnumeration(_e: RosettaEnumeration): void {
     // Enums render inline as CHECK constraints on referencing columns (enumStrategy 'check').
   }
 
+  @debug()
   emitTypeAlias(_a: RosettaTypeAlias): void {
     // Type aliases collapse to their underlying column type at the use site.
   }
 
+  @debug()
   emitData(data: Data): void {
     const q = (id: string) => this.dialect.quote(id);
     const fkType = this.dialect.fkColumnType();

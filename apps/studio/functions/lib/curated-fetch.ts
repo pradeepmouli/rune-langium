@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -37,6 +38,7 @@ import {
   type CuratedManifest,
   parseManifest
 } from '@rune-langium/curated-schema';
+import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
 const CURATED_MIRROR_BASE = 'https://www.daikonic.dev/curated';
 
@@ -80,35 +82,47 @@ export class CuratedBundleUnavailableError extends Error {
  */
 const bundleCache = new Map<string, Promise<CuratedDocument[]>>();
 
-export async function fetchCuratedBundle(
-  id: string,
-  version: string,
-  fetcher?: CuratedFetcher
-): Promise<CuratedDocument[]> {
-  const cacheable = version !== 'latest';
-  const cacheKey = `${id}@${version}`;
-  if (cacheable) {
-    const hit = bundleCache.get(cacheKey);
-    if (hit) return hit;
-  }
+export const fetchCuratedBundle = withInstrumentation(
+  async function fetchCuratedBundle(id: string, version: string, fetcher?: CuratedFetcher): Promise<CuratedDocument[]> {
+    const cacheable = version !== 'latest';
+    const cacheKey = `${id}@${version}`;
+    if (cacheable) {
+      const hit = bundleCache.get(cacheKey);
+      if (hit) return hit;
+    }
 
-  // Default to globalThis.fetch for backwards compatibility with tests and
-  // local dev. Production callers should pass env.CURATED_MIRROR.fetch to
-  // bypass CF same-zone routing — a global fetch from a Pages Function to
-  // its own zone (www.daikonic.dev/curated/...) gets a cf-worker header
-  // that triggers loop prevention and returns 404 instead of reaching the
-  // curated-mirror Worker.
-  const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
+    // Default to globalThis.fetch for backwards compatibility with tests and
+    // local dev. Production callers should pass env.CURATED_MIRROR.fetch to
+    // bypass CF same-zone routing — a global fetch from a Pages Function to
+    // its own zone (www.daikonic.dev/curated/...) gets a cf-worker header
+    // that triggers loop prevention and returns 404 instead of reaching the
+    // curated-mirror Worker.
+    const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
 
-  const work = fetchSerializedArtifact(id, version, fetchFn);
-  if (cacheable) {
-    bundleCache.set(cacheKey, work);
-    work.catch(() => {
-      if (bundleCache.get(cacheKey) === work) bundleCache.delete(cacheKey);
-    });
+    const work = fetchSerializedArtifact(id, version, fetchFn);
+    if (cacheable) {
+      bundleCache.set(cacheKey, work);
+      work.catch(() => {
+        if (bundleCache.get(cacheKey) === work) bundleCache.delete(cacheKey);
+      });
+    }
+    return work;
+    // `id`/`version` are curated bundle identifiers (public, fixed vocabulary)
+    // — safe. `fetcher` isn't capturable. Output documents carry raw
+    // serializedModel AST text — only a count is captured.
+  },
+  {
+    op: 'fetchCuratedBundle',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) => {
+      if (which === 'input') {
+        const [id, version] = value as [string, string, unknown];
+        return { id, version };
+      }
+      return { count: (value as unknown[]).length };
+    }
   }
-  return work;
-}
+);
 
 async function fetchSerializedArtifact(
   id: string,
@@ -248,108 +262,113 @@ const NamespaceArtifactSchema = z.object({ documents: z.array(CuratedSerializedD
  */
 const namespaceCache = new Map<string, Promise<CuratedDocument[]>>();
 
-/**
- * Fetch the per-namespace artifact manifest published at
- * `${CURATED_MIRROR_BASE}/${id}/manifest.json`.
- *
- * The manifest is plain JSON (not gzip). It is NOT cached — it is small,
- * short-lived, and republish changes it; callers should not assume staleness.
- */
-export async function fetchCuratedManifest(
-  id: string,
-  version: string,
-  fetcher?: CuratedFetcher
-): Promise<CuratedManifest> {
-  // Default to globalThis.fetch — same rationale as fetchCuratedBundle (CF
-  // same-zone loop prevention; production callers pass env.CURATED_MIRROR.fetch).
-  const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
-  const url = `${CURATED_MIRROR_BASE}/${id}/manifest.json`;
+export const fetchCuratedManifest = withInstrumentation(
+  async function fetchCuratedManifest(id: string, version: string, fetcher?: CuratedFetcher): Promise<CuratedManifest> {
+    // Default to globalThis.fetch — same rationale as fetchCuratedBundle (CF
+    // same-zone loop prevention; production callers pass env.CURATED_MIRROR.fetch).
+    const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
+    const url = `${CURATED_MIRROR_BASE}/${id}/manifest.json`;
 
-  let res: Response;
-  try {
-    res = await fetchFn(url, undefined);
-  } catch (err) {
-    console.error('curated-fetch manifest_fetch_failed', {
-      bundleId: id,
-      version,
-      url,
-      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-    });
-    throw new CuratedBundleUnavailableError(id, version, undefined, err);
-  }
-  if (!res.ok) {
-    console.error('curated-fetch manifest_non_ok', {
-      bundleId: id,
-      version,
-      url,
-      status: res.status,
-      contentType: res.headers.get('content-type')
-    });
-    throw new CuratedBundleUnavailableError(id, version, res.status);
-  }
+    let res: Response;
+    try {
+      res = await fetchFn(url, undefined);
+    } catch (err) {
+      console.error('curated-fetch manifest_fetch_failed', {
+        bundleId: id,
+        version,
+        url,
+        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      });
+      throw new CuratedBundleUnavailableError(id, version, undefined, err);
+    }
+    if (!res.ok) {
+      console.error('curated-fetch manifest_non_ok', {
+        bundleId: id,
+        version,
+        url,
+        status: res.status,
+        contentType: res.headers.get('content-type')
+      });
+      throw new CuratedBundleUnavailableError(id, version, res.status);
+    }
 
-  let data: unknown;
-  try {
-    data = await res.json();
-  } catch (err) {
-    console.error('curated-fetch manifest_json_parse_failed', {
-      bundleId: id,
-      version,
-      err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-    });
-    throw new CuratedBundleUnavailableError(id, version, undefined, err);
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch (err) {
+      console.error('curated-fetch manifest_json_parse_failed', {
+        bundleId: id,
+        version,
+        err: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      });
+      throw new CuratedBundleUnavailableError(id, version, undefined, err);
+    }
+    const result = parseManifest(data);
+    if (!result.ok) {
+      console.error('curated-fetch manifest_schema_mismatch', {
+        bundleId: id,
+        version,
+        reason: result.reason
+      });
+      throw new CuratedBundleUnavailableError(id, version, undefined, new Error(result.reason));
+    }
+    return result.manifest;
+    // Fetched unauthenticated from the public curated mirror — the whole
+    // manifest (namespace/dep metadata for a curated bundle) is public,
+    // curated data, same trust tier as `id`/`version`. Safe to capture in full.
+  },
+  {
+    op: 'fetchCuratedManifest',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) => {
+      if (which === 'input') {
+        const [id, version] = value as [string, string, unknown];
+        return { id, version };
+      }
+      return value;
+    }
   }
-  const result = parseManifest(data);
-  if (!result.ok) {
-    console.error('curated-fetch manifest_schema_mismatch', {
-      bundleId: id,
-      version,
-      reason: result.reason
-    });
-    throw new CuratedBundleUnavailableError(id, version, undefined, new Error(result.reason));
-  }
-  return result.manifest;
-}
+);
 
-/**
- * Fetch a single per-namespace artifact, inflate, validate, and map to
- * CuratedDocument[].
- *
- * `artifactKey` is the `namespaces[ns].artifact` value from the manifest. It is
- * normally an ABSOLUTE URL (e.g. `https://www.daikonic.dev/curated/cdm/artifacts/
- * 2026-05-22/ns/cdm.base.json.gz`), which is fetched as-is — but only if it points
- * at the trusted curated mirror (`CURATED_MIRROR_BASE`); off-mirror URLs are
- * rejected. A RELATIVE path (older v2 manifests, e.g. `artifacts/.../ns/x.json.gz`)
- * is prefixed with `${CURATED_MIRROR_BASE}/${id}/`.
- *
- * Results are cached per `${id}/${artifactKey}` (versioned keys are immutable).
- * If `artifactKey` contains `latest` caching is skipped as a defensive measure.
- */
-export async function fetchCuratedNamespace(
-  id: string,
-  version: string,
-  artifactKey: string,
-  fetcher?: CuratedFetcher
-): Promise<CuratedDocument[]> {
-  const cacheable = !artifactKey.includes('latest');
-  const cacheKey = `${id}/${artifactKey}`;
-  if (cacheable) {
-    const hit = namespaceCache.get(cacheKey);
-    if (hit) return hit;
-  }
+export const fetchCuratedNamespace = withInstrumentation(
+  async function fetchCuratedNamespace(
+    id: string,
+    version: string,
+    artifactKey: string,
+    fetcher?: CuratedFetcher
+  ): Promise<CuratedDocument[]> {
+    const cacheable = !artifactKey.includes('latest');
+    const cacheKey = `${id}/${artifactKey}`;
+    if (cacheable) {
+      const hit = namespaceCache.get(cacheKey);
+      if (hit) return hit;
+    }
 
-  // Default to globalThis.fetch — same rationale as fetchCuratedBundle.
-  const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
+    // Default to globalThis.fetch — same rationale as fetchCuratedBundle.
+    const fetchFn: CuratedFetcher = fetcher ?? ((url, init) => globalThis.fetch(url, init));
 
-  const work = fetchNamespaceArtifact(id, version, artifactKey, fetchFn);
-  if (cacheable) {
-    namespaceCache.set(cacheKey, work);
-    work.catch(() => {
-      if (namespaceCache.get(cacheKey) === work) namespaceCache.delete(cacheKey);
-    });
+    const work = fetchNamespaceArtifact(id, version, artifactKey, fetchFn);
+    if (cacheable) {
+      namespaceCache.set(cacheKey, work);
+      work.catch(() => {
+        if (namespaceCache.get(cacheKey) === work) namespaceCache.delete(cacheKey);
+      });
+    }
+    return work;
+    // Same rationale as fetchCuratedBundle above.
+  },
+  {
+    op: 'fetchCuratedNamespace',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) => {
+      if (which === 'input') {
+        const [id, version, artifactKey] = value as [string, string, string, unknown];
+        return { id, version, artifactKey };
+      }
+      return { count: (value as unknown[]).length };
+    }
   }
-  return work;
-}
+);
 
 async function fetchNamespaceArtifact(
   id: string,

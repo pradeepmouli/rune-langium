@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -24,6 +25,7 @@
 
 import { gzip, inflate } from 'pako';
 import type { OpfsFs } from './opfs-fs.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 export interface ExtractOptions {
   /** Called once per emitted file; useful for progress UI. */
@@ -53,59 +55,75 @@ interface UstarHeader {
   typeflag: string;
 }
 
-export async function extractTarGz(gzBytes: Uint8Array, fs: OpfsFs, options: ExtractOptions = {}): Promise<void> {
-  // Step 1: gunzip. pako throws on bad headers; we let that propagate so
-  // the caller can surface 'archive_decode' per FR-002.
-  const tar = inflate(gzBytes);
+export const extractTarGz = withInstrumentation(
+  async function extractTarGz(gzBytes: Uint8Array, fs: OpfsFs, options: ExtractOptions = {}): Promise<void> {
+    // Step 1: gunzip. pako throws on bad headers; we let that propagate so
+    // the caller can surface 'archive_decode' per FR-002.
+    const tar = inflate(gzBytes);
 
-  const prefix = options.pathPrefix ? options.pathPrefix.replace(/\/$/, '') : '';
+    const prefix = options.pathPrefix ? options.pathPrefix.replace(/\/$/, '') : '';
 
-  // Step 2: walk 512-byte blocks.
-  let offset = 0;
-  while (offset + BLOCK <= tar.byteLength) {
-    const headerBlock = tar.subarray(offset, offset + BLOCK);
-    if (isAllZero(headerBlock)) {
-      // Two zero blocks signal end-of-archive; one is enough for us to stop.
-      break;
-    }
-    const header = parseUstarHeader(headerBlock);
-    offset += BLOCK;
-
-    const dataBlocks = Math.ceil(header.size / BLOCK);
-    const dataEnd = offset + header.size;
-    if (header.typeflag === '5') {
-      const cleaned = cleanPath(header.name);
-      if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned + '/'))) {
-        try {
-          await fs.mkdir(`${prefix}/${cleaned}`);
-        } catch (err) {
-          // Re-throw with the offending path so the curated-loader's
-          // FR-002 mapper has somewhere to point the user.
-          throw withCause(new Error(`tar: mkdir ${cleaned}/ failed: ${errMessage(err)}`), err);
-        }
+    // Step 2: walk 512-byte blocks.
+    let offset = 0;
+    while (offset + BLOCK <= tar.byteLength) {
+      const headerBlock = tar.subarray(offset, offset + BLOCK);
+      if (isAllZero(headerBlock)) {
+        // Two zero blocks signal end-of-archive; one is enough for us to stop.
+        break;
       }
-    } else if (header.typeflag === '0' || header.typeflag === '\0' || header.typeflag === '') {
-      const cleaned = cleanPath(header.name);
-      if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned))) {
-        const data = tar.subarray(offset, dataEnd);
-        try {
-          await fs.writeFile(`${prefix}/${cleaned}`, data);
-        } catch (err) {
-          throw withCause(new Error(`tar: writeFile ${cleaned} failed: ${errMessage(err)}`), err);
-        }
-        options.onEntry?.(cleaned, header.size);
-      }
-    } else if (header.typeflag === 'g' || header.typeflag === 'x') {
-      // PAX headers — next ustar header carries the canonical name.
-    } else if (header.typeflag === '1' || header.typeflag === '2') {
-      throw new Error(`tar: links not supported (path=${header.name})`);
-    } else {
-      throw new Error(`tar: unsupported typeflag '${header.typeflag}' (path=${header.name})`);
-    }
+      const header = parseUstarHeader(headerBlock);
+      offset += BLOCK;
 
-    offset += dataBlocks * BLOCK;
+      const dataBlocks = Math.ceil(header.size / BLOCK);
+      const dataEnd = offset + header.size;
+      if (header.typeflag === '5') {
+        const cleaned = cleanPath(header.name);
+        if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned + '/'))) {
+          try {
+            await fs.mkdir(`${prefix}/${cleaned}`);
+          } catch (err) {
+            // Re-throw with the offending path so the curated-loader's
+            // FR-002 mapper has somewhere to point the user.
+            throw withCause(new Error(`tar: mkdir ${cleaned}/ failed: ${errMessage(err)}`), err);
+          }
+        }
+      } else if (header.typeflag === '0' || header.typeflag === '\0' || header.typeflag === '') {
+        const cleaned = cleanPath(header.name);
+        if (cleaned && (!options.shouldExtract || options.shouldExtract(cleaned))) {
+          const data = tar.subarray(offset, dataEnd);
+          try {
+            await fs.writeFile(`${prefix}/${cleaned}`, data);
+          } catch (err) {
+            throw withCause(new Error(`tar: writeFile ${cleaned} failed: ${errMessage(err)}`), err);
+          }
+          options.onEntry?.(cleaned, header.size);
+        }
+      } else if (header.typeflag === 'g' || header.typeflag === 'x') {
+        // PAX headers — next ustar header carries the canonical name.
+      } else if (header.typeflag === '1' || header.typeflag === '2') {
+        throw new Error(`tar: links not supported (path=${header.name})`);
+      } else {
+        throw new Error(`tar: unsupported typeflag '${header.typeflag}' (path=${header.name})`);
+      }
+
+      offset += dataBlocks * BLOCK;
+    }
+    // `gzBytes` is raw archive binary (may be a curated public bundle OR a
+    // user-uploaded instance bundle — see instance-bundle.ts's importBundle);
+    // entries within can carry user instance data, so nothing about the
+    // archive's content is captured. `options.pathPrefix` is an app-computed
+    // workspace path — safe.
+  },
+  {
+    op: 'extractTarGz',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [, , options] = value as [Uint8Array, unknown, ExtractOptions | undefined];
+      return { pathPrefix: options?.pathPrefix };
+    }
   }
-}
+);
 
 function parseUstarHeader(block: Uint8Array): UstarHeader {
   const dec = new TextDecoder('utf-8');
@@ -213,26 +231,29 @@ function padTo512(data: Uint8Array): Uint8Array {
   return padded;
 }
 
-/**
- * ustar writer + gzip — the create-side counterpart extractTarGz never had.
- * Purpose-built to match: only regular files (no dirs/links needed for
- * bundle export), 512-byte blocks, two trailing zero blocks per the ustar
- * end-of-archive convention extractTarGz already relies on.
- */
-export function createTarGz(entries: TarEntry[]): Uint8Array {
-  const parts: Uint8Array[] = [];
-  for (const entry of entries) {
-    parts.push(ustarHeaderBytes(entry.path, entry.data.byteLength));
-    parts.push(padTo512(entry.data));
-  }
-  parts.push(new Uint8Array(BLOCK * 2)); // end-of-archive: two zero blocks
+export const createTarGz = withInstrumentation(
+  function createTarGz(entries: TarEntry[]): Uint8Array {
+    const parts: Uint8Array[] = [];
+    for (const entry of entries) {
+      parts.push(ustarHeaderBytes(entry.path, entry.data.byteLength));
+      parts.push(padTo512(entry.data));
+    }
+    parts.push(new Uint8Array(BLOCK * 2)); // end-of-archive: two zero blocks
 
-  const totalLength = parts.reduce((sum, p) => sum + p.byteLength, 0);
-  const tar = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const part of parts) {
-    tar.set(part, offset);
-    offset += part.byteLength;
+    const totalLength = parts.reduce((sum, p) => sum + p.byteLength, 0);
+    const tar = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const part of parts) {
+      tar.set(part, offset);
+      offset += part.byteLength;
+    }
+    return gzip(tar);
+    // `entries[].data` is raw file content (may be user instance data);
+    // output is a raw binary archive — only an entry count is safe.
+  },
+  {
+    op: 'createTarGz',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { entryCount: (value as [TarEntry[]])[0].length } : undefined)
   }
-  return gzip(tar);
-}
+);

@@ -1,5 +1,8 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 /**
  * Keyboard shortcut layer. The dockview keyboard contract
@@ -67,23 +70,28 @@ const BINDINGS: Record<ShellAction, KeyBinding[]> = {
   'reset-layout': [] // command palette only — no global shortcut
 };
 
-export function matchAction(ev: KeyboardEvent): ShellAction | null {
-  for (const action in BINDINGS) {
-    const a = action as ShellAction;
-    for (const b of BINDINGS[a]) {
-      if (
-        normalizeKey(ev.key) === normalizeKey(b.key) &&
-        Boolean(ev.ctrlKey) === Boolean(b.ctrlKey) &&
-        Boolean(ev.metaKey) === Boolean(b.metaKey) &&
-        Boolean(ev.altKey) === Boolean(b.altKey) &&
-        Boolean(ev.shiftKey) === Boolean(b.shiftKey)
-      ) {
-        return a;
+export const matchAction = withInstrumentation(
+  function matchAction(ev: KeyboardEvent): ShellAction | null {
+    for (const action in BINDINGS) {
+      const a = action as ShellAction;
+      for (const b of BINDINGS[a]) {
+        if (
+          normalizeKey(ev.key) === normalizeKey(b.key) &&
+          Boolean(ev.ctrlKey) === Boolean(b.ctrlKey) &&
+          Boolean(ev.metaKey) === Boolean(b.metaKey) &&
+          Boolean(ev.altKey) === Boolean(b.altKey) &&
+          Boolean(ev.shiftKey) === Boolean(b.shiftKey)
+        ) {
+          return a;
+        }
       }
     }
-  }
-  return null;
-}
+    return null;
+    // `ev` (raw KeyboardEvent) isn't captured; output is one of a fixed enum
+    // of shell action names — safe.
+  },
+  { op: 'matchAction', capture: Capture.Output, sanitize: (value, which) => (which === 'output' ? value : undefined) }
+);
 
 function normalizeKey(k: string): string {
   return k.length === 1 ? k.toLowerCase() : k;
@@ -91,19 +99,18 @@ function normalizeKey(k: string): string {
 
 export type ShellHandler = (action: ShellAction, ev: KeyboardEvent) => void;
 
-/**
- * Install a global keydown listener that dispatches matched shortcuts to
- * `handler`. Returns a teardown function — call from a useEffect cleanup.
- */
-export function installShellShortcuts(target: Window | HTMLElement, handler: ShellHandler): () => void {
-  const listener = (ev: Event) => {
-    const ke = ev as KeyboardEvent;
-    const action = matchAction(ke);
-    if (action) {
-      ke.preventDefault();
-      handler(action, ke);
-    }
-  };
-  target.addEventListener('keydown', listener);
-  return () => target.removeEventListener('keydown', listener);
-}
+export const installShellShortcuts = withInstrumentation(
+  function installShellShortcuts(target: Window | HTMLElement, handler: ShellHandler): () => void {
+    const listener = (ev: Event) => {
+      const ke = ev as KeyboardEvent;
+      const action = matchAction(ke);
+      if (action) {
+        ke.preventDefault();
+        handler(action, ke);
+      }
+    };
+    target.addEventListener('keydown', listener);
+    return () => target.removeEventListener('keydown', listener);
+  },
+  { op: 'installShellShortcuts' }
+);

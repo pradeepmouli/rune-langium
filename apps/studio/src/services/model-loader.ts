@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -22,6 +23,7 @@ import type { ModelSource, CachedModel, CachedFile, LoadProgress, LoadedModel } 
 import { ModelLoadError } from '../types/model-types.js';
 import { getCachedModel, getCachedModelIfFresh, setCachedModel } from './model-cache.js';
 import { namespaceFromSource } from '@rune-langium/core';
+import { withInstrumentation } from './instrumentation/core.js';
 
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
 
@@ -43,179 +45,175 @@ interface LoadOptions {
   ) => Promise<LoadedModel>;
 }
 
-/**
- * Load a Rune DSL model.
- *
- * - If `source.archiveUrl` is set AND `options.archiveLoader` is supplied,
- *   routes to the curated-archive (CF R2) path. This is the fast, reliable
- *   path for deployed Studio.
- * - Otherwise falls through to the git-clone path for custom-URL sources
- *   that carry a `source.repoUrl` but no `archiveUrl` (FR-007).
- *
- * The progress + cancellation surface is identical across both paths.
- */
-export async function loadModel(source: ModelSource, options: LoadOptions = {}): Promise<LoadedModel> {
-  const { signal, useCache = true, onProgress, archiveLoader } = options;
+export const loadModel = withInstrumentation(
+  async function loadModel(source: ModelSource, options: LoadOptions = {}): Promise<LoadedModel> {
+    const { signal, useCache = true, onProgress, archiveLoader } = options;
 
-  if (source.archiveUrl && archiveLoader) {
-    if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
-    return archiveLoader(source, { signal, onProgress });
-  }
-
-  // Check cancellation
-  if (signal?.aborted) {
-    throw new ModelLoadError('CANCELLED', 'Load cancelled');
-  }
-
-  // No archiveUrl — fall through to the git-clone path (custom-URL sources).
-  // If there's no repoUrl either, there's nothing to clone.
-  if (!source.repoUrl) {
-    throw new ModelLoadError(
-      'NETWORK',
-      `No archive loader or git URL available for "${source.name}". Only curated archive sources and custom git URLs are supported.`
-    );
-  }
-
-  // Check cache first
-  if (useCache) {
-    const cached = await getCachedModelIfFresh(source.id, source.ref);
-    if (cached) {
-      return {
-        source,
-        commitHash: cached.commitHash,
-        files: cached.files,
-        loadedAt: Date.now()
-      };
+    if (source.archiveUrl && archiveLoader) {
+      if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
+      return archiveLoader(source, { signal, onProgress });
     }
-  }
 
-  // T011: Offline fallback — if offline, try cached model (even stale ref)
-  if (!navigator.onLine) {
-    const cachedAny = await getCachedModel(source.id);
-    if (cachedAny) {
-      return {
-        source,
-        commitHash: cachedAny.commitHash,
-        files: cachedAny.files,
-        loadedAt: Date.now()
-      };
+    // Check cancellation
+    if (signal?.aborted) {
+      throw new ModelLoadError('CANCELLED', 'Load cancelled');
     }
-    throw new ModelLoadError(
-      'NETWORK',
-      `Offline and no cached version of ${source.name} available. Connect to the internet for initial download.`
-    );
-  }
 
-  // Throwaway in-memory FS — the clone exists only long enough to walk
-  // the tree for .rosetta files; persistence happens in CachedModel below.
-  const fs = new InMemoryFs();
+    // No archiveUrl — fall through to the git-clone path (custom-URL sources).
+    // If there's no repoUrl either, there's nothing to clone.
+    if (!source.repoUrl) {
+      throw new ModelLoadError(
+        'NETWORK',
+        `No archive loader or git URL available for "${source.name}". Only curated archive sources and custom git URLs are supported.`
+      );
+    }
 
-  const dir = `/${source.id}`;
-
-  try {
-    // Phase 1: Fetch/clone the repository
-    onProgress?.({ phase: 'fetching', current: 0, total: 1 });
-
-    if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
-
-    await git.clone({
-      fs,
-      http,
-      dir,
-      corsProxy: CORS_PROXY,
-      url: source.repoUrl,
-      ref: source.ref,
-      singleBranch: true,
-      depth: 1,
-      noCheckout: false,
-      onProgress: (evt) => {
-        onProgress?.({
-          phase: 'fetching',
-          current: evt.loaded ?? 0,
-          total: evt.total ?? 1
-        });
+    // Check cache first
+    if (useCache) {
+      const cached = await getCachedModelIfFresh(source.id, source.ref);
+      if (cached) {
+        return {
+          source,
+          commitHash: cached.commitHash,
+          files: cached.files,
+          loadedAt: Date.now()
+        };
       }
-    });
-
-    if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
-
-    // Get the commit hash
-    const commitHash = await git.resolveRef({ fs, dir, ref: 'HEAD' });
-
-    onProgress?.({ phase: 'fetching', current: 1, total: 1 });
-
-    // Phase 2: Discover .rosetta files
-    onProgress?.({ phase: 'discovering', current: 0, total: 1 });
-
-    const rosettaFiles = await discoverRosettaFiles(fs, dir, source.paths);
-
-    if (rosettaFiles.length === 0) {
-      throw new ModelLoadError('NO_FILES', `No .rosetta files found in ${source.name}`);
     }
 
-    if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
+    // T011: Offline fallback — if offline, try cached model (even stale ref)
+    if (!navigator.onLine) {
+      const cachedAny = await getCachedModel(source.id);
+      if (cachedAny) {
+        return {
+          source,
+          commitHash: cachedAny.commitHash,
+          files: cachedAny.files,
+          loadedAt: Date.now()
+        };
+      }
+      throw new ModelLoadError(
+        'NETWORK',
+        `Offline and no cached version of ${source.name} available. Connect to the internet for initial download.`
+      );
+    }
 
-    onProgress?.({
-      phase: 'discovering',
-      current: rosettaFiles.length,
-      total: rosettaFiles.length
-    });
+    // Throwaway in-memory FS — the clone exists only long enough to walk
+    // the tree for .rosetta files; persistence happens in CachedModel below.
+    const fs = new InMemoryFs();
 
-    // Phase 3: Read file contents. Reads within a chunk are independent, so
-    // run them concurrently; cancellation and progress are still checked
-    // between chunks (same CHUNK_SIZE convention as readFileList).
-    const files: CachedFile[] = [];
-    const total = rosettaFiles.length;
-    const CHUNK_SIZE = 10;
+    const dir = `/${source.id}`;
 
-    for (let start = 0; start < rosettaFiles.length; start += CHUNK_SIZE) {
+    try {
+      // Phase 1: Fetch/clone the repository
+      onProgress?.({ phase: 'fetching', current: 0, total: 1 });
+
       if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
 
-      const chunk = rosettaFiles.slice(start, start + CHUNK_SIZE);
-      const chunkFiles = await Promise.all(
-        chunk.map(async (filePath): Promise<CachedFile> => {
-          const content = new TextDecoder().decode((await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array);
-          const namespace = extractNamespace(content);
-          return { path: filePath, content, namespace };
-        })
-      );
-      files.push(...chunkFiles);
+      await git.clone({
+        fs,
+        http,
+        dir,
+        corsProxy: CORS_PROXY,
+        url: source.repoUrl,
+        ref: source.ref,
+        singleBranch: true,
+        depth: 1,
+        noCheckout: false,
+        onProgress: (evt) => {
+          onProgress?.({
+            phase: 'fetching',
+            current: evt.loaded ?? 0,
+            total: evt.total ?? 1
+          });
+        }
+      });
 
-      onProgress?.({ phase: 'parsing', current: files.length, total });
+      if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
+
+      // Get the commit hash
+      const commitHash = await git.resolveRef({ fs, dir, ref: 'HEAD' });
+
+      onProgress?.({ phase: 'fetching', current: 1, total: 1 });
+
+      // Phase 2: Discover .rosetta files
+      onProgress?.({ phase: 'discovering', current: 0, total: 1 });
+
+      const rosettaFiles = await discoverRosettaFiles(fs, dir, source.paths);
+
+      if (rosettaFiles.length === 0) {
+        throw new ModelLoadError('NO_FILES', `No .rosetta files found in ${source.name}`);
+      }
+
+      if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
+
+      onProgress?.({
+        phase: 'discovering',
+        current: rosettaFiles.length,
+        total: rosettaFiles.length
+      });
+
+      // Phase 3: Read file contents. Reads within a chunk are independent, so
+      // run them concurrently; cancellation and progress are still checked
+      // between chunks (same CHUNK_SIZE convention as readFileList).
+      const files: CachedFile[] = [];
+      const total = rosettaFiles.length;
+      const CHUNK_SIZE = 10;
+
+      for (let start = 0; start < rosettaFiles.length; start += CHUNK_SIZE) {
+        if (signal?.aborted) throw new ModelLoadError('CANCELLED', 'Load cancelled');
+
+        const chunk = rosettaFiles.slice(start, start + CHUNK_SIZE);
+        const chunkFiles = await Promise.all(
+          chunk.map(async (filePath): Promise<CachedFile> => {
+            const content = new TextDecoder().decode((await fs.promises.readFile(`${dir}/${filePath}`)) as Uint8Array);
+            const namespace = extractNamespace(content);
+            return { path: filePath, content, namespace };
+          })
+        );
+        files.push(...chunkFiles);
+
+        onProgress?.({ phase: 'parsing', current: files.length, total });
+      }
+
+      // Cache the result
+      const cachedModel: CachedModel = {
+        sourceId: source.id,
+        ref: source.ref,
+        commitHash,
+        files,
+        fetchedAt: Date.now(),
+        totalFiles: files.length
+      };
+      await setCachedModel(cachedModel);
+
+      return {
+        source,
+        commitHash,
+        files,
+        loadedAt: Date.now()
+      };
+    } catch (e) {
+      if (e instanceof ModelLoadError) throw e;
+
+      const msg = (e as Error).message ?? String(e);
+
+      if (msg.includes('404') || msg.includes('not found')) {
+        throw new ModelLoadError('NOT_FOUND', `Repository or ref not found: ${source.repoUrl}@${source.ref}`);
+      }
+      // Anything else maps to NETWORK — we can't reliably distinguish
+      // network errors from programming bugs by string-matching the message,
+      // so prefer the user-actionable category and let the underlying msg
+      // through for diagnostics.
+      throw new ModelLoadError('NETWORK', `Failed to load ${source.name}: ${msg}`);
     }
-
-    // Cache the result
-    const cachedModel: CachedModel = {
-      sourceId: source.id,
-      ref: source.ref,
-      commitHash,
-      files,
-      fetchedAt: Date.now(),
-      totalFiles: files.length
-    };
-    await setCachedModel(cachedModel);
-
-    return {
-      source,
-      commitHash,
-      files,
-      loadedAt: Date.now()
-    };
-  } catch (e) {
-    if (e instanceof ModelLoadError) throw e;
-
-    const msg = (e as Error).message ?? String(e);
-
-    if (msg.includes('404') || msg.includes('not found')) {
-      throw new ModelLoadError('NOT_FOUND', `Repository or ref not found: ${source.repoUrl}@${source.ref}`);
-    }
-    // Anything else maps to NETWORK — we can't reliably distinguish
-    // network errors from programming bugs by string-matching the message,
-    // so prefer the user-actionable category and let the underlying msg
-    // through for diagnostics.
-    throw new ModelLoadError('NETWORK', `Failed to load ${source.name}: ${msg}`);
-  }
-}
+    // `source.repoUrl`/`source.name` can be a user-entered custom git URL
+    // (telemetry-shipper.ts's own commentary notes this must be hashed, never
+    // shipped raw) and the output carries raw .rosetta file contents — never
+    // captured.
+  },
+  { op: 'loadModel' }
+);
 
 /**
  * Recursively discover .rosetta files matching the source's path patterns.

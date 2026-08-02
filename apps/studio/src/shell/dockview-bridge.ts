@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -29,6 +30,7 @@ import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import type { DockviewPayload, FactoryShape, LayoutNode, LayoutGroup, PanelComponentName } from './layout-types.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, PANEL_TITLES } from './layout-factory.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
 
@@ -46,65 +48,69 @@ const BOTTOM_GROUP_MIN_HEIGHT = 24;
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
 
-/**
- * Distinguish a factory-shape layout from a native (round-tripped)
- * layout. Kept as a typed predicate so call sites can narrow.
- */
-export function isFactoryShape(payload: DockviewPayload | null): payload is FactoryShape {
-  return !!payload && payload.shape === 'factory';
-}
+export const isFactoryShape = withInstrumentation(
+  function isFactoryShape(payload: DockviewPayload | null): payload is FactoryShape {
+    return !!payload && payload.shape === 'factory';
+  },
+  {
+    op: 'isFactoryShape',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
-/**
- * Apply a layout to a freshly-mounted dockview. Factory shape goes
- * through `addPanel` calls; native shape goes through `fromJSON`. A
- * `null` payload (fresh workspace, unmigrated record) builds a default.
- */
-export function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
-  const payload = layout.dockview;
-  if (!payload) {
-    applyFactoryShape(api, defaultFactoryShape(layout));
-    return;
-  }
-  if (payload.shape === 'factory') {
-    applyFactoryShape(api, payload);
-    return;
-  }
-  // shape === 'native'
-  try {
-    api.fromJSON(payload.json as Parameters<DockviewApi['fromJSON']>[0]);
-    const restoredPanels = api.panels;
-    if (restoredPanels.length === 0) {
-      throw new Error('restored layout contains no panels');
+export const applyLayout = withInstrumentation(
+  function applyLayout(api: DockviewApi, layout: PanelLayoutRecord): void {
+    const payload = layout.dockview;
+    if (!payload) {
+      applyFactoryShape(api, defaultFactoryShape(layout));
+      return;
     }
-    const unknownPanels: string[] = [];
-    for (const panel of restoredPanels) {
-      const component = panel.api.component;
-      if (!KNOWN_COMPONENTS.has(component)) unknownPanels.push(component);
+    if (payload.shape === 'factory') {
+      applyFactoryShape(api, payload);
+      return;
     }
-    if (unknownPanels.length > 0) {
-      throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
+    // shape === 'native'
+    try {
+      api.fromJSON(payload.json as Parameters<DockviewApi['fromJSON']>[0]);
+      const restoredPanels = api.panels;
+      if (restoredPanels.length === 0) {
+        throw new Error('restored layout contains no panels');
+      }
+      const unknownPanels: string[] = [];
+      for (const panel of restoredPanels) {
+        const component = panel.api.component;
+        if (!KNOWN_COMPONENTS.has(component)) unknownPanels.push(component);
+      }
+      if (unknownPanels.length > 0) {
+        throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
+      }
+      api.getPanel('workspace.problems')?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
+    } catch (err) {
+      // The user just lost their saved layout. Don't be silent — log the
+      // cause + a sample of the JSON so the bug is filable. layout-migrations
+      // already ran the sanitiser, so reaching this catch implies a shape
+      // change inside dockview itself.
+      // eslint-disable-next-line no-console
+      console.error('[dockview-bridge] api.fromJSON rejected, falling back to default layout', {
+        err: errMessage(err),
+        jsonPreview: previewJson(payload.json)
+      });
+      // This recovers internally rather than rethrowing, so DockShell's own
+      // applyLayout try/catch (which op-logs + toasts) never sees this error —
+      // without an op-log entry here, the reset is otherwise silent.
+      useOutputStore
+        .getState()
+        .addLine(fmtLine('layout', 'saved layout rejected, using default', errMessage(err)), 'warn');
+      api.clear();
+      applyFactoryShape(api, defaultFactoryShape(layout));
     }
-    api.getPanel('workspace.problems')?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
-  } catch (err) {
-    // The user just lost their saved layout. Don't be silent — log the
-    // cause + a sample of the JSON so the bug is filable. layout-migrations
-    // already ran the sanitiser, so reaching this catch implies a shape
-    // change inside dockview itself.
-    // eslint-disable-next-line no-console
-    console.error('[dockview-bridge] api.fromJSON rejected, falling back to default layout', {
-      err: errMessage(err),
-      jsonPreview: previewJson(payload.json)
-    });
-    // This recovers internally rather than rethrowing, so DockShell's own
-    // applyLayout try/catch (which op-logs + toasts) never sees this error —
-    // without an op-log entry here, the reset is otherwise silent.
-    useOutputStore
-      .getState()
-      .addLine(fmtLine('layout', 'saved layout rejected, using default', errMessage(err)), 'warn');
-    api.clear();
-    applyFactoryShape(api, defaultFactoryShape(layout));
-  }
-}
+    // `api` isn't serializable; `layout.dockview` may carry an opaque
+    // third-party (dockview) JSON snapshot of unclear full shape — not
+    // confidently safe, so left uncaptured.
+  },
+  { op: 'applyLayout' }
+);
 
 function defaultFactoryShape(layout: PanelLayoutRecord): FactoryShape {
   return buildDefaultLayout({
@@ -198,14 +204,14 @@ function addLeafOrGroup(
   } satisfies AddPanelOptions);
 }
 
-/**
- * Snapshot the current layout for persistence. The returned shape is
- * stored as `PanelLayoutRecord.dockview` directly; the next mount will
- * route it through `api.fromJSON()`.
- */
-export function serializeLayout(api: DockviewApi): DockviewPayload {
-  return { shape: 'native', json: api.toJSON() };
-}
+export const serializeLayout = withInstrumentation(
+  function serializeLayout(api: DockviewApi): DockviewPayload {
+    return { shape: 'native', json: api.toJSON() };
+    // `api.toJSON()` is an opaque third-party (dockview) snapshot — not
+    // confidently safe to capture in full.
+  },
+  { op: 'serializeLayout' }
+);
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
