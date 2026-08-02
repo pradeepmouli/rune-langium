@@ -41,6 +41,23 @@ function noopEmit(): void {
 
 let currentEmit: Emit = noopEmit;
 
+const additionalSinks = new Set<Emit>();
+
+/**
+ * Registers an additional sink alongside whatever configureInstrumentation
+ * set as the primary emit — every emitted record is forwarded to both.
+ * Returns an unregister function; call it on cleanup (e.g. a React
+ * component's unmount) so a torn-down consumer stops receiving records.
+ * `emit` stays "a plain function reference" — this is a fan-out dispatch
+ * list, not a Sink interface/class.
+ */
+export function addInstrumentationSink(sink: Emit): () => void {
+  additionalSinks.add(sink);
+  return () => {
+    additionalSinks.delete(sink);
+  };
+}
+
 // Module scope in core.ts:
 // - Vite/rolldown builds (browser + both workers): `import.meta.env` is
 //   statically replaced, so IS_PROD folds to a build-time constant and the
@@ -74,6 +91,7 @@ export function configureInstrumentation(emit: Emit, isEnabled: () => boolean = 
 /** Test-only: restores the pre-configuration no-op sink and default threshold between test files. */
 export function resetInstrumentationForTests(): void {
   currentEmit = noopEmit;
+  additionalSinks.clear();
   isEnabledCheck = () => true;
   resetInstrumentationThresholdForTests();
 }
@@ -81,6 +99,7 @@ export function resetInstrumentationForTests(): void {
 /** Public export — used both internally by withInstrumentation and directly by callers (e.g. InstrumentationErrorBoundary) that hand-build a TelemetryRecord outside the capture/sanitize wrapper machinery. */
 export function emitRecord(record: TelemetryRecord): void {
   currentEmit(record);
+  for (const sink of additionalSinks) sink(record);
 }
 
 export function levelClears(level: Level, threshold: Level): boolean {
