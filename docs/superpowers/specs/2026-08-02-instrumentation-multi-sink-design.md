@@ -7,24 +7,36 @@ shipped a repo-wide instrumentation pipe for `apps/studio`, but it has exactly
 one consumer today: the Output panel (`browser-sink.ts`'s
 `routeTelemetryRecord`, which forwards every record that clears the global
 threshold into `useOutputStore`). Two other UI surfaces exist, fully built,
-and currently starved:
+and currently reached only indirectly:
 
 - `StudioToastProvider` (`apps/studio/src/components/StudioToastProvider.tsx`)
-  — a real toast system, currently only fed by one hand-wired async flow
-  (`showLoadingToast`/`dismissToast` for curated-namespace hydration).
+  — a real toast system. `showToast`/`showLoadingToast`/`dismissToast`
+  already mirror into `output-store`/`activity-store` internally (a
+  deliberate, already-shipped "superset-of-toasts invariant" from
+  `docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md`), but
+  nothing in the app calls `showToast` *from* the new instrumentation pipe
+  — toasts today only fire from whatever UI code directly calls
+  `useStudioToast()`, never from an arbitrary instrumented function's
+  telemetry record.
 - `ActivityPanel`/`useActivityStore`
   (`apps/studio/src/shell/panels/ActivityPanel.tsx`,
   `apps/studio/src/store/activity-store.ts`) — a scrollable activity feed
-  with a well-shaped `ActivityEntry` type and a capped ring buffer. Verified
-  by searching the whole repo: `addActivity(...)` is called **only from test
-  files** today. In production, this panel is permanently empty.
+  with a well-shaped `ActivityEntry` type and a capped ring buffer. It is
+  NOT currently empty in production (an earlier draft of this doc claimed
+  otherwise — corrected: `StudioToastProvider`'s existing mirroring
+  already populates it, generically tagged `'toast'`, whenever a toast
+  fires). What's missing is a namespace-aware feed driven directly by the
+  instrumentation pipe, independent of whether something also toasted.
 
-This design wires both into the existing telemetry pipe as real sinks,
-rather than building anything new. It also tightens what `'info'` means —
-today it's the *default* level for any un-nested instrumented call (nearly
-all of the 277 call sites the original plan instrumented), which would make
-every one of them a toast/activity trigger if left as-is. That's the
-opposite of curated.
+This design wires both into the existing telemetry pipe as new,
+independent sinks, reusing real existing primitives (`useActivityStore`'s
+`addActivity`, and a new minimal pass-through on `StudioToastProvider` —
+see Sink architecture) rather than building anything new or duplicating
+`showToast()`'s own already-tested mirroring. It also tightens what
+`'info'` means — today it's the *default* level for any un-nested
+instrumented call (nearly all of the 277 call sites the original plan
+instrumented), which would make every one of them a toast/activity trigger
+if left as-is. That's the opposite of curated.
 
 ## Non-goals
 
@@ -197,28 +209,70 @@ gate, because every unconditionally-emitted error (`'error'`, and
 `handled`'s `'warn'` tier) already clears that numeric floor by
 construction — gating on level alone would turn every uncaught error from
 any of the original plan's 277 call sites into a toast, none of which
-opted into that. A record reaches the Toast/Activity sink's own
-display logic only when `record.namespace` is set; level still matters
-for *how* it's displayed (e.g. toast variant), just not *whether*.
+opted into that. A record reaches each sink's own display logic only
+when `record.namespace` is set; level still matters for *how* it's
+displayed (e.g. toast variant), just not *whether*.
+
+**Toast and Activity are two genuinely independent sinks, not one bundled
+mechanism.** An earlier draft of this section considered routing the Toast
+sink through the *existing* `showToast()` — rejected during design review:
+`showToast()` (`StudioToastProvider.tsx`, already shipped) internally
+mirrors every toast into both `output-store` and `activity-store` as a
+deliberate, already-tested "superset-of-toasts invariant"
+(`docs/superpowers/specs/2026-07-16-prod-ux-checkout-harness.md` — *"any
+event a user sees as a toast must also exist as an op-log entry"*). Routing
+through it would make a *second*, independent Activity sink call
+`addActivity()` directly for the same record — producing a duplicate
+Activity entry (once via `showToast()`'s own mirror, tagged generically
+`'toast'`; once via the new Activity sink, tagged with the real
+`namespace`). Toast and Activity must be targetable independently, and
+Toast itself must be a pure pass-through with no side effects of its own.
+
+**`StudioToastContextValue` gains one new method, `notify`** — a minimal,
+side-effect-free pass-through that does *only* the toast render (`add({...
+})` from `useToastManager()`), nothing else:
+
+```ts
+interface StudioToastContextValue {
+  // ...existing showToast/showLoadingToast/dismissToast, unchanged...
+  /** Pure toast render, no output-store/activity-store mirroring. Used by
+   *  the instrumentation Toast sink, which independently targets Activity
+   *  itself — see docs/superpowers/specs/
+   *  2026-08-02-instrumentation-multi-sink-design.md. */
+  notify: (toast: StudioToastInput) => void;
+}
+```
+
+The **existing** `showToast`/`showLoadingToast`/`dismissToast` and their
+existing mirroring behavior are completely untouched by this design — no
+existing call site, and no prod-ux-checkout-harness assertion, changes.
+`notify` is new, narrower, additive.
 
 **Toast sink — new.** Registered from inside `StudioToastProvider` itself
 (not a standalone module-level function like the Output sink) — it needs
-`showToast`, which only exists inside that component's own React context.
+`notify`, which only exists inside that component's own React context.
 Maps `TelemetryRecord.op` + `namespace` into the toast's
 `title`/`description`; `level === 'error'` → toast `variant: 'destructive'`,
-everything else (`'warn'`, `'info'`) → default variant. Additive: does not
-touch the existing `showLoadingToast`/`dismissToast` mechanism (a separate,
-independent path for the one async curated-hydration flow that predates
-this design) — this is a second, independent route into the same toast
-system for `namespace`-tagged telemetry records.
+everything else (`'warn'`, `'info'`) → default variant.
 
-**Activity sink — new.** Calls
-`useActivityStore.getState().addActivity(tag, ok, msg, meta)` — the first
-production code to ever populate that store (verified: today, only test
-files call it). `TelemetryRecord` maps cleanly onto the existing
-`ActivityEntry` shape with no changes needed to `activity-store.ts` itself:
-`namespace` → `tag`, `level !== 'error'` → `ok`, `op` (or a short derived
-description) → `msg`, `durationMs`/`ts` already line up directly.
+**Activity sink — new, fully independent of the Toast sink.** Calls
+`useActivityStore.getState().addActivity(tag, ok, msg, meta)` directly — a
+new, additional producer into that store, alongside the store's existing
+producers (`StudioToastProvider`'s own `showToast`/`showLoadingToast`/
+`dismissToast`, which already write there today via the superset-of-toasts
+mirror — this store is not currently unpopulated in production, contrary
+to an earlier draft of this doc's Problem section; corrected there).
+`TelemetryRecord` maps cleanly onto the existing `ActivityEntry` shape with
+no changes needed to `activity-store.ts` itself: `namespace` → `tag`,
+`level !== 'error'` → `ok`, `op` (or a short derived description) → `msg`,
+`durationMs`/`ts` already line up directly.
+
+**In practice today**, both sinks share the same gate (`namespace`
+presence), so a namespace-tagged record currently produces both a toast and
+an activity entry together — but the two sinks are architecturally
+decoupled (independent registrations, independent implementations, no
+shared internal call path), so a future refinement could target one without
+the other without restructuring anything.
 
 ## Testing
 
@@ -241,9 +295,12 @@ infrastructure):
   `handled`-unset/`'error'` case; this only needs the two new tiers).
 - Toast sink: a component-level test rendering `StudioToastProvider`,
   driving a `namespace`-tagged instrumented call, and asserting a toast
-  appears with the right `namespace`-derived title — mirroring
+  appears (via the new `notify` pass-through, not `showToast`) with the
+  right `namespace`-derived title — mirroring
   `InstrumentationErrorBoundary.test.tsx`'s existing render-and-assert
-  pattern from the parent plan's Task 11.
+  pattern from the parent plan's Task 11. A companion test confirms
+  `showToast`'s own existing output-store/activity-store mirroring is
+  unaffected — the new sink's addition doesn't touch that code path.
 - Activity sink: a test asserting `useActivityStore`'s `entries` array
   gains a correctly-shaped `ActivityEntry` after a `namespace`-tagged call,
   and that neither (a) a `'debug'`-default call, nor (b) — the load-bearing
@@ -253,12 +310,17 @@ infrastructure):
   exact bug caught during this design's own self-review and must never
   regress: gating on `namespace` presence, not numeric level, is what keeps
   every uncaught error across the app from becoming a toast.
-- Real integration check: at least one real call site across the app gets
-  explicitly promoted with a `namespace` as part of this design's
-  implementation (not deferred to "someone will add these later")
-  — e.g. a genuinely toast-worthy existing event, so the Activity Panel is
-  provably non-empty and the Toast sink provably fires at least once in
-  real app usage, not just in unit tests.
+- Real integration check: `CodegenProvider.tsx`'s `reportHydrationRetryExhausted`
+  (the `RetryExhaustedError` retrofit from the original plan's Task 8) gets
+  promoted to `handled: true, namespace: 'curated'` as part of this design's
+  implementation, not deferred. Today, when curated-namespace hydration
+  exhausts its retry budget, the error is captured for telemetry but the
+  user sees nothing — the local `try { ... } catch {}` swallows it silently
+  by design (Task 8's own stated intent, preserving pre-instrumentation
+  UX). This design makes that first real user-visible: the existing
+  `CodegenProvider.retry-exhausted.test.tsx` gets extended to also assert a
+  toast/activity entry now appears, giving both the Activity Panel and the
+  Toast sink a genuinely useful, real (not synthetic) validation.
 
 ## Open follow-ups (not blocking this design)
 
