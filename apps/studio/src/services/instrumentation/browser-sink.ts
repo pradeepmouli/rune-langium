@@ -7,14 +7,14 @@ import { useTelemetrySettingsStore } from '../../store/telemetry-settings.js';
 import { configureInstrumentation, type TelemetryRecord } from './core.js';
 import { withInstrumentation } from './core.js';
 
-// oxlint-disable-next-line rune/no-uninstrumented-export -- this IS the
-// currentEmit sink installed below (configureInstrumentation's first arg):
-// wrapping it in withInstrumentation would make every instrumented call's
-// success emission re-enter emitRecord -> currentEmit -> this function,
-// recursing into itself (unbounded once the threshold is lowered below
-// 'warn', since the default depth-0 level 'info' doesn't normally clear
-// it). The instrumentation pipe's own terminal sink must stay a plain
-// function.
+// This IS the currentEmit sink installed below (configureInstrumentation's
+// first arg): wrapping it in withInstrumentation would make every
+// instrumented call's success emission re-enter emitRecord ->
+// currentEmit -> this function, recursing into itself (unbounded once the
+// threshold is lowered below 'warn', since the default depth-0 level
+// 'info' doesn't normally clear it). The instrumentation pipe's own
+// terminal sink must stay a plain function.
+// oxlint-disable-next-line rune/no-uninstrumented-export -- see comment above
 export function routeTelemetryRecord(record: TelemetryRecord): void {
   // Single choke point for the existing telemetry opt-in flag — gates both
   // relayed worker records (worker-sink.ts's own configureInstrumentation

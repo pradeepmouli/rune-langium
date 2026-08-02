@@ -9,7 +9,7 @@
       "files": ["src/**", "functions/**"],
       "excludeFiles": ["functions/test/**"],
       "rules": {
-        "rune/no-uninstrumented-export": "warn"
+        "rune/no-uninstrumented-export": "error"
       }
     }
   ]
