@@ -31,7 +31,7 @@
 - Test: `apps/studio/test/services/instrumentation/core.test.ts`
 
 **Interfaces:**
-- Produces: `Level` (`'trace'|'debug'|'info'|'warn'|'error'`), `Capture` (`const enum { Input = 0b01, Output = 0b10 }`), `TelemetryRecord`, `Emit`, `configureInstrumentation(emit: Emit): void`, `resetInstrumentationForTests(): void` (test-only reset, mirrors how `useTelemetrySettingsStore` resets between test files).
+- Produces: `Level` (`'trace'|'debug'|'info'|'warn'|'error'`), `Capture` (a `const`-object of bitflags `{ Input: 0b01, Output: 0b10 }` — NOT a `const enum`: every tsconfig in this repo sets `isolatedModules`, and once Task 9 moves this module into a dist-built package, a `const enum` in the emitted `.d.ts` is ambient and un-referenceable from `isolatedModules` consumers), `TelemetryRecord`, `Emit`, `configureInstrumentation(emit: Emit): void`, `resetInstrumentationForTests(): void` (test-only reset, mirrors how `useTelemetrySettingsStore` resets between test files).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -100,10 +100,12 @@ Expected: FAIL — `Cannot find module '../../../src/services/instrumentation/co
 
 export type Level = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
-export const enum Capture {
-  Input = 0b01,
-  Output = 0b10
-}
+// Plain const object, not `const enum` — see Task 1's Interfaces note
+// (isolatedModules + cross-package .d.ts make const enums a hazard here).
+export const Capture = {
+  Input: 0b01,
+  Output: 0b10
+} as const;
 
 export interface TelemetryRecord {
   op: string;
@@ -272,6 +274,13 @@ describe('withInstrumentation', () => {
     wrapped();
     expect(emitted).toEqual([expect.objectContaining({ op: 'myNamedFunction' })]);
   });
+
+  it('an above-threshold call through the default (pre-configuration) no-op sink never throws', () => {
+    resetInstrumentationForTests(); // guarantee the no-op sink, not a leaked emit from a prior test
+    setInstrumentationThreshold('info');
+    const wrapped = withInstrumentation(() => 7, { op: 'unconfigured', level: 'info' });
+    expect(wrapped()).toBe(7); // emit path runs, silently dropped — the design's "silent no-op" invariant
+  });
 });
 ```
 
@@ -366,16 +375,18 @@ function emitSuccess(
   emitRecord(record);
 }
 
-function emitError(op: string, opts: InstrumentationOptions, err: unknown): void {
+// `bindingContext` is unused until Task 3 introduces `.child()` — declared now
+// so error records carry the bound context the same way success records do.
+function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindingContext?: unknown): void {
   const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
-  emitRecord({ op, level: 'error', captured: 0, signature, context, ts: Date.now() });
+  emitRecord({ op, level: 'error', captured: 0, signature, context: context ?? bindingContext, ts: Date.now() });
 }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/services/instrumentation/with-instrumentation.test.ts`
-Expected: PASS (5 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -422,7 +433,9 @@ describe('withInstrumentation.child', () => {
     const emitted: unknown[] = [];
     configureInstrumentation((r) => emitted.push(r));
     setInstrumentationThreshold('info');
-    const moduleScoped = withInstrumentation.child({ context: { module: 'codegen-worker' } });
+    // NOTE: the first argument IS the baseContext itself (it lands verbatim in
+    // record.context) — not an options bag with a `context` key.
+    const moduleScoped = withInstrumentation.child({ module: 'codegen-worker' });
     const wrapped = moduleScoped((x: number) => x, { op: 'passthrough', level: 'info' });
     wrapped(1);
     expect(emitted).toEqual([expect.objectContaining({ op: 'passthrough', context: { module: 'codegen-worker' } })]);
@@ -446,6 +459,23 @@ describe('withInstrumentation.child', () => {
     const wrapped = verbose(() => 1, { op: 'loud', level: 'warn' });
     wrapped();
     expect(emitted).toEqual([expect.objectContaining({ op: 'loud', level: 'warn' })]);
+  });
+
+  it('baseContext also lands on the ERROR record when a wrapped call throws (unless sanitizeError supplies its own context)', () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((r) => emitted.push(r));
+    setInstrumentationThreshold('error');
+    const moduleScoped = withInstrumentation.child({ module: 'codegen-worker' });
+    const wrapped = moduleScoped(
+      () => {
+        throw new Error('boom');
+      },
+      { op: 'explodeInChild', sanitizeError: () => ({ signature: 'Error:boom' }) }
+    );
+    expect(() => wrapped()).toThrow('boom');
+    expect(emitted).toEqual([
+      expect.objectContaining({ op: 'explodeInChild', level: 'error', context: { module: 'codegen-worker' } })
+    ]);
   });
 });
 
@@ -575,7 +605,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             },
             (err) => {
               depth--;
-              emitError(op, opts, err);
+              emitError(op, opts, err, context);
               throw err;
             }
           );
@@ -583,7 +613,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
         emitSuccessWithContext(op, level, capture, args, result, sanitize, performance.now() - start, context);
         return result;
       } catch (err) {
-        emitError(op, opts, err);
+        emitError(op, opts, err, context);
         throw err;
       } finally {
         if (!isAsync) depth--;
@@ -629,7 +659,7 @@ Replace the plain `export function withInstrumentation` from Task 2 with:
 export const withInstrumentation = makeWithInstrumentation();
 ```
 
-(Delete Task 2's standalone `withInstrumentation` function body — `makeWithInstrumentation()` with no binding reproduces the exact same behavior as its base case, so Task 2's tests keep passing unmodified.)
+(Delete Task 2's standalone `withInstrumentation` function body AND its now-dead `emitSuccess` helper — `makeWithInstrumentation()` with no binding plus `emitSuccessWithContext` reproduce the exact same behavior as the base case, so Task 2's tests keep passing unmodified.)
 
 - [ ] **Step 4: Run all instrumentation tests to verify they pass**
 
@@ -654,7 +684,7 @@ git commit -m "feat(studio): depth-based default level, .child() binding, level-
 
 **Interfaces:**
 - Consumes: `TelemetryRecord`, `configureInstrumentation` (Task 1); `addLine`, `fmtLine` from `apps/studio/src/store/output-store.ts` (existing, unmodified).
-- Produces: `installInstrumentationBrowserSink(): void`.
+- Produces: `installInstrumentationBrowserSink(): void`; `routeTelemetryRecord(record: TelemetryRecord): void` (the record→`addLine` mapping as a standalone export — Task 5's worker relays call it directly rather than duplicating the mapping).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -717,17 +747,27 @@ import { configureInstrumentation, type TelemetryRecord } from './core.js';
  * existing pipe, not a second channel. Call once at browser bootstrap
  * (apps/studio/src/main.tsx), mirroring installTelemetryCapture().
  */
-export function installInstrumentationBrowserSink(): void {
-  configureInstrumentation((record: TelemetryRecord) => {
-    const addLine = useOutputStore.getState().addLine;
-    const severity = record.level === 'error' ? 'error' : record.level === 'warn' ? 'warn' : 'info';
-    addLine(fmtLine(record.op, record.subject ?? ''), severity, {
-      op: record.op,
-      subject: record.subject,
-      signature: record.signature,
-      durationMs: record.durationMs
-    });
+/**
+ * Maps one TelemetryRecord onto the existing addLine shape. Exported
+ * standalone because the worker relays (Task 5) route worker-originated
+ * records through the exact same mapping — one mapping, not three copies.
+ * `trace`/`debug` collapse to severity 'info' (OutputSeverity has no lower
+ * tier, and the op_spans wire schema's level enum is closed over
+ * info|warn|error) — with the default threshold they never get here at all.
+ */
+export function routeTelemetryRecord(record: TelemetryRecord): void {
+  const addLine = useOutputStore.getState().addLine;
+  const severity = record.level === 'error' ? 'error' : record.level === 'warn' ? 'warn' : 'info';
+  addLine(fmtLine(record.op, record.subject ?? ''), severity, {
+    op: record.op,
+    subject: record.subject,
+    signature: record.signature,
+    durationMs: record.durationMs
   });
+}
+
+export function installInstrumentationBrowserSink(): void {
+  configureInstrumentation(routeTelemetryRecord);
 }
 ```
 
@@ -757,34 +797,15 @@ git commit -m "feat(studio): wire instrumentation core to the existing browser t
 
 **Files:**
 - Create: `apps/studio/src/services/instrumentation/worker-sink.ts`
-- Modify: `apps/studio/src/workers/parser-worker.ts`, `apps/studio/src/workers/codegen-worker.ts`, `apps/studio/src/shell/providers/CodegenProvider.tsx`
+- Modify: `apps/studio/src/workers/parser-worker.ts`, `apps/studio/src/workers/codegen-worker.ts`, `apps/studio/src/shell/providers/CodegenProvider.tsx`, `apps/studio/src/services/workspace.ts`
 - Test: `apps/studio/test/services/instrumentation/worker-sink.test.ts`
 
 **Interfaces:**
-- Consumes: `configureInstrumentation`, `TelemetryRecord` (Task 1); the browser sink's mapping logic (Task 4, reused, not duplicated).
-- Produces: `installInstrumentationWorkerSink(post: (msg: unknown) => void): void`; a `{ type: 'telemetry:record', record: TelemetryRecord }` message shape.
+- Consumes: `configureInstrumentation`, `TelemetryRecord` (Task 1); `routeTelemetryRecord` (Task 4, reused by both relays, not duplicated).
+- Produces: `installInstrumentationWorkerSink(post): void` and the `isTelemetryRecordMessage` guard; a `{ type: 'telemetry:record', record: TelemetryRecord }` message shape.
+- Relay coverage note: the codegen worker's messages are owned by `CodegenProvider.tsx`'s persistent `handleMessage` listener; the parser worker has NO persistent main-thread listener — `workspace.ts` attaches per-request listeners that match on a response `id` and ignore everything else (verified: its `handler` early-returns unless `e.data?.id === id`, so an id-less `telemetry:record` message is protocol-safe there but also silently DROPPED). Both relays below are therefore required, one per worker owner.
 
 - [ ] **Step 1: Write the failing test**
-
-```ts
-// SPDX-License-Identifier: FSL-1.1-ALv2
-// Copyright (c) 2026 Pradeep Mouli
-
-import { describe, expect, it, vi } from 'vitest';
-import { installInstrumentationWorkerSink } from '../../../src/services/instrumentation/worker-sink.js';
-import { configureInstrumentation, resetInstrumentationForTests } from '../../../src/services/instrumentation/core.js';
-
-describe('installInstrumentationWorkerSink', () => {
-  it('posts a telemetry:record message via the given post function', () => {
-    resetInstrumentationForTests();
-    const posted: unknown[] = [];
-    installInstrumentationWorkerSink((msg) => posted.push(msg));
-    const emit = (globalThis as any).__lastConfiguredEmit; // not real — see Step 3 for the real assertion shape
-  });
-});
-```
-
-(Rewritten in Step 3 once the real export shape is fixed — see the actual test below.)
 
 ```ts
 // SPDX-License-Identifier: FSL-1.1-ALv2
@@ -830,49 +851,57 @@ import { configureInstrumentation, type TelemetryRecord } from './core.js';
 /**
  * Wires the instrumentation core's emit sink to postMessage a
  * `telemetry:record` message. The main thread relays this into the SAME
- * browser sink (see CodegenProvider.tsx's worker-message handling) so a
- * worker's captured error lands in the identical pipe, sampling, and
- * shipper as a main-thread one. `post` is injected (rather than reaching
- * for a global `self`) so this is testable without a real Worker context.
+ * browser sink (routeTelemetryRecord) so a worker's captured error lands
+ * in the identical pipe, sampling, and shipper as a main-thread one.
+ * `post` is injected (rather than reaching for a global `self`) so this
+ * is testable without a real Worker context.
  */
 export function installInstrumentationWorkerSink(post: (msg: { type: 'telemetry:record'; record: TelemetryRecord }) => void): void {
   configureInstrumentation((record: TelemetryRecord) => {
     post({ type: 'telemetry:record', record });
   });
 }
+
+/**
+ * Message guard for the relay side. Lives HERE (not in codegen-service.ts,
+ * where the preview/instance guards are centralized) because it is not a
+ * codegen-specific message — both workers post it, and both relay sites
+ * import this one guard.
+ */
+export function isTelemetryRecordMessage(msg: unknown): msg is { type: 'telemetry:record'; record: TelemetryRecord } {
+  return typeof msg === 'object' && msg !== null && (msg as { type?: unknown }).type === 'telemetry:record';
+}
 ```
 
-Wire into both workers, at module top level (after existing imports, before any message-handler registration):
+Wire into both workers, at module top level (after existing imports, before any message-handler registration). **The `isWorkerGlobalScope()` guard is mandatory, not stylistic:** both worker modules are ALSO imported on the main thread for their exported guards/types (`workspace.ts` imports `isParseResponse` etc. from `parser-worker.js`; `CodegenProvider.tsx` imports `DeferredExportEntry` from it) — an unguarded top-level `installInstrumentationWorkerSink` would run during that main-thread import and hijack the main thread's `configureInstrumentation` slot away from the browser sink (with `self` being `window`, no less). Same shared-gate rationale as the existing message-listener registration (see PR #214 / `runtime-guards.ts`):
 
 ```ts
 // apps/studio/src/workers/parser-worker.ts and codegen-worker.ts:
 import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
-installInstrumentationWorkerSink((msg) => (self as unknown as DedicatedWorkerGlobalScope).postMessage(msg));
+
+if (isWorkerGlobalScope()) {
+  installInstrumentationWorkerSink((msg) => (self as unknown as DedicatedWorkerGlobalScope).postMessage(msg));
+}
 ```
 
-Add a new case to `CodegenProvider.tsx`'s existing `handleMessage` function (the one already handling `isPreviewExecuteResultMessage`, etc. — add this check alongside the others, before the `isPreviewWorkerMessage` branch since it's an unrelated message type):
+Relay 1 — codegen worker: add a new case to `CodegenProvider.tsx`'s existing `handleMessage` function (the one already handling `isPreviewExecuteResultMessage`, etc. — add this check alongside the others, before the `isPreviewWorkerMessage` branch since it's an unrelated message type). The mapping is Task 4's `routeTelemetryRecord`, imported — not re-implemented:
 
 ```ts
+import { routeTelemetryRecord } from '../../services/instrumentation/browser-sink.js';
+import { isTelemetryRecordMessage } from '../../services/instrumentation/worker-sink.js';
+// ... inside handleMessage:
 if (isTelemetryRecordMessage(msg)) {
-  const addLine = useOutputStore.getState().addLine;
-  const record = msg.record;
-  const severity = record.level === 'error' ? 'error' : record.level === 'warn' ? 'warn' : 'info';
-  addLine(fmtLine(record.op, record.subject ?? ''), severity, {
-    op: record.op,
-    subject: record.subject,
-    signature: record.signature,
-    durationMs: record.durationMs
-  });
+  routeTelemetryRecord(msg.record);
   return;
 }
 ```
 
-Add the guard next to `CodegenProvider.tsx`'s other message-type guards (or a shared `worker-messages.ts` if one already centralizes them — check before adding a new one, per this repo's DRY convention):
+Relay 2 — parser worker: in `apps/studio/src/services/workspace.ts`, immediately after the `new Worker(new URL('../workers/parser-worker.ts', ...))` construction, attach ONE persistent listener (per-request listeners there are added/removed per call and ignore id-less messages, so without this the parser worker's records are silently dropped):
 
 ```ts
-function isTelemetryRecordMessage(msg: unknown): msg is { type: 'telemetry:record'; record: TelemetryRecord } {
-  return typeof msg === 'object' && msg !== null && (msg as { type?: unknown }).type === 'telemetry:record';
-}
+worker.addEventListener('message', (e: MessageEvent<unknown>) => {
+  if (isTelemetryRecordMessage(e.data)) routeTelemetryRecord(e.data.record);
+});
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -883,7 +912,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/studio/src/services/instrumentation/worker-sink.ts apps/studio/src/workers/parser-worker.ts apps/studio/src/workers/codegen-worker.ts apps/studio/src/shell/providers/CodegenProvider.tsx apps/studio/test/services/instrumentation/worker-sink.test.ts
+git add apps/studio/src/services/instrumentation/worker-sink.ts apps/studio/src/workers/parser-worker.ts apps/studio/src/workers/codegen-worker.ts apps/studio/src/shell/providers/CodegenProvider.tsx apps/studio/src/services/workspace.ts apps/studio/test/services/instrumentation/worker-sink.test.ts
 git commit -m "feat(studio): wire instrumentation core through both Web Workers into the browser pipe"
 ```
 
@@ -893,6 +922,7 @@ git commit -m "feat(studio): wire instrumentation core through both Web Workers 
 
 **Files:**
 - Create: `apps/studio/functions/lib/instrumentation-sink.ts`
+- Modify: `apps/studio/functions/_middleware.ts` (the wiring — creating the sink without calling it anywhere would leave the edge runtime silently uninstrumented)
 - Test: `apps/studio/functions/test/instrumentation-sink.test.ts`
 
 **Interfaces:**
@@ -972,6 +1002,17 @@ export function installInstrumentationEdgeSink(env: { INSTRUMENTATION_ENABLED?: 
 }
 ```
 
+Wire it in `apps/studio/functions/_middleware.ts` (currently a documented no-op pass-through). Pages Functions expose `env` bindings only per-request — there is no module-scope `env` — so the middleware's request entry is the wiring point; `configureInstrumentation` just reassigns a module-level function reference, so re-running it per request is idempotent and effectively free:
+
+```ts
+import { installInstrumentationEdgeSink } from './lib/instrumentation-sink.js';
+
+export const onRequest: PagesFunction<{ INSTRUMENTATION_ENABLED?: string }> = (ctx) => {
+  installInstrumentationEdgeSink(ctx.env);
+  return ctx.next();
+};
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run functions/test/instrumentation-sink.test.ts`
@@ -980,8 +1021,8 @@ Expected: PASS (2 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/studio/functions/lib/instrumentation-sink.ts apps/studio/functions/test/instrumentation-sink.test.ts
-git commit -m "feat(studio): Cloudflare Functions instrumentation sink, env-gated"
+git add apps/studio/functions/lib/instrumentation-sink.ts apps/studio/functions/_middleware.ts apps/studio/functions/test/instrumentation-sink.test.ts
+git commit -m "feat(studio): Cloudflare Functions instrumentation sink, env-gated, wired via _middleware"
 ```
 
 ---
@@ -998,7 +1039,7 @@ git commit -m "feat(studio): Cloudflare Functions instrumentation sink, env-gate
 
 - [ ] **Step 1: Write the failing test**
 
-Vitest sets `import.meta.env.MODE` to `'test'` (not `'production'`) by default, so `import.meta.env.PROD` is `false` in the normal test run — this test instead asserts the SOURCE contains the gate (a static check), since flipping `import.meta.env.PROD` at runtime inside a Vitest test is unreliable across bundler versions and isn't what actually matters — what matters is that Rollup can statically eliminate the branch, which requires the literal `import.meta.env.PROD` expression to appear directly in a condition, not be wrapped in a helper function Rollup can't see through.
+Vitest sets `import.meta.env.MODE` to `'test'` (not `'production'`) by default, so the prod gate is off in the normal test run — this test instead asserts the SOURCE contains the gate expression (a static check), since flipping `import.meta.env.PROD` at runtime inside a Vitest test is unreliable across bundler versions and isn't what actually matters — what matters is that the bundler can statically fold the check.
 
 ```ts
 // SPDX-License-Identifier: FSL-1.1-ALv2
@@ -1009,12 +1050,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 describe('production dead-code-elimination gate', () => {
-  it('withInstrumentation short-circuits on a literal import.meta.env.PROD check', () => {
+  it('withInstrumentation short-circuits on the guarded import.meta.env PROD check', () => {
     const source = readFileSync(
       fileURLToPath(new URL('../../../src/services/instrumentation/core.ts', import.meta.url)),
       'utf-8'
     );
-    expect(source).toMatch(/import\.meta\.env\.PROD/);
+    expect(source).toContain('.env?.PROD === true');
   });
 });
 ```
@@ -1022,24 +1063,34 @@ describe('production dead-code-elimination gate', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/services/instrumentation/prod-gate.test.ts`
-Expected: FAIL — no `import.meta.env.PROD` in `core.ts` yet
+Expected: FAIL — no PROD gate in `core.ts` yet
 
 - [ ] **Step 3: Add the gate**
 
-In `makeWithInstrumentation`'s `bound` closure (from Task 3), change the level-check line:
+The expression cannot be a bare `import.meta.env.PROD`: this core module is also loaded by runtimes with no Vite build — Cloudflare Pages Functions (Task 6 imports it) and, after Task 9's extraction, Node consumers via `packages/codegen` — where `import.meta.env` is `undefined`, so a bare member access would THROW on every instrumented call, and the property doesn't type-check under `functions/tsconfig.json` (no `vite/client` types). The cast + optional chain solves both; Vite/rolldown still statically replaces the `import.meta.env` reference in browser/worker builds, so the whole expression constant-folds there:
 
 ```ts
-// Before:
-      const clears = levelClears(level, threshold);
-      if (!clears) return fn.apply(this, args);
-
-// After:
-      if (import.meta.env.PROD) return fn.apply(this, args); // Rollup dead-code-eliminates this branch in prod builds
-      const clears = levelClears(level, threshold) && useTelemetrySettingsStoreEnabled();
-      if (!clears) return fn.apply(this, args);
+// Module scope in core.ts:
+// - Vite/rolldown builds (browser + both workers): `import.meta.env` is
+//   statically replaced, so IS_PROD folds to a build-time constant and the
+//   instrumentation branch below it is eliminated from prod bundles.
+// - Non-Vite runtimes (Pages Functions, Node): `import.meta.env` is
+//   undefined; the optional chain makes IS_PROD a safe runtime `false`
+//   (their own gates — env binding / threshold — still apply).
+// - The cast keeps this type-checking under tsconfigs without vite/client.
+const IS_PROD = (import.meta as { env?: { PROD?: boolean } }).env?.PROD === true;
 ```
 
-This requires importing the existing telemetry opt-in flag. Since `core.ts` must stay isomorphic (no zustand import — Cloudflare Functions can't import a browser zustand store), inject it instead: add an optional `isEnabled: () => boolean` parameter to `configureInstrumentation`, defaulting to `() => true`:
+In `makeWithInstrumentation`'s `bound` closure (from Task 3), ahead of the existing level check:
+
+```ts
+if (IS_PROD) return fn.apply(this, args);
+if (!isEnabledCheck()) return fn.apply(this, args);
+const clears = levelClears(level, threshold);
+if (!clears) return fn.apply(this, args);
+```
+
+`isEnabledCheck` is injected — `core.ts` must stay isomorphic (no zustand import — Cloudflare Functions can't import a browser zustand store). Add an optional `isEnabled: () => boolean` parameter to `configureInstrumentation`, defaulting to `() => true`:
 
 ```ts
 let isEnabledCheck: () => boolean = () => true;
@@ -1050,18 +1101,23 @@ export function configureInstrumentation(emit: Emit, isEnabled: () => boolean = 
 }
 ```
 
-And in `bound`:
+(Also reset `isEnabledCheck` back to `() => true` inside `resetInstrumentationForTests`.)
+
+Then wire the existing opt-in flag (reusing it, per the design's explicit "no second, parallel setting" requirement) — but at the RIGHT place per runtime:
+
+- **Browser sink (Task 4's `installInstrumentationBrowserSink`)**: pass `() => useTelemetrySettingsStore.getState().enabled` as the second `configureInstrumentation` argument.
+- **Worker sink (Task 5's `installInstrumentationWorkerSink`)**: do NOT pass the store check — a Web Worker has its own module graph, so importing the zustand store there yields a fresh instance permanently stuck at its `enabled: false` default, which would silently disable worker instrumentation forever. Workers keep the default `() => true` and the opt-in is enforced on the main thread instead: add an early return to Task 4's `routeTelemetryRecord` — `if (!useTelemetrySettingsStore.getState().enabled) return;` — which gates both relayed worker records and (redundantly but harmlessly) browser-originated ones at the single choke point before `addLine`.
+- **Edge sink (Task 6)**: unchanged — its `env.INSTRUMENTATION_ENABLED` early-return already covers it, and `IS_PROD` is a safe `false` there per the guarded expression above.
+
+- [ ] **Step 4: Update Tasks 4–5's tests for the new gate, run all suites**
+
+Task 4's `browser-sink.test.ts` and Task 5's `worker-sink.test.ts` now need the opt-in flag on wherever `routeTelemetryRecord`/the browser `isEnabled` check is in the emit path — add to their `beforeEach`:
 
 ```ts
-if (import.meta.env.PROD) return fn.apply(this, args);
-if (!isEnabledCheck()) return fn.apply(this, args);
-const clears = levelClears(level, threshold);
-if (!clears) return fn.apply(this, args);
+useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
 ```
 
-Update Task 4's `installInstrumentationBrowserSink` and Task 5's `installInstrumentationWorkerSink` to pass `() => useTelemetrySettingsStore.getState().enabled` as the second argument (reusing the existing opt-in flag, per the design's explicit "no second, parallel setting" requirement). Task 6's edge sink already has its own `env.INSTRUMENTATION_ENABLED` gate and does not need this second parameter (Cloudflare Functions have no Vite build at all, so `import.meta.env.PROD` is meaningless there — the edge sink's existing early-return already covers it).
-
-- [ ] **Step 4: Run test to verify it passes; re-run Tasks 1–6's suites to confirm no regression**
+(The core/`with-instrumentation` tests are unaffected — they configure a raw emit with the default `() => true`.)
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/services/instrumentation/ functions/test/instrumentation-sink.test.ts`
 Expected: PASS (all tests)
@@ -1069,8 +1125,8 @@ Expected: PASS (all tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/studio/src/services/instrumentation/core.ts apps/studio/src/services/instrumentation/browser-sink.ts apps/studio/src/services/instrumentation/worker-sink.ts apps/studio/test/services/instrumentation/prod-gate.test.ts
-git commit -m "feat(studio): gate instrumentation on import.meta.env.PROD + the existing telemetry opt-in flag"
+git add apps/studio/src/services/instrumentation/core.ts apps/studio/src/services/instrumentation/browser-sink.ts apps/studio/test/services/instrumentation/prod-gate.test.ts apps/studio/test/services/instrumentation/browser-sink.test.ts apps/studio/test/services/instrumentation/worker-sink.test.ts
+git commit -m "feat(studio): gate instrumentation on prod builds + the existing telemetry opt-in flag"
 ```
 
 ---
@@ -1135,37 +1191,56 @@ export class RetryExhaustedError extends Error {
 }
 ```
 
-Now retrofit `CodegenProvider.tsx`'s retry-cap-exhausted branch (the `namespacesToHydrate.size === 0` / `!canRetry` path inside the `preview:result` handler, which today only calls `clearHydrationRetriesRemaining(targetId)`). Wrap the throwing call in an ordinary `try/catch` at the call site so today's observable UX (clear the retry counter, let the schema's own `status`/`unsupportedFeatures` drive the UI) is unchanged — the only behavior addition is that instrumentation now sees it:
+Now retrofit `CodegenProvider.tsx`'s retry-cap-exhausted branch. Precision about the real code (verified): the `preview:result` handler has TWO `clearHydrationRetriesRemaining(targetId)` call sites, but only ONE is exhaustion-adjacent and NEITHER is the exhaustion branch itself —
+
+- `unresolvedNames.length === 0` → `markResolved` + clear: the SUCCESS path. Do not touch.
+- `namespacesToHydrate.size === 0` → clear: the "every unresolved name is genuinely unresolved, don't burn budget" path (see its own comment). This is give-up-by-classification, NOT retry exhaustion — its budget was deliberately never spent. Do not touch in this task.
+- `const canRetry = orchestrator.beginRetryRound(targetId); if (canRetry) { ... }` — there is currently NO else. `canRetry === false` IS retry exhaustion (`HydrationOrchestrator.beginRetryRound` returns false once `attempts >= MAX_HYDRATION_RETRIES_PER_TARGET`), and today it does nothing but fall through to `setHydrationRetriesRemaining(targetId, 0)`. THIS is where the throw goes.
+
+Define the thrower at module scope in `CodegenProvider.tsx`, wrapped BY HAND — the Task 12 codemod only rewrites *exported* function declarations, so a module-local helper like this would never be auto-wrapped; relying on "the codemod will get it later" would silently leave the entire exhaustion path uninstrumented:
 
 ```ts
-function giveUpOnHydration(targetId: string, attempts: number): void {
-  try {
+import { MAX_HYDRATION_RETRIES_PER_TARGET } from '../../services/hydration-orchestrator.js'; // new import — only the class is imported today
+import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { RetryExhaustedError } from '../../services/instrumentation/errors.js';
+
+const reportHydrationRetryExhausted = withInstrumentation(
+  function reportHydrationRetryExhausted(targetId: string, attempts: number): never {
     throw new RetryExhaustedError(targetId, attempts);
-  } catch (err) {
-    clearHydrationRetriesRemaining(targetId);
-    throw err; // re-thrown deliberately — see withInstrumentation's "never swallows" contract;
-               // this function itself should be wrapped with withInstrumentation by the Task 12 codemod.
+  },
+  {
+    op: 'hydrationRetryExhausted',
+    // targetId is deliberately NOT captured: a preview target can be a
+    // user-authored type fqn, not just a curated id. Error-class name +
+    // attempt count are structurally safe.
+    sanitizeError: (err) => ({
+      signature: err instanceof Error ? err.name : 'Error',
+      context: err instanceof RetryExhaustedError ? { attempts: err.attempts } : undefined
+    })
   }
-}
+);
 ```
 
-Replace the two `clearHydrationRetriesRemaining(targetId)` call sites in the retry-exhausted branches (the `namespacesToHydrate.size === 0` early-return, and the `canRetry === false` branch inside `beginRetryRound`'s else) with `giveUpOnHydration(targetId, MAX_HYDRATION_RETRIES_PER_TARGET)` wrapped in the caller's own `try/catch { /* preserve existing no-op UX */ }`, since `CodegenProvider`'s `handleMessage` is a `postMessage` event handler — an uncaught throw there would surface as an `unhandledrejection`-adjacent path depending on how the event listener is invoked, not silently vanish, but the existing behavior (continue processing, no visible change) must be preserved explicitly rather than left to chance:
+Add an `else` to the `if (canRetry)` branch, with the caller's own `try/catch` so today's observable UX (fall through, `setHydrationRetriesRemaining(targetId, 0)` still runs after the if/else, schema `status`/`unsupportedFeatures` drive the UI) is unchanged — the only behavioral addition is that instrumentation now sees the give-up:
 
 ```ts
-try {
-  giveUpOnHydration(targetId, MAX_HYDRATION_RETRIES_PER_TARGET);
-} catch {
-  // Preserves today's observable UX: schema.status/unsupportedFeatures already
-  // drive the "could not resolve" UI; this catch exists ONLY so the throw
-  // routes through instrumentation's error-capture path without changing
-  // control flow for anything downstream of this handler.
+if (canRetry) {
+  // ... existing retry-request loop, unchanged ...
+} else {
+  try {
+    reportHydrationRetryExhausted(targetId, MAX_HYDRATION_RETRIES_PER_TARGET);
+  } catch {
+    // Preserves today's observable UX. This catch exists ONLY so the throw
+    // routes through instrumentation's error-capture path without changing
+    // control flow for anything downstream of this handler.
+  }
 }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm --filter @rune-langium/studio exec vitest run test/services/instrumentation/errors.test.ts test/shell/providers/CodegenProvider.retry-exhausted.test.tsx`
-Expected: PASS. (Write `CodegenProvider.retry-exhausted.test.tsx` following the existing test patterns already present in `apps/studio/test/shell/providers/` for this component — assert `giveUpOnHydration` is invoked and that `clearHydrationRetriesRemaining` still fires exactly as before the retrofit.)
+Expected: PASS. (Write `CodegenProvider.retry-exhausted.test.tsx` following the existing patterns in `apps/studio/test/shell/providers/CodegenProvider.test.tsx`. `reportHydrationRetryExhausted` is module-local and cannot be spied on directly — assert through its observable effects instead: install a test emit via `configureInstrumentation`, set the threshold as needed (error records always clear it), drive a `preview:result` message whose unresolved names map to a deferred export after the orchestrator's budget is exhausted (`beginRetryRound` returning false), then assert (a) exactly one emitted record with `op: 'hydrationRetryExhausted'`, `level: 'error'`, `signature: 'RetryExhaustedError'`, `context: { attempts: 5 }`, (b) the retries-remaining state still ends at 0 exactly as before the retrofit, and (c) no exception escapes the handler.)
 
 - [ ] **Step 5: Commit**
 
@@ -1194,7 +1269,7 @@ mkdir -p packages/instrumentation-core/src
 git mv apps/studio/src/services/instrumentation/core.ts packages/instrumentation-core/src/index.ts
 ```
 
-Change the SPDX header at the top of the moved file from `FSL-1.1-ALv2` to `MIT` (the code itself is unmodified — see Global Constraints on licensing). Create `packages/instrumentation-core/package.json` following the exact pattern of an existing small internal package (check `packages/curated-schema/package.json` for the template: `name`, `version`, `type: module`, `exports`, `devDependencies` for `typescript`/`vitest`). Re-export from the old location so Tasks 1–8's existing import paths keep working:
+Change the SPDX header at the top of the moved file from `FSL-1.1-ALv2` to `MIT` (the code itself is unmodified — see Global Constraints on licensing). Create `packages/instrumentation-core/package.json` AND `packages/instrumentation-core/tsconfig.json` following the exact pattern of `packages/curated-schema` (`name`, `version`, `private`, `type: module`, dist-pointing `exports` with `types`, `build: tsc -b`, `test: vitest run`, `type-check`, `devDependencies` for `vitest`). **Dist-pointing exports (curated-schema's pattern) are required here, not the `visual-editor` src-pointing style**: `packages/codegen` builds to `dist/` and runs in real Node (CLI, and studio's vitest config force-externalizes `@rune-langium/codegen` to Node's native loader) — Node cannot load a `.ts` exports target at runtime. Consequence to note in the task: like codegen, instrumentation-core must be REBUILT after any source change before dependents' tests see it. Re-export from the old location so Tasks 1–8's existing import paths keep working:
 
 ```ts
 // apps/studio/src/services/instrumentation/core.ts (replaces the moved file)
@@ -1203,11 +1278,13 @@ Change the SPDX header at the top of the moved file from `FSL-1.1-ALv2` to `MIT`
 export * from '@rune-langium/instrumentation-core';
 ```
 
-Add `@rune-langium/instrumentation-core` as a `workspace:*` dependency of `apps/studio/package.json`. Move Task 1–3's `core.test.ts`/`with-instrumentation.test.ts`/`with-instrumentation-child.test.ts` to `packages/instrumentation-core/test/` and update their relative import paths.
+Add `@rune-langium/instrumentation-core` as a `workspace:*` dependency of BOTH `apps/studio/package.json` AND `packages/codegen/package.json` (this task's decorator, Step 4, imports it from codegen — forgetting the codegen side is the licensing bug this whole restructuring exists to prevent), then run `pnpm install` to link the new workspace package, and `pnpm --filter @rune-langium/instrumentation-core run build`.
+
+Move Task 1–3's `core.test.ts`/`with-instrumentation.test.ts`/`with-instrumentation-child.test.ts` AND Task 7's `prod-gate.test.ts` to `packages/instrumentation-core/test/` and update their relative import paths (`../src/index.js`; prod-gate reads `../src/index.ts` as source text). `prod-gate.test.ts` must move because it asserts on the SOURCE of the module containing the gate — after this move the studio-side `core.ts` is a 3-line re-export and the assertion would fail against it.
 
 - [ ] **Step 2: Run the moved tests to confirm the restructure didn't break anything**
 
-Run: `pnpm --filter @rune-langium/instrumentation-core exec vitest run && pnpm --filter @rune-langium/studio exec vitest run test/services/instrumentation/`
+Run: `pnpm --filter @rune-langium/instrumentation-core run build && pnpm --filter @rune-langium/instrumentation-core run test && pnpm --filter @rune-langium/studio exec vitest run test/services/instrumentation/`
 Expected: PASS (moved tests pass from their new location; studio's re-export doesn't break Tasks 4–8's tests)
 
 - [ ] **Step 3: Write the failing decorator test**
@@ -1327,7 +1404,7 @@ Run: `pnpm --filter @rune-langium/codegen test`
 Expected: PASS, zero regressions
 
 ```bash
-git add packages/instrumentation-core apps/studio/src/services/instrumentation/core.ts apps/studio/package.json apps/studio/test/services/instrumentation/ packages/codegen/src/instrument.ts packages/codegen/src/emit/zod-emitter.ts packages/codegen/test/instrument.test.ts
+git add packages/instrumentation-core apps/studio/src/services/instrumentation/core.ts apps/studio/package.json packages/codegen/package.json pnpm-lock.yaml apps/studio/test/services/instrumentation/ packages/codegen/src/instrument.ts packages/codegen/src/emit/zod-emitter.ts packages/codegen/test/instrument.test.ts
 git commit -m "feat(codegen): extract MIT-licensed instrumentation-core package, add native method decorator, instrument ZodNamespaceEmitter"
 ```
 
@@ -1343,7 +1420,7 @@ git commit -m "feat(codegen): extract MIT-licensed instrumentation-core package,
 
 - [ ] **Step 1: Apply `@debug()` to each remaining `*NamespaceEmitter` class's per-type emission methods**
 
-For each of `TsNamespaceEmitter`, `JsonSchemaNamespaceEmitter`, `SqlNamespaceEmitter`, `XsdNamespaceEmitter`, `OpenApiNamespaceEmitter`: import `debug` from `../instrument.js`, and add `@debug()` above each method whose name starts with `emit` (mirroring exactly what Task 9 did for `ZodNamespaceEmitter` — same method-name pattern across all six emitters, since they share `BaseNamespaceEmitter`'s contract).
+For each of `TsNamespaceEmitter`, `JsonSchemaNamespaceEmitter`, `SqlNamespaceEmitter`, `XsdNamespaceEmitter`, `OpenApiNamespaceEmitter`: import `debug` from `../instrument.js`, and add `@debug()` above each PUBLIC per-type emission hook the class implements from the `NamespaceEmitter` interface (`packages/codegen/src/emit/namespace-emitter.ts`): `emitEnumeration`, `emitTypeAlias`, `emitData`, plus the optional `emitChoice`/`emitDataPrelude` where a given emitter implements them. Do NOT blanket-decorate every method whose name starts with `emit` — the emitters also have many PRIVATE `emit*` helpers (e.g. zod-emitter's `emitAttribute`, `emitObjectBody`, …) that Task 9 deliberately left undecorated; mirror Task 9's actual selection, the interface hooks. (Note: `BaseNamespaceEmitter` itself only declares `finalize()` abstract — the shared per-type contract lives on the `NamespaceEmitter` interface, not the base class.)
 
 - [ ] **Step 2: Run the full codegen suite for each emitter to confirm zero output changes**
 
@@ -1363,11 +1440,11 @@ git commit -m "feat(codegen): instrument remaining namespace emitters (ts, json-
 
 **Files:**
 - Create: `apps/studio/src/components/InstrumentationErrorBoundary.tsx`
-- Modify: `apps/studio/src/main.tsx`
+- Modify: `apps/studio/src/main.tsx`, `apps/studio/src/services/telemetry-capture.ts` (export the existing private `signatureFor` — see Step 4)
 - Test: `apps/studio/test/components/InstrumentationErrorBoundary.test.tsx`
 
 **Interfaces:**
-- Consumes: `emitRecord`-equivalent — since `core.ts`'s `emitRecord` is internal, the boundary calls `withInstrumentation`'s public surface indirectly by importing `configureInstrumentation`'s already-installed sink is not accessible directly; instead it constructs a `TelemetryRecord` via the same shape and calls a newly-exported `emitDirectly(record)` (Task 1's `emitRecord`, promoted to a public export — add this in this task, not retroactively editing Task 1's step, since the need only becomes concrete here).
+- Consumes: `emitRecord` (Task 1) — the boundary emits a hand-built `TelemetryRecord` directly rather than wrapping a function, so it uses `emitRecord`, promoted from "internal" to a documented public export in Step 1 (the need only becomes concrete here, so the promotion happens in this task rather than retroactively editing Task 1). Also `signatureFor` from `telemetry-capture.ts`.
 
 - [ ] **Step 1: Promote `emitRecord` to a public export**
 
@@ -1379,7 +1456,7 @@ In `packages/instrumentation-core/src/index.ts`, remove the "Internal — not ex
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { configureInstrumentation, resetInstrumentationForTests } from '@rune-langium/instrumentation-core';
 import { InstrumentationErrorBoundary } from '../../src/components/InstrumentationErrorBoundary.js';
@@ -1419,6 +1496,7 @@ Expected: FAIL — module not found
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { emitRecord } from '@rune-langium/instrumentation-core';
+import { signatureFor } from '../services/telemetry-capture.js';
 
 /**
  * React's render-crash mechanism is an Error Boundary (class component —
@@ -1449,7 +1527,15 @@ export class InstrumentationErrorBoundary extends Component<Props, State> {
       op: 'ReactRenderCrash',
       level: 'error',
       captured: 0,
-      signature: `${error.name}:${error.message.slice(0, 80)}`,
+      // signatureFor (telemetry-capture.ts, exported for this in this task —
+      // change its `function signatureFor` to `export function signatureFor`)
+      // is allowlisted-name + hashed-top-stack-frame, deliberately EXCLUDING
+      // error.message: messages are low-entropy, guessable text that can
+      // interpolate user/model content — see signatureFor's own doc comment.
+      // Never put raw error.message in a shipped record.
+      signature: signatureFor(error),
+      // componentStack names studio's OWN components (bundled code shipped to
+      // every user), not user content — safe to truncate-and-carry.
       context: { componentStack: info.componentStack?.slice(0, 500) },
       ts: Date.now()
     });
@@ -1484,7 +1570,7 @@ Run: `pnpm --filter @rune-langium/studio exec vitest run test/components/Instrum
 Expected: PASS
 
 ```bash
-git add packages/instrumentation-core/src/index.ts apps/studio/src/components/InstrumentationErrorBoundary.tsx apps/studio/src/main.tsx apps/studio/test/components/InstrumentationErrorBoundary.test.tsx
+git add packages/instrumentation-core/src/index.ts apps/studio/src/components/InstrumentationErrorBoundary.tsx apps/studio/src/main.tsx apps/studio/src/services/telemetry-capture.ts apps/studio/test/components/InstrumentationErrorBoundary.test.tsx
 git commit -m "feat(studio): React Error Boundary reporting render crashes into the instrumentation pipe"
 ```
 
@@ -1522,53 +1608,50 @@ pnpm --filter @rune-langium/studio add -D ts-morph
  *
  * Usage: pnpm --filter @rune-langium/studio exec tsx scripts/instrument-codemod.ts "src/services/*.ts"
  */
-import { Project, SyntaxKind, type FunctionDeclaration } from 'ts-morph';
+import path from 'node:path';
+import { Project } from 'ts-morph';
 
-const IMPORT_SPECIFIER = '../services/instrumentation/core.js'; // relative import gets adjusted per-file below
+// cwd is apps/studio when invoked via `pnpm --filter @rune-langium/studio exec`
+// (and when vitest runs the test below) — every path here is relative to the
+// PACKAGE root, not the repo root.
+const CORE_MODULE = path.resolve('src/services/instrumentation/core.ts');
 
 function relativeImportPathFor(fileDir: string): string {
   // Computed per-file so every rewritten file imports withInstrumentation
-  // via a correct relative path regardless of its depth under src/.
-  const path = require('node:path') as typeof import('node:path');
-  const target = path.resolve('apps/studio/src/services/instrumentation/core.ts');
-  let rel = path.relative(fileDir, target).replace(/\.ts$/, '.js');
+  // via a correct relative path regardless of its depth under src/ (or
+  // functions/ — the same expression yields `../../src/...` from there).
+  let rel = path.relative(fileDir, CORE_MODULE).replace(/\.ts$/, '.js');
   if (!rel.startsWith('.')) rel = `./${rel}`;
   return rel;
 }
 
-function alreadyWrapped(fn: FunctionDeclaration): boolean {
-  // A function whose body is literally `return withInstrumentation(...)`-shaped
-  // doesn't apply here (this codemod targets FUNCTION DECLARATIONS, which
-  // can't themselves be reassigned to a wrapped const in place) — see the
-  // rewrite strategy below: declarations become `export const name = withInstrumentation(function name(...) {...}, opts)`.
-  return false; // idempotency check happens via a marker comment instead — see Step 2 body.
-}
-
 export function runCodemod(globPattern: string): void {
-  const project = new Project({ tsConfigFilePath: 'apps/studio/tsconfig.json' });
-  project.addSourceFilesAtPaths(globPattern);
-  for (const sourceFile of project.getSourceFiles()) {
+  // skipAddingFilesFromTsConfig is load-bearing: without it the Project
+  // pre-loads EVERY file in the studio tsconfig, and iterating the project's
+  // source files would rewrite the whole package on any invocation instead
+  // of just the glob. Iterate ONLY the files the glob added, for the same
+  // reason.
+  const project = new Project({ tsConfigFilePath: 'tsconfig.json', skipAddingFilesFromTsConfig: true });
+  const sourceFiles = project.addSourceFilesAtPaths(globPattern);
+  for (const sourceFile of sourceFiles) {
     if (sourceFile.getFullText().includes('@instrumentation-codemod-applied')) continue; // idempotency marker
     const fns = sourceFile.getFunctions().filter((fn) => fn.isExported() && fn.getName());
     if (fns.length === 0) continue;
     const importPath = relativeImportPathFor(sourceFile.getDirectoryPath());
-    let changed = false;
     for (const fn of fns) {
       const name = fn.getName()!;
       const isAsync = fn.isAsync();
+      const typeParamsText = fn.getTypeParameters().map((p) => p.getText()).join(', ');
       const paramsText = fn.getParameters().map((p) => p.getText()).join(', ');
       const returnTypeText = fn.getReturnTypeNode()?.getText() ?? '';
       const bodyText = fn.getBodyText() ?? '';
-      const fnText = `${isAsync ? 'async ' : ''}function ${name}(${paramsText})${returnTypeText ? `: ${returnTypeText}` : ''} {\n${bodyText}\n}`;
+      const fnText = `${isAsync ? 'async ' : ''}function ${name}${typeParamsText ? `<${typeParamsText}>` : ''}(${paramsText})${returnTypeText ? `: ${returnTypeText}` : ''} {\n${bodyText}\n}`;
       fn.replaceWithText(
-        `export const ${name} = withInstrumentation(${fnText}, { op: '${name}', sanitize: (v) => '[unsanitized-default: REVIEW]', sanitizeError: (e) => ({ signature: e instanceof Error ? e.name : 'Error' }) });`
+        `export const ${name} = withInstrumentation(${fnText}, { op: '${name}', sanitize: () => '[unsanitized-default: REVIEW]', sanitizeError: (e) => ({ signature: e instanceof Error ? e.name : 'Error' }) });`
       );
-      changed = true;
     }
-    if (changed) {
-      sourceFile.addImportDeclaration({ moduleSpecifier: importPath, namedImports: ['withInstrumentation'] });
-      sourceFile.insertText(0, '// @instrumentation-codemod-applied\n');
-    }
+    sourceFile.addImportDeclaration({ moduleSpecifier: importPath, namedImports: ['withInstrumentation'] });
+    sourceFile.insertText(0, '// @instrumentation-codemod-applied\n');
   }
   project.saveSync();
 }
@@ -1583,6 +1666,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 ```
 
+**Known, accepted limitation — hoisting:** the declaration→`const` rewrite removes function hoisting. A same-module call site ABOVE the (former) declaration becomes a "block-scoped variable used before its declaration" error, surfaced by the `tsc --noEmit` gate that follows every codemod run — resolve by reordering, or leave that one function unwrapped (with an inline oxlint-disable for Task 13's rule) if reordering is invasive. The rewrite also drops any JSDoc attached to the function — check the diff for lost doc comments and re-attach them above the new `const`.
+
 **Deliberate, flagged limitation**: the codemod's default `sanitize` is a placeholder string (`'[unsanitized-default: REVIEW]'`), not a silent pass-through of raw values — this is intentional and matches the Global Constraint that sanitization must never default to capturing raw data. Every codemod'd file needs a human pass replacing the placeholder with a real per-function sanitizer (or explicitly deciding `capture: 0`, i.e. never capture input/output for that function, only duration/errors) — this is called out explicitly in Task 13's review step, not silently left as permanent placeholder text in shipped code.
 
 - [ ] **Step 3: Prove it on one real, low-risk file**
@@ -1593,7 +1678,7 @@ pnpm --filter @rune-langium/studio exec tsx scripts/instrument-codemod.ts "src/u
 git diff apps/studio/src/utils/uri.ts
 ```
 
-Manually inspect the diff: confirm `pathToUri`/`uriToPath`/`curatedPathToUri` are rewritten to `withInstrumentation(...)` calls with correct relative import, confirm the file still type-checks and its existing tests still pass unmodified:
+Manually inspect the diff: confirm `pathToUri` and `uriToPath` (the file's two exports — there is no third function in `uri.ts`) are rewritten to `withInstrumentation(...)` calls with correct relative import, confirm the file still type-checks and its existing tests still pass unmodified:
 
 Run: `pnpm --filter @rune-langium/studio exec tsc --noEmit && pnpm --filter @rune-langium/studio exec vitest run test/components/pathToUri.test.ts`
 Expected: type-check clean, all `pathToUri.test.ts` tests still PASS (the codemod must not change any function's observable behavior — its wrapping is transparent for the success path per Task 2's design)
@@ -1608,6 +1693,8 @@ git branch -D codemod-proof-slice
 
 - [ ] **Step 4: Write a unit test for the codemod itself, against a fixture file**
 
+Location: `apps/studio/test/scripts/instrument-codemod.test.ts` — it MUST live under `test/` (not next to the script) because `vitest.config.ts`'s `include` only covers `test/**/*.test.{ts,tsx}` and `functions/test/**/*.test.ts`; a test file in `scripts/` would silently never run.
+
 ```ts
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
@@ -1616,7 +1703,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runCodemod } from '../scripts/instrument-codemod.js';
+import { runCodemod } from '../../scripts/instrument-codemod.js';
 
 let dir: string;
 
@@ -1649,13 +1736,13 @@ describe('runCodemod', () => {
 });
 ```
 
-Run: `pnpm --filter @rune-langium/studio exec vitest run scripts/instrument-codemod.test.ts`
+Run: `pnpm --filter @rune-langium/studio exec vitest run test/scripts/instrument-codemod.test.ts`
 Expected: PASS (2 tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/studio/scripts/instrument-codemod.ts apps/studio/scripts/instrument-codemod.test.ts apps/studio/package.json pnpm-lock.yaml
+git add apps/studio/scripts/instrument-codemod.ts apps/studio/test/scripts/instrument-codemod.test.ts apps/studio/package.json pnpm-lock.yaml
 git commit -m "feat(studio): ts-morph codemod for wrapping free functions in withInstrumentation, proven on one file"
 ```
 
@@ -1738,14 +1825,23 @@ export default {
 
 - [ ] **Step 2: Enable it in `apps/studio/.oxlintrc.json`, scoped to the directories this design targets**
 
+Scoping via `overrides` is required, not optional: the studio package also contains `test/`, `scripts/`, and Playwright config files full of exported helper functions that no codemod pass will ever wrap — an unscoped rule would flag all of them, and Task 14's flip to `"error"` would then fail CI on files outside the design's scope (`apps/studio/src` + the Functions runtime code, per the spec's "Retrofit scope"). `functions/test/` is deliberately not listed for the same reason.
+
 ```json
 {
   "jsPlugins": ["../../oxlint-plugins/rune.mjs"],
   "rules": {
     "rune/no-raw-arbitrary-value": "error",
-    "rune/no-raw-node-id": "error",
-    "rune/no-uninstrumented-export": "warn"
-  }
+    "rune/no-raw-node-id": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**", "functions/api/**", "functions/lib/**", "functions/_middleware.ts"],
+      "rules": {
+        "rune/no-uninstrumented-export": "warn"
+      }
+    }
+  ]
 }
 ```
 
@@ -1753,23 +1849,25 @@ Start at `"warn"`, not `"error"` — the repo-wide sweep (Task 14) hasn't run ye
 
 - [ ] **Step 3: Verify the rule fires on a known-bad fixture and stays silent on a known-good one**
 
+The fixtures must live under a path the Step 2 `overrides.files` globs actually match (a `/tmp` file would never trigger the scoped rule), so create them under `src/`, lint, and delete — never commit them:
+
 ```bash
-cat > /tmp/rune-lint-fixture-bad.ts <<'EOF'
+cat > apps/studio/src/services/__tmp-lint-fixture-bad.ts <<'EOF'
 export function unwrapped(x: number): number {
   return x;
 }
 EOF
-cat > /tmp/rune-lint-fixture-good.ts <<'EOF'
-import { withInstrumentation } from '../services/instrumentation/core.js';
+cat > apps/studio/src/services/__tmp-lint-fixture-good.ts <<'EOF'
+import { withInstrumentation } from './instrumentation/core.js';
 export const wrapped = withInstrumentation(function wrapped(x: number): number {
   return x;
 }, { op: 'wrapped' });
 EOF
-pnpm --filter @rune-langium/studio exec oxlint --config .oxlintrc.json /tmp/rune-lint-fixture-bad.ts
+pnpm --filter @rune-langium/studio exec oxlint --config .oxlintrc.json src/services/__tmp-lint-fixture-bad.ts
 # Expected: reports rune/no-uninstrumented-export
-pnpm --filter @rune-langium/studio exec oxlint --config .oxlintrc.json /tmp/rune-lint-fixture-good.ts
+pnpm --filter @rune-langium/studio exec oxlint --config .oxlintrc.json src/services/__tmp-lint-fixture-good.ts
 # Expected: no rune/no-uninstrumented-export report
-rm /tmp/rune-lint-fixture-bad.ts /tmp/rune-lint-fixture-good.ts
+rm apps/studio/src/services/__tmp-lint-fixture-bad.ts apps/studio/src/services/__tmp-lint-fixture-good.ts
 ```
 
 - [ ] **Step 4: Run the full lint suite to confirm nothing else broke**
@@ -1789,7 +1887,7 @@ git commit -m "feat(studio): rune/no-uninstrumented-export oxlint rule (warn), e
 ### Task 14: Run the codemod repo-wide, fill in real sanitizers, flip the lint rule to error
 
 **Files:**
-- Modify: every exported function under `apps/studio/src/services/`, `apps/studio/src/store/`, `apps/studio/src/shell/`, `apps/studio/src/components/`, `apps/studio/src/workers/parser-worker.ts`, `apps/studio/src/workers/codegen-worker.ts`, `apps/studio/functions/`
+- Modify: every exported function under ALL of `apps/studio/src/` — by directory group: `services/`, `store/`, `shell/`, `components/`, `workers/`, `utils/` (this is where `pathToUri` — the PR #461 function this whole design exists for — actually lives; omitting it would instrument everything EXCEPT the motivating example), `hooks/`, `lang/`, `lens/`, `opfs/`, `workspace/`, `codegen-forms/`, and the top-level `src/*.ts(x)` files (`App.tsx`, `config.ts`, `test-api.ts`) — plus `apps/studio/functions/api/`, `functions/lib/`, `functions/_middleware.ts`
 - Modify: `apps/studio/.oxlintrc.json` (final step)
 
 **Interfaces:**
@@ -1815,11 +1913,18 @@ For each match, either supply a real `sanitize`/`sanitizeError` per the function
 Run: `pnpm --filter @rune-langium/studio exec tsc --noEmit && pnpm --filter @rune-langium/studio test`
 Expected: type-check clean, full suite green, zero remaining `unsanitized-default` placeholders in these two directories.
 
-- [ ] **Step 3: Repeat Steps 1–2 for `apps/studio/src/shell/`, `apps/studio/src/components/` (React components included — same codemod, same review process), the two Web Workers, and `apps/studio/functions/`**
+- [ ] **Step 3: Repeat Steps 1–2 for every remaining directory group from the Files list above**
 
-Run the same three commands (codemod, `rg` for remaining placeholders, `tsc --noEmit && test`) once per directory group, committing after each group passes clean — this keeps each commit's diff reviewable and bisectable if something regresses.
+Group order (one codemod+review+commit cycle per group, committing after each group passes clean — keeps each diff reviewable and bisectable): `src/shell/`, `src/components/` (React components included — same codemod, same review process), `src/workers/`, `src/utils/`, `src/hooks/`, `src/lang/`, `src/lens/`, `src/opfs/`, `src/workspace/`, `src/codegen-forms/`, top-level `src/*.ts(x)`, then `functions/api/` + `functions/lib/` + `functions/_middleware.ts`.
+
+Two categories the codemod does NOT rewrite, which each group's pass must handle by hand before its commit (Task 13's rule flags them, so the Step 4 error-flip fails otherwise):
+
+- `export const f = (...) => ...` arrow/function-expression exports — the codemod only rewrites `export function` DECLARATIONS. Wrap these manually in `withInstrumentation(...)` (zustand `create(...)` stores and other non-function `const` exports are not flagged and need nothing).
+- Functions legitimately left unwrapped (hoisting conflicts per Task 12's known limitation, or the instrumentation core's own modules) — add an inline oxlint-disable comment with a one-line reason.
 
 - [ ] **Step 4: Flip `rune/no-uninstrumented-export` to `"error"`**
+
+Inside the `overrides` entry Task 13 added (the rule lives there, not in the top-level `rules` block):
 
 ```json
 "rune/no-uninstrumented-export": "error"
@@ -1842,7 +1947,7 @@ git commit -m "feat(studio): repo-wide instrumentation sweep — codemod applied
 
 ## Self-review notes (writing-plans skill checklist)
 
-- **Spec coverage**: Problem/Goal → Task 8 (concrete exhaustion example) + Tasks 1-7 (the core pipe); Non-goals → respected throughout (no OTel/Sentry/pino deps added anywhere, no class migration, no bundler plugin — Task 12 uses `ts-morph`, a pre-build script); Core API → Tasks 1-3; Sinks/Toggle → Tasks 4-7; Levels/thresholds → Tasks 1-3 (resolved the "exact handling" open question from the spec: `trace`/`debug` never reach `telemetry-shipper.ts` at all in the normal case, since `withInstrumentation`'s threshold check prevents `addLine` from ever being called for them — confirmed against the shipper's own existing `severity !== 'error' && !== 'warn' && !== 'info'` filter, so **no change to `telemetry-shipper.ts`'s `SAMPLE_RATE` table or `telemetry.ts`'s wire schema is needed**, contrary to the spec's speculative "either... or" framing); Wiring mechanism (decorators + codemod + lint rule + Error Boundary) → Tasks 9-14; Known sanitization gap for workers/edge → explicitly left unresolved per the spec's own "not solved by this design" framing, not silently dropped from this plan either.
+- **Spec coverage**: Problem/Goal → Task 8 (concrete exhaustion example) + Tasks 1-7 (the core pipe); Non-goals → respected throughout (no OTel/Sentry/pino deps added anywhere, no class migration, no bundler plugin — Task 12 uses `ts-morph`, a pre-build script); Core API → Tasks 1-3; Sinks/Toggle → Tasks 4-7; Levels/thresholds → Tasks 1-3 (resolved the "exact handling" open question from the spec: **no change to `telemetry-shipper.ts`'s `SAMPLE_RATE` table or `telemetry.ts`'s wire schema is needed**, contrary to the spec's speculative "either... or" framing — but for a two-part reason, verified against both files: (1) with the default `'warn'` threshold, `trace`/`debug`/`info` success records never reach `addLine` at all, so the shipper never sees them; (2) when the threshold IS lowered for troubleshooting, the browser sink maps `trace`/`debug` to severity `'info'` BEFORE `addLine` (OutputSeverity and the wire schema's closed `level: z.enum(['info','warn','error'])` have no lower tier), so they ship as ordinary info spans at the existing 2% sample — the shipper's `severity !== 'error' && !== 'warn' && !== 'info'` filter does NOT drop them, and does not need to); Wiring mechanism (decorators + codemod + lint rule + Error Boundary) → Tasks 9-14; Known sanitization gap for workers/edge → explicitly left unresolved per the spec's own "not solved by this design" framing, not silently dropped from this plan either.
 - **Placeholder scan**: the codemod's `'[unsanitized-default: REVIEW]'` string is a deliberate, flagged, temporary artifact of the codemod's OWN output — not a placeholder in this PLAN. Task 14 exists specifically to eliminate every instance of it from shipped code before the lint rule goes to `"error"`.
 - **Type consistency**: `TelemetryRecord`, `Level`, `Capture`, `InstrumentationOptions`, `Emit` are defined once (Task 1) and referenced identically by name in every later task; `withInstrumentation`/`.child`/`.trace`/`.debug`/`.info`/`.warn` signatures introduced in Tasks 2-3 are reused verbatim in Tasks 4-14, not redefined.
 - **New finding during planning, not in the original spec**: `packages/codegen` (MIT) needs the core module too (Task 9's decorator), but the core module started life under `apps/studio` (FSL). Task 9 extracts it into a new small MIT package (`packages/instrumentation-core`) rather than duplicating the module under two licenses — the spec didn't anticipate this because the class-based/decorator insight came from `packages/codegen`, a different package than where the design's examples (`apps/studio`) lived. Flagging this explicitly since it's a real, licensing-driven restructuring a plan reviewer should know was deliberate, not an oversight.

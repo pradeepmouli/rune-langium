@@ -88,17 +88,27 @@ thresholds" and "Record shape" below — not repeated here.)
   r.subject, signature: r.signature, durationMs: r.durationMs }))` — calls
   the existing `addLine` directly; `telemetry-shipper.ts` is untouched.
 - **Each Web Worker** (`parser-worker.ts`, `codegen-worker.ts`), at module
-  top level: `configureInstrumentation((r) => self.postMessage({ type:
-  'telemetry:record', record: r }))`. The main thread's existing
-  worker-message handler (`CodegenProvider.tsx` already has one) gets one
-  new `case 'telemetry:record'` that calls the same browser sink above —
-  so a worker's captured error lands in the identical pipe, sampling, and
-  shipper as a main-thread one.
-- **Each Cloudflare Pages Function**, at module scope:
-  `configureInstrumentation((r) => console.log(JSON.stringify(r)))`.
-  Workers Logs already scrapes structured `console.log` JSON — this is the
-  same pattern `apps/telemetry-worker` itself already uses post-PR #451, so
-  no new server-side plumbing.
+  top level, guarded by the existing `isWorkerGlobalScope()` check (both
+  worker modules are ALSO imported on the main thread for their exported
+  guards/types — an unguarded call would hijack the main thread's sink):
+  `configureInstrumentation((r) => self.postMessage({ type:
+  'telemetry:record', record: r }))`. Each worker's main-thread owner
+  relays the message into the same browser sink above — the codegen
+  worker's owner is `CodegenProvider.tsx`'s existing message handler (one
+  new `telemetry:record` case); the parser worker's owner is
+  `workspace.ts`, whose per-request listeners match on a response `id` and
+  ignore everything else (so the message is protocol-safe there), meaning
+  it needs one small persistent relay listener added where the worker is
+  created. Either way a worker's captured error lands in the identical
+  pipe, sampling, and shipper as a main-thread one.
+- **Cloudflare Pages Functions**: `configureInstrumentation((r) =>
+  console.log(JSON.stringify(r)))`, wired once in
+  `apps/studio/functions/_middleware.ts` at request entry — NOT at module
+  scope, because the `env` bindings that gate the edge toggle (see Toggle
+  below) only exist per-request in Pages Functions; module scope can't see
+  them. Workers Logs already scrapes structured `console.log` JSON — this
+  is the same pattern `apps/telemetry-worker` itself already uses post-PR
+  #451, so no new server-side plumbing.
 
 Before `configureInstrumentation` runs, the sink defaults to a no-op —
 never throws, never buffers, matching `telemetry-shipper.ts`'s existing
@@ -117,10 +127,15 @@ what gets processed at runtime, not selective wrapping.
 ```ts
 type Level = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
-const enum Capture {
-  Input = 0b01,
-  Output = 0b10,
-}
+// Bitflags as a plain const object, NOT a `const enum`: this repo compiles
+// every package with `isolatedModules` and the module ends up consumed
+// across a package boundary (see the MIT extraction in the plan) — a
+// `const enum` in an emitted .d.ts is ambient, which `isolatedModules`
+// consumers cannot reference at all.
+const Capture = {
+  Input: 0b01,
+  Output: 0b10,
+} as const;
 
 interface InstrumentationOptions {
   op?: string;                              // defaults to fn.name
@@ -300,15 +315,21 @@ close to verbatim (edge as raw JSON).
 
 ## Toggle
 
-- **Browser / Web Workers** (Vite-bundled): every instrumented call is
-  gated `if (!import.meta.env.PROD ||
-  useTelemetrySettingsStore.getState().enabled)`. `import.meta.env.PROD`
-  is statically known at build time, so Rollup dead-code-eliminates the
-  branch entirely in production builds — zero runtime cost, zero data
-  captured in prod regardless of the runtime toggle. The dev/preview
-  runtime toggle reuses the *existing* telemetry opt-in flag
-  (`useTelemetrySettingsStore`) rather than adding a second, parallel
-  setting.
+- **Browser / Web Workers** (Vite-bundled): two stacked gates. First,
+  production is unconditionally off: `if (import.meta.env.PROD) return
+  fn(...)`. `PROD` is statically known at build time, so the bundler
+  dead-code-eliminates the instrumentation branch entirely in production
+  builds — zero runtime cost, zero data captured in prod regardless of
+  any runtime toggle. Second, in dev/preview, capture is additionally
+  gated on the *existing* telemetry opt-in flag
+  (`useTelemetrySettingsStore.getState().enabled`) rather than a second,
+  parallel setting — injected into the core as a plain `() => boolean`
+  (the core module stays isomorphic; it cannot import a zustand store).
+  One implementation caveat: the core module is also imported by non-Vite
+  runtimes (Cloudflare Pages Functions, and Node consumers of the
+  extracted package), where `import.meta.env` is `undefined` — the check
+  must be written so it evaluates safely there (falsy, instrumentation
+  falls through to the runtime gates) instead of throwing.
 - **Cloudflare Pages Functions** (Wrangler-built, not Vite — no
   `import.meta.env.PROD` dead-code elimination available there): gated by
   an `env.INSTRUMENTATION_ENABLED` binding instead. A cheap runtime
