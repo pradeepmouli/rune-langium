@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -12,17 +13,21 @@
 
 import React from 'react';
 import GeneratedSqlImportOptionsForm from './sql-import-options.schema?z2f';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface SqlImportOptionsFormAdapterProps {
   value: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }
 
-export function SqlImportOptionsFormAdapter({ value, onChange }: SqlImportOptionsFormAdapterProps): React.ReactElement {
-  return (
-    <GeneratedSqlImportOptionsForm
-      defaultValues={value}
-      onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
-    />
-  );
-}
+export const SqlImportOptionsFormAdapter = withInstrumentation(
+  function SqlImportOptionsFormAdapter({ value, onChange }: SqlImportOptionsFormAdapterProps): React.ReactElement {
+    return (
+      <GeneratedSqlImportOptionsForm
+        defaultValues={value}
+        onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
+      />
+    );
+  },
+  { op: 'SqlImportOptionsFormAdapter' }
+);

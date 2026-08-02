@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -5,6 +6,7 @@ import { OpfsFs } from '../opfs/opfs-fs.js';
 import type { WorkspaceFile } from '../services/workspace.js';
 import { notifySyncOnSave } from '../services/git-sync.js';
 import { loadWorkspace } from './persistence.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 interface WorkspaceFilesDeps {
   getOpfsRoot: () => Promise<FileSystemDirectoryHandle>;
@@ -21,9 +23,12 @@ let deps: WorkspaceFilesDeps = {
   loadWorkspaceFn: loadWorkspace
 };
 
-export function setWorkspaceFilesDeps(next: Partial<WorkspaceFilesDeps>): void {
-  deps = { ...deps, ...next };
-}
+export const setWorkspaceFilesDeps = withInstrumentation(
+  function setWorkspaceFilesDeps(next: Partial<WorkspaceFilesDeps>): void {
+    deps = { ...deps, ...next };
+  },
+  { op: 'setWorkspaceFilesDeps' }
+);
 
 function isNotFoundError(error: unknown): boolean {
   // 'NotFoundError' is the DOM exception name (FileSystemDirectoryHandle
@@ -84,29 +89,42 @@ const deletedWorkspaceIds = new Set<string>();
 // about is simply never a pruning candidate, in either direction.
 const lastKnownTrackedPaths = new Map<string, ReadonlySet<string>>();
 
-export function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
-  if (deletedWorkspaceIds.has(workspaceId)) {
-    return Promise.resolve();
+export const saveWorkspaceFiles = withInstrumentation(
+  function saveWorkspaceFiles(workspaceId: string, files: readonly WorkspaceFile[]): Promise<void> {
+    if (deletedWorkspaceIds.has(workspaceId)) {
+      return Promise.resolve();
+    }
+
+    const queue = saveQueues.get(workspaceId) ?? { inFlight: false, pending: null, runDone: null };
+    saveQueues.set(workspaceId, queue);
+
+    if (queue.inFlight) {
+      return new Promise<void>((resolve, reject) => {
+        if (queue.pending) {
+          // A newer snapshot supersedes the previously-queued one — no need to
+          // persist an intermediate state once a later one is already known.
+          queue.pending.files = files;
+          queue.pending.waiters.push({ resolve, reject });
+        } else {
+          queue.pending = { files, waiters: [{ resolve, reject }] };
+        }
+      });
+    }
+
+    return runQueuedSave(workspaceId, files, queue);
+    // `files[].content` is raw model source — never captured; workspaceId +
+    // count are safe.
+  },
+  {
+    op: 'saveWorkspaceFiles',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [workspaceId, files] = value as [string, readonly WorkspaceFile[]];
+      return { workspaceId, fileCount: files.length };
+    }
   }
-
-  const queue = saveQueues.get(workspaceId) ?? { inFlight: false, pending: null, runDone: null };
-  saveQueues.set(workspaceId, queue);
-
-  if (queue.inFlight) {
-    return new Promise<void>((resolve, reject) => {
-      if (queue.pending) {
-        // A newer snapshot supersedes the previously-queued one — no need to
-        // persist an intermediate state once a later one is already known.
-        queue.pending.files = files;
-        queue.pending.waiters.push({ resolve, reject });
-      } else {
-        queue.pending = { files, waiters: [{ resolve, reject }] };
-      }
-    });
-  }
-
-  return runQueuedSave(workspaceId, files, queue);
-}
+);
 
 async function runQueuedSave(
   workspaceId: string,
@@ -216,18 +234,27 @@ async function saveWorkspaceFilesNow(workspaceId: string, files: readonly Worksp
   notifySyncOnSave(workspaceId);
 }
 
-export async function loadWorkspaceFiles(workspaceId: string): Promise<WorkspaceFile[]> {
-  const root = await deps.getOpfsRoot();
-  const fs = new OpfsFs(root);
-  const files: WorkspaceFile[] = [];
+export const loadWorkspaceFiles = withInstrumentation(
+  async function loadWorkspaceFiles(workspaceId: string): Promise<WorkspaceFile[]> {
+    const root = await deps.getOpfsRoot();
+    const fs = new OpfsFs(root);
+    const files: WorkspaceFile[] = [];
 
-  await walkWorkspaceFiles(fs, `/${workspaceId}/files`, '', files);
-  // Establish/refresh the pruning baseline (issue #439) from what's
-  // actually on disk at load time — the moment the editor genuinely does
-  // know about every currently-tracked path.
-  lastKnownTrackedPaths.set(workspaceId, new Set(files.map((file) => file.path)));
-  return files;
-}
+    await walkWorkspaceFiles(fs, `/${workspaceId}/files`, '', files);
+    // Establish/refresh the pruning baseline (issue #439) from what's
+    // actually on disk at load time — the moment the editor genuinely does
+    // know about every currently-tracked path.
+    lastKnownTrackedPaths.set(workspaceId, new Set(files.map((file) => file.path)));
+    return files;
+    // Output carries raw model source — never captured; only a count.
+  },
+  {
+    op: 'loadWorkspaceFiles',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) =>
+      which === 'input' ? { workspaceId: (value as [string])[0] } : { fileCount: (value as WorkspaceFile[]).length }
+  }
+);
 
 async function walkWorkspaceFiles(
   fs: OpfsFs,
@@ -274,40 +301,47 @@ async function walkWorkspaceFiles(
   }
 }
 
-export async function deleteWorkspaceFiles(workspaceId: string): Promise<void> {
-  // Mark deleted before anything else (synchronously, before any await) so
-  // no save requested from this point on can slip past the queue drain
-  // below and later recreate the directory we're about to remove.
-  deletedWorkspaceIds.add(workspaceId);
+export const deleteWorkspaceFiles = withInstrumentation(
+  async function deleteWorkspaceFiles(workspaceId: string): Promise<void> {
+    // Mark deleted before anything else (synchronously, before any await) so
+    // no save requested from this point on can slip past the queue drain
+    // below and later recreate the directory we're about to remove.
+    deletedWorkspaceIds.add(workspaceId);
 
-  const queue = saveQueues.get(workspaceId);
-  if (queue) {
-    // A not-yet-started save would just resurrect the directory once it
-    // runs — cancel it instead of letting it start.
-    const pending = queue.pending;
-    queue.pending = null;
-    if (pending) {
-      const err = new Error(`Workspace ${workspaceId} was deleted before its queued save could run`);
-      pending.waiters.forEach((w) => w.reject(err));
+    const queue = saveQueues.get(workspaceId);
+    if (queue) {
+      // A not-yet-started save would just resurrect the directory once it
+      // runs — cancel it instead of letting it start.
+      const pending = queue.pending;
+      queue.pending = null;
+      if (pending) {
+        const err = new Error(`Workspace ${workspaceId} was deleted before its queued save could run`);
+        pending.waiters.forEach((w) => w.reject(err));
+      }
+      // Wait for an already-running write to actually finish so the delete
+      // below doesn't race its still-open OPFS mutations.
+      if (queue.runDone) {
+        await queue.runDone;
+      }
     }
-    // Wait for an already-running write to actually finish so the delete
-    // below doesn't race its still-open OPFS mutations.
-    if (queue.runDone) {
-      await queue.runDone;
-    }
-  }
 
-  try {
-    const root = await deps.getOpfsRoot();
-    await root.removeEntry(workspaceId, { recursive: true });
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return;
+    try {
+      const root = await deps.getOpfsRoot();
+      await root.removeEntry(workspaceId, { recursive: true });
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return;
+      }
+      // The delete didn't actually happen — the caller (handleDeleteWorkspace)
+      // surfaces this error and leaves the workspace active, so don't leave
+      // it permanently unable to save: clear the tombstone before rethrowing.
+      deletedWorkspaceIds.delete(workspaceId);
+      throw error;
     }
-    // The delete didn't actually happen — the caller (handleDeleteWorkspace)
-    // surfaces this error and leaves the workspace active, so don't leave
-    // it permanently unable to save: clear the tombstone before rethrowing.
-    deletedWorkspaceIds.delete(workspaceId);
-    throw error;
+  },
+  {
+    op: 'deleteWorkspaceFiles',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { workspaceId: (value as [string])[0] } : undefined)
   }
-}
+);

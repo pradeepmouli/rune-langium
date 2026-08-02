@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -15,6 +16,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { DockviewPayload } from '../shell/layout-types.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 export type WorkspaceKind = 'browser-only' | 'folder-backed' | 'git-backed';
 
@@ -154,140 +156,202 @@ function getDb(): Promise<IDBPDatabase<RuneStudioDB>> {
   return dbPromise;
 }
 
-/** Reset the cached connection — used by tests between cases. */
-export async function _resetForTests(): Promise<void> {
-  const prev = dbPromise;
-  dbPromise = undefined;
-  if (prev) {
-    closeInFlight = (async () => {
+export const _resetForTests = withInstrumentation(
+  async function _resetForTests(): Promise<void> {
+    const prev = dbPromise;
+    dbPromise = undefined;
+    if (prev) {
+      closeInFlight = (async () => {
+        try {
+          const db = await prev;
+          db.close();
+        } catch {
+          /* nothing to close */
+        }
+      })();
       try {
-        const db = await prev;
-        db.close();
-      } catch {
-        /* nothing to close */
+        await closeInFlight;
+      } finally {
+        closeInFlight = undefined;
       }
-    })();
-    try {
-      await closeInFlight;
-    } finally {
-      closeInFlight = undefined;
     }
-  }
-}
+  },
+  { op: '_resetForTests' }
+);
 
 // ---------- workspaces ----------
 
-export async function saveWorkspace(ws: WorkspaceRecord): Promise<void> {
-  const db = await getDb();
-  const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
-  const wsStore = tx.objectStore('workspaces');
-  // `structureView` is owned by `saveStructureViewState`; `saveWorkspace`
-  // is for workspace metadata only. Callers reach this function via a
-  // `load → mutate field → save` cycle that inevitably carries forward
-  // the `structureView` they read, which may be stale relative to a
-  // concurrent toggle. Unconditionally read the persisted value inside
-  // this tx and write that back, ignoring the caller's input for this
-  // field. (A conditional merge — "only when input is undefined" — left
-  // the stale-snapshot case wide open because stale snapshots almost
-  // always *do* carry a non-undefined, outdated structureView.)
-  const existing = await wsStore.get(ws.id);
-  const { structureView: _ignoredCaller, ...rest } = ws;
-  const toWrite: WorkspaceRecord = existing?.structureView
-    ? ({ ...rest, structureView: existing.structureView } as WorkspaceRecord)
-    : (rest as WorkspaceRecord);
-  await wsStore.put(toWrite);
-  await tx.objectStore('recents').put({
-    id: ws.id,
-    name: ws.name,
-    kind: ws.kind,
-    lastOpenedAt: ws.lastOpenedAt
-  });
-  await tx.done;
-}
+export const saveWorkspace = withInstrumentation(
+  async function saveWorkspace(ws: WorkspaceRecord): Promise<void> {
+    const db = await getDb();
+    const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
+    const wsStore = tx.objectStore('workspaces');
+    // `structureView` is owned by `saveStructureViewState`; `saveWorkspace`
+    // is for workspace metadata only. Callers reach this function via a
+    // `load → mutate field → save` cycle that inevitably carries forward
+    // the `structureView` they read, which may be stale relative to a
+    // concurrent toggle. Unconditionally read the persisted value inside
+    // this tx and write that back, ignoring the caller's input for this
+    // field. (A conditional merge — "only when input is undefined" — left
+    // the stale-snapshot case wide open because stale snapshots almost
+    // always *do* carry a non-undefined, outdated structureView.)
+    const existing = await wsStore.get(ws.id);
+    const { structureView: _ignoredCaller, ...rest } = ws;
+    const toWrite: WorkspaceRecord = existing?.structureView
+      ? ({ ...rest, structureView: existing.structureView } as WorkspaceRecord)
+      : (rest as WorkspaceRecord);
+    await wsStore.put(toWrite);
+    await tx.objectStore('recents').put({
+      id: ws.id,
+      name: ws.name,
+      kind: ws.kind,
+      lastOpenedAt: ws.lastOpenedAt
+    });
+    await tx.done;
+    // `ws.name` (user-chosen) and `ws.gitBacking.repoUrl` (may name a private
+    // repo) are never captured; id/kind/schemaVersion/tabCount are safe.
+  },
+  {
+    op: 'saveWorkspace',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [ws] = value as [WorkspaceRecord];
+      return { id: ws.id, kind: ws.kind, schemaVersion: ws.schemaVersion, tabCount: ws.tabs.length };
+    }
+  }
+);
 
-export async function loadWorkspace(id: string): Promise<WorkspaceRecord | undefined> {
-  const db = await getDb();
-  return db.get('workspaces', id);
-}
+// Output carries `name`/`gitBacking.repoUrl` — never captured.
+export const loadWorkspace = withInstrumentation(
+  async function loadWorkspace(id: string): Promise<WorkspaceRecord | undefined> {
+    const db = await getDb();
+    return db.get('workspaces', id);
+  },
+  {
+    op: 'loadWorkspace',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { id: (value as [string])[0] } : undefined)
+  }
+);
 
-export async function deleteWorkspace(id: string): Promise<void> {
-  const db = await getDb();
-  const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
-  await tx.objectStore('workspaces').delete(id);
-  await tx.objectStore('recents').delete(id);
-  await tx.done;
-}
+export const deleteWorkspace = withInstrumentation(
+  async function deleteWorkspace(id: string): Promise<void> {
+    const db = await getDb();
+    const tx = db.transaction(['workspaces', 'recents'], 'readwrite');
+    await tx.objectStore('workspaces').delete(id);
+    await tx.objectStore('recents').delete(id);
+    await tx.done;
+  },
+  {
+    op: 'deleteWorkspace',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { id: (value as [string])[0] } : undefined)
+  }
+);
 
-export async function listRecents(): Promise<RecentWorkspaceRecord[]> {
-  const db = await getDb();
-  const all = await db.getAllFromIndex('recents', 'by-lastOpenedAt');
-  return all.reverse(); // index is ascending; we want most-recent first
-}
+// Entries carry `name` (user-chosen) — never captured; only a count.
+export const listRecents = withInstrumentation(
+  async function listRecents(): Promise<RecentWorkspaceRecord[]> {
+    const db = await getDb();
+    const all = await db.getAllFromIndex('recents', 'by-lastOpenedAt');
+    return all.reverse(); // index is ascending; we want most-recent first
+  },
+  {
+    op: 'listRecents',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' && Array.isArray(value) ? { count: value.length } : undefined)
+  }
+);
 
 // ---------- structure-view ----------
 
-/**
- * Load the Structure View expansion map for a workspace. Returns `{}` for
- * workspaces that don't exist or were saved before the `structureView`
- * slot was introduced, so the store can hydrate unconditionally.
- */
-export async function loadStructureViewState(workspaceId: string): Promise<Record<string, boolean>> {
-  const ws = await loadWorkspace(workspaceId);
-  return ws?.structureView?.expansionMap ?? {};
-}
-
-/**
- * Write the Structure View expansion map for a workspace. Silently drops
- * the write if the workspace has been deleted out from under us — keeps
- * callers from having to special-case race conditions during teardown.
- *
- * Performs the get + put inside a single `readwrite` transaction on
- * `'workspaces'` so a concurrent `saveWorkspace` call (e.g., the
- * workspace-manager updating `lastOpenedAt`, layout, or tabs) can't
- * commit between our read and our write — without this, our put would
- * write back a stale snapshot and silently revert those other fields.
- *
- * Deliberately doesn't touch `'recents'`: a structure-view toggle isn't
- * a workspace-open event, so `lastOpenedAt` and the recents index stay
- * put.
- */
-export async function saveStructureViewState(
-  workspaceId: string,
-  expansionMap: Record<string, boolean>
-): Promise<void> {
-  const db = await getDb();
-  const tx = db.transaction('workspaces', 'readwrite');
-  const store = tx.objectStore('workspaces');
-  const ws = await store.get(workspaceId);
-  if (!ws) {
-    await tx.done.catch(() => undefined);
-    return;
+export const loadStructureViewState = withInstrumentation(
+  async function loadStructureViewState(workspaceId: string): Promise<Record<string, boolean>> {
+    const ws = await loadWorkspace(workspaceId);
+    return ws?.structureView?.expansionMap ?? {};
+    // Output's expansionMap is keyed by user model TYPE NAMES — never captured.
+  },
+  {
+    op: 'loadStructureViewState',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { workspaceId: (value as [string])[0] } : undefined)
   }
-  await store.put({ ...ws, structureView: { expansionMap } });
-  await tx.done;
-}
+);
+
+export const saveStructureViewState = withInstrumentation(
+  async function saveStructureViewState(workspaceId: string, expansionMap: Record<string, boolean>): Promise<void> {
+    const db = await getDb();
+    const tx = db.transaction('workspaces', 'readwrite');
+    const store = tx.objectStore('workspaces');
+    const ws = await store.get(workspaceId);
+    if (!ws) {
+      await tx.done.catch(() => undefined);
+      return;
+    }
+    await store.put({ ...ws, structureView: { expansionMap } });
+    await tx.done;
+    // `expansionMap` is keyed by user model TYPE NAMES — never captured.
+  },
+  {
+    op: 'saveStructureViewState',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { workspaceId: (value as [string, unknown])[0] } : undefined)
+  }
+);
 
 // ---------- settings ----------
 
-export async function saveSetting(key: SettingKey, value: unknown): Promise<void> {
-  const db = await getDb();
-  await db.put('settings', { key, value });
-}
+export const saveSetting = withInstrumentation(
+  async function saveSetting(key: SettingKey, value: unknown): Promise<void> {
+    const db = await getDb();
+    await db.put('settings', { key, value });
+    // `key` is a fixed SettingKey enum and `value` is always a benign
+    // primitive (theme name, boolean, tab-size number, version string) for
+    // every key in that enum — never user/model content. Safe to capture.
+  },
+  { op: 'saveSetting', capture: Capture.Input, sanitize: (value) => value }
+);
 
-export async function loadSetting<T = unknown>(key: SettingKey): Promise<T | undefined> {
-  const db = await getDb();
-  const row = await db.get('settings', key);
-  return row?.value as T | undefined;
-}
+export const loadSetting = withInstrumentation(
+  async function loadSetting<T = unknown>(key: SettingKey): Promise<T | undefined> {
+    const db = await getDb();
+    const row = await db.get('settings', key);
+    return row?.value as T | undefined;
+  },
+  { op: 'loadSetting', capture: Capture.Input | Capture.Output, sanitize: (value) => value }
+);
 
 // ---------- handles ----------
 
-export async function saveFolderHandle(rec: FolderHandleRecord): Promise<void> {
-  const db = await getDb();
-  await db.put('handles', rec);
-}
+export const saveFolderHandle = withInstrumentation(
+  async function saveFolderHandle(rec: FolderHandleRecord): Promise<void> {
+    const db = await getDb();
+    await db.put('handles', rec);
+    // `rec.handle` (a FileSystemDirectoryHandle) isn't capturable.
+  },
+  {
+    op: 'saveFolderHandle',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [rec] = value as [FolderHandleRecord];
+      return { id: rec.id, lastPermission: rec.lastPermission };
+    }
+  }
+);
 
-export async function loadFolderHandle(id: string): Promise<FolderHandleRecord | undefined> {
-  const db = await getDb();
-  return db.get('handles', id);
-}
+export const loadFolderHandle = withInstrumentation(
+  async function loadFolderHandle(id: string): Promise<FolderHandleRecord | undefined> {
+    const db = await getDb();
+    return db.get('handles', id);
+  },
+  {
+    op: 'loadFolderHandle',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) =>
+      which === 'input'
+        ? { id: (value as [string])[0] }
+        : { lastPermission: (value as FolderHandleRecord | undefined)?.lastPermission }
+  }
+);

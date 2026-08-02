@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -12,17 +13,21 @@
 
 import React from 'react';
 import GeneratedXsdImportOptionsForm from './xsd-import-options.schema?z2f';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface XsdImportOptionsFormAdapterProps {
   value: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }
 
-export function XsdImportOptionsFormAdapter({ value, onChange }: XsdImportOptionsFormAdapterProps): React.ReactElement {
-  return (
-    <GeneratedXsdImportOptionsForm
-      defaultValues={value}
-      onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
-    />
-  );
-}
+export const XsdImportOptionsFormAdapter = withInstrumentation(
+  function XsdImportOptionsFormAdapter({ value, onChange }: XsdImportOptionsFormAdapterProps): React.ReactElement {
+    return (
+      <GeneratedXsdImportOptionsForm
+        defaultValues={value}
+        onValueChange={(data: unknown) => onChange(data as Record<string, unknown>)}
+      />
+    );
+  },
+  { op: 'XsdImportOptionsFormAdapter' }
+);
