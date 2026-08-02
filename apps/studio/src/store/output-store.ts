@@ -60,15 +60,24 @@ export const useOutputStore = create<OutputState>((set) => ({
   }
 }));
 
-export const fmtLine = withInstrumentation(
-  function fmtLine(source: string, message: string, detail?: string): string {
-    const base = `[${source}] ${message}`;
-    return detail !== undefined ? `${base} · ${detail}` : base;
-    // `message`/`detail` are free-form text — many call sites pass a raw
-    // error.message or file-path-bearing string through here — never captured.
-  },
-  { op: 'fmtLine' }
-);
+/**
+ * Plain, uninstrumented core — exported separately so instrumentation
+ * sink implementations (e.g. browser-sink.ts's terminal sink) can format
+ * a line without re-entering `withInstrumentation`. A sink calling the
+ * instrumented `fmtLine` below would emit a new record on every call,
+ * which its own configured sink would then format via `fmtLine` again —
+ * unbounded recursion once the threshold is low enough to clear it.
+ * Ordinary call sites should keep using the instrumented `fmtLine`.
+ */
+// oxlint-disable-next-line rune/no-uninstrumented-export -- deliberately plain, see comment above
+export function formatLine(source: string, message: string, detail?: string): string {
+  const base = `[${source}] ${message}`;
+  return detail !== undefined ? `${base} · ${detail}` : base;
+  // `message`/`detail` are free-form text — many call sites pass a raw
+  // error.message or file-path-bearing string through here — never captured.
+}
+
+export const fmtLine = withInstrumentation(formatLine, { op: 'fmtLine' });
 
 export const SEV: Record<OutputSeverity, string> = {
   success: '✓',

@@ -35,4 +35,17 @@ describe('installInstrumentationBrowserSink', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({ op: 'browserOp', severity: 'info' });
   });
+
+  it('does not recurse into itself at the "trace" threshold — the terminal sink must not call the instrumented fmtLine', () => {
+    installInstrumentationBrowserSink();
+    setInstrumentationThreshold('trace'); // the exact troubleshooting scenario that used to overflow the stack
+    const wrapped = withInstrumentation(() => 1, { op: 'traceOp', level: 'trace' });
+    expect(() => wrapped()).not.toThrow();
+    // Exactly one line for the one instrumented call above — if the sink's
+    // own formatting call had re-entered the pipe, this would be far more
+    // than one line (or the call above would have thrown RangeError first).
+    const lines = useOutputStore.getState().lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({ op: 'traceOp' });
+  });
 });

@@ -227,6 +227,14 @@ function makeWithInstrumentation(binding?: ChildBinding) {
         if (!isAsync) depth--;
       }
     };
+    // React reads a component's function `.name` for error-boundary
+    // componentStack frames and DevTools — without this, every wrapped
+    // component (the codemod wraps nearly all of them) shows up as the
+    // generic closure name `wrapped`, destroying the diagnostic context
+    // this module exists to add. `configurable: true` matches
+    // Function.prototype.name's own descriptor, so this behaves exactly
+    // like a normal named function to any other introspection.
+    Object.defineProperty(wrapped, 'name', { value: op, configurable: true });
     return wrapped as F;
   }
   bound.child = (childContext: unknown, childOpts: { level?: Level } = {}) =>

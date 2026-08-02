@@ -89,6 +89,18 @@ describe('withInstrumentation', () => {
     expect(emitted).toEqual([expect.objectContaining({ op: 'myNamedFunction' })]);
   });
 
+  it('the wrapped function carries the same .name as op — React reads this for componentStack frames', () => {
+    function MyComponent(): void {}
+    const wrapped = withInstrumentation(MyComponent, {});
+    expect(wrapped.name).toBe('MyComponent');
+  });
+
+  it('an explicit op overrides .name too, not just the telemetry field', () => {
+    function anyName(): void {}
+    const wrapped = withInstrumentation(anyName, { op: 'CustomOpName' });
+    expect(wrapped.name).toBe('CustomOpName');
+  });
+
   it('an above-threshold call through the default (pre-configuration) no-op sink never throws', () => {
     resetInstrumentationForTests(); // guarantee the no-op sink, not a leaked emit from a prior test
     setInstrumentationThreshold('info');
