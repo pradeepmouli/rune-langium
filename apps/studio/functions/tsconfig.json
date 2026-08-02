@@ -15,5 +15,5 @@
     "types": ["@cloudflare/workers-types"],
     "composite": false
   },
-  "include": ["./**/*.ts", "../../src/**/*.ts"]
+  "include": ["./**/*.ts", "../../src/services/instrumentation/*.ts"]
 }
