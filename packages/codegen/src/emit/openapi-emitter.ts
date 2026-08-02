@@ -66,6 +66,7 @@ import { jsonSchemaProfile } from './json-schema-profile.js';
 import { extractFuncs, type RuneFunc, type RuneFuncParam } from '../types/func.js';
 import { recognizeCondition, constraintIRToJsonSchemaKeywords } from './constraint-recognizer.js';
 import { OpenApiOptionsSchema, resolveCrudTypeNames, type OpenApiOptions } from '../options/openapi-options.js';
+import { debug } from '../instrument.js';
 
 const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = mergeProfileTypeMaps(jsonSchemaProfile) as Record<
   string,
@@ -208,9 +209,13 @@ export class OpenApiNamespaceEmitter extends BaseNamespaceEmitter {
   // OWN full run over the same `model`/`registry`, rather than walking
   // per-element like a from-scratch emitter would (decision 2: compose,
   // don't extract/duplicate the JSON Schema emitter's per-type logic).
+  @debug()
   emitEnumeration(): void {}
+  @debug()
   emitTypeAlias(): void {}
+  @debug()
   emitData(): void {}
+  @debug()
   emitChoice(): void {}
 
   finalize(): GeneratorOutput {
