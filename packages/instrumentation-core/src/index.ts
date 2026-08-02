@@ -27,6 +27,7 @@ export interface TelemetryRecord {
   signature?: string;
   durationMs?: number;
   context?: unknown;
+  namespace?: string;
   ts: number;
 }
 
@@ -106,9 +107,27 @@ export interface InstrumentationOptions {
   capture?: number;
   sanitize?: (value: unknown, which: 'input' | 'output') => unknown;
   sanitizeError?: (err: unknown) => SanitizeErrorResult;
+  /**
+   * Set when the developer knows their own immediate caller wraps this call
+   * in a local try/catch that swallows the error (preserving existing UX)
+   * — see CodegenProvider.tsx's reportHydrationRetryExhausted for the
+   * established pattern. Demotes the emitted error record's level from the
+   * default 'error' to 'warn'. A further `errorLevel: 'debug'` demotes it
+   * again, for known-noise handled errors not worth even a 'warn'.
+   */
+  handled?: boolean;
+  /** Only meaningful when `handled: true`. */
+  errorLevel?: 'warn' | 'debug';
+  /**
+   * Marks this call as toast/activity-eligible. Presence (not `level`) is
+   * the actual gate the Toast/Activity sinks (apps/studio) check — see
+   * docs/superpowers/specs/2026-08-02-instrumentation-multi-sink-design.md.
+   * Absent by default; only set on calls a developer deliberately promotes.
+   */
+  namespace?: string;
 }
 
-let threshold: Level = 'warn';
+let threshold: Level = 'info';
 
 export function setInstrumentationThreshold(level: Level): void {
   threshold = level;
@@ -120,7 +139,7 @@ export function getInstrumentationThreshold(): Level {
 
 /** Test-only: restores the default threshold between test files. */
 export function resetInstrumentationThresholdForTests(): void {
-  threshold = 'warn';
+  threshold = 'info';
 }
 
 function defaultSanitizeError(err: unknown): SanitizeErrorResult {
@@ -128,11 +147,24 @@ function defaultSanitizeError(err: unknown): SanitizeErrorResult {
   return { signature: `${name}:unspecified` };
 }
 
+function errorLevelFor(opts: InstrumentationOptions): Level {
+  if (!opts.handled) return 'error';
+  return opts.errorLevel ?? 'warn';
+}
+
 // `bindingContext` lets `.child()`-bound wrappers (Task 3) attach their bound
 // context to error records the same way success records do.
 function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindingContext?: unknown): void {
   const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
-  emitRecord({ op, level: 'error', captured: 0, signature, context: context ?? bindingContext, ts: Date.now() });
+  emitRecord({
+    op,
+    level: errorLevelFor(opts),
+    captured: 0,
+    signature,
+    context: context ?? bindingContext,
+    namespace: opts.namespace,
+    ts: Date.now()
+  });
 }
 
 // Dynamic nesting-depth counter — a single shared value, incremented on
@@ -142,8 +174,7 @@ function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindi
 let depth = 0;
 
 function defaultLevelForDepth(): Level {
-  if (depth <= 0) return 'info';
-  if (depth <= 2) return 'debug';
+  if (depth <= 0) return 'debug';
   return 'trace';
 }
 
@@ -207,7 +238,17 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             (value) => {
               depth--;
               if (clears)
-                emitSuccessWithContext(op, level, capture, args, value, sanitize, performance.now() - start, context);
+                emitSuccessWithContext(
+                  op,
+                  level,
+                  capture,
+                  args,
+                  value,
+                  sanitize,
+                  performance.now() - start,
+                  context,
+                  opts.namespace
+                );
               return value;
             },
             (err) => {
@@ -218,7 +259,17 @@ function makeWithInstrumentation(binding?: ChildBinding) {
           );
         }
         if (clears)
-          emitSuccessWithContext(op, level, capture, args, result, sanitize, performance.now() - start, context);
+          emitSuccessWithContext(
+            op,
+            level,
+            capture,
+            args,
+            result,
+            sanitize,
+            performance.now() - start,
+            context,
+            opts.namespace
+          );
         return result;
       } catch (err) {
         emitError(op, opts, err, context);
@@ -260,9 +311,10 @@ function emitSuccessWithContext(
   output: unknown,
   sanitize: (value: unknown, which: 'input' | 'output') => unknown,
   durationMs: number,
-  context: unknown
+  context: unknown,
+  namespace: string | undefined
 ): void {
-  const record: TelemetryRecord = { op, level, captured: capture, ts: Date.now(), durationMs, context };
+  const record: TelemetryRecord = { op, level, captured: capture, ts: Date.now(), durationMs, context, namespace };
   if (capture & Capture.Input) record.input = sanitize(args, 'input');
   if (capture & Capture.Output) record.output = sanitize(output, 'output');
   emitRecord(record);
