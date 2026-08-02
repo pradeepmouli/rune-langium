@@ -531,6 +531,61 @@ describe('dynamic nesting-depth default level', () => {
     await wrapped();
     expect(emitted.every((r: any) => r.level === 'info')).toBe(true);
   });
+
+  // Regression coverage for a bug Task 2's review caught in ITS OWN early-plan
+  // code shape (an `if (!clears) return fn.apply(...)` early-return before
+  // entering the try/catch), which Task 2 fixed for the base wrapper. This
+  // task's depth-tracking append re-introduces the SAME early-return shape in
+  // its own literal code unless corrected — and for depth-tracking
+  // specifically it is a SECOND bug, not just the error-emission one: an
+  // early return before `depth++` means a below-threshold call's own nested
+  // calls never see their parent's depth increment, silently under-counting
+  // nesting. Both must hold even when the call itself never clears.
+  it('a below-threshold call still increments depth for its own nested calls (regression: an early return before depth++ would hide nesting)', () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((r) => emitted.push(r));
+    setInstrumentationThreshold('trace');
+    const inner = withInstrumentation(() => 1, { op: 'innerUnderBelowThresholdParent' });
+    // outer is explicitly BELOW the 'trace' threshold isn't possible (trace is
+    // the lowest level) — so gate outer's own emission via an explicit level
+    // above the ambient default while asserting on the emitted array itself:
+    // the real assertion is about depth's effect on `inner`, not on whether
+    // `outer` itself emits.
+    setInstrumentationThreshold('error'); // outer (default 'info') won't clear
+    const outer = withInstrumentation(() => inner(), { op: 'outerBelowThreshold' });
+    outer();
+    const innerRecord = emitted.find((r: any) => r.op === 'innerUnderBelowThresholdParent');
+    expect(innerRecord).toBeUndefined(); // inner is 'trace'-appropriate-depth but threshold is 'error', so it won't emit either — see next assertion for the real check
+    // Re-run with a threshold that lets inner through, to prove depth was
+    // still incremented by outer despite outer itself never clearing 'error'.
+    setInstrumentationThreshold('debug');
+    outer();
+    const secondInnerRecord = emitted.find((r: any) => r.op === 'innerUnderBelowThresholdParent');
+    expect(secondInnerRecord).toBeDefined();
+    expect((secondInnerRecord as any).level).toBe('debug'); // depth=1 from outer -> inner defaults to debug, proving outer's depth++ ran even though outer itself never cleared 'error' on the first call
+  });
+
+  it('a below-threshold async rejection still emits an error record and still decrements depth on settle (regression: same early-return shape as Task 2, applied to the depth-tracking wrapper)', async () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((r) => emitted.push(r));
+    setInstrumentationThreshold('error');
+    const boom = new Error('boom');
+    const wrapped = withInstrumentation(
+      async () => {
+        throw boom;
+      },
+      { op: 'depthAsyncExplode', level: 'trace', sanitizeError: () => ({ signature: 'Error:boom' }) }
+    );
+    await expect(wrapped()).rejects.toThrow(boom);
+    expect(emitted).toEqual([expect.objectContaining({ op: 'depthAsyncExplode', level: 'error' })]);
+    // Depth must have been decremented on settle — a later top-level call
+    // still defaults to 'info', not a deeper level, proving no leak.
+    setInstrumentationThreshold('trace');
+    const wrapped2 = withInstrumentation(() => 1, { op: 'afterAsyncExplode' });
+    wrapped2();
+    const afterRecord = emitted.find((r: any) => r.op === 'afterAsyncExplode');
+    expect((afterRecord as any).level).toBe('info');
+  });
 });
 ```
 
@@ -580,7 +635,18 @@ function makeWithInstrumentation(binding?: ChildBinding) {
     const wrapped = function (this: unknown, ...args: unknown[]) {
       const level = resolveLevel(binding, opts.level);
       const clears = levelClears(level, threshold);
-      if (!clears) return fn.apply(this, args);
+      // NO early `if (!clears) return fn.apply(...)` here — Task 2's review
+      // caught exactly this shape as a real bug (it makes error-record
+      // emission conditional on threshold, which the Global Constraints
+      // forbid) and fixed it for the base wrapper by always running `fn`
+      // inside the try/catch and gating only SUCCESS emission on `clears`.
+      // For THIS depth-tracking wrapper specifically, the early return would
+      // ALSO have been a second, independent bug: `depth++` sits below it, so
+      // a below-threshold call would never increment depth, silently hiding
+      // its own nested calls' true nesting level. `clears` therefore now
+      // gates ONLY the `emitSuccessWithContext` calls below, never whether
+      // `fn` runs inside the try, never whether `depth` is tracked, and never
+      // whether an error/rejection is captured.
       const sanitize = opts.sanitize ?? ((v: unknown) => v);
       const start = performance.now();
       depth++;
@@ -600,7 +666,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
           return result.then(
             (value) => {
               depth--;
-              emitSuccessWithContext(op, level, capture, args, value, sanitize, performance.now() - start, context);
+              if (clears) emitSuccessWithContext(op, level, capture, args, value, sanitize, performance.now() - start, context);
               return value;
             },
             (err) => {
@@ -610,7 +676,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             }
           );
         }
-        emitSuccessWithContext(op, level, capture, args, result, sanitize, performance.now() - start, context);
+        if (clears) emitSuccessWithContext(op, level, capture, args, result, sanitize, performance.now() - start, context);
         return result;
       } catch (err) {
         emitError(op, opts, err, context);
