@@ -17,6 +17,7 @@ import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { useActivityStore } from '../store/activity-store.js';
 import { allocateOpId } from '../services/op-log.js';
 import { addInstrumentationSink, withInstrumentation, type TelemetryRecord } from '../services/instrumentation/core.js';
+import { isFailureRecord } from '../services/instrumentation/record-status.js';
 
 type StudioToastVariant = 'default' | 'destructive' | 'loading';
 
@@ -158,8 +159,8 @@ function StudioToastInner({ children }: { children: ReactNode }) {
       if (!record.namespace) return;
       notify({
         title: record.namespace,
-        description: record.op,
-        variant: record.level === 'error' ? 'destructive' : 'default'
+        description: record.message ?? record.op,
+        variant: isFailureRecord(record) ? 'destructive' : 'default'
       });
     });
   }, [notify]);

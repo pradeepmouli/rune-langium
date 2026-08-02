@@ -136,6 +136,7 @@ describe('CodegenProvider retry-budget exhaustion instrumentation', () => {
         level: 'warn', // was 'error' — this call site is now `handled: true`
         signature: 'RetryExhaustedError',
         namespace: 'curated',
+        message: 'Preview refresh exhausted its retry budget',
         context: { attempts: MAX_HYDRATION_RETRIES_PER_TARGET }
       })
     ]);
@@ -150,7 +151,6 @@ describe('CodegenProvider retry-budget exhaustion instrumentation', () => {
   it('the exhausted-retry error reaches the user: a toast fires and an Activity entry is recorded', async () => {
     useActivityStore.setState({ entries: [] });
     const unregisterActivitySink = installInstrumentationActivitySink();
-    setInstrumentationThreshold('warn'); // handled errors default to 'warn' — must clear this threshold
 
     usePreviewStore.getState().resetPreviewState();
     usePreviewStore.setState({
@@ -179,12 +179,16 @@ describe('CodegenProvider retry-budget exhaustion instrumentation', () => {
       sendUnresolvedPreviewResult(worker, 'Scheme', generateMsg.requestId);
     });
 
-    const toast = await screen.findByText('hydrationRetryExhausted');
+    const toast = await screen.findByText('Preview refresh exhausted its retry budget');
     expect(toast).toBeTruthy();
 
     const entries = useActivityStore.getState().entries;
     expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({ tag: 'curated', ok: false, msg: 'hydrationRetryExhausted' });
+    expect(entries[0]).toMatchObject({
+      tag: 'curated',
+      ok: false,
+      msg: 'Preview refresh exhausted its retry budget'
+    });
 
     unregisterActivitySink();
   });

@@ -28,6 +28,7 @@ export interface TelemetryRecord {
   durationMs?: number;
   context?: unknown;
   namespace?: string;
+  message?: string;
   ts: number;
 }
 
@@ -98,8 +99,23 @@ export function resetInstrumentationForTests(): void {
 
 /** Public export — used both internally by withInstrumentation and directly by callers (e.g. InstrumentationErrorBoundary) that hand-build a TelemetryRecord outside the capture/sanitize wrapper machinery. */
 export function emitRecord(record: TelemetryRecord): void {
-  currentEmit(record);
-  for (const sink of additionalSinks) sink(record);
+  // Each sink is isolated: a throwing sink must never mask the real
+  // application error/result flowing through withInstrumentation's own
+  // try/catch, nor prevent sibling sinks (registered independently) from
+  // receiving the same record — matches this module's own "telemetry must
+  // never throw into the app" invariant (see configureInstrumentation).
+  try {
+    currentEmit(record);
+  } catch {
+    /* a sink must never break the app or its siblings */
+  }
+  for (const sink of additionalSinks) {
+    try {
+      sink(record);
+    } catch {
+      /* a sink must never break the app or its siblings */
+    }
+  }
 }
 
 export function levelClears(level: Level, threshold: Level): boolean {
@@ -144,6 +160,11 @@ export interface InstrumentationOptions {
    * Absent by default; only set on calls a developer deliberately promotes.
    */
   namespace?: string;
+  /**
+   * Optional human-readable override for Toast/Activity display; falls
+   * back to `op` when absent — most call sites should leave this unset.
+   */
+  message?: string;
 }
 
 let threshold: Level = 'info';
@@ -182,6 +203,7 @@ function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindi
     signature,
     context: context ?? bindingContext,
     namespace: opts.namespace,
+    message: opts.message,
     ts: Date.now()
   });
 }
@@ -266,7 +288,8 @@ function makeWithInstrumentation(binding?: ChildBinding) {
                   sanitize,
                   performance.now() - start,
                   context,
-                  opts.namespace
+                  opts.namespace,
+                  opts.message
                 );
               return value;
             },
@@ -287,7 +310,8 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             sanitize,
             performance.now() - start,
             context,
-            opts.namespace
+            opts.namespace,
+            opts.message
           );
         return result;
       } catch (err) {
@@ -331,9 +355,19 @@ function emitSuccessWithContext(
   sanitize: (value: unknown, which: 'input' | 'output') => unknown,
   durationMs: number,
   context: unknown,
-  namespace: string | undefined
+  namespace: string | undefined,
+  message: string | undefined
 ): void {
-  const record: TelemetryRecord = { op, level, captured: capture, ts: Date.now(), durationMs, context, namespace };
+  const record: TelemetryRecord = {
+    op,
+    level,
+    captured: capture,
+    ts: Date.now(),
+    durationMs,
+    context,
+    namespace,
+    message
+  };
   if (capture & Capture.Input) record.input = sanitize(args, 'input');
   if (capture & Capture.Output) record.output = sanitize(output, 'output');
   emitRecord(record);

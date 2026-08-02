@@ -31,6 +31,7 @@ import { routeTelemetryRecord } from '../../services/instrumentation/browser-sin
 import { isTelemetryRecordMessage } from '../../services/instrumentation/worker-sink.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 import { RetryExhaustedError } from '../../services/instrumentation/errors.js';
+import type { InstrumentationNamespace } from '../../services/instrumentation/namespace.js';
 
 /**
  * Looks up which curated namespace(s) export `name`, so a `preview:result`'s
@@ -70,7 +71,8 @@ const reportHydrationRetryExhausted = withInstrumentation(
     // hydration retry budget gives the user zero feedback; this is the
     // first thing that changes that.
     handled: true,
-    namespace: 'curated',
+    namespace: 'curated' satisfies InstrumentationNamespace,
+    message: 'Preview refresh exhausted its retry budget',
     // targetId is deliberately NOT captured: a preview target can be a
     // user-authored type fqn, not just a curated id. Error-class name +
     // attempt count are structurally safe.

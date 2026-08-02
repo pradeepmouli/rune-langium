@@ -211,4 +211,25 @@ describe('StudioToastProvider — instrumentation Toast sink', () => {
     expect(() => wrapped()).toThrow('boom');
     expect(screen.queryByText('explode')).toBeNull();
   });
+
+  it('a handled:true error (demoted to warn) still renders a destructive toast', async () => {
+    render(
+      <StudioToastProvider>
+        <div />
+      </StudioToastProvider>
+    );
+    configureInstrumentation(() => {});
+    setInstrumentationThreshold('warn');
+    const wrapped = withInstrumentation(
+      () => {
+        throw new Error('boom');
+      },
+      { op: 'hydrationRetryExhausted', namespace: 'curated', handled: true }
+    );
+    expect(() => wrapped()).toThrow('boom');
+
+    const toast = await screen.findByText('hydrationRetryExhausted');
+    const toastRoot = toast.closest('[data-slot="toast"]');
+    expect(toastRoot!.getAttribute('data-variant')).toBe('destructive');
+  });
 });

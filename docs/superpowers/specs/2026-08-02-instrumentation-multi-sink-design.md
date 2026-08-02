@@ -251,9 +251,15 @@ existing call site, and no prod-ux-checkout-harness assertion, changes.
 **Toast sink — new.** Registered from inside `StudioToastProvider` itself
 (not a standalone module-level function like the Output sink) — it needs
 `notify`, which only exists inside that component's own React context.
-Maps `TelemetryRecord.op` + `namespace` into the toast's
-`title`/`description`; `level === 'error'` → toast `variant: 'destructive'`,
-everything else (`'warn'`, `'info'`) → default variant.
+Maps `TelemetryRecord.op`/`message` + `namespace` into the toast's
+`title`/`description`; a shared `isFailureRecord(record)` derivation
+(`apps/studio/src/services/instrumentation/record-status.ts`, `record.signature
+!== undefined`) → toast `variant: 'destructive'`, everything else → default
+variant. This is level-independent by design: a `handled: true` error is
+demoted to `'warn'`/`'debug'` level while still being a failure, so gating
+on `level === 'error'` would misclassify it — both the Toast and Activity
+sinks consume the same derivation so they can never disagree on the same
+record.
 
 **Activity sink — new, fully independent of the Toast sink.** Calls
 `useActivityStore.getState().addActivity(tag, ok, msg, meta)` directly — a
@@ -264,7 +270,7 @@ mirror — this store is not currently unpopulated in production, contrary
 to an earlier draft of this doc's Problem section; corrected there).
 `TelemetryRecord` maps cleanly onto the existing `ActivityEntry` shape with
 no changes needed to `activity-store.ts` itself: `namespace` → `tag`,
-`level !== 'error'` → `ok`, `op` (or a short derived description) → `msg`,
+`isFailureRecord(record)` (negated) → `ok`, `message ?? op` → `msg`,
 `durationMs`/`ts` already line up directly.
 
 **In practice today**, both sinks share the same gate (`namespace`
@@ -282,9 +288,12 @@ infrastructure):
 
 - Fan-out dispatcher: unit tests confirming N registered sinks each
   independently receive a record that clears the global threshold, and
-  that a sink's own local-threshold filtering is the sink's job, not the
-  dispatcher's (the dispatcher forwards everything past the global gate;
-  each sink decides for itself whether to act).
+  that a throwing sink can't prevent sibling sinks from receiving the same
+  record or otherwise leak into `withInstrumentation`'s own control flow
+  (the dispatcher forwards everything past the global gate, each sink
+  isolated in its own try/catch; neither the Toast nor Activity sink does
+  any threshold filtering of its own — both gate purely on `namespace`
+  presence).
 - `defaultLevelForDepth()`'s new depth-0-is-debug behavior: a direct
   regression test, since this changes previously-tested behavior from the
   parent plan's Task 3.

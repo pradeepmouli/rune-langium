@@ -63,4 +63,29 @@ describe('addInstrumentationSink', () => {
     const wrapped = withInstrumentation(() => 'ok', { op: 'test', level: 'info' });
     expect(() => wrapped()).not.toThrow();
   });
+
+  it('a throwing additional sink does not prevent a later-registered sink from receiving the record', () => {
+    const received: unknown[] = [];
+    configureInstrumentation(() => {});
+    addInstrumentationSink(() => {
+      throw new Error('first sink blows up');
+    });
+    addInstrumentationSink((r) => received.push(r));
+    setInstrumentationThreshold('info');
+    const wrapped = withInstrumentation(() => 'ok', { op: 'test', level: 'info' });
+    expect(() => wrapped()).not.toThrow();
+    expect(received).toEqual([expect.objectContaining({ op: 'test' })]);
+  });
+
+  it('a throwing sink does not cause withInstrumentation to throw or change a successful call result', () => {
+    configureInstrumentation(() => {
+      throw new Error('primary sink blows up');
+    });
+    addInstrumentationSink(() => {
+      throw new Error('additional sink blows up');
+    });
+    setInstrumentationThreshold('info');
+    const wrapped = withInstrumentation(() => 'real result', { op: 'test', level: 'info' });
+    expect(wrapped()).toBe('real result');
+  });
 });

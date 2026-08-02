@@ -3,6 +3,7 @@
 
 import { addInstrumentationSink, withInstrumentation, type TelemetryRecord } from './core.js';
 import { useActivityStore } from '../../store/activity-store.js';
+import { isFailureRecord } from './record-status.js';
 
 /**
  * Feeds the Activity Panel from the shared telemetry pipe. Gates on
@@ -21,13 +22,12 @@ export const installInstrumentationActivitySink = withInstrumentation(
   function installInstrumentationActivitySink(): () => void {
     return addInstrumentationSink((record: TelemetryRecord) => {
       if (!record.namespace) return;
-      // `signature` is only ever set by core.ts's emitError — never by the
-      // success path — so it's the correct ok/fail discriminator. `level`
-      // alone is NOT: a `handled: true` error is demoted to 'warn' (or
-      // 'debug' with `errorLevel: 'debug'`) while still being an error, so
-      // `level !== 'error'` would misreport handled errors as successes.
-      useActivityStore.getState().addActivity(record.namespace, record.signature === undefined, record.op, {
-        subject: record.subject,
+      // `isFailureRecord` (shared with the Toast sink) is the correct
+      // ok/fail discriminator. `level` alone is NOT: a `handled: true`
+      // error is demoted to 'warn' (or 'debug' with `errorLevel: 'debug'`)
+      // while still being an error, so `level !== 'error'` would misreport
+      // handled errors as successes.
+      useActivityStore.getState().addActivity(record.namespace, !isFailureRecord(record), record.message ?? record.op, {
         durationMs: record.durationMs
       });
     });
