@@ -97,25 +97,43 @@ export function resetInstrumentationForTests(): void {
   resetInstrumentationThresholdForTests();
 }
 
-/** Public export — used both internally by withInstrumentation and directly by callers (e.g. InstrumentationErrorBoundary) that hand-build a TelemetryRecord outside the capture/sanitize wrapper machinery. */
-export function emitRecord(record: TelemetryRecord): void {
-  // Each sink is isolated: a throwing sink must never mask the real
-  // application error/result flowing through withInstrumentation's own
-  // try/catch, nor prevent sibling sinks (registered independently) from
-  // receiving the same record — matches this module's own "telemetry must
-  // never throw into the app" invariant (see configureInstrumentation).
-  try {
-    currentEmit(record);
-  } catch {
-    /* a sink must never break the app or its siblings */
-  }
-  for (const sink of additionalSinks) {
+// Shared by emitRecord's additionalSinks loop and emitToAdditionalSinksOnly
+// below — a throwing sink must never mask the real application error/
+// result flowing through withInstrumentation's own try/catch, nor prevent
+// sibling sinks (registered independently) from receiving the same record.
+function dispatchToSinks(sinks: Iterable<Emit>, record: TelemetryRecord): void {
+  for (const sink of sinks) {
     try {
       sink(record);
     } catch {
       /* a sink must never break the app or its siblings */
     }
   }
+}
+
+/** Public export — used both internally by withInstrumentation and directly by callers (e.g. InstrumentationErrorBoundary) that hand-build a TelemetryRecord outside the capture/sanitize wrapper machinery. */
+export function emitRecord(record: TelemetryRecord): void {
+  // Matches this module's own "telemetry must never throw into the app"
+  // invariant (see configureInstrumentation) — isolated the same way
+  // dispatchToSinks isolates each additional sink.
+  try {
+    currentEmit(record);
+  } catch {
+    /* a sink must never break the app or its siblings */
+  }
+  dispatchToSinks(additionalSinks, record);
+}
+
+// Dispatches ONLY to additionalSinks (Activity/Toast), never to
+// currentEmit (the primary diagnostic/telemetry-shipping sink — gated by
+// the developer's own opt-in and eliminated from prod bundles by design,
+// see IS_PROD below). Used exclusively by the notify-only fast path: a
+// namespace-tagged call's user-facing notification must reach the user
+// regardless of production build mode or telemetry opt-in — see
+// docs/superpowers/specs/2026-08-02-instrumentation-multi-sink-design.md.
+// Diagnostic capture/shipping (currentEmit) stays properly gated either way.
+function emitToAdditionalSinksOnly(record: TelemetryRecord): void {
+  dispatchToSinks(additionalSinks, record);
 }
 
 export function levelClears(level: Level, threshold: Level): boolean {
@@ -193,10 +211,19 @@ function errorLevelFor(opts: InstrumentationOptions): Level {
 }
 
 // `bindingContext` lets `.child()`-bound wrappers (Task 3) attach their bound
-// context to error records the same way success records do.
-function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindingContext?: unknown): void {
+// context to error records the same way success records do. `dispatch`
+// defaults to the normal full fan-out (emitRecord); the notify-only fast
+// path below passes emitToAdditionalSinksOnly instead, reusing this exact
+// signature/context-extraction logic without duplicating it.
+function emitError(
+  op: string,
+  opts: InstrumentationOptions,
+  err: unknown,
+  bindingContext?: unknown,
+  dispatch: Emit = emitRecord
+): void {
   const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
-  emitRecord({
+  dispatch({
     op,
     level: errorLevelFor(opts),
     captured: 0,
@@ -206,6 +233,72 @@ function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindi
     message: opts.message,
     ts: Date.now()
   });
+}
+
+const identitySanitize = (v: unknown): unknown => v;
+
+// The notify-only fast path: runs when a wrapped call is skipped for
+// diagnostic-capture purposes (production build, or the developer's own
+// telemetry opt-in is off) BUT the call is namespace-tagged — a developer
+// explicitly promoted it to toast/activity-eligible, and that promise must
+// hold regardless of build mode or opt-in state. No depth tracking, no
+// input/output capture (capture: 0 throughout — Toast/Activity never read
+// them), no threshold gating (matches the full path's "errors always emit
+// unconditionally" invariant; successes here are always explicitly
+// requested via `namespace`, so there's no default-noise concern to gate).
+// Dispatches only to additionalSinks (emitToAdditionalSinksOnly) — the
+// primary diagnostic/telemetry-shipping sink stays properly gated.
+function runNotifyOnly<F extends (...args: any[]) => any>(
+  fn: F,
+  opts: InstrumentationOptions,
+  op: string,
+  thisArg: unknown,
+  args: unknown[]
+): ReturnType<F> {
+  try {
+    const result = fn.apply(thisArg, args);
+    if (result instanceof Promise) {
+      return result.then(
+        (value) => {
+          emitSuccessWithContext(
+            op,
+            opts.level ?? 'info',
+            0,
+            args,
+            value,
+            identitySanitize,
+            0,
+            undefined,
+            opts.namespace,
+            opts.message,
+            emitToAdditionalSinksOnly
+          );
+          return value;
+        },
+        (err) => {
+          emitError(op, opts, err, undefined, emitToAdditionalSinksOnly);
+          throw err;
+        }
+      ) as ReturnType<F>;
+    }
+    emitSuccessWithContext(
+      op,
+      opts.level ?? 'info',
+      0,
+      args,
+      result,
+      identitySanitize,
+      0,
+      undefined,
+      opts.namespace,
+      opts.message,
+      emitToAdditionalSinksOnly
+    );
+    return result;
+  } catch (err) {
+    emitError(op, opts, err, undefined, emitToAdditionalSinksOnly);
+    throw err;
+  }
 }
 
 // Dynamic nesting-depth counter — a single shared value, incremented on
@@ -243,8 +336,18 @@ function makeWithInstrumentation(binding?: ChildBinding) {
     const capture = opts.capture ?? 0;
     const context = resolveContext(binding);
     const wrapped = function (this: unknown, ...args: unknown[]) {
-      if (IS_PROD) return fn.apply(this, args);
-      if (!isEnabledCheck()) return fn.apply(this, args);
+      // A namespace-tagged call's user-facing notification must reach the
+      // user even here — see runNotifyOnly's own doc comment. Every other
+      // call (no namespace, the overwhelming majority) takes the exact
+      // same bare `fn.apply` path as before this branch existed.
+      if (IS_PROD) {
+        if (!opts.namespace) return fn.apply(this, args);
+        return runNotifyOnly(fn, opts, op, this, args);
+      }
+      if (!isEnabledCheck()) {
+        if (!opts.namespace) return fn.apply(this, args);
+        return runNotifyOnly(fn, opts, op, this, args);
+      }
       const level = resolveLevel(binding, opts.level);
       const clears = levelClears(level, threshold);
       // NO early `if (!clears) return fn.apply(...)` here — Task 2's review
@@ -346,6 +449,9 @@ function makeWithInstrumentation(binding?: ChildBinding) {
   };
 }
 
+// `dispatch` defaults to the normal full fan-out (emitRecord); the
+// notify-only fast path below passes emitToAdditionalSinksOnly instead,
+// always with capture: 0 (Toast/Activity never read input/output).
 function emitSuccessWithContext(
   op: string,
   level: Level,
@@ -356,7 +462,8 @@ function emitSuccessWithContext(
   durationMs: number,
   context: unknown,
   namespace: string | undefined,
-  message: string | undefined
+  message: string | undefined,
+  dispatch: Emit = emitRecord
 ): void {
   const record: TelemetryRecord = {
     op,
@@ -370,7 +477,7 @@ function emitSuccessWithContext(
   };
   if (capture & Capture.Input) record.input = sanitize(args, 'input');
   if (capture & Capture.Output) record.output = sanitize(output, 'output');
-  emitRecord(record);
+  dispatch(record);
 }
 
 export const withInstrumentation = makeWithInstrumentation();

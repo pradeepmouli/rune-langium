@@ -3,6 +3,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  addInstrumentationSink,
   Capture,
   configureInstrumentation,
   getInstrumentationThreshold,
@@ -264,5 +265,97 @@ describe('namespace threading', () => {
 describe('global default threshold', () => {
   it("default threshold is 'info', not 'warn'", () => {
     expect(getInstrumentationThreshold()).toBe('info');
+  });
+});
+
+// Exercises the notify-only fast path via the isEnabledCheck()-false branch
+// — the runtime-togglable half of `if (IS_PROD) {...} if (!isEnabledCheck())
+// {...}`, both of which share byte-identical inner logic. IS_PROD itself is
+// a build-time constant (see the prod-gate suite) that can only be
+// exercised by an actual production build, not a unit test.
+describe('notify-only fast path — diagnostics disabled but namespace-tagged', () => {
+  it('a namespace-tagged success call still reaches additional sinks, never the primary sink', () => {
+    const primary: unknown[] = [];
+    const additional: unknown[] = [];
+    configureInstrumentation(
+      (r) => primary.push(r),
+      () => false // diagnostics disabled — matches the IS_PROD branch's shape
+    );
+    const unregister = addInstrumentationSink((r) => additional.push(r));
+    const wrapped = withInstrumentation(() => 'ok', {
+      op: 'notify',
+      namespace: 'workspace',
+      message: 'Something happened'
+    });
+    expect(wrapped()).toBe('ok'); // return value unaffected
+    expect(primary).toEqual([]); // primary/diagnostic sink stays gated
+    expect(additional).toEqual([
+      expect.objectContaining({ op: 'notify', namespace: 'workspace', message: 'Something happened' })
+    ]);
+    unregister();
+  });
+
+  it('a namespace-tagged thrown error still reaches additional sinks, never the primary sink, and still rethrows', () => {
+    const primary: unknown[] = [];
+    const additional: unknown[] = [];
+    configureInstrumentation(
+      (r) => primary.push(r),
+      () => false
+    );
+    const unregister = addInstrumentationSink((r) => additional.push(r));
+    const boom = new Error('boom');
+    const wrapped = withInstrumentation(
+      () => {
+        throw boom;
+      },
+      { op: 'explode', handled: true, namespace: 'curated', sanitizeError: () => ({ signature: 'Error:boom' }) }
+    );
+    expect(() => wrapped()).toThrow(boom);
+    expect(primary).toEqual([]);
+    expect(additional).toEqual([
+      expect.objectContaining({ op: 'explode', namespace: 'curated', level: 'warn', signature: 'Error:boom' })
+    ]);
+    unregister();
+  });
+
+  it('a namespace-tagged async success/rejection still reach additional sinks, never the primary sink', async () => {
+    const primary: unknown[] = [];
+    const additional: unknown[] = [];
+    configureInstrumentation(
+      (r) => primary.push(r),
+      () => false
+    );
+    const unregister = addInstrumentationSink((r) => additional.push(r));
+    const succeed = withInstrumentation(async () => 'async-ok', { op: 'asyncOk', namespace: 'lsp' });
+    await expect(succeed()).resolves.toBe('async-ok');
+    const boom = new Error('async boom');
+    const fail = withInstrumentation(
+      async () => {
+        throw boom;
+      },
+      { op: 'asyncFail', handled: true, namespace: 'git', sanitizeError: () => ({ signature: 'Error:async boom' }) }
+    );
+    await expect(fail()).rejects.toThrow(boom);
+    expect(primary).toEqual([]);
+    expect(additional).toEqual([
+      expect.objectContaining({ op: 'asyncOk', namespace: 'lsp' }),
+      expect.objectContaining({ op: 'asyncFail', namespace: 'git', signature: 'Error:async boom' })
+    ]);
+    unregister();
+  });
+
+  it('a call with NO namespace is a bare passthrough — no emission anywhere, identical to pre-existing behavior', () => {
+    const primary: unknown[] = [];
+    const additional: unknown[] = [];
+    configureInstrumentation(
+      (r) => primary.push(r),
+      () => false
+    );
+    const unregister = addInstrumentationSink((r) => additional.push(r));
+    const wrapped = withInstrumentation(() => 42, { op: 'plain' });
+    expect(wrapped()).toBe(42);
+    expect(primary).toEqual([]);
+    expect(additional).toEqual([]);
+    unregister();
   });
 });
