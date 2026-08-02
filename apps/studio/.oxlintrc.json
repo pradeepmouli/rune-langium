@@ -6,7 +6,8 @@
   },
   "overrides": [
     {
-      "files": ["src/**", "functions/api/**", "functions/lib/**", "functions/_middleware.ts"],
+      "files": ["src/**", "functions/**"],
+      "excludeFiles": ["functions/test/**"],
       "rules": {
         "rune/no-uninstrumented-export": "warn"
       }
