@@ -260,6 +260,27 @@ describe('namespace threading', () => {
     wrapped();
     expect((emitted[0] as { namespace?: string }).namespace).toBeUndefined();
   });
+
+  it('a namespace-tagged success still emits at the default depth-0 level against the default threshold — matches how errors always emit unconditionally', () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((r) => emitted.push(r));
+    // Default threshold ('info') + no explicit level: depth-0 default is
+    // 'debug', which does NOT clear 'info' — without the namespace
+    // override this would silently emit nothing, the exact
+    // environment-dependent silence this fix exists to close on the
+    // success side (the error side was already unconditional).
+    const wrapped = withInstrumentation(() => 'ok', { op: 'promoted', namespace: 'workspace' });
+    wrapped();
+    expect(emitted).toEqual([expect.objectContaining({ op: 'promoted', namespace: 'workspace', level: 'debug' })]);
+  });
+
+  it('a namespace-tagged async success still emits at the default depth-0 level against the default threshold', async () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((r) => emitted.push(r));
+    const wrapped = withInstrumentation(async () => 'ok', { op: 'promotedAsync', namespace: 'lsp' });
+    await wrapped();
+    expect(emitted).toEqual([expect.objectContaining({ op: 'promotedAsync', namespace: 'lsp', level: 'debug' })]);
+  });
 });
 
 describe('global default threshold', () => {

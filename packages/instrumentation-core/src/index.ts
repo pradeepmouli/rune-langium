@@ -381,7 +381,17 @@ function makeWithInstrumentation(binding?: ChildBinding) {
           return result.then(
             (value) => {
               depth--;
-              if (clears)
+              // `|| opts.namespace`: a namespace-tagged success is always
+              // explicitly requested by the developer (see runNotifyOnly's
+              // own comment) — it must emit regardless of the depth-based
+              // default level/threshold, the same way errors already emit
+              // unconditionally. Without this, a namespace-tagged success
+              // silently misses `clears` at the default depth-0 'debug'
+              // level against the 'info' threshold — exactly the kind of
+              // environment-dependent silence this whole plan exists to
+              // eliminate, just on the success side instead of the error
+              // side.
+              if (clears || opts.namespace)
                 emitSuccessWithContext(
                   op,
                   level,
@@ -403,7 +413,9 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             }
           );
         }
-        if (clears)
+        // `|| opts.namespace` — see the identical comment on the async
+        // success branch above; same reasoning, sync path.
+        if (clears || opts.namespace)
           emitSuccessWithContext(
             op,
             level,
