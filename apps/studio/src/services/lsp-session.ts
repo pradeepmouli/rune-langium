@@ -1,8 +1,8 @@
 // @instrumentation-codemod-applied
-import { withInstrumentation, Capture } from './instrumentation/core.js';
-
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 const LSP_SESSION_ID_KEY = 'rune-studio:lsp-session-id';
 const CROCKFORD_BASE32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';

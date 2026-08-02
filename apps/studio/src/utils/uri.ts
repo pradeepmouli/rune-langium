@@ -1,8 +1,8 @@
 // @instrumentation-codemod-applied
-import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
-
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 export const pathToUri = withInstrumentation(
   function pathToUri(path: string): string {

@@ -1,8 +1,8 @@
 // @instrumentation-codemod-applied
-import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
-
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
 /**
  * Auth + token layer for the LSP Worker (T040).

@@ -1,8 +1,8 @@
 // @instrumentation-codemod-applied
-import { withInstrumentation } from './instrumentation/core.js';
-
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+import { withInstrumentation } from './instrumentation/core.js';
 
 export const downloadFile = withInstrumentation(
   function downloadFile(content: string, filename: string, mimeType: string = 'text/plain'): void {
