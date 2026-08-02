@@ -1,3 +1,6 @@
+// @instrumentation-codemod-applied
+import { withInstrumentation, Capture } from './instrumentation/core.js';
+
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -40,19 +43,64 @@ let entries: PerfLogEntry[] = [];
  */
 const lastStartedOpId = new Map<string, number>();
 
-export function recordPerfStart(op: string, opId: number): void {
-  lastStartedOpId.set(op, opId);
-}
+// `op` here is one of a fixed vocabulary of studio-defined operation tags
+// (e.g. 'workspaceSave') set by call sites in this codebase — never
+// user/model content — safe to capture verbatim, same as opId (a counter).
+export const recordPerfStart = withInstrumentation(
+  function recordPerfStart(op: string, opId: number): void {
+    lastStartedOpId.set(op, opId);
+  },
+  {
+    op: 'recordPerfStart',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [op, opId] = value as [string, number];
+      return { op, opId };
+    }
+  }
+);
 
-export function getLastStartedOpId(op: string): number | undefined {
-  return lastStartedOpId.get(op);
-}
+export const getLastStartedOpId = withInstrumentation(
+  function getLastStartedOpId(op: string): number | undefined {
+    return lastStartedOpId.get(op);
+  },
+  {
+    op: 'getLastStartedOpId',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) => (which === 'input' ? { op: (value as [string])[0] } : value)
+  }
+);
 
-export function recordPerf(entry: PerfLogEntry): void {
-  entries.push(entry);
-  if (entries.length > MAX_ENTRIES) entries = entries.slice(-MAX_ENTRIES);
-}
+// `entry.subject` is a free-form correlator that (like op-log.ts's
+// OpLogEntry.subject) isn't always safe — see telemetry-shipper.ts's
+// safeSubject commentary — so it's dropped here; `op`/`ok`/`durationMs`/
+// `opId` are all studio-defined/structural and safe.
+export const recordPerf = withInstrumentation(
+  function recordPerf(entry: PerfLogEntry): void {
+    entries.push(entry);
+    if (entries.length > MAX_ENTRIES) entries = entries.slice(-MAX_ENTRIES);
+  },
+  {
+    op: 'recordPerf',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [entry] = value as [PerfLogEntry];
+      return { op: entry.op, ok: entry.ok, durationMs: entry.durationMs, opId: entry.opId };
+    }
+  }
+);
 
-export function getPerfLogSnapshot(): PerfLogEntry[] {
-  return entries;
-}
+// Same subject concern as recordPerf above — only capture the count, never
+// the raw entries array.
+export const getPerfLogSnapshot = withInstrumentation(
+  function getPerfLogSnapshot(): PerfLogEntry[] {
+    return entries;
+  },
+  {
+    op: 'getPerfLogSnapshot',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' && Array.isArray(value) ? { count: value.length } : undefined)
+  }
+);

@@ -1,25 +1,20 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
 import { useTelemetrySettingsStore } from '../../store/telemetry-settings.js';
 import { configureInstrumentation, type TelemetryRecord } from './core.js';
+import { withInstrumentation } from './core.js';
 
-/**
- * Wires the instrumentation core's emit sink to the SAME addLine op-log
- * telemetry-shipper.ts already reads — this is a new PRODUCER into the
- * existing pipe, not a second channel. Call once at browser bootstrap
- * (apps/studio/src/main.tsx), mirroring installTelemetryCapture().
- */
-
-/**
- * Maps one TelemetryRecord onto the existing addLine shape. Exported
- * standalone because the worker relays (Task 5) route worker-originated
- * records through the exact same mapping — one mapping, not three copies.
- * `trace`/`debug` collapse to severity 'info' (OutputSeverity has no lower
- * tier, and the op_spans wire schema's level enum is closed over
- * info|warn|error) — with the default threshold they never get here at all.
- */
+// oxlint-disable-next-line rune/no-uninstrumented-export -- this IS the
+// currentEmit sink installed below (configureInstrumentation's first arg):
+// wrapping it in withInstrumentation would make every instrumented call's
+// success emission re-enter emitRecord -> currentEmit -> this function,
+// recursing into itself (unbounded once the threshold is lowered below
+// 'warn', since the default depth-0 level 'info' doesn't normally clear
+// it). The instrumentation pipe's own terminal sink must stay a plain
+// function.
 export function routeTelemetryRecord(record: TelemetryRecord): void {
   // Single choke point for the existing telemetry opt-in flag — gates both
   // relayed worker records (worker-sink.ts's own configureInstrumentation
@@ -37,6 +32,9 @@ export function routeTelemetryRecord(record: TelemetryRecord): void {
   });
 }
 
-export function installInstrumentationBrowserSink(): void {
-  configureInstrumentation(routeTelemetryRecord, () => useTelemetrySettingsStore.getState().enabled);
-}
+export const installInstrumentationBrowserSink = withInstrumentation(
+  function installInstrumentationBrowserSink(): void {
+    configureInstrumentation(routeTelemetryRecord, () => useTelemetrySettingsStore.getState().enabled);
+  },
+  { op: 'installInstrumentationBrowserSink' }
+);

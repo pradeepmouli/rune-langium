@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -340,522 +341,523 @@ function workerRequest(
   });
 }
 
-/**
- * Parse a single .rosetta file and return the model.
- * Tries the web worker first; falls back to main-thread parsing.
- */
-export async function parseFile(content: string, uri?: string): Promise<ParseFileResult> {
-  // Try worker first (T098)
-  try {
-    const id = String(++requestId);
-    const response = await workerRequest({
-      type: 'parse',
-      id,
-      content,
-      uri
-    });
-    return { model: response.model, errors: response.errors, parseMode: 'worker' };
-  } catch (error) {
-    // Fallback to main thread
-    console.warn('[workspace] parseFile worker fallback:', error);
-    useOutputStore.getState().addLine(fmtLine('parse', 'worker unavailable, using main thread'), 'warn');
-  }
+export const parseFile = withInstrumentation(
+  async function parseFile(content: string, uri?: string): Promise<ParseFileResult> {
+    // Try worker first (T098)
+    try {
+      const id = String(++requestId);
+      const response = await workerRequest({
+        type: 'parse',
+        id,
+        content,
+        uri
+      });
+      return { model: response.model, errors: response.errors, parseMode: 'worker' };
+    } catch (error) {
+      // Fallback to main thread
+      console.warn('[workspace] parseFile worker fallback:', error);
+      useOutputStore.getState().addLine(fmtLine('parse', 'worker unavailable, using main thread'), 'warn');
+    }
 
-  // Main-thread fallback
-  try {
-    const result = await parse(content, uri);
-    const errors: string[] = [];
-    if (result.parserErrors && result.parserErrors.length > 0) {
-      for (const err of result.parserErrors) {
-        errors.push(err.message);
+    // Main-thread fallback
+    try {
+      const result = await parse(content, uri);
+      const errors: string[] = [];
+      if (result.parserErrors && result.parserErrors.length > 0) {
+        for (const err of result.parserErrors) {
+          errors.push(err.message);
+        }
+      }
+      return {
+        model: result.value,
+        errors,
+        parseMode: 'main-thread-fallback',
+        fallbackMessage: WORKER_FALLBACK_MESSAGE
+      };
+    } catch (e) {
+      return {
+        model: null,
+        errors: [(e as Error).message],
+        parseMode: 'main-thread-fallback',
+        fallbackMessage: formatWorkerFallbackMessage(e)
+      };
+    }
+    // `content` is raw user model source and the output's `model`/`errors`
+    // carry raw AST/message text — never captured. `parseMode` and error
+    // counts are safe structural summaries.
+  },
+  {
+    op: 'parseFile',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as ParseFileResult;
+      return { parseMode: result.parseMode, errorCount: result.errors.length };
+    }
+  }
+);
+
+export const collectCuratedBundlesFromWorkspace = withInstrumentation(
+  function collectCuratedBundlesFromWorkspace(
+    files: ReadonlyArray<WorkspaceFile>
+  ): Array<{ id: string; version: string }> {
+    const seen = new Map<string, string>(); // id → version
+    for (const file of files) {
+      if (file.bundleId && file.bundleVersion && !seen.has(file.bundleId)) {
+        seen.set(file.bundleId, file.bundleVersion);
       }
     }
-    return {
-      model: result.value,
-      errors,
-      parseMode: 'main-thread-fallback',
-      fallbackMessage: WORKER_FALLBACK_MESSAGE
-    };
-  } catch (e) {
-    return {
-      model: null,
-      errors: [(e as Error).message],
-      parseMode: 'main-thread-fallback',
-      fallbackMessage: formatWorkerFallbackMessage(e)
-    };
+    return Array.from(seen.entries()).map(([id, version]) => ({ id, version }));
+    // Output entries are {id, version} for curated bundles only — `id` is one
+    // of the fixed CURATED_MODEL_IDS values and `version` is a commit hash —
+    // both safe.
+  },
+  {
+    op: 'collectCuratedBundlesFromWorkspace',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-}
+);
 
-/**
- * Walks the workspace's WorkspaceFile[] and collects unique curated bundle
- * metadata from files that carry bundleId + bundleVersion (set by
- * mergeModelFiles from LoadedModel.source.id and LoadedModel.commitHash).
- *
- * Returns deduped { id, version } entries suitable for the /api/parse
- * curatedBundles field (server fetches the corpus server-to-server).
- *
- * Design note: We read bundleId/bundleVersion from WorkspaceFile rather than
- * the model-store Zustand state so that parseWorkspaceFiles remains a pure
- * function that doesn't depend on the store. mergeModelFiles populates these
- * fields whenever it merges corpus files into the workspace.
- */
-export function collectCuratedBundlesFromWorkspace(
-  files: ReadonlyArray<WorkspaceFile>
-): Array<{ id: string; version: string }> {
-  const seen = new Map<string, string>(); // id → version
-  for (const file of files) {
-    if (file.bundleId && file.bundleVersion && !seen.has(file.bundleId)) {
-      seen.set(file.bundleId, file.bundleVersion);
+export const collectCuratedDocsFromWorkspace = withInstrumentation(
+  function collectCuratedDocsFromWorkspace(
+    files: ReadonlyArray<WorkspaceFile>
+  ): Array<{ uri: string; serializedModel: string }> {
+    const docs: Array<{ uri: string; serializedModel: string }> = [];
+    for (const f of files) {
+      if (f.path.endsWith(BUNDLE_MARKER_SUFFIX)) continue;
+      if (typeof f.serializedModelJson === 'string' && f.serializedModelJson.length > 0) {
+        docs.push({ uri: f.path, serializedModel: f.serializedModelJson });
+      }
+    }
+    return docs;
+    // `serializedModel` is raw serialized AST text — never captured; only a count.
+  },
+  {
+    op: 'collectCuratedDocsFromWorkspace',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' && Array.isArray(value) ? { count: value.length } : undefined)
+  }
+);
+
+export const collectCuratedSourcesForCodegen = withInstrumentation(
+  function collectCuratedSourcesForCodegen(files: ReadonlyArray<WorkspaceFile>): {
+    curatedBundles: Array<{ id: string; version: string }>;
+    curatedDocs: Array<{ uri: string; serializedModel: string }>;
+  } {
+    const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+    const curatedDocs = curatedBundles.length === 0 ? collectCuratedDocsFromWorkspace(files) : [];
+    return { curatedBundles, curatedDocs };
+  },
+  {
+    op: 'collectCuratedSourcesForCodegen',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as { curatedBundles: unknown[]; curatedDocs: unknown[] };
+      return { bundleCount: result.curatedBundles.length, docCount: result.curatedDocs.length };
     }
   }
-  return Array.from(seen.entries()).map(([id, version]) => ({ id, version }));
-}
+);
 
-/**
- * Collect pre-loaded serialized curated docs for the /api/codegen path-A
- * request: workspace files carrying a real serialized model. Excludes the
- * synthetic bundle marker (serializedModelJson '{}', path .../.bundle-marker) —
- * shipping it injects a $type-less doc the server can't deserialize and, when a
- * bundle is marker-only, suppresses the curatedBundles path-C fallback. Mirrors
- * CodegenProvider's marker exclusion.
- */
-export function collectCuratedDocsFromWorkspace(
-  files: ReadonlyArray<WorkspaceFile>
-): Array<{ uri: string; serializedModel: string }> {
-  const docs: Array<{ uri: string; serializedModel: string }> = [];
-  for (const f of files) {
-    if (f.path.endsWith(BUNDLE_MARKER_SUFFIX)) continue;
-    if (typeof f.serializedModelJson === 'string' && f.serializedModelJson.length > 0) {
-      docs.push({ uri: f.path, serializedModel: f.serializedModelJson });
+export const parseWorkspaceFiles = withInstrumentation(
+  async function parseWorkspaceFiles(
+    files: WorkspaceFile[],
+    options: { hydrateNamespaces?: string[] } = {}
+  ): Promise<ParseWorkspaceFilesResult> {
+    const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
+    if (files.length === 0 && !wantsHydration) {
+      return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
+    }
+
+    // User files go as raw content; curated files become bundle metadata only
+    // (via collectCuratedBundlesFromWorkspace below). A user file is one WITHOUT a
+    // `bundleId` — that's the canonical marker every curated file carries. The
+    // older `!serializedModelJson` proxy missed list-only deferredExports
+    // namespaces (bundleId + refOnly, but NO serializedModelJson): those leaked
+    // through and got POSTed to /api/parse as bogus files named
+    // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
+    // extension '.'" → 500, collapsing the curated catalog to the user closure.
+    const userFiles: Array<{ name: string; content: string }> = [];
+    for (const f of files) {
+      if (f.bundleId || f.serializedModelJson || f.refOnly) continue;
+      userFiles.push({ name: f.path, content: f.content });
+    }
+    const curatedBundles = collectCuratedBundlesFromWorkspace(files);
+
+    try {
+      const response = await parseWorkspaceViaRouter(userFiles, {
+        curatedBundles,
+        hydrateNamespaces: options.hydrateNamespaces
+      });
+      const errMap = new Map<string, string[]>();
+      for (const [k, v] of Object.entries(response.errors)) {
+        errMap.set(k, v);
+      }
+      return {
+        models: response.models,
+        parsedModels: response.parsedModels,
+        errors: errMap,
+        parseMode: 'router',
+        deferredExports: response.deferredExports,
+        curatedRefOnlyFiles: response.curatedRefOnlyFiles
+      };
+    } catch (error) {
+      // Router failed (network error, Pages Function unavailable, etc.) — fall back
+      // to synchronous main-thread parsing so the editor stays functional.
+      console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
+      useOutputStore
+        .getState()
+        .addLine(
+          fmtLine(
+            'parse',
+            'router unavailable, falling back to browser parse',
+            error instanceof Error ? error.message : String(error)
+          ),
+          'warn'
+        );
+      // Layer 1 filter: only hand user-authored .rosetta files to the in-browser
+      // Langium parser.  Two conditions are checked:
+      //   1. `!f.serializedModelJson` — excludes curated entries (which may have a
+      //      .rosetta path such as "[cdm]/types/Trade.rosetta" but are pre-parsed
+      //      server-side and must not be re-parsed in-browser).
+      //   2. `f.path.toLowerCase().endsWith('.rosetta')` — excludes bundle-marker
+      //      files (e.g. "[cdm]/.bundle-marker") whose extensionless URI causes
+      //      Langium's getServices() to throw "no services for the extension ''".
+      // Together these mirror the router path's `userFiles` filter so the fallback
+      // never dead-ends on mixed workspaces.
+      const parseableFiles = files.filter((f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta'));
+      return parseWorkspaceFilesOnMainThread(parseableFiles, {
+        parseMode: 'main-thread-fallback',
+        fallbackMessage: formatRouterFallbackMessage(error)
+      });
+    }
+    // `files` (input) and models/parsedModels/deferredExports/curatedRefOnlyFiles
+    // (output) all carry raw model source, AST, or user type/namespace names —
+    // never captured. Only structural counts are safe.
+  },
+  {
+    op: 'parseWorkspaceFiles',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as ParseWorkspaceFilesResult;
+      return { parseMode: result.parseMode, modelCount: result.models.length, errorCount: result.errors.size };
     }
   }
-  return docs;
-}
+);
 
-/**
- * Resolve the curated source to send with an `/api/codegen` download
- * request (issue #401 fix). `downloadTargetViaRouter`'s own doc comment
- * establishes that the server prefers `curatedBundles` — it independently
- * fetches and dependency-closes the correct namespace set from the
- * manifest (Path C) — and only falls back to `curatedDocs` when no bundle
- * info is present at all.
- *
- * Both call sites (CodePreviewPanel, ExportPerspective) previously
- * collected AND sent both unconditionally. `collectCuratedDocsFromWorkspace`
- * walks every hydrated curated file across the WHOLE workspace (not scoped
- * to this download's own dependency closure), so on a workspace where a
- * user has browsed many curated namespaces over a session this can balloon
- * to tens of MB — confirmed live (23MB for a single-anchor `cdm.base.datetime`
- * download) — large enough on its own to trip Cloudflare's request-size/CPU
- * limits and 503, even though the server was always going to ignore it once
- * `curatedBundles` was also present. Skip collecting `curatedDocs` entirely
- * whenever `curatedBundles` is non-empty so the client's send behavior
- * actually matches the server's documented precedence.
- */
-export function collectCuratedSourcesForCodegen(files: ReadonlyArray<WorkspaceFile>): {
-  curatedBundles: Array<{ id: string; version: string }>;
-  curatedDocs: Array<{ uri: string; serializedModel: string }>;
-} {
-  const curatedBundles = collectCuratedBundlesFromWorkspace(files);
-  const curatedDocs = curatedBundles.length === 0 ? collectCuratedDocsFromWorkspace(files) : [];
-  return { curatedBundles, curatedDocs };
-}
-
-/**
- * Parse all files in the workspace and return models.
- *
- * Primary path (019 Phase 0): delegates to the /api/parse Pages Function via
- * `parseWorkspaceViaRouter`. Curated corpus files (readOnly, serializedModelJson
- * set) are NOT sent as file content — instead their bundle id+version are
- * collected and sent as `curatedBundles` so the server can fetch them
- * server-to-server. Only user-authored files (no serializedModelJson) are POSTed
- * as raw content.
- *
- * Fallback: if the router call fails (network error, 5xx, ok:false), the
- * function falls back to main-thread parsing via
- * `parseWorkspaceFilesOnMainThread` with the FULL WorkspaceFile[] (including
- * curated bundle entries) so the corpus isn't dropped on transient Pages
- * Function failures. The old browser-worker `parseWorkspace` path (T098)
- * is invoked through `parseWorkspaceFilesOnMainThread` and remains the
- * fallback-only code path.
- */
-export async function parseWorkspaceFiles(
-  files: WorkspaceFile[],
-  options: { hydrateNamespaces?: string[] } = {}
-): Promise<ParseWorkspaceFilesResult> {
-  const wantsHydration = (options.hydrateNamespaces?.length ?? 0) > 0;
-  if (files.length === 0 && !wantsHydration) {
-    return { models: [], parsedModels: [], errors: new Map(), parseMode: 'router' };
-  }
-
-  // User files go as raw content; curated files become bundle metadata only
-  // (via collectCuratedBundlesFromWorkspace below). A user file is one WITHOUT a
-  // `bundleId` — that's the canonical marker every curated file carries. The
-  // older `!serializedModelJson` proxy missed list-only deferredExports
-  // namespaces (bundleId + refOnly, but NO serializedModelJson): those leaked
-  // through and got POSTed to /api/parse as bogus files named
-  // `[bundleId]/<namespace>`, which Langium rejects with "no services for the
-  // extension '.'" → 500, collapsing the curated catalog to the user closure.
-  const userFiles: Array<{ name: string; content: string }> = [];
-  for (const f of files) {
-    if (f.bundleId || f.serializedModelJson || f.refOnly) continue;
-    userFiles.push({ name: f.path, content: f.content });
-  }
-  const curatedBundles = collectCuratedBundlesFromWorkspace(files);
-
-  try {
-    const response = await parseWorkspaceViaRouter(userFiles, {
-      curatedBundles,
-      hydrateNamespaces: options.hydrateNamespaces
-    });
-    const errMap = new Map<string, string[]>();
-    for (const [k, v] of Object.entries(response.errors)) {
-      errMap.set(k, v);
+export const _resetParserWorkerForTests = withInstrumentation(
+  function _resetParserWorkerForTests(): void {
+    if (worker) {
+      worker.terminate();
     }
-    return {
-      models: response.models,
-      parsedModels: response.parsedModels,
-      errors: errMap,
-      parseMode: 'router',
-      deferredExports: response.deferredExports,
-      curatedRefOnlyFiles: response.curatedRefOnlyFiles
-    };
-  } catch (error) {
-    // Router failed (network error, Pages Function unavailable, etc.) — fall back
-    // to synchronous main-thread parsing so the editor stays functional.
-    console.warn('[workspace] parseWorkspaceFiles via router failed:', error);
-    useOutputStore
-      .getState()
-      .addLine(
-        fmtLine(
-          'parse',
-          'router unavailable, falling back to browser parse',
-          error instanceof Error ? error.message : String(error)
-        ),
-        'warn'
-      );
-    // Layer 1 filter: only hand user-authored .rosetta files to the in-browser
-    // Langium parser.  Two conditions are checked:
-    //   1. `!f.serializedModelJson` — excludes curated entries (which may have a
-    //      .rosetta path such as "[cdm]/types/Trade.rosetta" but are pre-parsed
-    //      server-side and must not be re-parsed in-browser).
-    //   2. `f.path.toLowerCase().endsWith('.rosetta')` — excludes bundle-marker
-    //      files (e.g. "[cdm]/.bundle-marker") whose extensionless URI causes
-    //      Langium's getServices() to throw "no services for the extension ''".
-    // Together these mirror the router path's `userFiles` filter so the fallback
-    // never dead-ends on mixed workspaces.
-    const parseableFiles = files.filter((f) => !f.serializedModelJson && f.path.toLowerCase().endsWith('.rosetta'));
-    return parseWorkspaceFilesOnMainThread(parseableFiles, {
-      parseMode: 'main-thread-fallback',
-      fallbackMessage: formatRouterFallbackMessage(error)
-    });
-  }
-}
-
-export function _resetParserWorkerForTests(): void {
-  if (worker) {
-    worker.terminate();
-  }
-  worker = null;
-  requestId = 0;
-  workerInitError = null;
-}
+    worker = null;
+    requestId = 0;
+    workerInitError = null;
+  },
+  { op: '_resetParserWorkerForTests' }
+);
 
 // ---------------------------------------------------------------------------
 // Server-side parse routing (019 Phase 0) — POST /api/parse with hydration
 // ---------------------------------------------------------------------------
 
-/**
- * Route a parseWorkspace request through the /api/parse Pages Function.
- *
- * 1. POSTs the file list to /api/parse (with optional curatedBundles metadata
- *    so the server can fetch corpus documents server-to-server).
- * 2. On success, hydrates the browser worker with the returned hydration state
- *    so subsequent linkDocument requests work without re-parsing locally.
- * 3. Throws on any failure (non-2xx, network error, or ok:false). The caller
- *    (`parseWorkspaceFiles`) is responsible for falling back to the main-
- *    thread parser with the FULL WorkspaceFile[] — including curated bundle
- *    serialized models that were filtered out before this call. Doing the
- *    fallback in-place here would silently drop the corpus, since this
- *    function only receives user files + bundle metadata.
- */
-export async function parseWorkspaceViaRouter(
-  files: Array<{ name: string; content: string }>,
-  options: { curatedBundles?: Array<{ id: string; version: string }>; hydrateNamespaces?: string[] } = {}
-): Promise<ParseWorkspaceResponse> {
-  const response = await fetch('/api/parse', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      files,
-      curatedBundles: options.curatedBundles ?? [],
-      hydrateNamespaces: options.hydrateNamespaces ?? []
-    })
-  });
-  if (!response.ok) {
-    throw new Error(`/api/parse HTTP ${response.status}`);
-  }
-  const data = (await response.json()) as {
-    ok: boolean;
-    models: ParseWorkspaceResponse['models'];
-    deferredExports: ParseWorkspaceResponse['deferredExports'];
-    errors: ParseWorkspaceResponse['errors'];
-    hydrationState: { documents: HydrateRequest['documents'] };
-    dependencyGraph?: Record<string, string[]>;
-  };
-
-  if (!data.ok) {
-    // Same reason as above: bubble up to the outer fallback with the full
-    // workspace inputs rather than reparsing only user files in-place.
-    throw new Error('/api/parse returned ok:false');
-  }
-
-  // Publish the cross-namespace dep graph (spec §5.2) into the codegen store
-  // so the Download config modal can drive its auto-select cascade. Absent /
-  // fail-soft responses leave it `{}` (modal shows no cascade hints).
-  useCodegenStore.getState().setDependencyGraph(data.dependencyGraph ?? {});
-
-  // Deserialize ONLY the user-document hydration entries into RosettaModel
-  // instances for the graph view. Curated corpus documents stay in
-  // hydrationState so the worker hydrate path can register their exports
-  // for cross-reference resolution, but we deliberately keep them out of
-  // `models[]` / `parsedModels[]` — pushing them through here defeats the
-  // lazy/deferred-corpus design (the whole reason curated docs serialize to
-  // JSON in the first place) and reintroduces multi-megabyte main-thread
-  // deserialization on every debounced edit parse.
-  const userFileNames = new Set(files.map((f) => f.name));
-  const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
-  const models: RosettaModel[] = [];
-  const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
-  // Build a quick lookup: filePath → namespace from the response's
-  // deferredExports so curated entries get a real namespace rather than
-  // an empty string (Copilot review: CachedFile.namespace is declared
-  // non-optional). User-file entries are handled in the same loop.
-  const namespaceByFilePath = new Map<string, string>();
-  for (const d of data.deferredExports ?? []) {
-    namespaceByFilePath.set(d.filePath, d.namespace);
-  }
-  // Collect curated docs as refOnly CachedFile entries grouped by bundleId.
-  // The server stamps each hydration doc with an explicit `bundleId` field
-  // (apps/studio/functions/api/parse.ts) so we don't infer bundle
-  // membership from the URI prefix — the previous prefix inference
-  // false-positive'd for user files under `${bundleId}/path` (Codex P2
-  // review of PR #163).
-  const curatedRefOnlyFiles: Record<string, CachedFile[]> = {};
-  for (const doc of data.hydrationState.documents) {
-    // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
-    // (no `file://` prefix). The legacy `file:///` strip is retained for
-    // backwards compatibility with any in-flight payloads.
-    const filePath = doc.uri.replace(/^file:\/\/\//, '');
-    if (userFileNames.has(filePath)) {
-      try {
-        const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
-        models.push(model);
-        parsedModels.push({ filePath, model });
-      } catch (err) {
-        console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
-      }
-      continue;
-    }
-    // Not a user file. Use the explicit bundleId stamped by the server;
-    // if it's missing (e.g. older deployments mid-rollout) we skip the
-    // entry rather than guess from the URI — silently grouping under
-    // the wrong key was the original Codex bug.
-    const bundleId = doc.bundleId;
-    if (!bundleId) continue;
-    // Strip the `${bundleId}/` prefix from the uri so the path within
-    // the bundle is preserved without the redundant id prefix on disk.
-    const pathInBundle = filePath.startsWith(`${bundleId}/`) ? filePath.slice(bundleId.length + 1) : filePath;
-    const entry: CachedFile = {
-      path: pathInBundle,
-      content: '',
-      namespace: namespaceByFilePath.get(filePath) ?? '',
-      serializedModelJson: doc.serializedModel as CachedFile['serializedModelJson'],
-      exports: doc.exports,
-      refOnly: true
-    };
-    (curatedRefOnlyFiles[bundleId] ??= []).push(entry);
-  }
-
-  // ── Restore "loaded" status for bundles outside the import closure ──────────
-  // The manifest fast-path hydrates ONLY the user's import closure into
-  // hydrationState, so a curated bundle that no user file imports yields zero
-  // hydrationState docs → zero curatedRefOnlyFiles → LoadedModel.files stays []
-  // → ModelLoader's 30s hydration timeout fires → "load failed". deferredExports
-  // lists EVERY namespace in each loaded bundle; register the list-only ones
-  // (those not already added from the closure above) as refOnly entries so the
-  // bundle reads as loaded. They carry no serializedModelJson — their ASTs
-  // hydrate on demand when the namespace is browsed.
-  const seenPathByBundle = new Map<string, Set<string>>();
-  for (const [bid, entries] of Object.entries(curatedRefOnlyFiles)) {
-    seenPathByBundle.set(bid, new Set(entries.map((e) => e.path)));
-  }
-  for (const d of data.deferredExports ?? []) {
-    const slash = d.filePath.indexOf('/');
-    if (slash < 0) continue; // user-file entry: no bundle prefix
-    const bundleId = d.filePath.slice(0, slash);
-    if (!CURATED_BUNDLE_IDS.has(bundleId)) continue;
-    const pathInBundle = d.filePath.slice(slash + 1);
-    // Only list-only manifest namespaces belong here — their filePath is the
-    // synthetic `${bundleId}/${namespace}`. Closure docs (already added above)
-    // and user files under a `${bundleId}/...` path have a different shape and
-    // must be skipped, avoiding the `${bundleId}/...` false-positive class.
-    if (d.filePath !== `${bundleId}/${d.namespace}`) continue;
-    const seen = seenPathByBundle.get(bundleId) ?? new Set<string>();
-    if (seen.has(pathInBundle)) continue; // already added from the closure
-    seen.add(pathInBundle);
-    seenPathByBundle.set(bundleId, seen);
-    (curatedRefOnlyFiles[bundleId] ??= []).push({
-      path: pathInBundle,
-      content: '',
-      namespace: d.namespace,
-      // CachedFile.exports needs {type,name,path}; deferredExports omits path
-      // (no AST yet). Path is only used to locate a node once hydrated.
-      exports: (d.exports ?? []).map((e) => ({ ...e, path: '' })),
-      refOnly: true
-    });
-  }
-
-  // Hydrate the browser worker with ALL server-parsed documents + exports
-  // (user AND curated) so subsequent linkDocument calls can resolve cross-
-  // references. Two failure modes are distinguished:
-  //
-  //   1. Worker REACHABLE but reports `ok: false` — a real hydration
-  //      failure. linkDocument lookups would silently miss the affected
-  //      docs. Throw so parseWorkspaceFiles' outer catch reparses the
-  //      workspace through the main-thread fallback (Codex review P2).
-  //   2. Worker UNREACHABLE (e.g. running in jsdom without a real Worker,
-  //      worker crashed, postMessage timeout) — log + accept the degraded
-  //      state. linkDocument will fail downstream but the graph still
-  //      renders from the deserialized models above. Throwing here would
-  //      regress test envs that don't ship the parser worker.
-  try {
-    const hydrateResponse = (await workerRequest({
-      type: 'hydrate',
-      id: `hydrate:${Date.now()}`,
-      documents: data.hydrationState.documents
-    })) as HydrateResponse;
-    if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
-      throw new Error(`worker hydration failed: ${hydrateResponse.error ?? 'unknown'}`);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.startsWith('worker hydration failed')) {
-      // Case 1 — worker explicitly rejected. Bubble up.
-      throw err;
-    }
-    // Case 2 — worker unreachable. Log and continue with deserialized models.
-    console.warn('[workspace] browser worker unreachable during hydrate; cross-ref resolution may be degraded:', msg);
-  }
-
-  return {
-    type: 'parseWorkspaceResult',
-    id: `routed:${Date.now()}`,
-    models,
-    parsedModels,
-    deferredExports: data.deferredExports,
-    errors: data.errors,
-    curatedRefOnlyFiles
-  };
-}
-
-/**
- * Trigger on-demand cross-reference linking for a single document (ADR 007 Phase 2).
- * Returns any corpus models that were lazily deserialized during linking so the
- * caller can merge them into the graph store.
- */
-export async function linkDocument(
-  uri: string
-): Promise<{ linked: boolean; errors: string[]; newModels: RosettaModel[] }> {
-  try {
-    const id = String(++requestId);
-    const response = await workerRequest({
-      type: 'linkDocument',
-      id,
-      uri
-    });
-    if (isLinkDocumentResponse(response)) {
-      return { linked: response.linked, errors: response.errors, newModels: response.newModels };
-    }
-    return { linked: false, errors: ['Unexpected response'], newModels: [] };
-  } catch (error) {
-    console.warn('[workspace] linkDocument failed:', error);
-    useOutputStore
-      .getState()
-      .addLine(fmtLine('parse', 'link failed', error instanceof Error ? error.message : String(error)), 'error');
-    return { linked: false, errors: [(error as Error).message], newModels: [] };
-  }
-}
-
-/**
- * Read files from a FileList (from file input or drag-and-drop).
- * Reads in chunks of 10 to keep the UI responsive for large folders.
- * Calls onProgress between chunks when provided.
- */
-export async function readFileList(
-  fileList: FileList,
-  onProgress?: (progress: WorkspaceLoadProgress) => void
-): Promise<WorkspaceFile[]> {
-  const results: WorkspaceFile[] = [];
-
-  // Collect rosetta file indices first
-  const indices: number[] = [];
-  for (let i = 0; i < fileList.length; i++) {
-    const file = fileList[i];
-    if (file && file.name.endsWith('.rosetta')) {
-      indices.push(i);
-    }
-  }
-
-  const total = indices.length;
-  const CHUNK_SIZE = 10;
-
-  for (let chunk = 0; chunk < indices.length; chunk += CHUNK_SIZE) {
-    const end = Math.min(chunk + CHUNK_SIZE, indices.length);
-    // Reads within a chunk are independent files, so run them concurrently;
-    // the chunking itself still exists to yield to the UI thread below.
-    const chunkFiles = await Promise.all(
-      Array.from({ length: end - chunk }, async (_, offset): Promise<WorkspaceFile> => {
-        const file = fileList[indices[chunk + offset]!]!;
-        const content = await file.text();
-        return {
-          name: file.name,
-          path: file.webkitRelativePath || file.name,
-          content,
-          dirty: false
-        };
+export const parseWorkspaceViaRouter = withInstrumentation(
+  async function parseWorkspaceViaRouter(
+    files: Array<{ name: string; content: string }>,
+    options: { curatedBundles?: Array<{ id: string; version: string }>; hydrateNamespaces?: string[] } = {}
+  ): Promise<ParseWorkspaceResponse> {
+    const response = await fetch('/api/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        files,
+        curatedBundles: options.curatedBundles ?? [],
+        hydrateNamespaces: options.hydrateNamespaces ?? []
       })
-    );
-    results.push(...chunkFiles);
-    onProgress?.({ phase: 'reading', loaded: results.length, total });
+    });
+    if (!response.ok) {
+      throw new Error(`/api/parse HTTP ${response.status}`);
+    }
+    const data = (await response.json()) as {
+      ok: boolean;
+      models: ParseWorkspaceResponse['models'];
+      deferredExports: ParseWorkspaceResponse['deferredExports'];
+      errors: ParseWorkspaceResponse['errors'];
+      hydrationState: { documents: HydrateRequest['documents'] };
+      dependencyGraph?: Record<string, string[]>;
+    };
 
-    // Yield to the UI thread between chunks
-    if (end < indices.length) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+    if (!data.ok) {
+      // Same reason as above: bubble up to the outer fallback with the full
+      // workspace inputs rather than reparsing only user files in-place.
+      throw new Error('/api/parse returned ok:false');
+    }
+
+    // Publish the cross-namespace dep graph (spec §5.2) into the codegen store
+    // so the Download config modal can drive its auto-select cascade. Absent /
+    // fail-soft responses leave it `{}` (modal shows no cascade hints).
+    useCodegenStore.getState().setDependencyGraph(data.dependencyGraph ?? {});
+
+    // Deserialize ONLY the user-document hydration entries into RosettaModel
+    // instances for the graph view. Curated corpus documents stay in
+    // hydrationState so the worker hydrate path can register their exports
+    // for cross-reference resolution, but we deliberately keep them out of
+    // `models[]` / `parsedModels[]` — pushing them through here defeats the
+    // lazy/deferred-corpus design (the whole reason curated docs serialize to
+    // JSON in the first place) and reintroduces multi-megabyte main-thread
+    // deserialization on every debounced edit parse.
+    const userFileNames = new Set(files.map((f) => f.name));
+    const services = createRuneDslServices(EmptyFileSystem).RuneDsl;
+    const models: RosettaModel[] = [];
+    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+    // Build a quick lookup: filePath → namespace from the response's
+    // deferredExports so curated entries get a real namespace rather than
+    // an empty string (Copilot review: CachedFile.namespace is declared
+    // non-optional). User-file entries are handled in the same loop.
+    const namespaceByFilePath = new Map<string, string>();
+    for (const d of data.deferredExports ?? []) {
+      namespaceByFilePath.set(d.filePath, d.namespace);
+    }
+    // Collect curated docs as refOnly CachedFile entries grouped by bundleId.
+    // The server stamps each hydration doc with an explicit `bundleId` field
+    // (apps/studio/functions/api/parse.ts) so we don't infer bundle
+    // membership from the URI prefix — the previous prefix inference
+    // false-positive'd for user files under `${bundleId}/path` (Codex P2
+    // review of PR #163).
+    const curatedRefOnlyFiles: Record<string, CachedFile[]> = {};
+    for (const doc of data.hydrationState.documents) {
+      // doc.uri is the bare filePath emitted by /api/parse + curated-fetch
+      // (no `file://` prefix). The legacy `file:///` strip is retained for
+      // backwards compatibility with any in-flight payloads.
+      const filePath = doc.uri.replace(/^file:\/\/\//, '');
+      if (userFileNames.has(filePath)) {
+        try {
+          const model = services.serializer.JsonSerializer.deserialize<RosettaModel>(doc.serializedModel);
+          models.push(model);
+          parsedModels.push({ filePath, model });
+        } catch (err) {
+          console.warn('[workspace] failed to deserialize hydration model for', doc.uri, err);
+        }
+        continue;
+      }
+      // Not a user file. Use the explicit bundleId stamped by the server;
+      // if it's missing (e.g. older deployments mid-rollout) we skip the
+      // entry rather than guess from the URI — silently grouping under
+      // the wrong key was the original Codex bug.
+      const bundleId = doc.bundleId;
+      if (!bundleId) continue;
+      // Strip the `${bundleId}/` prefix from the uri so the path within
+      // the bundle is preserved without the redundant id prefix on disk.
+      const pathInBundle = filePath.startsWith(`${bundleId}/`) ? filePath.slice(bundleId.length + 1) : filePath;
+      const entry: CachedFile = {
+        path: pathInBundle,
+        content: '',
+        namespace: namespaceByFilePath.get(filePath) ?? '',
+        serializedModelJson: doc.serializedModel as CachedFile['serializedModelJson'],
+        exports: doc.exports,
+        refOnly: true
+      };
+      (curatedRefOnlyFiles[bundleId] ??= []).push(entry);
+    }
+
+    // ── Restore "loaded" status for bundles outside the import closure ──────────
+    // The manifest fast-path hydrates ONLY the user's import closure into
+    // hydrationState, so a curated bundle that no user file imports yields zero
+    // hydrationState docs → zero curatedRefOnlyFiles → LoadedModel.files stays []
+    // → ModelLoader's 30s hydration timeout fires → "load failed". deferredExports
+    // lists EVERY namespace in each loaded bundle; register the list-only ones
+    // (those not already added from the closure above) as refOnly entries so the
+    // bundle reads as loaded. They carry no serializedModelJson — their ASTs
+    // hydrate on demand when the namespace is browsed.
+    const seenPathByBundle = new Map<string, Set<string>>();
+    for (const [bid, entries] of Object.entries(curatedRefOnlyFiles)) {
+      seenPathByBundle.set(bid, new Set(entries.map((e) => e.path)));
+    }
+    for (const d of data.deferredExports ?? []) {
+      const slash = d.filePath.indexOf('/');
+      if (slash < 0) continue; // user-file entry: no bundle prefix
+      const bundleId = d.filePath.slice(0, slash);
+      if (!CURATED_BUNDLE_IDS.has(bundleId)) continue;
+      const pathInBundle = d.filePath.slice(slash + 1);
+      // Only list-only manifest namespaces belong here — their filePath is the
+      // synthetic `${bundleId}/${namespace}`. Closure docs (already added above)
+      // and user files under a `${bundleId}/...` path have a different shape and
+      // must be skipped, avoiding the `${bundleId}/...` false-positive class.
+      if (d.filePath !== `${bundleId}/${d.namespace}`) continue;
+      const seen = seenPathByBundle.get(bundleId) ?? new Set<string>();
+      if (seen.has(pathInBundle)) continue; // already added from the closure
+      seen.add(pathInBundle);
+      seenPathByBundle.set(bundleId, seen);
+      (curatedRefOnlyFiles[bundleId] ??= []).push({
+        path: pathInBundle,
+        content: '',
+        namespace: d.namespace,
+        // CachedFile.exports needs {type,name,path}; deferredExports omits path
+        // (no AST yet). Path is only used to locate a node once hydrated.
+        exports: (d.exports ?? []).map((e) => ({ ...e, path: '' })),
+        refOnly: true
+      });
+    }
+
+    // Hydrate the browser worker with ALL server-parsed documents + exports
+    // (user AND curated) so subsequent linkDocument calls can resolve cross-
+    // references. Two failure modes are distinguished:
+    //
+    //   1. Worker REACHABLE but reports `ok: false` — a real hydration
+    //      failure. linkDocument lookups would silently miss the affected
+    //      docs. Throw so parseWorkspaceFiles' outer catch reparses the
+    //      workspace through the main-thread fallback (Codex review P2).
+    //   2. Worker UNREACHABLE (e.g. running in jsdom without a real Worker,
+    //      worker crashed, postMessage timeout) — log + accept the degraded
+    //      state. linkDocument will fail downstream but the graph still
+    //      renders from the deserialized models above. Throwing here would
+    //      regress test envs that don't ship the parser worker.
+    try {
+      const hydrateResponse = (await workerRequest({
+        type: 'hydrate',
+        id: `hydrate:${Date.now()}`,
+        documents: data.hydrationState.documents
+      })) as HydrateResponse;
+      if (hydrateResponse.type === 'hydrateResult' && !hydrateResponse.ok) {
+        throw new Error(`worker hydration failed: ${hydrateResponse.error ?? 'unknown'}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith('worker hydration failed')) {
+        // Case 1 — worker explicitly rejected. Bubble up.
+        throw err;
+      }
+      // Case 2 — worker unreachable. Log and continue with deserialized models.
+      console.warn('[workspace] browser worker unreachable during hydrate; cross-ref resolution may be degraded:', msg);
+    }
+
+    return {
+      type: 'parseWorkspaceResult',
+      id: `routed:${Date.now()}`,
+      models,
+      parsedModels,
+      deferredExports: data.deferredExports,
+      errors: data.errors,
+      curatedRefOnlyFiles
+    };
+    // Same raw-content concerns as parseWorkspaceFiles above — only counts.
+  },
+  {
+    op: 'parseWorkspaceViaRouter',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as ParseWorkspaceResponse;
+      return { modelCount: result.models.length };
     }
   }
+);
 
-  return results;
-}
+export const linkDocument = withInstrumentation(
+  async function linkDocument(uri: string): Promise<{ linked: boolean; errors: string[]; newModels: RosettaModel[] }> {
+    try {
+      const id = String(++requestId);
+      const response = await workerRequest({
+        type: 'linkDocument',
+        id,
+        uri
+      });
+      if (isLinkDocumentResponse(response)) {
+        return { linked: response.linked, errors: response.errors, newModels: response.newModels };
+      }
+      return { linked: false, errors: ['Unexpected response'], newModels: [] };
+    } catch (error) {
+      console.warn('[workspace] linkDocument failed:', error);
+      useOutputStore
+        .getState()
+        .addLine(fmtLine('parse', 'link failed', error instanceof Error ? error.message : String(error)), 'error');
+      return { linked: false, errors: [(error as Error).message], newModels: [] };
+    }
+    // `uri` (input) and errors/newModels (output) may reference user model
+    // content — never captured; `linked` alone is a safe boolean.
+  },
+  {
+    op: 'linkDocument',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? { linked: (value as { linked: boolean }).linked } : undefined)
+  }
+);
 
-/**
- * Update a file's content and mark it dirty.
- */
-export function updateFileContent(files: readonly WorkspaceFile[], path: string, newContent: string): WorkspaceFile[] {
-  return files.map((f) => (f.path === path ? { ...f, content: newContent, dirty: true } : f));
-}
+export const readFileList = withInstrumentation(
+  async function readFileList(
+    fileList: FileList,
+    onProgress?: (progress: WorkspaceLoadProgress) => void
+  ): Promise<WorkspaceFile[]> {
+    const results: WorkspaceFile[] = [];
 
-/**
- * Create a new workspace file.
- */
-export function createWorkspaceFile(name: string, content: string): WorkspaceFile {
-  return {
-    name,
-    path: name,
-    content,
-    dirty: true
-  };
-}
+    // Collect rosetta file indices first
+    const indices: number[] = [];
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      if (file && file.name.endsWith('.rosetta')) {
+        indices.push(i);
+      }
+    }
+
+    const total = indices.length;
+    const CHUNK_SIZE = 10;
+
+    for (let chunk = 0; chunk < indices.length; chunk += CHUNK_SIZE) {
+      const end = Math.min(chunk + CHUNK_SIZE, indices.length);
+      // Reads within a chunk are independent files, so run them concurrently;
+      // the chunking itself still exists to yield to the UI thread below.
+      const chunkFiles = await Promise.all(
+        Array.from({ length: end - chunk }, async (_, offset): Promise<WorkspaceFile> => {
+          const file = fileList[indices[chunk + offset]!]!;
+          const content = await file.text();
+          return {
+            name: file.name,
+            path: file.webkitRelativePath || file.name,
+            content,
+            dirty: false
+          };
+        })
+      );
+      results.push(...chunkFiles);
+      onProgress?.({ phase: 'reading', loaded: results.length, total });
+
+      // Yield to the UI thread between chunks
+      if (end < indices.length) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+
+    return results;
+    // `fileList` (raw browser Files, names may be user-chosen/sensitive) and
+    // the output's file contents — never captured; only a count.
+  },
+  {
+    op: 'readFileList',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' && Array.isArray(value) ? { count: value.length } : undefined)
+  }
+);
+
+export const updateFileContent = withInstrumentation(
+  function updateFileContent(files: readonly WorkspaceFile[], path: string, newContent: string): WorkspaceFile[] {
+    return files.map((f) => (f.path === path ? { ...f, content: newContent, dirty: true } : f));
+  },
+  { op: 'updateFileContent' }
+);
+
+export const createWorkspaceFile = withInstrumentation(
+  function createWorkspaceFile(name: string, content: string): WorkspaceFile {
+    return {
+      name,
+      path: name,
+      content,
+      dirty: true
+    };
+  },
+  { op: 'createWorkspaceFile' }
+);
 
 /**
  * Default starter template for a blank Rune file — a minimal `namespace`
@@ -870,44 +872,40 @@ const BLANK_TEMPLATE = `namespace example
 //   name string (1..1)
 `;
 
-/**
- * Returns `candidate` unchanged if no file in `existingFiles` already has
- * that path; otherwise appends -2, -3, ... before the extension until a
- * free path is found.
- */
-export function uniqueFilePath(candidate: string, existingFiles: ReadonlyArray<WorkspaceFile>): string {
-  const paths = new Set(existingFiles.map((f) => f.path));
-  if (!paths.has(candidate)) return candidate;
-  const dotIndex = candidate.lastIndexOf('.');
-  const base = dotIndex === -1 ? candidate : candidate.slice(0, dotIndex);
-  const ext = dotIndex === -1 ? '' : candidate.slice(dotIndex);
-  let n = 2;
-  let next = `${base}-${n}${ext}`;
-  while (paths.has(next)) {
-    n += 1;
-    next = `${base}-${n}${ext}`;
-  }
-  return next;
-}
+export const uniqueFilePath = withInstrumentation(
+  function uniqueFilePath(candidate: string, existingFiles: ReadonlyArray<WorkspaceFile>): string {
+    const paths = new Set(existingFiles.map((f) => f.path));
+    if (!paths.has(candidate)) return candidate;
+    const dotIndex = candidate.lastIndexOf('.');
+    const base = dotIndex === -1 ? candidate : candidate.slice(0, dotIndex);
+    const ext = dotIndex === -1 ? '' : candidate.slice(dotIndex);
+    let n = 2;
+    let next = `${base}-${n}${ext}`;
+    while (paths.has(next)) {
+      n += 1;
+      next = `${base}-${n}${ext}`;
+    }
+    return next;
+    // `candidate`/existing paths may echo user-chosen filenames — never captured.
+  },
+  { op: 'uniqueFilePath' }
+);
 
-/**
- * Create a blank untitled workspace file for the "New" start-page option.
- *
- * Picks the next available `untitled[-N].rosetta` name that doesn't collide
- * with an existing user file. Read-only model files are ignored since they
- * live under a `[model-id]/` prefix and never shadow user-editable paths.
- */
-export function createBlankWorkspaceFile(existingFiles: ReadonlyArray<WorkspaceFile>): WorkspaceFile {
-  const userFiles = existingFiles.filter((f) => !f.readOnly);
-  const candidate = uniqueFilePath('untitled.rosetta', userFiles);
-  return createWorkspaceFile(candidate, BLANK_TEMPLATE);
-}
+export const createBlankWorkspaceFile = withInstrumentation(
+  function createBlankWorkspaceFile(existingFiles: ReadonlyArray<WorkspaceFile>): WorkspaceFile {
+    const userFiles = existingFiles.filter((f) => !f.readOnly);
+    const candidate = uniqueFilePath('untitled.rosetta', userFiles);
+    return createWorkspaceFile(candidate, BLANK_TEMPLATE);
+  },
+  { op: 'createBlankWorkspaceFile' }
+);
 
 // ---------------------------------------------------------------------------
 // Model file merging (T008) — integrate loaded reference models
 // ---------------------------------------------------------------------------
 
 import type { LoadedModel } from '../types/model-types.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 /**
  * Merge loaded model files into the workspace as read-only entries.
@@ -925,99 +923,101 @@ import type { LoadedModel } from '../types/model-types.js';
  */
 export const BUNDLE_MARKER_SUFFIX = '/.bundle-marker';
 
-export function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedModel): WorkspaceFile[] {
-  // Remove any previous files from this model source
-  const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
+export const mergeModelFiles = withInstrumentation(
+  function mergeModelFiles(currentFiles: WorkspaceFile[], model: LoadedModel): WorkspaceFile[] {
+    // Remove any previous files from this model source
+    const userFiles = currentFiles.filter((f) => !f.path.startsWith(`[${model.source.id}]/`));
 
-  // Convert model files to read-only workspace files.
-  // bundleId and bundleVersion are propagated from the LoadedModel so that
-  // parseWorkspaceFiles / collectCuratedBundlesFromWorkspace can build the
-  // curatedBundles list for /api/parse without touching the model-store.
-  const modelFiles: WorkspaceFile[] = model.files.map((f: CachedFile) => ({
-    name: f.path.split('/').pop() ?? f.path,
-    path: `[${model.source.id}]/${f.path}`,
-    content: f.content,
-    dirty: false,
-    readOnly: true,
-    serializedModelJson: f.serializedModelJson,
-    exports: f.exports,
-    bundleId: model.source.id,
-    bundleVersion: model.commitHash,
-    refOnly: f.refOnly
-  }));
-
-  // 019 Phase 0: when no files were extracted (server-side parse path),
-  // insert a synthetic bundle-marker so collectCuratedBundlesFromWorkspace
-  // can find the bundle id+version without the corpus files being present.
-  // The marker has a truthy serializedModelJson so parseWorkspaceFiles
-  // excludes it from the userFiles sent to the server. App.tsx filters it
-  // from syncWorkspaceFiles via BUNDLE_MARKER_SUFFIX to avoid LSP noise.
-  if (modelFiles.length === 0) {
-    modelFiles.push({
-      name: '.bundle-marker',
-      path: `[${model.source.id}]${BUNDLE_MARKER_SUFFIX}`,
-      content: '',
+    // Convert model files to read-only workspace files.
+    // bundleId and bundleVersion are propagated from the LoadedModel so that
+    // parseWorkspaceFiles / collectCuratedBundlesFromWorkspace can build the
+    // curatedBundles list for /api/parse without touching the model-store.
+    const modelFiles: WorkspaceFile[] = model.files.map((f: CachedFile) => ({
+      name: f.path.split('/').pop() ?? f.path,
+      path: `[${model.source.id}]/${f.path}`,
+      content: f.content,
       dirty: false,
       readOnly: true,
-      // Non-empty string → excluded from userFiles by `!f.serializedModelJson` filter.
-      serializedModelJson: '{}' as CuratedSerializedDocument['modelJson'],
+      serializedModelJson: f.serializedModelJson,
+      exports: f.exports,
       bundleId: model.source.id,
-      bundleVersion: model.commitHash
-    });
+      bundleVersion: model.commitHash,
+      refOnly: f.refOnly
+    }));
+
+    // 019 Phase 0: when no files were extracted (server-side parse path),
+    // insert a synthetic bundle-marker so collectCuratedBundlesFromWorkspace
+    // can find the bundle id+version without the corpus files being present.
+    // The marker has a truthy serializedModelJson so parseWorkspaceFiles
+    // excludes it from the userFiles sent to the server. App.tsx filters it
+    // from syncWorkspaceFiles via BUNDLE_MARKER_SUFFIX to avoid LSP noise.
+    if (modelFiles.length === 0) {
+      modelFiles.push({
+        name: '.bundle-marker',
+        path: `[${model.source.id}]${BUNDLE_MARKER_SUFFIX}`,
+        content: '',
+        dirty: false,
+        readOnly: true,
+        // Non-empty string → excluded from userFiles by `!f.serializedModelJson` filter.
+        serializedModelJson: '{}' as CuratedSerializedDocument['modelJson'],
+        bundleId: model.source.id,
+        bundleVersion: model.commitHash
+      });
+    }
+
+    return [...userFiles, ...modelFiles];
+    // `model.source.id` is either a curated id or an already-hashed custom-URL
+    // id (see model-registry.ts) — safe. File contents (input and output) are
+    // never captured.
+  },
+  {
+    op: 'mergeModelFiles',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [, model] = value as [WorkspaceFile[], LoadedModel];
+      return { modelSourceId: model.source.id, fileCount: model.files.length };
+    }
   }
+);
 
-  return [...userFiles, ...modelFiles];
-}
-
-/**
- * Merge a `parseWorkspaceFiles`/`ParseWorkspaceFilesResult.curatedRefOnlyFiles`
- * response into `files` itself, using the same `mergeModelFiles` conversion
- * every OTHER curated-bundle load already goes through.
- *
- * Root cause this closes: on-demand curated namespace hydration
- * (`App.tsx`'s `pendingHydrationNamespaces` effect) previously updated only
- * `models`/`parsedModels`/`deferredExports` via `applyParseResult` — never
- * `files`. `CodegenProvider`'s preview-worker file-sync effect is keyed on
- * `files`, not `models`, so a reference that only becomes resolvable via
- * ON-DEMAND hydration (as opposed to being present at initial workspace
- * load) stayed permanently unresolved in Form Preview — identically on
- * every retry, past the retry cap — even though Structure/Inspector
- * (which reads `models`) correctly showed the hydrated namespace.
- *
- * `curatedRefOnlyFiles[bundleId]` is expected to carry the FULL cumulative
- * closure for that bundle (every namespace hydrated so far, not just this
- * round's delta) — the same assumption `useModelStore.setCuratedFiles`
- * already relies on for its own wholesale-replace semantics, since the
- * caller always requests `[...hydratedSoFar, ...pendingHydration]`.
- * A bundle id with no matching entry in `loadedModels` is skipped: a
- * namespace-hydration request only ever targets an already-loaded curated
- * bundle, so this should not happen in practice, but a stale/unknown id
- * must not throw.
- *
- * @returns `currentFiles` unchanged (same reference) if no bundle id in
- *   `curatedRefOnlyFiles` matched a loaded model — callers can compare by
- *   reference to skip a no-op `setFiles`.
- */
-export function mergeCuratedRefOnlyFiles(
-  currentFiles: WorkspaceFile[],
-  curatedRefOnlyFiles: Record<string, CachedFile[]>,
-  loadedModels: ReadonlyMap<string, LoadedModel>
-): WorkspaceFile[] {
-  let mergedFiles = currentFiles;
-  for (const [bundleId, entries] of Object.entries(curatedRefOnlyFiles)) {
-    const existingModel = loadedModels.get(bundleId);
-    if (!existingModel) continue;
-    mergedFiles = mergeModelFiles(mergedFiles, { ...existingModel, files: entries });
+export const mergeCuratedRefOnlyFiles = withInstrumentation(
+  function mergeCuratedRefOnlyFiles(
+    currentFiles: WorkspaceFile[],
+    curatedRefOnlyFiles: Record<string, CachedFile[]>,
+    loadedModels: ReadonlyMap<string, LoadedModel>
+  ): WorkspaceFile[] {
+    let mergedFiles = currentFiles;
+    for (const [bundleId, entries] of Object.entries(curatedRefOnlyFiles)) {
+      const existingModel = loadedModels.get(bundleId);
+      if (!existingModel) continue;
+      mergedFiles = mergeModelFiles(mergedFiles, { ...existingModel, files: entries });
+    }
+    return mergedFiles;
+  },
+  {
+    op: 'mergeCuratedRefOnlyFiles',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [, curatedRefOnlyFiles] = value as [WorkspaceFile[], Record<string, unknown>];
+      return { bundleCount: Object.keys(curatedRefOnlyFiles).length };
+    }
   }
-  return mergedFiles;
-}
+);
 
-/**
- * Remove all files from a specific model source.
- */
-export function removeModelFiles(currentFiles: WorkspaceFile[], sourceId: string): WorkspaceFile[] {
-  return currentFiles.filter((f) => !f.path.startsWith(`[${sourceId}]/`));
-}
+// `sourceId` is safe (see mergeModelFiles above); the returned file list
+// still carries other files' raw content, so only input is captured.
+export const removeModelFiles = withInstrumentation(
+  function removeModelFiles(currentFiles: WorkspaceFile[], sourceId: string): WorkspaceFile[] {
+    return currentFiles.filter((f) => !f.path.startsWith(`[${sourceId}]/`));
+  },
+  {
+    op: 'removeModelFiles',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { sourceId: (value as [WorkspaceFile[], string])[1] } : undefined)
+  }
+);
 
 // ---------------------------------------------------------------------------
 // External file change detection (T102)
@@ -1030,47 +1030,52 @@ export interface FileChangeEvent {
   newContent: string;
 }
 
-/**
- * Detect external file changes by re-reading the FileList and comparing
- * against the current workspace state. Returns a list of changed files.
- */
-export async function detectExternalChanges(
-  currentFiles: WorkspaceFile[],
-  newFileList: FileList
-): Promise<FileChangeEvent[]> {
-  const changes: FileChangeEvent[] = [];
-  const newFiles = await readFileList(newFileList);
-  const currentByPath = new Map(currentFiles.map((f) => [f.path, f]));
+export const detectExternalChanges = withInstrumentation(
+  async function detectExternalChanges(
+    currentFiles: WorkspaceFile[],
+    newFileList: FileList
+  ): Promise<FileChangeEvent[]> {
+    const changes: FileChangeEvent[] = [];
+    const newFiles = await readFileList(newFileList);
+    const currentByPath = new Map(currentFiles.map((f) => [f.path, f]));
 
-  for (const newFile of newFiles) {
-    const existing = currentByPath.get(newFile.path);
-    if (existing && existing.content !== newFile.content) {
-      changes.push({ path: newFile.path, newContent: newFile.content });
-    }
-  }
-
-  return changes;
-}
-
-/**
- * Apply file change decisions to the workspace.
- */
-export function applyFileChanges(
-  files: WorkspaceFile[],
-  changes: FileChangeEvent[],
-  decisions: Map<string, FileChangeAction>
-): WorkspaceFile[] {
-  return files.map((f) => {
-    const decision = decisions.get(f.path);
-    if (decision === 'reload') {
-      const change = changes.find((c) => c.path === f.path);
-      if (change) {
-        return { ...f, content: change.newContent, dirty: false };
+    for (const newFile of newFiles) {
+      const existing = currentByPath.get(newFile.path);
+      if (existing && existing.content !== newFile.content) {
+        changes.push({ path: newFile.path, newContent: newFile.content });
       }
     }
-    return f;
-  });
-}
+
+    return changes;
+    // `changes[].newContent` is raw file content — never captured; only a count.
+  },
+  {
+    op: 'detectExternalChanges',
+    capture: Capture.Output,
+    sanitize: (value, which) =>
+      which === 'output' && Array.isArray(value) ? { changedCount: value.length } : undefined
+  }
+);
+
+export const applyFileChanges = withInstrumentation(
+  function applyFileChanges(
+    files: WorkspaceFile[],
+    changes: FileChangeEvent[],
+    decisions: Map<string, FileChangeAction>
+  ): WorkspaceFile[] {
+    return files.map((f) => {
+      const decision = decisions.get(f.path);
+      if (decision === 'reload') {
+        const change = changes.find((c) => c.path === f.path);
+        if (change) {
+          return { ...f, content: change.newContent, dirty: false };
+        }
+      }
+      return f;
+    });
+  },
+  { op: 'applyFileChanges' }
+);
 
 /**
  * Error raised by downloadTargetViaRouter so callers can read the
@@ -1146,73 +1151,86 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-/**
- * POST workspace files to /api/codegen and trigger a browser save for
- * the response artifact (single file for whole-model and one-namespace
- * generations; zip for multi-namespace per-namespace generations).
- *
- * Spec §7.6. Companion server lives at apps/studio/functions/api/codegen.ts.
- *
- * Throws CodegenDownloadError on any non-2xx response with the parsed
- * diagnostics envelope; throws a plain Error on network failure.
- *
- * 018 Phase 0 Task 0.12.
- */
-export async function downloadTargetViaRouter(
-  files: Array<{ path: string; content: string }>,
-  target: string,
-  options: Record<string, unknown> = {},
-  curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
-  namespaces: ReadonlyArray<string> = [],
-  curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
-): Promise<void> {
-  const body: Record<string, unknown> = { files, target, options };
-  // Send BOTH when available — NOT mutually exclusive. The server prefers
-  // curatedBundles (it independently fetches + dependency-closes the
-  // correct namespace set from the manifest) and only falls back to
-  // curatedDocs when no bundle info was supplied at all. curatedDocs alone
-  // can be silently incomplete relative to `namespaces`: it reflects
-  // whatever the client's workspace has ALREADY hydrated via on-demand
-  // navigation, which doesn't necessarily cover the full dependency-closed
-  // selection this request asks for (found via the 2026-07 /api/codegen
-  // 400 investigation — a Download for one curated anchor type produced
-  // "unknown-attribute"/"unresolved-enum-reference" diagnostics for
-  // completely unrelated types, because curatedDocs was missing a few
-  // namespaces one `extends`/`import` hop away that the server trusted as
-  // complete purely because it was non-empty).
-  if (curatedDocs.length > 0) {
-    body.curatedDocs = curatedDocs;
-  }
-  if (curatedBundles.length > 0) {
-    body.curatedBundles = curatedBundles;
-  }
-  // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
-  // no filter (emit everything), matching the server's interpretation.
-  if (namespaces.length > 0) {
-    body.namespaces = namespaces;
-  }
-  const response = await fetch('/api/codegen', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-    let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
-    try {
-      envelope = (await response.json()) as typeof envelope;
-    } catch {
-      // Non-JSON response (e.g. 502 from the edge before reaching the
-      // function). Keep the empty envelope; the status code alone is
-      // enough information for the user.
+export const downloadTargetViaRouter = withInstrumentation(
+  async function downloadTargetViaRouter(
+    files: Array<{ path: string; content: string }>,
+    target: string,
+    options: Record<string, unknown> = {},
+    curatedBundles: ReadonlyArray<{ id: string; version: string }> = [],
+    namespaces: ReadonlyArray<string> = [],
+    curatedDocs: ReadonlyArray<{ uri: string; serializedModel: string }> = []
+  ): Promise<void> {
+    const body: Record<string, unknown> = { files, target, options };
+    // Send BOTH when available — NOT mutually exclusive. The server prefers
+    // curatedBundles (it independently fetches + dependency-closes the
+    // correct namespace set from the manifest) and only falls back to
+    // curatedDocs when no bundle info was supplied at all. curatedDocs alone
+    // can be silently incomplete relative to `namespaces`: it reflects
+    // whatever the client's workspace has ALREADY hydrated via on-demand
+    // navigation, which doesn't necessarily cover the full dependency-closed
+    // selection this request asks for (found via the 2026-07 /api/codegen
+    // 400 investigation — a Download for one curated anchor type produced
+    // "unknown-attribute"/"unresolved-enum-reference" diagnostics for
+    // completely unrelated types, because curatedDocs was missing a few
+    // namespaces one `extends`/`import` hop away that the server trusted as
+    // complete purely because it was non-empty).
+    if (curatedDocs.length > 0) {
+      body.curatedDocs = curatedDocs;
     }
-    const diags = Array.isArray(envelope.diagnostics)
-      ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
-      : [];
-    throw new CodegenDownloadError(envelope.error ?? `/api/codegen HTTP ${response.status}`, response.status, diags);
-  }
+    if (curatedBundles.length > 0) {
+      body.curatedBundles = curatedBundles;
+    }
+    // §5.3 — forward the modal's dependency-closed namespace subset. Empty =
+    // no filter (emit everything), matching the server's interpretation.
+    if (namespaces.length > 0) {
+      body.namespaces = namespaces;
+    }
+    const response = await fetch('/api/codegen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
 
-  const blob = await response.blob();
-  const filename = parseContentDispositionFilename(response.headers.get('Content-Disposition'), `${target}-output`);
-  triggerBlobDownload(blob, filename);
-}
+    if (!response.ok) {
+      let envelope: { ok?: boolean; error?: string; diagnostics?: unknown } = {};
+      try {
+        envelope = (await response.json()) as typeof envelope;
+      } catch {
+        // Non-JSON response (e.g. 502 from the edge before reaching the
+        // function). Keep the empty envelope; the status code alone is
+        // enough information for the user.
+      }
+      const diags = Array.isArray(envelope.diagnostics)
+        ? (envelope.diagnostics as ReadonlyArray<{ severity: string; code: string; message: string }>)
+        : [];
+      throw new CodegenDownloadError(envelope.error ?? `/api/codegen HTTP ${response.status}`, response.status, diags);
+    }
+
+    const blob = await response.blob();
+    const filename = parseContentDispositionFilename(response.headers.get('Content-Disposition'), `${target}-output`);
+    triggerBlobDownload(blob, filename);
+    // `target` is one of a fixed, app-defined set of codegen language ids
+    // (typescript/json-schema/sql/xsd/openapi/...) — safe. `files`/`options`/
+    // `namespaces`/`curatedDocs` may carry user model content — never captured.
+  },
+  {
+    op: 'downloadTargetViaRouter',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [files, target, , curatedBundles, namespaces] = value as [
+        unknown[],
+        string,
+        unknown,
+        ReadonlyArray<unknown> | undefined,
+        ReadonlyArray<unknown> | undefined
+      ];
+      return {
+        target,
+        fileCount: files.length,
+        curatedBundleCount: curatedBundles?.length ?? 0,
+        namespaceCount: namespaces?.length ?? 0
+      };
+    }
+  }
+);

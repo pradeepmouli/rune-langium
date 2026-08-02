@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -11,6 +12,7 @@
  */
 
 import { indexById } from '@rune-langium/core';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -38,41 +40,56 @@ export interface DiffResult {
 // Implementation
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * Compare two snapshots of type declarations.
- */
-export function semanticDiff(before: TypeDeclaration[], after: TypeDeclaration[]): DiffResult {
-  const beforeMap = indexById(before, (t) => t.name);
-  const afterMap = indexById(after, (t) => t.name);
+export const semanticDiff = withInstrumentation(
+  function semanticDiff(before: TypeDeclaration[], after: TypeDeclaration[]): DiffResult {
+    const beforeMap = indexById(before, (t) => t.name);
+    const afterMap = indexById(after, (t) => t.name);
 
-  const added: string[] = [];
-  const removed: string[] = [];
-  const modified: string[] = [];
+    const added: string[] = [];
+    const removed: string[] = [];
+    const modified: string[] = [];
 
-  // Check for added and modified
-  for (const [name, afterType] of afterMap) {
-    const beforeType = beforeMap.get(name);
-    if (!beforeType) {
-      added.push(name);
-      continue;
+    // Check for added and modified
+    for (const [name, afterType] of afterMap) {
+      const beforeType = beforeMap.get(name);
+      if (!beforeType) {
+        added.push(name);
+        continue;
+      }
+
+      if (isModified(beforeType, afterType)) {
+        modified.push(name);
+      }
     }
 
-    if (isModified(beforeType, afterType)) {
-      modified.push(name);
+    // Check for removed
+    for (const name of beforeMap.keys()) {
+      if (!afterMap.has(name)) {
+        removed.push(name);
+      }
+    }
+
+    const hasStructuralChanges = added.length > 0 || removed.length > 0 || modified.length > 0;
+
+    return { hasStructuralChanges, added, removed, modified };
+    // `before`/`after`/the added/removed/modified arrays all carry user-defined
+    // type/attribute names — only counts and the boolean are safe.
+  },
+  {
+    op: 'semanticDiff',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as DiffResult;
+      return {
+        hasStructuralChanges: result.hasStructuralChanges,
+        addedCount: result.added.length,
+        removedCount: result.removed.length,
+        modifiedCount: result.modified.length
+      };
     }
   }
-
-  // Check for removed
-  for (const name of beforeMap.keys()) {
-    if (!afterMap.has(name)) {
-      removed.push(name);
-    }
-  }
-
-  const hasStructuralChanges = added.length > 0 || removed.length > 0 || modified.length > 0;
-
-  return { hasStructuralChanges, added, removed, modified };
-}
+);
 
 function isModified(before: TypeDeclaration, after: TypeDeclaration): boolean {
   if (before.kind !== after.kind) return true;

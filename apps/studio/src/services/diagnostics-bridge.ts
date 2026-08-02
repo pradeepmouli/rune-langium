@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -10,6 +11,7 @@
  */
 
 import type { LspDiagnostic, TypeDiagnosticsSummary } from '../types/diagnostics.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 export type { LspDiagnostic, TypeDiagnosticsSummary } from '../types/diagnostics.js';
 
@@ -28,48 +30,63 @@ export interface TypePosition {
 // Implementation
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * Map LSP diagnostics to type-level summaries using line-range intersection.
- */
-export function mapDiagnosticsToTypes(
-  uri: string,
-  diagnostics: LspDiagnostic[],
-  typePositions: Map<string, TypePosition>
-): TypeDiagnosticsSummary[] {
-  if (diagnostics.length === 0 || typePositions.size === 0) return [];
+export const mapDiagnosticsToTypes = withInstrumentation(
+  function mapDiagnosticsToTypes(
+    uri: string,
+    diagnostics: LspDiagnostic[],
+    typePositions: Map<string, TypePosition>
+  ): TypeDiagnosticsSummary[] {
+    if (diagnostics.length === 0 || typePositions.size === 0) return [];
 
-  // Build per-type counters
-  const counters = new Map<string, { errors: number; warnings: number }>();
+    // Build per-type counters
+    const counters = new Map<string, { errors: number; warnings: number }>();
 
-  for (const diag of diagnostics) {
-    const diagLine = diag.range.start.line;
+    for (const diag of diagnostics) {
+      const diagLine = diag.range.start.line;
 
-    for (const [typeName, pos] of typePositions) {
-      if (diagLine >= pos.start && diagLine <= pos.end) {
-        let counter = counters.get(typeName);
-        if (!counter) {
-          counter = { errors: 0, warnings: 0 };
-          counters.set(typeName, counter);
+      for (const [typeName, pos] of typePositions) {
+        if (diagLine >= pos.start && diagLine <= pos.end) {
+          let counter = counters.get(typeName);
+          if (!counter) {
+            counter = { errors: 0, warnings: 0 };
+            counters.set(typeName, counter);
+          }
+          if (diag.severity === 1) counter.errors++;
+          else if (diag.severity === 2) counter.warnings++;
+          break; // A diagnostic belongs to at most one type
         }
-        if (diag.severity === 1) counter.errors++;
-        else if (diag.severity === 2) counter.warnings++;
-        break; // A diagnostic belongs to at most one type
       }
     }
-  }
 
-  // Convert to summaries
-  const result: TypeDiagnosticsSummary[] = [];
-  for (const [typeName, counter] of counters) {
-    const pos = typePositions.get(typeName)!;
-    result.push({
-      typeName,
-      errorCount: counter.errors,
-      warningCount: counter.warnings,
-      fileUri: uri,
-      lineRange: { start: pos.start, end: pos.end }
-    });
-  }
+    // Convert to summaries
+    const result: TypeDiagnosticsSummary[] = [];
+    for (const [typeName, counter] of counters) {
+      const pos = typePositions.get(typeName)!;
+      result.push({
+        typeName,
+        errorCount: counter.errors,
+        warningCount: counter.warnings,
+        fileUri: uri,
+        lineRange: { start: pos.start, end: pos.end }
+      });
+    }
 
-  return result;
-}
+    return result;
+    // `typePositions`/diagnostics/result all carry user-defined type names and
+    // LSP diagnostic message text — never captured raw. Only aggregate counts,
+    // which are unambiguously safe, are worth the capture.
+  },
+  {
+    op: 'mapDiagnosticsToTypes',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output' || !Array.isArray(value)) return undefined;
+      const summaries = value as TypeDiagnosticsSummary[];
+      return {
+        typeCount: summaries.length,
+        errorCount: summaries.reduce((sum, s) => sum + s.errorCount, 0),
+        warningCount: summaries.reduce((sum, s) => sum + s.warningCount, 0)
+      };
+    }
+  }
+);

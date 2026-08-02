@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -21,6 +22,7 @@ import { useCodegenStore } from './codegen-store.js';
 import { useOutputStore, fmtLine } from './output-store.js';
 import { useActivityStore } from './activity-store.js';
 import { allocateOpId } from '../services/op-log.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -86,24 +88,18 @@ interface ModelStoreDeps {
   telemetry: Pick<TelemetryClient, 'emit'>;
 }
 
-/**
- * Gates a telemetry client's emits on the live per-user Settings opt-in
- * (spec Phase 5), re-checked on every call rather than captured once at
- * construction — same belt-and-suspenders pattern telemetry-shipper.ts
- * uses. `config.telemetryEnabled` (VITE_ENABLE_TELEMETRY) below is a
- * deployment-level kill switch an operator sets; without this wrapper, a
- * deployment with that switch on would send curated_load_* events for
- * every user regardless of whether they ever touched the Settings toggle,
- * bypassing the whole point of Task 1's per-user opt-in.
- */
-export function gatedByUserOptIn(client: Pick<TelemetryClient, 'emit'>): Pick<TelemetryClient, 'emit'> {
-  return {
-    async emit(event) {
-      if (!useTelemetrySettingsStore.getState().enabled) return;
-      return client.emit(event);
-    }
-  };
-}
+export const gatedByUserOptIn = withInstrumentation(
+  function gatedByUserOptIn(client: Pick<TelemetryClient, 'emit'>): Pick<TelemetryClient, 'emit'> {
+    return {
+      async emit(event) {
+        if (!useTelemetrySettingsStore.getState().enabled) return;
+        return client.emit(event);
+      }
+    };
+    // `client`/return are function-bearing objects — not capturable.
+  },
+  { op: 'gatedByUserOptIn' }
+);
 
 let deps: ModelStoreDeps = {
   telemetry: gatedByUserOptIn(
@@ -116,13 +112,12 @@ let deps: ModelStoreDeps = {
   )
 };
 
-/**
- * Override the model-store's dependencies. Intended for tests; in
- * production the defaults pull the real telemetry client.
- */
-export function setModelStoreDeps(next: Partial<ModelStoreDeps>): void {
-  deps = { ...deps, ...next };
-}
+export const setModelStoreDeps = withInstrumentation(
+  function setModelStoreDeps(next: Partial<ModelStoreDeps>): void {
+    deps = { ...deps, ...next };
+  },
+  { op: 'setModelStoreDeps' }
+);
 
 const VALID_CURATED_IDS = new Set<string>(CURATED_MODEL_IDS);
 
@@ -361,10 +356,17 @@ export const useModelStore = create<ModelStore>((set, get) => ({
 // Selectors
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Get all loaded models as a flat array. */
-export function selectLoadedModels(state: ModelStoreState): LoadedModel[] {
-  return Array.from(state.models.values());
-}
+export const selectLoadedModels = withInstrumentation(
+  function selectLoadedModels(state: ModelStoreState): LoadedModel[] {
+    return Array.from(state.models.values());
+    // LoadedModel carries raw .rosetta file contents — only a count is safe.
+  },
+  {
+    op: 'selectLoadedModels',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' && Array.isArray(value) ? { count: value.length } : undefined)
+  }
+);
 
 /** T012: Detect namespace conflicts across loaded models. */
 export interface NamespaceConflict {
@@ -372,33 +374,57 @@ export interface NamespaceConflict {
   sources: string[];
 }
 
-export function selectNamespaceConflicts(state: ModelStoreState): NamespaceConflict[] {
-  const nsToSources = new Map<string, string[]>();
-  for (const model of state.models.values()) {
-    for (const file of model.files) {
-      if (!file.namespace) continue;
-      const sources = nsToSources.get(file.namespace) ?? [];
-      if (!sources.includes(model.source.id)) {
-        sources.push(model.source.id);
+export const selectNamespaceConflicts = withInstrumentation(
+  function selectNamespaceConflicts(state: ModelStoreState): NamespaceConflict[] {
+    const nsToSources = new Map<string, string[]>();
+    for (const model of state.models.values()) {
+      for (const file of model.files) {
+        if (!file.namespace) continue;
+        const sources = nsToSources.get(file.namespace) ?? [];
+        if (!sources.includes(model.source.id)) {
+          sources.push(model.source.id);
+        }
+        nsToSources.set(file.namespace, sources);
       }
-      nsToSources.set(file.namespace, sources);
     }
-  }
-  const conflicts: NamespaceConflict[] = [];
-  for (const [namespace, sources] of nsToSources) {
-    if (sources.length > 1) {
-      conflicts.push({ namespace, sources });
+    const conflicts: NamespaceConflict[] = [];
+    for (const [namespace, sources] of nsToSources) {
+      if (sources.length > 1) {
+        conflicts.push({ namespace, sources });
+      }
     }
+    return conflicts;
+    // `namespace` may be a user-authored (not curated) model namespace — never
+    // captured; only the conflict count.
+  },
+  {
+    op: 'selectNamespaceConflicts',
+    capture: Capture.Output,
+    sanitize: (value, which) =>
+      which === 'output' && Array.isArray(value) ? { conflictCount: value.length } : undefined
   }
-  return conflicts;
-}
+);
 
-/** Check if any model is currently loading. */
-export function selectIsAnyLoading(state: ModelStoreState): boolean {
-  return state.loading.size > 0;
-}
+export const selectIsAnyLoading = withInstrumentation(
+  function selectIsAnyLoading(state: ModelStoreState): boolean {
+    return state.loading.size > 0;
+  },
+  {
+    op: 'selectIsAnyLoading',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
-/** Get progress for a specific loading model. */
-export function selectLoadProgress(state: ModelStoreState, sourceId: string): LoadProgress | null {
-  return state.loading.get(sourceId)?.progress ?? null;
-}
+// `sourceId` is safe (curated id or already-hashed custom id — see
+// model-registry.ts); LoadProgress is a structural {phase, current, total}.
+export const selectLoadProgress = withInstrumentation(
+  function selectLoadProgress(state: ModelStoreState, sourceId: string): LoadProgress | null {
+    return state.loading.get(sourceId)?.progress ?? null;
+  },
+  {
+    op: 'selectLoadProgress',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) => (which === 'input' ? { sourceId: (value as [ModelStoreState, string])[1] } : value)
+  }
+);

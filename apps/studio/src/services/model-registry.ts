@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -7,6 +8,7 @@
  */
 
 import type { ModelSource } from '../types/model-types.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 const MIRROR_BASE = 'https://www.daikonic.dev/curated';
 
@@ -43,29 +45,44 @@ const CURATED_MODELS: readonly ModelSource[] = [
   }
 ] as const;
 
-/** Returns the curated list of well-known model sources. */
-export function getModelRegistry(): readonly ModelSource[] {
-  return CURATED_MODELS;
-}
+// Static, hardcoded curated constant — no diagnostic value in re-capturing
+// an unchanging value every call.
+export const getModelRegistry = withInstrumentation(
+  function getModelRegistry(): readonly ModelSource[] {
+    return CURATED_MODELS;
+  },
+  { op: 'getModelRegistry' }
+);
 
-/** Look up a curated model by ID. */
-export function getModelSource(id: string): ModelSource | undefined {
-  return CURATED_MODELS.find((m) => m.id === id);
-}
+// `id` is one of the fixed curated ids ('cdm'/'fpml'/'rune-dsl'); the
+// matched ModelSource (if any) is itself curated/public data — both safe.
+export const getModelSource = withInstrumentation(
+  function getModelSource(id: string): ModelSource | undefined {
+    return CURATED_MODELS.find((m) => m.id === id);
+  },
+  { op: 'getModelSource', capture: Capture.Input | Capture.Output, sanitize: (value) => value }
+);
 
-/**
- * Create a custom ModelSource from a user-provided URL.
- * Uses a hash of the URL as the ID.
- */
-export function createCustomModelSource(
-  repoUrl: string,
-  ref: string = 'main',
-  paths: string[] = ['**/*.rosetta']
-): ModelSource {
-  const id = `custom-${hashUrl(repoUrl)}`;
-  const name = extractRepoName(repoUrl);
-  return { id, name, repoUrl, ref, paths };
-}
+// `repoUrl` is a user-entered custom git URL — the reason hashUrl() exists
+// (see telemetry-shipper.ts's safeSubject commentary for the same
+// pattern) — never captured raw, nor is the derived `name` (may echo the
+// repo name). Only the resulting hashed `id` is safe.
+export const createCustomModelSource = withInstrumentation(
+  function createCustomModelSource(
+    repoUrl: string,
+    ref: string = 'main',
+    paths: string[] = ['**/*.rosetta']
+  ): ModelSource {
+    const id = `custom-${hashUrl(repoUrl)}`;
+    const name = extractRepoName(repoUrl);
+    return { id, name, repoUrl, ref, paths };
+  },
+  {
+    op: 'createCustomModelSource',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? { id: (value as ModelSource).id } : undefined)
+  }
+);
 
 function hashUrl(url: string): string {
   let hash = 0;

@@ -1,3 +1,6 @@
+// @instrumentation-codemod-applied
+import { withInstrumentation, Capture } from './instrumentation/core.js';
+
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -20,26 +23,30 @@ function makeLspSessionUlid(): string {
   return time + randPart;
 }
 
-/**
- * Per-tab LSP session id for Durable Object routing. Persisted in
- * sessionStorage so a tab keeps its DO across reloads; falls back to a
- * per-call ULID under privacy modes. Tags the LSP DO so multi-tenancy works.
- */
-export function getLspSessionId(): string {
-  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
-    return makeLspSessionUlid();
+export const getLspSessionId = withInstrumentation(
+  function getLspSessionId(): string {
+    if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+      return makeLspSessionUlid();
+    }
+    try {
+      const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
+      if (existing && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(existing)) return existing;
+      const fresh = makeLspSessionUlid();
+      window.sessionStorage.setItem(LSP_SESSION_ID_KEY, fresh);
+      return fresh;
+    } catch {
+      // sessionStorage may throw under privacy / access-restricted modes — even
+      // on read (getItem), not just setItem. Non-fatal: the caller still gets a
+      // unique-for-this-call id, it just won't persist across reloads (the DO is
+      // isolated per-mount instead of per-tab).
+      return makeLspSessionUlid();
+    }
+    // Output is a random per-tab session correlator (crypto.getRandomValues),
+    // never derived from user/model content — safe to capture verbatim.
+  },
+  {
+    op: 'getLspSessionId',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  try {
-    const existing = window.sessionStorage.getItem(LSP_SESSION_ID_KEY);
-    if (existing && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(existing)) return existing;
-    const fresh = makeLspSessionUlid();
-    window.sessionStorage.setItem(LSP_SESSION_ID_KEY, fresh);
-    return fresh;
-  } catch {
-    // sessionStorage may throw under privacy / access-restricted modes — even
-    // on read (getItem), not just setItem. Non-fatal: the caller still gets a
-    // unique-for-this-call id, it just won't persist across reloads (the DO is
-    // isolated per-mount instead of per-tab).
-    return makeLspSessionUlid();
-  }
-}
+);

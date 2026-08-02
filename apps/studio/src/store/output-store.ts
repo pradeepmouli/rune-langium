@@ -1,7 +1,9 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import { create } from 'zustand';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export type OutputSeverity = 'info' | 'warn' | 'error' | 'success';
 
@@ -58,10 +60,15 @@ export const useOutputStore = create<OutputState>((set) => ({
   }
 }));
 
-export function fmtLine(source: string, message: string, detail?: string): string {
-  const base = `[${source}] ${message}`;
-  return detail !== undefined ? `${base} · ${detail}` : base;
-}
+export const fmtLine = withInstrumentation(
+  function fmtLine(source: string, message: string, detail?: string): string {
+    const base = `[${source}] ${message}`;
+    return detail !== undefined ? `${base} · ${detail}` : base;
+    // `message`/`detail` are free-form text — many call sites pass a raw
+    // error.message or file-path-bearing string through here — never captured.
+  },
+  { op: 'fmtLine' }
+);
 
 export const SEV: Record<OutputSeverity, string> = {
   success: '✓',
