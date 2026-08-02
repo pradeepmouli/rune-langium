@@ -52,9 +52,10 @@ export function configureInstrumentation(emit: Emit): void {
   currentEmit = emit;
 }
 
-/** Test-only: restores the pre-configuration no-op sink between test files. */
+/** Test-only: restores the pre-configuration no-op sink and default threshold between test files. */
 export function resetInstrumentationForTests(): void {
   currentEmit = noopEmit;
+  threshold = 'warn';
 }
 
 /** Internal — Task 2's withInstrumentation calls this; not exported publicly. */
@@ -73,4 +74,95 @@ export function __buildRecordForTests(
   fields: Partial<Omit<TelemetryRecord, 'op' | 'level' | 'ts'>> & { captured: number }
 ): TelemetryRecord {
   return { op, level, ts: Date.now(), ...fields };
+}
+
+export interface SanitizeErrorResult {
+  signature: string;
+  context?: unknown;
+}
+
+export interface InstrumentationOptions {
+  op?: string;
+  level?: Level;
+  capture?: number;
+  sanitize?: (value: unknown, which: 'input' | 'output') => unknown;
+  sanitizeError?: (err: unknown) => SanitizeErrorResult;
+}
+
+let threshold: Level = 'warn';
+
+export function setInstrumentationThreshold(level: Level): void {
+  threshold = level;
+}
+
+export function getInstrumentationThreshold(): Level {
+  return threshold;
+}
+
+/** Test-only: restores the default threshold between test files. */
+export function resetInstrumentationThresholdForTests(): void {
+  threshold = 'warn';
+}
+
+function defaultSanitizeError(err: unknown): SanitizeErrorResult {
+  const name = err instanceof Error ? err.name : 'Error';
+  return { signature: `${name}:unspecified` };
+}
+
+export function withInstrumentation<F extends (...args: any[]) => any>(fn: F, opts: InstrumentationOptions = {}): F {
+  const op = opts.op ?? fn.name ?? 'anonymous';
+  const capture = opts.capture ?? 0;
+  const wrapped = function (this: unknown, ...args: unknown[]) {
+    const level = opts.level ?? 'info'; // depth-based default lands in Task 3
+    const clears = levelClears(level, threshold);
+    const sanitize = opts.sanitize ?? ((v: unknown) => v);
+    const start = performance.now();
+    try {
+      const result = fn.apply(this, args);
+      // Only emit success if at/above threshold
+      if (clears) {
+        if (result instanceof Promise) {
+          return result.then(
+            (value) => {
+              emitSuccess(op, level, capture, args, value, sanitize, performance.now() - start);
+              return value;
+            },
+            (err) => {
+              emitError(op, opts, err);
+              throw err;
+            }
+          );
+        }
+        emitSuccess(op, level, capture, args, result, sanitize, performance.now() - start);
+      }
+      return result;
+    } catch (err) {
+      // Errors ALWAYS emit, regardless of threshold
+      emitError(op, opts, err);
+      throw err;
+    }
+  };
+  return wrapped as F;
+}
+
+function emitSuccess(
+  op: string,
+  level: Level,
+  capture: number,
+  args: unknown[],
+  output: unknown,
+  sanitize: (value: unknown, which: 'input' | 'output') => unknown,
+  durationMs: number
+): void {
+  const record: TelemetryRecord = { op, level, captured: capture, ts: Date.now(), durationMs };
+  if (capture & Capture.Input) record.input = sanitize(args, 'input');
+  if (capture & Capture.Output) record.output = sanitize(output, 'output');
+  emitRecord(record);
+}
+
+// `bindingContext` is unused until Task 3 introduces `.child()` — declared now
+// so error records carry the bound context the same way success records do.
+function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindingContext?: unknown): void {
+  const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
+  emitRecord({ op, level: 'error', captured: 0, signature, context: context ?? bindingContext, ts: Date.now() });
 }
