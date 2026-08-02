@@ -16,6 +16,7 @@ import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-wal
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { getElementNamespace } from '@rune-langium/core';
+import { debug } from '../instrument.js';
 import {
   isChoice,
   isData,
@@ -232,11 +233,13 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     }
   }
 
+  @debug()
   emitEnumeration(enumNode: RosettaEnumeration): void {
     this.sections.push(this.emitEnum(enumNode));
     this.sections.push('');
   }
 
+  @debug()
   emitTypeAlias(typeAlias: RosettaTypeAlias): void {
     this.sections.push('');
     this.sections.push(this.emitTypeAliasSchema(typeAlias));
@@ -253,6 +256,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     this.sections.push('');
   }
 
+  @debug()
   emitData(data: Data): void {
     this.sections.push(this.emitTypeSchema(data));
     const alias = this.emitInferAlias(data);
@@ -266,6 +270,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * doesn't apply, there is no literal tag field), mirroring emitData's
    * schema + z.infer-alias pairing.
    */
+  @debug()
   emitChoice(choice: Choice): void {
     this.sections.push(this.emitChoiceSchema(choice));
     this.sections.push(`export type ${choice.name} = z.infer<typeof ${choice.name}Schema>;`);

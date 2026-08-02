@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: FSL-1.1-ALv2
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,7 +7,7 @@ import {
   configureInstrumentation,
   resetInstrumentationForTests,
   __buildRecordForTests
-} from '../../../src/services/instrumentation/core.js';
+} from '../src/index.js';
 
 afterEach(() => {
   resetInstrumentationForTests();

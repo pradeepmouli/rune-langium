@@ -49,6 +49,7 @@
     "@rune-langium/curated-schema": "workspace:*",
     "@rune-langium/design-system": "workspace:*",
     "@rune-langium/git-sync-engine": "workspace:*",
+    "@rune-langium/instrumentation-core": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
     "@rune-langium/visual-editor": "workspace:*",
     "@tanstack/react-virtual": "^3.14.9",
