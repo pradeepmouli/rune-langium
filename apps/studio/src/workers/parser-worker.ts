@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -22,6 +23,7 @@ import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { URI, EmptyFileSystem, type AstNode, type AstNodeDescription, type LangiumDocument } from 'langium';
 import { isWorkerGlobalScope } from './runtime-guards.js';
 import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 // This module is ALSO imported on the main thread (workspace.ts imports the
 // `isParseResponse` etc. guards) — gate behind `isWorkerGlobalScope()` so the
@@ -170,264 +172,322 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object';
 }
 
-export function isParseResponse(value: unknown): value is ParseResponse {
-  if (!isRecord(value)) {
-    return false;
+export const isParseResponse = withInstrumentation(
+  function isParseResponse(value: unknown): value is ParseResponse {
+    if (!isRecord(value)) {
+      return false;
+    }
+    return (
+      value.type === 'parseResult' &&
+      typeof value.id === 'string' &&
+      Array.isArray(value.errors) &&
+      value.errors.every((entry) => typeof entry === 'string') &&
+      (value.model === null || isRecord(value.model))
+    );
+  },
+  {
+    op: 'isParseResponse',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  return (
-    value.type === 'parseResult' &&
-    typeof value.id === 'string' &&
-    Array.isArray(value.errors) &&
-    value.errors.every((entry) => typeof entry === 'string') &&
-    (value.model === null || isRecord(value.model))
-  );
-}
+);
 
-export function isParseWorkspaceResponse(value: unknown): value is ParseWorkspaceResponse {
-  if (!isRecord(value) || value.type !== 'parseWorkspaceResult' || typeof value.id !== 'string') {
-    return false;
+export const isParseWorkspaceResponse = withInstrumentation(
+  function isParseWorkspaceResponse(value: unknown): value is ParseWorkspaceResponse {
+    if (!isRecord(value) || value.type !== 'parseWorkspaceResult' || typeof value.id !== 'string') {
+      return false;
+    }
+    if (!Array.isArray(value.models) || !value.models.every((entry) => isRecord(entry))) {
+      return false;
+    }
+    if (
+      !Array.isArray(value.parsedModels) ||
+      !value.parsedModels.every(
+        (entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model)
+      )
+    ) {
+      return false;
+    }
+    if (!isRecord(value.errors)) {
+      return false;
+    }
+    if (
+      !Object.values(value.errors).every(
+        (entry) => Array.isArray(entry) && entry.every((message) => typeof message === 'string')
+      )
+    ) {
+      return false;
+    }
+    if (!Array.isArray(value.deferredExports)) {
+      return false;
+    }
+    return true;
+  },
+  {
+    op: 'isParseWorkspaceResponse',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  if (!Array.isArray(value.models) || !value.models.every((entry) => isRecord(entry))) {
-    return false;
-  }
-  if (
-    !Array.isArray(value.parsedModels) ||
-    !value.parsedModels.every((entry) => isRecord(entry) && typeof entry.filePath === 'string' && isRecord(entry.model))
-  ) {
-    return false;
-  }
-  if (!isRecord(value.errors)) {
-    return false;
-  }
-  if (
-    !Object.values(value.errors).every(
-      (entry) => Array.isArray(entry) && entry.every((message) => typeof message === 'string')
-    )
-  ) {
-    return false;
-  }
-  if (!Array.isArray(value.deferredExports)) {
-    return false;
-  }
-  return true;
-}
+);
 
 // ---------------------------------------------------------------------------
 // Worker message handler
 // ---------------------------------------------------------------------------
 
-async function handleParse(req: ParseRequest): Promise<ParseResponse> {
-  try {
-    const document = await factory.fromString(req.content, URI.parse(req.uri ?? 'inmemory:///model.rosetta'));
-    await builder.build([document], { validation: false, eagerLinking: false });
-    const errors: string[] = [];
-    if (document.parseResult.parserErrors.length > 0) {
-      for (const err of document.parseResult.parserErrors) {
-        errors.push(err.message);
-      }
-    }
-    const model = document.parseResult.value as RosettaModel;
-    if (model) preserveCstText(model);
-    return { type: 'parseResult', id: req.id, model, errors };
-  } catch (e) {
-    return {
-      type: 'parseResult',
-      id: req.id,
-      model: null,
-      errors: [(e as Error).message]
-    };
-  }
-}
-
-async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
-  const errors: Record<string, string[]> = {};
-  if (req.files.length === 0) {
-    return {
-      type: 'parseWorkspaceResult',
-      id: req.id,
-      models: [],
-      parsedModels: [],
-      errors,
-      deferredExports: []
-    };
-  }
-
-  try {
-    const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
-    const userDocs: LangiumDocument<AstNode>[] = [];
-    const models: RosettaModel[] = [];
-    const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
-    const deferredExports: DeferredExportEntry[] = [];
-
-    // Drop all corpus JSON from the previous workspace load.
-    deferredModelJson.clear();
-
-    // Clear previously registered documents (prevents "already present" collision).
-    if (langiumDocs.all) {
-      for (const doc of langiumDocs.all.toArray()) {
-        langiumDocs.deleteDocument(doc.uri);
-      }
-    }
-
-    for (const file of req.files) {
-      const uri = URI.parse(file.name);
-      if (langiumDocs.hasDocument(uri)) langiumDocs.deleteDocument(uri);
-
-      // DEPRECATED (019 Phase 0): pre-parsed corpus content no longer flows through
-      // this path. The server-side /api/parse Pages Function fetches curated bundles
-      // from curated-mirror directly and returns them in hydrationState. This branch
-      // remains as a transition shim during 019 rollout; remove in a follow-up spec
-      // once the router is the only production path for parseWorkspace. The
-      // `.bundle-marker` synthetic file entries (workspace.ts BUNDLE_MARKER_SUFFIX)
-      // also flow through this branch with `serializedModelJson: '{}'` and content '',
-      // which the deferred-model machinery handles harmlessly.
-      if (file.serializedModelJson) {
-        // Corpus file — store raw JSON for lazy deserialization by RuneDslLinker.
-        // Nothing is deserialized or added to LangiumDocuments here.
-        deferredModelJson.set(uri.toString(), file.serializedModelJson);
-
-        if (file.exports?.length) {
-          // Register export stubs in IndexManager so Langium's scope provider can
-          // locate corpus types when building cross-references in user documents.
-          const descriptions: AstNodeDescription[] = file.exports.map((exp) => ({
-            type: exp.type,
-            name: exp.name,
-            path: exp.path,
-            documentUri: uri
-          }));
-          indexManager.registerExports(uri, descriptions);
-
-          // Emit namespace-explorer stubs for the UI (no Langium involvement).
-          const ns = namespaceFromSource(file.content);
-          deferredExports.push({
-            filePath: file.name,
-            namespace: ns,
-            exports: file.exports.map((exp) => ({ type: exp.type, name: exp.name }))
-          });
-        }
-      } else {
-        // User file — parse from source text and register in LangiumDocuments.
-        const doc = factory.fromString(file.content, uri);
-        langiumDocs.addDocument(doc);
-        userDocs.push(doc);
-      }
-    }
-
-    // Build user docs with eagerLinking: false — indexed but not yet linked.
-    // Corpus docs are never built here; RuneDslLinker handles them on demand.
-    if (userDocs.length > 0) {
-      await builder.build(userDocs, { validation: false, eagerLinking: false });
-    }
-
-    // Track the active services so linkDocument can find documents from this parse.
-    activeBuilder = builder;
-    activeLangiumDocs = langiumDocs;
-
-    // Pre-build URI→file name map to avoid O(N²) lookup in the collection loop.
-    const uriToFileName = new Map<string, string>();
-    for (const file of req.files) {
-      uriToFileName.set(URI.parse(file.name).toString(), file.name);
-    }
-
-    // User files populate both models[] and parsedModels[].
-    // Corpus models are not included here — they are not yet deserialized.
-    for (const document of userDocs) {
-      const model = document.parseResult.value as RosettaModel;
-      if (model) {
-        preserveCstText(model);
-        models.push(model);
-        const fileName = uriToFileName.get(document.uri?.toString() ?? '');
-        if (fileName) parsedModels.push({ filePath: fileName, model });
-      }
+// Not `export const` here — this function is exported once, below, via
+// the grouped `export { handleParse, handleParseWorkspace,
+// handleLinkDocument };` statement (the codemod would otherwise introduce
+// a duplicate-export TS2323 conflict with that pre-existing statement).
+const handleParse = withInstrumentation(
+  async function handleParse(req: ParseRequest): Promise<ParseResponse> {
+    try {
+      const document = await factory.fromString(req.content, URI.parse(req.uri ?? 'inmemory:///model.rosetta'));
+      await builder.build([document], { validation: false, eagerLinking: false });
+      const errors: string[] = [];
       if (document.parseResult.parserErrors.length > 0) {
-        const docUri = document.uri?.toString() ?? '';
-        const fileName = uriToFileName.get(docUri) ?? docUri;
-        errors[fileName] = document.parseResult.parserErrors.map((e: { message: string }) => e.message);
+        for (const err of document.parseResult.parserErrors) {
+          errors.push(err.message);
+        }
       }
+      const model = document.parseResult.value as RosettaModel;
+      if (model) preserveCstText(model);
+      return { type: 'parseResult', id: req.id, model, errors };
+    } catch (e) {
+      return {
+        type: 'parseResult',
+        id: req.id,
+        model: null,
+        errors: [(e as Error).message]
+      };
     }
-
-    return {
-      type: 'parseWorkspaceResult',
-      id: req.id,
-      models,
-      parsedModels,
-      errors,
-      deferredExports
-    };
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[parser-worker] parseWorkspace failed', {
-      id: req.id,
-      error
-    });
-    const detail =
-      error instanceof Error ? [error.message, error.stack].filter(Boolean).join('\n') : 'Workspace parsing failed.';
-    return {
-      type: 'parseWorkspaceResult',
-      id: req.id,
-      models: [],
-      parsedModels: [],
-      errors: {
-        __worker__: [detail]
-      },
-      deferredExports: []
-    };
+    // `req.content` is raw model source and output's `model`/`errors` carry
+    // raw AST/parser message text — never captured. Only a safe count.
+  },
+  {
+    op: 'handleParse',
+    capture: Capture.Output,
+    sanitize: (value, which) =>
+      which === 'output' ? { errorCount: (value as ParseResponse).errors.length } : undefined
   }
-}
+);
 
-async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumentResponse> {
-  newModelsAccumulator = [];
-  try {
-    const targetUri = URI.parse(req.uri);
-    let doc: LangiumDocument<AstNode> | undefined;
-
-    // Corpus documents are stored as raw JSON until first link request.
-    // Materialize the target document now if it hasn't been deserialized yet.
-    if (deferredModelJson.has(targetUri.toString())) {
-      const { model, document } = hydrateModelDocument(
-        { RuneDsl, shared: RuneDsl.shared },
-        targetUri,
-        deferredModelJson.get(targetUri.toString())!,
-        { register: 'always' }
-      );
-      newModelsAccumulator.push(model);
-      doc = document;
-      deferredModelJson.delete(targetUri.toString());
-    } else if (activeLangiumDocs.hasDocument(targetUri)) {
-      doc = activeLangiumDocs.getDocument(targetUri);
+// See handleParse's comment above — exported via the grouped statement below.
+const handleParseWorkspace = withInstrumentation(
+  async function handleParseWorkspace(req: ParseWorkspaceRequest): Promise<ParseWorkspaceResponse> {
+    const errors: Record<string, string[]> = {};
+    if (req.files.length === 0) {
+      return {
+        type: 'parseWorkspaceResult',
+        id: req.id,
+        models: [],
+        parsedModels: [],
+        errors,
+        deferredExports: []
+      };
     }
 
-    if (!doc) {
-      return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [], newModels: [] };
-    }
+    try {
+      const langiumDocs = RuneDsl.shared.workspace.LangiumDocuments;
+      const userDocs: LangiumDocument<AstNode>[] = [];
+      const models: RosettaModel[] = [];
+      const parsedModels: Array<{ filePath: string; model: RosettaModel }> = [];
+      const deferredExports: DeferredExportEntry[] = [];
 
-    // eagerLinking: true runs Langium's linker immediately.
-    // RuneDslLinker.loadAstNode handles transitive corpus deps on demand,
-    // each calling deferredProvider.getModel() which appends to newModelsAccumulator.
-    await activeBuilder.build([doc], { validation: false, eagerLinking: true });
+      // Drop all corpus JSON from the previous workspace load.
+      deferredModelJson.clear();
 
-    const errors: string[] = [];
-    for (const diag of doc.diagnostics ?? []) {
-      // `Diagnostic.message` widened to `string | MarkupContent` in newer LSP types.
-      errors.push(typeof diag.message === 'string' ? diag.message : diag.message.value);
+      // Clear previously registered documents (prevents "already present" collision).
+      if (langiumDocs.all) {
+        for (const doc of langiumDocs.all.toArray()) {
+          langiumDocs.deleteDocument(doc.uri);
+        }
+      }
+
+      for (const file of req.files) {
+        const uri = URI.parse(file.name);
+        if (langiumDocs.hasDocument(uri)) langiumDocs.deleteDocument(uri);
+
+        // DEPRECATED (019 Phase 0): pre-parsed corpus content no longer flows through
+        // this path. The server-side /api/parse Pages Function fetches curated bundles
+        // from curated-mirror directly and returns them in hydrationState. This branch
+        // remains as a transition shim during 019 rollout; remove in a follow-up spec
+        // once the router is the only production path for parseWorkspace. The
+        // `.bundle-marker` synthetic file entries (workspace.ts BUNDLE_MARKER_SUFFIX)
+        // also flow through this branch with `serializedModelJson: '{}'` and content '',
+        // which the deferred-model machinery handles harmlessly.
+        if (file.serializedModelJson) {
+          // Corpus file — store raw JSON for lazy deserialization by RuneDslLinker.
+          // Nothing is deserialized or added to LangiumDocuments here.
+          deferredModelJson.set(uri.toString(), file.serializedModelJson);
+
+          if (file.exports?.length) {
+            // Register export stubs in IndexManager so Langium's scope provider can
+            // locate corpus types when building cross-references in user documents.
+            const descriptions: AstNodeDescription[] = file.exports.map((exp) => ({
+              type: exp.type,
+              name: exp.name,
+              path: exp.path,
+              documentUri: uri
+            }));
+            indexManager.registerExports(uri, descriptions);
+
+            // Emit namespace-explorer stubs for the UI (no Langium involvement).
+            const ns = namespaceFromSource(file.content);
+            deferredExports.push({
+              filePath: file.name,
+              namespace: ns,
+              exports: file.exports.map((exp) => ({ type: exp.type, name: exp.name }))
+            });
+          }
+        } else {
+          // User file — parse from source text and register in LangiumDocuments.
+          const doc = factory.fromString(file.content, uri);
+          langiumDocs.addDocument(doc);
+          userDocs.push(doc);
+        }
+      }
+
+      // Build user docs with eagerLinking: false — indexed but not yet linked.
+      // Corpus docs are never built here; RuneDslLinker handles them on demand.
+      if (userDocs.length > 0) {
+        await builder.build(userDocs, { validation: false, eagerLinking: false });
+      }
+
+      // Track the active services so linkDocument can find documents from this parse.
+      activeBuilder = builder;
+      activeLangiumDocs = langiumDocs;
+
+      // Pre-build URI→file name map to avoid O(N²) lookup in the collection loop.
+      const uriToFileName = new Map<string, string>();
+      for (const file of req.files) {
+        uriToFileName.set(URI.parse(file.name).toString(), file.name);
+      }
+
+      // User files populate both models[] and parsedModels[].
+      // Corpus models are not included here — they are not yet deserialized.
+      for (const document of userDocs) {
+        const model = document.parseResult.value as RosettaModel;
+        if (model) {
+          preserveCstText(model);
+          models.push(model);
+          const fileName = uriToFileName.get(document.uri?.toString() ?? '');
+          if (fileName) parsedModels.push({ filePath: fileName, model });
+        }
+        if (document.parseResult.parserErrors.length > 0) {
+          const docUri = document.uri?.toString() ?? '';
+          const fileName = uriToFileName.get(docUri) ?? docUri;
+          errors[fileName] = document.parseResult.parserErrors.map((e: { message: string }) => e.message);
+        }
+      }
+
+      return {
+        type: 'parseWorkspaceResult',
+        id: req.id,
+        models,
+        parsedModels,
+        errors,
+        deferredExports
+      };
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[parser-worker] parseWorkspace failed', {
+        id: req.id,
+        error
+      });
+      const detail =
+        error instanceof Error ? [error.message, error.stack].filter(Boolean).join('\n') : 'Workspace parsing failed.';
+      return {
+        type: 'parseWorkspaceResult',
+        id: req.id,
+        models: [],
+        parsedModels: [],
+        errors: {
+          __worker__: [detail]
+        },
+        deferredExports: []
+      };
     }
-    return {
-      type: 'linkDocumentResult',
-      id: req.id,
-      linked: true,
-      errors,
-      newModels: newModelsAccumulator
-    };
-  } catch (error) {
-    return {
-      type: 'linkDocumentResult',
-      id: req.id,
-      linked: false,
-      errors: [(error as Error).message],
-      newModels: []
-    };
+    // Same rationale as handleParse above — raw content in, raw AST/messages
+    // out; only counts are safe.
+  },
+  {
+    op: 'handleParseWorkspace',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as ParseWorkspaceResponse;
+      return { modelCount: result.models.length, errorFileCount: Object.keys(result.errors).length };
+    }
   }
-}
+);
+
+// See handleParse's comment above — exported via the grouped statement below.
+const handleLinkDocument = withInstrumentation(
+  async function handleLinkDocument(req: LinkDocumentRequest): Promise<LinkDocumentResponse> {
+    newModelsAccumulator = [];
+    try {
+      const targetUri = URI.parse(req.uri);
+      let doc: LangiumDocument<AstNode> | undefined;
+
+      // Corpus documents are stored as raw JSON until first link request.
+      // Materialize the target document now if it hasn't been deserialized yet.
+      if (deferredModelJson.has(targetUri.toString())) {
+        const { model, document } = hydrateModelDocument(
+          { RuneDsl, shared: RuneDsl.shared },
+          targetUri,
+          deferredModelJson.get(targetUri.toString())!,
+          { register: 'always' }
+        );
+        newModelsAccumulator.push(model);
+        doc = document;
+        deferredModelJson.delete(targetUri.toString());
+      } else if (activeLangiumDocs.hasDocument(targetUri)) {
+        doc = activeLangiumDocs.getDocument(targetUri);
+      }
+
+      if (!doc) {
+        return { type: 'linkDocumentResult', id: req.id, linked: false, errors: [], newModels: [] };
+      }
+
+      // eagerLinking: true runs Langium's linker immediately.
+      // RuneDslLinker.loadAstNode handles transitive corpus deps on demand,
+      // each calling deferredProvider.getModel() which appends to newModelsAccumulator.
+      await activeBuilder.build([doc], { validation: false, eagerLinking: true });
+
+      const errors: string[] = [];
+      for (const diag of doc.diagnostics ?? []) {
+        // `Diagnostic.message` widened to `string | MarkupContent` in newer LSP types.
+        errors.push(typeof diag.message === 'string' ? diag.message : diag.message.value);
+      }
+      return {
+        type: 'linkDocumentResult',
+        id: req.id,
+        linked: true,
+        errors,
+        newModels: newModelsAccumulator
+      };
+    } catch (error) {
+      return {
+        type: 'linkDocumentResult',
+        id: req.id,
+        linked: false,
+        errors: [(error as Error).message],
+        newModels: []
+      };
+    }
+    // `req.uri` is a workspace-relative document URI (uri.ts convention) —
+    // safe. Output errors/newModels carry raw content — only counts captured.
+  },
+  {
+    op: 'handleLinkDocument',
+    capture: Capture.Input | Capture.Output,
+    sanitize: (value, which) => {
+      if (which === 'input') return { uri: (value as [LinkDocumentRequest])[0].uri };
+      const result = value as LinkDocumentResponse;
+      return { linked: result.linked, errorCount: result.errors.length, newModelCount: result.newModels.length };
+    }
+  }
+);
 
 async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
   try {
@@ -478,18 +538,24 @@ async function handleHydrate(req: HydrateRequest): Promise<HydrateResponse> {
 // Exported dispatcher — testable in Node without spinning up a Web Worker
 // ---------------------------------------------------------------------------
 
-export async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerResponse> {
-  switch (req.type) {
-    case 'parse':
-      return handleParse(req);
-    case 'parseWorkspace':
-      return handleParseWorkspace(req);
-    case 'linkDocument':
-      return handleLinkDocument(req);
-    case 'hydrate':
-      return handleHydrate(req);
-  }
-}
+export const dispatchWorkerRequest = withInstrumentation(
+  async function dispatchWorkerRequest(req: WorkerRequest): Promise<WorkerResponse> {
+    switch (req.type) {
+      case 'parse':
+        return handleParse(req);
+      case 'parseWorkspace':
+        return handleParseWorkspace(req);
+      case 'linkDocument':
+        return handleLinkDocument(req);
+      case 'hydrate':
+        return handleHydrate(req);
+    }
+    // Delegates to already-instrumented handlers above (each with its own
+    // tailored sanitizer) — capturing here too would be redundant and riskier
+    // (this dispatcher sees every request/response shape generically).
+  },
+  { op: 'dispatchWorkerRequest' }
+);
 
 // ---------------------------------------------------------------------------
 // Register message listener (only when running as a worker)
@@ -505,25 +571,37 @@ if (isWorkerGlobalScope()) {
   });
 }
 
-export function isLinkDocumentResponse(value: unknown): value is LinkDocumentResponse {
-  if (!isRecord(value)) return false;
-  return (
-    value.type === 'linkDocumentResult' &&
-    typeof value.id === 'string' &&
-    typeof value.linked === 'boolean' &&
-    Array.isArray(value.errors) &&
-    value.errors.every((e) => typeof e === 'string') &&
-    Array.isArray(value.newModels)
-  );
-}
+export const isLinkDocumentResponse = withInstrumentation(
+  function isLinkDocumentResponse(value: unknown): value is LinkDocumentResponse {
+    if (!isRecord(value)) return false;
+    return (
+      value.type === 'linkDocumentResult' &&
+      typeof value.id === 'string' &&
+      typeof value.linked === 'boolean' &&
+      Array.isArray(value.errors) &&
+      value.errors.every((e) => typeof e === 'string') &&
+      Array.isArray(value.newModels)
+    );
+  },
+  {
+    op: 'isLinkDocumentResponse',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 export { handleParse, handleParseWorkspace, handleLinkDocument };
 
 // Test-only accessors. Exported for use by parser-worker-harness.ts.
 // Not part of the worker's public message API.
-export function _testInternals() {
-  return {
-    deferredModelJson,
-    services: RuneDsl
-  };
-}
+export const _testInternals = withInstrumentation(
+  function _testInternals() {
+    return {
+      deferredModelJson,
+      services: RuneDsl
+    };
+    // Test-only escape hatch returning live internal state (deferredModelJson,
+    // raw Langium services) — never capturable.
+  },
+  { op: '_testInternals' }
+);
