@@ -1,9 +1,11 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useCallback, useEffect, useState } from 'react';
 import { CaseSensitive } from 'lucide-react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export type FontScale = 'sm' | 'md' | 'lg';
 
@@ -26,44 +28,38 @@ function applyToRoot(scale: FontScale): void {
   document.documentElement.dataset.fontScale = scale;
 }
 
-/**
- * Cycle button for content-pane font size (Inspector / Structure / Graph
- * / Form). Three steps: sm / md / lg. Persisted in localStorage. Applied
- * by writing `data-font-scale` on the document root; CSS in
- * apps/studio/src/app.css scales the relevant pane containers via
- * the `zoom` property (works under React Flow's internal transform
- * because zoom is applied at the outer container before RF reads layout
- * coordinates).
- */
-export function FontScaleButton(): React.ReactElement {
-  const [scale, setScale] = useState<FontScale>(readStored);
+export const FontScaleButton = withInstrumentation(
+  function FontScaleButton(): React.ReactElement {
+    const [scale, setScale] = useState<FontScale>(readStored);
 
-  useEffect(() => {
-    applyToRoot(scale);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, scale);
-    } catch {
-      /* private mode / storage disabled — non-fatal */
-    }
-  }, [scale]);
+    useEffect(() => {
+      applyToRoot(scale);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, scale);
+      } catch {
+        /* private mode / storage disabled — non-fatal */
+      }
+    }, [scale]);
 
-  const cycle = useCallback(() => {
-    setScale((cur) => {
-      const i = ORDER.indexOf(cur);
-      return ORDER[(i + 1) % ORDER.length] ?? 'md';
-    });
-  }, []);
+    const cycle = useCallback(() => {
+      setScale((cur) => {
+        const i = ORDER.indexOf(cur);
+        return ORDER[(i + 1) % ORDER.length] ?? 'md';
+      });
+    }, []);
 
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      onClick={cycle}
-      aria-label={`Pane font size: ${LABEL[scale]} (click to cycle)`}
-      title={`Pane font size: ${LABEL[scale]} (click to cycle)`}
-      data-font-scale-current={scale}
-    >
-      <CaseSensitive />
-    </Button>
-  );
-}
+    return (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={cycle}
+        aria-label={`Pane font size: ${LABEL[scale]} (click to cycle)`}
+        title={`Pane font size: ${LABEL[scale]} (click to cycle)`}
+        data-font-scale-current={scale}
+      >
+        <CaseSensitive />
+      </Button>
+    );
+  },
+  { op: 'FontScaleButton' }
+);

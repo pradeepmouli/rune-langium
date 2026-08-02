@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -18,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 interface Props {
   onOpen: (workspaceId: string) => void;
@@ -52,59 +54,62 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export function WorkspaceSwitcher({ onOpen, onCreate: _onCreate, onDelete }: Props): React.ReactElement {
-  const [rows, setRows] = useState<RecentWorkspaceRecord[]>([]);
+export const WorkspaceSwitcher = withInstrumentation(
+  function WorkspaceSwitcher({ onOpen, onCreate: _onCreate, onDelete }: Props): React.ReactElement {
+    const [rows, setRows] = useState<RecentWorkspaceRecord[]>([]);
 
-  useEffect(() => {
-    void listRecents().then(setRows);
-  }, []);
+    useEffect(() => {
+      void listRecents().then(setRows);
+    }, []);
 
-  function handleDelete(row: RecentWorkspaceRecord) {
-    if (typeof confirm === 'function' && !confirm(`Delete workspace "${row.name}"?`)) return;
-    onDelete(row.id);
-    setRows((rs) => rs.filter((r) => r.id !== row.id));
-  }
+    function handleDelete(row: RecentWorkspaceRecord) {
+      if (typeof confirm === 'function' && !confirm(`Delete workspace "${row.name}"?`)) return;
+      onDelete(row.id);
+      setRows((rs) => rs.filter((r) => r.id !== row.id));
+    }
 
-  return (
-    <div data-testid="workspace-switcher" className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent workspaces</p>
-      {rows.length === 0 ? (
-        <p data-testid="workspace-switcher-empty" className="text-sm text-muted-foreground">
-          No recent workspaces — create one above to get started.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {rows.map((row) => (
-            <li key={row.id} data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
-              <div className="group flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm hover:bg-accent/50 transition-colors">
-                <button
-                  type="button"
-                  onClick={() => onOpen(row.id)}
-                  aria-label={`Open ${row.name}`}
-                  className="flex-1 flex items-center gap-2 text-left cursor-pointer"
-                >
-                  <span className="font-medium truncate">{row.name}</span>
-                  <span className="shrink-0 text-3xs px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
-                    {KIND_LABEL[row.kind]}
-                  </span>
-                  <span className="shrink-0 ml-auto text-xs text-muted-foreground">
-                    {formatRelativeTime(row.lastOpenedAt)}
-                  </span>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="size-5 p-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  onClick={() => handleDelete(row)}
-                  aria-label={`Delete ${row.name}`}
-                >
-                  ×
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
+    return (
+      <div data-testid="workspace-switcher" className="space-y-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent workspaces</p>
+        {rows.length === 0 ? (
+          <p data-testid="workspace-switcher-empty" className="text-sm text-muted-foreground">
+            No recent workspaces — create one above to get started.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {rows.map((row) => (
+              <li key={row.id} data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
+                <div className="group flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm hover:bg-accent/50 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(row.id)}
+                    aria-label={`Open ${row.name}`}
+                    className="flex-1 flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span className="font-medium truncate">{row.name}</span>
+                    <span className="shrink-0 text-3xs px-1.5 py-0.5 rounded border border-border text-muted-foreground uppercase tracking-wide">
+                      {KIND_LABEL[row.kind]}
+                    </span>
+                    <span className="shrink-0 ml-auto text-xs text-muted-foreground">
+                      {formatRelativeTime(row.lastOpenedAt)}
+                    </span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-5 p-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    onClick={() => handleDelete(row)}
+                    aria-label={`Delete ${row.name}`}
+                  >
+                    ×
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  },
+  { op: 'WorkspaceSwitcher' }
+);

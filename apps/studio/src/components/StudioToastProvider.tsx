@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -15,6 +16,7 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { useActivityStore } from '../store/activity-store.js';
 import { allocateOpId } from '../services/op-log.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 type StudioToastVariant = 'default' | 'destructive' | 'loading';
 
@@ -45,13 +47,16 @@ interface StudioToastContextValue {
 
 const StudioToastContext = createContext<StudioToastContextValue | null>(null);
 
-export function StudioToastProvider({ children }: { children: ReactNode }) {
-  return (
-    <ToastProvider duration={4000}>
-      <StudioToastInner>{children}</StudioToastInner>
-    </ToastProvider>
-  );
-}
+export const StudioToastProvider = withInstrumentation(
+  function StudioToastProvider({ children }: { children: ReactNode }) {
+    return (
+      <ToastProvider duration={4000}>
+        <StudioToastInner>{children}</StudioToastInner>
+      </ToastProvider>
+    );
+  },
+  { op: 'StudioToastProvider' }
+);
 
 function StudioToastInner({ children }: { children: ReactNode }) {
   const { toasts, add, close } = useToastManager();
@@ -160,6 +165,9 @@ const NOOP_TOAST: StudioToastContextValue = {
   dismissToast: () => {}
 };
 
-export function useStudioToast(): StudioToastContextValue {
-  return useContext(StudioToastContext) ?? NOOP_TOAST;
-}
+export const useStudioToast = withInstrumentation(
+  function useStudioToast(): StudioToastContextValue {
+    return useContext(StudioToastContext) ?? NOOP_TOAST;
+  },
+  { op: 'useStudioToast' }
+);

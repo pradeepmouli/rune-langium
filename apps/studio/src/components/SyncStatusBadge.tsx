@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -21,6 +22,7 @@ import type { SyncStatus } from '@rune-langium/git-sync-engine';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Check, WifiOff, AlertTriangle } from 'lucide-react';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 const SYNCING_PHASES = new Set(['committing', 'fetching', 'merging', 'pushing']);
 
@@ -49,48 +51,81 @@ export interface SyncStatusBadgeProps {
   onResolve: (choice: 'keepMine' | 'takeRemote') => void;
 }
 
-export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): ReactElement {
-  const { phase } = status;
+export const SyncStatusBadge = withInstrumentation(
+  function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): ReactElement {
+    const { phase } = status;
 
-  if (SYNCING_PHASES.has(phase)) {
-    return (
-      <span
-        data-testid="sync-status"
-        data-phase={phase}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-      >
-        <Spinner className="size-3" />
-        Syncing…
-      </span>
-    );
-  }
+    if (SYNCING_PHASES.has(phase)) {
+      return (
+        <span
+          data-testid="sync-status"
+          data-phase={phase}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        >
+          <Spinner className="size-3" />
+          Syncing…
+        </span>
+      );
+    }
 
-  if (phase === 'offline') {
-    return (
-      <span
-        data-testid="sync-status"
-        data-phase={phase}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-      >
-        <WifiOff className="size-3" />
-        Offline — will retry
-      </span>
-    );
-  }
+    if (phase === 'offline') {
+      return (
+        <span
+          data-testid="sync-status"
+          data-phase={phase}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        >
+          <WifiOff className="size-3" />
+          Offline — will retry
+        </span>
+      );
+    }
 
-  if (phase === 'blocked') {
-    // The engine emits `blocked` for several reasons. A merge conflict —
-    // including one where the conflicting file list is empty (unsupported-merge
-    // path) — carries `conflictPaths` (defined, possibly []) AND has a pending
-    // ConflictPolicy.onConflict promise that the resolve buttons must fulfil.
-    // Other blocked reasons (auth, no_push_access, non_fast_forward) have
-    // `conflictPaths === undefined`; showing resolve buttons there would leave
-    // the engine stuck forever — surface an informative message instead.
-    if (status.conflictPaths !== undefined) {
-      const conflictMsg =
-        status.conflictPaths.length > 0
-          ? 'Merge conflict — choose a resolution'
-          : "Couldn't auto-merge — choose a resolution";
+    if (phase === 'blocked') {
+      // The engine emits `blocked` for several reasons. A merge conflict —
+      // including one where the conflicting file list is empty (unsupported-merge
+      // path) — carries `conflictPaths` (defined, possibly []) AND has a pending
+      // ConflictPolicy.onConflict promise that the resolve buttons must fulfil.
+      // Other blocked reasons (auth, no_push_access, non_fast_forward) have
+      // `conflictPaths === undefined`; showing resolve buttons there would leave
+      // the engine stuck forever — surface an informative message instead.
+      if (status.conflictPaths !== undefined) {
+        const conflictMsg =
+          status.conflictPaths.length > 0
+            ? 'Merge conflict — choose a resolution'
+            : "Couldn't auto-merge — choose a resolution";
+        return (
+          <span
+            data-testid="sync-status"
+            data-phase={phase}
+            className="inline-flex items-center gap-1.5 text-xs text-amber-500"
+          >
+            <AlertTriangle className="size-3 shrink-0" />
+            <span>{conflictMsg}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              data-testid="sync-resolve-keep-mine"
+              onClick={() => onResolve('keepMine')}
+              className="h-5 px-1.5 text-3xs"
+            >
+              Keep mine
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              data-testid="sync-resolve-take-remote"
+              onClick={() => onResolve('takeRemote')}
+              className="h-5 px-1.5 text-3xs"
+            >
+              Take remote
+            </Button>
+          </span>
+        );
+      }
+
       return (
         <span
           data-testid="sync-status"
@@ -98,52 +133,22 @@ export function SyncStatusBadge({ status, onResolve }: SyncStatusBadgeProps): Re
           className="inline-flex items-center gap-1.5 text-xs text-amber-500"
         >
           <AlertTriangle className="size-3 shrink-0" />
-          <span>{conflictMsg}</span>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            data-testid="sync-resolve-keep-mine"
-            onClick={() => onResolve('keepMine')}
-            className="h-5 px-1.5 text-3xs"
-          >
-            Keep mine
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            data-testid="sync-resolve-take-remote"
-            onClick={() => onResolve('takeRemote')}
-            className="h-5 px-1.5 text-3xs"
-          >
-            Take remote
-          </Button>
+          <span>{blockedErrorMessage(status.lastError?.code)}</span>
         </span>
       );
     }
 
+    // idle — quiet success indicator
     return (
       <span
         data-testid="sync-status"
         data-phase={phase}
-        className="inline-flex items-center gap-1.5 text-xs text-amber-500"
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
       >
-        <AlertTriangle className="size-3 shrink-0" />
-        <span>{blockedErrorMessage(status.lastError?.code)}</span>
+        <Check className="size-3 text-success" />
+        Synced
       </span>
     );
-  }
-
-  // idle — quiet success indicator
-  return (
-    <span
-      data-testid="sync-status"
-      data-phase={phase}
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-    >
-      <Check className="size-3 text-success" />
-      Synced
-    </span>
-  );
-}
+  },
+  { op: 'SyncStatusBadge' }
+);

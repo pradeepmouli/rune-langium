@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -11,6 +12,7 @@
 import type { TransportState } from '../services/transport-provider.js';
 import { cn } from '@rune-langium/design-system/utils';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface ConnectionStatusProps {
   /** Transport state to display. */
@@ -39,27 +41,30 @@ const DOT_COLORS: Record<string, string> = {
   error: 'bg-destructive'
 };
 
-export function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) {
-  const statusLabel = STATUS_LABELS[state.status] ?? state.status;
-  const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
+export const ConnectionStatus = withInstrumentation(
+  function ConnectionStatus({ state, onReconnect }: ConnectionStatusProps) {
+    const statusLabel = STATUS_LABELS[state.status] ?? state.status;
+    const modeLabel = MODE_LABELS[state.mode] ?? state.mode;
 
-  const showReconnect = onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
+    const showReconnect = onReconnect !== undefined && state.status !== 'connected' && state.status !== 'connecting';
 
-  return (
-    <output className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span className={cn('w-2 h-2 rounded-full shrink-0', DOT_COLORS[state.status] ?? DOT_COLORS['disconnected'])} />
-      <span>
-        {statusLabel}
-        {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
-      </span>
-      {state.status === 'error' && state.error && (
-        <span className="text-destructive text-xs">{state.error.message}</span>
-      )}
-      {showReconnect && (
-        <Button variant="ghost" size="sm" onClick={onReconnect} aria-label="Reconnect" className="h-5 px-2 text-xs">
-          Reconnect
-        </Button>
-      )}
-    </output>
-  );
-}
+    return (
+      <output className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className={cn('w-2 h-2 rounded-full shrink-0', DOT_COLORS[state.status] ?? DOT_COLORS['disconnected'])} />
+        <span>
+          {statusLabel}
+          {modeLabel && state.status === 'connected' ? ` (${modeLabel})` : ''}
+        </span>
+        {state.status === 'error' && state.error && (
+          <span className="text-destructive text-xs">{state.error.message}</span>
+        )}
+        {showReconnect && (
+          <Button variant="ghost" size="sm" onClick={onReconnect} aria-label="Reconnect" className="h-5 px-2 text-xs">
+            Reconnect
+          </Button>
+        )}
+      </output>
+    );
+  },
+  { op: 'ConnectionStatus' }
+);

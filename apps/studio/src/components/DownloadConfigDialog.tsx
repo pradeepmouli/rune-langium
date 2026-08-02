@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -29,6 +30,7 @@ import { Checkbox } from '@rune-langium/design-system/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@rune-langium/design-system/ui/radio-group';
 import { InteractiveDialog } from '@rune-langium/design-system/ui/interactive-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 /** One layout choice rendered as a radio option. */
 export interface LayoutChoice {
@@ -115,266 +117,273 @@ export interface NamespaceSelection {
   pulledBy: Map<string, string[]>;
 }
 
-/**
- * Cascade math (§5.2): given the user's explicit selection and the transitive
- * dep closure per namespace, compute the full emitted set, the auto-pulled
- * subset, and the "pulled by" provenance for tooltips.
- *
- * Pure + closure-based: the server already transitively closed each
- * namespace's deps, so this is one union over `dependencyGraph[n]` for each
- * selected `n` — no fixed-point iteration needed here.
- */
-export function computeNamespaceSelection(
-  selected: ReadonlySet<string>,
-  dependencyGraph: Record<string, readonly string[]>
-): NamespaceSelection {
-  const emitted = new Set<string>();
-  const pulledBy = new Map<string, string[]>();
+export const computeNamespaceSelection = withInstrumentation(
+  function computeNamespaceSelection(
+    selected: ReadonlySet<string>,
+    dependencyGraph: Record<string, readonly string[]>
+  ): NamespaceSelection {
+    const emitted = new Set<string>();
+    const pulledBy = new Map<string, string[]>();
 
-  for (const ns of selected) {
-    const closure = dependencyGraph[ns] ?? [ns];
-    for (const dep of closure) {
-      emitted.add(dep);
-      if (dep !== ns && !selected.has(dep)) {
-        const sources = pulledBy.get(dep);
-        if (sources) sources.push(ns);
-        else pulledBy.set(dep, [ns]);
+    for (const ns of selected) {
+      const closure = dependencyGraph[ns] ?? [ns];
+      for (const dep of closure) {
+        emitted.add(dep);
+        if (dep !== ns && !selected.has(dep)) {
+          const sources = pulledBy.get(dep);
+          if (sources) sources.push(ns);
+          else pulledBy.set(dep, [ns]);
+        }
       }
+      // A selected namespace always emits itself even if its closure entry
+      // was missing from the map.
+      emitted.add(ns);
     }
-    // A selected namespace always emits itself even if its closure entry
-    // was missing from the map.
-    emitted.add(ns);
+
+    const pulled = new Set<string>();
+    for (const ns of emitted) {
+      if (!selected.has(ns)) pulled.add(ns);
+    }
+
+    // Sort provenance lists for stable tooltip text.
+    for (const sources of pulledBy.values()) sources.sort();
+
+    return { emitted, pulled, pulledBy };
+    // `selected`/`dependencyGraph`/output all carry user model namespace
+    // strings (possibly non-curated) — never captured; only counts.
+  },
+  {
+    op: 'computeNamespaceSelection',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as { emitted: Set<string>; pulled: Set<string> };
+      return { emittedCount: result.emitted.size, pulledCount: result.pulled.size };
+    }
   }
+);
 
-  const pulled = new Set<string>();
-  for (const ns of emitted) {
-    if (!selected.has(ns)) pulled.add(ns);
-  }
+export const DownloadConfigDialog = withInstrumentation(
+  function DownloadConfigDialog({
+    open,
+    target,
+    namespaces,
+    dependencyGraph,
+    onClose,
+    onGenerate,
+    optionsForm: OptionsForm
+  }: DownloadConfigDialogProps) {
+    const descriptor = TARGET_DESCRIPTORS[target];
+    const panel = TARGET_PANELS[target];
 
-  // Sort provenance lists for stable tooltip text.
-  for (const sources of pulledBy.values()) sources.sort();
+    // Draft state lives here while the modal is open. Default: all namespaces
+    // selected (§5.1 "Default is all loaded namespaces"); default layout is the
+    // target's opinionated download default.
+    const [selected, setSelected] = useState<Set<string>>(() => new Set(namespaces));
+    const [layout, setLayout] = useState<string | undefined>(panel?.defaultLayout);
+    // Target-specific options collected from the injected OptionsForm (§5.1 task
+    // #275). Stored as an opaque record; the caller decides what keys mean.
+    const [targetOptions, setTargetOptions] = useState<Record<string, unknown>>({});
+    // Use a ref so handleGenerate always reads the latest options without
+    // re-creating the callback on every options change.
+    const targetOptionsRef = useLatestRef(targetOptions);
 
-  return { emitted, pulled, pulledBy };
-}
+    // Reset draft state whenever the modal (re)opens or the target changes —
+    // a fresh open should not inherit a stale narrowing from a prior session.
+    // Adjusted during render (React's blessed pattern for resetting state in
+    // response to a prop change) rather than in an effect, so the reset is
+    // visible in the same render instead of flashing the prior session's
+    // stale draft for one frame before an effect corrects it.
+    //
+    // `resetKey` deliberately does NOT include `open` — folding it into the
+    // compared string previously meant prevResetKeyRef only got updated while
+    // `open` was true (see the `if` below), so closing left it frozen at the
+    // last "open" key; reopening with the SAME target/namespaces then computed
+    // that identical key again and silently skipped the reset, leaking the
+    // prior session's draft into the reopened dialog (Codex review). The
+    // actual open transition is tracked separately via prevOpen instead.
+    //
+    // Both markers are useState, NOT plain refs: a ref mutation made during
+    // render is not rolled back if React discards/retries this render under
+    // concurrent rendering, while the accompanying setSelected/setLayout/
+    // setTargetOptions calls ARE rolled back (they never committed) — so a
+    // bare `.current = ...` assignment could leave the retry believing this
+    // reset key was already handled and skip it, generating with the prior
+    // namespace selection/layout/target options (Codex review, round 2).
+    const resetKey = `${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
+    const [prevResetKey, setPrevResetKey] = useState(resetKey);
+    const [prevOpen, setPrevOpen] = useState(open);
+    const justOpened = open && !prevOpen;
+    if (open && (justOpened || prevResetKey !== resetKey)) {
+      setPrevResetKey(resetKey);
+      setSelected(new Set(namespaces));
+      setLayout(panel?.defaultLayout);
+      setTargetOptions({});
+    }
+    if (open !== prevOpen) setPrevOpen(open);
 
-export function DownloadConfigDialog({
-  open,
-  target,
-  namespaces,
-  dependencyGraph,
-  onClose,
-  onGenerate,
-  optionsForm: OptionsForm
-}: DownloadConfigDialogProps) {
-  const descriptor = TARGET_DESCRIPTORS[target];
-  const panel = TARGET_PANELS[target];
+    const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
 
-  // Draft state lives here while the modal is open. Default: all namespaces
-  // selected (§5.1 "Default is all loaded namespaces"); default layout is the
-  // target's opinionated download default.
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(namespaces));
-  const [layout, setLayout] = useState<string | undefined>(panel?.defaultLayout);
-  // Target-specific options collected from the injected OptionsForm (§5.1 task
-  // #275). Stored as an opaque record; the caller decides what keys mean.
-  const [targetOptions, setTargetOptions] = useState<Record<string, unknown>>({});
-  // Use a ref so handleGenerate always reads the latest options without
-  // re-creating the callback on every options change.
-  const targetOptionsRef = useLatestRef(targetOptions);
+    function toggleNamespace(ns: string): void {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(ns)) next.delete(ns);
+        else next.add(ns);
+        return next;
+      });
+    }
 
-  // Reset draft state whenever the modal (re)opens or the target changes —
-  // a fresh open should not inherit a stale narrowing from a prior session.
-  // Adjusted during render (React's blessed pattern for resetting state in
-  // response to a prop change) rather than in an effect, so the reset is
-  // visible in the same render instead of flashing the prior session's
-  // stale draft for one frame before an effect corrects it.
-  //
-  // `resetKey` deliberately does NOT include `open` — folding it into the
-  // compared string previously meant prevResetKeyRef only got updated while
-  // `open` was true (see the `if` below), so closing left it frozen at the
-  // last "open" key; reopening with the SAME target/namespaces then computed
-  // that identical key again and silently skipped the reset, leaking the
-  // prior session's draft into the reopened dialog (Codex review). The
-  // actual open transition is tracked separately via prevOpen instead.
-  //
-  // Both markers are useState, NOT plain refs: a ref mutation made during
-  // render is not rolled back if React discards/retries this render under
-  // concurrent rendering, while the accompanying setSelected/setLayout/
-  // setTargetOptions calls ARE rolled back (they never committed) — so a
-  // bare `.current = ...` assignment could leave the retry believing this
-  // reset key was already handled and skip it, generating with the prior
-  // namespace selection/layout/target options (Codex review, round 2).
-  const resetKey = `${target}|${[...namespaces].sort().join(',')}|${panel?.defaultLayout ?? ''}`;
-  const [prevResetKey, setPrevResetKey] = useState(resetKey);
-  const [prevOpen, setPrevOpen] = useState(open);
-  const justOpened = open && !prevOpen;
-  if (open && (justOpened || prevResetKey !== resetKey)) {
-    setPrevResetKey(resetKey);
-    setSelected(new Set(namespaces));
-    setLayout(panel?.defaultLayout);
-    setTargetOptions({});
-  }
-  if (open !== prevOpen) setPrevOpen(open);
+    function handleGenerate(): void {
+      const opts = targetOptionsRef.current;
+      const hasOptions = OptionsForm !== undefined && Object.keys(opts).length > 0;
+      onGenerate({
+        target,
+        layout,
+        // When there are no namespaces to choose from (dep graph not yet
+        // populated / fail-soft empty), emit an empty list = "no filter" so
+        // the server emits everything. Otherwise send the closed emit set.
+        namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort(),
+        // Only include options when an OptionsForm was provided and it
+        // actually collected values (avoids sending `options: {}` for
+        // targets with no options form). Keyed by target so it matches the
+        // documented `DownloadConfig.options` shape ({ excel: {...} }) that
+        // CodePreviewPanel reads via `config.options?.[target]` (Codex P1 #228).
+        ...(hasOptions ? { options: { [target]: opts } } : {})
+      });
+    }
 
-  const selection = useMemo(() => computeNamespaceSelection(selected, dependencyGraph), [selected, dependencyGraph]);
+    const hasLayouts = (panel?.layouts.length ?? 0) > 0;
+    const hasNamespaces = namespaces.length > 0;
+    // Disable Generate only when there ARE namespaces but the user deselected
+    // them all. An empty namespace list is a valid "emit everything" state.
+    const generateDisabled = hasNamespaces && selection.emitted.size === 0;
 
-  function toggleNamespace(ns: string): void {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(ns)) next.delete(ns);
-      else next.add(ns);
-      return next;
-    });
-  }
-
-  function handleGenerate(): void {
-    const opts = targetOptionsRef.current;
-    const hasOptions = OptionsForm !== undefined && Object.keys(opts).length > 0;
-    onGenerate({
-      target,
-      layout,
-      // When there are no namespaces to choose from (dep graph not yet
-      // populated / fail-soft empty), emit an empty list = "no filter" so
-      // the server emits everything. Otherwise send the closed emit set.
-      namespaces: namespaces.length === 0 ? [] : Array.from(selection.emitted).sort(),
-      // Only include options when an OptionsForm was provided and it
-      // actually collected values (avoids sending `options: {}` for
-      // targets with no options form). Keyed by target so it matches the
-      // documented `DownloadConfig.options` shape ({ excel: {...} }) that
-      // CodePreviewPanel reads via `config.options?.[target]` (Codex P1 #228).
-      ...(hasOptions ? { options: { [target]: opts } } : {})
-    });
-  }
-
-  const hasLayouts = (panel?.layouts.length ?? 0) > 0;
-  const hasNamespaces = namespaces.length > 0;
-  // Disable Generate only when there ARE namespaces but the user deselected
-  // them all. An empty namespace list is a valid "emit everything" state.
-  const generateDisabled = hasNamespaces && selection.emitted.size === 0;
-
-  return (
-    <InteractiveDialog
-      open={open}
-      onOpenChange={(o) => !o && onClose()}
-      title={`Generate ${descriptor.label}`}
-      description={`Choose layout and namespace subset, then generate ${descriptor.label} output.`}
-      width="w-[480px]"
-      testId="download-config-dialog"
-      bodyClassName="studio-scroll overflow-auto p-4 gap-5"
-      footer={
-        <>
-          <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-dialog__cancel">
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleGenerate}
-            disabled={generateDisabled}
-            data-testid="download-config-dialog__generate"
-          >
-            Generate
-          </Button>
-        </>
-      }
-    >
-      {/* Layout — only for layout-aware targets */}
-      {hasLayouts && (
-        <div className="flex flex-col gap-2" data-testid="download-config-dialog__layout">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Layout</span>
-          <RadioGroup value={layout} onValueChange={setLayout}>
-            {panel!.layouts.map((choice) => {
-              const id = `download-layout-${choice.value}`;
-              return (
-                <div key={choice.value} className="flex items-center gap-2 text-sm">
-                  <RadioGroupItem
-                    id={id}
-                    value={choice.value}
-                    data-testid={`download-config-dialog__layout-${choice.value}`}
-                  />
-                  <label htmlFor={id} className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{choice.label}</span>
-                    {choice.hint && <span className="text-muted-foreground">({choice.hint})</span>}
-                  </label>
-                </div>
-              );
-            })}
-          </RadioGroup>
-        </div>
-      )}
-
-      {/* Per-target options — rendered only when an OptionsForm is
-          injected by the wiring site (e.g. ExcelOptionsForm for excel).
-          The form calls onChange on every field change (auto-save mode)
-          and we store the result as opaque options for the Generate
-          payload. */}
-      {OptionsForm !== undefined && (
-        <div className="flex flex-col gap-2" data-testid="download-config-dialog__options">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options</span>
-          <OptionsForm value={targetOptions} onChange={setTargetOptions} />
-        </div>
-      )}
-
-      {/* Namespaces with auto-select cascade. Hidden when there's
-          nothing to narrow (dep graph not populated) — Generate then
-          emits everything. */}
-      {hasNamespaces && (
-        <div className="flex flex-col gap-2" data-testid="download-config-dialog__namespaces">
-          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
-          </span>
-          {/* Explicit 0: the namespace list's dependency-source tooltips want to
-              stay instant (dense, frequently-hovered rows) — preserve that
-              pre-existing behavior against the shared TooltipProvider's now-
-              nonzero default (tooltip.tsx). */}
-          <TooltipProvider delayDuration={0}>
-            <div className="flex flex-col gap-1.5">
-              {namespaces.map((ns) => {
-                const isSelected = selected.has(ns);
-                const isPulled = selection.pulled.has(ns);
-                const sources = selection.pulledBy.get(ns);
-                const id = `download-ns-${ns}`;
-                const row = (
-                  <div
-                    className={
-                      'flex items-center gap-2 text-sm ' + (isPulled ? 'text-muted-foreground' : 'text-foreground')
-                    }
-                    data-testid={`download-config-dialog__ns-row-${ns}`}
-                    data-state={isSelected ? 'selected' : isPulled ? 'pulled' : 'unselected'}
-                  >
-                    <Checkbox
+    return (
+      <InteractiveDialog
+        open={open}
+        onOpenChange={(o) => !o && onClose()}
+        title={`Generate ${descriptor.label}`}
+        description={`Choose layout and namespace subset, then generate ${descriptor.label} output.`}
+        width="w-[480px]"
+        testId="download-config-dialog"
+        bodyClassName="studio-scroll overflow-auto p-4 gap-5"
+        footer={
+          <>
+            <Button variant="secondary" size="sm" onClick={onClose} data-testid="download-config-dialog__cancel">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleGenerate}
+              disabled={generateDisabled}
+              data-testid="download-config-dialog__generate"
+            >
+              Generate
+            </Button>
+          </>
+        }
+      >
+        {/* Layout — only for layout-aware targets */}
+        {hasLayouts && (
+          <div className="flex flex-col gap-2" data-testid="download-config-dialog__layout">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Layout</span>
+            <RadioGroup value={layout} onValueChange={setLayout}>
+              {panel!.layouts.map((choice) => {
+                const id = `download-layout-${choice.value}`;
+                return (
+                  <div key={choice.value} className="flex items-center gap-2 text-sm">
+                    <RadioGroupItem
                       id={id}
-                      // A pulled dependency is read-only: the user can only
-                      // remove it by deselecting whatever pulled it in
-                      // (§5.2 prevents partial-graph emit).
-                      checked={isSelected || isPulled}
-                      disabled={isPulled}
-                      onCheckedChange={() => toggleNamespace(ns)}
-                      data-testid={`download-config-dialog__ns-${ns}`}
+                      value={choice.value}
+                      data-testid={`download-config-dialog__layout-${choice.value}`}
                     />
-                    <label htmlFor={id} className="font-mono">
-                      {ns}
+                    <label htmlFor={id} className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">{choice.label}</span>
+                      {choice.hint && <span className="text-muted-foreground">({choice.hint})</span>}
                     </label>
-                    {isPulled && (
-                      <Badge variant="secondary" className="ml-auto text-3xs">
-                        auto
-                      </Badge>
-                    )}
                   </div>
                 );
-                // Wrap pulled rows in a tooltip explaining provenance.
-                if (isPulled && sources && sources.length > 0) {
-                  return (
-                    <Tooltip key={ns}>
-                      <TooltipTrigger render={row} />
-                      <TooltipContent>pulled by {sources.join(', ')}</TooltipContent>
-                    </Tooltip>
-                  );
-                }
-                return <div key={ns}>{row}</div>;
               })}
-            </div>
-          </TooltipProvider>
-        </div>
-      )}
-    </InteractiveDialog>
-  );
-}
+            </RadioGroup>
+          </div>
+        )}
+
+        {/* Per-target options — rendered only when an OptionsForm is
+      injected by the wiring site (e.g. ExcelOptionsForm for excel).
+      The form calls onChange on every field change (auto-save mode)
+      and we store the result as opaque options for the Generate
+      payload. */}
+        {OptionsForm !== undefined && (
+          <div className="flex flex-col gap-2" data-testid="download-config-dialog__options">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Options</span>
+            <OptionsForm value={targetOptions} onChange={setTargetOptions} />
+          </div>
+        )}
+
+        {/* Namespaces with auto-select cascade. Hidden when there's
+      nothing to narrow (dep graph not populated) — Generate then
+      emits everything. */}
+        {hasNamespaces && (
+          <div className="flex flex-col gap-2" data-testid="download-config-dialog__namespaces">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Namespaces ({selection.emitted.size} selected, {namespaces.length} total)
+            </span>
+            {/* Explicit 0: the namespace list's dependency-source tooltips want to
+          stay instant (dense, frequently-hovered rows) — preserve that
+          pre-existing behavior against the shared TooltipProvider's now-
+          nonzero default (tooltip.tsx). */}
+            <TooltipProvider delayDuration={0}>
+              <div className="flex flex-col gap-1.5">
+                {namespaces.map((ns) => {
+                  const isSelected = selected.has(ns);
+                  const isPulled = selection.pulled.has(ns);
+                  const sources = selection.pulledBy.get(ns);
+                  const id = `download-ns-${ns}`;
+                  const row = (
+                    <div
+                      className={
+                        'flex items-center gap-2 text-sm ' + (isPulled ? 'text-muted-foreground' : 'text-foreground')
+                      }
+                      data-testid={`download-config-dialog__ns-row-${ns}`}
+                      data-state={isSelected ? 'selected' : isPulled ? 'pulled' : 'unselected'}
+                    >
+                      <Checkbox
+                        id={id}
+                        // A pulled dependency is read-only: the user can only
+                        // remove it by deselecting whatever pulled it in
+                        // (§5.2 prevents partial-graph emit).
+                        checked={isSelected || isPulled}
+                        disabled={isPulled}
+                        onCheckedChange={() => toggleNamespace(ns)}
+                        data-testid={`download-config-dialog__ns-${ns}`}
+                      />
+                      <label htmlFor={id} className="font-mono">
+                        {ns}
+                      </label>
+                      {isPulled && (
+                        <Badge variant="secondary" className="ml-auto text-3xs">
+                          auto
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                  // Wrap pulled rows in a tooltip explaining provenance.
+                  if (isPulled && sources && sources.length > 0) {
+                    return (
+                      <Tooltip key={ns}>
+                        <TooltipTrigger render={row} />
+                        <TooltipContent>pulled by {sources.join(', ')}</TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+                  return <div key={ns}>{row}</div>;
+                })}
+              </div>
+            </TooltipProvider>
+          </div>
+        )}
+      </InteractiveDialog>
+    );
+  },
+  { op: 'DownloadConfigDialog' }
+);

@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -20,6 +21,7 @@ import { useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@rune-langium/design-system/ui/alert';
 import { GitHubConnectDialog } from './GitHubConnectDialog.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface GitHubWorkspaceFlowProps {
   authBase: string;
@@ -102,98 +104,101 @@ function parseRepoUrl(raw: string): { user: string; repo: string; canonicalUrl: 
   return { user, repo, canonicalUrl: `https://github.com/${user}/${repo}.git` };
 }
 
-export function GitHubWorkspaceFlow({
-  authBase,
-  onCreated,
-  onCancel,
-  createWorkspace
-}: GitHubWorkspaceFlowProps): React.ReactElement {
-  const [state, setState] = useState<FlowState>({ phase: 'auth' });
-  const [repoUrl, setRepoUrl] = useState('');
-  const [branch, setBranch] = useState('main');
+export const GitHubWorkspaceFlow = withInstrumentation(
+  function GitHubWorkspaceFlow({
+    authBase,
+    onCreated,
+    onCancel,
+    createWorkspace
+  }: GitHubWorkspaceFlowProps): React.ReactElement {
+    const [state, setState] = useState<FlowState>({ phase: 'auth' });
+    const [repoUrl, setRepoUrl] = useState('');
+    const [branch, setBranch] = useState('main');
 
-  if (state.phase === 'auth') {
-    return (
-      <GitHubConnectDialog
-        authBase={authBase}
-        onConnected={(token) => setState({ phase: 'url', token })}
-        onCancel={onCancel}
-      />
-    );
-  }
+    if (state.phase === 'auth') {
+      return (
+        <GitHubConnectDialog
+          authBase={authBase}
+          onConnected={(token) => setState({ phase: 'url', token })}
+          onCancel={onCancel}
+        />
+      );
+    }
 
-  if (state.phase === 'cloning') {
+    if (state.phase === 'cloning') {
+      return (
+        <div role="dialog" aria-label="Cloning repository" data-testid="github-cloning">
+          <p>Cloning repository — this may take ~30 seconds for a fresh repo…</p>
+        </div>
+      );
+    }
+
+    // 'url' or 'error' — both render the form, with an error banner on retry.
+    const parsed = parseRepoUrl(repoUrl);
+    const canSubmit = parsed !== null;
+
     return (
-      <div role="dialog" aria-label="Cloning repository" data-testid="github-cloning">
-        <p>Cloning repository — this may take ~30 seconds for a fresh repo…</p>
+      <div role="dialog" aria-label="Choose a repository" data-testid="github-repo-form">
+        <p>Authorisation succeeded. Paste the repository URL to clone.</p>
+        <label htmlFor="repo-url-input">Repository URL or owner/repo</label>
+        <input
+          id="repo-url-input"
+          data-testid="repo-url-input"
+          type="text"
+          value={repoUrl}
+          onChange={(e) => setRepoUrl(e.target.value)}
+          placeholder="https://github.com/owner/repo"
+        />
+        <label htmlFor="repo-branch-input">Branch</label>
+        <input
+          id="repo-branch-input"
+          data-testid="repo-branch-input"
+          type="text"
+          value={branch}
+          onChange={(e) => setBranch(e.target.value)}
+          placeholder="main"
+        />
+        {state.phase === 'error' &&
+          state.errorReason &&
+          (() => {
+            const friendly = friendlyCloneError(state.errorReason);
+            return (
+              <Alert variant="destructive" data-testid="github-clone-error">
+                <AlertTitle>{friendly.headline}</AlertTitle>
+                {friendly.hint && <AlertDescription>{friendly.hint}</AlertDescription>}
+              </Alert>
+            );
+          })()}
+        <Button
+          disabled={!canSubmit}
+          onClick={async () => {
+            if (!parsed || !state.token) return;
+            setState({ phase: 'cloning', token: state.token });
+            try {
+              const result = await createWorkspace({
+                name: `${parsed.user}/${parsed.repo}`,
+                repoUrl: parsed.canonicalUrl,
+                branch: branch.trim() || 'main',
+                user: parsed.user,
+                token: state.token
+              });
+              onCreated(result.id);
+            } catch (err) {
+              setState({
+                phase: 'error',
+                token: state.token,
+                errorReason: err instanceof Error ? err.message : String(err)
+              });
+            }
+          }}
+        >
+          Clone
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
       </div>
     );
-  }
-
-  // 'url' or 'error' — both render the form, with an error banner on retry.
-  const parsed = parseRepoUrl(repoUrl);
-  const canSubmit = parsed !== null;
-
-  return (
-    <div role="dialog" aria-label="Choose a repository" data-testid="github-repo-form">
-      <p>Authorisation succeeded. Paste the repository URL to clone.</p>
-      <label htmlFor="repo-url-input">Repository URL or owner/repo</label>
-      <input
-        id="repo-url-input"
-        data-testid="repo-url-input"
-        type="text"
-        value={repoUrl}
-        onChange={(e) => setRepoUrl(e.target.value)}
-        placeholder="https://github.com/owner/repo"
-      />
-      <label htmlFor="repo-branch-input">Branch</label>
-      <input
-        id="repo-branch-input"
-        data-testid="repo-branch-input"
-        type="text"
-        value={branch}
-        onChange={(e) => setBranch(e.target.value)}
-        placeholder="main"
-      />
-      {state.phase === 'error' &&
-        state.errorReason &&
-        (() => {
-          const friendly = friendlyCloneError(state.errorReason);
-          return (
-            <Alert variant="destructive" data-testid="github-clone-error">
-              <AlertTitle>{friendly.headline}</AlertTitle>
-              {friendly.hint && <AlertDescription>{friendly.hint}</AlertDescription>}
-            </Alert>
-          );
-        })()}
-      <Button
-        disabled={!canSubmit}
-        onClick={async () => {
-          if (!parsed || !state.token) return;
-          setState({ phase: 'cloning', token: state.token });
-          try {
-            const result = await createWorkspace({
-              name: `${parsed.user}/${parsed.repo}`,
-              repoUrl: parsed.canonicalUrl,
-              branch: branch.trim() || 'main',
-              user: parsed.user,
-              token: state.token
-            });
-            onCreated(result.id);
-          } catch (err) {
-            setState({
-              phase: 'error',
-              token: state.token,
-              errorReason: err instanceof Error ? err.message : String(err)
-            });
-          }
-        }}
-      >
-        Clone
-      </Button>
-      <Button variant="ghost" onClick={onCancel}>
-        Cancel
-      </Button>
-    </div>
-  );
-}
+  },
+  { op: 'GitHubWorkspaceFlow' }
+);

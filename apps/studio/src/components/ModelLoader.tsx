@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -15,6 +16,7 @@ import type { ModelSource, LoadProgress, ModelLoadErrorCode } from '../types/mod
 import { CuratedLoadErrorPanel } from './CuratedLoadErrorPanel.js';
 import { ErrorCategorySchema, type ErrorCategory } from '@rune-langium/curated-schema';
 import { config } from '../config.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 /**
  * Map either a legacy `ModelLoadErrorCode` (git-clone path) or an already-
@@ -150,149 +152,152 @@ function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { pa
   );
 }
 
-export function ModelLoader() {
-  const models = useModelStore((s) => s.models);
-  const loading = useModelStore((s) => s.loading);
-  const errors = useModelStore((s) => s.errors);
-  const load = useModelStore((s) => s.load);
-  const dismissError = useModelStore((s) => s.dismissError);
+export const ModelLoader = withInstrumentation(
+  function ModelLoader() {
+    const models = useModelStore((s) => s.models);
+    const loading = useModelStore((s) => s.loading);
+    const errors = useModelStore((s) => s.errors);
+    const load = useModelStore((s) => s.load);
+    const dismissError = useModelStore((s) => s.dismissError);
 
-  const [customUrl, setCustomUrl] = useState('');
-  const [customRef, setCustomRef] = useState('main');
-  const [showCustom, setShowCustom] = useState(false);
+    const [customUrl, setCustomUrl] = useState('');
+    const [customRef, setCustomRef] = useState('main');
+    const [showCustom, setShowCustom] = useState(false);
 
-  const registry = getModelRegistry();
+    const registry = getModelRegistry();
 
-  const handleLoadCurated = useCallback(
-    (source: ModelSource) => {
+    const handleLoadCurated = useCallback(
+      (source: ModelSource) => {
+        load(source);
+      },
+      [load]
+    );
+
+    const handleLoadCustom = useCallback(() => {
+      if (!customUrl.trim()) return;
+      const source = createCustomModelSource(customUrl.trim(), customRef.trim() || 'main');
       load(source);
-    },
-    [load]
-  );
+      setCustomUrl('');
+      setCustomRef('main');
+      setShowCustom(false);
+    }, [customUrl, customRef, load]);
 
-  const handleLoadCustom = useCallback(() => {
-    if (!customUrl.trim()) return;
-    const source = createCustomModelSource(customUrl.trim(), customRef.trim() || 'main');
-    load(source);
-    setCustomUrl('');
-    setCustomRef('main');
-    setShowCustom(false);
-  }, [customUrl, customRef, load]);
-
-  return (
-    <div className="space-y-4" data-testid="model-loader">
-      {/* Loaded models */}
-      {models.size > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Loaded Models</p>
-          <div className="flex flex-wrap gap-2">
-            {Array.from(models.values()).map((m) => (
-              <LoadedModelBadge key={m.source.id} model={m} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Loading progress */}
-      {Array.from(loading.entries()).map(([id, state]) =>
-        state.progress ? (
-          <ProgressBar key={id} progress={state.progress} sourceId={id} />
-        ) : (
-          <p key={id} className="text-sm text-muted-foreground">
-            Connecting to {state.source.name}...
-          </p>
-        )
-      )}
-
-      {/* Errors — FR-002 distinct, actionable copy per failure category. */}
-      {Array.from(errors.entries()).map(([id, err]) => {
-        // Prefer the source captured at error time so Retry works for both
-        // curated (in-registry) and custom-URL loads. Fall back to the
-        // registry as a defensive lookup if we ever lose the entry.source.
-        const source = err.source ?? registry.find((s) => s.id === id);
-        const modelName = source?.name ?? id;
-        return (
-          <div key={id} className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
-            <CuratedLoadErrorPanel
-              category={mapToCategory(err.code)}
-              modelName={modelName}
-              onRetry={() => {
-                dismissError(id);
-                if (source) handleLoadCurated(source);
-              }}
-            />
-          </div>
-        );
-      })}
-
-      {config.curatedMirrorEnabled && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reference Models</p>
-          <div className="flex flex-wrap gap-2">
-            {registry.map((source) => {
-              const isLoaded = models.has(source.id);
-              const isLoading = loading.has(source.id);
-              return (
-                <Button
-                  key={source.id}
-                  variant={isLoaded ? 'secondary' : 'outline'}
-                  size="sm"
-                  disabled={isLoaded || isLoading}
-                  onClick={() => handleLoadCurated(source)}
-                >
-                  {isLoaded ? `✓ ${source.name}` : source.name}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Custom URL input */}
-      <div className="space-y-2">
-        {showCustom ? (
-          <form
-            className="space-y-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleLoadCustom();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                setShowCustom(false);
-              }
-            }}
-          >
-            <Input
-              placeholder="https://github.com/owner/repo.git"
-              value={customUrl}
-              onChange={(e) => setCustomUrl(e.target.value)}
-              data-testid="custom-url-input"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <Input
-                placeholder="Branch/tag (default: main)"
-                value={customRef}
-                onChange={(e) => setCustomRef(e.target.value)}
-                className="flex-1"
-              />
-              <Button type="submit" size="sm" disabled={!customUrl.trim()}>
-                Load
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustom(false)}>
-                Cancel
-              </Button>
+    return (
+      <div className="space-y-4" data-testid="model-loader">
+        {/* Loaded models */}
+        {models.size > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Loaded Models</p>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(models.values()).map((m) => (
+                <LoadedModelBadge key={m.source.id} model={m} />
+              ))}
             </div>
-            <p className="text-xs text-muted-foreground">Press Esc to cancel, Enter to load.</p>
-          </form>
-        ) : (
-          <Button variant="link" size="sm" onClick={() => setShowCustom(true)} className="p-0">
-            + Load from custom URL
-          </Button>
+          </div>
         )}
+
+        {/* Loading progress */}
+        {Array.from(loading.entries()).map(([id, state]) =>
+          state.progress ? (
+            <ProgressBar key={id} progress={state.progress} sourceId={id} />
+          ) : (
+            <p key={id} className="text-sm text-muted-foreground">
+              Connecting to {state.source.name}...
+            </p>
+          )
+        )}
+
+        {/* Errors — FR-002 distinct, actionable copy per failure category. */}
+        {Array.from(errors.entries()).map(([id, err]) => {
+          // Prefer the source captured at error time so Retry works for both
+          // curated (in-registry) and custom-URL loads. Fall back to the
+          // registry as a defensive lookup if we ever lose the entry.source.
+          const source = err.source ?? registry.find((s) => s.id === id);
+          const modelName = source?.name ?? id;
+          return (
+            <div key={id} className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
+              <CuratedLoadErrorPanel
+                category={mapToCategory(err.code)}
+                modelName={modelName}
+                onRetry={() => {
+                  dismissError(id);
+                  if (source) handleLoadCurated(source);
+                }}
+              />
+            </div>
+          );
+        })}
+
+        {config.curatedMirrorEnabled && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reference Models</p>
+            <div className="flex flex-wrap gap-2">
+              {registry.map((source) => {
+                const isLoaded = models.has(source.id);
+                const isLoading = loading.has(source.id);
+                return (
+                  <Button
+                    key={source.id}
+                    variant={isLoaded ? 'secondary' : 'outline'}
+                    size="sm"
+                    disabled={isLoaded || isLoading}
+                    onClick={() => handleLoadCurated(source)}
+                  >
+                    {isLoaded ? `✓ ${source.name}` : source.name}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Custom URL input */}
+        <div className="space-y-2">
+          {showCustom ? (
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleLoadCustom();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setShowCustom(false);
+                }
+              }}
+            >
+              <Input
+                placeholder="https://github.com/owner/repo.git"
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                data-testid="custom-url-input"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Branch/tag (default: main)"
+                  value={customRef}
+                  onChange={(e) => setCustomRef(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="submit" size="sm" disabled={!customUrl.trim()}>
+                  Load
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCustom(false)}>
+                  Cancel
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Press Esc to cancel, Enter to load.</p>
+            </form>
+          ) : (
+            <Button variant="link" size="sm" onClick={() => setShowCustom(true)} className="p-0">
+              + Load from custom URL
+            </Button>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+  { op: 'ModelLoader' }
+);

@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -22,6 +23,7 @@ import { IMPLEMENTED_TARGETS, TARGET_DESCRIPTORS, type Target } from '@rune-lang
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { Eye, EyeOff, Download } from 'lucide-react';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface CodegenTargetsTableProps {
   /** Called when the user clicks the View (eye) button on a namespace-contract row. */
@@ -56,89 +58,92 @@ const TARGET_KEYS = (Object.keys(TARGET_DESCRIPTORS) as Target[]).filter((t) =>
   (IMPLEMENTED_TARGETS as readonly Target[]).includes(t)
 ) as readonly Target[];
 
-export function CodegenTargetsTable({
-  onView,
-  onDownload,
-  inflightTarget,
-  activeTarget
-}: CodegenTargetsTableProps): React.ReactElement {
-  return (
-    <div
-      data-testid="codegen-targets-table"
-      className="preview-panel__targets-table studio-scroll flex flex-col overflow-auto"
-    >
-      <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 border-b border-border/70 bg-card/40 text-left text-3xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          <tr>
-            <th scope="col" className="px-3 py-1.5 font-semibold">
-              Target
-            </th>
-            <th scope="col" className="px-3 py-1.5 text-right font-semibold">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {TARGET_KEYS.map((target) => {
-            const descriptor = TARGET_DESCRIPTORS[target];
-            const isLoading = inflightTarget === target;
-            const isActive = activeTarget === target;
-            const canView = descriptor.contract === 'namespace';
-            return (
-              <tr
-                key={target}
-                data-testid={`codegen-targets-table__row-${target}`}
-                data-target={target}
-                data-contract={descriptor.contract}
-                data-active={isActive ? 'true' : undefined}
-                className={
-                  'border-b border-border/70 transition-colors last:border-b-0 hover:bg-accent ' +
-                  (isActive ? 'bg-accent/60' : '')
-                }
-              >
-                <td className="px-3 py-1.5 font-medium text-foreground">{descriptor.label}</td>
-                <td className="px-3 py-1.5 text-right">
-                  {isLoading ? (
-                    <Spinner data-testid={`codegen-targets-table__spinner-${target}`} className="ml-auto size-4" />
-                  ) : (
-                    <div className="flex justify-end gap-0.5">
-                      {canView ? (
+export const CodegenTargetsTable = withInstrumentation(
+  function CodegenTargetsTable({
+    onView,
+    onDownload,
+    inflightTarget,
+    activeTarget
+  }: CodegenTargetsTableProps): React.ReactElement {
+    return (
+      <div
+        data-testid="codegen-targets-table"
+        className="preview-panel__targets-table studio-scroll flex flex-col overflow-auto"
+      >
+        <table className="w-full border-collapse text-sm">
+          <thead className="sticky top-0 border-b border-border/70 bg-card/40 text-left text-3xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <tr>
+              <th scope="col" className="px-3 py-1.5 font-semibold">
+                Target
+              </th>
+              <th scope="col" className="px-3 py-1.5 text-right font-semibold">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {TARGET_KEYS.map((target) => {
+              const descriptor = TARGET_DESCRIPTORS[target];
+              const isLoading = inflightTarget === target;
+              const isActive = activeTarget === target;
+              const canView = descriptor.contract === 'namespace';
+              return (
+                <tr
+                  key={target}
+                  data-testid={`codegen-targets-table__row-${target}`}
+                  data-target={target}
+                  data-contract={descriptor.contract}
+                  data-active={isActive ? 'true' : undefined}
+                  className={
+                    'border-b border-border/70 transition-colors last:border-b-0 hover:bg-accent ' +
+                    (isActive ? 'bg-accent/60' : '')
+                  }
+                >
+                  <td className="px-3 py-1.5 font-medium text-foreground">{descriptor.label}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    {isLoading ? (
+                      <Spinner data-testid={`codegen-targets-table__spinner-${target}`} className="ml-auto size-4" />
+                    ) : (
+                      <div className="flex justify-end gap-0.5">
+                        {canView ? (
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={isActive ? `Hide ${descriptor.label} preview` : `View ${descriptor.label}`}
+                            aria-pressed={isActive}
+                            title={isActive ? `Hide ${descriptor.label} preview` : `View ${descriptor.label}`}
+                            data-testid={`codegen-targets-table__view-${target}`}
+                            onClick={() => onView(target)}
+                          >
+                            {isActive ? (
+                              <EyeOff className="size-4" aria-hidden="true" />
+                            ) : (
+                              <Eye className="size-4" aria-hidden="true" />
+                            )}
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           size="icon-sm"
                           variant="ghost"
-                          aria-label={isActive ? `Hide ${descriptor.label} preview` : `View ${descriptor.label}`}
-                          aria-pressed={isActive}
-                          title={isActive ? `Hide ${descriptor.label} preview` : `View ${descriptor.label}`}
-                          data-testid={`codegen-targets-table__view-${target}`}
-                          onClick={() => onView(target)}
+                          aria-label={`Download ${descriptor.label}`}
+                          title={`Download ${descriptor.label}`}
+                          data-testid={`codegen-targets-table__download-${target}`}
+                          onClick={() => onDownload(target)}
                         >
-                          {isActive ? (
-                            <EyeOff className="size-4" aria-hidden="true" />
-                          ) : (
-                            <Eye className="size-4" aria-hidden="true" />
-                          )}
+                          <Download className="size-4" aria-hidden="true" />
                         </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Download ${descriptor.label}`}
-                        title={`Download ${descriptor.label}`}
-                        data-testid={`codegen-targets-table__download-${target}`}
-                        onClick={() => onDownload(target)}
-                      >
-                        <Download className="size-4" aria-hidden="true" />
-                      </Button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  },
+  { op: 'CodegenTargetsTable' }
+);
