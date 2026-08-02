@@ -55,7 +55,7 @@ export function configureInstrumentation(emit: Emit): void {
 /** Test-only: restores the pre-configuration no-op sink and default threshold between test files. */
 export function resetInstrumentationForTests(): void {
   currentEmit = noopEmit;
-  threshold = 'warn';
+  resetInstrumentationThresholdForTests();
 }
 
 /** Internal — Task 2's withInstrumentation calls this; not exported publicly. */
@@ -119,20 +119,25 @@ export function withInstrumentation<F extends (...args: any[]) => any>(fn: F, op
     const start = performance.now();
     try {
       const result = fn.apply(this, args);
-      // Only emit success if at/above threshold
-      if (clears) {
-        if (result instanceof Promise) {
-          return result.then(
-            (value) => {
+      // Handle async results — always attach rejection handler regardless of threshold
+      if (result instanceof Promise) {
+        return result.then(
+          (value) => {
+            // Only emit success if at/above threshold
+            if (clears) {
               emitSuccess(op, level, capture, args, value, sanitize, performance.now() - start);
-              return value;
-            },
-            (err) => {
-              emitError(op, opts, err);
-              throw err;
             }
-          );
-        }
+            return value;
+          },
+          (err) => {
+            // Errors ALWAYS emit, regardless of threshold
+            emitError(op, opts, err);
+            throw err;
+          }
+        );
+      }
+      // Sync path: only emit success if at/above threshold
+      if (clears) {
         emitSuccess(op, level, capture, args, result, sanitize, performance.now() - start);
       }
       return result;

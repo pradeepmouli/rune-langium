@@ -95,4 +95,21 @@ describe('withInstrumentation', () => {
     const wrapped = withInstrumentation(() => 7, { op: 'unconfigured', level: 'info' });
     expect(wrapped()).toBe(7); // emit path runs, silently dropped — the design's "silent no-op" invariant
   });
+
+  it('below-threshold async rejection ALWAYS emits error-level record regardless of threshold, then rethrows', async () => {
+    const emitted: unknown[] = [];
+    configureInstrumentation((r) => emitted.push(r));
+    setInstrumentationThreshold('error'); // only errors clear
+    const boom = new Error('async boom');
+    const wrapped = withInstrumentation(
+      async () => {
+        throw boom;
+      },
+      { op: 'asyncFail', level: 'trace', sanitizeError: (e) => ({ signature: 'Error:async boom' }) }
+    );
+    await expect(wrapped()).rejects.toThrow(boom);
+    expect(emitted).toEqual([
+      expect.objectContaining({ op: 'asyncFail', level: 'error', signature: 'Error:async boom' })
+    ]);
+  });
 });
