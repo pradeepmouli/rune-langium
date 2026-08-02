@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -12,30 +13,35 @@
  * `../lens/ts-wasm-asset.ts`/`../lens/py-wasm-asset.ts`.
  */
 import sqlWasmUrl from '@l1xnan/tree-sitter-sql/tree-sitter-sql.wasm?url';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 let cached: Promise<Uint8Array> | undefined;
 
-export function getSqlWasmBytes(): Promise<Uint8Array> {
-  cached ??= fetch(sqlWasmUrl)
-    .then((r) => {
-      // fetch() only rejects on network-level failures — it resolves
-      // normally for HTTP error statuses (404, a transient 503, etc.).
-      // Without this check, a failed response's error body would be read
-      // as if it were valid WASM bytes and cached as a FULFILLED promise,
-      // so the .catch() below (which only fires on rejection) would never
-      // clear the bad cache — Language.load() would then fail much later
-      // on every retry until a full page reload.
-      if (!r.ok) throw new Error(`failed to fetch SQL WASM grammar: ${r.status} ${r.statusText}`);
-      return r.arrayBuffer();
-    })
-    .then((buf) => new Uint8Array(buf))
-    .catch((e) => {
-      // A failed fetch (offline, transient network error, or the non-2xx
-      // response rejected above) must not poison the cache forever — clear
-      // it so the next call retries instead of replaying the same
-      // rejection indefinitely.
-      cached = undefined;
-      throw e;
-    });
-  return cached;
-}
+export const getSqlWasmBytes = withInstrumentation(
+  function getSqlWasmBytes(): Promise<Uint8Array> {
+    cached ??= fetch(sqlWasmUrl)
+      .then((r) => {
+        // fetch() only rejects on network-level failures — it resolves
+        // normally for HTTP error statuses (404, a transient 503, etc.).
+        // Without this check, a failed response's error body would be read
+        // as if it were valid WASM bytes and cached as a FULFILLED promise,
+        // so the .catch() below (which only fires on rejection) would never
+        // clear the bad cache — Language.load() would then fail much later
+        // on every retry until a full page reload.
+        if (!r.ok) throw new Error(`failed to fetch SQL WASM grammar: ${r.status} ${r.statusText}`);
+        return r.arrayBuffer();
+      })
+      .then((buf) => new Uint8Array(buf))
+      .catch((e) => {
+        // A failed fetch (offline, transient network error, or the non-2xx
+        // response rejected above) must not poison the cache forever — clear
+        // it so the next call retries instead of replaying the same
+        // rejection indefinitely.
+        cached = undefined;
+        throw e;
+      });
+    return cached;
+    // Output is raw WASM binary bytes — not meaningful/safe to capture.
+  },
+  { op: 'getSqlWasmBytes' }
+);

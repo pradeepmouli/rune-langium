@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 /**
@@ -29,6 +30,7 @@ import { SyncStatusBadge } from '../components/SyncStatusBadge.js';
 import { FontScaleButton } from '../components/FontScaleButton.js';
 import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
 import { resolveConflict } from '../services/git-sync.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 function WorkspaceSwitcherTrigger({
   workspaceName,
@@ -140,68 +142,71 @@ interface AppHeaderProps {
   hasExploreContent: boolean;
 }
 
-export function AppHeader({ hasWorkspace, hasExploreContent }: AppHeaderProps) {
-  const activeId = usePerspectiveStore((s) => s.activePerspective);
-  const effectiveId = resolveEffectivePerspective(activeId, { hasWorkspace, hasExploreContent });
-  const perspective = PERSPECTIVES.find((p) => p.id === effectiveId);
-  const Center = perspective?.centerSlot;
-  const Actions = perspective?.actions;
+export const AppHeader = withInstrumentation(
+  function AppHeader({ hasWorkspace, hasExploreContent }: AppHeaderProps) {
+    const activeId = usePerspectiveStore((s) => s.activePerspective);
+    const effectiveId = resolveEffectivePerspective(activeId, { hasWorkspace, hasExploreContent });
+    const perspective = PERSPECTIVES.find((p) => p.id === effectiveId);
+    const Center = perspective?.centerSlot;
+    const Actions = perspective?.actions;
 
-  const workspace = useWorkspaceOptional();
-  const workspaceActions = useWorkspaceActionsOptional();
-  const syncStatus = useExploreFileNavStore((s) => s.syncStatus);
+    const workspace = useWorkspaceOptional();
+    const workspaceActions = useWorkspaceActionsOptional();
+    const syncStatus = useExploreFileNavStore((s) => s.syncStatus);
 
-  // Degrade rule: hide the switcher when there's no workspace loaded, or the
-  // active perspective doesn't need one (Settings) — brand + title + global
-  // utilities remain either way.
-  const showSwitcher = workspace !== null && workspaceActions !== null && (perspective?.requiresWorkspace ?? false);
+    // Degrade rule: hide the switcher when there's no workspace loaded, or the
+    // active perspective doesn't need one (Settings) — brand + title + global
+    // utilities remain either way.
+    const showSwitcher = workspace !== null && workspaceActions !== null && (perspective?.requiresWorkspace ?? false);
 
-  return (
-    <header className="studio-topbar" aria-label="Studio workspace header" data-testid="app-header">
-      <div className="studio-topbar__left">
-        <div className="studio-brand">
-          <div className="studio-brand__mark">R</div>
-          <span className="studio-brand__name">Rune Studio</span>
+    return (
+      <header className="studio-topbar" aria-label="Studio workspace header" data-testid="app-header">
+        <div className="studio-topbar__left">
+          <div className="studio-brand">
+            <div className="studio-brand__mark">R</div>
+            <span className="studio-brand__name">Rune Studio</span>
+          </div>
+          {showSwitcher && workspace && workspaceActions && (
+            <>
+              <span className="studio-topbar__divider" />
+              <WorkspaceSwitcherTrigger
+                workspaceName={workspace.workspaceName}
+                workspaceFileCount={workspace.fileCount}
+                onSwitchWorkspace={workspaceActions.onSwitchWorkspace}
+                onCreateWorkspace={workspaceActions.onCreateWorkspace}
+                onClose={workspaceActions.onClose}
+                workspaceId={workspace.workspaceId ?? 'default'}
+              />
+            </>
+          )}
         </div>
-        {showSwitcher && workspace && workspaceActions && (
-          <>
-            <span className="studio-topbar__divider" />
-            <WorkspaceSwitcherTrigger
-              workspaceName={workspace.workspaceName}
-              workspaceFileCount={workspace.fileCount}
-              onSwitchWorkspace={workspaceActions.onSwitchWorkspace}
-              onCreateWorkspace={workspaceActions.onCreateWorkspace}
-              onClose={workspaceActions.onClose}
-              workspaceId={workspace.workspaceId ?? 'default'}
+        {Center ? <Center /> : <div className="studio-topbar__title">{perspective?.title ?? perspective?.label}</div>}
+        <div className="studio-topbar__right">
+          {Actions ? <Actions /> : null}
+          <button type="button" className="studio-topbar__cmdk" aria-label="Search">
+            <Search className="size-3.5" />
+            <span>Search types, files, commands…</span>
+            <Kbd>⌘K</Kbd>
+          </button>
+          {workspace?.workspaceKind === 'git-backed' && syncStatus && (
+            <SyncStatusBadge
+              status={syncStatus}
+              onResolve={(choice) => {
+                resolveConflict(workspace.workspaceId ?? 'default', choice);
+              }}
             />
-          </>
-        )}
-      </div>
-      {Center ? <Center /> : <div className="studio-topbar__title">{perspective?.title ?? perspective?.label}</div>}
-      <div className="studio-topbar__right">
-        {Actions ? <Actions /> : null}
-        <button type="button" className="studio-topbar__cmdk" aria-label="Search">
-          <Search className="size-3.5" />
-          <span>Search types, files, commands…</span>
-          <Kbd>⌘K</Kbd>
-        </button>
-        {workspace?.workspaceKind === 'git-backed' && syncStatus && (
-          <SyncStatusBadge
-            status={syncStatus}
-            onResolve={(choice) => {
-              resolveConflict(workspace.workspaceId ?? 'default', choice);
-            }}
-          />
-        )}
-        <span className="studio-topbar__divider" />
-        <FontScaleButton />
-        <span className="studio-topbar__divider" />
-        <Avatar render={<button type="button" aria-label="Account" />} className="size-7 cursor-pointer">
-          <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-2xs font-bold">
-            PM
-          </AvatarFallback>
-        </Avatar>
-      </div>
-    </header>
-  );
-}
+          )}
+          <span className="studio-topbar__divider" />
+          <FontScaleButton />
+          <span className="studio-topbar__divider" />
+          <Avatar render={<button type="button" aria-label="Account" />} className="size-7 cursor-pointer">
+            <AvatarFallback className="bg-linear-to-br from-enum to-data text-primary-foreground text-2xs font-bold">
+              PM
+            </AvatarFallback>
+          </Avatar>
+        </div>
+      </header>
+    );
+  },
+  { op: 'AppHeader' }
+);

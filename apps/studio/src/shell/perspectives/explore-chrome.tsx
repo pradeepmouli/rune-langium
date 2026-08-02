@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -25,6 +26,7 @@ import { useExploreFileNavStore } from '../explore-file-nav-store.js';
 import { useExportDialogStore } from '../export-dialog-store.js';
 import { useImportDialogStore } from '../import-dialog-store.js';
 import type { LspDiagnostic } from '../../store/diagnostics-store.js';
+import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 /** Stable module-level reference — same rationale as ExplorePerspective's
  *  EMPTY_PARSE_ERRORS: avoids a fresh Map() on every render that would
@@ -152,83 +154,89 @@ function FileTabStrip({
   );
 }
 
-export function ExploreCenterSlot() {
-  const { files, parseErrors } = useWorkspace();
-  const { onFilesChange } = useWorkspaceActions();
-  const { fileDiagnostics } = useDiagnosticsStore();
-  const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
-  const openFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
-  const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
+export const ExploreCenterSlot = withInstrumentation(
+  function ExploreCenterSlot() {
+    const { files, parseErrors } = useWorkspace();
+    const { onFilesChange } = useWorkspaceActions();
+    const { fileDiagnostics } = useDiagnosticsStore();
+    const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+    const openFileInSource = useExploreFileNavStore((s) => s.openFileInSource);
+    const setActiveEditorFile = useExploreFileNavStore((s) => s.setActiveEditorFile);
 
-  const effectiveParseErrors = parseErrors ?? EMPTY_PARSE_ERRORS;
-  const combinedFileDiagnostics = useMemo(
-    () => combineFileDiagnostics(fileDiagnostics, files, effectiveParseErrors),
-    [fileDiagnostics, files, effectiveParseErrors]
-  );
+    const effectiveParseErrors = parseErrors ?? EMPTY_PARSE_ERRORS;
+    const combinedFileDiagnostics = useMemo(
+      () => combineFileDiagnostics(fileDiagnostics, files, effectiveParseErrors),
+      [fileDiagnostics, files, effectiveParseErrors]
+    );
 
-  const handleCreateFile = () => {
-    const file = createBlankWorkspaceFile(files);
-    onFilesChange?.([...files, file]);
-    openFileInSource(file.path);
-  };
+    const handleCreateFile = () => {
+      const file = createBlankWorkspaceFile(files);
+      onFilesChange?.([...files, file]);
+      openFileInSource(file.path);
+    };
 
-  // Issue #405 — no UI action previously deleted a workspace file. Native
-  // confirm(), matching the established shell-wide destructive-action
-  // pattern (WorkspaceSwitcher's handleDelete uses the same
-  // `typeof confirm === 'function'` guard for jsdom/non-browser safety).
-  // Deleting the currently-active file redirects to another remaining
-  // user file, or clears activeEditorFile entirely when none remain —
-  // exercising resolveEffectivePerspective's existing "delete last file"
-  // fallback to the Workspaces launcher instead of stranding the user on
-  // a now-blank Explore perspective.
-  const handleDeleteFile = (path: string) => {
-    const file = files.find((f) => f.path === path);
-    if (!file) return;
-    if (typeof confirm === 'function' && !confirm(`Delete "${file.name}"? This cannot be undone.`)) return;
-    const remaining = files.filter((f) => f.path !== path);
-    onFilesChange?.(remaining);
-    setActiveEditorFile((prev) => {
-      if (prev !== path) return prev;
-      return remaining.find((f) => !f.readOnly)?.path;
-    });
-  };
+    // Issue #405 — no UI action previously deleted a workspace file. Native
+    // confirm(), matching the established shell-wide destructive-action
+    // pattern (WorkspaceSwitcher's handleDelete uses the same
+    // `typeof confirm === 'function'` guard for jsdom/non-browser safety).
+    // Deleting the currently-active file redirects to another remaining
+    // user file, or clears activeEditorFile entirely when none remain —
+    // exercising resolveEffectivePerspective's existing "delete last file"
+    // fallback to the Workspaces launcher instead of stranding the user on
+    // a now-blank Explore perspective.
+    const handleDeleteFile = (path: string) => {
+      const file = files.find((f) => f.path === path);
+      if (!file) return;
+      if (typeof confirm === 'function' && !confirm(`Delete "${file.name}"? This cannot be undone.`)) return;
+      const remaining = files.filter((f) => f.path !== path);
+      onFilesChange?.(remaining);
+      setActiveEditorFile((prev) => {
+        if (prev !== path) return prev;
+        return remaining.find((f) => !f.readOnly)?.path;
+      });
+    };
 
-  return (
-    <FileTabStrip
-      files={files}
-      activeFile={activeEditorFile}
-      onSelectFile={openFileInSource}
-      onCreateFile={handleCreateFile}
-      onDeleteFile={handleDeleteFile}
-      fileDiagnostics={combinedFileDiagnostics}
-    />
-  );
-}
+    return (
+      <FileTabStrip
+        files={files}
+        activeFile={activeEditorFile}
+        onSelectFile={openFileInSource}
+        onCreateFile={handleCreateFile}
+        onDeleteFile={handleDeleteFile}
+        fileDiagnostics={combinedFileDiagnostics}
+      />
+    );
+  },
+  { op: 'ExploreCenterSlot' }
+);
 
-export function ExploreActions() {
-  const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
-  const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
-  return (
-    <>
-      <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
-        <Check />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Export code"
-        title="Export code"
-        onClick={() => setShowExportDialog(true)}
-      >
-        <Download />
-      </Button>
-      <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
-        <Share2 />
-      </Button>
-      <button type="button" className="studio-topbar__import" onClick={() => setShowImportDialog(true)}>
-        <Wand2 className="size-3.5" />
-        Import
-      </button>
-    </>
-  );
-}
+export const ExploreActions = withInstrumentation(
+  function ExploreActions() {
+    const setShowExportDialog = useExportDialogStore((s) => s.setOpen);
+    const setShowImportDialog = useImportDialogStore((s) => s.setOpen);
+    return (
+      <>
+        <Button variant="ghost" size="icon-sm" aria-label="Validate" title="Validate">
+          <Check />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Export code"
+          title="Export code"
+          onClick={() => setShowExportDialog(true)}
+        >
+          <Download />
+        </Button>
+        <Button variant="ghost" size="icon-sm" aria-label="Share" title="Share">
+          <Share2 />
+        </Button>
+        <button type="button" className="studio-topbar__import" onClick={() => setShowImportDialog(true)}>
+          <Wand2 className="size-3.5" />
+          Import
+        </button>
+      </>
+    );
+  },
+  { op: 'ExploreActions' }
+);

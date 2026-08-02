@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { createContext, useContext } from 'react';
@@ -5,6 +6,7 @@ import type { WorkspaceKind } from '../../workspace/persistence.js';
 import type { WorkspaceFile, ParsedWorkspaceModel } from '../../services/workspace.js';
 import type { RosettaModel } from '@rune-langium/core';
 import type { DeferredExportEntry } from '../../workers/parser-worker.js';
+import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 /** Current loaded-model data published by WorkspaceProvider. Value swaps per
  *  workspace; the provider component never remounts. */
@@ -22,15 +24,20 @@ export interface WorkspaceState {
 
 export const WorkspaceStateContext = createContext<WorkspaceState | null>(null);
 
-export function useWorkspace(): WorkspaceState {
-  const ctx = useContext(WorkspaceStateContext);
-  if (ctx === null) {
-    throw new Error('useWorkspace must be used within a WorkspaceProvider');
-  }
-  return ctx;
-}
+export const useWorkspace = withInstrumentation(
+  function useWorkspace(): WorkspaceState {
+    const ctx = useContext(WorkspaceStateContext);
+    if (ctx === null) {
+      throw new Error('useWorkspace must be used within a WorkspaceProvider');
+    }
+    return ctx;
+  },
+  { op: 'useWorkspace' }
+);
 
-/** Null-tolerant variant for shell chrome that must render without a workspace (Settings). */
-export function useWorkspaceOptional(): WorkspaceState | null {
-  return useContext(WorkspaceStateContext);
-}
+export const useWorkspaceOptional = withInstrumentation(
+  function useWorkspaceOptional(): WorkspaceState | null {
+    return useContext(WorkspaceStateContext);
+  },
+  { op: 'useWorkspaceOptional' }
+);
