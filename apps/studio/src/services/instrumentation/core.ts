@@ -109,65 +109,134 @@ function defaultSanitizeError(err: unknown): SanitizeErrorResult {
   return { signature: `${name}:unspecified` };
 }
 
-export function withInstrumentation<F extends (...args: any[]) => any>(fn: F, opts: InstrumentationOptions = {}): F {
-  const op = opts.op ?? fn.name ?? 'anonymous';
-  const capture = opts.capture ?? 0;
-  const wrapped = function (this: unknown, ...args: unknown[]) {
-    const level = opts.level ?? 'info'; // depth-based default lands in Task 3
-    const clears = levelClears(level, threshold);
-    const sanitize = opts.sanitize ?? ((v: unknown) => v);
-    const start = performance.now();
-    try {
-      const result = fn.apply(this, args);
-      // Handle async results — always attach rejection handler regardless of threshold
-      if (result instanceof Promise) {
-        return result.then(
-          (value) => {
-            // Only emit success if at/above threshold
-            if (clears) {
-              emitSuccess(op, level, capture, args, value, sanitize, performance.now() - start);
-            }
-            return value;
-          },
-          (err) => {
-            // Errors ALWAYS emit, regardless of threshold
-            emitError(op, opts, err);
-            throw err;
-          }
-        );
-      }
-      // Sync path: only emit success if at/above threshold
-      if (clears) {
-        emitSuccess(op, level, capture, args, result, sanitize, performance.now() - start);
-      }
-      return result;
-    } catch (err) {
-      // Errors ALWAYS emit, regardless of threshold
-      emitError(op, opts, err);
-      throw err;
-    }
-  };
-  return wrapped as F;
+// `bindingContext` lets `.child()`-bound wrappers (Task 3) attach their bound
+// context to error records the same way success records do.
+function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindingContext?: unknown): void {
+  const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
+  emitRecord({ op, level: 'error', captured: 0, signature, context: context ?? bindingContext, ts: Date.now() });
 }
 
-function emitSuccess(
+// Dynamic nesting-depth counter — a single shared value, incremented on
+// entry and decremented on exit of ANY instrumented call. Approximate
+// under concurrent async work (see design doc); used only as a DEFAULT,
+// never a hard guarantee — an explicit `level` always wins.
+let depth = 0;
+
+function defaultLevelForDepth(): Level {
+  if (depth <= 0) return 'info';
+  if (depth <= 2) return 'debug';
+  return 'trace';
+}
+
+interface ChildBinding {
+  context?: unknown;
+  level?: Level;
+  parent?: ChildBinding;
+}
+
+function resolveLevel(binding: ChildBinding | undefined, explicit: Level | undefined): Level {
+  if (explicit) return explicit;
+  for (let b = binding; b; b = b.parent) {
+    if (b.level) return b.level;
+  }
+  return defaultLevelForDepth();
+}
+
+function resolveContext(binding: ChildBinding | undefined): unknown {
+  return binding?.context;
+}
+
+function makeWithInstrumentation(binding?: ChildBinding) {
+  function bound<F extends (...args: any[]) => any>(fn: F, opts: InstrumentationOptions = {}): F {
+    const op = opts.op ?? fn.name ?? 'anonymous';
+    const capture = opts.capture ?? 0;
+    const context = resolveContext(binding);
+    const wrapped = function (this: unknown, ...args: unknown[]) {
+      const level = resolveLevel(binding, opts.level);
+      const clears = levelClears(level, threshold);
+      // NO early `if (!clears) return fn.apply(...)` here — Task 2's review
+      // caught exactly this shape as a real bug (it makes error-record
+      // emission conditional on threshold, which the Global Constraints
+      // forbid) and fixed it for the base wrapper by always running `fn`
+      // inside the try/catch and gating only SUCCESS emission on `clears`.
+      // For THIS depth-tracking wrapper specifically, the early return would
+      // ALSO have been a second, independent bug: `depth++` sits below it, so
+      // a below-threshold call would never increment depth, silently hiding
+      // its own nested calls' true nesting level. `clears` therefore now
+      // gates ONLY the `emitSuccessWithContext` calls below, never whether
+      // `fn` runs inside the try, never whether `depth` is tracked, and never
+      // whether an error/rejection is captured.
+      const sanitize = opts.sanitize ?? ((v: unknown) => v);
+      const start = performance.now();
+      depth++;
+      // `isAsync` guards the `finally` below: when fn returns a Promise, depth
+      // must stay incremented until the promise actually SETTLES (the `.then`/
+      // catch callbacks below own decrementing it then) — not when this
+      // synchronous wrapper call returns the still-pending promise. Without
+      // this flag, `finally` (which always runs on the way out of `try`, even
+      // past an early `return`) would decrement depth immediately on handoff,
+      // undercounting nesting depth for any async call with async work still
+      // in flight beneath it.
+      let isAsync = false;
+      try {
+        const result = fn.apply(this, args);
+        if (result instanceof Promise) {
+          isAsync = true;
+          return result.then(
+            (value) => {
+              depth--;
+              if (clears)
+                emitSuccessWithContext(op, level, capture, args, value, sanitize, performance.now() - start, context);
+              return value;
+            },
+            (err) => {
+              depth--;
+              emitError(op, opts, err, context);
+              throw err;
+            }
+          );
+        }
+        if (clears)
+          emitSuccessWithContext(op, level, capture, args, result, sanitize, performance.now() - start, context);
+        return result;
+      } catch (err) {
+        emitError(op, opts, err, context);
+        throw err;
+      } finally {
+        if (!isAsync) depth--;
+      }
+    };
+    return wrapped as F;
+  }
+  bound.child = (childContext: unknown, childOpts: { level?: Level } = {}) =>
+    makeWithInstrumentation({ context: childContext, level: childOpts.level, parent: binding });
+  (['trace', 'debug', 'info', 'warn'] as const).forEach((lvl) => {
+    (bound as any)[lvl] = <F extends (...args: any[]) => any>(fn: F, opts: InstrumentationOptions = {}) =>
+      bound(fn, { ...opts, level: lvl });
+  });
+  return bound as typeof bound & {
+    child: typeof bound.child;
+    trace: <F extends (...args: any[]) => any>(fn: F, opts?: InstrumentationOptions) => F;
+    debug: <F extends (...args: any[]) => any>(fn: F, opts?: InstrumentationOptions) => F;
+    info: <F extends (...args: any[]) => any>(fn: F, opts?: InstrumentationOptions) => F;
+    warn: <F extends (...args: any[]) => any>(fn: F, opts?: InstrumentationOptions) => F;
+  };
+}
+
+function emitSuccessWithContext(
   op: string,
   level: Level,
   capture: number,
   args: unknown[],
   output: unknown,
   sanitize: (value: unknown, which: 'input' | 'output') => unknown,
-  durationMs: number
+  durationMs: number,
+  context: unknown
 ): void {
-  const record: TelemetryRecord = { op, level, captured: capture, ts: Date.now(), durationMs };
+  const record: TelemetryRecord = { op, level, captured: capture, ts: Date.now(), durationMs, context };
   if (capture & Capture.Input) record.input = sanitize(args, 'input');
   if (capture & Capture.Output) record.output = sanitize(output, 'output');
   emitRecord(record);
 }
 
-// `bindingContext` is unused until Task 3 introduces `.child()` — declared now
-// so error records carry the bound context the same way success records do.
-function emitError(op: string, opts: InstrumentationOptions, err: unknown, bindingContext?: unknown): void {
-  const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
-  emitRecord({ op, level: 'error', captured: 0, signature, context: context ?? bindingContext, ts: Date.now() });
-}
+export const withInstrumentation = makeWithInstrumentation();
