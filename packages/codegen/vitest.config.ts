@@ -26,6 +26,21 @@ const ts = createRequire(import.meta.url)('typescript-classic') as typeof import
 // use this package's decorators — everything else is untouched.
 const DECORATOR_USAGE_RE = /@(?:instrument|trace|debug|info|warn)\(/;
 
+// Scoped exception to this plan's "do NOT build a live rolldown-vite/
+// Rollup bundler AST-transform plugin" constraint (docs/superpowers/plans/
+// 2026-08-01-instrumentation-wrapper.md, Global Constraints) — that
+// constraint targets an auto-wrapping mechanism (discovering and injecting
+// instrumentation into code that doesn't already call for it), which this
+// is not. Every `@debug()` etc. site below is already hand-authored by a
+// developer; this plugin's only job is a mechanical, test-time-only syntax
+// downlevel — the identical transform `tsc -b` already performs for the
+// real production build, which this plugin never touches. Reviewed and
+// explicitly approved as a carve-out (not silently self-approved) during
+// Task 9's review. Do NOT widen `DECORATOR_USAGE_RE` or generalize this
+// plugin's role beyond "make already-explicit decorator syntax parseable
+// under Oxc" — doing so would cross into the auto-wrapping territory the
+// constraint exists to prevent, and needs the same explicit sign-off this
+// carve-out got.
 function decoratorLoweringPlugin(): Plugin {
   return {
     name: 'codegen-decorator-lowering',
