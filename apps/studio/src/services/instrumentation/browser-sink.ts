@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useOutputStore, fmtLine } from '../../store/output-store.js';
+import { useTelemetrySettingsStore } from '../../store/telemetry-settings.js';
 import { configureInstrumentation, type TelemetryRecord } from './core.js';
 
 /**
@@ -20,6 +21,12 @@ import { configureInstrumentation, type TelemetryRecord } from './core.js';
  * info|warn|error) — with the default threshold they never get here at all.
  */
 export function routeTelemetryRecord(record: TelemetryRecord): void {
+  // Single choke point for the existing telemetry opt-in flag — gates both
+  // relayed worker records (worker-sink.ts's own configureInstrumentation
+  // deliberately can't check the store; see worker-sink.ts) and, redundantly
+  // but harmlessly, browser-originated records already gated below in
+  // installInstrumentationBrowserSink.
+  if (!useTelemetrySettingsStore.getState().enabled) return;
   const addLine = useOutputStore.getState().addLine;
   const severity = record.level === 'error' ? 'error' : record.level === 'warn' ? 'warn' : 'info';
   addLine(fmtLine(record.op, record.subject ?? ''), severity, {
@@ -31,5 +38,5 @@ export function routeTelemetryRecord(record: TelemetryRecord): void {
 }
 
 export function installInstrumentationBrowserSink(): void {
-  configureInstrumentation(routeTelemetryRecord);
+  configureInstrumentation(routeTelemetryRecord, () => useTelemetrySettingsStore.getState().enabled);
 }

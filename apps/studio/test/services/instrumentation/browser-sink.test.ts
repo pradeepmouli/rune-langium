@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useOutputStore } from '../../../src/store/output-store.js';
+import { useTelemetrySettingsStore } from '../../../src/store/telemetry-settings.js';
 import {
   Capture,
   resetInstrumentationForTests,
@@ -14,6 +15,7 @@ import { installInstrumentationBrowserSink } from '../../../src/services/instrum
 
 beforeEach(() => {
   useOutputStore.setState({ lines: [] });
+  useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
   resetInstrumentationForTests();
   resetInstrumentationThresholdForTests();
 });

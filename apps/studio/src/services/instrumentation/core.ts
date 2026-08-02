@@ -40,6 +40,18 @@ function noopEmit(): void {
 
 let currentEmit: Emit = noopEmit;
 
+// Module scope in core.ts:
+// - Vite/rolldown builds (browser + both workers): `import.meta.env` is
+//   statically replaced, so IS_PROD folds to a build-time constant and the
+//   instrumentation branch below it is eliminated from prod bundles.
+// - Non-Vite runtimes (Pages Functions, Node): `import.meta.env` is
+//   undefined; the optional chain makes IS_PROD a safe runtime `false`
+//   (their own gates — env binding / threshold — still apply).
+// - The cast keeps this type-checking under tsconfigs without vite/client.
+const IS_PROD = (import.meta as { env?: { PROD?: boolean } }).env?.PROD === true;
+
+let isEnabledCheck: () => boolean = () => true;
+
 /**
  * Sets the module-level sink for the current runtime context. Call exactly
  * once, at each runtime's own entry point (mirrors installTelemetryCapture's
@@ -47,14 +59,21 @@ let currentEmit: Emit = noopEmit;
  * instrumented call's emit is silently dropped — never throws, never
  * buffers, matching telemetry-shipper.ts's "telemetry must never throw into
  * the app" invariant.
+ *
+ * `isEnabled` is an injected runtime opt-in check (defaulting to always-on)
+ * rather than a direct zustand import — core.ts must stay isomorphic since
+ * Cloudflare Functions and (post-Task-9) Node consumers can't import a
+ * browser zustand store.
  */
-export function configureInstrumentation(emit: Emit): void {
+export function configureInstrumentation(emit: Emit, isEnabled: () => boolean = () => true): void {
   currentEmit = emit;
+  isEnabledCheck = isEnabled;
 }
 
 /** Test-only: restores the pre-configuration no-op sink and default threshold between test files. */
 export function resetInstrumentationForTests(): void {
   currentEmit = noopEmit;
+  isEnabledCheck = () => true;
   resetInstrumentationThresholdForTests();
 }
 
@@ -152,6 +171,8 @@ function makeWithInstrumentation(binding?: ChildBinding) {
     const capture = opts.capture ?? 0;
     const context = resolveContext(binding);
     const wrapped = function (this: unknown, ...args: unknown[]) {
+      if (IS_PROD) return fn.apply(this, args);
+      if (!isEnabledCheck()) return fn.apply(this, args);
       const level = resolveLevel(binding, opts.level);
       const clears = levelClears(level, threshold);
       // NO early `if (!clears) return fn.apply(...)` here — Task 2's review
