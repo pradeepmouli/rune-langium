@@ -26,6 +26,8 @@ import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
 import type { CodegenWorkerMessage } from '../../components/CodePreviewPanel.js';
 import { HydrationOrchestrator } from '../../services/hydration-orchestrator.js';
 import type { DeferredExportEntry } from '../../workers/parser-worker.js';
+import { routeTelemetryRecord } from '../../services/instrumentation/browser-sink.js';
+import { isTelemetryRecordMessage } from '../../services/instrumentation/worker-sink.js';
 
 /**
  * Looks up which curated namespace(s) export `name`, so a `preview:result`'s
@@ -233,6 +235,10 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
     useInstanceStore.getState().setWorker(codegenWorker);
     function handleMessage(e: MessageEvent<unknown>) {
       const msg = e.data;
+      if (isTelemetryRecordMessage(msg)) {
+        routeTelemetryRecord(msg.record);
+        return;
+      }
       if (isPreviewExecuteResultMessage(msg)) {
         receiveExecutionResult(msg.funcName, msg.output);
         return;

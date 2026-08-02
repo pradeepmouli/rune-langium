@@ -23,6 +23,8 @@ import type {
 import { isParseResponse, isParseWorkspaceResponse, isLinkDocumentResponse } from '../workers/parser-worker.js';
 import { useCodegenStore } from '../store/codegen-store.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { routeTelemetryRecord } from './instrumentation/browser-sink.js';
+import { isTelemetryRecordMessage } from './instrumentation/worker-sink.js';
 
 /** Known curated bundle ids — guards deferredExports filePath prefixes so user
  *  files that happen to live under `${bundleId}/...` aren't mis-grouped. */
@@ -199,6 +201,16 @@ function getWorker(): Worker | null {
   try {
     worker = new Worker(new URL('../workers/parser-worker.ts', import.meta.url), {
       type: 'module'
+    });
+    // Persistent relay for the parser worker's `telemetry:record` messages.
+    // Unlike codegen-worker's messages (owned by CodegenProvider.tsx's
+    // persistent handleMessage listener), this worker only otherwise gets
+    // PER-REQUEST listeners below (workerRequest's `handler`), which match
+    // on a response `id` and silently drop anything without one — an
+    // id-less `telemetry:record` message would never reach routeTelemetryRecord
+    // without this dedicated listener.
+    worker.addEventListener('message', (e: MessageEvent<unknown>) => {
+      if (isTelemetryRecordMessage(e.data)) routeTelemetryRecord(e.data.record);
     });
     workerInitError = null;
     return worker;

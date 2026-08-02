@@ -21,6 +21,16 @@ import {
 import type { CuratedSerializedDocument } from '@rune-langium/curated-schema';
 import { URI, EmptyFileSystem, type AstNode, type AstNodeDescription, type LangiumDocument } from 'langium';
 import { isWorkerGlobalScope } from './runtime-guards.js';
+import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
+
+// This module is ALSO imported on the main thread (workspace.ts imports the
+// `isParseResponse` etc. guards) — gate behind `isWorkerGlobalScope()` so the
+// main thread's `configureInstrumentation` slot (set by the browser sink at
+// bootstrap) is never hijacked by this worker-side wiring. Same shared-gate
+// rationale as the message listener registered below (PR #214).
+if (isWorkerGlobalScope()) {
+  installInstrumentationWorkerSink((msg) => (self as unknown as DedicatedWorkerGlobalScope).postMessage(msg));
+}
 
 export interface ParseRequest {
   type: 'parse';
