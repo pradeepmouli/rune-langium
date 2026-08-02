@@ -13,6 +13,12 @@ import { render, screen, cleanup } from '@testing-library/react';
 import { StudioToastProvider, useStudioToast } from '../../src/components/StudioToastProvider.js';
 import { useOutputStore } from '../../src/store/output-store.js';
 import { useActivityStore } from '../../src/store/activity-store.js';
+import {
+  configureInstrumentation,
+  resetInstrumentationForTests,
+  setInstrumentationThreshold,
+  withInstrumentation
+} from '../../src/services/instrumentation/core.js';
 
 afterEach(() => cleanup());
 
@@ -37,6 +43,13 @@ function LoadingToastHarness() {
 function ShowToastHarness() {
   const { showToast } = useStudioToast();
   return <button onClick={() => showToast({ description: 'Plain notification', variant: 'destructive' })}>show</button>;
+}
+
+function NotifyHarness() {
+  const { notify } = useStudioToast();
+  return (
+    <button onClick={() => notify({ title: 'workspace', description: 'testOp', variant: 'default' })}>notify</button>
+  );
 }
 
 describe('StudioToastProvider', () => {
@@ -124,5 +137,78 @@ describe('StudioToastProvider — superset-of-toasts invariant', () => {
     expect(entries[0].opId).toBeDefined();
     expect(entries[1].opId).toBe(entries[0].opId);
     expect(entries[1].durationMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('StudioToastProvider — notify pass-through', () => {
+  beforeEach(() => {
+    useOutputStore.setState({ lines: [] });
+    useActivityStore.setState({ entries: [] });
+  });
+
+  it('notify renders a toast without touching output-store or activity-store', async () => {
+    render(
+      <StudioToastProvider>
+        <NotifyHarness />
+      </StudioToastProvider>
+    );
+    screen.getByText('notify').click();
+
+    const toast = await screen.findByText('testOp');
+    expect(toast).toBeTruthy();
+    expect(useOutputStore.getState().lines).toHaveLength(0);
+    expect(useActivityStore.getState().entries).toHaveLength(0);
+  });
+
+  it("showToast's existing mirroring is unaffected by notify's addition", () => {
+    render(
+      <StudioToastProvider>
+        <ShowToastHarness />
+      </StudioToastProvider>
+    );
+    screen.getByText('show').click();
+    expect(useActivityStore.getState().entries).toHaveLength(1);
+    expect(useActivityStore.getState().entries[0].tag).toBe('toast');
+  });
+});
+
+describe('StudioToastProvider — instrumentation Toast sink', () => {
+  afterEach(() => {
+    resetInstrumentationForTests();
+  });
+
+  it('a namespace-tagged instrumented call fires a toast via notify', async () => {
+    render(
+      <StudioToastProvider>
+        <div />
+      </StudioToastProvider>
+    );
+    configureInstrumentation(() => {});
+    setInstrumentationThreshold('info');
+    const wrapped = withInstrumentation(() => 'ok', { op: 'downloadCode', level: 'info', namespace: 'codegen' });
+    wrapped();
+
+    const toast = await screen.findByText('downloadCode');
+    expect(toast).toBeTruthy();
+    const toastRoot = toast.closest('[data-slot="toast"]');
+    expect(toastRoot!.getAttribute('data-variant')).toBe('default');
+  });
+
+  it('an ordinary unhandled error with NO namespace does NOT fire a toast', () => {
+    render(
+      <StudioToastProvider>
+        <div />
+      </StudioToastProvider>
+    );
+    configureInstrumentation(() => {});
+    setInstrumentationThreshold('error');
+    const wrapped = withInstrumentation(
+      () => {
+        throw new Error('boom');
+      },
+      { op: 'explode' }
+    );
+    expect(() => wrapped()).toThrow('boom');
+    expect(screen.queryByText('explode')).toBeNull();
   });
 });
