@@ -24,10 +24,12 @@ import { pathToUri } from '../../utils/uri.js';
 import { getRuneStudioTestApi } from '../../test-api.js';
 import { BUNDLE_MARKER_SUFFIX } from '../../services/workspace.js';
 import type { CodegenWorkerMessage } from '../../components/CodePreviewPanel.js';
-import { HydrationOrchestrator } from '../../services/hydration-orchestrator.js';
+import { HydrationOrchestrator, MAX_HYDRATION_RETRIES_PER_TARGET } from '../../services/hydration-orchestrator.js';
 import type { DeferredExportEntry } from '../../workers/parser-worker.js';
 import { routeTelemetryRecord } from '../../services/instrumentation/browser-sink.js';
 import { isTelemetryRecordMessage } from '../../services/instrumentation/worker-sink.js';
+import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { RetryExhaustedError } from '../../services/instrumentation/errors.js';
 
 /**
  * Looks up which curated namespace(s) export `name`, so a `preview:result`'s
@@ -52,6 +54,22 @@ function extractUnresolvedNames(unsupportedFeatures: string[] | undefined): stri
     .filter((f) => f.startsWith('unresolved-reference:'))
     .map((f) => f.slice('unresolved-reference:'.length));
 }
+
+const reportHydrationRetryExhausted = withInstrumentation(
+  function reportHydrationRetryExhausted(targetId: string, attempts: number): never {
+    throw new RetryExhaustedError(targetId, attempts);
+  },
+  {
+    op: 'hydrationRetryExhausted',
+    // targetId is deliberately NOT captured: a preview target can be a
+    // user-authored type fqn, not just a curated id. Error-class name +
+    // attempt count are structurally safe.
+    sanitizeError: (err) => ({
+      signature: err instanceof Error ? err.name : 'Error',
+      context: err instanceof RetryExhaustedError ? { attempts: err.attempts } : undefined
+    })
+  }
+);
 
 /**
  * CodegenProvider owns the single codegen/preview {@link Worker} plus both
@@ -331,6 +349,14 @@ export function CodegenProvider({ children }: { children: React.ReactNode }): Re
                       }
                     }
                   });
+                }
+              } else {
+                try {
+                  reportHydrationRetryExhausted(targetId, MAX_HYDRATION_RETRIES_PER_TARGET);
+                } catch {
+                  // Preserves today's observable UX. This catch exists ONLY so the throw
+                  // routes through instrumentation's error-capture path without changing
+                  // control flow for anything downstream of this handler.
                 }
               }
               setHydrationRetriesRemaining(targetId, orchestrator.getRemainingAttempts(targetId));
