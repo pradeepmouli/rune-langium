@@ -8,6 +8,7 @@ import { Buffer } from 'buffer';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import { InstrumentationErrorBoundary } from './components/InstrumentationErrorBoundary.js';
 import { installOpLogWindowBridge } from './services/op-log-window-bridge.js';
 import { installPerfLogWindowBridge } from './services/perf-log-window-bridge.js';
 import { installTypeGraphWindowBridge } from './services/type-graph-window-bridge.js';
@@ -37,6 +38,8 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <InstrumentationErrorBoundary>
+      <App />
+    </InstrumentationErrorBoundary>
   </StrictMode>
 );

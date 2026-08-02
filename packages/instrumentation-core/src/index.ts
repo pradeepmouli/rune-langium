@@ -77,7 +77,7 @@ export function resetInstrumentationForTests(): void {
   resetInstrumentationThresholdForTests();
 }
 
-/** Internal — Task 2's withInstrumentation calls this; not exported publicly. */
+/** Public export — used both internally by withInstrumentation and directly by callers (e.g. InstrumentationErrorBoundary) that hand-build a TelemetryRecord outside the capture/sanitize wrapper machinery. */
 export function emitRecord(record: TelemetryRecord): void {
   currentEmit(record);
 }

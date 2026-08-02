@@ -118,7 +118,7 @@ function hashString(input: string): string {
  * it groups the same recurring bug across sessions without deriving
  * anything from what the user actually typed.
  */
-function signatureFor(error: Error | undefined): string {
+export function signatureFor(error: Error | undefined): string {
   const name = error?.name && KNOWN_ERROR_NAMES.has(error.name) ? error.name : 'Error';
   const topFrame = error?.stack?.split('\n')[1]?.trim() ?? '';
   return `${name}:${hashString(topFrame)}`;
