@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { afterEach, describe, it, expect, beforeEach } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { render, act, screen } from '@testing-library/react';
 
 class FakeWorker {
   static instances: FakeWorker[] = [];
@@ -39,7 +39,10 @@ afterEach(() => {
 import { CodegenProvider } from '../../../src/shell/providers/CodegenProvider.js';
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 import { usePreviewStore } from '../../../src/store/preview-store.js';
+import { useActivityStore } from '../../../src/store/activity-store.js';
 import { useEditorStore } from '@rune-langium/visual-editor';
+import { StudioToastProvider } from '../../../src/components/StudioToastProvider.js';
+import { installInstrumentationActivitySink } from '../../../src/services/instrumentation/activity-sink.js';
 import {
   configureInstrumentation,
   resetInstrumentationForTests,
@@ -130,8 +133,9 @@ describe('CodegenProvider retry-budget exhaustion instrumentation', () => {
     expect(emitted).toEqual([
       expect.objectContaining({
         op: 'hydrationRetryExhausted',
-        level: 'error',
+        level: 'warn', // was 'error' — this call site is now `handled: true`
         signature: 'RetryExhaustedError',
+        namespace: 'curated',
         context: { attempts: MAX_HYDRATION_RETRIES_PER_TARGET }
       })
     ]);
@@ -141,5 +145,47 @@ describe('CodegenProvider retry-budget exhaustion instrumentation', () => {
     // A further exhausted round emits again (not deduped) but still doesn't throw.
     expect(() => sendUnresolvedPreviewResult(worker, 'Scheme', generateMsg.requestId)).not.toThrow();
     expect(emitted.length).toBe(2);
+  });
+
+  it('the exhausted-retry error reaches the user: a toast fires and an Activity entry is recorded', async () => {
+    useActivityStore.setState({ entries: [] });
+    const unregisterActivitySink = installInstrumentationActivitySink();
+    setInstrumentationThreshold('warn'); // handled errors default to 'warn' — must clear this threshold
+
+    usePreviewStore.getState().resetPreviewState();
+    usePreviewStore.setState({
+      selectedTargetId: 'Scheme',
+      selectedTarget: { id: 'Scheme', namespace: 'fpml.consolidated.confirmation', name: 'Scheme', kind: 'data' }
+    });
+
+    render(
+      <StudioToastProvider>
+        <WorkspaceStateContext.Provider value={wsState('ws-exhaust-2')}>
+          <CodegenProvider>
+            <div />
+          </CodegenProvider>
+        </WorkspaceStateContext.Provider>
+      </StudioToastProvider>
+    );
+
+    const worker = FakeWorker.instances[0]!;
+    const generateMsg = worker.posted.find((m) => m.type === 'preview:generate' && m.targetId === 'Scheme');
+    expect(generateMsg).toBeDefined();
+
+    for (let i = 0; i < MAX_HYDRATION_RETRIES_PER_TARGET; i++) {
+      sendUnresolvedPreviewResult(worker, 'Scheme', generateMsg.requestId);
+    }
+    await act(async () => {
+      sendUnresolvedPreviewResult(worker, 'Scheme', generateMsg.requestId);
+    });
+
+    const toast = await screen.findByText('hydrationRetryExhausted');
+    expect(toast).toBeTruthy();
+
+    const entries = useActivityStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ tag: 'curated', ok: false, msg: 'hydrationRetryExhausted' });
+
+    unregisterActivitySink();
   });
 });

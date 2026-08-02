@@ -62,6 +62,15 @@ const reportHydrationRetryExhausted = withInstrumentation(
   },
   {
     op: 'hydrationRetryExhausted',
+    // Handled: the call site below wraps this in an empty try/catch,
+    // deliberately swallowing it to preserve existing UX (established in
+    // the original instrumentation-wrapper plan's Task 8) — 'warn', not
+    // the default 'error'. namespace: 'curated' is what makes the Toast
+    // and Activity sinks pick it up: today, exhausting the curated-
+    // hydration retry budget gives the user zero feedback; this is the
+    // first thing that changes that.
+    handled: true,
+    namespace: 'curated',
     // targetId is deliberately NOT captured: a preview target can be a
     // user-authored type fqn, not just a curated id. Error-class name +
     // attempt count are structurally safe.
