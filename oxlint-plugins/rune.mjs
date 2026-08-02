@@ -192,12 +192,67 @@ const noRawEdgeId = {
   }
 };
 
+// ── rune/no-uninstrumented-export ────────────────────────────────────
+// Flags a top-level `export function`/`export const fn = (...) => {}`
+// NOT already wrapped in withInstrumentation. Enforcement-only — this
+// does NOT autofix (none of this plugin's existing rules do; the
+// one-time ts-morph codemod, not this lint rule, performs the rewrite).
+// Its job is purely to catch a NEW function added after the codemod's
+// initial sweep that forgot to opt in.
+//
+// Static heuristic, not a type checker: it cannot resolve whether a
+// `withInstrumentation` identifier genuinely refers to THE
+// `withInstrumentation` from `services/instrumentation/core.ts` vs. some
+// unrelated same-named import, and it will not recognize an aliased
+// import (`import { withInstrumentation as wi } from ...`). Full
+// type-aware detection is out of scope for a lint rule.
+const INSTRUMENTATION_MARKER = 'withInstrumentation';
+
+const noUninstrumentedExport = {
+  create(context) {
+    return {
+      ExportNamedDeclaration(node) {
+        const decl = node.declaration;
+        if (!decl) return;
+        if (decl.type === 'FunctionDeclaration') {
+          context.report({
+            message: `Exported function "${decl.id?.name ?? '(anonymous)'}" is not wrapped in withInstrumentation — run the codemod (apps/studio/scripts/instrument-codemod.ts) or wrap it manually.`,
+            node: decl
+          });
+          return;
+        }
+        if (decl.type === 'VariableDeclaration') {
+          for (const declarator of decl.declarations) {
+            const init = declarator.init;
+            if (!init) continue;
+            const isArrowOrFunctionExpr = init.type === 'ArrowFunctionExpression' || init.type === 'FunctionExpression';
+            const isWrapped =
+              init.type === 'CallExpression' &&
+              init.callee &&
+              ((init.callee.type === 'Identifier' && init.callee.name === INSTRUMENTATION_MARKER) ||
+                (init.callee.type === 'MemberExpression' &&
+                  init.callee.object?.type === 'Identifier' &&
+                  init.callee.object.name === INSTRUMENTATION_MARKER));
+            if (isArrowOrFunctionExpr && !isWrapped) {
+              context.report({
+                message: `Exported function "${declarator.id?.name ?? '(anonymous)'}" is not wrapped in withInstrumentation.`,
+                node: declarator
+              });
+            }
+          }
+        }
+      }
+    };
+  }
+};
+
 export default {
   meta: { name: 'rune' },
   rules: {
     'no-palette-utility': noPaletteUtility,
     'no-raw-arbitrary-value': noRawArbitraryValue,
     'no-raw-node-id': noRawNodeId,
-    'no-raw-edge-id': noRawEdgeId
+    'no-raw-edge-id': noRawEdgeId,
+    'no-uninstrumented-export': noUninstrumentedExport
   }
 };
