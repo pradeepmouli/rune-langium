@@ -13,6 +13,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
+import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { getElementNamespace } from '@rune-langium/core';
@@ -22,7 +23,6 @@ import {
   isData,
   isRosettaEnumeration,
   isRosettaBasicType,
-  isData as _isData,
   type Choice,
   type Data,
   type Attribute,
@@ -173,6 +173,42 @@ const ZOD_TS_TYPE_MAP: Readonly<Record<string, string>> = {
   zonedDateTime: 'string'
 } as Record<string, string>;
 
+/**
+ * Wrap a bare `ReadonlyMap<string, N>` (this emitter's own `EmissionContext`
+ * lookup maps) into the `{node, sourceUri}`-entry shape `resolveTypeCallTarget`
+ * (Task 1, type-ref-resolver.ts) requires. Every entry shares one fallback
+ * `sourceUri` — this emitter never consumes the per-entry `sourceUri` in its
+ * own rendering (only `preview-schema.ts`'s later migration needs real
+ * per-entry source URIs for recursive structural expansion), so a single
+ * shared value for the whole namespace is correct here.
+ */
+function wrapTypeIndexEntries<N>(
+  map: ReadonlyMap<string, N>,
+  sourceUri: string
+): ReadonlyMap<string, TypeIndexEntry<N>> {
+  const wrapped = new Map<string, TypeIndexEntry<N>>();
+  for (const [name, node] of map) {
+    wrapped.set(name, { node, sourceUri });
+  }
+  return wrapped;
+}
+
+/**
+ * Adapt this emitter's `EmissionContext` (bare unwrapped lookup maps) to the
+ * `TypeIndexLookup` shape `resolveTypeCallTarget` expects. Built once per
+ * namespace emission (the underlying maps are immutable for the lifetime of
+ * one `ZodNamespaceEmitter` instance).
+ */
+function toTypeIndexLookup(ctx: EmissionContext): TypeIndexLookup {
+  const sourceUri = ctx.namespace;
+  return {
+    enumByName: wrapTypeIndexEntries(ctx.enumByName, sourceUri),
+    dataByName: wrapTypeIndexEntries(ctx.dataByName, sourceUri),
+    choiceByName: wrapTypeIndexEntries(ctx.choiceByName, sourceUri),
+    typeAliasByName: wrapTypeIndexEntries(ctx.typeAliasByName, sourceUri)
+  };
+}
+
 function buildEmissionContext(
   model: NamespaceWalkResult,
   registry: NamespaceRegistry,
@@ -214,6 +250,7 @@ export function emitNamespace(
 
 export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
+  private readonly typeIndex: TypeIndexLookup;
   private readonly sections: string[] = [];
 
   constructor(
@@ -223,6 +260,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   ) {
     super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry, this.diagnostics);
+    this.typeIndex = toTypeIndexLookup(this.ctx);
   }
 
   emitHeader(): void {
@@ -414,86 +452,37 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * only a single file is parsed without the full workspace — common for fixtures).
    */
   private resolveTypeExpr(attr: Attribute): string {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      // Unresolved reference — try to recover using $refText
-      if (refText) {
-        // Check if it's a known built-in type name
-        const builtinZod = this.ctx.builtinTypeMap[refText];
-        if (builtinZod) {
-          return builtinZod;
+    return resolveTypeCallTarget(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no Zod mapping; emitting z.unknown()`
+          });
+          return 'z.unknown()';
+        },
+        onEnum: (node) => `${node.name}Schema`,
+        onData: (node) => `${node.name}Schema`,
+        onChoice: (node) => `${node.name}Schema`,
+        onUnresolved: (refText) => {
+          if (refText) {
+            // Unknown but named — emit schema reference optimistically
+            // (matches the pre-migration wording exactly).
+            this.reportUnresolvedReference(attr.name, refText, 'optimistic schema reference');
+            return `${refText}Schema`;
+          }
+          // Truly anonymous unresolved reference
+          this.reportUnresolvedReference(attr.name, undefined, 'z.unknown()');
+          return 'z.unknown()';
         }
-        // Check if it's an enum in the current namespace
-        if (this.ctx.enumByName.has(refText)) {
-          return `${refText}Schema`;
-        }
-        // Check if it's a data type in the current namespace
-        if (this.ctx.dataByName.has(refText)) {
-          return `${refText}Schema`;
-        }
-        // Check if it's a choice in the current namespace (W2)
-        if (this.ctx.choiceByName.has(refText)) {
-          return `${refText}Schema`;
-        }
-        // Unknown but named — emit schema reference optimistically
-        this.ctx.diagnostics.push({
-          severity: 'warning',
-          code: 'unresolved-ref',
-          message: `Attribute '${attr.name}': type '${refText}' is not resolved; emitting optimistic schema reference`
-        });
-        return `${refText}Schema`;
-      }
-      // Truly anonymous unresolved reference
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unresolved-ref',
-        message: `Attribute '${attr.name}' has an unresolved type reference; emitting z.unknown()`
-      });
-      return 'z.unknown()';
-    }
-
-    if (isRosettaBasicType(typeRef)) {
-      const typeName = typeRef.name;
-      const mapped = this.ctx.builtinTypeMap[typeName];
-      if (mapped) return mapped;
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unmapped-builtin',
-        message: `Builtin type '${typeName}' has no Zod mapping; emitting z.unknown()`
-      });
-      return 'z.unknown()';
-    }
-
-    if (isRosettaEnumeration(typeRef)) {
-      // Reference to an enum → use the enum schema name
-      return `${typeRef.name}Schema`;
-    }
-
-    if (isData(typeRef)) {
-      // Reference to a data type → use the schema name
-      return `${typeRef.name}Schema`;
-    }
-
-    if (isChoice(typeRef)) {
-      // W2: reference to a choice → use the choice union schema name
-      // (was falling to z.unknown() — isChoice was never consulted here).
-      return `${typeRef.name}Schema`;
-    }
-
-    // Unknown reference type — try $refText fallback
-    if (refText) {
-      const builtinZod = this.ctx.builtinTypeMap[refText];
-      if (builtinZod) return builtinZod;
-    }
-
-    this.ctx.diagnostics.push({
-      severity: 'warning',
-      code: 'unresolved-ref',
-      message: `Unknown type reference kind for attribute '${attr.name}'; emitting z.unknown()`
-    });
-    return 'z.unknown()';
+      },
+      this.ctx.namespace
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -790,37 +779,38 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * Resolve the TypeScript type expression for an attribute (for interface declarations).
    */
   private resolveTypeExprAsTs(attr: Attribute): string {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      if (refText) {
-        const builtinTs = ZOD_TS_TYPE_MAP[refText];
-        if (builtinTs) return builtinTs;
-        return refText; // data type name
-      }
-      return 'unknown';
-    }
-
-    if (isRosettaBasicType(typeRef)) {
-      const mapped = ZOD_TS_TYPE_MAP[typeRef.name];
-      if (mapped) return mapped;
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unmapped-builtin',
-        message: `Builtin type '${typeRef.name}' has no TypeScript mapping in interface for '${attr.name}'; emitting unknown`
-      });
-      return 'unknown';
-    }
-
-    if (isRosettaEnumeration(typeRef)) return typeRef.name;
-    if (_isData(typeRef)) return typeRef.name;
-
-    if (refText) {
-      const builtinTs = ZOD_TS_TYPE_MAP[refText];
-      if (builtinTs) return builtinTs;
-    }
-    return 'unknown';
+    return resolveTypeCallTarget(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = ZOD_TS_TYPE_MAP[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no TypeScript mapping in interface for '${attr.name}'; emitting unknown`
+          });
+          return 'unknown';
+        },
+        onEnum: (node) => node.name,
+        onData: (node) => node.name,
+        onChoice: (node) => node.name,
+        onUnresolved: (refText) => {
+          // Pre-migration behavior never pushed a diagnostic on this path —
+          // it optimistically assumed an unresolved-but-named ref is a
+          // data/enum/choice type name used as-is; a genuinely anonymous
+          // ref falls back to 'unknown'. No diagnostic here, verbatim.
+          if (refText) {
+            const builtinTs = ZOD_TS_TYPE_MAP[refText];
+            if (builtinTs) return builtinTs;
+            return refText;
+          }
+          return 'unknown';
+        }
+      },
+      this.ctx.namespace
+    );
   }
 
   /**
