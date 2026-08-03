@@ -235,4 +235,80 @@ describe('resolveTypeCallTarget', () => {
     const result = resolveTypeCallTarget(refTextOnlyTypeCall, index, recordingVisitor(), 'file:///test.rosetta');
     expect(result).toEqual({ kind: 'data', value: 'Bar' });
   });
+
+  it('resolves a RosettaRecordType-typed field (date with linked typeRef) to primitive', async () => {
+    const { model, index } = await parseNamespace(`
+      namespace test
+      type Foo:
+        createdAt date (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'createdAt'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    expect(result).toEqual({ kind: 'primitive', value: 'date' });
+  });
+
+  it('resolves dateTime (RosettaRecordType) with linked typeRef to primitive', async () => {
+    const { model, index } = await parseNamespace(`
+      namespace test
+      type Foo:
+        timestamp dateTime (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'timestamp'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    expect(result).toEqual({ kind: 'primitive', value: 'dateTime' });
+  });
+
+  it('handles undefined typeCall by calling onUnresolved', async () => {
+    const { index } = await parseNamespace(`
+      namespace test
+    `);
+    const result = resolveTypeCallTarget(undefined, index, recordingVisitor(), 'file:///test.rosetta');
+    expect(result).toEqual({ kind: 'unresolved', value: undefined });
+  });
+
+  it('resolves eventType via linked typeRef to primitive', async () => {
+    const { model, index } = await parseNamespace(`
+      namespace test
+      type Foo:
+        event eventType (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'event'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    // If eventType is a builtin, expect primitive with 'eventType' name
+    expect(result.kind).toBe('primitive');
+    expect(result.value).toBe('eventType');
+  });
+
+  it('resolves calculation via linked typeRef to primitive', async () => {
+    const { model, index } = await parseNamespace(`
+      namespace test
+      type Foo:
+        calc calculation (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'calc'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    // If calculation is a builtin, expect primitive with 'calculation' name
+    expect(result.kind).toBe('primitive');
+    expect(result.value).toBe('calculation');
+  });
 });

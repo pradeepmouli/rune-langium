@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { isData, isChoice, isRosettaEnumeration, isRosettaBasicType, isRosettaTypeAlias } from '@rune-langium/core';
+import {
+  isData,
+  isChoice,
+  isRosettaEnumeration,
+  isRosettaBasicType,
+  isRosettaTypeAlias,
+  isRosettaRecordType
+} from '@rune-langium/core';
 import type { Data, Choice, RosettaEnumeration, RosettaTypeAlias, TypeCall } from '@rune-langium/core';
 
 /**
@@ -20,10 +27,16 @@ const ROSETTA_BASIC_TYPE_NAMES = new Set([
   'zonedDateTime',
   'time',
   'productType',
-  'eventType'
+  'eventType',
+  'pattern',
+  'calculation'
 ]);
 
-/** Bound on alias-to-alias chain length — defensive only; a real corpus never chains this deep. */
+/**
+ * Bound on alias-to-alias chain length — defense-in-depth only; a real corpus never chains
+ * this deep. The `Set` cycle guard already terminates any cycle in at most `visitedAliases.size + 1`
+ * hops, so this bound is unreachable in practice but serves as a safety net.
+ */
 const MAX_ALIAS_CHAIN = 32;
 
 export interface TypeResolutionVisitor<T> {
@@ -79,6 +92,7 @@ export function resolveTypeCallTarget<T>(
 
     if (typeRef) {
       if (isRosettaBasicType(typeRef)) return visitor.onPrimitive(typeRef.name);
+      if (isRosettaRecordType(typeRef)) return visitor.onPrimitive(typeRef.name);
       if (isRosettaEnumeration(typeRef)) return visitor.onEnum(typeRef, nodeSourceUri(typeRef, fallbackSourceUri));
       if (isData(typeRef)) return visitor.onData(typeRef, nodeSourceUri(typeRef, fallbackSourceUri));
       if (isChoice(typeRef)) return visitor.onChoice(typeRef, nodeSourceUri(typeRef, fallbackSourceUri));
