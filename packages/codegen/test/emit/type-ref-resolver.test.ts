@@ -2,7 +2,14 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import { createRuneDslServices, isData, isChoice, isRosettaEnumeration, isRosettaTypeAlias } from '@rune-langium/core';
+import {
+  createRuneDslServices,
+  isData,
+  isChoice,
+  isRosettaEnumeration,
+  isRosettaTypeAlias,
+  parseWorkspace
+} from '@rune-langium/core';
 import { EmptyFileSystem } from 'langium';
 import { URI } from 'langium';
 import type { Data, RosettaEnumeration, Choice, RosettaTypeAlias, RosettaModel, TypeCall } from '@rune-langium/core';
@@ -239,6 +246,7 @@ describe('resolveTypeCallTarget', () => {
   it('resolves a RosettaRecordType-typed field (date with linked typeRef) to primitive', async () => {
     const { model, index } = await parseNamespace(`
       namespace test
+      recordType date { day int month int year int }
       type Foo:
         createdAt date (0..1)
     `);
@@ -249,12 +257,17 @@ describe('resolveTypeCallTarget', () => {
       recordingVisitor(),
       'file:///test.rosetta'
     );
+    // With local recordType declaration, date now resolves to genuine RosettaRecordType node,
+    // and our isRosettaRecordType check correctly routes to onPrimitive
     expect(result).toEqual({ kind: 'primitive', value: 'date' });
   });
 
   it('resolves dateTime (RosettaRecordType) with linked typeRef to primitive', async () => {
     const { model, index } = await parseNamespace(`
       namespace test
+      recordType time { hour int minute int second int }
+      recordType date { day int month int year int }
+      recordType dateTime { date date time time }
       type Foo:
         timestamp dateTime (0..1)
     `);
@@ -265,6 +278,8 @@ describe('resolveTypeCallTarget', () => {
       recordingVisitor(),
       'file:///test.rosetta'
     );
+    // With local recordType declaration, dateTime now resolves to genuine RosettaRecordType node,
+    // and our isRosettaRecordType check correctly routes to onPrimitive
     expect(result).toEqual({ kind: 'primitive', value: 'dateTime' });
   });
 
@@ -310,5 +325,27 @@ describe('resolveTypeCallTarget', () => {
     // If calculation is a builtin, expect primitive with 'calculation' name
     expect(result.kind).toBe('primitive');
     expect(result.value).toBe('calculation');
+  });
+
+  it('demonstrates local alias-chasing behavior: typeAlias Alias: string resolves to onPrimitive(string)', async () => {
+    const { model, index } = await parseNamespace(`
+      namespace test
+      typeAlias MyStringAlias: string
+      type Foo:
+        field MyStringAlias (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'field'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    // Demonstrates that resolveTypeCallTarget chases aliases and calls onPrimitive
+    // with the TERMINAL type name (string), not the alias name (MyStringAlias).
+    // This is correct behavior — aliases are transparent to the resolver.
+    // For stdlib aliases like int→number, productType→string, etc., the caller
+    // sees the underlying name, not the alias name.
+    expect(result).toEqual({ kind: 'primitive', value: 'string' });
   });
 });
