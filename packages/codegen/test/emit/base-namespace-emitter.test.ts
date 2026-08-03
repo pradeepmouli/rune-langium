@@ -14,7 +14,17 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { parseWorkspace, isData, type Data, type RosettaCardinality } from '@rune-langium/core';
-import { buildAttributeTypesMap, decodeCardinality } from '../../src/emit/base-namespace-emitter.js';
+import {
+  buildAttributeTypesMap,
+  decodeCardinality,
+  BaseNamespaceEmitter
+} from '../../src/emit/base-namespace-emitter.js';
+import type { NamespaceWalkResult } from '../../src/emit/namespace-walker.js';
+import type { NamespaceRegistry } from '../../src/emit/namespace-registry.js';
+import type { GeneratorOutput, GeneratorDiagnostic } from '../../src/types.js';
+import { ZodNamespaceEmitter } from '../../src/emit/zod-emitter.js';
+import { TsNamespaceEmitter } from '../../src/emit/ts-emitter.js';
+import { JsonSchemaNamespaceEmitter } from '../../src/emit/json-schema-emitter.js';
 
 async function parseSingleNamespaceDataByName(source: string): Promise<Map<string, Data>> {
   const [result] = await parseWorkspace([{ uri: 'inmemory:///model.rosetta', content: source }]);
@@ -227,5 +237,166 @@ describe('decodeCardinality', () => {
     expect(decodeCardinality(undefined)).toEqual({ lower: 0, upper: null });
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+/**
+ * BaseNamespaceEmitter.reportUnresolvedReference + diagnostics unification
+ * (unified-type-reference-resolution Task 2). `reportUnresolvedReference`'s
+ * message text must match verbatim what Tasks 3-7 (zod/ts/json-schema/xsd/sql
+ * emitters' resolveTypeExpr-style methods) already emit today, so those tasks
+ * can swap their inline `this.ctx.diagnostics.push({...})` calls for this
+ * shared helper without changing observable output.
+ */
+
+class TestEmitter extends BaseNamespaceEmitter {
+  finalize(): GeneratorOutput {
+    return { relativePath: 'test.out', content: '', sourceMap: [], diagnostics: this.diagnostics, funcs: [] };
+  }
+  callReportUnresolved(attrName: string, refText: string | undefined, fallbackDescription: string): void {
+    this.reportUnresolvedReference(attrName, refText, fallbackDescription);
+  }
+  exposeDiagnostics(): GeneratorDiagnostic[] {
+    return this.diagnostics;
+  }
+}
+
+function makeModel(): NamespaceWalkResult {
+  return {
+    namespace: 'test',
+    dataByName: new Map(),
+    enumByName: new Map(),
+    choiceByName: new Map(),
+    typeAliasByName: new Map(),
+    libraryFuncsByName: new Map(),
+    rulesByName: new Map(),
+    reportsByName: new Map(),
+    annotationsByName: new Map(),
+    emitOrder: [],
+    cyclicTypes: new Set(),
+    docs: []
+  } as unknown as NamespaceWalkResult;
+}
+
+describe('BaseNamespaceEmitter.reportUnresolvedReference', () => {
+  it('pushes a warning diagnostic with the expected shape when refText is present', () => {
+    const emitter = new TestEmitter(makeModel(), {}, { namespaces: new Map() } as NamespaceRegistry);
+    emitter.callReportUnresolved('myAttr', 'MissingType', 'z.unknown()');
+    expect(emitter.exposeDiagnostics()).toEqual([
+      {
+        severity: 'warning',
+        code: 'unresolved-ref',
+        message: "Attribute 'myAttr': type 'MissingType' is not resolved; emitting z.unknown()"
+      }
+    ]);
+  });
+
+  it('pushes a warning diagnostic with the expected shape when refText is undefined (anonymous unresolved ref)', () => {
+    const emitter = new TestEmitter(makeModel(), {}, { namespaces: new Map() } as NamespaceRegistry);
+    emitter.callReportUnresolved('myAttr', undefined, 'z.unknown()');
+    expect(emitter.exposeDiagnostics()).toEqual([
+      {
+        severity: 'warning',
+        code: 'unresolved-ref',
+        message: "Attribute 'myAttr' has an unresolved type reference; emitting z.unknown()"
+      }
+    ]);
+  });
+
+  it('the fallbackDescription argument is interpolated verbatim (per-emitter fallback text varies)', () => {
+    const emitter = new TestEmitter(makeModel(), {}, { namespaces: new Map() } as NamespaceRegistry);
+    emitter.callReportUnresolved('field', 'Foo', 'xs:string');
+    expect(emitter.exposeDiagnostics()[0]?.message).toBe(
+      "Attribute 'field': type 'Foo' is not resolved; emitting xs:string"
+    );
+  });
+
+  it('accumulates multiple diagnostics across calls (does not overwrite)', () => {
+    const emitter = new TestEmitter(makeModel(), {}, { namespaces: new Map() } as NamespaceRegistry);
+    emitter.callReportUnresolved('a', 'A', 'unknown');
+    emitter.callReportUnresolved('b', undefined, '{}');
+    expect(emitter.exposeDiagnostics()).toHaveLength(2);
+  });
+});
+
+/**
+ * Diagnostics-storage unification: `EmissionContext.diagnostics` (each of
+ * the three EmissionContext-based emitters' internal `ctx`) must now be a
+ * REFERENCE to the same array as `BaseNamespaceEmitter.diagnostics`, not a
+ * separately-allocated `[]`. Proven here via reference identity (`toBe`),
+ * not merely "both are non-empty" — two independently-allocated arrays
+ * could both be non-empty and still be distinct objects, which would NOT
+ * satisfy the requirement that pushing through one path is visible through
+ * the other.
+ */
+describe('EmissionContext.diagnostics identity with BaseNamespaceEmitter.diagnostics', () => {
+  function emptyWalkResult(): NamespaceWalkResult {
+    return {
+      docs: [],
+      namespace: 'test.identity',
+      dataByName: new Map(),
+      enumByName: new Map(),
+      typeAliasByName: new Map(),
+      rulesByName: new Map(),
+      reportsByName: new Map(),
+      annotationsByName: new Map(),
+      libraryFuncsByName: new Map(),
+      choiceByName: new Map(),
+      emitOrder: [],
+      cyclicTypes: new Set()
+    } as unknown as NamespaceWalkResult;
+  }
+
+  const registry: NamespaceRegistry = { namespaces: new Map() };
+
+  class ProbeZodEmitter extends ZodNamespaceEmitter {
+    pushProbeDiagnostic(): void {
+      this.diagnostics.push({ severity: 'warning', code: 'probe', message: 'probe' });
+    }
+    exposeDiagnostics(): GeneratorDiagnostic[] {
+      return this.diagnostics;
+    }
+  }
+
+  class ProbeTsEmitter extends TsNamespaceEmitter {
+    pushProbeDiagnostic(): void {
+      this.diagnostics.push({ severity: 'warning', code: 'probe', message: 'probe' });
+    }
+    exposeDiagnostics(): GeneratorDiagnostic[] {
+      return this.diagnostics;
+    }
+  }
+
+  class ProbeJsonSchemaEmitter extends JsonSchemaNamespaceEmitter {
+    pushProbeDiagnostic(): void {
+      this.diagnostics.push({ severity: 'warning', code: 'probe', message: 'probe' });
+    }
+    exposeDiagnostics(): GeneratorDiagnostic[] {
+      return this.diagnostics;
+    }
+  }
+
+  it('ZodNamespaceEmitter: this.diagnostics IS the array returned as finalize().diagnostics', () => {
+    const emitter = new ProbeZodEmitter(emptyWalkResult(), {}, registry);
+    emitter.pushProbeDiagnostic();
+    const output = emitter.finalize();
+    expect(output.diagnostics).toBe(emitter.exposeDiagnostics());
+    expect(output.diagnostics).toContainEqual({ severity: 'warning', code: 'probe', message: 'probe' });
+  });
+
+  it('TsNamespaceEmitter: this.diagnostics IS the array returned as finalize().diagnostics', () => {
+    const emitter = new ProbeTsEmitter(emptyWalkResult(), {}, registry);
+    emitter.pushProbeDiagnostic();
+    const output = emitter.finalize();
+    expect(output.diagnostics).toBe(emitter.exposeDiagnostics());
+    expect(output.diagnostics).toContainEqual({ severity: 'warning', code: 'probe', message: 'probe' });
+  });
+
+  it('JsonSchemaNamespaceEmitter: this.diagnostics IS the array returned as finalize().diagnostics', () => {
+    const emitter = new ProbeJsonSchemaEmitter(emptyWalkResult(), {}, registry);
+    emitter.pushProbeDiagnostic();
+    const output = emitter.finalize();
+    expect(output.diagnostics).toBe(emitter.exposeDiagnostics());
+    expect(output.diagnostics).toContainEqual({ severity: 'warning', code: 'probe', message: 'probe' });
   });
 });

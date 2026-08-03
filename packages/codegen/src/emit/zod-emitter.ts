@@ -173,13 +173,17 @@ const ZOD_TS_TYPE_MAP: Readonly<Record<string, string>> = {
   zonedDateTime: 'string'
 } as Record<string, string>;
 
-function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
+function buildEmissionContext(
+  model: NamespaceWalkResult,
+  registry: NamespaceRegistry,
+  diagnostics: GeneratorDiagnostic[]
+): EmissionContext {
   return {
     target: 'zod',
     emitOrder: model.emitOrder,
     lazyTypes: model.cyclicTypes,
     sourceMap: [],
-    diagnostics: [],
+    diagnostics,
     namespace: model.namespace,
     dataByName: model.dataByName,
     choiceByName: model.choiceByName,
@@ -218,7 +222,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     super(model, options, registry);
-    this.ctx = buildEmissionContext(model, registry);
+    this.ctx = buildEmissionContext(model, registry, this.diagnostics);
   }
 
   emitHeader(): void {

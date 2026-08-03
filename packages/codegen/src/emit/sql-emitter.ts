@@ -18,7 +18,7 @@ import {
   type RosettaEnumeration,
   type RosettaTypeAlias
 } from '@rune-langium/core';
-import type { GeneratorOptions, GeneratorOutput, GeneratorDiagnostic, SqlOptions } from '../types.js';
+import type { GeneratorOptions, GeneratorOutput, SqlOptions } from '../types.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
@@ -35,7 +35,6 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly enumNames: ReadonlySet<string>;
   private readonly statements: string[] = [];
   private readonly joinTables: string[] = [];
-  private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly relativePath: string;
 
   /**

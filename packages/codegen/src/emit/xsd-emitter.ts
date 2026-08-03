@@ -163,7 +163,7 @@ import {
   type RosettaTypeAlias,
   type Condition
 } from '@rune-langium/core';
-import type { GeneratorOptions, GeneratorOutput, GeneratorDiagnostic } from '../types.js';
+import type { GeneratorOptions, GeneratorOutput } from '../types.js';
 import { emitNamespaceWithContract } from './namespace-emitter.js';
 import type { NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter, decodeCardinality } from './base-namespace-emitter.js';
@@ -273,7 +273,6 @@ export function emitNamespace(
 
 export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly relativePath: string;
-  private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly complexTypeBlocks: string[] = [];
   private readonly simpleTypeBlocks: string[] = [];
   /** Every top-level `xs:simpleType` name emitted so far in this namespace (enum names + synthesized restricted-simpleType names share one name space) — guards against `synthesizeRestrictedSimpleType` colliding with an enum or another attribute's synthesized type. */

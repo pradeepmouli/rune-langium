@@ -104,7 +104,11 @@ const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = mergeProfileType
   object
 >;
 
-function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
+function buildEmissionContext(
+  model: NamespaceWalkResult,
+  registry: NamespaceRegistry,
+  diagnostics: GeneratorDiagnostic[]
+): EmissionContext {
   return {
     namespace: model.namespace,
     relativePath: getTargetRelativePath(model.namespace, 'json-schema'),
@@ -118,7 +122,7 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     libraryFuncsByName: model.libraryFuncsByName,
     emitOrder: model.emitOrder,
     sourceMap: [],
-    diagnostics: [],
+    diagnostics,
     registry,
     builtinTypeMap: JSON_BUILTIN_TYPE_MAP
   };
@@ -157,7 +161,7 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     super(model, options, registry);
-    this.ctx = buildEmissionContext(model, registry);
+    this.ctx = buildEmissionContext(model, registry, this.diagnostics);
     this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
     this.typesWithLocalSubtype = JsonSchemaNamespaceEmitter.computeTypesWithLocalSubtype(
       model.dataByName,

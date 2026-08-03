@@ -165,7 +165,6 @@ export function emitNamespace(
 export class OpenApiNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly relativePathJson: string;
   private readonly openApiOptions: OpenApiOptions;
-  private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly generatorOptions: NamespaceEmitterOptions;
 
   constructor(model: NamespaceWalkResult, options: NamespaceEmitterOptions, registry: NamespaceRegistry) {

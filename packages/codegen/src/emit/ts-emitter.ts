@@ -136,13 +136,17 @@ const TS_TYPEOF_MAP: Readonly<Record<string, string>> = buildTsTypeofMap();
 // Emission context constructor helper
 // ---------------------------------------------------------------------------
 
-function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
+function buildEmissionContext(
+  model: NamespaceWalkResult,
+  registry: NamespaceRegistry,
+  diagnostics: GeneratorDiagnostic[]
+): EmissionContext {
   return {
     target: 'typescript',
     emitOrder: model.emitOrder,
     lazyTypes: model.cyclicTypes,
     sourceMap: [],
-    diagnostics: [],
+    diagnostics,
     namespace: model.namespace,
     dataByName: model.dataByName,
     enumByName: model.enumByName,
@@ -190,7 +194,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     super(model, options, registry);
-    this.ctx = buildEmissionContext(model, registry);
+    this.ctx = buildEmissionContext(model, registry, this.diagnostics);
     this.relativePath = getTargetRelativePath(model.namespace, 'typescript');
   }
 
