@@ -97,6 +97,11 @@ export function resolveTypeCallTarget<T>(
       if (isData(typeRef)) return visitor.onData(typeRef, nodeSourceUri(typeRef, fallbackSourceUri));
       if (isChoice(typeRef)) return visitor.onChoice(typeRef, nodeSourceUri(typeRef, fallbackSourceUri));
       if (isRosettaTypeAlias(typeRef)) {
+        // Special case: stdlib aliases with names in ROSETTA_BASIC_TYPE_NAMES (int, productType,
+        // eventType, calculation) should NOT be chased through. They're named aliases that represent
+        // their own distinct type identities for emitters (e.g., int → z.number().int() in Zod,
+        // INTEGER in SQL). Return their name directly, not their underlying type.
+        if (ROSETTA_BASIC_TYPE_NAMES.has(typeRef.name)) return visitor.onPrimitive(typeRef.name);
         if (visitedAliases.has(typeRef)) return visitor.onUnresolved(originalRefText);
         visitedAliases.add(typeRef);
         currentTypeCall = typeRef.typeCall;
@@ -115,6 +120,12 @@ export function resolveTypeCallTarget<T>(
       if (choiceEntry) return visitor.onChoice(choiceEntry.node, choiceEntry.sourceUri);
       const aliasEntry = namespace.typeAliasByName.get(refText);
       if (aliasEntry) {
+        // Short-circuit: stdlib aliases with names in ROSETTA_BASIC_TYPE_NAMES should not be chased
+        // (consistency with the typeRef-resolved branch above). In practice, this refText path hits
+        // the `ROSETTA_BASIC_TYPE_NAMES.has(refText)` check above first, so this is defense-in-depth.
+        if (ROSETTA_BASIC_TYPE_NAMES.has(aliasEntry.node.name)) {
+          return visitor.onPrimitive(aliasEntry.node.name);
+        }
         if (visitedAliases.has(aliasEntry.node)) return visitor.onUnresolved(originalRefText);
         visitedAliases.add(aliasEntry.node);
         currentTypeCall = aliasEntry.node.typeCall;

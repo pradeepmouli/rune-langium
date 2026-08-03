@@ -2,17 +2,10 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, expect, it } from 'vitest';
-import {
-  createRuneDslServices,
-  isData,
-  isChoice,
-  isRosettaEnumeration,
-  isRosettaTypeAlias,
-  parseWorkspace
-} from '@rune-langium/core';
+import { createRuneDslServices, isData, isChoice, isRosettaEnumeration, isRosettaTypeAlias } from '@rune-langium/core';
 import { EmptyFileSystem } from 'langium';
 import { URI } from 'langium';
-import type { Data, RosettaEnumeration, Choice, RosettaTypeAlias, RosettaModel, TypeCall } from '@rune-langium/core';
+import type { Data, RosettaModel } from '@rune-langium/core';
 import {
   resolveTypeCallTarget,
   type TypeIndexLookup,
@@ -327,7 +320,29 @@ describe('resolveTypeCallTarget', () => {
     expect(result.value).toBe('calculation');
   });
 
-  it('demonstrates local alias-chasing behavior: typeAlias Alias: string resolves to onPrimitive(string)', async () => {
+  it('short-circuits stdlib aliases in ROSETTA_BASIC_TYPE_NAMES (e.g., calculation → onPrimitive(calculation), not string)', async () => {
+    const { model, index } = await parseNamespace(`
+      namespace test
+      typeAlias calculation: string
+      type Foo:
+        calc calculation (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'calc'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    // CORRECT behavior: stdlib aliases (calculation, int, productType, eventType —
+    // all in ROSETTA_BASIC_TYPE_NAMES) are NOT chased through. They're semantically
+    // distinct in emitters and have special handling. The resolver preserves the
+    // alias name so emitters can recognize and handle them distinctly (e.g., calculation
+    // may have different rendering than plain string).
+    expect(result).toEqual({ kind: 'primitive', value: 'calculation' });
+  });
+
+  it('chases NON-stdlib aliases (e.g., MyStringAlias → onPrimitive(string))', async () => {
     const { model, index } = await parseNamespace(`
       namespace test
       typeAlias MyStringAlias: string
@@ -341,11 +356,9 @@ describe('resolveTypeCallTarget', () => {
       recordingVisitor(),
       'file:///test.rosetta'
     );
-    // Demonstrates that resolveTypeCallTarget chases aliases and calls onPrimitive
-    // with the TERMINAL type name (string), not the alias name (MyStringAlias).
-    // This is correct behavior — aliases are transparent to the resolver.
-    // For stdlib aliases like int→number, productType→string, etc., the caller
-    // sees the underlying name, not the alias name.
+    // CORRECT behavior: domain aliases (not in ROSETTA_BASIC_TYPE_NAMES) are chased
+    // through to their terminal type. MyStringAlias is a domain-specific alias without
+    // special emitter handling, so it resolves to the underlying string type.
     expect(result).toEqual({ kind: 'primitive', value: 'string' });
   });
 });
