@@ -1226,44 +1226,59 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * Emit a TypeScript type alias declaration.
    * Maps a Rune typeAlias to `export type <Name> = <TsType>;`.
    * Renamed from emitTypeAlias to avoid collision with the public interface method.
+   *
+   * Resolves the alias's own right-hand side (`typeAlias A: B` — what `B`
+   * resolves to) via the shared `resolveTypeCallTarget` resolver, same as
+   * `resolveTypeExprAsTs` resolves an ATTRIBUTE's type reference. This
+   * transparently chases `B` through further `RosettaTypeAlias` links — the
+   * two hand-rolled inline builtin maps this replaces had no
+   * `isRosettaTypeAlias` branch (so a chained alias silently degraded to
+   * `unknown`) AND were mutually inconsistent (the `typeRef`-branch map
+   * lacked `pattern`/`calculation`; the `refText`-branch map additionally
+   * lacked `productType`/`eventType`, and neither was sourced from
+   * `this.ctx.builtinTypeMap` like every other builtin lookup in this file).
+   * Routing primitives through `this.ctx.builtinTypeMap` also means the
+   * temporal builtins (`date`/`dateTime`/`zonedDateTime`/`time`) now resolve
+   * to their real `Temporal.*` TS types instead of the old maps' `'string'`
+   * literal — consistent with every other builtin-typed declaration in this
+   * emitter (no fixture previously exercised a temporal-typed alias).
+   *
+   * Data/Choice targets resolve to their `<Name>Shape` plain-structural type
+   * (not the class/bare-union name `resolveTypeExprAsTs` uses for attribute
+   * fields) — a type alias is a structural synonym, and this function's own
+   * pre-existing Data handling already used the `Shape` suffix (verified by
+   * the `data-ref` US7 fixture: `typeAlias HomeAddress: Address` →
+   * `export type HomeAddress = AddressShape;`); Choice follows the same
+   * Shape-suffix convention for consistency (previously unhandled — any
+   * alias-to-Choice fell through to `unknown`).
    */
   private emitTypeAliasDeclaration(alias: RosettaTypeAlias): string {
     const name = alias.name;
-    const typeRef = alias.typeCall?.type?.ref;
-    const refText = alias.typeCall?.type?.$refText;
 
-    let tsType = 'unknown';
-    if (typeRef && isRosettaBasicType(typeRef)) {
-      const builtinMap: Record<string, string> = {
-        string: 'string',
-        int: 'number',
-        number: 'number',
-        boolean: 'boolean',
-        date: 'string',
-        dateTime: 'string',
-        zonedDateTime: 'string',
-        time: 'string',
-        productType: 'string',
-        eventType: 'string'
-      };
-      tsType = builtinMap[typeRef.name] ?? 'unknown';
-    } else if (typeRef && isData(typeRef)) {
-      tsType = `${typeRef.name}Shape`;
-    } else if (typeRef && isRosettaEnumeration(typeRef)) {
-      tsType = typeRef.name;
-    } else if (refText) {
-      const builtinMap: Record<string, string> = {
-        string: 'string',
-        int: 'number',
-        number: 'number',
-        boolean: 'boolean',
-        date: 'string',
-        dateTime: 'string',
-        zonedDateTime: 'string',
-        time: 'string'
-      };
-      tsType = builtinMap[refText] ?? refText;
-    }
+    const tsType = resolveTypeCallTarget(
+      alias.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no TypeScript mapping in type alias '${alias.name}'; emitting unknown`
+          });
+          return 'unknown';
+        },
+        onEnum: (node) => node.name,
+        onData: (node) => `${node.name}Shape`,
+        onChoice: (node) => `${node.name}Shape`,
+        // Pre-migration behavior: a totally unresolved RHS falls back to
+        // `unknown`, verbatim — no diagnostic (matches the old code's silent
+        // `tsType = 'unknown'` default for this case).
+        onUnresolved: () => 'unknown'
+      },
+      this.ctx.namespace
+    );
 
     return `export type ${name} = ${tsType};`;
   }

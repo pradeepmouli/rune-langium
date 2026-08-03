@@ -22,7 +22,6 @@ import {
   isChoice,
   isData,
   isRosettaEnumeration,
-  isRosettaBasicType,
   type Choice,
   type Data,
   type Attribute,
@@ -938,38 +937,45 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Emit a Zod schema and type alias for a RosettaTypeAlias node.
    * NOTE: not named `emitTypeAlias` — that name is taken by the public interface method.
+   *
+   * Resolves the alias's own right-hand side (`typeAlias A: B` — what `B`
+   * resolves to) via the shared `resolveTypeCallTarget` resolver, same as
+   * `resolveTypeExpr` resolves an ATTRIBUTE's type reference. This transparently
+   * chases `B` through further `RosettaTypeAlias` links (e.g. `typeAlias A: B`
+   * where `B` is itself `typeAlias B: C`) — the hand-rolled chain this replaces
+   * had no `isRosettaTypeAlias` branch, so `A` silently degraded to `z.unknown()`
+   * whenever its RHS was itself an alias (unified-type-reference-resolution
+   * follow-up; the earlier Task 3 migration only covered attribute references).
    */
   private emitTypeAliasSchema(alias: RosettaTypeAlias): string {
     const name = alias.name;
     const schemaName = `${name}Schema`;
-    const typeRef = alias.typeCall?.type?.ref;
-    const refText = alias.typeCall?.type?.$refText;
 
-    // Resolve to a Zod schema expression
-    let zodExpr = 'z.unknown()';
-
-    if (typeRef && isRosettaBasicType(typeRef)) {
-      const mapped = this.ctx.builtinTypeMap[typeRef.name];
-      if (mapped) {
-        zodExpr = mapped;
-      } else {
-        this.ctx.diagnostics.push({
-          severity: 'warning',
-          code: 'unmapped-builtin',
-          message: `Builtin type '${typeRef.name}' has no Zod mapping in type alias '${alias.name}'; emitting z.unknown()`
-        });
-      }
-    } else if (typeRef && isRosettaEnumeration(typeRef)) {
-      zodExpr = `${typeRef.name}Schema`;
-    } else if (typeRef && isData(typeRef)) {
-      zodExpr = `${typeRef.name}Schema`;
-    } else if (refText) {
-      const builtinZod = this.ctx.builtinTypeMap[refText];
-      if (builtinZod) zodExpr = builtinZod;
-      else if (this.ctx.enumByName.has(refText)) zodExpr = `${refText}Schema`;
-      else if (this.ctx.dataByName.has(refText)) zodExpr = `${refText}Schema`;
-      else zodExpr = 'z.unknown()';
-    }
+    const zodExpr = resolveTypeCallTarget(
+      alias.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no Zod mapping in type alias '${alias.name}'; emitting z.unknown()`
+          });
+          return 'z.unknown()';
+        },
+        onEnum: (node) => `${node.name}Schema`,
+        onData: (node) => `${node.name}Schema`,
+        onChoice: (node) => `${node.name}Schema`,
+        // Pre-migration behavior: a totally unresolved RHS (not a builtin,
+        // not a known Enum/Data/Choice/alias) falls back to `z.unknown()`
+        // with no diagnostic — verbatim, no optimistic `${refText}Schema`
+        // guess (unlike `resolveTypeExpr`'s attribute-side onUnresolved).
+        onUnresolved: () => 'z.unknown()'
+      },
+      this.ctx.namespace
+    );
 
     const lines: string[] = [
       `export const ${schemaName} = ${zodExpr};`,

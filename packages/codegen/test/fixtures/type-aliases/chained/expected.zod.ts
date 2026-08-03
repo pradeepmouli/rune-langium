@@ -35,8 +35,8 @@ const runeExtendChoice = <T extends z.ZodUnion<readonly z.ZodObject[]>>(choice: 
 export const AmountSchema = z.number();
 export type Amount = z.infer<typeof AmountSchema>;
 
-export const PriceSchema = z.unknown();
+export const PriceSchema = z.number();
 export type Price = z.infer<typeof PriceSchema>;
 
-export const UnitPriceSchema = z.unknown();
+export const UnitPriceSchema = z.number();
 export type UnitPrice = z.infer<typeof UnitPriceSchema>;
