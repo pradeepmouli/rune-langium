@@ -79,16 +79,16 @@ describe('withInstrumentation level-named sugar', () => {
 });
 
 describe('dynamic nesting-depth default level', () => {
-  it('a top-level call (no instrumented calls above it) defaults to info', () => {
+  it('a top-level call (no instrumented calls above it) defaults to debug', () => {
     const emitted: unknown[] = [];
     configureInstrumentation((r) => emitted.push(r));
     setInstrumentationThreshold('trace'); // let everything through so the DEFAULT is visible
     const wrapped = withInstrumentation(() => 1, { op: 'shallow' }); // no explicit level
     wrapped();
-    expect(emitted).toEqual([expect.objectContaining({ op: 'shallow', level: 'info' })]);
+    expect(emitted).toEqual([expect.objectContaining({ op: 'shallow', level: 'debug' })]);
   });
 
-  it('a call made from inside another instrumented call defaults lower (debug, not info)', () => {
+  it('a call made from inside another instrumented call defaults lower (trace, not debug)', () => {
     const emitted: unknown[] = [];
     configureInstrumentation((r) => emitted.push(r));
     setInstrumentationThreshold('trace');
@@ -96,10 +96,10 @@ describe('dynamic nesting-depth default level', () => {
     const outer = withInstrumentation(() => inner(), { op: 'outer' }); // no explicit level
     outer();
     const innerRecord = emitted.find((r: any) => r.op === 'inner') as any;
-    expect(innerRecord.level).toBe('debug');
+    expect(innerRecord.level).toBe('trace');
   });
 
-  it('depth is correctly decremented after a synchronous call returns, so a later top-level call is still info (regression: a prior version leaked depth on every sync call)', () => {
+  it('depth is correctly decremented after a synchronous call returns, so a later top-level call is still debug (regression: a prior version leaked depth on every sync call)', () => {
     const emitted: unknown[] = [];
     configureInstrumentation((r) => emitted.push(r));
     setInstrumentationThreshold('trace');
@@ -107,7 +107,7 @@ describe('dynamic nesting-depth default level', () => {
     wrapped();
     wrapped();
     wrapped();
-    expect(emitted.every((r: any) => r.level === 'info')).toBe(true);
+    expect(emitted.every((r: any) => r.level === 'debug')).toBe(true);
   });
 
   it('depth is correctly decremented after an async call settles, not before', async () => {
@@ -117,7 +117,7 @@ describe('dynamic nesting-depth default level', () => {
     const wrapped = withInstrumentation(async () => 1, { op: 'asyncRepeat' });
     await wrapped();
     await wrapped();
-    expect(emitted.every((r: any) => r.level === 'info')).toBe(true);
+    expect(emitted.every((r: any) => r.level === 'debug')).toBe(true);
   });
 
   // Regression coverage for a bug Task 2's review caught in ITS OWN early-plan
@@ -139,18 +139,18 @@ describe('dynamic nesting-depth default level', () => {
     // above the ambient default while asserting on the emitted array itself:
     // the real assertion is about depth's effect on `inner`, not on whether
     // `outer` itself emits.
-    setInstrumentationThreshold('error'); // outer (default 'info') won't clear
+    setInstrumentationThreshold('error'); // outer (default 'debug') won't clear
     const outer = withInstrumentation(() => inner(), { op: 'outerBelowThreshold' });
     outer();
     const innerRecord = emitted.find((r: any) => r.op === 'innerUnderBelowThresholdParent');
     expect(innerRecord).toBeUndefined(); // inner is 'trace'-appropriate-depth but threshold is 'error', so it won't emit either — see next assertion for the real check
     // Re-run with a threshold that lets inner through, to prove depth was
     // still incremented by outer despite outer itself never clearing 'error'.
-    setInstrumentationThreshold('debug');
+    setInstrumentationThreshold('trace');
     outer();
     const secondInnerRecord = emitted.find((r: any) => r.op === 'innerUnderBelowThresholdParent');
     expect(secondInnerRecord).toBeDefined();
-    expect((secondInnerRecord as any).level).toBe('debug'); // depth=1 from outer -> inner defaults to debug, proving outer's depth++ ran even though outer itself never cleared 'error' on the first call
+    expect((secondInnerRecord as any).level).toBe('trace'); // depth=1 from outer -> inner defaults to trace, proving outer's depth++ ran even though outer itself never cleared 'error' on the first call
   });
 
   it('a below-threshold async rejection still emits an error record and still decrements depth on settle (regression: same early-return shape as Task 2, applied to the depth-tracking wrapper)', async () => {
@@ -167,11 +167,11 @@ describe('dynamic nesting-depth default level', () => {
     await expect(wrapped()).rejects.toThrow(boom);
     expect(emitted).toEqual([expect.objectContaining({ op: 'depthAsyncExplode', level: 'error' })]);
     // Depth must have been decremented on settle — a later top-level call
-    // still defaults to 'info', not a deeper level, proving no leak.
+    // still defaults to 'debug', not a deeper level, proving no leak.
     setInstrumentationThreshold('trace');
     const wrapped2 = withInstrumentation(() => 1, { op: 'afterAsyncExplode' });
     wrapped2();
     const afterRecord = emitted.find((r: any) => r.op === 'afterAsyncExplode');
-    expect((afterRecord as any).level).toBe('info');
+    expect((afterRecord as any).level).toBe('debug');
   });
 });
