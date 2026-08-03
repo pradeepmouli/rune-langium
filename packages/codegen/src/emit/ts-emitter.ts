@@ -26,7 +26,6 @@ import {
   isRosettaEnumeration,
   isRosettaBasicType,
   isRosettaTypeAlias,
-  isData as _isData,
   type Choice,
   type Data,
   type Attribute,
@@ -64,6 +63,7 @@ import {
 } from './base-namespace-emitter.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
+import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import {
   extractFuncs,
   buildFuncCallGraph,
@@ -89,6 +89,7 @@ interface EmissionContext {
   namespace: string;
   dataByName: ReadonlyMap<string, Data>;
   enumByName: ReadonlyMap<string, RosettaEnumeration>;
+  choiceByName: ReadonlyMap<string, Choice>;
   typeAliasByName: ReadonlyMap<string, RosettaTypeAlias>;
   rulesByName: ReadonlyMap<string, RosettaRule>;
   reportsByName: ReadonlyMap<string, RosettaReport>;
@@ -136,6 +137,43 @@ const TS_TYPEOF_MAP: Readonly<Record<string, string>> = buildTsTypeofMap();
 // Emission context constructor helper
 // ---------------------------------------------------------------------------
 
+/**
+ * Wrap a bare `ReadonlyMap<string, N>` (this emitter's own `EmissionContext`
+ * lookup maps) into the `{node, sourceUri}`-entry shape `resolveTypeCallTarget`
+ * (Task 1, type-ref-resolver.ts) requires. Every entry shares one fallback
+ * `sourceUri` — this emitter never consumes the per-entry `sourceUri` in its
+ * own rendering (only `preview-schema.ts`'s later migration needs real
+ * per-entry source URIs for recursive structural expansion), so a single
+ * shared value for the whole namespace is correct here. Mirrors
+ * zod-emitter.ts's identically-named helper.
+ */
+function wrapTypeIndexEntries<N>(
+  map: ReadonlyMap<string, N>,
+  sourceUri: string
+): ReadonlyMap<string, TypeIndexEntry<N>> {
+  const wrapped = new Map<string, TypeIndexEntry<N>>();
+  for (const [name, node] of map) {
+    wrapped.set(name, { node, sourceUri });
+  }
+  return wrapped;
+}
+
+/**
+ * Adapt this emitter's `EmissionContext` (bare unwrapped lookup maps) to the
+ * `TypeIndexLookup` shape `resolveTypeCallTarget` expects. Built once per
+ * namespace emission (the underlying maps are immutable for the lifetime of
+ * one `TsNamespaceEmitter` instance).
+ */
+function toTypeIndexLookup(ctx: EmissionContext): TypeIndexLookup {
+  const sourceUri = ctx.namespace;
+  return {
+    enumByName: wrapTypeIndexEntries(ctx.enumByName, sourceUri),
+    dataByName: wrapTypeIndexEntries(ctx.dataByName, sourceUri),
+    choiceByName: wrapTypeIndexEntries(ctx.choiceByName, sourceUri),
+    typeAliasByName: wrapTypeIndexEntries(ctx.typeAliasByName, sourceUri)
+  };
+}
+
 function buildEmissionContext(
   model: NamespaceWalkResult,
   registry: NamespaceRegistry,
@@ -150,6 +188,7 @@ function buildEmissionContext(
     namespace: model.namespace,
     dataByName: model.dataByName,
     enumByName: model.enumByName,
+    choiceByName: model.choiceByName,
     typeAliasByName: model.typeAliasByName,
     rulesByName: model.rulesByName,
     reportsByName: model.reportsByName,
@@ -184,6 +223,7 @@ export function emitNamespace(
 
 export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
+  private readonly typeIndex: TypeIndexLookup;
   private readonly sections: string[] = [];
   private readonly relativePath: string;
   private readonly generatedFuncs: GeneratedFunc[] = [];
@@ -195,6 +235,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   ) {
     super(model, options, registry);
     this.ctx = buildEmissionContext(model, registry, this.diagnostics);
+    this.typeIndex = toTypeIndexLookup(this.ctx);
     this.relativePath = getTargetRelativePath(model.namespace, 'typescript');
   }
 
@@ -418,40 +459,40 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T105.
    */
   private resolveTypeExprAsTs(attr: Attribute): string {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      if (refText) {
-        const builtinTs = this.ctx.builtinTypeMap[refText];
-        if (builtinTs) return builtinTs;
-        return refText; // data type / enum name
-      }
-      return 'unknown';
-    }
-
-    if (isRosettaBasicType(typeRef)) {
-      const mapped = this.ctx.builtinTypeMap[typeRef.name];
-      if (mapped) return mapped;
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unmapped-builtin',
-        message: `Builtin type '${typeRef.name}' has no TypeScript mapping; emitting unknown`
-      });
-      return 'unknown';
-    }
-    if (isRosettaEnumeration(typeRef)) return typeRef.name;
-    if (_isData(typeRef)) return typeRef.name;
-    // W2: a Choice-typed attribute resolves to the emitted Choice union
-    // type name — was previously falling to 'unknown' (isChoice was never
-    // consulted in this mapping).
-    if (isChoice(typeRef)) return typeRef.name;
-
-    if (refText) {
-      const builtinTs = this.ctx.builtinTypeMap[refText];
-      if (builtinTs) return builtinTs;
-    }
-    return 'unknown';
+    return resolveTypeCallTarget(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          // Matches the original inline diagnostic exactly (code +
+          // message) — mirrors zod-emitter.ts's onPrimitive, which keeps
+          // its own target-specific diagnostics.push rather than routing
+          // through reportUnresolvedReference: this is a resolved
+          // primitive with no TARGET mapping, a different condition than
+          // an unresolved reference.
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no TypeScript mapping; emitting unknown`
+          });
+          return 'unknown';
+        },
+        // W2: a Choice-typed attribute resolves to the emitted Choice
+        // union type name — was previously falling to 'unknown' (isChoice
+        // was never consulted in the hand-rolled chain this replaces).
+        onEnum: (node) => node.name,
+        onData: (node) => node.name,
+        onChoice: (node) => node.name,
+        onUnresolved: (refText) => {
+          if (refText) return refText; // preserves this file's existing permissive refText shortcut
+          this.reportUnresolvedReference(attr.name, undefined, 'unknown');
+          return 'unknown';
+        }
+      },
+      this.ctx.namespace
+    );
   }
 
   /**
