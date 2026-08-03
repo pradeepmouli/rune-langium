@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -25,6 +26,7 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { TransportState } from '../services/transport-provider.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface LspConnectionBadgeProps {
   state: TransportState;
@@ -32,43 +34,46 @@ export interface LspConnectionBadgeProps {
   onRetry?: () => void;
 }
 
-export function LspConnectionBadge({ state, onRetry }: LspConnectionBadgeProps): ReactElement | null {
-  if (state.status === 'connected') {
-    // Dev-only success indicator; production is silent on success.
-    if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+export const LspConnectionBadge = withInstrumentation(
+  function LspConnectionBadge({ state, onRetry }: LspConnectionBadgeProps): ReactElement | null {
+    if (state.status === 'connected') {
+      // Dev-only success indicator; production is silent on success.
+      if (typeof window !== 'undefined' && import.meta.env?.DEV) {
+        return (
+          <span data-testid="lsp-badge-connected" className="text-success text-xs">
+            ●
+          </span>
+        );
+      }
+      return null;
+    }
+
+    if (state.status === 'connecting') {
       return (
-        <span data-testid="lsp-badge-connected" className="text-success text-xs">
-          ●
+        <span data-testid="lsp-badge-connecting" className="text-warning text-xs inline-flex items-center gap-1">
+          <RefreshCw className="size-3 animate-spin" />
+          Connecting…
         </span>
       );
     }
-    return null;
-  }
 
-  if (state.status === 'connecting') {
+    // 'error' or 'disconnected' — surface FR-014 copy + recovery affordance.
     return (
-      <span data-testid="lsp-badge-connecting" className="text-warning text-xs inline-flex items-center gap-1">
-        <RefreshCw className="size-3 animate-spin" />
-        Connecting…
+      <span data-testid="lsp-badge-error" className="text-destructive text-xs inline-flex items-center gap-2">
+        <AlertTriangle className="size-3.5" />
+        Language services unavailable
+        {onRetry && (
+          <button
+            type="button"
+            data-testid="lsp-badge-retry"
+            onClick={onRetry}
+            className="ml-1 underline hover:no-underline"
+          >
+            Retry
+          </button>
+        )}
       </span>
     );
-  }
-
-  // 'error' or 'disconnected' — surface FR-014 copy + recovery affordance.
-  return (
-    <span data-testid="lsp-badge-error" className="text-destructive text-xs inline-flex items-center gap-2">
-      <AlertTriangle className="size-3.5" />
-      Language services unavailable
-      {onRetry && (
-        <button
-          type="button"
-          data-testid="lsp-badge-retry"
-          onClick={onRetry}
-          className="ml-1 underline hover:no-underline"
-        >
-          Retry
-        </button>
-      )}
-    </span>
-  );
-}
+  },
+  { op: 'LspConnectionBadge' }
+);

@@ -37,6 +37,13 @@ jobs:
       - name: Build core
         run: pnpm --filter @rune-langium/core run build
 
+      - name: Build instrumentation-core
+        # packages/codegen/src/instrument.ts imports @rune-langium/instrumentation-core;
+        # tsc -b resolves workspace deps via normal module resolution (this repo
+        # has no explicit TS project `references`), so instrumentation-core's
+        # dist/ must exist before codegen's own build runs.
+        run: pnpm --filter @rune-langium/instrumentation-core run build
+
       - name: Build codegen
         run: pnpm --filter @rune-langium/codegen run build
 

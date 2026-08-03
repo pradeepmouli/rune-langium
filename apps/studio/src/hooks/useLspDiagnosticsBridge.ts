@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -12,20 +13,21 @@
 import { useEffect } from 'react';
 import type { LspClientService } from '../services/lsp-client.js';
 import { useDiagnosticsStore } from '../store/diagnostics-store.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
-/**
- * Hook that bridges LSP diagnostics into the zustand diagnostics store.
- */
-export function useLspDiagnosticsBridge(lspClient?: LspClientService): void {
-  const setFileDiagnostics = useDiagnosticsStore((s) => s.setFileDiagnostics);
+export const useLspDiagnosticsBridge = withInstrumentation(
+  function useLspDiagnosticsBridge(lspClient?: LspClientService): void {
+    const setFileDiagnostics = useDiagnosticsStore((s) => s.setFileDiagnostics);
 
-  useEffect(() => {
-    if (!lspClient) return;
+    useEffect(() => {
+      if (!lspClient) return;
 
-    const unsub = lspClient.onDiagnostics((uri, diagnostics) => {
-      setFileDiagnostics(uri, diagnostics);
-    });
+      const unsub = lspClient.onDiagnostics((uri, diagnostics) => {
+        setFileDiagnostics(uri, diagnostics);
+      });
 
-    return unsub;
-  }, [lspClient, setFileDiagnostics]);
-}
+      return unsub;
+    }, [lspClient, setFileDiagnostics]);
+  },
+  { op: 'useLspDiagnosticsBridge' }
+);

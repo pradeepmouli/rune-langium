@@ -25,6 +25,8 @@
  * through to the SPA entry.
  */
 
+import { withInstrumentation } from '../../../src/services/instrumentation/core.js';
+
 /** True if the request is a top-level browser navigation (document load). */
 function isNavigationRequest(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false;
@@ -37,26 +39,32 @@ function isNavigationRequest(request: Request): boolean {
   return accept.includes('text/html');
 }
 
-export const onRequest: PagesFunction<{ ASSETS: Fetcher }> = async ({ request, env }) => {
-  // First: attempt to serve the real static asset.
-  const assetResponse = await env.ASSETS.fetch(request);
-  if (assetResponse.status !== 404) {
-    return assetResponse;
-  }
+// Manually wrapped (Cloudflare Pages Function arrow export — codemod-blind).
+// `request`/`env`/the Response outputs are raw HTTP/static-asset objects —
+// not meaningful or safe to capture.
+export const onRequest: PagesFunction<{ ASSETS: Fetcher }> = withInstrumentation(
+  async ({ request, env }) => {
+    // First: attempt to serve the real static asset.
+    const assetResponse = await env.ASSETS.fetch(request);
+    if (assetResponse.status !== 404) {
+      return assetResponse;
+    }
 
-  // Asset not found. If this isn't a browser navigation (script/style/font/
-  // image/fetch/XHR), preserve the 404 — rewriting to HTML would cause the
-  // browser to try parsing `<html>...` as JS/CSS and fail with cryptic errors.
-  if (!isNavigationRequest(request)) {
-    return assetResponse;
-  }
+    // Asset not found. If this isn't a browser navigation (script/style/font/
+    // image/fetch/XHR), preserve the 404 — rewriting to HTML would cause the
+    // browser to try parsing `<html>...` as JS/CSS and fail with cryptic errors.
+    if (!isNavigationRequest(request)) {
+      return assetResponse;
+    }
 
-  // Navigation 404 -> serve the SPA entry so client-side routing can render.
-  // Use the PRETTY URL /rune-studio/studio/ (trailing slash, no index.html)
-  // because CF Pages' asset server resolves index assets only via the pretty
-  // path; asking for /rune-studio/studio/index.html directly can itself 404.
-  // A fresh GET Request (no original headers/body) avoids body-consumption
-  // issues with non-GET methods reaching this fallback path.
-  const indexUrl = new URL('/rune-studio/studio/', request.url);
-  return env.ASSETS.fetch(new Request(indexUrl.toString(), { method: 'GET' }));
-};
+    // Navigation 404 -> serve the SPA entry so client-side routing can render.
+    // Use the PRETTY URL /rune-studio/studio/ (trailing slash, no index.html)
+    // because CF Pages' asset server resolves index assets only via the pretty
+    // path; asking for /rune-studio/studio/index.html directly can itself 404.
+    // A fresh GET Request (no original headers/body) avoids body-consumption
+    // issues with non-GET methods reaching this fallback path.
+    const indexUrl = new URL('/rune-studio/studio/', request.url);
+    return env.ASSETS.fetch(new Request(indexUrl.toString(), { method: 'GET' }));
+  },
+  { op: 'onRequest' }
+);

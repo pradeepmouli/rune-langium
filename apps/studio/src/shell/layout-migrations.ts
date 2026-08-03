@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -22,6 +23,7 @@
 import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { buildDefaultLayout, LAYOUT_SCHEMA_VERSION, type BuildLayoutInput } from './layout-factory.js';
 import { PANEL_COMPONENT_NAMES, type FactoryShape } from './layout-types.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 const KNOWN_COMPONENTS = new Set<string>(PANEL_COMPONENT_NAMES);
 export const INVALID_LAYOUT_RESET_NOTICE =
@@ -64,95 +66,126 @@ function validateNativeLayout(json: unknown): 'ok' | 'invalid-shape' | 'unknown-
   return 'ok';
 }
 
-export function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayoutRecord {
-  return sanitizeLayoutWithDiagnostics(input, ctx).layout;
-}
+// `input` is `unknown` — the very value this function is defensively
+// validating, so it isn't trusted as safe. The 'native' dockview shape's
+// `json` is an opaque third-party snapshot — only a safe structural
+// summary of the sanitized output is captured.
+export const sanitizeLayout = withInstrumentation(
+  function sanitizeLayout(input: unknown, ctx: BuildLayoutInput): PanelLayoutRecord {
+    return sanitizeLayoutWithDiagnostics(input, ctx).layout;
+  },
+  {
+    op: 'sanitizeLayout',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const layout = value as PanelLayoutRecord;
+      return { version: layout.version, shape: layout.dockview?.shape };
+    }
+  }
+);
 
-export function sanitizeLayoutWithDiagnostics(input: unknown, ctx: BuildLayoutInput): LayoutSanitizationResult {
-  if (!isPlausibleLayout(input)) {
-    return { layout: buildDefaultLayout(ctx) };
-  }
-  if (input.version > LAYOUT_SCHEMA_VERSION) {
-    return {
-      layout: buildDefaultLayout(ctx),
-      notice: INVALID_LAYOUT_RESET_NOTICE
-    };
-  }
-  if (!hasKnownDockviewShape(input.dockview)) {
-    return {
-      layout: buildDefaultLayout(ctx),
-      notice: INVALID_LAYOUT_RESET_NOTICE
-    };
-  }
-  // Native (api.toJSON) snapshots can't be patched in place when the default
-  // layout gains a panel, so any native layout older than the current schema
-  // is force-reset to the factory default:
-  //   • v5→v6: dockview 6.x changed its toJSON format (panels couldn't resize).
-  //   • v6→v7: workspace.activity was added to the default bottom group; a
-  //     pre-v7 native snapshot has no way to surface it without a reset.
-  if (input.version <= 6 && input.dockview?.shape === 'native') {
-    // eslint-disable-next-line no-console
-    console.warn('[layout-migrations] reset pre-v7 native layout to surface new default panels');
-    return {
-      layout: buildDefaultLayout(ctx),
-      notice: INVALID_LAYOUT_RESET_NOTICE
-    };
-  }
-
-  // Walk + drop unknown component names. Mutation happens on a deep clone
-  // so the original (persisted) record stays untouched until a new save.
-  const cloned: PanelLayoutRecord = structuredClone(input);
-  if (cloned.version < LAYOUT_SCHEMA_VERSION) {
-    cloned.version = LAYOUT_SCHEMA_VERSION;
-  }
-  let droppedAny = false;
-  let normalizedActive = false;
-  let injectedPanel = false;
-  walkAndDrop(cloned.dockview, () => {
-    droppedAny = true;
-  });
-  if (cloned.dockview?.shape === 'factory') {
-    const activeResult = normalizeFactoryActives(cloned.dockview);
-    if (activeResult === 'invalid-shape') {
-      // eslint-disable-next-line no-console
-      console.warn('[layout-migrations] reset invalid saved layout to defaults');
+export const sanitizeLayoutWithDiagnostics = withInstrumentation(
+  function sanitizeLayoutWithDiagnostics(input: unknown, ctx: BuildLayoutInput): LayoutSanitizationResult {
+    if (!isPlausibleLayout(input)) {
+      return { layout: buildDefaultLayout(ctx) };
+    }
+    if (input.version > LAYOUT_SCHEMA_VERSION) {
       return {
         layout: buildDefaultLayout(ctx),
         notice: INVALID_LAYOUT_RESET_NOTICE
       };
     }
-    normalizedActive = activeResult;
-    // A factory snapshot persisted before a panel joined the default bottom
-    // group (e.g. workspace.activity) upgrades cleanly above but would never
-    // surface the new tab. Native snapshots get a full reset for this; factory
-    // ones are structured, so patch in place — inject any missing default
-    // bottom-group panels rather than discarding the user's arrangement.
-    injectedPanel = ensureDefaultBottomPanels(cloned.dockview, ctx);
-  } else if (cloned.dockview?.shape === 'native') {
-    const nativeResult = validateNativeLayout(cloned.dockview.json);
-    if (nativeResult !== 'ok') {
-      // eslint-disable-next-line no-console
-      console.warn('[layout-migrations] reset invalid saved layout to defaults');
+    if (!hasKnownDockviewShape(input.dockview)) {
       return {
         layout: buildDefaultLayout(ctx),
         notice: INVALID_LAYOUT_RESET_NOTICE
       };
     }
+    // Native (api.toJSON) snapshots can't be patched in place when the default
+    // layout gains a panel, so any native layout older than the current schema
+    // is force-reset to the factory default:
+    //   • v5→v6: dockview 6.x changed its toJSON format (panels couldn't resize).
+    //   • v6→v7: workspace.activity was added to the default bottom group; a
+    //     pre-v7 native snapshot has no way to surface it without a reset.
+    if (input.version <= 6 && input.dockview?.shape === 'native') {
+      // eslint-disable-next-line no-console
+      console.warn('[layout-migrations] reset pre-v7 native layout to surface new default panels');
+      return {
+        layout: buildDefaultLayout(ctx),
+        notice: INVALID_LAYOUT_RESET_NOTICE
+      };
+    }
+
+    // Walk + drop unknown component names. Mutation happens on a deep clone
+    // so the original (persisted) record stays untouched until a new save.
+    const cloned: PanelLayoutRecord = structuredClone(input);
+    if (cloned.version < LAYOUT_SCHEMA_VERSION) {
+      cloned.version = LAYOUT_SCHEMA_VERSION;
+    }
+    let droppedAny = false;
+    let normalizedActive = false;
+    let injectedPanel = false;
+    walkAndDrop(cloned.dockview, () => {
+      droppedAny = true;
+    });
+    if (cloned.dockview?.shape === 'factory') {
+      const activeResult = normalizeFactoryActives(cloned.dockview);
+      if (activeResult === 'invalid-shape') {
+        // eslint-disable-next-line no-console
+        console.warn('[layout-migrations] reset invalid saved layout to defaults');
+        return {
+          layout: buildDefaultLayout(ctx),
+          notice: INVALID_LAYOUT_RESET_NOTICE
+        };
+      }
+      normalizedActive = activeResult;
+      // A factory snapshot persisted before a panel joined the default bottom
+      // group (e.g. workspace.activity) upgrades cleanly above but would never
+      // surface the new tab. Native snapshots get a full reset for this; factory
+      // ones are structured, so patch in place — inject any missing default
+      // bottom-group panels rather than discarding the user's arrangement.
+      injectedPanel = ensureDefaultBottomPanels(cloned.dockview, ctx);
+    } else if (cloned.dockview?.shape === 'native') {
+      const nativeResult = validateNativeLayout(cloned.dockview.json);
+      if (nativeResult !== 'ok') {
+        // eslint-disable-next-line no-console
+        console.warn('[layout-migrations] reset invalid saved layout to defaults');
+        return {
+          layout: buildDefaultLayout(ctx),
+          notice: INVALID_LAYOUT_RESET_NOTICE
+        };
+      }
+    }
+    if (droppedAny) {
+      // eslint-disable-next-line no-console
+      console.warn('[layout-migrations] dropped unknown component names from saved layout');
+    }
+    if (normalizedActive) {
+      // eslint-disable-next-line no-console
+      console.warn('[layout-migrations] normalized invalid active tabs in saved layout');
+    }
+    if (injectedPanel) {
+      // eslint-disable-next-line no-console
+      console.warn('[layout-migrations] injected missing default panels into saved factory layout');
+    }
+    return { layout: cloned };
+    // Same rationale as sanitizeLayout above.
+  },
+  {
+    op: 'sanitizeLayoutWithDiagnostics',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as LayoutSanitizationResult;
+      return {
+        version: result.layout.version,
+        shape: result.layout.dockview?.shape,
+        hasNotice: Boolean(result.notice)
+      };
+    }
   }
-  if (droppedAny) {
-    // eslint-disable-next-line no-console
-    console.warn('[layout-migrations] dropped unknown component names from saved layout');
-  }
-  if (normalizedActive) {
-    // eslint-disable-next-line no-console
-    console.warn('[layout-migrations] normalized invalid active tabs in saved layout');
-  }
-  if (injectedPanel) {
-    // eslint-disable-next-line no-console
-    console.warn('[layout-migrations] injected missing default panels into saved factory layout');
-  }
-  return { layout: cloned };
-}
+);
 
 /**
  * Ensure a factory layout's bottom group contains every panel the current

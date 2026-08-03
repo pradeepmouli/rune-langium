@@ -1,5 +1,8 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
+
+import { withInstrumentation, Capture } from '../../src/services/instrumentation/core.js';
 
 /**
  * Auth + token layer for the LSP Worker (T040).
@@ -92,86 +95,93 @@ async function hmacSign(secret: string, data: Uint8Array): Promise<Uint8Array> {
 // Sign / verify session tokens
 // ────────────────────────────────────────────────────────────────────────────
 
-export async function signSessionToken(secret: string, payload: SessionTokenPayload): Promise<string> {
-  const json = JSON.stringify(payload);
-  const payloadBytes = new TextEncoder().encode(json);
-  const sig = await hmacSign(secret, payloadBytes);
-  return `${bufToBase64Url(payloadBytes)}.${bufToBase64Url(sig)}`;
-}
+export const signSessionToken = withInstrumentation(
+  async function signSessionToken(secret: string, payload: SessionTokenPayload): Promise<string> {
+    const json = JSON.stringify(payload);
+    const payloadBytes = new TextEncoder().encode(json);
+    const sig = await hmacSign(secret, payloadBytes);
+    return `${bufToBase64Url(payloadBytes)}.${bufToBase64Url(sig)}`;
+    // `secret` is the HMAC signing key — a literal credential, never captured.
+    // `payload`/output token carry session data; conservative default (whole
+    // function deals in security-critical material) — capture:0.
+  },
+  { op: 'signSessionToken' }
+);
 
-export async function verifySessionToken(secret: string, token: string, now = Date.now()): Promise<VerifyResult> {
-  const parts = token.split('.');
-  if (parts.length !== 2) return { ok: false, reason: 'malformed' };
-  const [payloadB64, sigB64] = parts as [string, string];
+export const verifySessionToken = withInstrumentation(
+  async function verifySessionToken(secret: string, token: string, now = Date.now()): Promise<VerifyResult> {
+    const parts = token.split('.');
+    if (parts.length !== 2) return { ok: false, reason: 'malformed' };
+    const [payloadB64, sigB64] = parts as [string, string];
 
-  let payloadBytes: Uint8Array;
-  let providedSig: Uint8Array;
-  try {
-    payloadBytes = base64UrlToBytes(payloadB64);
-    providedSig = base64UrlToBytes(sigB64);
-  } catch {
-    return { ok: false, reason: 'malformed' };
+    let payloadBytes: Uint8Array;
+    let providedSig: Uint8Array;
+    try {
+      payloadBytes = base64UrlToBytes(payloadB64);
+      providedSig = base64UrlToBytes(sigB64);
+    } catch {
+      return { ok: false, reason: 'malformed' };
+    }
+
+    const expected = await hmacSign(secret, payloadBytes);
+    if (!bytesEqualConstantTime(expected, providedSig)) {
+      return { ok: false, reason: 'invalid_signature' };
+    }
+
+    let payload: SessionTokenPayload;
+    try {
+      const json = new TextDecoder().decode(payloadBytes);
+      payload = JSON.parse(json) as SessionTokenPayload;
+    } catch {
+      return { ok: false, reason: 'malformed' };
+    }
+
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      payload.v !== 1 ||
+      typeof payload.workspaceId !== 'string' ||
+      typeof payload.issuedAt !== 'number' ||
+      typeof payload.exp !== 'number' ||
+      typeof payload.origin !== 'string' ||
+      typeof payload.nonce !== 'string'
+    ) {
+      return { ok: false, reason: 'malformed' };
+    }
+
+    if (payload.exp <= now) return { ok: false, reason: 'expired' };
+
+    return { ok: true, token: payload };
+    // `secret`/`token` are credential-adjacent — never captured. Output's
+    // `ok`/`reason` discriminant is a safe enum; the decoded session payload
+    // (workspaceId/origin/nonce) on success is dropped.
+  },
+  {
+    op: 'verifySessionToken',
+    capture: Capture.Output,
+    sanitize: (value, which) =>
+      which === 'output' ? { ok: (value as VerifyResult).ok, reason: (value as { reason?: string }).reason } : undefined
   }
-
-  const expected = await hmacSign(secret, payloadBytes);
-  if (!bytesEqualConstantTime(expected, providedSig)) {
-    return { ok: false, reason: 'invalid_signature' };
-  }
-
-  let payload: SessionTokenPayload;
-  try {
-    const json = new TextDecoder().decode(payloadBytes);
-    payload = JSON.parse(json) as SessionTokenPayload;
-  } catch {
-    return { ok: false, reason: 'malformed' };
-  }
-
-  if (
-    typeof payload !== 'object' ||
-    payload === null ||
-    payload.v !== 1 ||
-    typeof payload.workspaceId !== 'string' ||
-    typeof payload.issuedAt !== 'number' ||
-    typeof payload.exp !== 'number' ||
-    typeof payload.origin !== 'string' ||
-    typeof payload.nonce !== 'string'
-  ) {
-    return { ok: false, reason: 'malformed' };
-  }
-
-  if (payload.exp <= now) return { ok: false, reason: 'expired' };
-
-  return { ok: true, token: payload };
-}
+);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Origin allowlist
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * Test whether `origin` is on the comma-separated allowlist.
- *
- * Match semantics:
- *  - `*`                        — allow any origin (escape hatch).
- *  - `https://example.com`      — exact match.
- *  - `https://*.example.com`    — single leading-wildcard for the subdomain
- *                                  label. Matches `https://a.example.com` and
- *                                  `https://b.c.example.com` but not the bare
- *                                  `https://example.com`.
- *
- * The wildcard form exists so we can grant CF Pages preview deployments
- * (subdomains like `https://<hash>.daikonic-dev.pages.dev`) access without
- * having to update the allowlist every time a new preview lands.
- */
-export function isOriginAllowed(origin: string | null, allowed: string): boolean {
-  if (!origin) return false;
-  if (allowed === '*') return true;
-  return allowed
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-    .some((pattern) => matchesOriginPattern(origin, pattern));
-}
+export const isOriginAllowed = withInstrumentation(
+  function isOriginAllowed(origin: string | null, allowed: string): boolean {
+    if (!origin) return false;
+    if (allowed === '*') return true;
+    return allowed
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+      .some((pattern) => matchesOriginPattern(origin, pattern));
+    // `origin` (a request Origin header URL) and `allowed` (app config) are
+    // both safe — neither is user/model content.
+  },
+  { op: 'isOriginAllowed', capture: Capture.Input | Capture.Output, sanitize: (value) => value }
+);
 
 function matchesOriginPattern(origin: string, pattern: string): boolean {
   if (pattern === origin) return true;
@@ -199,26 +209,32 @@ const NONCE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const nonceRing = new Map<string, number>();
 
-/**
- * Returns true on the FIRST time `nonce` is seen (and records it).
- * Returns false (replay) if `nonce` was already seen and is still within
- * the 24h horizon.
- */
-export function checkAndRecordNonce(nonce: string, now = Date.now()): boolean {
-  evictExpiredNonces(now);
-  const existing = nonceRing.get(nonce);
-  if (existing !== undefined && existing > now) {
-    return false;
+export const checkAndRecordNonce = withInstrumentation(
+  function checkAndRecordNonce(nonce: string, now = Date.now()): boolean {
+    evictExpiredNonces(now);
+    const existing = nonceRing.get(nonce);
+    if (existing !== undefined && existing > now) {
+      return false;
+    }
+    nonceRing.set(nonce, now + NONCE_TTL_MS);
+    enforceLruBound();
+    return true;
+    // `nonce` is a security replay-protection value — never captured raw.
+  },
+  {
+    op: 'checkAndRecordNonce',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  nonceRing.set(nonce, now + NONCE_TTL_MS);
-  enforceLruBound();
-  return true;
-}
+);
 
-export function hasSeenNonce(nonce: string, now = Date.now()): boolean {
-  const existing = nonceRing.get(nonce);
-  return existing !== undefined && existing > now;
-}
+export const hasSeenNonce = withInstrumentation(
+  function hasSeenNonce(nonce: string, now = Date.now()): boolean {
+    const existing = nonceRing.get(nonce);
+    return existing !== undefined && existing > now;
+  },
+  { op: 'hasSeenNonce', capture: Capture.Output, sanitize: (value, which) => (which === 'output' ? value : undefined) }
+);
 
 function evictExpiredNonces(now: number): void {
   // Cheap path: only sweep when the Map is large enough to matter.
@@ -242,9 +258,12 @@ function enforceLruBound(): void {
   }
 }
 
-export function _resetNonceRingForTesting(): void {
-  nonceRing.clear();
-}
+export const _resetNonceRingForTesting = withInstrumentation(
+  function _resetNonceRingForTesting(): void {
+    nonceRing.clear();
+  },
+  { op: '_resetNonceRingForTesting' }
+);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Per-IP rate limit for session mint (30/min/IP)
@@ -260,20 +279,29 @@ interface RateWindow {
 
 const sessionRateWindows = new Map<string, RateWindow>();
 
-export function checkSessionRateLimit(ip: string, now = Date.now()): { allowed: boolean; retryAfterS: number } {
-  evictExpiredRateWindows(now);
-  const w = sessionRateWindows.get(ip);
-  if (!w || now - w.windowStart >= SESSION_WINDOW_MS) {
-    sessionRateWindows.set(ip, { windowStart: now, count: 1 });
+export const checkSessionRateLimit = withInstrumentation(
+  function checkSessionRateLimit(ip: string, now = Date.now()): { allowed: boolean; retryAfterS: number } {
+    evictExpiredRateWindows(now);
+    const w = sessionRateWindows.get(ip);
+    if (!w || now - w.windowStart >= SESSION_WINDOW_MS) {
+      sessionRateWindows.set(ip, { windowStart: now, count: 1 });
+      return { allowed: true, retryAfterS: 0 };
+    }
+    if (w.count >= SESSION_RATE_LIMIT) {
+      const retryAfterS = Math.max(1, Math.ceil((w.windowStart + SESSION_WINDOW_MS - now) / 1000));
+      return { allowed: false, retryAfterS };
+    }
+    w.count += 1;
     return { allowed: true, retryAfterS: 0 };
+    // `ip` is the client's IP address — PII, never captured. Output
+    // `allowed`/`retryAfterS` are safe.
+  },
+  {
+    op: 'checkSessionRateLimit',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  if (w.count >= SESSION_RATE_LIMIT) {
-    const retryAfterS = Math.max(1, Math.ceil((w.windowStart + SESSION_WINDOW_MS - now) / 1000));
-    return { allowed: false, retryAfterS };
-  }
-  w.count += 1;
-  return { allowed: true, retryAfterS: 0 };
-}
+);
 
 function evictExpiredRateWindows(now: number): void {
   if (sessionRateWindows.size < 1024) return;
@@ -282,18 +310,26 @@ function evictExpiredRateWindows(now: number): void {
   }
 }
 
-export function _resetSessionRateLimitForTesting(): void {
-  sessionRateWindows.clear();
-}
+export const _resetSessionRateLimitForTesting = withInstrumentation(
+  function _resetSessionRateLimitForTesting(): void {
+    sessionRateWindows.clear();
+  },
+  { op: '_resetSessionRateLimitForTesting' }
+);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Random nonce / signing-key helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-export function newNonceHex(): string {
-  const buf = new Uint8Array(16);
-  crypto.getRandomValues(buf);
-  return Array.from(buf)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+export const newNonceHex = withInstrumentation(
+  function newNonceHex(): string {
+    const buf = new Uint8Array(16);
+    crypto.getRandomValues(buf);
+    return Array.from(buf)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    // Output is freshly generated cryptographic randomness used as a security
+    // nonce — conservative default, not captured.
+  },
+  { op: 'newNonceHex' }
+);

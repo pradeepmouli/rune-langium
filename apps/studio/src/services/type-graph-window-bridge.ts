@@ -1,7 +1,9 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import { useEditorStore, selectNodeRepository } from '@rune-langium/visual-editor';
+import { withInstrumentation } from './instrumentation/core.js';
 
 export interface TypeGraphNodeSnapshot {
   /** = the node's qualified name (makeNodeId(ns, name)). */
@@ -28,19 +30,19 @@ declare global {
   }
 }
 
-/**
- * Installs an always-on, read-only window global exposing the currently
- * loaded graph nodes' raw domain data — unlike `test-api.ts`, this is NOT
- * gated by `import.meta.env.MODE`, so it works against the real production
- * build. It exposes nothing beyond what the graph/explorer already render;
- * there is no write method.
- */
-export function installTypeGraphWindowBridge(): void {
-  window.__runeStudioTypeGraph = {
-    snapshot: () => {
-      const nodesById = useEditorStore.getState().nodesById;
-      const repo = selectNodeRepository(nodesById);
-      return repo.all().map((node) => ({ id: node.id, data: node.data }));
-    }
-  };
-}
+export const installTypeGraphWindowBridge = withInstrumentation(
+  function installTypeGraphWindowBridge(): void {
+    window.__runeStudioTypeGraph = {
+      snapshot: () => {
+        const nodesById = useEditorStore.getState().nodesById;
+        const repo = selectNodeRepository(nodesById);
+        return repo.all().map((node) => ({ id: node.id, data: node.data }));
+      }
+    };
+    // The bridge's own snapshot() closure (exposed on window, not itself
+    // wrapped) returns raw domain node data (see TypeGraphNodeSnapshot's doc
+    // comment) — deliberately outside instrumentation's capture; this installer
+    // call itself takes no args and returns void.
+  },
+  { op: 'installTypeGraphWindowBridge' }
+);

@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -27,6 +28,7 @@ import {
   splitChoiceArmFields,
   validatePreviewSample
 } from '../services/preview-validator.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface FormPreviewPanelProps {
   schema?: FormPreviewSchema;
@@ -38,481 +40,491 @@ export interface FormPreviewPanelProps {
   onValuesChange?: (values: Record<string, unknown>) => void;
 }
 
-export function FormPreviewPanel({
-  schema,
-  status,
-  target: _target,
-  getFieldSource,
-  onExecute,
-  values,
-  onValuesChange
-}: FormPreviewPanelProps): ReactElement {
-  const isControlled = values !== undefined;
-  const ensureSample = usePreviewStore((s) => s.ensureSample);
-  const updateSample = usePreviewStore((s) => s.updateSample);
-  const resetSample = usePreviewStore((s) => s.resetSample);
-  const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
-  const [controlledMeta, setControlledMeta] = useState<{
-    errors: Record<string, string>;
-    valid: boolean;
-    validated: boolean;
-  }>({ errors: {}, valid: true, validated: false });
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
+export const FormPreviewPanel = withInstrumentation(
+  function FormPreviewPanel({
+    schema,
+    status,
+    target: _target,
+    getFieldSource,
+    onExecute,
+    values,
+    onValuesChange
+  }: FormPreviewPanelProps): ReactElement {
+    const isControlled = values !== undefined;
+    const ensureSample = usePreviewStore((s) => s.ensureSample);
+    const updateSample = usePreviewStore((s) => s.updateSample);
+    const resetSample = usePreviewStore((s) => s.resetSample);
+    const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
+    const [controlledMeta, setControlledMeta] = useState<{
+      errors: Record<string, string>;
+      valid: boolean;
+      validated: boolean;
+    }>({ errors: {}, valid: true, validated: false });
+    const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+    const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
 
-  const funcName = schema?.kind === 'function' ? schema.title : undefined;
-  const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
-  // Remaining lazy-hydration retry attempts for the CURRENTLY selected target
-  // (Task 3's hydrationRetriesRemaining, mirrored from
-  // HydrationOrchestrator.getRemainingAttempts()). Per-*target* granularity,
-  // not per-individual-unresolved-reference-name: a Data type with several
-  // simultaneously-unresolved fields shares this one flag, so all of them
-  // switch to a "resolving…" state together rather than each independently
-  // guessing whether ITS OWN reference is the one being retried.
-  const hydrationRetriesRemaining = usePreviewStore((s) =>
-    schema ? s.hydrationRetriesRemaining[schema.targetId] : undefined
-  );
-  const isResolvingReferences = hydrationRetriesRemaining !== undefined && hydrationRetriesRemaining > 0;
-  const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
+    const funcName = schema?.kind === 'function' ? schema.title : undefined;
+    const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
+    // Remaining lazy-hydration retry attempts for the CURRENTLY selected target
+    // (Task 3's hydrationRetriesRemaining, mirrored from
+    // HydrationOrchestrator.getRemainingAttempts()). Per-*target* granularity,
+    // not per-individual-unresolved-reference-name: a Data type with several
+    // simultaneously-unresolved fields shares this one flag, so all of them
+    // switch to a "resolving…" state together rather than each independently
+    // guessing whether ITS OWN reference is the one being retried.
+    const hydrationRetriesRemaining = usePreviewStore((s) =>
+      schema ? s.hydrationRetriesRemaining[schema.targetId] : undefined
+    );
+    const isResolvingReferences = hydrationRetriesRemaining !== undefined && hydrationRetriesRemaining > 0;
+    const loggedUnsupportedSchemaRef = useRef<FormPreviewSchema | undefined>(undefined);
 
-  // Seed from any execution result already cached in the store at mount
-  // time — e.g. the dock panel was closed (unmounting this component) then
-  // reopened while the store still holds a prior run's result. Without this,
-  // the sync branch below only reacts to storeExecResult CHANGING, and
-  // useState(storeExecResult) below initializes prevStoreExecResult to that
-  // same already-current value, so the branch never fires and the cached
-  // output stayed hidden until the next execution (Codex review).
-  const [executionResult, setExecutionResult] = useState<unknown>(() =>
-    storeExecResult && !storeExecResult.error ? storeExecResult.output : undefined
-  );
-  const [executionError, setExecutionError] = useState<string | null>(() => storeExecResult?.error ?? null);
+    // Seed from any execution result already cached in the store at mount
+    // time — e.g. the dock panel was closed (unmounting this component) then
+    // reopened while the store still holds a prior run's result. Without this,
+    // the sync branch below only reacts to storeExecResult CHANGING, and
+    // useState(storeExecResult) below initializes prevStoreExecResult to that
+    // same already-current value, so the branch never fires and the cached
+    // output stayed hidden until the next execution (Codex review).
+    const [executionResult, setExecutionResult] = useState<unknown>(() =>
+      storeExecResult && !storeExecResult.error ? storeExecResult.output : undefined
+    );
+    const [executionError, setExecutionError] = useState<string | null>(() => storeExecResult?.error ?? null);
 
-  // Adjusted during render (React's blessed pattern) rather than in
-  // effects, so switching functions or a new execution result lands in the
-  // same render instead of flashing the prior function's stale result for
-  // one frame first. Order matters: a funcName change takes priority over a
-  // same-render storeExecResult change, matching the original two-effects'
-  // declaration-order commit sequencing (the funcName effect ran second and
-  // so always won when both fired together).
-  //
-  // Tracked via useState, NOT plain refs: a ref mutation made during render
-  // is not rolled back if React discards/retries this render under
-  // concurrent rendering, while the accompanying setExecutionState/
-  // setExecutionResult/setExecutionError calls ARE rolled back (they never
-  // committed) — so a bare `.current = ...` assignment could leave the
-  // retry believing the new function/result was already handled and keep
-  // displaying the previous function's output indefinitely (Codex review).
-  const [prevFuncName, setPrevFuncName] = useState(funcName);
-  const [prevStoreExecResult, setPrevStoreExecResult] = useState(storeExecResult);
-  if (funcName !== prevFuncName) {
-    setExecutionState('idle');
-    // Seed from the NEWLY selected function's own cached result, if it has
-    // one, rather than unconditionally blanking — otherwise switching to a
-    // function that was already executed earlier in this session hides its
-    // cached output until it's re-run, and the trailing prevStoreExecResult
-    // sync below would mark it "seen" so the branch below never picks it up
-    // retroactively either (same root cause as the mount-time case above).
-    if (storeExecResult) {
-      setExecutionResult(storeExecResult.error ? undefined : storeExecResult.output);
-      setExecutionError(storeExecResult.error ?? null);
-    } else {
+    // Adjusted during render (React's blessed pattern) rather than in
+    // effects, so switching functions or a new execution result lands in the
+    // same render instead of flashing the prior function's stale result for
+    // one frame first. Order matters: a funcName change takes priority over a
+    // same-render storeExecResult change, matching the original two-effects'
+    // declaration-order commit sequencing (the funcName effect ran second and
+    // so always won when both fired together).
+    //
+    // Tracked via useState, NOT plain refs: a ref mutation made during render
+    // is not rolled back if React discards/retries this render under
+    // concurrent rendering, while the accompanying setExecutionState/
+    // setExecutionResult/setExecutionError calls ARE rolled back (they never
+    // committed) — so a bare `.current = ...` assignment could leave the
+    // retry believing the new function/result was already handled and keep
+    // displaying the previous function's output indefinitely (Codex review).
+    const [prevFuncName, setPrevFuncName] = useState(funcName);
+    const [prevStoreExecResult, setPrevStoreExecResult] = useState(storeExecResult);
+    if (funcName !== prevFuncName) {
+      setExecutionState('idle');
+      // Seed from the NEWLY selected function's own cached result, if it has
+      // one, rather than unconditionally blanking — otherwise switching to a
+      // function that was already executed earlier in this session hides its
+      // cached output until it's re-run, and the trailing prevStoreExecResult
+      // sync below would mark it "seen" so the branch below never picks it up
+      // retroactively either (same root cause as the mount-time case above).
+      if (storeExecResult) {
+        setExecutionResult(storeExecResult.error ? undefined : storeExecResult.output);
+        setExecutionError(storeExecResult.error ?? null);
+      } else {
+        setExecutionResult(undefined);
+        setExecutionError(null);
+      }
+    } else if (storeExecResult && storeExecResult !== prevStoreExecResult) {
+      if (storeExecResult.error) {
+        setExecutionError(storeExecResult.error);
+      } else {
+        setExecutionResult(storeExecResult.output);
+      }
+      setExecutionState('idle');
+    }
+    if (funcName !== prevFuncName) setPrevFuncName(funcName);
+    if (storeExecResult !== prevStoreExecResult) setPrevStoreExecResult(storeExecResult);
+
+    useEffect(() => {
+      if (!schema?.unsupportedFeatures?.length) return;
+      // `cyclic-type:` entries are informational only (see
+      // summarizeUnsupportedFeatures) — a schema whose ONLY entries are
+      // `cyclic-type:` renders every field successfully and must not log a
+      // blank "unsupported preview features" warning (Codex PR #459 review,
+      // round 3).
+      const summary = summarizeUnsupportedFeatures(schema.unsupportedFeatures);
+      if (!summary) return;
+      if (loggedUnsupportedSchemaRef.current === schema) return;
+      loggedUnsupportedSchemaRef.current = schema;
+      useOutputStore.getState().addLine(fmtLine('preview', 'unsupported preview features', summary), 'warn', {
+        op: 'preview',
+        subject: schema.targetId
+      });
+    }, [schema]);
+
+    const defaultValues = useMemo(() => {
+      if (!schema) return {};
+      return buildDefaultValues(schema.fields, resolveArmPaths(schema)) as Record<string, unknown>;
+    }, [schema]);
+    const lookupFieldSource = useCallback(
+      (fieldPath: string) =>
+        getFieldSource?.(fieldPath) ?? schema?.sourceMap?.find((entry) => entry.fieldPath === fieldPath),
+      [getFieldSource, schema]
+    );
+
+    useEffect(() => {
+      if (isControlled || !schema) return;
+      ensureSample(schema.targetId, defaultValues);
+    }, [defaultValues, ensureSample, isControlled, schema]);
+
+    const activeSample = useMemo<PreviewSampleState | undefined>(() => {
+      if (!schema) return undefined;
+      if (isControlled) {
+        return {
+          targetId: schema.targetId,
+          values: values ?? defaultValues,
+          serialized: JSON.stringify(values ?? defaultValues, null, 2),
+          errors: controlledMeta.errors,
+          valid: controlledMeta.valid,
+          validated: controlledMeta.validated,
+          updatedAt: 0
+        };
+      }
+      return (
+        sample ?? {
+          targetId: schema.targetId,
+          values: defaultValues,
+          serialized: JSON.stringify(defaultValues, null, 2),
+          errors: {},
+          valid: true,
+          validated: false,
+          updatedAt: 0
+        }
+      );
+    }, [controlledMeta, defaultValues, isControlled, sample, schema, values]);
+
+    const showStatusOnly = !schema || status.state === 'unavailable' || schema.schemaVersion !== 1;
+
+    const applyValidation = useCallback(
+      (nextValues: Record<string, unknown>, validated: boolean) => {
+        if (!schema) return;
+        const result = validated
+          ? validatePreviewSample(schema, nextValues)
+          : { errors: {} as Record<string, string>, valid: true };
+        if (isControlled) {
+          setControlledMeta({ errors: result.errors, valid: result.valid, validated });
+          onValuesChange?.(nextValues);
+          return;
+        }
+        updateSample(schema.targetId, nextValues, result.errors, result.valid, validated);
+      },
+      [isControlled, onValuesChange, schema, updateSample]
+    );
+
+    const handleFieldBlur = useCallback(() => {
+      if (!schema || !activeSample) return;
+      applyValidation(activeSample.values, true);
+    }, [activeSample, applyValidation, schema]);
+
+    const handleFieldChange = useCallback(
+      (fieldPath: string, value: unknown, arrayIndices?: number[]) => {
+        if (!schema || !activeSample) return;
+        const nextValues = setValueAtPath(
+          activeSample.values,
+          pathToSegments(fieldPath, arrayIndices),
+          value
+        ) as Record<string, unknown>;
+        applyValidation(nextValues, activeSample.validated);
+      },
+      [activeSample, applyValidation, schema]
+    );
+
+    const handleArrayAdd = useCallback(
+      (field: PreviewField, arrayIndices?: number[]) => {
+        if (!schema || !activeSample) return;
+        const segments = pathToSegments(field.path, arrayIndices);
+        const current = getValueAtPath(activeSample.values, segments);
+        const items = Array.isArray(current) ? [...current] : [];
+        if (field.kind !== 'array') {
+          return;
+        }
+        const [child] = field.children ?? [];
+        if (!child) {
+          return;
+        }
+        items.push(buildDefaultValue(child));
+        const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<string, unknown>;
+        applyValidation(nextValues, true);
+      },
+      [activeSample, applyValidation, schema]
+    );
+
+    const handleArrayRemove = useCallback(
+      (field: PreviewField, index: number, arrayIndices?: number[]) => {
+        if (!schema || !activeSample) return;
+        const segments = pathToSegments(field.path, arrayIndices);
+        const current = getValueAtPath(activeSample.values, segments);
+        const items = Array.isArray(current) ? [...current] : [];
+        items.splice(index, 1);
+        const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<string, unknown>;
+        applyValidation(nextValues, true);
+      },
+      [activeSample, applyValidation, schema]
+    );
+
+    const handleObjectToggle = useCallback(
+      (field: PreviewField, present: boolean, arrayIndices?: number[]) => {
+        if (!schema || !activeSample) return;
+        const segments = pathToSegments(field.path, arrayIndices);
+        const nextValues = (
+          present
+            ? setValueAtPath(activeSample.values, segments, buildDefaultObjectValue(field))
+            : removeValueAtPath(activeSample.values, segments)
+        ) as Record<string, unknown>;
+        applyValidation(nextValues, activeSample.validated);
+      },
+      [activeSample, applyValidation, schema]
+    );
+
+    // Selecting a Choice arm (issue #434) must unset every OTHER arm and set
+    // the chosen one as a single atomic transformation of activeSample.values.
+    // ChoiceFieldGroup previously composed this from separate onObjectToggle/
+    // onFieldChange/onFieldBlur calls, each independently re-reading the SAME
+    // (unchanged-until-next-render) activeSample.values closure — React 18
+    // batches the state updates from all of them into one re-render, so only
+    // the LAST call's transformation actually survived, discarding the
+    // others (a latent bug, never reachable before this fix since
+    // ChoiceFieldGroup was only ever wired to the top-level kind:'choice'
+    // case, which this exact multi-arm-removal path never exercised in
+    // practice). Folding every arm's removal/selection into one `nextValues`
+    // fold, applied in a single applyValidation call, fixes this at the
+    // source rather than papering over one call site.
+    const handleArmSelect = useCallback(
+      (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => {
+        if (!schema || !activeSample) return;
+        let nextValues = activeSample.values;
+        for (const arm of arms) {
+          const segments = pathToSegments(arm.path, arrayIndices);
+          nextValues = (
+            arm.path === selected.path
+              ? setValueAtPath(nextValues, segments, buildArmValue(arm))
+              : removeValueAtPath(nextValues, segments)
+          ) as Record<string, unknown>;
+        }
+        applyValidation(nextValues, true);
+      },
+      [activeSample, applyValidation, schema]
+    );
+
+    const handleRun = useCallback(() => {
+      if (!funcName || !activeSample || !onExecute) return;
+      setExecutionState('running');
       setExecutionResult(undefined);
       setExecutionError(null);
-    }
-  } else if (storeExecResult && storeExecResult !== prevStoreExecResult) {
-    if (storeExecResult.error) {
-      setExecutionError(storeExecResult.error);
-    } else {
-      setExecutionResult(storeExecResult.output);
-    }
-    setExecutionState('idle');
-  }
-  if (funcName !== prevFuncName) setPrevFuncName(funcName);
-  if (storeExecResult !== prevStoreExecResult) setPrevStoreExecResult(storeExecResult);
+      onExecute(funcName, activeSample.values);
+    }, [activeSample, funcName, onExecute]);
 
-  useEffect(() => {
-    if (!schema?.unsupportedFeatures?.length) return;
-    // `cyclic-type:` entries are informational only (see
-    // summarizeUnsupportedFeatures) — a schema whose ONLY entries are
-    // `cyclic-type:` renders every field successfully and must not log a
-    // blank "unsupported preview features" warning (Codex PR #459 review,
-    // round 3).
-    const summary = summarizeUnsupportedFeatures(schema.unsupportedFeatures);
-    if (!summary) return;
-    if (loggedUnsupportedSchemaRef.current === schema) return;
-    loggedUnsupportedSchemaRef.current = schema;
-    useOutputStore.getState().addLine(fmtLine('preview', 'unsupported preview features', summary), 'warn', {
-      op: 'preview',
-      subject: schema.targetId
-    });
-  }, [schema]);
-
-  const defaultValues = useMemo(() => {
-    if (!schema) return {};
-    return buildDefaultValues(schema.fields, resolveArmPaths(schema)) as Record<string, unknown>;
-  }, [schema]);
-  const lookupFieldSource = useCallback(
-    (fieldPath: string) =>
-      getFieldSource?.(fieldPath) ?? schema?.sourceMap?.find((entry) => entry.fieldPath === fieldPath),
-    [getFieldSource, schema]
-  );
-
-  useEffect(() => {
-    if (isControlled || !schema) return;
-    ensureSample(schema.targetId, defaultValues);
-  }, [defaultValues, ensureSample, isControlled, schema]);
-
-  const activeSample = useMemo<PreviewSampleState | undefined>(() => {
-    if (!schema) return undefined;
-    if (isControlled) {
-      return {
-        targetId: schema.targetId,
-        values: values ?? defaultValues,
-        serialized: JSON.stringify(values ?? defaultValues, null, 2),
-        errors: controlledMeta.errors,
-        valid: controlledMeta.valid,
-        validated: controlledMeta.validated,
-        updatedAt: 0
-      };
-    }
-    return (
-      sample ?? {
-        targetId: schema.targetId,
-        values: defaultValues,
-        serialized: JSON.stringify(defaultValues, null, 2),
-        errors: {},
-        valid: true,
-        validated: false,
-        updatedAt: 0
-      }
-    );
-  }, [controlledMeta, defaultValues, isControlled, sample, schema, values]);
-
-  const showStatusOnly = !schema || status.state === 'unavailable' || schema.schemaVersion !== 1;
-
-  const applyValidation = useCallback(
-    (nextValues: Record<string, unknown>, validated: boolean) => {
+    const handleReset = useCallback(() => {
       if (!schema) return;
-      const result = validated
-        ? validatePreviewSample(schema, nextValues)
-        : { errors: {} as Record<string, string>, valid: true };
       if (isControlled) {
-        setControlledMeta({ errors: result.errors, valid: result.valid, validated });
-        onValuesChange?.(nextValues);
+        setControlledMeta({ errors: {}, valid: true, validated: false });
+        onValuesChange?.(defaultValues);
+      } else {
+        resetSample(schema.targetId, defaultValues);
+      }
+      setCopyFeedback(null);
+    }, [defaultValues, isControlled, onValuesChange, resetSample, schema]);
+
+    const handleCopySample = useCallback(async () => {
+      if (!activeSample) {
         return;
       }
-      updateSample(schema.targetId, nextValues, result.errors, result.valid, validated);
-    },
-    [isControlled, onValuesChange, schema, updateSample]
-  );
-
-  const handleFieldBlur = useCallback(() => {
-    if (!schema || !activeSample) return;
-    applyValidation(activeSample.values, true);
-  }, [activeSample, applyValidation, schema]);
-
-  const handleFieldChange = useCallback(
-    (fieldPath: string, value: unknown, arrayIndices?: number[]) => {
-      if (!schema || !activeSample) return;
-      const nextValues = setValueAtPath(activeSample.values, pathToSegments(fieldPath, arrayIndices), value) as Record<
-        string,
-        unknown
-      >;
-      applyValidation(nextValues, activeSample.validated);
-    },
-    [activeSample, applyValidation, schema]
-  );
-
-  const handleArrayAdd = useCallback(
-    (field: PreviewField, arrayIndices?: number[]) => {
-      if (!schema || !activeSample) return;
-      const segments = pathToSegments(field.path, arrayIndices);
-      const current = getValueAtPath(activeSample.values, segments);
-      const items = Array.isArray(current) ? [...current] : [];
-      if (field.kind !== 'array') {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+        setCopyFeedback('Clipboard access is unavailable in this browser.');
         return;
       }
-      const [child] = field.children ?? [];
-      if (!child) {
-        return;
+      try {
+        await navigator.clipboard.writeText(activeSample.serialized);
+        setCopyFeedback('Sample data copied.');
+      } catch (error) {
+        console.error('[FormPreviewPanel] Failed to copy sample data:', error);
+        useOutputStore
+          .getState()
+          .addLine(
+            fmtLine('preview', 'copy sample data failed', error instanceof Error ? error.message : String(error)),
+            'error'
+          );
+        setCopyFeedback('Copy failed. Check clipboard permissions and try again.');
       }
-      items.push(buildDefaultValue(child));
-      const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<string, unknown>;
-      applyValidation(nextValues, true);
-    },
-    [activeSample, applyValidation, schema]
-  );
+    }, [activeSample]);
 
-  const handleArrayRemove = useCallback(
-    (field: PreviewField, index: number, arrayIndices?: number[]) => {
-      if (!schema || !activeSample) return;
-      const segments = pathToSegments(field.path, arrayIndices);
-      const current = getValueAtPath(activeSample.values, segments);
-      const items = Array.isArray(current) ? [...current] : [];
-      items.splice(index, 1);
-      const nextValues = setValueAtPath(activeSample.values, segments, items) as Record<string, unknown>;
-      applyValidation(nextValues, true);
-    },
-    [activeSample, applyValidation, schema]
-  );
+    const summaryMessage = schema ? getSummaryMessage(schema, status, activeSample) : undefined;
+    // `cyclic-type:` entries are informational only — a schema whose ONLY
+    // unsupportedFeatures entries are `cyclic-type:` rendered every field
+    // successfully and must not show a blank "Unsupported preview features:"
+    // banner (Codex PR #459 review, round 3).
+    const unsupportedSummary = schema?.unsupportedFeatures?.length
+      ? summarizeUnsupportedFeatures(schema.unsupportedFeatures)
+      : '';
 
-  const handleObjectToggle = useCallback(
-    (field: PreviewField, present: boolean, arrayIndices?: number[]) => {
-      if (!schema || !activeSample) return;
-      const segments = pathToSegments(field.path, arrayIndices);
-      const nextValues = (
-        present
-          ? setValueAtPath(activeSample.values, segments, buildDefaultObjectValue(field))
-          : removeValueAtPath(activeSample.values, segments)
-      ) as Record<string, unknown>;
-      applyValidation(nextValues, activeSample.validated);
-    },
-    [activeSample, applyValidation, schema]
-  );
-
-  // Selecting a Choice arm (issue #434) must unset every OTHER arm and set
-  // the chosen one as a single atomic transformation of activeSample.values.
-  // ChoiceFieldGroup previously composed this from separate onObjectToggle/
-  // onFieldChange/onFieldBlur calls, each independently re-reading the SAME
-  // (unchanged-until-next-render) activeSample.values closure — React 18
-  // batches the state updates from all of them into one re-render, so only
-  // the LAST call's transformation actually survived, discarding the
-  // others (a latent bug, never reachable before this fix since
-  // ChoiceFieldGroup was only ever wired to the top-level kind:'choice'
-  // case, which this exact multi-arm-removal path never exercised in
-  // practice). Folding every arm's removal/selection into one `nextValues`
-  // fold, applied in a single applyValidation call, fixes this at the
-  // source rather than papering over one call site.
-  const handleArmSelect = useCallback(
-    (arms: PreviewField[], selected: PreviewField, arrayIndices?: number[]) => {
-      if (!schema || !activeSample) return;
-      let nextValues = activeSample.values;
-      for (const arm of arms) {
-        const segments = pathToSegments(arm.path, arrayIndices);
-        nextValues = (
-          arm.path === selected.path
-            ? setValueAtPath(nextValues, segments, buildArmValue(arm))
-            : removeValueAtPath(nextValues, segments)
-        ) as Record<string, unknown>;
-      }
-      applyValidation(nextValues, true);
-    },
-    [activeSample, applyValidation, schema]
-  );
-
-  const handleRun = useCallback(() => {
-    if (!funcName || !activeSample || !onExecute) return;
-    setExecutionState('running');
-    setExecutionResult(undefined);
-    setExecutionError(null);
-    onExecute(funcName, activeSample.values);
-  }, [activeSample, funcName, onExecute]);
-
-  const handleReset = useCallback(() => {
-    if (!schema) return;
-    if (isControlled) {
-      setControlledMeta({ errors: {}, valid: true, validated: false });
-      onValuesChange?.(defaultValues);
-    } else {
-      resetSample(schema.targetId, defaultValues);
-    }
-    setCopyFeedback(null);
-  }, [defaultValues, isControlled, onValuesChange, resetSample, schema]);
-
-  const handleCopySample = useCallback(async () => {
-    if (!activeSample) {
-      return;
-    }
-    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
-      setCopyFeedback('Clipboard access is unavailable in this browser.');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(activeSample.serialized);
-      setCopyFeedback('Sample data copied.');
-    } catch (error) {
-      console.error('[FormPreviewPanel] Failed to copy sample data:', error);
-      useOutputStore
-        .getState()
-        .addLine(
-          fmtLine('preview', 'copy sample data failed', error instanceof Error ? error.message : String(error)),
-          'error'
-        );
-      setCopyFeedback('Copy failed. Check clipboard permissions and try again.');
-    }
-  }, [activeSample]);
-
-  const summaryMessage = schema ? getSummaryMessage(schema, status, activeSample) : undefined;
-  // `cyclic-type:` entries are informational only — a schema whose ONLY
-  // unsupportedFeatures entries are `cyclic-type:` rendered every field
-  // successfully and must not show a blank "Unsupported preview features:"
-  // banner (Codex PR #459 review, round 3).
-  const unsupportedSummary = schema?.unsupportedFeatures?.length
-    ? summarizeUnsupportedFeatures(schema.unsupportedFeatures)
-    : '';
-
-  if (showStatusOnly) {
-    const isWaiting = status.state === 'waiting' && status.targetId;
-    return (
-      <section
-        aria-label="Form preview"
-        data-testid="panel-formPreview"
-        className="studio-scroll flex h-full flex-col overflow-auto p-3"
-      >
-        {isWaiting ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner className="size-3.5 shrink-0" />
-            <span role="status" aria-live="polite">
-              {getStatusOnlyMessage(schema, status)}
-            </span>
-          </div>
-        ) : (
-          <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
-            {getStatusOnlyMessage(schema, status)}
-          </p>
-        )}
-      </section>
-    );
-  }
-
-  // A Data-extends-Choice (or typeAlias-extends-Choice) schema's own
-  // top-level `kind` isn't `'choice'` — schema.choiceArmPaths carries the
-  // same "which fields.path values are Choice-ancestor arms" signal that
-  // PreviewObjectField.choiceArmPaths carries for a NESTED reference
-  // (issue #434). Route those root-level arm fields through
-  // ChoiceFieldGroup too, not just the genuine `kind === 'choice'` case.
-  const { armFields: rootArmFields, otherFields: rootOtherFields } = splitChoiceArmFields(
-    schema.fields,
-    schema.choiceArmPaths
-  );
-
-  return (
-    <section
-      role="region"
-      aria-label="Form preview"
-      data-testid="panel-formPreview"
-      className="studio-scroll flex h-full flex-col overflow-auto"
-    >
-      <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-        <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button type="button" variant="ghost" size="xs" onClick={handleCopySample}>
-            Copy
-          </Button>
-          <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
-            Reset
-          </Button>
-        </div>
-      </header>
-      <p
-        role={status.state === 'invalid' ? 'alert' : 'status'}
-        aria-live="polite"
-        className="px-3 pt-2 text-xs text-muted-foreground"
-      >
-        {summaryMessage}
-      </p>
-      <form className="preview-panel__body studio-scroll space-y-3 overflow-auto p-3">
-        {schema.kind === 'choice' ? (
-          <ChoiceFieldGroup
-            fields={schema.fields}
-            sample={activeSample}
-            lookupFieldSource={lookupFieldSource}
-            isResolvingReferences={isResolvingReferences}
-            onFieldBlur={handleFieldBlur}
-            onFieldChange={handleFieldChange}
-            onArrayAdd={handleArrayAdd}
-            onArrayRemove={handleArrayRemove}
-            onObjectToggle={handleObjectToggle}
-            onArmSelect={handleArmSelect}
-          />
-        ) : (
-          <>
-            {rootArmFields.length > 0 ? (
-              <ChoiceFieldGroup
-                fields={rootArmFields}
-                sample={activeSample}
-                lookupFieldSource={lookupFieldSource}
-                isResolvingReferences={isResolvingReferences}
-                onFieldBlur={handleFieldBlur}
-                onFieldChange={handleFieldChange}
-                onArrayAdd={handleArrayAdd}
-                onArrayRemove={handleArrayRemove}
-                onObjectToggle={handleObjectToggle}
-                onArmSelect={handleArmSelect}
-              />
-            ) : null}
-            {rootOtherFields.map((field) => (
-              <PreviewFieldControl
-                key={field.path}
-                field={field}
-                sample={activeSample}
-                lookupFieldSource={lookupFieldSource}
-                isResolvingReferences={isResolvingReferences}
-                onFieldBlur={handleFieldBlur}
-                onFieldChange={handleFieldChange}
-                onArrayAdd={handleArrayAdd}
-                onArrayRemove={handleArrayRemove}
-                onObjectToggle={handleObjectToggle}
-                onArmSelect={handleArmSelect}
-              />
-            ))}
-          </>
-        )}
-        {isResolvingReferences || unsupportedSummary ? (
-          isResolvingReferences ? (
-            <div role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Spinner className="size-3 shrink-0" />
-              <span>
-                Resolving reference… ({hydrationRetriesRemaining}{' '}
-                {hydrationRetriesRemaining === 1 ? 'retry' : 'retries'} left)
+    if (showStatusOnly) {
+      const isWaiting = status.state === 'waiting' && status.targetId;
+      return (
+        <section
+          aria-label="Form preview"
+          data-testid="panel-formPreview"
+          className="studio-scroll flex h-full flex-col overflow-auto p-3"
+        >
+          {isWaiting ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="size-3.5 shrink-0" />
+              <span role="status" aria-live="polite">
+                {getStatusOnlyMessage(schema, status)}
               </span>
             </div>
           ) : (
-            <div role="status" className="text-xs text-muted-foreground">
-              Unsupported preview features: {unsupportedSummary}
-            </div>
-          )
-        ) : null}
-        {schema.kind === 'function' ? (
-          <div className="preview-panel__function-controls border-t border-border pt-3">
-            <Button type="button" variant="ghost" size="xs" disabled={executionState === 'running'} onClick={handleRun}>
-              {executionState === 'running' ? 'Executing…' : 'Run'}
-            </Button>
-            {executionError ? (
-              <div className="execution-error mt-2 text-xs">
-                <span className="text-xs font-medium text-destructive">Error:</span>{' '}
-                <span className="text-xs text-destructive">{executionError}</span>
-              </div>
-            ) : null}
-            {executionResult !== undefined ? (
-              <div className="execution-result mt-2">
-                <span className="text-2xs font-medium text-muted-foreground">Output:</span>
-                <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-2xs leading-5 text-foreground">
-                  {JSON.stringify(executionResult, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        <details className="preview-panel__sample" data-testid="sample-data-view" open>
-          <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
-          <div className="space-y-2 border-t border-border p-2">
-            <pre
-              aria-label="Sample data output"
-              className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
-              data-testid="sample-data-output"
-            >
-              {activeSample?.serialized ?? '{}'}
-            </pre>
-            <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
-              {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
+            <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+              {getStatusOnlyMessage(schema, status)}
             </p>
+          )}
+        </section>
+      );
+    }
+
+    // A Data-extends-Choice (or typeAlias-extends-Choice) schema's own
+    // top-level `kind` isn't `'choice'` — schema.choiceArmPaths carries the
+    // same "which fields.path values are Choice-ancestor arms" signal that
+    // PreviewObjectField.choiceArmPaths carries for a NESTED reference
+    // (issue #434). Route those root-level arm fields through
+    // ChoiceFieldGroup too, not just the genuine `kind === 'choice'` case.
+    const { armFields: rootArmFields, otherFields: rootOtherFields } = splitChoiceArmFields(
+      schema.fields,
+      schema.choiceArmPaths
+    );
+
+    return (
+      <section
+        role="region"
+        aria-label="Form preview"
+        data-testid="panel-formPreview"
+        className="studio-scroll flex h-full flex-col overflow-auto"
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+          <h2 className="truncate text-sm font-semibold">{schema.title}</h2>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button type="button" variant="ghost" size="xs" onClick={handleCopySample}>
+              Copy
+            </Button>
+            <Button type="button" variant="ghost" size="xs" onClick={handleReset}>
+              Reset
+            </Button>
           </div>
-        </details>
-      </form>
-    </section>
-  );
-}
+        </header>
+        <p
+          role={status.state === 'invalid' ? 'alert' : 'status'}
+          aria-live="polite"
+          className="px-3 pt-2 text-xs text-muted-foreground"
+        >
+          {summaryMessage}
+        </p>
+        <form className="preview-panel__body studio-scroll space-y-3 overflow-auto p-3">
+          {schema.kind === 'choice' ? (
+            <ChoiceFieldGroup
+              fields={schema.fields}
+              sample={activeSample}
+              lookupFieldSource={lookupFieldSource}
+              isResolvingReferences={isResolvingReferences}
+              onFieldBlur={handleFieldBlur}
+              onFieldChange={handleFieldChange}
+              onArrayAdd={handleArrayAdd}
+              onArrayRemove={handleArrayRemove}
+              onObjectToggle={handleObjectToggle}
+              onArmSelect={handleArmSelect}
+            />
+          ) : (
+            <>
+              {rootArmFields.length > 0 ? (
+                <ChoiceFieldGroup
+                  fields={rootArmFields}
+                  sample={activeSample}
+                  lookupFieldSource={lookupFieldSource}
+                  isResolvingReferences={isResolvingReferences}
+                  onFieldBlur={handleFieldBlur}
+                  onFieldChange={handleFieldChange}
+                  onArrayAdd={handleArrayAdd}
+                  onArrayRemove={handleArrayRemove}
+                  onObjectToggle={handleObjectToggle}
+                  onArmSelect={handleArmSelect}
+                />
+              ) : null}
+              {rootOtherFields.map((field) => (
+                <PreviewFieldControl
+                  key={field.path}
+                  field={field}
+                  sample={activeSample}
+                  lookupFieldSource={lookupFieldSource}
+                  isResolvingReferences={isResolvingReferences}
+                  onFieldBlur={handleFieldBlur}
+                  onFieldChange={handleFieldChange}
+                  onArrayAdd={handleArrayAdd}
+                  onArrayRemove={handleArrayRemove}
+                  onObjectToggle={handleObjectToggle}
+                  onArmSelect={handleArmSelect}
+                />
+              ))}
+            </>
+          )}
+          {isResolvingReferences || unsupportedSummary ? (
+            isResolvingReferences ? (
+              <div role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Spinner className="size-3 shrink-0" />
+                <span>
+                  Resolving reference… ({hydrationRetriesRemaining}{' '}
+                  {hydrationRetriesRemaining === 1 ? 'retry' : 'retries'} left)
+                </span>
+              </div>
+            ) : (
+              <div role="status" className="text-xs text-muted-foreground">
+                Unsupported preview features: {unsupportedSummary}
+              </div>
+            )
+          ) : null}
+          {schema.kind === 'function' ? (
+            <div className="preview-panel__function-controls border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={executionState === 'running'}
+                onClick={handleRun}
+              >
+                {executionState === 'running' ? 'Executing…' : 'Run'}
+              </Button>
+              {executionError ? (
+                <div className="execution-error mt-2 text-xs">
+                  <span className="text-xs font-medium text-destructive">Error:</span>{' '}
+                  <span className="text-xs text-destructive">{executionError}</span>
+                </div>
+              ) : null}
+              {executionResult !== undefined ? (
+                <div className="execution-result mt-2">
+                  <span className="text-2xs font-medium text-muted-foreground">Output:</span>
+                  <pre className="preview-panel__sample-output studio-scroll mt-0.5 overflow-auto p-2 text-2xs leading-5 text-foreground">
+                    {JSON.stringify(executionResult, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <details className="preview-panel__sample" data-testid="sample-data-view" open>
+            <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-foreground">Sample data</summary>
+            <div className="space-y-2 border-t border-border p-2">
+              <pre
+                aria-label="Sample data output"
+                className="preview-panel__sample-output studio-scroll max-h-56 overflow-auto p-2 text-2xs leading-5 text-foreground"
+                data-testid="sample-data-output"
+              >
+                {activeSample?.serialized ?? '{}'}
+              </pre>
+              <p role="status" aria-live="polite" className="text-2xs text-muted-foreground">
+                {copyFeedback ?? 'Sample data stays in-memory until you explicitly copy it.'}
+              </p>
+            </div>
+          </details>
+        </form>
+      </section>
+    );
+  },
+  { op: 'FormPreviewPanel' }
+);
 
 // splitChoiceArmFields (issue #434) — used at both the schema-root level (a
 // Data-extends-Choice schema whose own top-level `kind` isn't `'choice'`)

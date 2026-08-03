@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -7,6 +8,7 @@ import { Network, FileCode2, Info, MoreHorizontal, Layers } from 'lucide-react';
 import { GraphFilterMenu } from '../../components/GraphFilterMenu.js';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
 import { useUtilityTrayControls } from '../utility-tray-context.js';
+import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 const PANE_ORDER: CenterPane[] = ['graph', 'structure', 'source', 'inspector'];
 const PANE_LABELS: Record<CenterPane, string> = {
@@ -30,163 +32,166 @@ interface CenterStackPanelProps {
   renderStructure: () => React.ReactElement | null;
 }
 
-export function CenterStackPanel({
-  renderGraph,
-  renderSource,
-  renderInspector,
-  renderStructure
-}: CenterStackPanelProps): React.ReactElement {
-  const { activePanes, toggle } = useCenterPanes();
-  const { utilitiesCollapsed, toggleUtilities } = useUtilityTrayControls();
-  const ordered = PANE_ORDER.filter((p) => activePanes.has(p));
-  const containerRef = useRef<HTMLDivElement>(null);
+export const CenterStackPanel = withInstrumentation(
+  function CenterStackPanel({
+    renderGraph,
+    renderSource,
+    renderInspector,
+    renderStructure
+  }: CenterStackPanelProps): React.ReactElement {
+    const { activePanes, toggle } = useCenterPanes();
+    const { utilitiesCollapsed, toggleUtilities } = useUtilityTrayControls();
+    const ordered = PANE_ORDER.filter((p) => activePanes.has(p));
+    const containerRef = useRef<HTMLDivElement>(null);
 
-  const [fractions, setFractions] = useState<number[]>(() => ordered.map(() => 1 / ordered.length));
+    const [fractions, setFractions] = useState<number[]>(() => ordered.map(() => 1 / ordered.length));
 
-  // Tracked via useState, NOT a plain ref: a ref mutation made during render
-  // is not rolled back if React discards/retries this render under
-  // concurrent rendering, while the accompanying setFractions call IS rolled
-  // back (it never committed) — so a bare `.current = ...` assignment could
-  // leave a retry believing this pane-count change was already handled and
-  // skip re-equalizing the split fractions (same class of issue Codex
-  // flagged across several dialogs in this PR).
-  const [prevCount, setPrevCount] = useState(ordered.length);
-  if (ordered.length !== prevCount) {
-    setPrevCount(ordered.length);
-    const equal = ordered.map(() => 1 / ordered.length);
-    if (JSON.stringify(equal) !== JSON.stringify(fractions)) {
-      setFractions(equal);
+    // Tracked via useState, NOT a plain ref: a ref mutation made during render
+    // is not rolled back if React discards/retries this render under
+    // concurrent rendering, while the accompanying setFractions call IS rolled
+    // back (it never committed) — so a bare `.current = ...` assignment could
+    // leave a retry believing this pane-count change was already handled and
+    // skip re-equalizing the split fractions (same class of issue Codex
+    // flagged across several dialogs in this PR).
+    const [prevCount, setPrevCount] = useState(ordered.length);
+    if (ordered.length !== prevCount) {
+      setPrevCount(ordered.length);
+      const equal = ordered.map(() => 1 / ordered.length);
+      if (JSON.stringify(equal) !== JSON.stringify(fractions)) {
+        setFractions(equal);
+      }
     }
-  }
 
-  const handleDragStart = useCallback(
-    (splitIndex: number, e: React.MouseEvent) => {
-      e.preventDefault();
-      const container = containerRef.current;
-      if (!container) return;
-      const totalWidth = container.offsetWidth;
-      const startX = e.clientX;
-      const startFractions = [...fractions];
+    const handleDragStart = useCallback(
+      (splitIndex: number, e: React.MouseEvent) => {
+        e.preventDefault();
+        const container = containerRef.current;
+        if (!container) return;
+        const totalWidth = container.offsetWidth;
+        const startX = e.clientX;
+        const startFractions = [...fractions];
 
-      const onMove = (ev: MouseEvent) => {
-        const dx = ev.clientX - startX;
-        const dFrac = dx / totalWidth;
-        const next = [...startFractions];
-        const left = splitIndex;
-        const right = splitIndex + 1;
-        const minFrac = MIN_PANE_PX / totalWidth;
-        next[left] = Math.max(minFrac, startFractions[left]! + dFrac);
-        next[right] = Math.max(minFrac, startFractions[right]! - dFrac);
-        const sum = next.reduce((a, b) => a + b, 0);
-        setFractions(next.map((f) => f / sum));
-      };
+        const onMove = (ev: MouseEvent) => {
+          const dx = ev.clientX - startX;
+          const dFrac = dx / totalWidth;
+          const next = [...startFractions];
+          const left = splitIndex;
+          const right = splitIndex + 1;
+          const minFrac = MIN_PANE_PX / totalWidth;
+          next[left] = Math.max(minFrac, startFractions[left]! + dFrac);
+          next[right] = Math.max(minFrac, startFractions[right]! - dFrac);
+          const sum = next.reduce((a, b) => a + b, 0);
+          setFractions(next.map((f) => f / sum));
+        };
 
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        };
 
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
-    },
-    [fractions]
-  );
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      },
+      [fractions]
+    );
 
-  const renderPane = (pane: CenterPane): React.ReactElement | null => {
-    switch (pane) {
-      case 'graph':
-        return renderGraph();
-      case 'structure':
-        return renderStructure();
-      case 'source':
-        return renderSource();
-      case 'inspector':
-        return renderInspector();
-    }
-  };
+    const renderPane = (pane: CenterPane): React.ReactElement | null => {
+      switch (pane) {
+        case 'graph':
+          return renderGraph();
+        case 'structure':
+          return renderStructure();
+        case 'source':
+          return renderSource();
+        case 'inspector':
+          return renderInspector();
+      }
+    };
 
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      {/* Paneswitch pill — sits below the dockview tab strip */}
-      <div
-        className="studio-center-stack__bar"
-        role="toolbar"
-        aria-label="Center pane selector"
-        data-testid="studio-paneswitch"
-      >
-        <div className="studio-paneswitch" role="group">
-          {PANE_ORDER.map((pane) => {
-            const isActive = activePanes.has(pane);
-            const Icon = PANE_ICONS[pane];
-            return (
-              <button
-                key={pane}
-                type="button"
-                aria-pressed={isActive}
-                className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
-                onClick={() => toggle(pane)}
-              >
-                <Icon className="size-3.5" aria-hidden />
-                {PANE_LABELS[pane]}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex-1" />
-        <div className="studio-panel-actions" aria-label="Center stack actions">
-          <GraphFilterMenu compact align="end" />
-          <button
-            type="button"
-            className="studio-panel-action studio-utility-toggle"
-            onClick={toggleUtilities}
-            aria-pressed={!utilitiesCollapsed}
-            aria-label={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
-            title={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
-            data-testid="toggle-utilities-chevron"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Pane body — active panes split side-by-side */}
-      <div ref={containerRef} className="studio-center-stack" data-count={ordered.length} data-testid="center-stack">
-        {ordered.map((pane, i) => (
-          <Fragment key={pane}>
-            {i > 0 && <div className="studio-center-stack__split" onMouseDown={(e) => handleDragStart(i - 1, e)} />}
-            <div
-              className="studio-center-stack__pane"
-              data-pane={pane}
-              style={{
-                // e2e-batch fix: was `flex: <grow> 1 0%`, which gives a 0% basis
-                // and stops children from growing past the equal split. Inner
-                // panes (Structure View especially) need a real basis so their
-                // content (React Flow tree) can size correctly. `minWidth: 0`
-                // keeps flex-shrink working — without it overflowing children
-                // would force the pane wider than its share. `minHeight: 0`
-                // mirrors the same protection for the vertical axis.
-                //
-                // Codex P1 review: an earlier revision added
-                // `minInlineSize: 280px` when multi-pane to keep panes legible.
-                // That hard minimum × pane count clipped the rightmost panes at
-                // common laptop widths (3 panes × 280 = 840 + splitters > 800
-                // viewport). Dropped — `minWidth: 0` lets panes genuinely shrink,
-                // and the user can collapse panes via the pane-switcher pill
-                // when more space is needed for the active ones.
-                flex: `${fractions[i] ?? 1 / ordered.length} 1 0`,
-                minWidth: 0,
-                minHeight: 0
-              }}
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        {/* Paneswitch pill — sits below the dockview tab strip */}
+        <div
+          className="studio-center-stack__bar"
+          role="toolbar"
+          aria-label="Center pane selector"
+          data-testid="studio-paneswitch"
+        >
+          <div className="studio-paneswitch" role="group">
+            {PANE_ORDER.map((pane) => {
+              const isActive = activePanes.has(pane);
+              const Icon = PANE_ICONS[pane];
+              return (
+                <button
+                  key={pane}
+                  type="button"
+                  aria-pressed={isActive}
+                  className={isActive ? 'studio-paneswitch__seg is-active' : 'studio-paneswitch__seg'}
+                  onClick={() => toggle(pane)}
+                >
+                  <Icon className="size-3.5" aria-hidden />
+                  {PANE_LABELS[pane]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex-1" />
+          <div className="studio-panel-actions" aria-label="Center stack actions">
+            <GraphFilterMenu compact align="end" />
+            <button
+              type="button"
+              className="studio-panel-action studio-utility-toggle"
+              onClick={toggleUtilities}
+              aria-pressed={!utilitiesCollapsed}
+              aria-label={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
+              title={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
+              data-testid="toggle-utilities-chevron"
             >
-              {renderPane(pane)}
-            </div>
-          </Fragment>
-        ))}
+              <MoreHorizontal className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Pane body — active panes split side-by-side */}
+        <div ref={containerRef} className="studio-center-stack" data-count={ordered.length} data-testid="center-stack">
+          {ordered.map((pane, i) => (
+            <Fragment key={pane}>
+              {i > 0 && <div className="studio-center-stack__split" onMouseDown={(e) => handleDragStart(i - 1, e)} />}
+              <div
+                className="studio-center-stack__pane"
+                data-pane={pane}
+                style={{
+                  // e2e-batch fix: was `flex: <grow> 1 0%`, which gives a 0% basis
+                  // and stops children from growing past the equal split. Inner
+                  // panes (Structure View especially) need a real basis so their
+                  // content (React Flow tree) can size correctly. `minWidth: 0`
+                  // keeps flex-shrink working — without it overflowing children
+                  // would force the pane wider than its share. `minHeight: 0`
+                  // mirrors the same protection for the vertical axis.
+                  //
+                  // Codex P1 review: an earlier revision added
+                  // `minInlineSize: 280px` when multi-pane to keep panes legible.
+                  // That hard minimum × pane count clipped the rightmost panes at
+                  // common laptop widths (3 panes × 280 = 840 + splitters > 800
+                  // viewport). Dropped — `minWidth: 0` lets panes genuinely shrink,
+                  // and the user can collapse panes via the pane-switcher pill
+                  // when more space is needed for the active ones.
+                  flex: `${fractions[i] ?? 1 / ordered.length} 1 0`,
+                  minWidth: 0,
+                  minHeight: 0
+                }}
+              >
+                {renderPane(pane)}
+              </div>
+            </Fragment>
+          ))}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+  { op: 'CenterStackPanel' }
+);

@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import {
@@ -11,146 +12,148 @@ import type { LangiumDocument } from 'langium';
 import { createTarGz, extractTarGz } from '../opfs/tar-untar.js';
 import { listInstanceFiles, readInstance, writeInstance } from '../opfs/instances-fs.js';
 import type { OpfsFs } from '../opfs/opfs-fs.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Serializes every instance in `workspaceRoot` plus a fingerprinted manifest into a tar.gz bundle. */
-export async function exportBundle(
-  fs: OpfsFs,
-  workspaceRoot: string,
-  documents: LangiumDocument[]
-): Promise<Uint8Array> {
-  const files = await listInstanceFiles(fs, workspaceRoot);
-  const ids = files.map((f) => f.replace(/\.json$/, ''));
-  const records = await Promise.all(ids.map((id) => readInstance(fs, workspaceRoot, id)));
+export const exportBundle = withInstrumentation(
+  async function exportBundle(fs: OpfsFs, workspaceRoot: string, documents: LangiumDocument[]): Promise<Uint8Array> {
+    const files = await listInstanceFiles(fs, workspaceRoot);
+    const ids = files.map((f) => f.replace(/\.json$/, ''));
+    const records = await Promise.all(ids.map((id) => readInstance(fs, workspaceRoot, id)));
 
-  const fingerprint = await computeModelFingerprint(documents);
-  const manifest = buildManifest(records, fingerprint, undefined);
+    const fingerprint = await computeModelFingerprint(documents);
+    const manifest = buildManifest(records, fingerprint, undefined);
 
-  const entries = [
-    { path: 'manifest.json', data: new TextEncoder().encode(serializeManifest(manifest)) },
-    ...records.map((r) => ({ path: `instances/${r.id}.json`, data: new TextEncoder().encode(JSON.stringify(r)) }))
-  ];
-  return createTarGz(entries);
-}
+    const entries = [
+      { path: 'manifest.json', data: new TextEncoder().encode(serializeManifest(manifest)) },
+      ...records.map((r) => ({ path: `instances/${r.id}.json`, data: new TextEncoder().encode(JSON.stringify(r)) }))
+    ];
+    return createTarGz(entries);
+    // `documents` is the user's raw model AST and the output is a serialized
+    // tar.gz of user-entered instance data — neither is safe to capture.
+  },
+  { op: 'exportBundle' }
+);
 
-/**
- * Extracts a tar.gz bundle into `workspaceRoot`'s instance store, gating
- * `stale` on whether the currently-loaded model's fingerprint matches the
- * bundle manifest's — see design doc §4.
- *
- * A malformed/corrupt bundle — whether the bytes aren't a valid gzip/tar
- * archive at all, the extracted `manifest.json` isn't valid JSON, or an
- * individual instance record's JSON is corrupt — surfaces as a distinctly-
- * messaged "Invalid bundle" error rather than a raw, un-namespaced parser
- * error (e.g. pako's raw gzip-header error, or a raw `SyntaxError`), so a
- * future caller (an import dialog) can present a specific message instead
- * of a parser internals leak.
- */
-export async function importBundle(
-  fs: OpfsFs,
-  workspaceRoot: string,
-  bundleBytes: Uint8Array,
-  documents: LangiumDocument[]
-): Promise<{ imported: InstanceRecord[]; stale: boolean }> {
-  // A unique-per-call scratch path (not a fixed shared one) — `extractTarGz`
-  // only writes entries present in the NEW archive, so a fixed, reused path
-  // could let a PRIOR import's leftover file (e.g. `instances/<id>.json` for
-  // an id the new, malformed bundle's manifest references but doesn't
-  // actually include) be read as if it were part of THIS import, instead of
-  // correctly failing.
-  const scratchRoot = `${workspaceRoot}/.studio/.bundle-import-scratch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  try {
-    await extractTarGz(bundleBytes, fs, { pathPrefix: scratchRoot });
-  } catch (err) {
-    throw new Error(`Invalid bundle: archive could not be extracted (${errMessage(err)})`);
-  }
+export const importBundle = withInstrumentation(
+  async function importBundle(
+    fs: OpfsFs,
+    workspaceRoot: string,
+    bundleBytes: Uint8Array,
+    documents: LangiumDocument[]
+  ): Promise<{ imported: InstanceRecord[]; stale: boolean }> {
+    // A unique-per-call scratch path (not a fixed shared one) — `extractTarGz`
+    // only writes entries present in the NEW archive, so a fixed, reused path
+    // could let a PRIOR import's leftover file (e.g. `instances/<id>.json` for
+    // an id the new, malformed bundle's manifest references but doesn't
+    // actually include) be read as if it were part of THIS import, instead of
+    // correctly failing.
+    const scratchRoot = `${workspaceRoot}/.studio/.bundle-import-scratch-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      await extractTarGz(bundleBytes, fs, { pathPrefix: scratchRoot });
+    } catch (err) {
+      throw new Error(`Invalid bundle: archive could not be extracted (${errMessage(err)})`);
+    }
 
-  let manifest;
-  try {
-    const manifestRaw = await fs.readFile(`${scratchRoot}/manifest.json`, 'utf8');
-    manifest = parseManifest(manifestRaw as string);
-  } catch (err) {
-    throw new Error(`Invalid bundle: manifest could not be parsed (${errMessage(err)})`);
-  }
+    let manifest;
+    try {
+      const manifestRaw = await fs.readFile(`${scratchRoot}/manifest.json`, 'utf8');
+      manifest = parseManifest(manifestRaw as string);
+    } catch (err) {
+      throw new Error(`Invalid bundle: manifest could not be parsed (${errMessage(err)})`);
+    }
 
-  const currentFingerprint = await computeModelFingerprint(documents);
-  const stale = currentFingerprint !== manifest.modelFingerprint;
+    const currentFingerprint = await computeModelFingerprint(documents);
+    const stale = currentFingerprint !== manifest.modelFingerprint;
 
-  // Parse phase: read and validate every instance record from `scratchRoot`
-  // (never `workspaceRoot`) before writing anything. This makes a bundle
-  // that fails to parse anywhere naturally atomic — nothing has touched the
-  // real workspace's instance store yet, so the throw needs no rollback.
-  // Reads are independent per entry, so run them concurrently — the
-  // all-or-nothing atomicity of the parse phase only requires that every
-  // read finishes (successfully or not) before any write starts, which
-  // Promise.all already guarantees.
-  const finalRecords: InstanceRecord[] = await Promise.all(
-    manifest.instances.map(async (entry) => {
-      // Reject a path-unsafe manifest entry id BEFORE it's ever used to build
-      // a read or write path. `writeInstance` (instances-fs.ts) writes to
-      // `${instancesDir(workspaceRoot)}/${record.id}.json` with no path
-      // sanitization of its own, and `listInstanceFiles` only does a flat,
-      // non-recursive `readdir` of that directory — so an id containing `/`
-      // (e.g. "foo/bar") would write into a REAL nested subdirectory that the
-      // app can never see again on a later listing, even though the write
-      // itself succeeds silently (the instance would vanish on next reload).
-      // A denylist (not a strict allowlist tied to today's `ulid()` alphabet —
-      // see instance-store.ts's Phase-1 placeholder note) keeps this future-
-      // proof against a real ULID implementation using different characters.
-      if (entry.id.includes('/') || entry.id.includes('\\') || entry.id.includes('..')) {
-        throw new Error(`Invalid bundle: instance record "${entry.id}" has a path-unsafe id`);
+    // Parse phase: read and validate every instance record from `scratchRoot`
+    // (never `workspaceRoot`) before writing anything. This makes a bundle
+    // that fails to parse anywhere naturally atomic — nothing has touched the
+    // real workspace's instance store yet, so the throw needs no rollback.
+    // Reads are independent per entry, so run them concurrently — the
+    // all-or-nothing atomicity of the parse phase only requires that every
+    // read finishes (successfully or not) before any write starts, which
+    // Promise.all already guarantees.
+    const finalRecords: InstanceRecord[] = await Promise.all(
+      manifest.instances.map(async (entry) => {
+        // Reject a path-unsafe manifest entry id BEFORE it's ever used to build
+        // a read or write path. `writeInstance` (instances-fs.ts) writes to
+        // `${instancesDir(workspaceRoot)}/${record.id}.json` with no path
+        // sanitization of its own, and `listInstanceFiles` only does a flat,
+        // non-recursive `readdir` of that directory — so an id containing `/`
+        // (e.g. "foo/bar") would write into a REAL nested subdirectory that the
+        // app can never see again on a later listing, even though the write
+        // itself succeeds silently (the instance would vanish on next reload).
+        // A denylist (not a strict allowlist tied to today's `ulid()` alphabet —
+        // see instance-store.ts's Phase-1 placeholder note) keeps this future-
+        // proof against a real ULID implementation using different characters.
+        if (entry.id.includes('/') || entry.id.includes('\\') || entry.id.includes('..')) {
+          throw new Error(`Invalid bundle: instance record "${entry.id}" has a path-unsafe id`);
+        }
+        let record: InstanceRecord;
+        try {
+          const raw = await fs.readFile(`${scratchRoot}/instances/${entry.id}.json`, 'utf8');
+          record = JSON.parse(raw as string) as InstanceRecord;
+        } catch (err) {
+          throw new Error(`Invalid bundle: instance record "${entry.id}" could not be parsed (${errMessage(err)})`);
+        }
+        // Reject a payload whose own `id` doesn't match the manifest entry's id
+        // (the file NAME, not its contents) — writeInstance derives its write
+        // path from `record.id`, not `entry.id`, so trusting the payload here
+        // would let a malformed/malicious bundle silently write to an id never
+        // listed in the manifest, potentially clobbering an unrelated instance.
+        if (record.id !== entry.id) {
+          throw new Error(`Invalid bundle: instance record "${entry.id}" has a mismatched id ("${record.id}")`);
+        }
+        return stale ? { ...record, stale: { reason: 'model-fingerprint-mismatch', diagnostics: [] } } : record;
+      })
+    );
+
+    // Write phase: only after every record parsed successfully. Each id writes
+    // to its own file (writeInstance's shared `mkdir` is idempotent), so these
+    // are independent and safe to run concurrently. Promise.allSettled (not
+    // Promise.all) — a single write failing must not leave the other in-flight
+    // writes unaccounted for: Promise.all rejects as soon as the FIRST write
+    // fails while the rest keep running in the background, so the caller would
+    // see "import failed" via the thrown error while files still get written
+    // moments later with no visibility into which ones (Codex review).
+    const writeResults = await Promise.allSettled(
+      finalRecords.map(async (finalRecord) => {
+        await writeInstance(fs, workspaceRoot, finalRecord);
+        return finalRecord;
+      })
+    );
+    const imported: InstanceRecord[] = [];
+    const writeFailures: string[] = [];
+    for (const [i, result] of writeResults.entries()) {
+      if (result.status === 'fulfilled') {
+        imported.push(result.value);
+      } else {
+        writeFailures.push(`${finalRecords[i]!.id}: ${errMessage(result.reason)}`);
       }
-      let record: InstanceRecord;
-      try {
-        const raw = await fs.readFile(`${scratchRoot}/instances/${entry.id}.json`, 'utf8');
-        record = JSON.parse(raw as string) as InstanceRecord;
-      } catch (err) {
-        throw new Error(`Invalid bundle: instance record "${entry.id}" could not be parsed (${errMessage(err)})`);
-      }
-      // Reject a payload whose own `id` doesn't match the manifest entry's id
-      // (the file NAME, not its contents) — writeInstance derives its write
-      // path from `record.id`, not `entry.id`, so trusting the payload here
-      // would let a malformed/malicious bundle silently write to an id never
-      // listed in the manifest, potentially clobbering an unrelated instance.
-      if (record.id !== entry.id) {
-        throw new Error(`Invalid bundle: instance record "${entry.id}" has a mismatched id ("${record.id}")`);
-      }
-      return stale ? { ...record, stale: { reason: 'model-fingerprint-mismatch', diagnostics: [] } } : record;
-    })
-  );
+    }
+    if (writeFailures.length > 0) {
+      throw new Error(
+        `Bundle import partially failed: ${imported.length}/${finalRecords.length} instances written, ` +
+          `${writeFailures.length} failed (${writeFailures.join('; ')})`
+      );
+    }
 
-  // Write phase: only after every record parsed successfully. Each id writes
-  // to its own file (writeInstance's shared `mkdir` is idempotent), so these
-  // are independent and safe to run concurrently. Promise.allSettled (not
-  // Promise.all) — a single write failing must not leave the other in-flight
-  // writes unaccounted for: Promise.all rejects as soon as the FIRST write
-  // fails while the rest keep running in the background, so the caller would
-  // see "import failed" via the thrown error while files still get written
-  // moments later with no visibility into which ones (Codex review).
-  const writeResults = await Promise.allSettled(
-    finalRecords.map(async (finalRecord) => {
-      await writeInstance(fs, workspaceRoot, finalRecord);
-      return finalRecord;
-    })
-  );
-  const imported: InstanceRecord[] = [];
-  const writeFailures: string[] = [];
-  for (const [i, result] of writeResults.entries()) {
-    if (result.status === 'fulfilled') {
-      imported.push(result.value);
-    } else {
-      writeFailures.push(`${finalRecords[i]!.id}: ${errMessage(result.reason)}`);
+    return { imported, stale };
+    // `bundleBytes`/`documents` (input) and `imported` (output, real instance
+    // field values) carry raw user data — never captured. `stale` alone is a
+    // safe boolean summary.
+  },
+  {
+    op: 'importBundle',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as { imported: unknown[]; stale: boolean };
+      return { importedCount: result.imported.length, stale: result.stale };
     }
   }
-  if (writeFailures.length > 0) {
-    throw new Error(
-      `Bundle import partially failed: ${imported.length}/${finalRecords.length} instances written, ` +
-        `${writeFailures.length} failed (${writeFailures.join('; ')})`
-    );
-  }
-
-  return { imported, stale };
-}
+);

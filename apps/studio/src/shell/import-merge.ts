@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // apps/studio/src/shell/import-merge.ts
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
@@ -23,6 +24,7 @@
 
 import { parse } from '@rune-langium/core';
 import type { MergeOptions } from './import-merge-options.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 export interface MergeResult {
   mergedText: string;
@@ -55,107 +57,118 @@ function uniqueDeclarationName(candidate: string, taken: ReadonlySet<string>): s
   return next;
 }
 
-/**
- * Merges `importedText`'s top-level elements into `existingText`. Throws if
- * either input, or the merged result, fails to parse — that is this
- * function's own invariant (importModel() already guarantees importedText
- * parses cleanly; a failure here means a bug in this splice logic, not a
- * user input error).
- */
-export async function mergeImportedText(
-  existingText: string,
-  importedText: string,
-  options: MergeOptions = { onCollision: 'skip' }
-): Promise<MergeResult> {
-  const [existingParse, importedParse] = await Promise.all([
-    parse(existingText, 'inmemory:///existing.rosetta'),
-    parse(importedText, 'inmemory:///imported.rosetta')
-  ]);
-  if (existingParse.hasErrors) {
-    throw new Error('mergeImportedText: existingText failed to parse.');
-  }
-  if (importedParse.hasErrors) {
-    throw new Error('mergeImportedText: importedText failed to parse.');
-  }
-
-  const existingElements = existingParse.value.elements as ReadonlyArray<{
-    name?: string;
-    $cstNode?: { offset: number; length: number };
-  }>;
-  const existingByName = new Map(
-    existingElements
-      .filter((el): el is typeof el & { name: string } => el.name !== undefined)
-      .map((el) => [el.name, el])
-  );
-  const allNames = new Set(existingByName.keys());
-
-  const skipped: string[] = [];
-  const overwritten: string[] = [];
-  const renamed: { from: string; to: string }[] = [];
-  const appendSpans: string[] = [];
-  // Existing-text edits (overwrite only) are collected as [start, end, replacement]
-  // and applied in one pass, offset-safe by processing in descending start order.
-  const existingEdits: { start: number; end: number; replacement: string }[] = [];
-
-  for (const el of importedParse.value.elements as ReadonlyArray<{
-    name?: string;
-    $cstNode?: { offset: number; length: number };
-  }>) {
-    const name = el.name;
-    const cst = el.$cstNode;
-    if (!cst) continue;
-    const spanText = importedText.slice(cst.offset, cst.offset + cst.length);
-    const collision = name !== undefined && existingByName.has(name);
-
-    if (!collision) {
-      appendSpans.push(spanText);
-      if (name !== undefined) allNames.add(name);
-      continue;
+export const mergeImportedText = withInstrumentation(
+  async function mergeImportedText(
+    existingText: string,
+    importedText: string,
+    options: MergeOptions = { onCollision: 'skip' }
+  ): Promise<MergeResult> {
+    const [existingParse, importedParse] = await Promise.all([
+      parse(existingText, 'inmemory:///existing.rosetta'),
+      parse(importedText, 'inmemory:///imported.rosetta')
+    ]);
+    if (existingParse.hasErrors) {
+      throw new Error('mergeImportedText: existingText failed to parse.');
+    }
+    if (importedParse.hasErrors) {
+      throw new Error('mergeImportedText: importedText failed to parse.');
     }
 
-    if (options.onCollision === 'skip') {
-      skipped.push(name!);
-      continue;
+    const existingElements = existingParse.value.elements as ReadonlyArray<{
+      name?: string;
+      $cstNode?: { offset: number; length: number };
+    }>;
+    const existingByName = new Map(
+      existingElements
+        .filter((el): el is typeof el & { name: string } => el.name !== undefined)
+        .map((el) => [el.name, el])
+    );
+    const allNames = new Set(existingByName.keys());
+
+    const skipped: string[] = [];
+    const overwritten: string[] = [];
+    const renamed: { from: string; to: string }[] = [];
+    const appendSpans: string[] = [];
+    // Existing-text edits (overwrite only) are collected as [start, end, replacement]
+    // and applied in one pass, offset-safe by processing in descending start order.
+    const existingEdits: { start: number; end: number; replacement: string }[] = [];
+
+    for (const el of importedParse.value.elements as ReadonlyArray<{
+      name?: string;
+      $cstNode?: { offset: number; length: number };
+    }>) {
+      const name = el.name;
+      const cst = el.$cstNode;
+      if (!cst) continue;
+      const spanText = importedText.slice(cst.offset, cst.offset + cst.length);
+      const collision = name !== undefined && existingByName.has(name);
+
+      if (!collision) {
+        appendSpans.push(spanText);
+        if (name !== undefined) allNames.add(name);
+        continue;
+      }
+
+      if (options.onCollision === 'skip') {
+        skipped.push(name!);
+        continue;
+      }
+
+      if (options.onCollision === 'overwrite') {
+        const existingEl = existingByName.get(name!)!;
+        const existingCst = existingEl.$cstNode!;
+        existingEdits.push({
+          start: existingCst.offset,
+          end: existingCst.offset + existingCst.length,
+          replacement: spanText
+        });
+        overwritten.push(name!);
+        continue;
+      }
+
+      // rename — only type/enum/choice/func declarations are safe to rename.
+      // Shared meta-declarations (e.g. `synonym source <Name>`, emitted on
+      // every import) are never renamed: other declarations' own synonym refs
+      // still point at the original name, so renaming would corrupt them.
+      // Treat a non-renamable collision as a skip instead.
+      if (!DECL_NAME_RE.test(spanText)) {
+        skipped.push(name!);
+        continue;
+      }
+      const newName = uniqueDeclarationName(name!, allNames);
+      allNames.add(newName);
+      renamed.push({ from: name!, to: newName });
+      appendSpans.push(renameDeclaration(spanText, newName));
     }
 
-    if (options.onCollision === 'overwrite') {
-      const existingEl = existingByName.get(name!)!;
-      const existingCst = existingEl.$cstNode!;
-      existingEdits.push({
-        start: existingCst.offset,
-        end: existingCst.offset + existingCst.length,
-        replacement: spanText
-      });
-      overwritten.push(name!);
-      continue;
+    let mergedExisting = existingText;
+    for (const edit of existingEdits.sort((a, b) => b.start - a.start)) {
+      mergedExisting = mergedExisting.slice(0, edit.start) + edit.replacement + mergedExisting.slice(edit.end);
     }
 
-    // rename — only type/enum/choice/func declarations are safe to rename.
-    // Shared meta-declarations (e.g. `synonym source <Name>`, emitted on
-    // every import) are never renamed: other declarations' own synonym refs
-    // still point at the original name, so renaming would corrupt them.
-    // Treat a non-renamable collision as a skip instead.
-    if (!DECL_NAME_RE.test(spanText)) {
-      skipped.push(name!);
-      continue;
+    const mergedText = appendSpans.length === 0 ? mergedExisting : `${mergedExisting}\n\n${appendSpans.join('\n\n')}`;
+
+    const mergedParse = await parse(mergedText, 'inmemory:///merged.rosetta');
+    if (mergedParse.hasErrors) {
+      throw new Error('mergeImportedText: merged output failed to re-parse.');
     }
-    const newName = uniqueDeclarationName(name!, allNames);
-    allNames.add(newName);
-    renamed.push({ from: name!, to: newName });
-    appendSpans.push(renameDeclaration(spanText, newName));
+
+    return { mergedText, skipped, overwritten, renamed };
+    // `existingText`/`importedText`/`mergedText` are raw model source, and
+    // skipped/overwritten/renamed carry user-defined declaration names —
+    // never captured. Only counts are safe.
+  },
+  {
+    op: 'mergeImportedText',
+    capture: Capture.Output,
+    sanitize: (value, which) => {
+      if (which !== 'output') return undefined;
+      const result = value as MergeResult;
+      return {
+        skippedCount: result.skipped.length,
+        overwrittenCount: result.overwritten.length,
+        renamedCount: result.renamed.length
+      };
+    }
   }
-
-  let mergedExisting = existingText;
-  for (const edit of existingEdits.sort((a, b) => b.start - a.start)) {
-    mergedExisting = mergedExisting.slice(0, edit.start) + edit.replacement + mergedExisting.slice(edit.end);
-  }
-
-  const mergedText = appendSpans.length === 0 ? mergedExisting : `${mergedExisting}\n\n${appendSpans.join('\n\n')}`;
-
-  const mergedParse = await parse(mergedText, 'inmemory:///merged.rosetta');
-  if (mergedParse.hasErrors) {
-    throw new Error('mergeImportedText: merged output failed to re-parse.');
-  }
-
-  return { mergedText, skipped, overwritten, renamed };
-}
+);

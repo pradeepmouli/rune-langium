@@ -1,8 +1,10 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
 import { create } from 'zustand';
 import { saveSetting, loadSetting } from '../workspace/persistence.js';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 interface TelemetrySettingsState {
   /** Per-user runtime opt-in. Defaults to false (opt-IN, not opt-out) until hydrated from IndexedDB. */
@@ -26,11 +28,13 @@ export const useTelemetrySettingsStore = create<TelemetrySettingsState>((set) =>
   }
 }));
 
-/** Reads the persisted opt-in once at startup. Call from App.tsx's init sequence, same as other one-shot hydration reads. */
-export async function hydrateTelemetrySettings(): Promise<void> {
-  const stored = await loadSetting<boolean>('telemetry-enabled');
-  // No-op if the user already made an explicit choice via setEnabled while
-  // this read was in flight — see the race note there.
-  if (useTelemetrySettingsStore.getState().hydrated) return;
-  useTelemetrySettingsStore.setState({ enabled: stored ?? false, hydrated: true });
-}
+export const hydrateTelemetrySettings = withInstrumentation(
+  async function hydrateTelemetrySettings(): Promise<void> {
+    const stored = await loadSetting<boolean>('telemetry-enabled');
+    // No-op if the user already made an explicit choice via setEnabled while
+    // this read was in flight — see the race note there.
+    if (useTelemetrySettingsStore.getState().hydrated) return;
+    useTelemetrySettingsStore.setState({ enabled: stored ?? false, hydrated: true });
+  },
+  { op: 'hydrateTelemetrySettings' }
+);

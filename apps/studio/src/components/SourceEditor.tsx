@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -20,6 +21,7 @@ import {
   useMemo,
   useImperativeHandle,
   forwardRef,
+  type ForwardedRef,
   type KeyboardEvent
 } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
@@ -32,6 +34,7 @@ import type { LspClientService } from '../services/lsp-client.js';
 import { pathToUri } from '../utils/uri.js';
 import { cn } from '@rune-langium/design-system/utils';
 import { isTypeRefPayload, TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
 // Re-export pathToUri for backward compatibility
 export { pathToUri } from '../utils/uri.js';
@@ -103,23 +106,26 @@ function getTabId(path: string): string {
 // Phase 9: type-ref drop helpers (exported for unit testing)
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * Accepts a dragover event iff it carries our TYPE_REF_PAYLOAD_MIME.
- * Returns true when accepted, false otherwise.
- * Exported so it can be unit-tested without constructing an EditorView.
- */
-export function handleTypeRefDragOver(event: DragEvent): boolean {
-  const types = Array.from(event.dataTransfer?.types ?? []);
-  const hasOurMime = types.some((t) => t.toLowerCase() === TYPE_REF_PAYLOAD_MIME);
-  if (!hasOurMime) return false;
-  event.preventDefault();
-  try {
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'link';
-  } catch {
-    // Some test stubs make dropEffect read-only — non-fatal.
+export const handleTypeRefDragOver = withInstrumentation(
+  function handleTypeRefDragOver(event: DragEvent): boolean {
+    const types = Array.from(event.dataTransfer?.types ?? []);
+    const hasOurMime = types.some((t) => t.toLowerCase() === TYPE_REF_PAYLOAD_MIME);
+    if (!hasOurMime) return false;
+    event.preventDefault();
+    try {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'link';
+    } catch {
+      // Some test stubs make dropEffect read-only — non-fatal.
+    }
+    return true;
+    // `event` (DOM DragEvent) isn't captured; output is a plain boolean — safe.
+  },
+  {
+    op: 'handleTypeRefDragOver',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  return true;
-}
+);
 
 /** Minimal view interface required by the drop handler (subset of EditorView). */
 export interface DropTargetView {
@@ -130,38 +136,40 @@ export interface DropTargetView {
   focus(): void;
 }
 
-/**
- * Handles a drop event for a type-ref payload.
- * Inserts `${namespaceUri}.${typeName}` at the drop position.
- * Returns true when the event was accepted and handled, false otherwise.
- * Exported so it can be unit-tested without constructing a full EditorView.
- */
-export function handleTypeRefDrop(event: DragEvent, view: DropTargetView): boolean {
-  const raw = event.dataTransfer?.getData(TYPE_REF_PAYLOAD_MIME);
-  if (!raw) return false;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return false;
+export const handleTypeRefDrop = withInstrumentation(
+  function handleTypeRefDrop(event: DragEvent, view: DropTargetView): boolean {
+    const raw = event.dataTransfer?.getData(TYPE_REF_PAYLOAD_MIME);
+    if (!raw) return false;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+    if (!isTypeRefPayload(parsed)) return false;
+
+    // Only preventDefault once we've confirmed the payload is ours — otherwise
+    // plain-text and file drops on the SourceEditor would be suppressed.
+    event.preventDefault();
+
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
+    const qualified = `${parsed.namespaceUri}.${parsed.typeName}`;
+    view.dispatch({
+      changes: { from: pos, to: pos, insert: qualified },
+      // Place caret after the inserted text so the user can keep typing.
+      selection: { anchor: pos + qualified.length }
+    });
+    // Restore focus so the user can type immediately without clicking first.
+    view.focus();
+    return true;
+    // `event`/`view` aren't captured; output is a plain boolean — safe.
+  },
+  {
+    op: 'handleTypeRefDrop',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
   }
-  if (!isTypeRefPayload(parsed)) return false;
-
-  // Only preventDefault once we've confirmed the payload is ours — otherwise
-  // plain-text and file drops on the SourceEditor would be suppressed.
-  event.preventDefault();
-
-  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
-  const qualified = `${parsed.namespaceUri}.${parsed.typeName}`;
-  view.dispatch({
-    changes: { from: pos, to: pos, insert: qualified },
-    // Place caret after the inserted text so the user can keep typing.
-    selection: { anchor: pos + qualified.length }
-  });
-  // Restore focus so the user can type immediately without clicking first.
-  view.focus();
-  return true;
-}
+);
 
 function scrollToPosition(view: EditorView | null, position: { line: number; character: number }): void {
   if (!view) return;
@@ -234,389 +242,400 @@ function extractNodeIdAtPosition(state: EditorState, pos: number): string | null
 // Component
 // ────────────────────────────────────────────────────────────────────────────
 
-export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(function SourceEditor(
-  {
-    files,
-    activeFile,
-    onFileSelect,
-    onFileClose,
-    onContentChange,
-    lspClient,
-    onNavigateToNode,
-    onEditorViewCreated,
-    hideTabs
-  },
-  ref
-) {
-  const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const editorViewRef = useRef<EditorView | null>(null);
+// Manually wrapped (codemod only rewrites `export function` declarations,
+// not a forwardRef-wrapped arrow/function-expression export): the render
+// function is wrapped, then handed to forwardRef, so forwardRef's own
+// $$typeof marker on the exported component is preserved. Props (files,
+// callbacks) aren't capturable — same as every other React component in
+// this sweep.
+const renderSourceEditor = withInstrumentation(
+  function SourceEditor(
+    {
+      files,
+      activeFile,
+      onFileSelect,
+      onFileClose,
+      onContentChange,
+      lspClient,
+      onNavigateToNode,
+      onEditorViewCreated,
+      hideTabs
+    }: SourceEditorProps,
+    ref: ForwardedRef<SourceEditorRef>
+  ) {
+    const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
+    const editorContainerRef = useRef<HTMLDivElement>(null);
+    const editorViewRef = useRef<EditorView | null>(null);
 
-  // Sync selectedPath when activeFile prop changes externally. Adjusted
-  // during render (React's blessed pattern) rather than in an effect, so
-  // external navigation lands in the same render instead of flashing the
-  // stale selectedPath for one frame first. Triggers off activeFile itself
-  // (not selectedPath) so internal tab-clicks — which change selectedPath
-  // without activeFile changing — never re-fire this.
-  //
-  // Tracked via useState, NOT a plain ref: a ref mutation made during render
-  // is not rolled back if React discards/retries this render under
-  // concurrent rendering, while the accompanying setSelectedPath call IS
-  // rolled back (it never committed) — so even the conditional
-  // `.current = activeFile` assignment below could leave a retry believing
-  // this activeFile was already handled while the selection update it was
-  // paired with never actually committed (Codex review, round 2).
-  const [prevActiveFile, setPrevActiveFile] = useState(activeFile);
-  if (activeFile && activeFile !== prevActiveFile) {
-    const exists = files.some((f) => f.path === activeFile);
-    if (exists) {
-      setSelectedPath(activeFile);
-      // Only mark this activeFile as "handled" once it actually resolved —
-      // if `files` hasn't hydrated it yet (async navigation race), leave
-      // prevActiveFile stale so a LATER render (once `files` catches up)
-      // still sees activeFile !== prevActiveFile and retries, instead of
-      // silently giving up because this assignment already marked the miss
-      // as "seen".
+    // Sync selectedPath when activeFile prop changes externally. Adjusted
+    // during render (React's blessed pattern) rather than in an effect, so
+    // external navigation lands in the same render instead of flashing the
+    // stale selectedPath for one frame first. Triggers off activeFile itself
+    // (not selectedPath) so internal tab-clicks — which change selectedPath
+    // without activeFile changing — never re-fire this.
+    //
+    // Tracked via useState, NOT a plain ref: a ref mutation made during render
+    // is not rolled back if React discards/retries this render under
+    // concurrent rendering, while the accompanying setSelectedPath call IS
+    // rolled back (it never committed) — so even the conditional
+    // `.current = activeFile` assignment below could leave a retry believing
+    // this activeFile was already handled while the selection update it was
+    // paired with never actually committed (Codex review, round 2).
+    const [prevActiveFile, setPrevActiveFile] = useState(activeFile);
+    if (activeFile && activeFile !== prevActiveFile) {
+      const exists = files.some((f) => f.path === activeFile);
+      if (exists) {
+        setSelectedPath(activeFile);
+        // Only mark this activeFile as "handled" once it actually resolved —
+        // if `files` hasn't hydrated it yet (async navigation race), leave
+        // prevActiveFile stale so a LATER render (once `files` catches up)
+        // still sees activeFile !== prevActiveFile and retries, instead of
+        // silently giving up because this assignment already marked the miss
+        // as "seen".
+        setPrevActiveFile(activeFile);
+      }
+    } else if (activeFile !== prevActiveFile) {
       setPrevActiveFile(activeFile);
     }
-  } else if (activeFile !== prevActiveFile) {
-    setPrevActiveFile(activeFile);
-  }
 
-  // Expose imperative handle for programmatic navigation
-  useImperativeHandle(ref, () => {
-    const revealPosition = (position: { line: number; character: number }, filePath?: string) => {
-      // If a different file is specified, switch to it first
-      if (filePath && filePath !== selectedPath) {
-        const target = files.find((f) => f.path === filePath || f.name === filePath);
-        if (target) {
-          setSelectedPath(target.path);
-          onFileSelect?.(target.path);
-          // Schedule the scroll after the editor is recreated for the new file
-          requestAnimationFrame(() => {
+    // Expose imperative handle for programmatic navigation
+    useImperativeHandle(ref, () => {
+      const revealPosition = (position: { line: number; character: number }, filePath?: string) => {
+        // If a different file is specified, switch to it first
+        if (filePath && filePath !== selectedPath) {
+          const target = files.find((f) => f.path === filePath || f.name === filePath);
+          if (target) {
+            setSelectedPath(target.path);
+            onFileSelect?.(target.path);
+            // Schedule the scroll after the editor is recreated for the new file
             requestAnimationFrame(() => {
-              scrollToPosition(editorViewRef.current, position);
+              requestAnimationFrame(() => {
+                scrollToPosition(editorViewRef.current, position);
+              });
             });
-          });
-          return;
+            return;
+          }
+        }
+        scrollToPosition(editorViewRef.current, position);
+      };
+      return {
+        revealLine(line: number, filePath?: string) {
+          revealPosition({ line, character: 1 }, filePath);
+        },
+        revealPosition
+      };
+    }, [files, selectedPath, onFileSelect]);
+
+    // Track content per file for document model
+    const contentMapRef = useRef<Map<string, string>>(new Map());
+
+    // Stable callback refs — prevents editor recreation when parent re-renders
+    const onContentChangeRef = useRef(onContentChange);
+    useEffect(() => {
+      onContentChangeRef.current = onContentChange;
+    }, [onContentChange]);
+
+    const onNavigateToNodeRef = useRef(onNavigateToNode);
+    useEffect(() => {
+      onNavigateToNodeRef.current = onNavigateToNode;
+    }, [onNavigateToNode]);
+
+    const onEditorViewCreatedRef = useRef(onEditorViewCreated);
+    useEffect(() => {
+      onEditorViewCreatedRef.current = onEditorViewCreated;
+    }, [onEditorViewCreated]);
+
+    // Initialise content map (new files only)
+    useEffect(() => {
+      for (const file of files) {
+        if (!contentMapRef.current.has(file.path)) {
+          contentMapRef.current.set(file.path, file.content);
         }
       }
-      scrollToPosition(editorViewRef.current, position);
-    };
-    return {
-      revealLine(line: number, filePath?: string) {
-        revealPosition({ line, character: 1 }, filePath);
-      },
-      revealPosition
-    };
-  }, [files, selectedPath, onFileSelect]);
+    }, [files]);
 
-  // Track content per file for document model
-  const contentMapRef = useRef<Map<string, string>>(new Map());
-
-  // Stable callback refs — prevents editor recreation when parent re-renders
-  const onContentChangeRef = useRef(onContentChange);
-  useEffect(() => {
-    onContentChangeRef.current = onContentChange;
-  }, [onContentChange]);
-
-  const onNavigateToNodeRef = useRef(onNavigateToNode);
-  useEffect(() => {
-    onNavigateToNodeRef.current = onNavigateToNode;
-  }, [onNavigateToNode]);
-
-  const onEditorViewCreatedRef = useRef(onEditorViewCreated);
-  useEffect(() => {
-    onEditorViewCreatedRef.current = onEditorViewCreated;
-  }, [onEditorViewCreated]);
-
-  // Initialise content map (new files only)
-  useEffect(() => {
-    for (const file of files) {
-      if (!contentMapRef.current.has(file.path)) {
+    // Handle external content updates (e.g., from graph → source sync)
+    useEffect(() => {
+      const view = editorViewRef.current;
+      if (!view) return;
+      const file = files.find((f) => f.path === selectedPath);
+      if (!file) return;
+      const editorContent = view.state.doc.toString();
+      const mapContent = contentMapRef.current.get(file.path);
+      // Only update if file content differs from BOTH editor and map (external change)
+      if (file.content !== editorContent && file.content !== mapContent) {
         contentMapRef.current.set(file.path, file.content);
+        view.dispatch({
+          changes: { from: 0, to: editorContent.length, insert: file.content }
+        });
       }
-    }
-  }, [files]);
+    }, [files, selectedPath]);
 
-  // Handle external content updates (e.g., from graph → source sync)
-  useEffect(() => {
-    const view = editorViewRef.current;
-    if (!view) return;
-    const file = files.find((f) => f.path === selectedPath);
-    if (!file) return;
-    const editorContent = view.state.doc.toString();
-    const mapContent = contentMapRef.current.get(file.path);
-    // Only update if file content differs from BOTH editor and map (external change)
-    if (file.content !== editorContent && file.content !== mapContent) {
-      contentMapRef.current.set(file.path, file.content);
-      view.dispatch({
-        changes: { from: 0, to: editorContent.length, insert: file.content }
-      });
-    }
-  }, [files, selectedPath]);
+    const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
 
-  const currentFile = useMemo(() => files.find((f) => f.path === selectedPath), [files, selectedPath]);
-
-  const handleFileSelect = useCallback(
-    (path: string) => {
-      // Save current content before switching
-      if (editorViewRef.current && selectedPath) {
-        const content = editorViewRef.current.state.doc.toString();
-        contentMapRef.current.set(selectedPath, content);
-      }
-      setSelectedPath(path);
-      onFileSelect?.(path);
-    },
-    [selectedPath, onFileSelect]
-  );
-
-  const handleTabKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLButtonElement>, path: string) => {
-      const currentIndex = files.findIndex((file) => file.path === path);
-      if (currentIndex < 0 || files.length === 0) {
-        return;
-      }
-      let nextIndex: number | undefined;
-      switch (event.key) {
-        case 'ArrowRight':
-          nextIndex = (currentIndex + 1) % files.length;
-          break;
-        case 'ArrowLeft':
-          nextIndex = (currentIndex - 1 + files.length) % files.length;
-          break;
-        case 'Home':
-          nextIndex = 0;
-          break;
-        case 'End':
-          nextIndex = files.length - 1;
-          break;
-        default:
-          return;
-      }
-      event.preventDefault();
-      const nextFile = files[nextIndex];
-      if (nextFile) {
-        handleFileSelect(nextFile.path);
-        const nextTab = document.getElementById(getTabId(nextFile.path));
-        if (nextTab instanceof HTMLButtonElement) {
-          nextTab.focus();
+    const handleFileSelect = useCallback(
+      (path: string) => {
+        // Save current content before switching
+        if (editorViewRef.current && selectedPath) {
+          const content = editorViewRef.current.state.doc.toString();
+          contentMapRef.current.set(selectedPath, content);
         }
-      }
-    },
-    [files, handleFileSelect]
-  );
+        setSelectedPath(path);
+        onFileSelect?.(path);
+      },
+      [selectedPath, onFileSelect]
+    );
 
-  // Build extensions — uses refs for callbacks to keep extensions stable
-  const buildExtensions = useCallback(
-    (filePath: string, isReadOnly: boolean): Extension[] => {
-      const exts: Extension[] = [
-        basicSetup,
-        keymap.of(defaultKeymap),
-        EditorView.lineWrapping,
-        ...studioEditorExtensions,
-        runeDslLanguage()
-      ];
+    const handleTabKeyDown = useCallback(
+      (event: KeyboardEvent<HTMLButtonElement>, path: string) => {
+        const currentIndex = files.findIndex((file) => file.path === path);
+        if (currentIndex < 0 || files.length === 0) {
+          return;
+        }
+        let nextIndex: number | undefined;
+        switch (event.key) {
+          case 'ArrowRight':
+            nextIndex = (currentIndex + 1) % files.length;
+            break;
+          case 'ArrowLeft':
+            nextIndex = (currentIndex - 1 + files.length) % files.length;
+            break;
+          case 'Home':
+            nextIndex = 0;
+            break;
+          case 'End':
+            nextIndex = files.length - 1;
+            break;
+          default:
+            return;
+        }
+        event.preventDefault();
+        const nextFile = files[nextIndex];
+        if (nextFile) {
+          handleFileSelect(nextFile.path);
+          const nextTab = document.getElementById(getTabId(nextFile.path));
+          if (nextTab instanceof HTMLButtonElement) {
+            nextTab.focus();
+          }
+        }
+      },
+      [files, handleFileSelect]
+    );
 
-      if (isReadOnly) {
-        exts.push(EditorState.readOnly.of(true));
-      } else {
+    // Build extensions — uses refs for callbacks to keep extensions stable
+    const buildExtensions = useCallback(
+      (filePath: string, isReadOnly: boolean): Extension[] => {
+        const exts: Extension[] = [
+          basicSetup,
+          keymap.of(defaultKeymap),
+          EditorView.lineWrapping,
+          ...studioEditorExtensions,
+          runeDslLanguage()
+        ];
+
+        if (isReadOnly) {
+          exts.push(EditorState.readOnly.of(true));
+        } else {
+          exts.push(
+            EditorView.updateListener.of((update) => {
+              if (update.docChanged) {
+                const content = update.state.doc.toString();
+                contentMapRef.current.set(filePath, content);
+                onContentChangeRef.current?.(filePath, content);
+              }
+            })
+          );
+        }
+
+        // Task 7: detect go-to-definition navigation and fire onNavigateToNode.
+        // The @codemirror/lsp-client jumpToDefinition dispatches transactions with
+        // userEvent "select.definition". We listen for these and attempt to derive
+        // a graph nodeId from the definition target position in the document.
         exts.push(
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-              const content = update.state.doc.toString();
-              contentMapRef.current.set(filePath, content);
-              onContentChangeRef.current?.(filePath, content);
-            }
-          })
-        );
-      }
-
-      // Task 7: detect go-to-definition navigation and fire onNavigateToNode.
-      // The @codemirror/lsp-client jumpToDefinition dispatches transactions with
-      // userEvent "select.definition". We listen for these and attempt to derive
-      // a graph nodeId from the definition target position in the document.
-      exts.push(
-        EditorView.updateListener.of((update) => {
-          for (const tr of update.transactions) {
-            if (tr.isUserEvent('select.definition')) {
-              // The transaction has already moved the cursor to the definition site.
-              // Try to extract the type name at the cursor position for graph navigation.
-              const pos = tr.newSelection.main.head;
-              const nodeId = extractNodeIdAtPosition(update.state, pos);
-              if (nodeId && onNavigateToNodeRef.current) {
-                onNavigateToNodeRef.current(nodeId);
+            for (const tr of update.transactions) {
+              if (tr.isUserEvent('select.definition')) {
+                // The transaction has already moved the cursor to the definition site.
+                // Try to extract the type name at the cursor position for graph navigation.
+                const pos = tr.newSelection.main.head;
+                const nodeId = extractNodeIdAtPosition(update.state, pos);
+                if (nodeId && onNavigateToNodeRef.current) {
+                  onNavigateToNodeRef.current(nodeId);
+                }
               }
             }
-          }
-        })
-      );
-
-      // Wire LSP plugin if client is available
-      if (lspClient?.isInitialized()) {
-        const lspPlugin = lspClient.getPlugin(pathToUri(filePath));
-        if (lspPlugin) exts.push(lspPlugin);
-      }
-
-      // Phase 9: accept type-ref drops from NamespaceExplorer onto the editor surface.
-      // Delegates to pure helpers (handleTypeRefDragOver / handleTypeRefDrop) so the
-      // logic is unit-testable without constructing a full EditorView.
-      // Guard: read-only editors must never receive drop mutations — CodeMirror's
-      // EditorState.readOnly.of(true) blocks user input but NOT programmatic
-      // view.dispatch(), so without this gate a drop would silently mutate a
-      // system/built-in buffer that onContentChange never sees.
-      if (!isReadOnly) {
-        exts.push(
-          EditorView.domEventHandlers({
-            dragover: handleTypeRefDragOver,
-            drop: handleTypeRefDrop
           })
         );
+
+        // Wire LSP plugin if client is available
+        if (lspClient?.isInitialized()) {
+          const lspPlugin = lspClient.getPlugin(pathToUri(filePath));
+          if (lspPlugin) exts.push(lspPlugin);
+        }
+
+        // Phase 9: accept type-ref drops from NamespaceExplorer onto the editor surface.
+        // Delegates to pure helpers (handleTypeRefDragOver / handleTypeRefDrop) so the
+        // logic is unit-testable without constructing a full EditorView.
+        // Guard: read-only editors must never receive drop mutations — CodeMirror's
+        // EditorState.readOnly.of(true) blocks user input but NOT programmatic
+        // view.dispatch(), so without this gate a drop would silently mutate a
+        // system/built-in buffer that onContentChange never sees.
+        if (!isReadOnly) {
+          exts.push(
+            EditorView.domEventHandlers({
+              dragover: handleTypeRefDragOver,
+              drop: handleTypeRefDrop
+            })
+          );
+        }
+
+        return exts;
+      },
+      [lspClient]
+    );
+
+    // Create / update editor view when file PATH changes (tab switch) or LSP connects.
+    // Content changes are handled by CodeMirror's internal state + updateListener.
+    useEffect(() => {
+      if (!editorContainerRef.current || !currentFile) return;
+
+      // Destroy previous editor
+      if (editorViewRef.current) {
+        editorViewRef.current.destroy();
+        editorViewRef.current = null;
       }
 
-      return exts;
-    },
-    [lspClient]
-  );
+      const content = contentMapRef.current.get(currentFile.path) ?? currentFile.content;
 
-  // Create / update editor view when file PATH changes (tab switch) or LSP connects.
-  // Content changes are handled by CodeMirror's internal state + updateListener.
-  useEffect(() => {
-    if (!editorContainerRef.current || !currentFile) return;
+      const state = EditorState.create({
+        doc: content,
+        extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false)
+      });
 
-    // Destroy previous editor
-    if (editorViewRef.current) {
-      editorViewRef.current.destroy();
-      editorViewRef.current = null;
+      const view = new EditorView({
+        state,
+        parent: editorContainerRef.current
+      });
+
+      editorViewRef.current = view;
+
+      // Notify host that a new EditorView was created (for cross-file go-to-definition)
+      if (currentFile?.path) {
+        onEditorViewCreatedRef.current?.(currentFile.path, view);
+      }
+
+      return () => {
+        view.destroy();
+        editorViewRef.current = null;
+      };
+      // Only recreate editor when file path changes (tab switch) or LSP connects.
+      // Content updates are handled by the updateListener extension, NOT by recreating.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentFile?.path, buildExtensions]);
+
+    // Empty state
+    if (files.length === 0) {
+      return (
+        <section
+          className="studio-editor-page__source flex h-full flex-col items-center justify-center bg-card text-muted-foreground"
+          data-testid="source-editor"
+        >
+          <p>No files loaded</p>
+        </section>
+      );
     }
 
-    const content = contentMapRef.current.get(currentFile.path) ?? currentFile.content;
-
-    const state = EditorState.create({
-      doc: content,
-      extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false)
-    });
-
-    const view = new EditorView({
-      state,
-      parent: editorContainerRef.current
-    });
-
-    editorViewRef.current = view;
-
-    // Notify host that a new EditorView was created (for cross-file go-to-definition)
-    if (currentFile?.path) {
-      onEditorViewCreatedRef.current?.(currentFile.path, view);
-    }
-
-    return () => {
-      view.destroy();
-      editorViewRef.current = null;
-    };
-    // Only recreate editor when file path changes (tab switch) or LSP connects.
-    // Content updates are handled by the updateListener extension, NOT by recreating.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFile?.path, buildExtensions]);
-
-  // Empty state
-  if (files.length === 0) {
     return (
       <section
-        className="studio-editor-page__source flex h-full flex-col items-center justify-center bg-card text-muted-foreground"
+        className="studio-source-editor studio-editor-page__source flex h-full flex-col bg-card"
         data-testid="source-editor"
       >
-        <p>No files loaded</p>
-      </section>
-    );
-  }
-
-  return (
-    <section
-      className="studio-source-editor studio-editor-page__source flex h-full flex-col bg-card"
-      data-testid="source-editor"
-    >
-      {/* Tab bar — suppressed when parent already provides file-tab navigation */}
-      {!hideTabs && (
-        <nav className="studio-source-editor__tabs" role="tablist" aria-label="Open files">
-          {files.map((file) => (
-            <div
-              key={file.path}
-              className={cn(
-                'studio-source-editor__tab-shell group',
-                file.path === selectedPath ? 'studio-source-editor__tab-shell--active' : ''
-              )}
-            >
-              <button
-                type="button"
-                id={getTabId(file.path)}
-                role="tab"
-                aria-selected={file.path === selectedPath}
-                aria-controls="editor-tabpanel"
-                tabIndex={file.path === selectedPath ? 0 : -1}
+        {/* Tab bar — suppressed when parent already provides file-tab navigation */}
+        {!hideTabs && (
+          <nav className="studio-source-editor__tabs" role="tablist" aria-label="Open files">
+            {files.map((file) => (
+              <div
+                key={file.path}
                 className={cn(
-                  'studio-source-editor__tab',
-                  file.path === selectedPath ? 'studio-source-editor__tab--active' : ''
+                  'studio-source-editor__tab-shell group',
+                  file.path === selectedPath ? 'studio-source-editor__tab-shell--active' : ''
                 )}
-                onClick={() => handleFileSelect(file.path)}
-                onKeyDown={(event) => handleTabKeyDown(event, file.path)}
-                title={file.path}
               >
-                <span className="studio-source-editor__tab-label">{file.name}</span>
-                {file.readOnly && (
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    aria-label="read-only"
-                    className="studio-source-editor__tab-lock"
-                  >
-                    <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
-                  </svg>
-                )}
-                {file.dirty && (
-                  <span className="studio-source-editor__tab-dirty" aria-hidden>
-                    ●
-                  </span>
-                )}
-              </button>
-              {onFileClose && !file.readOnly && (
                 <button
                   type="button"
-                  aria-label={`Close ${file.name}`}
+                  id={getTabId(file.path)}
+                  role="tab"
+                  aria-selected={file.path === selectedPath}
+                  aria-controls="editor-tabpanel"
+                  tabIndex={file.path === selectedPath ? 0 : -1}
                   className={cn(
-                    'studio-source-editor__tab-close',
-                    file.path === selectedPath && 'studio-source-editor__tab-close--active'
+                    'studio-source-editor__tab',
+                    file.path === selectedPath ? 'studio-source-editor__tab--active' : ''
                   )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onFileClose(file.path);
-                  }}
+                  onClick={() => handleFileSelect(file.path)}
+                  onKeyDown={(event) => handleTabKeyDown(event, file.path)}
+                  title={file.path}
                 >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
-                    <path
-                      d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <span className="studio-source-editor__tab-label">{file.name}</span>
+                  {file.readOnly && (
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-label="read-only"
+                      className="studio-source-editor__tab-lock"
+                    >
+                      <path d="M11 7V5a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1zm-5 0V5a2 2 0 1 1 4 0v2H6zm2 3a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                    </svg>
+                  )}
+                  {file.dirty && (
+                    <span className="studio-source-editor__tab-dirty" aria-hidden>
+                      ●
+                    </span>
+                  )}
                 </button>
-              )}
-            </div>
-          ))}
-        </nav>
-      )}
+                {onFileClose && !file.readOnly && (
+                  <button
+                    type="button"
+                    aria-label={`Close ${file.name}`}
+                    className={cn(
+                      'studio-source-editor__tab-close',
+                      file.path === selectedPath && 'studio-source-editor__tab-close--active'
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFileClose(file.path);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden>
+                      <path
+                        d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </nav>
+        )}
 
-      {/* Editor container */}
-      <div
-        id="editor-tabpanel"
-        className="flex-1 overflow-hidden"
-        role="tabpanel"
-        aria-labelledby={selectedPath ? getTabId(selectedPath) : undefined}
-        data-testid="source-editor-container"
-        ref={editorContainerRef}
-      />
-    </section>
-  );
-});
+        {/* Editor container */}
+        <div
+          id="editor-tabpanel"
+          className="flex-1 overflow-hidden"
+          role="tabpanel"
+          aria-labelledby={selectedPath ? getTabId(selectedPath) : undefined}
+          data-testid="source-editor-container"
+          ref={editorContainerRef}
+        />
+      </section>
+    );
+  },
+  { op: 'SourceEditor' }
+);
+
+export const SourceEditor = forwardRef<SourceEditorRef, SourceEditorProps>(renderSourceEditor);

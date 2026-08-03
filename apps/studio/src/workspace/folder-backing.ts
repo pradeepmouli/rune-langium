@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -12,57 +13,97 @@
  */
 
 import { saveFolderHandle, loadFolderHandle, type FolderHandleRecord } from './persistence.js';
+import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
-export async function bindFolderToWorkspace(
-  workspaceId: string,
-  handle: FileSystemDirectoryHandle,
-  permission: FolderHandleRecord['lastPermission'] = 'granted'
-): Promise<void> {
-  await saveFolderHandle({
-    id: workspaceId,
-    handle,
-    lastPermission: permission
-  });
-}
-
-export async function isFolderReadOnly(workspaceId: string): Promise<boolean> {
-  const rec = await loadFolderHandle(workspaceId);
-  if (!rec) return false;
-  return rec.lastPermission !== 'granted';
-}
-
-export async function readFolderFile(root: FileSystemDirectoryHandle, relPath: string): Promise<string> {
-  const fh = await navigateToFile(root, relPath, false);
-  const file = await fh.getFile();
-  return file.text();
-}
-
-export async function writeFolderFile(
-  root: FileSystemDirectoryHandle,
-  relPath: string,
-  content: string
-): Promise<void> {
-  const fh = await navigateToFile(root, relPath, true);
-  const w = await fh.createWritable();
-  await w.write(content);
-  await w.close();
-}
-
-export async function listFolderFiles(root: FileSystemDirectoryHandle, prefix = ''): Promise<string[]> {
-  const out: string[] = [];
-  // `FileSystemDirectoryHandle.entries()` is declared in
-  // lib.dom.asynciterable.d.ts as `[string, FileSystemHandle]`; the union is
-  // narrowed below by `handle.kind`, no `any` cast needed.
-  for await (const [name, handle] of root.entries()) {
-    const path = prefix ? `${prefix}/${name}` : name;
-    if (handle.kind === 'file') {
-      out.push(path);
-    } else if (handle.kind === 'directory') {
-      out.push(...(await listFolderFiles(handle, path)));
+// `handle` (a FileSystemDirectoryHandle) isn't capturable; workspaceId +
+// permission are safe structural values.
+export const bindFolderToWorkspace = withInstrumentation(
+  async function bindFolderToWorkspace(
+    workspaceId: string,
+    handle: FileSystemDirectoryHandle,
+    permission: FolderHandleRecord['lastPermission'] = 'granted'
+  ): Promise<void> {
+    await saveFolderHandle({
+      id: workspaceId,
+      handle,
+      lastPermission: permission
+    });
+  },
+  {
+    op: 'bindFolderToWorkspace',
+    capture: Capture.Input,
+    sanitize: (value, which) => {
+      if (which !== 'input') return undefined;
+      const [workspaceId, , permission] = value as [string, unknown, string | undefined];
+      return { workspaceId, permission };
     }
   }
-  return out;
-}
+);
+
+export const isFolderReadOnly = withInstrumentation(
+  async function isFolderReadOnly(workspaceId: string): Promise<boolean> {
+    const rec = await loadFolderHandle(workspaceId);
+    if (!rec) return false;
+    return rec.lastPermission !== 'granted';
+  },
+  { op: 'isFolderReadOnly', capture: Capture.Input | Capture.Output, sanitize: (value) => value }
+);
+
+// `relPath` is relative to whatever real folder the user picked — never
+// includes their home directory / username, only relative sub-path
+// segments — same safety category as uri.ts's workspace-relative paths.
+// `root` (a FileSystemDirectoryHandle) and file content are not captured.
+export const readFolderFile = withInstrumentation(
+  async function readFolderFile(root: FileSystemDirectoryHandle, relPath: string): Promise<string> {
+    const fh = await navigateToFile(root, relPath, false);
+    const file = await fh.getFile();
+    return file.text();
+  },
+  {
+    op: 'readFolderFile',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { relPath: (value as [unknown, string])[1] } : undefined)
+  }
+);
+
+export const writeFolderFile = withInstrumentation(
+  async function writeFolderFile(root: FileSystemDirectoryHandle, relPath: string, content: string): Promise<void> {
+    const fh = await navigateToFile(root, relPath, true);
+    const w = await fh.createWritable();
+    await w.write(content);
+    await w.close();
+  },
+  {
+    op: 'writeFolderFile',
+    capture: Capture.Input,
+    sanitize: (value, which) => (which === 'input' ? { relPath: (value as [unknown, string, string])[1] } : undefined)
+  }
+);
+
+// Output is a list of relative paths within the user's chosen folder —
+// same safety rationale as readFolderFile's relPath above.
+export const listFolderFiles = withInstrumentation(
+  async function listFolderFiles(root: FileSystemDirectoryHandle, prefix = ''): Promise<string[]> {
+    const out: string[] = [];
+    // `FileSystemDirectoryHandle.entries()` is declared in
+    // lib.dom.asynciterable.d.ts as `[string, FileSystemHandle]`; the union is
+    // narrowed below by `handle.kind`, no `any` cast needed.
+    for await (const [name, handle] of root.entries()) {
+      const path = prefix ? `${prefix}/${name}` : name;
+      if (handle.kind === 'file') {
+        out.push(path);
+      } else if (handle.kind === 'directory') {
+        out.push(...(await listFolderFiles(handle, path)));
+      }
+    }
+    return out;
+  },
+  {
+    op: 'listFolderFiles',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 async function navigateToFile(
   root: FileSystemDirectoryHandle,

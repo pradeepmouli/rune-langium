@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -20,30 +21,24 @@ import React from 'react';
 // with the generated form component. TypeScript resolves it via the ambient
 // `declare module '*?z2f'` in @zod-to-form/vite/client.
 import GeneratedExcelOptionsForm from './excel-options.schema?z2f';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 export interface ExcelOptionsFormAdapterProps {
   value: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }
 
-/**
- * Controlled wrapper around the ?z2f-generated ExcelOptionsForm.
- *
- * `defaultValues` seeds the form from the parent's `value` on mount (RHF only
- * reads defaultValues once). The modal mounts/unmounts this adapter as the
- * Download modal opens/closes, and resets its options state per open, so the
- * form re-seeds from a fresh `value` each time — no remount key needed here.
- * `onValueChange` (called on every field change in auto-save mode) forwards
- * the data to `onChange` as a plain Record.
- */
-export function ExcelOptionsFormAdapter({ value, onChange }: ExcelOptionsFormAdapterProps): React.ReactElement {
-  return (
-    <GeneratedExcelOptionsForm
-      // defaultValues seeds RHF on mount with the parent's current value.
-      defaultValues={value as Record<string, unknown>}
-      onValueChange={(data: unknown) => {
-        onChange(data as Record<string, unknown>);
-      }}
-    />
-  );
-}
+export const ExcelOptionsFormAdapter = withInstrumentation(
+  function ExcelOptionsFormAdapter({ value, onChange }: ExcelOptionsFormAdapterProps): React.ReactElement {
+    return (
+      <GeneratedExcelOptionsForm
+        // defaultValues seeds RHF on mount with the parent's current value.
+        defaultValues={value as Record<string, unknown>}
+        onValueChange={(data: unknown) => {
+          onChange(data as Record<string, unknown>);
+        }}
+      />
+    );
+  },
+  { op: 'ExcelOptionsFormAdapter' }
+);

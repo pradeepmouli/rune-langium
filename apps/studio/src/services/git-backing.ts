@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -19,6 +20,7 @@ import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/web';
 import type { OpfsFs } from '../opfs/opfs-fs.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
+import { withInstrumentation, Capture } from './instrumentation/core.js';
 
 const CORS_PROXY = 'https://cors.isomorphic-git.org';
 
@@ -92,14 +94,18 @@ export interface InitOptions {
   defaultBranch?: string;
 }
 
-export async function initRepo(fs: OpfsFs, workspaceId: string, options: InitOptions = {}): Promise<void> {
-  await git.init({
-    fs: toGitFs(fs),
-    dir: worktreeDir(workspaceId),
-    gitdir: gitDir(workspaceId),
-    defaultBranch: options.defaultBranch ?? 'main'
-  });
-}
+export const initRepo = withInstrumentation(
+  async function initRepo(fs: OpfsFs, workspaceId: string, options: InitOptions = {}): Promise<void> {
+    await git.init({
+      fs: toGitFs(fs),
+      dir: worktreeDir(workspaceId),
+      gitdir: gitDir(workspaceId),
+      defaultBranch: options.defaultBranch ?? 'main'
+    });
+    // `fs` isn't serializable; nothing else here is safe/useful to capture.
+  },
+  { op: 'initRepo' }
+);
 
 export interface CommitOptions {
   message: string;
@@ -107,40 +113,53 @@ export interface CommitOptions {
   authorEmail: string;
 }
 
-export async function stageAndCommit(fs: OpfsFs, workspaceId: string, options: CommitOptions): Promise<string> {
-  const dir = worktreeDir(workspaceId);
-  const gdir = gitDir(workspaceId);
-  const fsAdapter = toGitFs(fs);
-  // Walk the working tree and stage every file under files/. Deliberately
-  // sequential, not Promise.all: isomorphic-git serializes every git.add()
-  // internally through a single AsyncLock keyed by the index file path
-  // (GitIndexManager.acquire), so concurrent calls would just queue on that
-  // lock — no real parallelism to gain, only lost per-file error context.
-  const files = await listWorkingTree(fs, workspaceId);
-  for (const f of files) {
-    await git.add({ fs: fsAdapter, dir, gitdir: gdir, filepath: f });
-  }
-  const sha = await git.commit({
-    fs: fsAdapter,
-    dir,
-    gitdir: gdir,
-    message: options.message,
-    author: { name: options.authorName, email: options.authorEmail }
-  });
-  return sha;
-}
+export const stageAndCommit = withInstrumentation(
+  async function stageAndCommit(fs: OpfsFs, workspaceId: string, options: CommitOptions): Promise<string> {
+    const dir = worktreeDir(workspaceId);
+    const gdir = gitDir(workspaceId);
+    const fsAdapter = toGitFs(fs);
+    // Walk the working tree and stage every file under files/. Deliberately
+    // sequential, not Promise.all: isomorphic-git serializes every git.add()
+    // internally through a single AsyncLock keyed by the index file path
+    // (GitIndexManager.acquire), so concurrent calls would just queue on that
+    // lock — no real parallelism to gain, only lost per-file error context.
+    const files = await listWorkingTree(fs, workspaceId);
+    for (const f of files) {
+      await git.add({ fs: fsAdapter, dir, gitdir: gdir, filepath: f });
+    }
+    const sha = await git.commit({
+      fs: fsAdapter,
+      dir,
+      gitdir: gdir,
+      message: options.message,
+      author: { name: options.authorName, email: options.authorEmail }
+    });
+    return sha;
+    // `options.message` is a free-form user-typed commit message and
+    // authorName/authorEmail are PII — never captured.
+  },
+  { op: 'stageAndCommit' }
+);
 
-export async function detectSyncState(fs: OpfsFs, workspaceId: string): Promise<SyncState> {
-  const matrix = await git.statusMatrix({
-    fs: toGitFs(fs),
-    dir: worktreeDir(workspaceId),
-    gitdir: gitDir(workspaceId)
-  });
-  // Each row: [filepath, head, workdir, stage]. Anything where workdir != stage
-  // or workdir != head is a local change → ahead.
-  const dirty = matrix.some(([_path, head, workdir, stage]) => head !== workdir || workdir !== stage);
-  return dirty ? 'ahead' : 'clean';
-}
+export const detectSyncState = withInstrumentation(
+  async function detectSyncState(fs: OpfsFs, workspaceId: string): Promise<SyncState> {
+    const matrix = await git.statusMatrix({
+      fs: toGitFs(fs),
+      dir: worktreeDir(workspaceId),
+      gitdir: gitDir(workspaceId)
+    });
+    // Each row: [filepath, head, workdir, stage]. Anything where workdir != stage
+    // or workdir != head is a local change → ahead.
+    const dirty = matrix.some(([_path, head, workdir, stage]) => head !== workdir || workdir !== stage);
+    return dirty ? 'ahead' : 'clean';
+    // Output is one of a fixed small set of sync-state enum literals — safe.
+  },
+  {
+    op: 'detectSyncState',
+    capture: Capture.Output,
+    sanitize: (value, which) => (which === 'output' ? value : undefined)
+  }
+);
 
 export interface CloneOptions {
   /** Public or private GitHub repo URL (e.g. `https://github.com/owner/repo.git`). */
@@ -155,41 +174,31 @@ export interface CloneOptions {
   onProgress?: (evt: { phase: string; loaded?: number; total?: number }) => void;
 }
 
-/**
- * Clone a GitHub repository into a fresh git-backed workspace under OPFS.
- *
- * Layout: `<workspaceId>/files/...` (working tree) + `<workspaceId>/.git/...`
- * (object store). The same shape the existing `initRepo` + `pushBranch`
- * functions assume.
- *
- * Routes through the studio's CORS proxy (`cors.isomorphic-git.org`).
- * This is the GitHub-backed workspace path and runs unconditionally;
- * it is distinct from the curated-archive path in `model-loader.ts`.
- *
- * Clones at full depth (no `depth` limit) so that history-based
- * ahead/behind computation and push-back work correctly.
- */
-export async function cloneRepository(fs: OpfsFs, workspaceId: string, options: CloneOptions): Promise<void> {
-  await git.clone({
-    fs: toGitFs(fs),
-    http,
-    dir: worktreeDir(workspaceId),
-    gitdir: gitDir(workspaceId),
-    url: options.remoteUrl,
-    ref: options.ref ?? 'main',
-    singleBranch: true,
-    corsProxy: CORS_PROXY,
-    onAuth: () => ({ username: options.user, password: options.token }),
-    onProgress: options.onProgress
-      ? (evt) =>
-          options.onProgress!({
-            phase: evt.phase,
-            loaded: evt.loaded,
-            total: evt.total
-          })
-      : undefined
-  });
-}
+export const cloneRepository = withInstrumentation(
+  async function cloneRepository(fs: OpfsFs, workspaceId: string, options: CloneOptions): Promise<void> {
+    await git.clone({
+      fs: toGitFs(fs),
+      http,
+      dir: worktreeDir(workspaceId),
+      gitdir: gitDir(workspaceId),
+      url: options.remoteUrl,
+      ref: options.ref ?? 'main',
+      singleBranch: true,
+      corsProxy: CORS_PROXY,
+      onAuth: () => ({ username: options.user, password: options.token }),
+      onProgress: options.onProgress
+        ? (evt) =>
+            options.onProgress!({
+              phase: evt.phase,
+              loaded: evt.loaded,
+              total: evt.total
+            })
+        : undefined
+    });
+    // `options.token` is a literal GitHub credential — never captured.
+  },
+  { op: 'cloneRepository' }
+);
 
 export interface PushOptions {
   remoteUrl: string;
@@ -198,18 +207,22 @@ export interface PushOptions {
   user: string;
 }
 
-export async function pushBranch(fs: OpfsFs, workspaceId: string, options: PushOptions): Promise<void> {
-  await git.push({
-    fs: toGitFs(fs),
-    http,
-    dir: worktreeDir(workspaceId),
-    gitdir: gitDir(workspaceId),
-    url: options.remoteUrl,
-    ref: options.ref,
-    corsProxy: CORS_PROXY,
-    onAuth: () => ({ username: options.user, password: options.token })
-  });
-}
+export const pushBranch = withInstrumentation(
+  async function pushBranch(fs: OpfsFs, workspaceId: string, options: PushOptions): Promise<void> {
+    await git.push({
+      fs: toGitFs(fs),
+      http,
+      dir: worktreeDir(workspaceId),
+      gitdir: gitDir(workspaceId),
+      url: options.remoteUrl,
+      ref: options.ref,
+      corsProxy: CORS_PROXY,
+      onAuth: () => ({ username: options.user, password: options.token })
+    });
+    // `options.token` is a literal GitHub credential — never captured.
+  },
+  { op: 'pushBranch' }
+);
 
 async function listWorkingTree(fs: OpfsFs, workspaceId: string): Promise<string[]> {
   const out: string[] = [];

@@ -1,7 +1,9 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 import { createContext, useContext } from 'react';
 import type { WorkspaceFile } from '../../services/workspace.js';
+import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 /**
  * Actions + data the WorkspacesPerspective launcher needs, lifted from
@@ -49,13 +51,18 @@ export interface WorkspaceActions {
 
 export const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null);
 
-export function useWorkspaceActions(): WorkspaceActions {
-  const v = useContext(WorkspaceActionsContext);
-  if (!v) throw new Error('useWorkspaceActions must be used within a WorkspaceActionsContext provider');
-  return v;
-}
+export const useWorkspaceActions = withInstrumentation(
+  function useWorkspaceActions(): WorkspaceActions {
+    const v = useContext(WorkspaceActionsContext);
+    if (!v) throw new Error('useWorkspaceActions must be used within a WorkspaceActionsContext provider');
+    return v;
+  },
+  { op: 'useWorkspaceActions' }
+);
 
-/** Null-tolerant variant for shell chrome that must render without a workspace (Settings). */
-export function useWorkspaceActionsOptional(): WorkspaceActions | null {
-  return useContext(WorkspaceActionsContext);
-}
+export const useWorkspaceActionsOptional = withInstrumentation(
+  function useWorkspaceActionsOptional(): WorkspaceActions | null {
+    return useContext(WorkspaceActionsContext);
+  },
+  { op: 'useWorkspaceActionsOptional' }
+);

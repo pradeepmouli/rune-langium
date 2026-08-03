@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -33,6 +34,7 @@ import {
   RadioGroupItem as DSRadioGroupItem
 } from '@rune-langium/design-system/ui/radio-group';
 import { Textarea as DSTextarea } from '@rune-langium/design-system/ui/textarea';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 // ── Checkbox ────────────────────────────────────────────────────────────────
 // z2f shadcn preset passes `checked` + `onCheckedChange`; DS Checkbox accepts
@@ -86,26 +88,38 @@ export const Switch = DSCheckbox;
 // detects a checkbox control specifically and reflows just that case to the
 // conventional checkbox-then-label row, leaving every other field type
 // (text/select/etc., which want label-above-control) untouched.
-export function Field({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <div className="z2f-field flex flex-col gap-1">{children}</div>;
-}
+export const Field = withInstrumentation(
+  function Field({ children }: { children: React.ReactNode }): React.ReactElement {
+    return <div className="z2f-field flex flex-col gap-1">{children}</div>;
+  },
+  { op: 'Field' }
+);
 
-export function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }): React.ReactElement {
-  return (
-    <DSLabel htmlFor={htmlFor} className="text-sm font-medium text-foreground">
-      {children}
-    </DSLabel>
-  );
-}
+export const FieldLabel = withInstrumentation(
+  function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }): React.ReactElement {
+    return (
+      <DSLabel htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+        {children}
+      </DSLabel>
+    );
+  },
+  { op: 'FieldLabel' }
+);
 
-export function FieldDescription({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <p className="text-xs text-muted-foreground">{children}</p>;
-}
+export const FieldDescription = withInstrumentation(
+  function FieldDescription({ children }: { children: React.ReactNode }): React.ReactElement {
+    return <p className="text-xs text-muted-foreground">{children}</p>;
+  },
+  { op: 'FieldDescription' }
+);
 
-export function FieldError({ children }: { children?: React.ReactNode }): React.ReactElement | null {
-  if (!children) return null;
-  return <p className="text-xs text-destructive">{children}</p>;
-}
+export const FieldError = withInstrumentation(
+  function FieldError({ children }: { children?: React.ReactNode }): React.ReactElement | null {
+    if (!children) return null;
+    return <p className="text-xs text-destructive">{children}</p>;
+  },
+  { op: 'FieldError' }
+);
 
 // ── FieldTemplate ────────────────────────────────────────────────────────────
 // Controls label + input + error layout for every generated field.
@@ -122,25 +136,28 @@ export interface FieldTemplateProps {
   deprecated?: boolean;
 }
 
-export function FieldTemplate({
-  children,
-  label,
-  description,
-  helpText,
-  error,
-  name,
-  required
-}: FieldTemplateProps): React.ReactElement {
-  return (
-    <div className="flex flex-col gap-1">
-      <DSLabel htmlFor={name} className="text-sm font-medium text-foreground">
-        {label}
-        {required && <span className="ml-1 text-destructive">*</span>}
-      </DSLabel>
-      {description && <p className="text-xs text-muted-foreground">{description}</p>}
-      {children}
-      {helpText && <p className="text-xs text-muted-foreground">{helpText}</p>}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}
+export const FieldTemplate = withInstrumentation(
+  function FieldTemplate({
+    children,
+    label,
+    description,
+    helpText,
+    error,
+    name,
+    required
+  }: FieldTemplateProps): React.ReactElement {
+    return (
+      <div className="flex flex-col gap-1">
+        <DSLabel htmlFor={name} className="text-sm font-medium text-foreground">
+          {label}
+          {required && <span className="ml-1 text-destructive">*</span>}
+        </DSLabel>
+        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        {children}
+        {helpText && <p className="text-xs text-muted-foreground">{helpText}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </div>
+    );
+  },
+  { op: 'FieldTemplate' }
+);

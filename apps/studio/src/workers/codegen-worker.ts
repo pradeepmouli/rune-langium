@@ -41,6 +41,18 @@ import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
 import { validatePreviewSample } from '../services/preview-validator.js';
 import { isWorkerGlobalScope } from './runtime-guards.js';
+import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
+
+// Gated behind `isWorkerGlobalScope()` for the same reason as the message
+// listener at the bottom of this file: no main-bundle code statically
+// imports this module today, but the moment something does (e.g. a
+// re-exported type), an unguarded top-level `installInstrumentationWorkerSink`
+// would run during that main-thread import with `self` being `window` and
+// hijack the main thread's `configureInstrumentation` slot away from the
+// browser sink installed at bootstrap (PR #214 precedent).
+if (isWorkerGlobalScope()) {
+  installInstrumentationWorkerSink((msg) => (self as unknown as DedicatedWorkerGlobalScope).postMessage(msg));
+}
 
 // ---------------------------------------------------------------------------
 // Message types (inbound)

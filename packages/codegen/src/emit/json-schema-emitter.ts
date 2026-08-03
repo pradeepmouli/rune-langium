@@ -57,6 +57,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
 import { mergeProfileTypeMaps, decodeCardinality, choiceOptionFieldName } from './base-namespace-emitter.js';
+import { debug } from '../instrument.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
 const DRAFT_2020_12 = 'https://json-schema.org/draft/2020-12/schema';
@@ -255,16 +256,19 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
     }
   }
 
+  @debug()
   emitEnumeration(enumNode: RosettaEnumeration): void {
     this.$defs[enumNode.name] = JsonSchemaNamespaceEmitter.emitEnumDef(enumNode);
     this.trackDefinitionSourceMap(enumNode);
   }
 
+  @debug()
   emitTypeAlias(typeAlias: RosettaTypeAlias): void {
     this.$defs[typeAlias.name] = this.emitTypeAliasDef(typeAlias);
     this.trackDefinitionSourceMap(typeAlias);
   }
 
+  @debug()
   emitData(data: Data): void {
     this.$defs[data.name] = this.emitTypeDef(data);
     this.trackDefinitionSourceMap(data);
@@ -285,6 +289,7 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
    * `{}` matches no branch, since each branch requires its own key
    * (invalid).
    */
+  @debug()
   emitChoice(choice: Choice): void {
     this.$defs[choice.name] = this.emitChoiceDef(choice);
     this.trackDefinitionSourceMap(choice);

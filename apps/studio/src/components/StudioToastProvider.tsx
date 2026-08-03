@@ -1,7 +1,8 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
-import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   Toast,
   ToastClose,
@@ -15,6 +16,8 @@ import { Spinner } from '@rune-langium/design-system/ui/spinner';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { useActivityStore } from '../store/activity-store.js';
 import { allocateOpId } from '../services/op-log.js';
+import { addInstrumentationSink, withInstrumentation, type TelemetryRecord } from '../services/instrumentation/core.js';
+import { isFailureRecord } from '../services/instrumentation/record-status.js';
 
 type StudioToastVariant = 'default' | 'destructive' | 'loading';
 
@@ -41,17 +44,28 @@ interface StudioToastContextValue {
   showLoadingToast: (toast: StudioLoadingToastInput) => string;
   /** Dismisses a toast by id (e.g. one returned by `showLoadingToast`). */
   dismissToast: (id: string) => void;
+  /**
+   * Pure toast render, no output-store/activity-store mirroring. Used by
+   * the instrumentation Toast sink, which independently targets Activity
+   * itself — see docs/superpowers/specs/
+   * 2026-08-02-instrumentation-multi-sink-design.md. showToast's existing
+   * mirroring is unaffected; this is a new, narrower, additive primitive.
+   */
+  notify: (toast: StudioToastInput) => void;
 }
 
 const StudioToastContext = createContext<StudioToastContextValue | null>(null);
 
-export function StudioToastProvider({ children }: { children: ReactNode }) {
-  return (
-    <ToastProvider duration={4000}>
-      <StudioToastInner>{children}</StudioToastInner>
-    </ToastProvider>
-  );
-}
+export const StudioToastProvider = withInstrumentation(
+  function StudioToastProvider({ children }: { children: ReactNode }) {
+    return (
+      <ToastProvider duration={4000}>
+        <StudioToastInner>{children}</StudioToastInner>
+      </ToastProvider>
+    );
+  },
+  { op: 'StudioToastProvider' }
+);
 
 function StudioToastInner({ children }: { children: ReactNode }) {
   const { toasts, add, close } = useToastManager();
@@ -128,9 +142,32 @@ function StudioToastInner({ children }: { children: ReactNode }) {
     [close]
   );
 
+  const notify = useCallback(
+    (input: StudioToastInput) => {
+      add({
+        title: input.title,
+        description: input.description,
+        type: input.variant ?? 'default',
+        timeout: input.duration
+      });
+    },
+    [add]
+  );
+
+  useEffect(() => {
+    return addInstrumentationSink((record: TelemetryRecord) => {
+      if (!record.namespace) return;
+      notify({
+        title: record.namespace,
+        description: record.message ?? record.op,
+        variant: isFailureRecord(record) ? 'destructive' : 'default'
+      });
+    });
+  }, [notify]);
+
   const contextValue = useMemo<StudioToastContextValue>(
-    () => ({ showToast, showLoadingToast, dismissToast }),
-    [showToast, showLoadingToast, dismissToast]
+    () => ({ showToast, showLoadingToast, dismissToast, notify }),
+    [showToast, showLoadingToast, dismissToast, notify]
   );
 
   return (
@@ -157,9 +194,13 @@ function StudioToastInner({ children }: { children: ReactNode }) {
 const NOOP_TOAST: StudioToastContextValue = {
   showToast: () => {},
   showLoadingToast: () => '',
-  dismissToast: () => {}
+  dismissToast: () => {},
+  notify: () => {}
 };
 
-export function useStudioToast(): StudioToastContextValue {
-  return useContext(StudioToastContext) ?? NOOP_TOAST;
-}
+export const useStudioToast = withInstrumentation(
+  function useStudioToast(): StudioToastContextValue {
+    return useContext(StudioToastContext) ?? NOOP_TOAST;
+  },
+  { op: 'useStudioToast' }
+);

@@ -1,3 +1,4 @@
+// @instrumentation-codemod-applied
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
@@ -10,6 +11,7 @@
 
 import { StreamLanguage, type StringStream } from '@codemirror/language';
 import type { Extension } from '@codemirror/state';
+import { withInstrumentation } from '../services/instrumentation/core.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Keywords extracted from rune-dsl.langium
@@ -203,9 +205,10 @@ export const runeDslStreamParser = {
 // Public API
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * CodeMirror language extension for Rune DSL syntax highlighting.
- */
-export function runeDslLanguage(): Extension {
-  return StreamLanguage.define(runeDslStreamParser);
-}
+export const runeDslLanguage = withInstrumentation(
+  function runeDslLanguage(): Extension {
+    return StreamLanguage.define(runeDslStreamParser);
+    // Output is a CodeMirror Extension object — not meaningfully capturable.
+  },
+  { op: 'runeDslLanguage' }
+);

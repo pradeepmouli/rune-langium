@@ -50,6 +50,7 @@ import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './names
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { getElementNamespace } from '@rune-langium/core';
+import { debug } from '../instrument.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
 import {
   decodeCardinality,
@@ -216,16 +217,19 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     this.sections.push('');
   }
 
+  @debug()
   emitEnumeration(enumNode: RosettaEnumeration): void {
     this.sections.push(this.emitEnumDeclaration(enumNode));
     this.sections.push('');
   }
 
+  @debug()
   emitTypeAlias(typeAlias: RosettaTypeAlias): void {
     this.sections.push('');
     this.sections.push(this.emitTypeAliasDeclaration(typeAlias));
   }
 
+  @debug()
   emitData(data: Data): void {
     this.sections.push(this.emitInterface(data));
     this.sections.push('');
@@ -247,6 +251,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * `export type <Name> = { cash: Cash } | ...` union is unchanged (W2
    * surface, non-goal).
    */
+  @debug()
   emitChoice(choice: Choice): void {
     this.sections.push(this.emitChoiceTypeDeclaration(choice));
     this.sections.push('');
