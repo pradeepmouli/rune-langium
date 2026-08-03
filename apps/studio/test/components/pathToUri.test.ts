@@ -94,4 +94,33 @@ describe('pathToUri', () => {
     // The URI is valid even with ./ — Langium handles path normalization
     expect(result).toMatch(/\.rosetta$/);
   });
+
+  // ── Curated-bundle paths (bracket-prefixed) ──────────────────────────────
+  //
+  // Regression for the "Party could not be resolved for form preview" class
+  // of bug: `mergeModelFiles` (services/workspace.ts) stamps every curated
+  // WorkspaceFile's `path` as `[${bundleId}]/${path}`. The curated-mirror
+  // publish pipeline bakes `file:///[${bundleId}]/${path}` into every
+  // serialized cross-document `$ref` for that bundle (see
+  // `functions/api/codegen.ts`'s `curatedKeyToUri`, which already fixed the
+  // identical mismatch for the server-side codegen path). Before this fix,
+  // the generic `/workspace/`-prefixing branch below produced
+  // `file:///workspace/[cdm]/...` for these paths too — a URI that can never
+  // match what a curated reference was serialized against, so EVERY
+  // cross-document reference into a curated bundle failed to resolve
+  // (confirmed against real production `cdm` corpus data: 875/1175 preview
+  // schemas showed a false `unresolved-reference`, dropping to 184 — all
+  // genuinely out-of-closure namespaces — once this fix was applied).
+  it('maps a bracket-prefixed curated-bundle path to file:///[bundleId]/... with no /workspace/ prefix', () => {
+    const result = pathToUri('[cdm]/common-domain-model-master/rosetta-source/src/main/rosetta/base-math-enum.rosetta');
+    expect(result).toBe(
+      'file:///[cdm]/common-domain-model-master/rosetta-source/src/main/rosetta/base-math-enum.rosetta'
+    );
+  });
+
+  it('does not insert /workspace/ for curated-bundle paths from a different bundle id', () => {
+    const result = pathToUri('[fpml]/consolidated/shared-type.rosetta');
+    expect(result).toBe('file:///[fpml]/consolidated/shared-type.rosetta');
+    expect(result).not.toContain('/workspace/');
+  });
 });

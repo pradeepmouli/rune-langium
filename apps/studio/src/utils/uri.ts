@@ -4,10 +4,32 @@
 
 import { withInstrumentation, Capture } from '../services/instrumentation/core.js';
 
+/**
+ * Curated-bundle `WorkspaceFile.path` values are already bracket-prefixed
+ * (`[${bundleId}]/${path}`, set by `mergeModelFiles` in services/workspace.ts)
+ * and must map to `file:///[${bundleId}]/${path}` — the EXACT URI scheme the
+ * curated-mirror publish pipeline bakes into every serialized cross-document
+ * `$ref` for that bundle. This mirrors
+ * `apps/studio/functions/api/codegen.ts`'s `curatedKeyToUri` (server-side
+ * codegen path, which hit and fixed this exact mismatch already — see its
+ * doc comment for the incident writeup). The generic `/workspace/`-prefixing
+ * branch below is for ordinary user-authored files and must never touch a
+ * bracket-prefixed path: prepending `/workspace/` here produces
+ * `file:///workspace/[cdm]/...`, which can never match the target URI a
+ * curated reference was serialized against, so cross-document references
+ * into curated bundles fail to resolve regardless of hydration order or
+ * relink rounds.
+ */
+function curatedPathToUri(path: string): string {
+  return `file:///${path}`;
+}
+
 export const pathToUri = withInstrumentation(
   function pathToUri(path: string): string {
     // Preserve any path that already carries a URI scheme (file://, system://, etc.)
     if (path.includes('://')) return path;
+
+    if (path.startsWith('[')) return curatedPathToUri(path);
 
     // For browser environment, treat relative paths as workspace paths
     let absPath: string;
@@ -31,10 +53,10 @@ export const pathToUri = withInstrumentation(
     const uriPath = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
 
     return `file://${uriPath}`;
-    // Workspace-relative virtual path in, `file:///workspace/...` URI out —
-    // never a real OS path with a username/home dir (see the function body:
-    // non-absolute input is always prefixed with the fixed `/workspace/` root).
-    // Safe to capture verbatim.
+    // Workspace-relative virtual path or bracket-prefixed curated-bundle
+    // identifier in, `file:///workspace/...` / `file:///[bundleId]/...` URI
+    // out — never a real OS path with a username/home dir. Safe to capture
+    // verbatim.
   },
   { op: 'pathToUri', capture: Capture.Input | Capture.Output, sanitize: (value) => value }
 );
