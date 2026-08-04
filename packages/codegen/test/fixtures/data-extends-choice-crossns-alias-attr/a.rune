@@ -1,0 +1,8 @@
+namespace test.declaliasattr.a
+version "0.0.0"
+
+type Cash:
+    amount number (0..1)
+
+choice Asset:
+    Cash

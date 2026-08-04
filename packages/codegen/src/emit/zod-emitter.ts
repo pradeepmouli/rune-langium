@@ -425,12 +425,13 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         const choiceAncestor = ZodNamespaceEmitter.findChoiceAncestor(parentRef);
         if (choiceAncestor) {
           trackRef(choiceAncestor.choice, `${choiceAncestor.choice.name}Schema`);
+          // Routed through trackTypeCallImport (not a direct `.typeCall?.type?.ref`
+          // check) so an inlined ancestor's alias-typed attribute is tracked
+          // against its TERMINAL resolved target too — matches the ordinary
+          // attribute-tracking loop below, which already chases alias chains.
           for (const link of [parentRef, ...choiceAncestor.intermediates]) {
             for (const attr of link.attributes) {
-              const attrTypeRef = attr.typeCall?.type?.ref;
-              if (attrTypeRef && (isData(attrTypeRef) || isRosettaEnumeration(attrTypeRef))) {
-                trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-              }
+              trackTypeCallImport(attr.typeCall);
             }
           }
         }

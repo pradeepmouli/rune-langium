@@ -486,6 +486,44 @@ describe('FormPreviewSchema generation', () => {
     });
   });
 
+  /**
+   * PR #470 final-review finding (2026-08-04) — `duplicateDataNames`
+   * covered only the `Data` branch of `buildNamespaceIndexes`; a second
+   * same-named `Choice` declaration silently overwrote the first in
+   * `choiceByName`, with no diagnostic, unlike the `Data` case just above.
+   */
+  skipIfNodeLt22('marks duplicate Choice target ids as unsupported instead of silently overwriting', async () => {
+    const first = await parseModel(`
+      namespace "test.previewChoice"
+      version "1"
+
+      type Cash:
+        amount number (0..1)
+
+      choice Asset:
+        Cash
+    `);
+    const second = await parseModel(`
+      namespace "test.previewChoice"
+      version "1"
+
+      type Commodity:
+        quantity number (0..1)
+
+      choice Asset:
+        Commodity
+    `);
+
+    const [asset] = generatePreviewSchemas([first, second], { targetId: 'test.previewChoice.Asset' });
+
+    expect(asset).toMatchObject({
+      targetId: 'test.previewChoice.Asset',
+      status: 'unsupported',
+      fields: [],
+      unsupportedFeatures: ['duplicate-target:test.previewChoice.Asset']
+    });
+  });
+
   skipIfAdjustableDateFixturesUnavailable(
     'generates a stable preview schema for the real CDM AdjustableDate type',
     async () => {

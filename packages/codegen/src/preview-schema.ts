@@ -48,6 +48,8 @@ export interface NamespaceIndex {
   choiceByName: Map<string, { node: Choice; sourceUri: string }>;
   funcByName: Map<string, { node: RosettaFunction; sourceUri: string }>;
   duplicateDataNames: Set<string>;
+  /** Mirrors `duplicateDataNames`, for `Choice` — see its own doc comment. */
+  duplicateChoiceNames: Set<string>;
 }
 
 interface FieldContext {
@@ -162,6 +164,10 @@ export function generatePreviewSchemas(
       const choice = namespace.choiceByName.get(name)!;
       const targetId = `${namespace.namespace}.${name}`;
       if (options.targetId && options.targetId !== targetId) continue;
+      if (namespace.duplicateChoiceNames.has(name)) {
+        schemas.push(buildDuplicateTargetSchema(choice.node, targetId));
+        continue;
+      }
       schemas.push(buildChoiceSchema(choice.node, choice.sourceUri, namespace, targetId, cyclicTypes));
     }
 
@@ -197,7 +203,8 @@ export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[]
         typeAliasByName: new Map(),
         choiceByName: new Map(),
         funcByName: new Map(),
-        duplicateDataNames: new Set()
+        duplicateDataNames: new Set(),
+        duplicateChoiceNames: new Set()
       };
       byNamespace.set(namespace, index);
     }
@@ -214,6 +221,10 @@ export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[]
       } else if (isRosettaTypeAlias(element)) {
         index.typeAliasByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       } else if (isChoice(element)) {
+        if (index.choiceByName.has(element.name)) {
+          index.duplicateChoiceNames.add(element.name);
+          continue;
+        }
         index.choiceByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       } else if (isRosettaFunction(element)) {
         index.funcByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
@@ -482,11 +493,11 @@ function buildDataSchema(
   };
 }
 
-function buildDuplicateTargetSchema(data: Data, targetId: string): FormPreviewSchema {
+function buildDuplicateTargetSchema(node: Data | Choice, targetId: string): FormPreviewSchema {
   return {
     schemaVersion: SCHEMA_VERSION,
     targetId,
-    title: data.name,
+    title: node.name,
     status: 'unsupported',
     fields: [],
     unsupportedFeatures: [`duplicate-target:${targetId}`]
