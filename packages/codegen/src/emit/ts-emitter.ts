@@ -501,17 +501,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T108.
    */
   private resolveTypeofStr(attr: Attribute): string | undefined {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      if (refText) return this.ctx.typeofMap[refText];
-      return undefined;
-    }
-    if (isRosettaBasicType(typeRef)) {
-      return this.ctx.typeofMap[typeRef.name];
-    }
-    return undefined;
+    return resolveTypeCallTarget<string | undefined>(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => this.ctx.typeofMap[basicTypeName],
+        onEnum: () => undefined,
+        onData: () => undefined,
+        onChoice: () => undefined,
+        onUnresolved: () => undefined
+      },
+      this.ctx.namespace
+    );
   }
 
   /**
@@ -520,11 +521,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * mappings. Returns undefined for non-builtin (Data/Enum) references.
    */
   private resolveBuiltinTsType(attr: Attribute): string | undefined {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-    if (!typeRef) return refText ? this.ctx.builtinTypeMap[refText] : undefined;
-    if (isRosettaBasicType(typeRef)) return this.ctx.builtinTypeMap[typeRef.name];
-    return undefined;
+    return resolveTypeCallTarget<string | undefined>(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => this.ctx.builtinTypeMap[basicTypeName],
+        onEnum: () => undefined,
+        onData: () => undefined,
+        onChoice: () => undefined,
+        onUnresolved: () => undefined
+      },
+      this.ctx.namespace
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -1272,9 +1280,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         onEnum: (node) => node.name,
         onData: (node) => `${node.name}Shape`,
         onChoice: (node) => `${node.name}Shape`,
-        // Pre-migration behavior: a totally unresolved RHS falls back to
-        // `unknown`, verbatim — no diagnostic (matches the old code's silent
-        // `tsType = 'unknown'` default for this case).
+        // A totally unresolved RHS falls back to `unknown`. This is a
+        // deliberate, disclosed behavior change from pre-migration: the old
+        // code did `builtinMap[refText] ?? refText` (a raw refText
+        // passthrough for a named-but-unresolvable alias RHS) — see this
+        // plan's execution ledger (progress.md, "dropped raw-refText
+        // passthrough") for the disclosure and risk assessment.
         onUnresolved: () => 'unknown'
       },
       this.ctx.namespace
