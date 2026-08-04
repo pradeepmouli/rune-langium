@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import type { LangiumDocument } from 'langium';
+import { isData, isChoice, isRosettaEnumeration } from '@rune-langium/core';
 import type { Data, Choice, RosettaEnumeration, RosettaTypeAlias } from '@rune-langium/core';
 import type { NamespaceIndex } from '../preview-schema.js';
-import type { TypeIndexLookup, TypeIndexEntry } from './type-ref-resolver.js';
+import { resolveTypeCallTarget, nodeSourceUri } from './type-ref-resolver.js';
+import type { TypeIndexLookup, TypeIndexEntry, TypeResolutionVisitor } from './type-ref-resolver.js';
 
 export interface ResolvedTarget {
   kind: 'data' | 'choice' | 'enum' | 'typeAlias';
@@ -68,4 +71,85 @@ export function findTargetNode(
     }
   }
   return undefined;
+}
+
+export interface StandaloneClosure {
+  dataByName: Map<string, Data>;
+  choiceByName: Map<string, Choice>;
+  enumByName: Map<string, RosettaEnumeration>;
+  typeAliasByName: Map<string, RosettaTypeAlias>;
+  docs: LangiumDocument[];
+}
+
+type FrontierNode = Data | Choice | RosettaTypeAlias;
+
+/**
+ * Walk the transitive type-dependency closure of `target` — every Data,
+ * Choice, Enum, and (only-if-the-target-itself) TypeAlias reachable via
+ * attribute/option type calls and Data superType chains. `resolveTypeCallTarget`
+ * already collapses RosettaTypeAlias chains down to their terminal kind, so
+ * an alias reached via an attribute/option reference is never enqueued —
+ * only the initial seed can ever land in typeAliasByName.
+ */
+export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: TypeIndexLookup): StandaloneClosure {
+  const dataByName = new Map<string, Data>();
+  const choiceByName = new Map<string, Choice>();
+  const enumByName = new Map<string, RosettaEnumeration>();
+  const typeAliasByName = new Map<string, RosettaTypeAlias>();
+  const docs = new Set<LangiumDocument>();
+  const visited = new Set<Data | Choice | RosettaEnumeration | RosettaTypeAlias>();
+  const frontier: FrontierNode[] = [];
+
+  const trackDoc = (node: { $container?: unknown }): void => {
+    const withDoc = node as { $container?: { $document?: LangiumDocument } };
+    const doc = withDoc.$container?.$document;
+    if (doc) docs.add(doc);
+  };
+
+  const enqueue = (node: Data | Choice | RosettaEnumeration | RosettaTypeAlias): void => {
+    if (visited.has(node)) return;
+    visited.add(node);
+    trackDoc(node);
+    if (isData(node)) {
+      dataByName.set(node.name, node);
+      frontier.push(node);
+    } else if (isChoice(node)) {
+      choiceByName.set(node.name, node);
+      frontier.push(node);
+    } else if (isRosettaEnumeration(node)) {
+      enumByName.set(node.name, node);
+    } else {
+      typeAliasByName.set(node.name, node);
+      frontier.push(node);
+    }
+  };
+
+  const dependencyVisitor: TypeResolutionVisitor<void> = {
+    onPrimitive: () => undefined,
+    onEnum: (node) => enqueue(node),
+    onData: (node) => enqueue(node),
+    onChoice: (node) => enqueue(node),
+    onUnresolved: () => undefined
+  };
+
+  enqueue(target.node);
+
+  while (frontier.length > 0) {
+    const node = frontier.shift()!;
+    if (isData(node)) {
+      const superRef = node.superType?.ref;
+      if (superRef) enqueue(superRef);
+      for (const attr of node.attributes) {
+        resolveTypeCallTarget(attr.typeCall, globalIndex, dependencyVisitor, nodeSourceUri(node, ''));
+      }
+    } else if (isChoice(node)) {
+      for (const option of node.attributes) {
+        resolveTypeCallTarget(option.typeCall, globalIndex, dependencyVisitor, nodeSourceUri(node, ''));
+      }
+    } else {
+      resolveTypeCallTarget(node.typeCall, globalIndex, dependencyVisitor, nodeSourceUri(node, ''));
+    }
+  }
+
+  return { dataByName, choiceByName, enumByName, typeAliasByName, docs: Array.from(docs) };
 }
