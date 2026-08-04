@@ -1735,6 +1735,61 @@ describe('FormPreviewSchema generation', () => {
   });
 
   skipIfNodeLt22(
+    'cuts a mutual Choice-to-Choice cycle through the new onChoice branch instead of recursing forever',
+    async () => {
+      // CycleA's sole option is CycleB, CycleB's sole option is CycleA —
+      // a genuine 2-hop cycle reachable ONLY through buildChoiceOptionField's
+      // new onChoice branch (the previous test above exercises the same
+      // branch but on a non-cyclic Outer->Inner->Leaf chain). Mirrors the
+      // Data branch's own cycle-cut contract (lines ~159-184 above): the
+      // SECOND encounter of a type already in `seenTypes` is cut with a
+      // `kind: 'unknown'` field and a `recursive-reference:<name>` tag,
+      // while the whole-graph `cyclicTypes` set additionally tags BOTH
+      // members with the non-cutting, informational `cyclic-type:<name>`
+      // tag (Codex PR #459 review) — same two-tag split as the Data branch.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        choice CycleA:
+          CycleB
+
+        choice CycleB:
+          CycleA
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const cycleA = schemas.find((s) => s.targetId === 'test.preview.CycleA')!;
+
+      // The call actually returns instead of stack-overflowing — a genuine
+      // cycle through the new onChoice branch is cut, not infinitely walked.
+      expect(cycleA.status).toBe('unsupported');
+      expect(cycleA.unsupportedFeatures).toContain('recursive-reference:CycleA');
+      expect(cycleA.unsupportedFeatures).toContain('cyclic-type:CycleA');
+      expect(cycleA.unsupportedFeatures).toContain('cyclic-type:CycleB');
+      expect(cycleA.unsupportedFeatures).not.toContain('recursive-reference:CycleB');
+      expect(cycleA.fields).toEqual([
+        {
+          path: 'cycleB',
+          label: 'CycleB',
+          kind: 'object',
+          required: false,
+          children: [
+            {
+              path: 'cycleB.cycleA',
+              label: 'CycleA',
+              kind: 'unknown',
+              required: false,
+              description: 'Recursive reference to CycleA is not expanded in form preview.'
+            }
+          ],
+          choiceArmPaths: ['cycleB.cycleA']
+        }
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
     'generates an enum-value field for a typeAlias resolving to an Enum (top-level navigation target)',
     async () => {
       const doc = await parseModel(`
