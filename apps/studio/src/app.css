@@ -207,7 +207,7 @@ html {
     align-items: center;
     gap: 0.375rem;
     min-width: 0;
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     font-weight: 600;
     color: var(--foreground);
     white-space: nowrap;

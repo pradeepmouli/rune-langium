@@ -17,7 +17,7 @@ export function PerspectiveHeading({ perspectiveId }: { perspectiveId: Perspecti
   const Icon = perspective.icon;
   return (
     <div className="studio-layout-presets__title" data-testid="perspective-heading">
-      <Icon className="size-3.5" aria-hidden="true" />
+      <Icon className="size-4" aria-hidden="true" />
       <span>{perspective.title ?? perspective.label}</span>
     </div>
   );

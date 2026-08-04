@@ -104,10 +104,10 @@ describe('AppHeader', () => {
     expect(screen.getAllByTestId('app-header')).toHaveLength(1);
   });
 
-  it('renders the active perspective title for a non-explore perspective', () => {
+  it('does NOT render the perspective title in the topbar — it lives in the chrome row below (PerspectiveHeading)', () => {
     usePerspectiveStore.getState().setActivePerspective('git');
     renderAppHeader();
-    expect(screen.getByText('Git / Sync')).toBeTruthy();
+    expect(screen.queryByText('Git / Sync')).not.toBeInTheDocument();
   });
 
   it('Explore renders the FileTabStrip and the model-actions cluster', () => {
@@ -147,7 +147,8 @@ describe('AppHeader', () => {
     usePerspectiveStore.getState().setActivePerspective('settings');
     expect(() => renderAppHeader()).not.toThrow();
     expect(screen.queryByLabelText(/Workspace menu/)).not.toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    // Title moved out of the topbar into the chrome row (PerspectiveHeading).
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 
   it('shows the workspace switcher for a workspace-requiring perspective with a loaded workspace', () => {
@@ -160,9 +161,10 @@ describe('AppHeader', () => {
   it('drift guard: explore active but no explore content renders the Workspaces chrome in the bar (PR #369)', () => {
     usePerspectiveStore.getState().setActivePerspective('explore');
     renderAppHeaderWithWorkspace({ hasWorkspace: false, hasExploreContent: false });
-    // Bar must show the Workspaces title, not Explore's FileTabStrip/actions —
+    // Bar must not show Explore's FileTabStrip/actions in this state; the
+    // Workspaces title now renders in the chrome row (PerspectiveHeading),
     // matching what PerspectiveHost renders in the body for this same state.
-    expect(screen.getByText('Workspaces / Models')).toBeInTheDocument();
+    expect(screen.queryByText('Workspaces / Models')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'a.rosetta' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
     expect(screen.queryByText('Import')).not.toBeInTheDocument();

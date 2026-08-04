@@ -180,7 +180,9 @@ export const AppHeader = withInstrumentation(
             </>
           )}
         </div>
-        {Center ? <Center /> : <div className="studio-topbar__title">{perspective?.title ?? perspective?.label}</div>}
+        {/* Perspective title now lives in the chrome row below (PerspectiveHeading);
+            keep an empty center cell so the topbar grid stays balanced. */}
+        {Center ? <Center /> : <div className="studio-topbar__title" aria-hidden="true" />}
         <div className="studio-topbar__right">
           {Actions ? <Actions /> : null}
           <button type="button" className="studio-topbar__cmdk" aria-label="Search">
