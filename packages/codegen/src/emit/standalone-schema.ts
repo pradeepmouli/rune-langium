@@ -9,6 +9,7 @@ import { resolveTypeCallTarget, nodeSourceUri } from './type-ref-resolver.js';
 import type { TypeIndexLookup, TypeIndexEntry, TypeResolutionVisitor } from './type-ref-resolver.js';
 import { emitNamespace } from './zod-emitter.js';
 import type { NamespaceWalkResult } from './namespace-walker.js';
+import type { NamespaceEmitterOptions } from './namespace-emitter.js';
 import { findCyclicTypes } from '../cycle-detector.js';
 import type { TypeReferenceGraph } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
@@ -255,6 +256,22 @@ const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';(\r
  * topo-sorted `Data`/`Choice` block, so evaluating the result throws a TDZ
  * `ReferenceError`. See `test/fixtures/type-aliases/data-ref/expected.zod.ts`
  * for the same defect in ordinary per-namespace output.
+ *
+ * A second caveat, also inherited from shared infrastructure (`topo-sort.ts`
+ * and `zod-emitter.ts`'s reference-emission, both entirely unmodified here)
+ * and confirmed to reproduce in the REAL per-namespace `.zod.ts` output too
+ * — not specific to standalone extraction: `topoSort` always appends cyclic
+ * types LAST, after every non-cyclic type, regardless of whether a
+ * non-cyclic type depends on one of them; and `zod-emitter.ts` only wraps a
+ * cyclic type's own schema declaration in `z.lazy()`, never a reference TO
+ * it from elsewhere. So a non-cyclic `Data`/`Choice` that references a
+ * cyclic one (e.g. `Root { n: Node }` where `Node` is self-referencing)
+ * emits `RootSchema`'s eager `const` initializer BEFORE `NodeSchema` is
+ * declared, throwing a TDZ `ReferenceError` at evaluation time. The real
+ * fix spans `topo-sort.ts`'s ordering algorithm and/or `zod-emitter.ts`'s
+ * reference-emission (deciding whether to wrap a REFERENCE, not just a
+ * declaration, in `z.lazy()`), well beyond this module's own scope — this
+ * function inherits it unmodified.
  */
 export function emitStandaloneZodSchema(
   documents: LangiumDocument[],
@@ -298,7 +315,21 @@ export function emitStandaloneZodSchema(
     graph
   };
 
-  const result = emitNamespace(syntheticModel, {}, { namespaces: new Map() });
+  // `suppressBoilerplate: true` (the same knob `GenericModelEmitter` uses for
+  // a shared whole-model bundle) makes `emitNamespace` emit an `import {
+  // ... } from './runtime.zod.js'` line instead of INLINING the TypeScript
+  // `RUNTIME_HELPER_SOURCE` block. That import line matches
+  // CROSS_NAMESPACE_IMPORT_LINE's own `.zod.js'` shape, so it gets stripped
+  // by the same regex below — leaving NEITHER an inlined helper block NOR a
+  // broken import, exactly matching this function's documented contract
+  // (the caller prepends `RUNTIME_HELPER_JS_SOURCE` separately). Without
+  // this flag, the default (`{}`) inlines `RUNTIME_HELPER_SOURCE` into
+  // `result.content`, which then collides with a caller's own prepended
+  // `RUNTIME_HELPER_JS_SOURCE` — after type-erasure both declare the same
+  // `const` helper names, and `new Function()` throws "Identifier has
+  // already been declared".
+  const emitOptions: NamespaceEmitterOptions = { suppressBoilerplate: true };
+  const result = emitNamespace(syntheticModel, emitOptions, { namespaces: new Map() });
   const code = result.content.replace(CROSS_NAMESPACE_IMPORT_LINE, '');
   return { code, diagnostics: result.diagnostics };
 }

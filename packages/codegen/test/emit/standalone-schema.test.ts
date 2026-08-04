@@ -209,10 +209,6 @@ describe('computeStandaloneClosure', () => {
 async function toEvaluableJs(tsCode: string): Promise<string> {
   const ts = (await import('typescript-classic')).default;
   const withoutBoilerplate = tsCode
-    // Drop the inlined TS-typed runtime-helper block — the caller prepends
-    // its JS-safe twin, RUNTIME_HELPER_JS_SOURCE, itself (see this test's
-    // own usage below), matching the documented contract.
-    .replace(/\/\/ --- rune-codegen runtime helpers \(inlined\) ---[\s\S]*?\/\/ --- end runtime helpers ---\n?/, '')
     .split('\n')
     .filter((line) => !/^import .*;$/.test(line))
     .map((line) => line.replace(/^export\s+/, ''))
@@ -250,6 +246,35 @@ describe('emitStandaloneZodSchema', () => {
     // since Bar is already declared locally in this same script.
     expect(result.code.match(/^import .*/gm)).toEqual(["import { z } from 'zod';"]);
     expect(result.code).toContain('BarSchema');
+  });
+
+  /**
+   * PR #470 live review finding (2026-08-04): `emitNamespace` was called
+   * with `{}`, which — absent `suppressBoilerplate: true` — INLINES the
+   * TypeScript-typed `RUNTIME_HELPER_SOURCE` block into `result.code`. A
+   * caller following this function's own documented contract (prepend
+   * `RUNTIME_HELPER_JS_SOURCE`, the JS-safe twin, separately) then got BOTH
+   * blocks declaring the same `const` names — after type erasure,
+   * `new Function()` threw "Identifier 'runeCheckOneOf' has already been
+   * declared". Fixed by passing `suppressBoilerplate: true`, which makes
+   * `emitNamespace` emit an import line instead of inlining — a line this
+   * function's own cross-namespace-import stripping already removes, since
+   * it matches the same `.zod.js'` shape.
+   */
+  skipIfNodeLt22('does not inline the runtime-helper block into the returned code', async () => {
+    const docs = await parseModels([
+      `
+      namespace test
+      version "1"
+
+      type Foo:
+        x string (0..1)
+      `
+    ]);
+    const result = emitStandaloneZodSchema(docs, 'test.Foo');
+    expect(result.code).not.toContain('runeCheckOneOf');
+    expect(result.code).not.toContain('runtime helpers');
+    expect(result.code).not.toMatch(/\.zod\.js/);
   });
 
   skipIfNodeLt22('produces a script that genuinely evaluates and validates real sample data', async () => {
