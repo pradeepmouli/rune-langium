@@ -105,7 +105,7 @@ export function OtherForm({ nodeData, meta: nodeMeta, nodeId, onNavigateToNode, 
 
   return (
     <ScrollArea className="h-full">
-      <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-col gap-3 p-4 pl-[12px] pr-[12px] pt-[12px] pb-[12px]">
         {/* Header: Namespace + Name + Badge */}
         <TypeHeader
           kind={kind as TypeKind}
