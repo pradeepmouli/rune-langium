@@ -7,10 +7,10 @@
       "type": "number"
     },
     "Price": {
-      "type": "string"
+      "type": "number"
     },
     "UnitPrice": {
-      "type": "string"
+      "type": "number"
     }
   }
 }

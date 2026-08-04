@@ -1580,4 +1580,376 @@ describe('FormPreviewSchema generation', () => {
       expect(itemsField.children.map((child) => child.path)).toEqual(['cash.items.foo']);
     }
   );
+
+  // ── Task 8: unified type-reference resolution ───────────────────────────
+
+  skipIfNodeLt22(
+    'resolves a field typed via a type-alias-to-primitive (the SignatureType/HMACOutputLengthType production bug)',
+    async () => {
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        typeAlias HMACOutputLengthType:
+          int
+
+        type SignatureMethodType:
+          hmacOutputLength HMACOutputLengthType (0..1)
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const schema = schemas.find((s) => s.targetId === 'test.preview.SignatureMethodType')!;
+      const field = schema.fields.find((f) => f.path === 'hmacOutputLength')!;
+
+      expect(field.kind).toBe('number');
+      expect(schema.status).toBe('ready');
+      expect(schema.unsupportedFeatures).toBeUndefined();
+    }
+  );
+
+  skipIfNodeLt22('resolves a field typed via a 2-hop type-alias chain to a Data type', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type DigestValueType:
+        x string (0..1)
+
+      typeAlias DigestAliasInner:
+        DigestValueType
+
+      typeAlias DigestAlias:
+        DigestAliasInner
+
+      type Foo:
+        bar DigestAlias (0..1)
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const schema = schemas.find((s) => s.targetId === 'test.preview.Foo')!;
+    const field = schema.fields.find((f) => f.path === 'bar')!;
+
+    expect(field.kind).toBe('object');
+    expect(schema.status).toBe('ready');
+  });
+
+  skipIfNodeLt22('resolves a Choice option typed via a type-alias-to-primitive', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      typeAlias AmountAlias:
+        number
+
+      choice Collateral:
+        AmountAlias
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral')!;
+
+    expect(choice.status).toBe('ready');
+    expect(choice.fields).toEqual([{ path: 'amountAlias', label: 'AmountAlias', kind: 'number', required: false }]);
+  });
+
+  skipIfNodeLt22('resolves a Choice option typed via a type-alias-to-Data', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type DigestValueType:
+        x string (0..1)
+
+      typeAlias DigestAlias:
+        DigestValueType
+
+      choice Collateral:
+        DigestAlias
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral')!;
+
+    expect(choice.status).toBe('ready');
+    const field = choice.fields.find((f) => f.path === 'digestAlias');
+    expect(field).toMatchObject({ kind: 'object', required: false });
+    expect(field && 'children' in field ? field.children.map((c) => c.path) : []).toEqual(['digestAlias.x']);
+  });
+
+  skipIfNodeLt22(
+    'resolves a Choice option typed as a namespace-qualified RosettaRecordType reference (buildChoiceOptionField previously only checked isRosettaBasicType)',
+    async () => {
+      // Unlike a bare `date` reference (whose raw $refText happens to
+      // coincide with a BUILTIN_KIND_MAP key even when unlinked), a
+      // namespace-qualified reference to a locally-declared recordType
+      // forces Langium to actually LINK typeRef to the RosettaRecordType
+      // node while $refText carries the full qualified path
+      // ('test.preview.date'), which does NOT match any BUILTIN_KIND_MAP
+      // key — so this only resolves if the isRosettaRecordType gap in
+      // buildChoiceOptionField's typeRef-resolved branch is fixed.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        recordType date {
+          value string
+        }
+
+        choice Collateral:
+          test.preview.date
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const choice = schemas.find((s) => s.targetId === 'test.preview.Collateral')!;
+
+      expect(choice.status).toBe('ready');
+      expect(choice.fields).toEqual([{ path: 'date', label: 'date', kind: 'string', required: false }]);
+    }
+  );
+
+  skipIfNodeLt22('resolves a Choice option typed as another named Choice', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Leaf:
+        value string (1..1)
+
+      choice Inner:
+        Leaf
+
+      choice Outer:
+        Inner
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const outer = schemas.find((s) => s.targetId === 'test.preview.Outer')!;
+
+    expect(outer.status).toBe('ready');
+    const innerField = outer.fields.find((f) => f.path === 'inner');
+    expect(innerField).toMatchObject({ path: 'inner', label: 'Inner', kind: 'object', required: false });
+    if (innerField?.kind !== 'object') throw new Error('expected inner field to be an object');
+    expect(innerField.children.map((c) => c.path)).toEqual(['inner.leaf']);
+    expect(innerField.children[0]).toMatchObject({ path: 'inner.leaf', label: 'Leaf', kind: 'object' });
+    expect(innerField.choiceArmPaths).toEqual(['inner.leaf']);
+  });
+
+  skipIfNodeLt22(
+    'cuts a mutual Choice-to-Choice cycle through the new onChoice branch instead of recursing forever',
+    async () => {
+      // CycleA's sole option is CycleB, CycleB's sole option is CycleA —
+      // a genuine 2-hop cycle reachable ONLY through buildChoiceOptionField's
+      // new onChoice branch (the previous test above exercises the same
+      // branch but on a non-cyclic Outer->Inner->Leaf chain). Mirrors the
+      // Data branch's own cycle-cut contract (lines ~159-184 above): the
+      // SECOND encounter of a type already in `seenTypes` is cut with a
+      // `kind: 'unknown'` field and a `recursive-reference:<name>` tag,
+      // while the whole-graph `cyclicTypes` set additionally tags BOTH
+      // members with the non-cutting, informational `cyclic-type:<name>`
+      // tag (Codex PR #459 review) — same two-tag split as the Data branch.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        choice CycleA:
+          CycleB
+
+        choice CycleB:
+          CycleA
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const cycleA = schemas.find((s) => s.targetId === 'test.preview.CycleA')!;
+
+      // The call actually returns instead of stack-overflowing — a genuine
+      // cycle through the new onChoice branch is cut, not infinitely walked.
+      expect(cycleA.status).toBe('unsupported');
+      expect(cycleA.unsupportedFeatures).toContain('recursive-reference:CycleA');
+      expect(cycleA.unsupportedFeatures).toContain('cyclic-type:CycleA');
+      expect(cycleA.unsupportedFeatures).toContain('cyclic-type:CycleB');
+      expect(cycleA.unsupportedFeatures).not.toContain('recursive-reference:CycleB');
+      expect(cycleA.fields).toEqual([
+        {
+          path: 'cycleB',
+          label: 'CycleB',
+          kind: 'object',
+          required: false,
+          children: [
+            {
+              path: 'cycleB.cycleA',
+              label: 'CycleA',
+              kind: 'unknown',
+              required: false,
+              description: 'Recursive reference to CycleA is not expanded in form preview.'
+            }
+          ],
+          choiceArmPaths: ['cycleB.cycleA']
+        }
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
+    'generates an enum-value field for a typeAlias resolving to an Enum (top-level navigation target)',
+    async () => {
+      const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      enum Side:
+        Buy
+        Sell
+
+      typeAlias SideAlias:
+        Side
+    `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const alias = schemas.find((s) => s.targetId === 'test.preview.SideAlias')!;
+
+      expect(alias).toMatchObject({ kind: 'typeAlias', status: 'ready' });
+      expect(alias.fields).toEqual([
+        {
+          path: 'value',
+          label: 'Side Alias',
+          kind: 'enum',
+          required: true,
+          enumValues: [
+            { value: 'Buy', label: 'Buy' },
+            { value: 'Sell', label: 'Sell' }
+          ]
+        }
+      ]);
+    }
+  );
+
+  skipIfNodeLt22(
+    "generates the Choice's own arm fields for a typeAlias resolving to a Choice (top-level navigation target)",
+    async () => {
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        type Cash:
+          amount number (1..1)
+
+        type Securities:
+          isin string (1..1)
+
+        choice Collateral:
+          Cash
+          Securities
+
+        typeAlias CollateralAlias:
+          Collateral
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const alias = schemas.find((s) => s.targetId === 'test.preview.CollateralAlias')!;
+
+      expect(alias).toMatchObject({ kind: 'typeAlias', status: 'ready' });
+      expect(alias.fields.map((f) => f.path)).toEqual(['cash', 'securities']);
+      expect(alias.choiceArmPaths).toEqual(['cash', 'securities']);
+    }
+  );
+
+  skipIfNodeLt22('resolves a 2-hop type-alias chain as the top-level navigation target itself', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      type Address:
+        street string (1..1)
+
+      typeAlias AddressAliasInner:
+        Address
+
+      typeAlias AddressAlias:
+        AddressAliasInner
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const alias = schemas.find((s) => s.targetId === 'test.preview.AddressAlias')!;
+
+    expect(alias).toMatchObject({ kind: 'typeAlias', status: 'ready' });
+    expect(alias.fields.map((f) => f.path)).toEqual(['street']);
+  });
+
+  skipIfNodeLt22(
+    'a primitive resolved without a BUILTIN_KIND_MAP entry does not flip status to unsupported (diagnostic-parity subtlety)',
+    async () => {
+      // 'pattern' is a real Rosetta basic-type name (ROSETTA_BASIC_TYPE_NAMES
+      // in type-ref-resolver.ts) but has no BUILTIN_KIND_MAP entry in this
+      // file (a pre-existing, unrelated gap left untouched by this
+      // migration). buildBaseField's onPrimitive callback must NOT call
+      // unsupportedFeatures.add for this case — only the genuinely-
+      // unresolved catch-all does — so a field merely missing a kind
+      // mapping still reads as 'ready', matching pre-migration behavior.
+      const doc = await parseModel(`
+        namespace "test.preview"
+        version "1"
+
+        type Foo:
+          bar pattern (0..1)
+      `);
+
+      const schemas = generatePreviewSchemas([doc]);
+      const schema = schemas.find((s) => s.targetId === 'test.preview.Foo')!;
+      const field = schema.fields.find((f) => f.path === 'bar')!;
+
+      expect(field.kind).toBe('unknown');
+      expect(schema.status).toBe('ready');
+      expect(schema.unsupportedFeatures).toBeUndefined();
+    }
+  );
+
+  skipIfNodeLt22('buildChoiceOptionField preserves its own unresolved-reference diagnostic wording', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      choice Instrument:
+        Bond
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const instrument = schemas.find((s) => s.targetId === 'test.preview.Instrument')!;
+
+    expect(instrument.status).toBe('unsupported');
+    expect(instrument.unsupportedFeatures).toContain('unresolved-reference:Bond');
+    expect(instrument.fields).toEqual([
+      {
+        path: 'bond',
+        label: 'Bond',
+        kind: 'unknown',
+        required: false,
+        description: 'Type reference Bond could not be resolved for form preview.'
+      }
+    ]);
+  });
+
+  skipIfNodeLt22('buildTypeAliasSchema preserves its own unresolved-reference diagnostic wording', async () => {
+    const doc = await parseModel(`
+      namespace "test.preview"
+      version "1"
+
+      typeAlias GhostAlias:
+        GhostType
+    `);
+
+    const schemas = generatePreviewSchemas([doc]);
+    const alias = schemas.find((s) => s.targetId === 'test.preview.GhostAlias')!;
+
+    expect(alias).toMatchObject({ kind: 'typeAlias', status: 'unsupported' });
+    expect(alias.unsupportedFeatures).toEqual(['unresolved-reference:GhostType']);
+    expect(alias.fields).toEqual([
+      {
+        path: 'value',
+        label: 'Ghost Alias',
+        kind: 'unknown',
+        required: true,
+        description: 'Type reference GhostType could not be resolved for form preview.'
+      }
+    ]);
+  });
 });

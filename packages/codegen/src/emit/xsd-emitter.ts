@@ -153,17 +153,16 @@
 import {
   isChoice,
   isData,
-  isRosettaEnumeration,
-  isRosettaBasicType,
   type Choice,
   type Data,
   type Attribute,
-  type RosettaEnumeration,
   type RosettaCardinality,
+  type RosettaEnumeration,
   type RosettaTypeAlias,
-  type Condition
+  type Condition,
+  type TypeCall
 } from '@rune-langium/core';
-import type { GeneratorOptions, GeneratorOutput, GeneratorDiagnostic } from '../types.js';
+import type { GeneratorOptions, GeneratorOutput } from '../types.js';
 import { emitNamespaceWithContract } from './namespace-emitter.js';
 import type { NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter, decodeCardinality } from './base-namespace-emitter.js';
@@ -172,6 +171,7 @@ import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-wal
 import { recognizeCondition } from './constraint-recognizer.js';
 import type { ConstraintIR } from '../import/source-model.js';
 import { debug } from '../instrument.js';
+import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 
 const XSD_NS = 'http://www.w3.org/2001/XMLSchema';
 
@@ -263,6 +263,41 @@ function renderRestrictedSimpleType(rt: RestrictedSimpleType): string {
   return lines.join('\n');
 }
 
+/**
+ * Wrap a bare `ReadonlyMap<string, N>` (`NamespaceWalkResult`'s own
+ * `enumByName`/`dataByName`/`choiceByName`/`typeAliasByName` lookup maps,
+ * namespace-walker.ts:28-43) into the `{node, sourceUri}`-entry shape
+ * `resolveTypeCallTarget` (Task 1, type-ref-resolver.ts) requires — the same
+ * adapter pattern as zod-emitter.ts's own `wrapTypeIndexEntries`, but
+ * reading from `model: NamespaceWalkResult` directly since this emitter,
+ * unlike zod/ts/json-schema, has no local `EmissionContext` wrapper.
+ */
+function wrapTypeIndexEntries<N>(
+  map: ReadonlyMap<string, N>,
+  sourceUri: string
+): ReadonlyMap<string, TypeIndexEntry<N>> {
+  const wrapped = new Map<string, TypeIndexEntry<N>>();
+  for (const [name, node] of map) {
+    wrapped.set(name, { node, sourceUri });
+  }
+  return wrapped;
+}
+
+/**
+ * Adapt `NamespaceWalkResult`'s bare unwrapped lookup maps to the
+ * `TypeIndexLookup` shape `resolveTypeCallTarget` expects. Built once per
+ * namespace emission (the underlying maps are immutable for the lifetime of
+ * one `XsdNamespaceEmitter` instance).
+ */
+function toTypeIndexLookup(model: NamespaceWalkResult, sourceUri: string): TypeIndexLookup {
+  return {
+    enumByName: wrapTypeIndexEntries(model.enumByName, sourceUri),
+    dataByName: wrapTypeIndexEntries(model.dataByName, sourceUri),
+    choiceByName: wrapTypeIndexEntries(model.choiceByName, sourceUri),
+    typeAliasByName: wrapTypeIndexEntries(model.typeAliasByName, sourceUri)
+  };
+}
+
 export function emitNamespace(
   model: NamespaceWalkResult,
   options: GeneratorOptions,
@@ -273,11 +308,13 @@ export function emitNamespace(
 
 export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly relativePath: string;
-  private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly complexTypeBlocks: string[] = [];
   private readonly simpleTypeBlocks: string[] = [];
   /** Every top-level `xs:simpleType` name emitted so far in this namespace (enum names + synthesized restricted-simpleType names share one name space) — guards against `synthesizeRestrictedSimpleType` colliding with an enum or another attribute's synthesized type. */
   private readonly usedSimpleTypeNames = new Set<string>();
+  /** A real document URI (`model.docs[0]?.uri`) — unlike `NamespaceWalkResult` itself, which has no `sourceUri` field — used both as the shared `sourceUri` for `toTypeIndexLookup`'s wrapped entries and as `resolveTypeCallTarget`'s own `fallbackSourceUri` argument. Mirrors json-schema-emitter.ts's identically-named field. */
+  private readonly fallbackSourceUri: string;
+  private readonly typeIndex: TypeIndexLookup;
 
   constructor(
     model: NamespaceWalkResult,
@@ -286,6 +323,8 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
   ) {
     super(model, options, registry);
     this.relativePath = getTargetRelativePath(model.namespace, 'xsd');
+    this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
+    this.typeIndex = toTypeIndexLookup(model, this.fallbackSourceUri);
   }
 
   @debug()
@@ -347,51 +386,57 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
   // Private instance methods
   // ---------------------------------------------------------------------------
 
-  /** Resolves an attribute's XSD type name (builtin, enum, Data, or Choice reference) and any recognized scalar facets attached to it via its owning Data's conditions. */
+  /**
+   * Shared body behind `resolveAttributeType` (a Data attribute's `typeCall`)
+   * and `renderChoiceComplexType`'s per-option type resolution (a Choice
+   * option's `typeCall` — same `TypeCall` shape, but `ChoiceOption` has no
+   * `name` field of its own to report in a diagnostic, hence the separate
+   * `diagnosticLabel` parameter rather than reading `attr.name` directly).
+   * Resolves to the XSD type name (builtin, enum, Data, or Choice reference —
+   * transparently chasing any `RosettaTypeAlias` chain in between).
+   */
+  private resolveTypeCallToXsdType(typeCall: TypeCall | undefined, diagnosticLabel: string): string {
+    return resolveTypeCallTarget(
+      typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = XSD_BUILTIN_TYPE_MAP[basicTypeName];
+          if (mapped) return `xs:${mapped}`;
+          this.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no XSD mapping; emitting xs:string`
+          });
+          return 'xs:string';
+        },
+        onEnum: (node) => node.name,
+        onData: (node) => node.name,
+        onChoice: (node) => node.name,
+        onUnresolved: (refText) => {
+          if (refText) {
+            this.reportUnresolvedReference(diagnosticLabel, refText, 'xs:string');
+          } else {
+            // No `refText` at all — preserve the original wording exactly
+            // (no "; emitting xs:string" suffix); `reportUnresolvedReference`'s
+            // no-refText branch WOULD add that suffix, silently changing this
+            // case's message, so it is not used here.
+            this.diagnostics.push({
+              severity: 'warning',
+              code: 'unresolved-ref',
+              message: `Attribute '${diagnosticLabel}' has an unresolved type reference`
+            });
+          }
+          return 'xs:string';
+        }
+      },
+      this.fallbackSourceUri
+    );
+  }
+
+  /** Resolves an attribute's XSD type name (builtin, enum, Data, or Choice reference — transparently chasing any `RosettaTypeAlias` chain in between) and any recognized scalar facets attached to it via its owning Data's conditions. */
   private resolveAttributeType(attr: Attribute): string {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (typeRef) {
-      if (isRosettaBasicType(typeRef)) {
-        const mapped = XSD_BUILTIN_TYPE_MAP[typeRef.name];
-        if (mapped) return `xs:${mapped}`;
-        this.diagnostics.push({
-          severity: 'warning',
-          code: 'unmapped-builtin',
-          message: `Builtin type '${typeRef.name}' has no XSD mapping; emitting xs:string`
-        });
-        return 'xs:string';
-      }
-      if (isRosettaEnumeration(typeRef) || isData(typeRef) || isChoice(typeRef)) {
-        return typeRef.name;
-      }
-    }
-
-    if (refText) {
-      const builtin = XSD_BUILTIN_TYPE_MAP[refText];
-      if (builtin) return `xs:${builtin}`;
-      if (
-        this.model.enumByName.has(refText) ||
-        this.model.dataByName.has(refText) ||
-        this.model.choiceByName.has(refText)
-      ) {
-        return refText;
-      }
-      this.diagnostics.push({
-        severity: 'warning',
-        code: 'unresolved-ref',
-        message: `Attribute '${attr.name}': type '${refText}' is not resolved; emitting xs:string`
-      });
-      return 'xs:string';
-    }
-
-    this.diagnostics.push({
-      severity: 'warning',
-      code: 'unresolved-ref',
-      message: `Attribute '${attr.name}' has an unresolved type reference`
-    });
-    return 'xs:string';
+    return this.resolveTypeCallToXsdType(attr.typeCall, attr.name);
   }
 
   /**
@@ -572,8 +617,16 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private renderChoiceComplexType(choice: Choice): string {
     const elements = choice.attributes.map((option): ResolvedElement => {
-      const optionTypeRef = option.typeCall?.type;
-      const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
+      // A Choice option has no `name` of its own — its resolved XSD type
+      // name doubles as its element name (mirrors base-namespace-emitter.ts's
+      // `choiceOptionFieldName` convention, used identically by ts-emitter
+      // and zod-emitter for their own Choice-option keys).
+      // `resolveTypeCallToXsdType` shares the exact same resolver wiring
+      // `resolveAttributeType` uses (builtin map, Enum/Data/Choice, and
+      // RosettaTypeAlias-chasing), closing the gap where this path used to
+      // read `option.typeCall` directly and never mapped through
+      // `XSD_BUILTIN_TYPE_MAP` at all.
+      const optionTypeName = this.resolveTypeCallToXsdType(option.typeCall, `${choice.name} option`);
       return { name: optionTypeName, typeName: optionTypeName, minOccurs: '0', maxOccurs: '1' };
     });
 

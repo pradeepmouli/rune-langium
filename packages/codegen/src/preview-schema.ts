@@ -5,11 +5,9 @@ import type { LangiumDocument } from 'langium';
 import {
   isChoice,
   isData,
-  isRosettaBasicType,
   isRosettaEnumeration,
   isRosettaFunction,
   isRosettaModel,
-  isRosettaRecordType,
   isRosettaTypeAlias,
   type Attribute,
   type Choice,
@@ -30,6 +28,7 @@ import type {
 import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
 import { qualifiedExportPath } from '@rune-langium/core';
 import { buildTypeReferenceGraph, findCyclicTypes } from './cycle-detector.js';
+import { resolveTypeCallTarget } from './emit/type-ref-resolver.js';
 
 function humanizeLabel(name: string): string {
   return name
@@ -510,105 +509,185 @@ function buildTypeAliasSchema(
   targetId: string,
   cyclicTypes: ReadonlySet<string>
 ): FormPreviewSchema {
-  const typeRef = alias.typeCall?.type?.ref;
   const refText = alias.typeCall?.type?.$refText;
   const unsupportedFeatures = new Set<string>();
 
-  // Primitive alias (e.g. `typeAlias productType: string`)
-  const builtinKind =
-    (typeRef && isRosettaBasicType(typeRef) ? BUILTIN_KIND_MAP[typeRef.name] : undefined) ??
-    (refText ? BUILTIN_KIND_MAP[refText] : undefined);
-
-  if (builtinKind) {
+  const unresolvedSchema = (): FormPreviewSchema => {
+    unsupportedFeatures.add(`unresolved-reference:${refText ?? alias.name}`);
     return {
       schemaVersion: SCHEMA_VERSION,
       kind: 'typeAlias',
       targetId,
       title: alias.name,
-      status: 'ready',
-      fields: [{ path: 'value', label: humanizeLabel(alias.name), kind: builtinKind, required: true }]
+      status: 'unsupported',
+      fields: [
+        {
+          path: 'value',
+          label: humanizeLabel(alias.name),
+          kind: 'unknown',
+          required: true,
+          description: `Type reference ${refText ?? alias.name} could not be resolved for form preview.`
+        }
+      ],
+      unsupportedFeatures: Array.from(unsupportedFeatures).sort()
     };
-  }
-
-  // Data-type alias — delegate field expansion to the underlying data type
-  const resolvedData =
-    (typeRef && isData(typeRef) ? typeRef : undefined) ??
-    (refText ? namespace.dataByName.get(refText)?.node : undefined);
-
-  if (resolvedData) {
-    const sourceMap: PreviewSourceMapEntry[] = [];
-    const { attributes, choiceAncestor } = collectInheritedAttributes(resolvedData);
-    const attributeFields = attributes.map((attr) =>
-      buildField(attr, {
-        namespace,
-        unsupportedFeatures,
-        sourceMap,
-        sourceUri,
-        maxDepth: DEFAULT_MAX_DEPTH,
-        depth: 0,
-        path: attr.name,
-        label: humanizeLabel(attr.name),
-        seenTypes: new Set([qualifiedTypeId(resolvedData)]),
-        cyclicTypes
-      })
-    );
-
-    // Data-extends-Choice (round-5 finding #1), applied to a data-type alias:
-    // mirrors buildDataSchema's expansion of a Choice ancestor's options into
-    // top-level pseudo-fields — see that call site's comment for the full
-    // rationale. On a name collision, the Data type's own attribute wins.
-    const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
-    const choiceFields = choiceAncestor
-      ? dropCollidingChoiceArmFields(
-          choiceAncestor.attributes,
-          (option, localUnsupportedFeatures) =>
-            buildChoiceOptionField(option, {
-              namespace,
-              unsupportedFeatures: localUnsupportedFeatures,
-              sourceUri,
-              seenTypes: new Set([qualifiedTypeId(resolvedData), qualifiedTypeId(choiceAncestor)]),
-              depth: 0,
-              maxDepth: DEFAULT_MAX_DEPTH,
-              cyclicTypes
-            }),
-          ownFieldPaths,
-          unsupportedFeatures
-        )
-      : [];
-
-    const fields = [...choiceFields, ...attributeFields];
-    return {
-      schemaVersion: SCHEMA_VERSION,
-      kind: 'typeAlias',
-      targetId,
-      title: alias.name,
-      status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
-      fields,
-      ...(sourceMap.length > 0 ? { sourceMap } : {}),
-      ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {}),
-      ...(choiceAncestor ? { choiceArmPaths: choiceFields.map((field) => field.path) } : {})
-    };
-  }
-
-  // Unresolvable alias reference
-  unsupportedFeatures.add(`unresolved-reference:${refText ?? alias.name}`);
-  return {
-    schemaVersion: SCHEMA_VERSION,
-    kind: 'typeAlias',
-    targetId,
-    title: alias.name,
-    status: 'unsupported',
-    fields: [
-      {
-        path: 'value',
-        label: humanizeLabel(alias.name),
-        kind: 'unknown',
-        required: true,
-        description: `Type reference ${refText ?? alias.name} could not be resolved for form preview.`
-      }
-    ],
-    unsupportedFeatures: Array.from(unsupportedFeatures).sort()
   };
+
+  return resolveTypeCallTarget<FormPreviewSchema>(
+    alias.typeCall,
+    namespace,
+    {
+      // Primitive alias (e.g. `typeAlias productType: string`)
+      onPrimitive: (basicTypeName) => {
+        const builtinKind = BUILTIN_KIND_MAP[basicTypeName];
+        if (!builtinKind) {
+          // No BUILTIN_KIND_MAP entry (the same pre-existing, unrelated
+          // 'pattern'/'calculation' gap noted in buildBaseField) — today's
+          // code falls through to the Data check next (which also fails
+          // for a genuine primitive) and lands on the unresolved catch-all;
+          // preserve that outcome directly.
+          return unresolvedSchema();
+        }
+        return {
+          schemaVersion: SCHEMA_VERSION,
+          kind: 'typeAlias',
+          targetId,
+          title: alias.name,
+          status: 'ready',
+          fields: [{ path: 'value', label: humanizeLabel(alias.name), kind: builtinKind, required: true }]
+        };
+      },
+      // Enum alias (e.g. `typeAlias SideAlias: Side`) — new: buildTypeAliasSchema
+      // previously had no enum handling at all, so this case always fell
+      // through to the unresolved catch-all. Shaped by analogy to the
+      // primitive-alias branch above (a single `value` field), reusing the
+      // same enumValues mapping buildChoiceOptionField's/enumField's enum
+      // branches already use for consistency.
+      onEnum: (node) => ({
+        schemaVersion: SCHEMA_VERSION,
+        kind: 'typeAlias',
+        targetId,
+        title: alias.name,
+        status: 'ready',
+        fields: [
+          {
+            path: 'value',
+            label: humanizeLabel(alias.name),
+            kind: 'enum',
+            required: true,
+            enumValues: node.enumValues.map((v) => ({
+              value: v.name,
+              label: v.display ?? humanizeLabel(v.name)
+            }))
+          }
+        ]
+      }),
+      // Data-type alias — delegate field expansion to the underlying data type
+      onData: (resolvedData, dataSourceUri) => {
+        const sourceMap: PreviewSourceMapEntry[] = [];
+        const { attributes, choiceAncestor } = collectInheritedAttributes(resolvedData);
+        const attributeFields = attributes.map((attr) =>
+          buildField(attr, {
+            namespace,
+            unsupportedFeatures,
+            sourceMap,
+            sourceUri: dataSourceUri,
+            maxDepth: DEFAULT_MAX_DEPTH,
+            depth: 0,
+            path: attr.name,
+            label: humanizeLabel(attr.name),
+            seenTypes: new Set([qualifiedTypeId(resolvedData)]),
+            cyclicTypes
+          })
+        );
+
+        // Data-extends-Choice (round-5 finding #1), applied to a data-type alias:
+        // mirrors buildDataSchema's expansion of a Choice ancestor's options into
+        // top-level pseudo-fields — see that call site's comment for the full
+        // rationale. On a name collision, the Data type's own attribute wins.
+        const ownFieldPaths = new Set(attributeFields.map((field) => field.path));
+        const choiceFields = choiceAncestor
+          ? dropCollidingChoiceArmFields(
+              choiceAncestor.attributes,
+              (option, localUnsupportedFeatures) =>
+                buildChoiceOptionField(option, {
+                  namespace,
+                  unsupportedFeatures: localUnsupportedFeatures,
+                  sourceUri: dataSourceUri,
+                  seenTypes: new Set([qualifiedTypeId(resolvedData), qualifiedTypeId(choiceAncestor)]),
+                  depth: 0,
+                  maxDepth: DEFAULT_MAX_DEPTH,
+                  cyclicTypes
+                }),
+              ownFieldPaths,
+              unsupportedFeatures
+            )
+          : [];
+
+        const fields = [...choiceFields, ...attributeFields];
+        return {
+          schemaVersion: SCHEMA_VERSION,
+          kind: 'typeAlias',
+          targetId,
+          title: alias.name,
+          status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
+          fields,
+          ...(sourceMap.length > 0 ? { sourceMap } : {}),
+          ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {}),
+          ...(choiceAncestor ? { choiceArmPaths: choiceFields.map((field) => field.path) } : {})
+        };
+      },
+      // Choice alias (e.g. `typeAlias CollateralAlias: Collateral`) — new:
+      // buildTypeAliasSchema previously had no Choice handling at all, so
+      // this case always fell through to the unresolved catch-all too.
+      // Mirrors buildChoiceSchema's own top-level Choice expansion (same
+      // empty-choice guard, same buildChoiceOptionField mapping with a
+      // fresh seenTypes seeded by the Choice's own id) — the alias just
+      // forwards to the Choice's own arms, framed with `kind: 'typeAlias'`
+      // (not `'choice'`) and this function's own targetId/title, with
+      // `choiceArmPaths` set unconditionally since every field here IS a
+      // Choice arm (mirrors the Data-extends-Choice branches' conditional
+      // choiceArmPaths, just unconditional because there's no "own
+      // attribute" here to combine with).
+      onChoice: (node, choiceSourceUri) => {
+        if (node.attributes.length === 0) {
+          unsupportedFeatures.add(`empty-choice:${node.name}`);
+          return {
+            schemaVersion: SCHEMA_VERSION,
+            kind: 'typeAlias',
+            targetId,
+            title: alias.name,
+            status: 'unsupported',
+            fields: [],
+            unsupportedFeatures: Array.from(unsupportedFeatures).sort()
+          };
+        }
+        const fields: PreviewField[] = node.attributes.map((option: ChoiceOption) =>
+          buildChoiceOptionField(option, {
+            namespace,
+            unsupportedFeatures,
+            sourceUri: choiceSourceUri,
+            seenTypes: new Set([qualifiedTypeId(node)]),
+            depth: 0,
+            maxDepth: DEFAULT_MAX_DEPTH,
+            cyclicTypes
+          })
+        );
+        return {
+          schemaVersion: SCHEMA_VERSION,
+          kind: 'typeAlias',
+          targetId,
+          title: alias.name,
+          status: hasReportableUnsupportedFeature(unsupportedFeatures) ? 'unsupported' : 'ready',
+          fields,
+          choiceArmPaths: fields.map((field) => field.path),
+          ...(unsupportedFeatures.size > 0 ? { unsupportedFeatures: Array.from(unsupportedFeatures).sort() } : {})
+        };
+      },
+      onUnresolved: () => unresolvedSchema()
+    },
+    sourceUri
+  );
 }
 
 /**
@@ -720,145 +799,160 @@ function buildChoiceOptionField(
   const basePath = choiceOptionFieldName(optionTypeName);
   const path = ctx.pathPrefix ? `${ctx.pathPrefix}.${basePath}` : basePath;
 
-  // Primitive type option
-  const builtinKind =
-    (typeRef && isRosettaBasicType(typeRef) ? BUILTIN_KIND_MAP[typeRef.name] : undefined) ??
-    (refText ? BUILTIN_KIND_MAP[refText] : undefined);
-
-  if (builtinKind) {
-    return { path, label, kind: builtinKind, required: false };
-  }
-
-  // Enumeration option
-  if (typeRef && isRosettaEnumeration(typeRef)) {
-    return {
-      path,
-      label,
-      kind: 'enum',
-      required: false,
-      enumValues: typeRef.enumValues.map((v) => ({
-        value: v.name,
-        label: v.display ?? humanizeLabel(v.name)
-      }))
-    };
-  }
-  if (!typeRef && refText && ctx.namespace.enumByName.has(refText)) {
-    const enumNode = ctx.namespace.enumByName.get(refText)!.node;
-    return {
-      path,
-      label,
-      kind: 'enum',
-      required: false,
-      enumValues: enumNode.enumValues.map((v) => ({
-        value: v.name,
-        label: v.display ?? humanizeLabel(v.name)
-      }))
-    };
-  }
-
-  // Data type option — emit as object with expanded children
-  const resolvedData =
-    (typeRef && isData(typeRef) ? typeRef : undefined) ??
-    (refText ? ctx.namespace.dataByName.get(refText)?.node : undefined);
-  const resolvedSourceUri =
-    (typeRef && isData(typeRef)
-      ? (typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri)
-      : ctx.namespace.dataByName.get(refText ?? '')?.sourceUri) ?? ctx.sourceUri;
-
-  if (resolvedData) {
-    const resolvedDataId = qualifiedTypeId(resolvedData);
-    // See objectField's identical split: tag cycle MEMBERSHIP with the
-    // distinct `cyclic-type` marker, but only CUT (and add the real
-    // `recursive-reference` tag) on an actual path-local repeat
-    // (seenTypes) or depth cap.
-    if (ctx.cyclicTypes.has(resolvedDataId)) {
-      ctx.unsupportedFeatures.add(`cyclic-type:${resolvedData.name}`);
-    }
-    if (ctx.seenTypes.has(resolvedDataId) || ctx.depth >= ctx.maxDepth) {
-      ctx.unsupportedFeatures.add(`recursive-reference:${resolvedData.name}`);
-      return {
+  return resolveTypeCallTarget<PreviewField>(
+    option.typeCall,
+    ctx.namespace,
+    {
+      onPrimitive: (basicTypeName) => {
+        const builtinKind = BUILTIN_KIND_MAP[basicTypeName];
+        if (builtinKind) {
+          return { path, label, kind: builtinKind, required: false };
+        }
+        // Unlike buildBaseField's onPrimitive, this function's ORIGINAL
+        // builtin check had no distinct "resolved but unmapped" case of its
+        // own — an unmapped primitive always fell through to the same
+        // unresolved-reference catch-all below. Preserve that here.
+        ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? label}`);
+        return {
+          path,
+          label,
+          kind: 'unknown',
+          required: false,
+          description: `Type reference ${refText ?? label} could not be resolved for form preview.`
+        };
+      },
+      onEnum: (node) => ({
         path,
         label,
-        kind: 'unknown',
+        kind: 'enum',
         required: false,
-        description: `Recursive reference to ${resolvedData.name} is not expanded in form preview.`
-      };
-    }
-    const nextSeen = new Set(ctx.seenTypes);
-    nextSeen.add(resolvedDataId);
-    const childCtx: FieldContext = {
-      namespace: ctx.namespace,
-      unsupportedFeatures: ctx.unsupportedFeatures,
-      sourceMap: [],
-      sourceUri: resolvedSourceUri,
-      maxDepth: ctx.maxDepth,
-      depth: ctx.depth + 1,
-      path,
-      label,
-      seenTypes: nextSeen,
-      cyclicTypes: ctx.cyclicTypes
-    };
-    const { attributes, choiceAncestor } = collectInheritedAttributes(resolvedData);
-    const attributeChildren = attributes.map((child) =>
-      buildField(child, {
-        ...childCtx,
-        path: `${path}.${child.name}`,
-        label: humanizeLabel(child.name)
-      })
-    );
+        enumValues: node.enumValues.map((v) => ({
+          value: v.name,
+          label: v.display ?? humanizeLabel(v.name)
+        }))
+      }),
+      onChoice: (node, sourceUri) => {
+        // A Choice option itself typed as another named Choice — mirrors
+        // buildBaseField's own direct Choice-typed-attribute branch, just
+        // threading THIS function's own cycle-safety state (seenTypes/
+        // depth/cyclicTypes) through instead of a top-level FieldContext's,
+        // so a cycle back to an ancestor Choice option is still caught.
+        const childCtx: FieldContext = {
+          namespace: ctx.namespace,
+          unsupportedFeatures: ctx.unsupportedFeatures,
+          sourceMap: [],
+          sourceUri,
+          maxDepth: ctx.maxDepth,
+          depth: ctx.depth,
+          path,
+          label,
+          seenTypes: ctx.seenTypes,
+          cyclicTypes: ctx.cyclicTypes
+        };
+        // Every Choice option is `required: false` (only one arm may be
+        // selected) — choiceField always returns `required: true`, so
+        // override it, same as the primitive/enum/data branches above.
+        return { ...choiceField(childCtx, node, sourceUri), required: false };
+      },
+      onData: (node, sourceUri) => {
+        const resolvedDataId = qualifiedTypeId(node);
+        // See objectField's identical split: tag cycle MEMBERSHIP with the
+        // distinct `cyclic-type` marker, but only CUT (and add the real
+        // `recursive-reference` tag) on an actual path-local repeat
+        // (seenTypes) or depth cap.
+        if (ctx.cyclicTypes.has(resolvedDataId)) {
+          ctx.unsupportedFeatures.add(`cyclic-type:${node.name}`);
+        }
+        if (ctx.seenTypes.has(resolvedDataId) || ctx.depth >= ctx.maxDepth) {
+          ctx.unsupportedFeatures.add(`recursive-reference:${node.name}`);
+          return {
+            path,
+            label,
+            kind: 'unknown',
+            required: false,
+            description: `Recursive reference to ${node.name} is not expanded in form preview.`
+          };
+        }
+        const nextSeen = new Set(ctx.seenTypes);
+        nextSeen.add(resolvedDataId);
+        const childCtx: FieldContext = {
+          namespace: ctx.namespace,
+          unsupportedFeatures: ctx.unsupportedFeatures,
+          sourceMap: [],
+          sourceUri,
+          maxDepth: ctx.maxDepth,
+          depth: ctx.depth + 1,
+          path,
+          label,
+          seenTypes: nextSeen,
+          cyclicTypes: ctx.cyclicTypes
+        };
+        const { attributes, choiceAncestor } = collectInheritedAttributes(node);
+        const attributeChildren = attributes.map((child) =>
+          buildField(child, {
+            ...childCtx,
+            path: `${path}.${child.name}`,
+            label: humanizeLabel(child.name)
+          })
+        );
 
-    // Doubly-nested Choice (Codex review, PR #433 round 5) — previously a
-    // documented, deferred gap ("a Choice option whose Data type itself
-    // extends a Choice"): a Choice option's Data type can itself EXTEND
-    // another Choice, distinct from that Data type's own plain attributes.
-    // Mirrors objectField's expansion of a choiceAncestor exactly (same
-    // collision precedence, same choiceArmPaths contract) so this level
-    // gets identical treatment to every other Data-extends-Choice call
-    // site instead of silently dropping the inherited arms — which would
-    // let a preview sample validate as complete while the real emitted
-    // `runeExtendChoice` Zod schema rejects it for missing the arm.
-    const ownChildPaths = new Set(attributeChildren.map((child) => child.path));
-    const choiceChildren = choiceAncestor
-      ? (() => {
-          const choiceSeen = new Set(nextSeen);
-          choiceSeen.add(qualifiedTypeId(choiceAncestor));
-          return dropCollidingChoiceArmFields(
-            choiceAncestor.attributes,
-            (option, localUnsupportedFeatures) =>
-              buildChoiceOptionField(option, {
-                namespace: ctx.namespace,
-                unsupportedFeatures: localUnsupportedFeatures,
-                sourceUri: resolvedSourceUri,
-                pathPrefix: path,
-                seenTypes: choiceSeen,
-                depth: ctx.depth + 1,
-                maxDepth: ctx.maxDepth,
-                cyclicTypes: ctx.cyclicTypes
-              }),
-            ownChildPaths,
-            ctx.unsupportedFeatures
-          );
-        })()
-      : [];
+        // Doubly-nested Choice (Codex review, PR #433 round 5) — previously
+        // a documented, deferred gap ("a Choice option whose Data type
+        // itself extends a Choice"): a Choice option's Data type can itself
+        // EXTEND another Choice, distinct from that Data type's own plain
+        // attributes. Mirrors objectField's expansion of a choiceAncestor
+        // exactly (same collision precedence, same choiceArmPaths contract)
+        // so this level gets identical treatment to every other
+        // Data-extends-Choice call site instead of silently dropping the
+        // inherited arms — which would let a preview sample validate as
+        // complete while the real emitted `runeExtendChoice` Zod schema
+        // rejects it for missing the arm.
+        const ownChildPaths = new Set(attributeChildren.map((child) => child.path));
+        const choiceChildren = choiceAncestor
+          ? (() => {
+              const choiceSeen = new Set(nextSeen);
+              choiceSeen.add(qualifiedTypeId(choiceAncestor));
+              return dropCollidingChoiceArmFields(
+                choiceAncestor.attributes,
+                (choiceOption, localUnsupportedFeatures) =>
+                  buildChoiceOptionField(choiceOption, {
+                    namespace: ctx.namespace,
+                    unsupportedFeatures: localUnsupportedFeatures,
+                    sourceUri,
+                    pathPrefix: path,
+                    seenTypes: choiceSeen,
+                    depth: ctx.depth + 1,
+                    maxDepth: ctx.maxDepth,
+                    cyclicTypes: ctx.cyclicTypes
+                  }),
+                ownChildPaths,
+                ctx.unsupportedFeatures
+              );
+            })()
+          : [];
 
-    return {
-      path,
-      label,
-      kind: 'object',
-      required: false,
-      children: [...choiceChildren, ...attributeChildren],
-      ...(choiceAncestor ? { choiceArmPaths: choiceChildren.map((field) => field.path) } : {})
-    };
-  }
-
-  ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? label}`);
-  return {
-    path,
-    label,
-    kind: 'unknown',
-    required: false,
-    description: `Type reference ${refText ?? label} could not be resolved for form preview.`
-  };
+        return {
+          path,
+          label,
+          kind: 'object',
+          required: false,
+          children: [...choiceChildren, ...attributeChildren],
+          ...(choiceAncestor ? { choiceArmPaths: choiceChildren.map((field) => field.path) } : {})
+        };
+      },
+      onUnresolved: () => {
+        ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? label}`);
+        return {
+          path,
+          label,
+          kind: 'unknown',
+          required: false,
+          description: `Type reference ${refText ?? label} could not be resolved for form preview.`
+        };
+      }
+    },
+    ctx.sourceUri
+  );
 }
 
 function buildFunctionSchema(
@@ -924,64 +1018,43 @@ function buildField(attr: Attribute, ctx: FieldContext): PreviewField {
 }
 
 function buildBaseField(attr: Attribute, ctx: FieldContext): PreviewField {
-  const typeRef = attr.typeCall?.type?.ref;
-  const refText = attr.typeCall?.type?.$refText;
-
-  if (typeRef && isRosettaBasicType(typeRef)) {
-    const builtinKind = BUILTIN_KIND_MAP[typeRef.name];
-    return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, typeRef.name);
-  }
-
-  // recordType (date, dateTime, zonedDateTime) resolves to RosettaRecordType, not RosettaBasicType
-  if (typeRef && isRosettaRecordType(typeRef)) {
-    const builtinKind = BUILTIN_KIND_MAP[typeRef.name];
-    return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, typeRef.name);
-  }
-
-  if (!typeRef && refText && BUILTIN_KIND_MAP[refText]) {
-    return scalarField(ctx, BUILTIN_KIND_MAP[refText]);
-  }
-
-  if (typeRef && isRosettaEnumeration(typeRef)) {
-    return enumField(ctx, typeRef);
-  }
-
-  if (!typeRef && refText && ctx.namespace.enumByName.has(refText)) {
-    return enumField(ctx, ctx.namespace.enumByName.get(refText)!.node);
-  }
-
-  if (typeRef && isData(typeRef)) {
-    return objectField(ctx, typeRef, typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri);
-  }
-
-  if (!typeRef && refText && ctx.namespace.dataByName.has(refText)) {
-    const resolved = ctx.namespace.dataByName.get(refText)!;
-    return objectField(ctx, resolved.node, resolved.sourceUri);
-  }
-
-  // Choice type reference (issue #394): mirrors zod-emitter.ts's own W2 fix
-  // for resolveTypeExpr's `isChoice(typeRef)` branch ("was falling to
-  // z.unknown() — isChoice was never consulted here") — the exact same gap,
-  // never propagated to this hand-maintained preview approximation. The real
-  // emitted schema (emitChoiceSchema) is `z.union([z.strictObject({ <field>:
-  // <OptionSchema> }), ...])` — one key per option, exactly one present —
-  // the SAME shape `choiceField` below builds by reusing
-  // `buildChoiceOptionField`, the function that already produces this shape
-  // for a genuine top-level Choice (buildChoiceSchema) and a Data-extends-
-  // Choice ancestor's options (objectField/buildDataSchema).
-  if (typeRef && isChoice(typeRef)) {
-    return choiceField(ctx, typeRef, typeRef.$container?.$document?.uri?.toString() ?? ctx.sourceUri);
-  }
-
-  if (!typeRef && refText && ctx.namespace.choiceByName.has(refText)) {
-    const resolved = ctx.namespace.choiceByName.get(refText)!;
-    return choiceField(ctx, resolved.node, resolved.sourceUri);
-  }
-
-  ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? attr.name}`);
-  return unsupportedField(
-    ctx,
-    refText ? `Type reference ${refText} could not be resolved for form preview.` : undefined
+  return resolveTypeCallTarget<PreviewField>(
+    attr.typeCall,
+    ctx.namespace,
+    {
+      onPrimitive: (basicTypeName) => {
+        const builtinKind = BUILTIN_KIND_MAP[basicTypeName];
+        // A primitive that resolved but has no BUILTIN_KIND_MAP entry (e.g.
+        // 'pattern'/'calculation', a pre-existing, unrelated gap) is NOT
+        // reported as an unresolved reference — matching the pre-migration
+        // behavior of the typeRef-resolved basic-type/record-type branches,
+        // which returned `unsupportedField` directly without ever touching
+        // `unsupportedFeatures`.
+        return builtinKind ? scalarField(ctx, builtinKind) : unsupportedField(ctx, basicTypeName);
+      },
+      onEnum: (node) => enumField(ctx, node),
+      onData: (node, sourceUri) => objectField(ctx, node, sourceUri),
+      // Choice type reference (issue #394): mirrors zod-emitter.ts's own W2
+      // fix for resolveTypeExpr's `isChoice(typeRef)` branch ("was falling
+      // to z.unknown() — isChoice was never consulted here") — the exact
+      // same gap, never propagated to this hand-maintained preview
+      // approximation. The real emitted schema (emitChoiceSchema) is
+      // `z.union([z.strictObject({ <field>: <OptionSchema> }), ...])` — one
+      // key per option, exactly one present — the SAME shape `choiceField`
+      // below builds by reusing `buildChoiceOptionField`, the function that
+      // already produces this shape for a genuine top-level Choice
+      // (buildChoiceSchema) and a Data-extends-Choice ancestor's options
+      // (objectField/buildDataSchema).
+      onChoice: (node, sourceUri) => choiceField(ctx, node, sourceUri),
+      onUnresolved: (refText) => {
+        ctx.unsupportedFeatures.add(`unresolved-reference:${refText ?? attr.name}`);
+        return unsupportedField(
+          ctx,
+          refText ? `Type reference ${refText} could not be resolved for form preview.` : undefined
+        );
+      }
+    },
+    ctx.sourceUri
   );
 }
 
