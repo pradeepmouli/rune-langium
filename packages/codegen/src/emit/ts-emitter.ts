@@ -23,9 +23,7 @@
 import {
   isChoice,
   isData,
-  isRosettaEnumeration,
   isRosettaBasicType,
-  isRosettaTypeAlias,
   type Choice,
   type Data,
   type Attribute,
@@ -35,7 +33,8 @@ import {
   type RosettaRule,
   type RosettaReport,
   type Annotation,
-  type RosettaExternalFunction
+  type RosettaExternalFunction,
+  type TypeCall
 } from '@rune-langium/core';
 import type {
   GeneratorOptions,
@@ -386,6 +385,33 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       symbols.add(symbolName);
     };
 
+    // Route every import-candidate scan through the same `resolveTypeCallTarget`
+    // dispatch the VALUE-emitting code uses (resolveTypeExprAsTs/
+    // emitTypeAliasDeclaration/emitChoiceTypeDeclaration/
+    // emitChoiceShapeTypeDeclaration), so import-tracking can never drift from
+    // value-emission again: a `TypeCall` that resolves through a
+    // RosettaTypeAlias chain (any number of hops) to a cross-namespace
+    // Data/Enum/Choice is tracked against the TERMINAL resolved node, not the
+    // immediate (possibly same-namespace alias) reference.
+    //
+    // ATTRIBUTE position: bare name only for all three kinds — matches
+    // resolveTypeExprAsTs's onData/onEnum/onChoice, which all return the bare
+    // `node.name` at attribute position (never `<Name>Shape`).
+    const trackAttributePositionImport = (typeCall: TypeCall | undefined): void => {
+      resolveTypeCallTarget(
+        typeCall,
+        this.typeIndex,
+        {
+          onPrimitive: () => undefined,
+          onEnum: (node) => trackRef(node, node.name),
+          onData: (node) => trackRef(node, node.name),
+          onChoice: (node) => trackRef(node, node.name),
+          onUnresolved: () => undefined
+        },
+        this.ctx.namespace
+      );
+    };
+
     // Check data type inheritance and attribute references
     for (const data of this.ctx.dataByName.values()) {
       const parentRef = data.superType?.ref;
@@ -411,34 +437,67 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
           trackRef(choiceAncestor, `${choiceAncestor.name}Shape`);
         }
       }
+      // Chases RosettaTypeAlias chains via resolveTypeCallTarget so an
+      // attribute typed via an alias that resolves to a cross-namespace
+      // Data/Enum/Choice is tracked against the terminal target, matching
+      // resolveTypeExprAsTs's value emission (was previously untracked
+      // entirely for alias-typed attributes — an alias ref is neither
+      // isData/isRosettaEnumeration/isChoice, so the old direct-ref checks
+      // never fired for it).
       for (const attr of data.attributes) {
-        const attrTypeRef = attr.typeCall?.type?.ref;
-        if (attrTypeRef && isData(attrTypeRef)) {
-          trackRef(attrTypeRef, attrTypeRef.name);
-        } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
-          trackRef(attrTypeRef, attrTypeRef.name);
-        } else if (attrTypeRef && isChoice(attrTypeRef)) {
-          // Item 3 (docs/superpowers/specs/2026-07-02-emitter-crossns-
-          // hardening-design.md): a Choice-typed attribute resolves to the
-          // BARE `<Choice>` union name via resolveTypeExprAsTs (isChoice
-          // branch, W2) — only the bare name is ever referenced at an
-          // attribute position (unlike the superType.ref tracking above,
-          // which also needs `<Choice>Shape` for the generic Shape
-          // constraint), so only the bare name needs importing here.
-          trackRef(attrTypeRef, attrTypeRef.name);
-        }
+        trackAttributePositionImport(attr.typeCall);
       }
     }
 
-    // Check type alias references
+    // Check type alias references — chases the alias's own RHS through any
+    // further alias links via resolveTypeCallTarget (a 2+ hop chain), matching
+    // emitTypeAliasDeclaration's value emission, instead of only tracking the
+    // alias's immediate direct ref (which for a 2+ hop chain tracked the
+    // wrong, intermediate alias's bare name rather than the terminal target).
+    // DECLARATION position: Data/Choice resolve to `<Name>Shape` (a type
+    // alias is a structural synonym); Enum resolves to the bare name — matches
+    // emitTypeAliasDeclaration's onData/onChoice/onEnum exactly.
     for (const alias of this.ctx.typeAliasByName.values()) {
-      const typeRef = alias.typeCall?.type?.ref;
-      if (typeRef && isData(typeRef)) {
-        trackRef(typeRef, `${typeRef.name}Shape`);
-      } else if (typeRef && isRosettaEnumeration(typeRef)) {
-        trackRef(typeRef, typeRef.name);
-      } else if (typeRef && isRosettaTypeAlias(typeRef)) {
-        trackRef(typeRef, typeRef.name);
+      resolveTypeCallTarget(
+        alias.typeCall,
+        this.typeIndex,
+        {
+          onPrimitive: () => undefined,
+          onEnum: (node) => trackRef(node, node.name),
+          onData: (node) => trackRef(node, `${node.name}Shape`),
+          onChoice: (node) => trackRef(node, `${node.name}Shape`),
+          onUnresolved: () => undefined
+        },
+        this.ctx.namespace
+      );
+    }
+
+    // Check Choice option type references — mirrors the attribute loop above
+    // (bare-name, attribute-position convention) for the union arms
+    // (emitChoiceTypeDeclaration), PLUS the Shape-suffixed convention for
+    // Data options in the Shape-level union (emitChoiceShapeTypeDeclaration).
+    // Previously never scanned at all, so a Choice option typed as (or via an
+    // alias to) a cross-namespace Data/Enum/Choice produced a correct value
+    // reference but no import line.
+    for (const choice of this.ctx.choiceByName.values()) {
+      for (const option of choice.attributes) {
+        trackAttributePositionImport(option.typeCall);
+        // emitChoiceShapeTypeDeclaration additionally references
+        // `<Name>Shape` for options that resolve to a Data (only Data —
+        // preserves that function's exact pre-existing Data-only special
+        // case; Enum/Choice options use the same bare name in both unions).
+        resolveTypeCallTarget(
+          option.typeCall,
+          this.typeIndex,
+          {
+            onPrimitive: () => undefined,
+            onEnum: () => undefined,
+            onData: (node) => trackRef(node, `${node.name}Shape`),
+            onChoice: () => undefined,
+            onUnresolved: () => undefined
+          },
+          this.ctx.namespace
+        );
       }
     }
 
@@ -928,6 +987,77 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   // ---------------------------------------------------------------------------
 
   /**
+   * Resolve a Choice option's bare TS type reference — the same
+   * `resolveTypeCallTarget` alias-chasing dispatch `resolveTypeExprAsTs` uses
+   * for an attribute's type reference, adapted for a `ChoiceOption` (which
+   * has a `typeCall` but no `.name`, unlike `Attribute`).
+   */
+  private resolveChoiceOptionTypeExpr(typeCall: TypeCall | undefined, diagnosticLabel: string): string {
+    return resolveTypeCallTarget(
+      typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no TypeScript mapping; emitting unknown`
+          });
+          return 'unknown';
+        },
+        onEnum: (node) => node.name,
+        onData: (node) => node.name,
+        onChoice: (node) => node.name,
+        onUnresolved: (refText) => {
+          if (refText) return refText;
+          this.reportUnresolvedReference(diagnosticLabel, undefined, 'unknown');
+          return 'unknown';
+        }
+      },
+      this.ctx.namespace
+    );
+  }
+
+  /**
+   * Resolve a Choice option's SHAPE-level TS type reference for
+   * `emitChoiceShapeTypeDeclaration` — identical dispatch to
+   * `resolveChoiceOptionTypeExpr` except a Data target resolves to its
+   * `<Name>Shape` structural type. Preserves that function's pre-existing
+   * Data-only special case (Enum/Choice targets stay bare, matching
+   * `emitChoiceShapeTypeDeclaration`'s doc comment) — now driven through the
+   * resolved terminal node instead of the immediate direct ref.
+   */
+  private resolveChoiceOptionShapeTypeExpr(typeCall: TypeCall | undefined, diagnosticLabel: string): string {
+    return resolveTypeCallTarget(
+      typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no TypeScript mapping; emitting unknown`
+          });
+          return 'unknown';
+        },
+        onEnum: (node) => node.name,
+        onData: (node) => `${node.name}Shape`,
+        onChoice: (node) => node.name,
+        onUnresolved: (refText) => {
+          if (refText) return refText;
+          this.reportUnresolvedReference(diagnosticLabel, undefined, 'unknown');
+          return 'unknown';
+        }
+      },
+      this.ctx.namespace
+    );
+  }
+
+  /**
    * Emit `export type <ChoiceName> = { option1: Type1 } | { option2: Type2 } | ...;`
    * — a key-presence discriminated union (not `z.discriminatedUnion`-style
    * literal-tag discrimination; CDM Choice instances are encoded as an
@@ -937,10 +1067,17 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const name = choice.name;
     const options = choice.attributes
       .map((option) => {
+        // FIELD KEY: derived from the DIRECT/immediate reference's name,
+        // never the alias-chased terminal target — established convention
+        // (matches preview-schema.ts's buildChoiceOptionField and
+        // zod-emitter's emitChoiceSchema); an option typed via a type alias
+        // keeps its author-given key, not the alias's resolved target's name.
         const optionTypeRef = option.typeCall?.type;
         const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
         const fieldName = choiceOptionFieldName(optionTypeName);
-        return `{ ${fieldName}: ${optionTypeName} }`;
+        // VALUE TYPE: chases through any RosettaTypeAlias chain.
+        const valueType = this.resolveChoiceOptionTypeExpr(option.typeCall, fieldName);
+        return `{ ${fieldName}: ${valueType} }`;
       })
       .join(' | ');
     if (options === '') {
@@ -970,10 +1107,14 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const name = choice.name;
     const options = choice.attributes
       .map((option) => {
+        // FIELD KEY: same direct/immediate-name convention as
+        // emitChoiceTypeDeclaration — see that function's doc comment.
         const optionTypeRef = option.typeCall?.type;
         const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
         const fieldName = choiceOptionFieldName(optionTypeName);
-        const valueType = optionTypeRef?.ref && isData(optionTypeRef.ref) ? `${optionTypeName}Shape` : optionTypeName;
+        // VALUE TYPE: chases through any RosettaTypeAlias chain; Data targets
+        // resolve to `<Name>Shape`.
+        const valueType = this.resolveChoiceOptionShapeTypeExpr(option.typeCall, fieldName);
         return `{ ${fieldName}: ${valueType} }`;
       })
       .join(' | ');

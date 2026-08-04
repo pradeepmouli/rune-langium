@@ -31,7 +31,8 @@ import {
   type RosettaRule,
   type RosettaReport,
   type Annotation,
-  type RosettaExternalFunction
+  type RosettaExternalFunction,
+  type TypeCall
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
@@ -376,6 +377,28 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       symbols.add(schemaName);
     };
 
+    // Route every import-candidate scan through the same `resolveTypeCallTarget`
+    // dispatch the VALUE-emitting code uses (resolveTypeExpr/emitTypeAliasSchema/
+    // emitChoiceSchema), so import-tracking can never drift from value-emission
+    // again: a `TypeCall` that resolves through a RosettaTypeAlias chain (any
+    // number of hops) to a cross-namespace Data/Enum/Choice is tracked against
+    // the TERMINAL resolved node, not the immediate (possibly same-namespace
+    // alias) reference.
+    const trackTypeCallImport = (typeCall: TypeCall | undefined): void => {
+      resolveTypeCallTarget(
+        typeCall,
+        this.typeIndex,
+        {
+          onPrimitive: () => undefined,
+          onEnum: (node) => trackRef(node, `${node.name}Schema`),
+          onData: (node) => trackRef(node, `${node.name}Schema`),
+          onChoice: (node) => trackRef(node, `${node.name}Schema`),
+          onUnresolved: () => undefined
+        },
+        this.ctx.namespace
+      );
+    };
+
     // Check data type inheritance and attribute references
     for (const data of this.ctx.dataByName.values()) {
       // Check superType
@@ -412,31 +435,31 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
           }
         }
       }
-      // Check attribute types
+      // Check attribute types — chases RosettaTypeAlias chains via
+      // resolveTypeCallTarget so an attribute typed via an alias that
+      // resolves to a cross-namespace Data/Enum/Choice is tracked against
+      // the terminal target, matching resolveTypeExpr's value emission.
       for (const attr of data.attributes) {
-        const attrTypeRef = attr.typeCall?.type?.ref;
-        if (attrTypeRef && isData(attrTypeRef)) {
-          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-        } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
-          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-        } else if (attrTypeRef && isChoice(attrTypeRef)) {
-          // Item 3 (docs/superpowers/specs/2026-07-02-emitter-crossns-
-          // hardening-design.md): a Choice-typed attribute resolves to
-          // `<Choice>Schema` via resolveTypeExpr (isChoice branch, W2) —
-          // same $import convention as Data/Enum attribute types, was
-          // previously untracked.
-          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-        }
+        trackTypeCallImport(attr.typeCall);
       }
     }
 
-    // Check type alias references
+    // Check type alias references — chases the alias's own RHS through any
+    // further alias links via resolveTypeCallTarget (a 2+ hop chain), matching
+    // emitTypeAliasSchema's value emission, instead of only tracking the
+    // alias's immediate direct ref (which for a 2+ hop chain would track the
+    // wrong, intermediate alias name).
     for (const alias of this.ctx.typeAliasByName.values()) {
-      const typeRef = alias.typeCall?.type?.ref;
-      if (typeRef && isData(typeRef)) {
-        trackRef(typeRef, `${typeRef.name}Schema`);
-      } else if (typeRef && isRosettaEnumeration(typeRef)) {
-        trackRef(typeRef, `${typeRef.name}Schema`);
+      trackTypeCallImport(alias.typeCall);
+    }
+
+    // Check Choice option type references — mirrors the attribute loop above;
+    // previously never scanned at all, so a Choice option typed as (or via an
+    // alias to) a cross-namespace Data/Enum/Choice produced a correct value
+    // reference (emitChoiceSchema) but no import line.
+    for (const choice of this.ctx.choiceByName.values()) {
+      for (const option of choice.attributes) {
+        trackTypeCallImport(option.typeCall);
       }
     }
 
@@ -498,10 +521,29 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     const schemaName = `${name}Schema`;
 
     const optionSchemas = choice.attributes.map((option) => {
+      // FIELD KEY: derived from the DIRECT/immediate reference's name, never
+      // the alias-chased terminal target — established convention (matches
+      // preview-schema.ts's buildChoiceOptionField); an option typed via a
+      // type alias keeps its author-given key (e.g. `myAlias`), not the
+      // alias's resolved target's name (e.g. `someData`).
       const optionTypeRef = option.typeCall?.type;
       const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
       const fieldName = choiceOptionFieldName(optionTypeName);
-      const optionSchemaExpr = this.ctx.builtinTypeMap[optionTypeName] ?? `${optionTypeName}Schema`;
+      // SCHEMA/TYPE REFERENCE: chases through any RosettaTypeAlias chain via
+      // resolveTypeCallTarget, same as resolveTypeExpr resolves an attribute's
+      // type reference.
+      const optionSchemaExpr = resolveTypeCallTarget(
+        option.typeCall,
+        this.typeIndex,
+        {
+          onPrimitive: (basicTypeName) => this.ctx.builtinTypeMap[basicTypeName] ?? `${basicTypeName}Schema`,
+          onEnum: (node) => `${node.name}Schema`,
+          onData: (node) => `${node.name}Schema`,
+          onChoice: (node) => `${node.name}Schema`,
+          onUnresolved: (refText) => `${refText ?? 'unknown'}Schema`
+        },
+        this.ctx.namespace
+      );
       // .strict(): non-strict objects allow unknown keys, so {cash, commodity}
       // would satisfy the first arm — strict arms make multi-option objects
       // fail every arm, enforcing the exactly-one-of Choice semantics.
