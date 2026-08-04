@@ -138,7 +138,15 @@ export default defineConfig(() => {
       // STUDIO_DEV_PORT for both this config and playwright.config.ts.
       port: Number(process.env.STUDIO_DEV_PORT) || 5173,
       host: '0.0.0.0',
-      allowedHosts: true
+      allowedHosts: true,
+      // Replit dev: vite serves on :5000 directly; forward /api to the
+      // wrangler pages dev server (:8788) which hosts the Pages Functions.
+      proxy: {
+        '/api': {
+          target: 'http://localhost:8788',
+          changeOrigin: false
+        }
+      }
     },
     build: {
       target: 'es2020',

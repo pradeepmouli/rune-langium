@@ -1,0 +1,1 @@
+- [Studio dev:full local setup](studio-dev-full.md) — four services (vite:5000, lsp:8790, mirror:8789, pages:8788) need specific env/config to connect in Replit; re-apply after any hard reset to origin.
