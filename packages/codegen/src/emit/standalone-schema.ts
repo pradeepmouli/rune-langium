@@ -4,9 +4,15 @@
 import type { LangiumDocument } from 'langium';
 import { isData, isChoice, isRosettaEnumeration } from '@rune-langium/core';
 import type { Data, Choice, RosettaEnumeration, RosettaTypeAlias } from '@rune-langium/core';
-import type { NamespaceIndex } from '../preview-schema.js';
+import { buildNamespaceIndexes, type NamespaceIndex } from '../preview-schema.js';
 import { resolveTypeCallTarget, nodeSourceUri } from './type-ref-resolver.js';
 import type { TypeIndexLookup, TypeIndexEntry, TypeResolutionVisitor } from './type-ref-resolver.js';
+import { emitNamespace } from './zod-emitter.js';
+import type { NamespaceWalkResult } from './namespace-walker.js';
+import { findCyclicTypes } from '../cycle-detector.js';
+import type { TypeReferenceGraph } from '../cycle-detector.js';
+import { topoSort } from '../topo-sort.js';
+import type { GeneratorDiagnostic } from '../types.js';
 
 export interface ResolvedTarget {
   kind: 'data' | 'choice' | 'enum' | 'typeAlias';
@@ -152,4 +158,138 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
   }
 
   return { dataByName, choiceByName, enumByName, typeAliasByName, docs: Array.from(docs) };
+}
+
+/**
+ * Build the `Data`/`Choice` dependency graph for emit-order purposes, scoped
+ * to exactly the closure's own members. `cycle-detector.ts`'s own
+ * `buildTypeReferenceGraph` is NOT reused here: it reads `attr.typeCall?.type?.ref`
+ * directly, so an attribute typed via a `RosettaTypeAlias` (the alias node
+ * itself is neither `Data` nor `Choice`) produces no edge at all — silently
+ * dropping exactly the dependency that determines correct `const` declaration
+ * order in the synthesized script. Chasing every attribute/option/superType
+ * through `resolveTypeCallTarget` (already used for closure discovery above)
+ * fixes this without touching the shared `cycle-detector.ts`, which other
+ * (non-alias-blind-sensitive) callers still rely on unchanged.
+ */
+function buildClosureReferenceGraph(closure: StandaloneClosure, globalIndex: TypeIndexLookup): TypeReferenceGraph {
+  const nodes: string[] = [];
+  const edges = new Map<string, string[]>();
+
+  const ensureNode = (name: string): void => {
+    if (!edges.has(name)) {
+      nodes.push(name);
+      edges.set(name, []);
+    }
+  };
+
+  const addEdge = (from: string, to: string): void => {
+    ensureNode(from);
+    ensureNode(to);
+    edges.get(from)!.push(to);
+  };
+
+  const dependencyVisitor = (from: string): TypeResolutionVisitor<void> => ({
+    onPrimitive: () => undefined,
+    onEnum: () => undefined,
+    onData: (node) => addEdge(from, node.name),
+    onChoice: (node) => addEdge(from, node.name),
+    onUnresolved: () => undefined
+  });
+
+  for (const data of closure.dataByName.values()) {
+    ensureNode(data.name);
+    const superRef = data.superType?.ref;
+    if (superRef) addEdge(data.name, superRef.name);
+    for (const attr of data.attributes) {
+      resolveTypeCallTarget(attr.typeCall, globalIndex, dependencyVisitor(data.name), nodeSourceUri(data, ''));
+    }
+  }
+
+  for (const choice of closure.choiceByName.values()) {
+    ensureNode(choice.name);
+    for (const option of choice.attributes) {
+      resolveTypeCallTarget(option.typeCall, globalIndex, dependencyVisitor(choice.name), nodeSourceUri(choice, ''));
+    }
+  }
+
+  return { nodes, edges };
+}
+
+/**
+ * Matches exactly the cross-namespace import lines `collectCrossNamespaceImports`
+ * (zod-emitter.ts) emits — always a single line of the form
+ * `import { Sym1, Sym2 } from '<path>.zod.js';`. It compares the REAL
+ * namespace each referenced AST node's `$container` lives in against the
+ * synthetic model's single `namespace` label, which can never match for a
+ * closure spanning more than one real namespace — every such line is
+ * necessarily wrong here (its target is, by construction of the closure,
+ * ALREADY declared locally in this same script) and is stripped rather than
+ * worked around by threading a "local" concept through zod-emitter.ts,
+ * which this plan leaves unmodified.
+ */
+const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';\r?\n?/gm;
+
+/**
+ * Emit one target type's real Zod schema as a self-contained script — the
+ * target's transitive closure (Task 2) assembled into a single synthetic
+ * `NamespaceWalkResult` and rendered through the real, unmodified
+ * `emitNamespace()` (zod target), never a hand-rolled approximation of it
+ * (per the repo's DRY precept).
+ *
+ * The returned `code` is real TypeScript (types, `export`, and — for cyclic
+ * types — an `interface` predeclaration all survive, unmodified), with one
+ * exception: the spurious cross-namespace `import` lines described above are
+ * stripped, since every symbol they'd reference is already declared locally
+ * in this same script. The genuine `import { z } from 'zod';` header line is
+ * NOT stripped — turning this into directly `new Function`-evaluable
+ * JavaScript (erasing types/`export`/the cyclic-type `interface` block, and
+ * binding `z`) is left to the caller, exactly as `RUNTIME_HELPER_JS_SOURCE`
+ * is already caller-prepended rather than bundled into this return value.
+ */
+export function emitStandaloneZodSchema(
+  documents: LangiumDocument[],
+  targetId: string
+): { code: string; diagnostics: GeneratorDiagnostic[] } {
+  const namespaceIndexes = buildNamespaceIndexes(documents);
+  const target = findTargetNode(namespaceIndexes, targetId);
+  if (!target) {
+    return {
+      code: '',
+      diagnostics: [
+        {
+          severity: 'error',
+          code: 'unknown-target',
+          message: `Target '${targetId}' was not found in the loaded documents.`
+        }
+      ]
+    };
+  }
+
+  const globalIndex = buildGlobalTypeIndex(namespaceIndexes);
+  const closure = computeStandaloneClosure(target, globalIndex);
+
+  const graph = buildClosureReferenceGraph(closure, globalIndex);
+  const cyclicTypes = findCyclicTypes(graph);
+  const emitOrder = topoSort(graph, cyclicTypes);
+
+  const syntheticModel: NamespaceWalkResult = {
+    docs: closure.docs,
+    namespace: '__standalone__',
+    dataByName: closure.dataByName,
+    enumByName: closure.enumByName,
+    typeAliasByName: closure.typeAliasByName,
+    choiceByName: closure.choiceByName,
+    rulesByName: new Map(),
+    reportsByName: new Map(),
+    annotationsByName: new Map(),
+    libraryFuncsByName: new Map(),
+    emitOrder,
+    cyclicTypes,
+    graph
+  };
+
+  const result = emitNamespace(syntheticModel, {}, { namespaces: new Map() });
+  const code = result.content.replace(CROSS_NAMESPACE_IMPORT_LINE, '');
+  return { code, diagnostics: result.diagnostics };
 }
