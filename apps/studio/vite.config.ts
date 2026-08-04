@@ -144,7 +144,8 @@ export default defineConfig(() => {
       proxy: {
         '/api': {
           target: 'http://localhost:8788',
-          changeOrigin: false
+          changeOrigin: false,
+          ws: true
         }
       }
     },

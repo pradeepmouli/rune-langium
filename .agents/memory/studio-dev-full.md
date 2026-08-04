@@ -7,9 +7,9 @@ description: Config required for all four dev:full services to connect in the Re
 
 Upstream assumes vite on :5173; Replit preview needs :5000. Five local-only config changes make the full stack (vite + lsp-worker + curated-mirror + pages functions) work:
 
-1. `apps/studio/wrangler.toml` — `ALLOWED_ORIGIN` must include BOTH `http://localhost:5000` and `http://127.0.0.1:5000` (browser origin arrives as 127.0.0.1). Missing → 403 `origin` check on `/api/lsp/session`.
+1. `apps/studio/wrangler.toml` — `ALLOWED_ORIGIN` must include `http://localhost:5000`, `http://127.0.0.1:5000`, AND `https://*.replit.dev` (webview/canvas iframe sends the replit.dev origin; the matcher in functions/lib/lsp-auth.ts supports `scheme://*.suffix` wildcards, so the wildcard survives domain rotation). Missing → 403 `origin_not_allowed` on `/api/lsp/session`.
 2. `apps/studio/.dev.vars` + `apps/lsp-worker/.dev.vars` — matching `SESSION_SIGNING_KEY` (any hex string, must be identical in both). Missing → 500 `signing_key_not_configured`.
-3. `apps/studio/vite.config.ts` — `server.proxy` forwarding `/api` → `http://localhost:8788` (the wrangler pages dev server). Missing → 404/502 on session mint.
+3. `apps/studio/vite.config.ts` — `server.proxy` forwarding `/api` → `http://localhost:8788` (the wrangler pages dev server) with `ws: true` (LSP uses WebSocket upgrade on `/api/lsp/ws`). Missing proxy → 404/502 on session mint; missing `ws: true` → session mints OK but WS connect fails ("Pages Function LSP step failed" in ws-transport).
 4. `apps/studio/package.json` — `predev:full` without `pnpm build` (workflow already builds), `dev:full` with `--kill-others-on-fail` instead of `-k`.
 5. Root `package.json` — remove `"packageManager"` field (corepack under Replit nix causes OOM); workflow installs pnpm globally via npm instead.
 6. Workflow must end with `dev:full`, not `dev` (vite alone → no pages functions → 502).

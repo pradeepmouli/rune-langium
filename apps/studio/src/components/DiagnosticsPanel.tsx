@@ -268,7 +268,7 @@ export const DiagnosticsPanel = withInstrumentation(
 );
 
 function CollapseUtilitiesButton() {
-  const { toggleUtilities } = useUtilityTrayControls();
+  const { toggleUtilities } = useContext(UtilityTrayContext);
   return (
     <button
       type="button"
