@@ -348,6 +348,93 @@ type Trade:
   });
 });
 
+describe('SqlNamespaceEmitter — type-alias-to-Data/Enum resolution', () => {
+  it('emits an FK column + constraint for a type-alias-to-Data attribute', async () => {
+    const out = await gen(`namespace test.aliasdata
+
+type Bar:
+  x string (0..1)
+
+typeAlias MyAlias: Bar
+
+type Foo:
+  bar MyAlias (0..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/"bar_id" BIGINT/);
+    expect(ddl).toMatch(/FOREIGN KEY \("bar_id"\) REFERENCES "Bar" ?\("id"\)/);
+    expect(out[0]!.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(false);
+  });
+
+  it('emits a CHECK constraint for a type-alias-to-Enum attribute', async () => {
+    const out = await gen(`namespace test.aliasenum
+
+enum Color:
+  Red
+  Green
+
+typeAlias MyColor: Color
+
+type Paint:
+  color MyColor (1..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/"color" TEXT NOT NULL/);
+    expect(ddl).toMatch(/CHECK\s*\(\s*"color" IN \('Red', 'Green'\)\s*\)/);
+    expect(out[0]!.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(false);
+  });
+
+  it('emits a correctly-FK-joined table for a MULTI-VALUED type-alias-to-Data attribute', async () => {
+    const out = await gen(`namespace test.aliasmulti
+
+type Leg:
+  rate number (1..1)
+
+typeAlias LegAlias: Leg
+
+type Swap:
+  legs LegAlias (0..*)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toContain('CREATE TABLE "Swap_legs"');
+    expect(ddl).toMatch(/"swap_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/"leg_id" BIGINT NOT NULL/);
+    expect(ddl).toMatch(/FOREIGN KEY \("leg_id"\) REFERENCES "Leg" ?\("id"\)/);
+  });
+
+  it('chases a 2-hop type-alias chain down to a Data type (not just 1-hop)', async () => {
+    const out = await gen(`namespace test.aliaschain
+
+type Bar:
+  x string (0..1)
+
+typeAlias InnerAlias: Bar
+typeAlias OuterAlias: InnerAlias
+
+type Foo:
+  bar OuterAlias (0..1)
+`);
+    const ddl = out[0]!.content;
+    assertParses(ddl);
+    expect(ddl).toMatch(/"bar_id" BIGINT/);
+    expect(ddl).toMatch(/FOREIGN KEY \("bar_id"\) REFERENCES "Bar" ?\("id"\)/);
+  });
+
+  it('preserves the exact unresolved-ref diagnostic wording for a genuinely unresolved type', async () => {
+    const out = await gen(`namespace test.unresolvedwording
+
+type Trade:
+  bar MissingType (1..1)
+`);
+    const diag = out[0]!.diagnostics.find((d) => d.code === 'unresolved-ref');
+    expect(diag).toBeDefined();
+    expect(diag!.message).toBe("Attribute 'Trade.bar': type 'MissingType' did not resolve; emitting TEXT.");
+  });
+});
+
 describe('SqlNamespaceEmitter — cross-namespace + identifier length (proactive hardening)', () => {
   it('warns when a type extends a parent defined in another namespace', async () => {
     const { RuneDsl } = createRuneDslServices();
