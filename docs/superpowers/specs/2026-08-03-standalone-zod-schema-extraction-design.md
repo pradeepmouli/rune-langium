@@ -52,7 +52,11 @@ The runtime helper bundle (`runeCheckOneOf`, `runeExtendChoice`, etc.) required 
 
 ### Closure computation
 
-Reuses the existing `buildTypeReferenceGraph`/cycle-detector infrastructure `preview-schema.ts` already uses for whole-graph cycle detection (`findCyclicTypes(buildTypeReferenceGraph(docs, qualifiedTypeId))`) — a reachability walk from the target's node over that graph, rather than a new hand-rolled traversal. This graph is built once per extraction call from the full multi-namespace document set (mirroring how `preview-schema.ts`'s `generatePreviewSchemas` already builds it once per call, not once per target).
+`buildTypeReferenceGraph` (the graph `preview-schema.ts` already builds for whole-graph cycle detection) turns out to be the wrong tool for discovering the closure itself: it only walks `Data`/`Choice` nodes and their `extends`/attribute-type edges, and an edge is only added when the attribute's resolved `.ref` is directly a `Data` or `Choice` — it never chases through a `RosettaTypeAlias`, and never includes `RosettaEnumeration`/`RosettaTypeAlias` as graph nodes at all. Using it as-is for closure discovery would silently miss every alias-typed dependency and every Enum.
+
+Closure discovery is instead a small reachability walk (BFS from the target node) that calls `resolveTypeCallTarget` on every attribute/choice-option `typeCall` — since that resolver already transparently chases alias chains and reports only the terminal `Data`/`Enum`/`Choice`, the walker never needs its own alias-aware logic. `Data.superType` is walked directly (not through `resolveTypeCallTarget`) since it's grammar-typed as a direct `Data`/`Choice` reference, never an alias.
+
+`buildTypeReferenceGraph`/`findCyclicTypes`/`topoSort` ARE still reused, but for their original purpose only: computing a correct emit order and cycle set for the closure's `Data`/`Choice` subset once discovery is complete, exactly mirroring what `namespace-walker.ts`'s own `walkNamespace` already does for a real namespace.
 
 ### Synthetic namespace assembly
 
