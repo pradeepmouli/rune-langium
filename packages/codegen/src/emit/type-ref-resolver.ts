@@ -59,7 +59,7 @@ export interface TypeIndexLookup {
   typeAliasByName: ReadonlyMap<string, TypeIndexEntry<RosettaTypeAlias>>;
 }
 
-function nodeSourceUri(node: { $container?: unknown } | undefined, fallback: string): string {
+export function nodeSourceUri(node: { $container?: unknown } | undefined, fallback: string): string {
   const withDoc = node as { $container?: { $document?: { uri?: { toString(): string } } } } | undefined;
   return withDoc?.$container?.$document?.uri?.toString() ?? fallback;
 }
