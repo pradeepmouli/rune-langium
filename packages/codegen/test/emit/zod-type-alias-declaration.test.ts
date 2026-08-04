@@ -72,7 +72,13 @@ typeAlias MyAlias: Bar
     const doc = await parseSource(source);
     const model = walkNamespace([doc], 'test.aliasDeclDataRef');
     const output = emitNamespace(model, {});
-    expect(output.content).toContain('export const MyAliasSchema = BarSchema;');
+    // z.lazy()-wrapped, not a bare reference: PR #469 live review finding
+    // (2026-08-04) — emitNamespaceWithContract emits every type alias
+    // unconditionally BEFORE any Data/Choice declaration, so a bare
+    // `MyAliasSchema = BarSchema` reference is a genuine TDZ ReferenceError
+    // at evaluation time, regardless of whether Bar happens to be cyclic.
+    expect(output.content).toContain('export const MyAliasSchema = z.lazy(() => BarSchema);');
+    expect(output.content).not.toContain('export const MyAliasSchema = BarSchema;');
     expect(output.content).not.toContain('export const MyAliasSchema = z.unknown();');
   });
 });

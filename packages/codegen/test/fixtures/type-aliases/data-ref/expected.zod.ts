@@ -32,7 +32,7 @@ const runeExtendChoice = <T extends z.ZodUnion<readonly z.ZodObject[]>>(choice: 
   z.union(choice.options.map((arm) => arm.extend(shape)));
 
 
-export const HomeAddressSchema = AddressSchema;
+export const HomeAddressSchema = z.lazy(() => AddressSchema);
 export type HomeAddress = z.infer<typeof HomeAddressSchema>;
 export const AddressSchema = z.object({
   street: z.string(),

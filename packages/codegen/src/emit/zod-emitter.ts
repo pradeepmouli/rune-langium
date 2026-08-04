@@ -1084,11 +1084,19 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
           return 'z.unknown()';
         },
         onEnum: (node) => `${node.name}Schema`,
-        // '' as owner: a type alias's own declaration is never itself
-        // wrapped in z.lazy() (same reasoning as emitChoiceSchema's option
-        // loop above) — always wrap when the target is cyclic.
-        onData: (node) => this.schemaRefExpr(node.name, ''),
-        onChoice: (node) => this.schemaRefExpr(node.name, ''),
+        // ALWAYS wrap Data/Choice targets in z.lazy() — unconditionally,
+        // not `schemaRefExpr`'s cyclic-only check. `emitNamespaceWithContract`
+        // emits every type alias unconditionally BEFORE any Data/Choice
+        // declaration (Enums → TypeAliases → Data prelude → Data/Choice via
+        // topo-sorted emitOrder), so a type alias's reference to ANY
+        // Data/Choice — cyclic or not — is a structural forward reference
+        // every single time, not something `lazyTypes` tracks at all
+        // (`lazyTypes` only tracks cycles among Data/Choice's OWN
+        // topo-sorted emit order, which type aliases sit entirely outside
+        // of). Enum targets need no such wrapping: Enums are emitted before
+        // type aliases too, so `onEnum` above stays a bare reference.
+        onData: (node) => `z.lazy(() => ${node.name}Schema)`,
+        onChoice: (node) => `z.lazy(() => ${node.name}Schema)`,
         // Pre-migration behavior: a totally unresolved RHS (not a builtin,
         // not a known Enum/Data/Choice/alias) falls back to `z.unknown()`
         // with no diagnostic — verbatim, no optimistic `${refText}Schema`
