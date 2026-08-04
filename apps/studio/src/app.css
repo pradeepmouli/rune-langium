@@ -2350,6 +2350,37 @@ html {
     color var(--motion-fast);
 }
 
+/* Buttons — universal hover/press feedback for every custom-styled button
+ * in the studio and the embedded visual-editor package: node nav buttons in
+ * the namespace explorer / structure view / inspector, codegen actions,
+ * paneswitch segments, layout presets, chevrons, etc.
+ *
+ * Design-system buttons ([data-slot='button']) are excluded — they ship
+ * their own tuned transition + hover-lift. `:where()` keeps specificity at
+ * (0,1,0) so any component rule with a tailored transition still wins. */
+.studio-app :where(button:not([data-slot='button'])) {
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    opacity var(--motion-fast),
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Subtle press-down on pointer-down. Scoped with :where() on the inner
+ * compound so it stays easy to override, and skipped for disabled buttons. */
+.studio-app :where(button:not([data-slot='button']):not(:disabled)):active {
+  transform: scale(0.96);
+}
+
+/* Chevron/disclosure icons rotate smoothly (structure-view row expanders,
+ * tree toggles) — most already swap icon glyphs; those that rotate via
+ * transform get eased. */
+.studio-app :where(.studio-app__chevron, [class*='__chevron'], [class*='__toggle-icon']) {
+  transition: transform var(--motion-fast);
+}
+
 /* Reduced motion — collapse all animation/transition to near-zero.
  * Placed last in the sheet so it wins the cascade. JS-driven tweens
  * (utility tray) check the same media query before animating. */
