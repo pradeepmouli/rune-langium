@@ -572,7 +572,21 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
           // match a real type name in lazyTypes.
           onData: (node) => this.schemaRefExpr(node.name, ''),
           onChoice: (node) => this.schemaRefExpr(node.name, ''),
-          onUnresolved: (refText) => `${refText ?? 'unknown'}Schema`
+          // Mirrors resolveTypeExpr's onUnresolved (attribute side): an
+          // unresolved Choice-option reference previously fell back to a
+          // guessed schema name with no diagnostic at all, unlike the
+          // attribute-reference case just above. Label follows
+          // xsd-emitter.ts's existing `${choice.name} option` convention for
+          // the same non-attribute (ChoiceOption has no `.name`) fallback.
+          onUnresolved: (refText) => {
+            const label = `${choice.name} option`;
+            if (refText) {
+              this.reportUnresolvedReference(label, refText, `${refText}Schema`);
+              return `${refText}Schema`;
+            }
+            this.reportUnresolvedReference(label, undefined, 'unknownSchema');
+            return 'unknownSchema';
+          }
         },
         this.ctx.namespace
       );
