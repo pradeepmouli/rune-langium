@@ -48,6 +48,7 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
 import { UtilityTrayContext } from './utility-tray-context.js';
+import { PerspectiveHeading } from './perspectives/PerspectiveHeading.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
@@ -450,6 +451,7 @@ export const DockShell = withInstrumentation(
           className="studio-layout-presets"
           data-testid="studio-layout-presets"
         >
+          <PerspectiveHeading perspectiveId="explore" />
           <div className="studio-layout-presets__group studio-layout-presets__group--actions">
             <Button
               type="button"

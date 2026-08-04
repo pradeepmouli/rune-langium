@@ -20,6 +20,7 @@ import { ExplorePerspective } from '../ExplorePerspective.js';
 import type { WorkspaceKind } from '../../workspace/persistence.js';
 import type { WorkspaceFile } from '../../services/workspace.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
+import { PerspectiveHeading } from './PerspectiveHeading.js';
 
 interface Props {
   hasWorkspace: boolean;
@@ -59,11 +60,22 @@ export const PerspectiveHost = withInstrumentation(
         >
           <ExplorePerspective />
         </div>
-        {effective === 'workspaces' && <WorkspacesPerspective />}
-        {effective === 'git' && <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />}
-        {effective === 'export' && <ExportPerspective files={files} />}
-        {effective === 'prototype' && <PrototypePerspective />}
-        {effective === 'settings' && <SettingsPerspective />}
+        {effective !== 'explore' && (
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
+            {/* Same chrome row Explore renders inside DockShell (studio-layout-presets),
+                so the perspective heading sits in the same location everywhere. */}
+            <div className="studio-layout-presets" data-testid="perspective-header-row">
+              <PerspectiveHeading perspectiveId={effective} />
+            </div>
+            <div className="min-h-0 min-w-0 flex-1">
+              {effective === 'workspaces' && <WorkspacesPerspective />}
+              {effective === 'git' && <GitSyncPerspective workspaceId={workspaceId} workspaceKind={workspaceKind} />}
+              {effective === 'export' && <ExportPerspective files={files} />}
+              {effective === 'prototype' && <PrototypePerspective />}
+              {effective === 'settings' && <SettingsPerspective />}
+            </div>
+          </div>
+        )}
       </div>
     );
   },
