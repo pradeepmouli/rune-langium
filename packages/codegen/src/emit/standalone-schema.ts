@@ -228,7 +228,7 @@ function buildClosureReferenceGraph(closure: StandaloneClosure, globalIndex: Typ
  * worked around by threading a "local" concept through zod-emitter.ts,
  * which this plan leaves unmodified.
  */
-const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';\r?\n?/gm;
+const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';(\r?\n){0,2}/gm;
 
 /**
  * Emit one target type's real Zod schema as a self-contained script — the
@@ -246,6 +246,15 @@ const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';\r?
  * JavaScript (erasing types/`export`/the cyclic-type `interface` block, and
  * binding `z`) is left to the caller, exactly as `RUNTIME_HELPER_JS_SOURCE`
  * is already caller-prepended rather than bundled into this return value.
+ *
+ * Caveat inherited from `namespace-emitter.ts` (pre-existing there, not
+ * introduced by this function): if `targetId` itself resolves to a
+ * `RosettaTypeAlias` whose RHS is a `Data`/`Choice` (not a primitive or
+ * `Enum`), the emitted alias `const` can reference its RHS `const` before
+ * that RHS is declared — type aliases are always emitted before the
+ * topo-sorted `Data`/`Choice` block, so evaluating the result throws a TDZ
+ * `ReferenceError`. See `test/fixtures/type-aliases/data-ref/expected.zod.ts`
+ * for the same defect in ordinary per-namespace output.
  */
 export function emitStandaloneZodSchema(
   documents: LangiumDocument[],

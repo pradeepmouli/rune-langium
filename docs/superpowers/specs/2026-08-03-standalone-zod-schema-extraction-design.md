@@ -1,6 +1,6 @@
 # Standalone Zod Schema Extraction Design
 
-**Goal:** Add a codegen-package function that produces one target type's real, generated Zod schema as a single self-contained, import-free script — the missing prerequisite for retiring `apps/studio/src/services/preview-validator.ts`'s hand-rolled structural validator/renderer in favor of the actual generated schema.
+**Goal:** Add a codegen-package function that produces one target type's real, generated Zod schema as a single self-contained script, free of *cross-namespace* imports (a genuine `import { z } from 'zod';` header line remains, and the output is real TypeScript requiring a caller-side type-erasure pass before evaluation) — the missing prerequisite for retiring `apps/studio/src/services/preview-validator.ts`'s hand-rolled structural validator/renderer in favor of the actual generated schema.
 
 **Architecture:** Compute the transitive closure of every type a target depends on (same- and cross-namespace), assemble a synthetic single-namespace view over those real AST nodes, and run the existing, unmodified `emitNamespace()` (zod target) against it. Zero changes to `zod-emitter.ts` itself.
 
@@ -76,8 +76,8 @@ Unresolved-reference diagnostics flow through exactly as `emitNamespace()` alrea
 
 Fixture-driven tests in `packages/codegen/test/emit/standalone-schema.test.ts` asserting:
 
-- The output string contains no `import` statements, for a target with real cross-namespace dependencies.
-- The script genuinely evaluates via `new Function()` + `RUNTIME_HELPER_JS_SOURCE`, in a Node-side test harness — proving real runtime correctness (a schema object that actually parses/rejects sample data), not just string shape.
+- The output string contains no *cross-namespace* `import` statements, for a target with real cross-namespace dependencies — the genuine `import { z } from 'zod';` header line is expected and still present.
+- The script genuinely evaluates via `new Function()` + `RUNTIME_HELPER_JS_SOURCE`, in a Node-side test harness — proving real runtime correctness (a schema object that actually parses/rejects sample data), not just string shape. Since the output is real TypeScript (types, `export`, cyclic-type `interface` predeclarations), the test harness first runs a TS-erasure pass (`ts.transpileModule`), matching `codegen-worker.ts`'s existing `stripTypeAnnotations`-before-eval precedent for generated `func` bodies — this erasure is the caller's responsibility, not something `emitStandaloneZodSchema` does itself.
 - A cross-namespace alias-to-Data dependency case specifically (the exact defect class the `unified-type-reference-resolution` branch just fixed) — a real `.safeParse()` call against both valid and invalid sample data.
 - A target with no dependencies at all (single scalar-only Data type) — the trivial/degenerate case.
 - Diagnostics for a genuinely unresolvable reference within the closure, and for an unknown `targetId`.
