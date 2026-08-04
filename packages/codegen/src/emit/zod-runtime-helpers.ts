@@ -36,3 +36,17 @@ export const RUNE_EXTEND_CHOICE_HELPER_SOURCE: string =
 export const RUNE_EXTEND_CHOICE_HELPER_SIDECAR_SOURCE: string =
   `export const runeExtendChoice = <T extends z.ZodUnion<readonly z.ZodObject[]>>(choice: T, shape: z.ZodRawShape) =>\n` +
   `  z.union(choice.options.map((arm) => arm.extend(shape)));`;
+
+/**
+ * Plain JavaScript equivalent of `RUNE_EXTEND_CHOICE_HELPER_SOURCE` — no
+ * type annotations, mirroring `../helpers.ts`'s `RUNTIME_HELPER_JS_SOURCE`
+ * twin of `RUNTIME_HELPER_SOURCE`. Needed because `standalone-schema.ts`'s
+ * `emitStandaloneZodSchema` produces directly `new Function`-evaluable
+ * output for a target closure that may contain a Data-extends-Choice
+ * usage, and `RUNTIME_HELPER_JS_SOURCE` deliberately excludes this helper
+ * (it's Zod-specific — `../helpers.ts`'s own helpers are shared with the
+ * zero-Zod-dependency TypeScript target, so a `z`-typed helper cannot live
+ * there without breaking that invariant).
+ */
+export const RUNE_EXTEND_CHOICE_HELPER_JS_SOURCE: string =
+  `const runeExtendChoice = (choice, shape) =>\n` + `  z.union(choice.options.map((arm) => arm.extend(shape)));`;

@@ -132,3 +132,5 @@ export function generatePreviewSchemas(
 ) {
   return runGeneratePreviewSchemas(documents, options);
 }
+
+export { emitStandaloneZodSchema } from './emit/standalone-schema.js';
