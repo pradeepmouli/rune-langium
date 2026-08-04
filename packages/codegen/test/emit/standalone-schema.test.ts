@@ -624,6 +624,58 @@ describe('emitStandaloneZodSchema', () => {
   );
 
   /**
+   * PR #470 final-review finding (2026-08-04, bot comment id 3715339833,
+   * P1) — the collision guard above only compared within the SAME kind's
+   * own bare-name map (dataByName vs. dataByName), so a closure reaching
+   * `ns.a.Common` as an Enum and `ns.b.Common` as a Data was invisible:
+   * `emitNamespace` emits BOTH as `export const CommonSchema`, one shared
+   * symbol namespace across every kind — two declarations of the same
+   * `const` either fails TS erasure or binds ambiguously at evaluation
+   * time. Now checked against one shared `emittedSchemaNames` map instead
+   * of four separate per-kind ones.
+   */
+  skipIfNodeLt22(
+    'refuses to emit (name-collision diagnostic) for a CROSS-KIND collision (Enum vs. Data) across namespaces',
+    async () => {
+      const docs = await parseModels([
+        `
+      namespace "test.collideClosureKind.a"
+      version "1"
+
+      enum Common: FOO BAR
+
+      type Left:
+        common Common (0..1)
+      `,
+        `
+      namespace "test.collideClosureKind.b"
+      version "1"
+
+      type Common:
+        y number (0..1)
+
+      type Right:
+        common Common (0..1)
+      `,
+        `
+      namespace "test.collideClosureKind.root"
+      version "1"
+
+      import test.collideClosureKind.a.*
+      import test.collideClosureKind.b.*
+
+      type Root:
+        left Left (0..1)
+        right Right (0..1)
+      `
+      ]);
+      const result = emitStandaloneZodSchema(docs, 'test.collideClosureKind.root.Root');
+      expect(result.code).toBe('');
+      expect(result.diagnostics.some((d) => d.code === 'name-collision')).toBe(true);
+    }
+  );
+
+  /**
    * PR #470 final-review finding (2026-08-04, bot comment id 3714316831) —
    * re-raised against the latest tip; verifies (rather than re-fixes) that
    * `emitStandaloneZodSchema` genuinely inherits the schemaRefExpr fix

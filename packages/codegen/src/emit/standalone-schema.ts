@@ -149,6 +149,15 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
   // diagnostic; `emitStandaloneZodSchema` refuses to emit anything at all
   // once one is found (mirrors the `ambiguous-target` precedent — guessing
   // which namespace "wins" is worse than declining).
+  //
+  // The collision check is against ONE shared `emittedSchemaNames` map, not
+  // each kind's own bare-name map separately: `emitNamespace` emits every
+  // kind's schema as `export const <Name>Schema`, sharing ONE symbol
+  // namespace across Data/Choice/Enum/typeAlias — `ns.a.Common` (an Enum)
+  // and `ns.b.Common` (a Data) collide exactly as two same-kind `Common`s
+  // would, and were previously invisible here since each kind's own map was
+  // checked in isolation.
+  const emittedSchemaNames = new Map<string, Data | Choice | RosettaEnumeration | RosettaTypeAlias>();
   const reportNameCollision = (kind: string, name: string): void => {
     diagnostics.push({
       severity: 'error',
@@ -156,29 +165,30 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
       message: `Two different namespaces in the closure each declare a '${kind}' named '${name}'; the synthesized script cannot distinguish them.`
     });
   };
+  const claimSchemaName = (kind: string, node: Data | Choice | RosettaEnumeration | RosettaTypeAlias): boolean => {
+    const existing = emittedSchemaNames.get(node.name);
+    if (existing && existing !== node) {
+      reportNameCollision(kind, node.name);
+      return false;
+    }
+    emittedSchemaNames.set(node.name, node);
+    return true;
+  };
 
   const enqueue = (node: Data | Choice | RosettaEnumeration | RosettaTypeAlias): void => {
     if (visited.has(node)) return;
     visited.add(node);
     trackDoc(node);
     if (isData(node)) {
-      const existing = dataByName.get(node.name);
-      if (existing && existing !== node) reportNameCollision('Data', node.name);
-      else dataByName.set(node.name, node);
+      if (claimSchemaName('Data', node)) dataByName.set(node.name, node);
       frontier.push(node);
     } else if (isChoice(node)) {
-      const existing = choiceByName.get(node.name);
-      if (existing && existing !== node) reportNameCollision('Choice', node.name);
-      else choiceByName.set(node.name, node);
+      if (claimSchemaName('Choice', node)) choiceByName.set(node.name, node);
       frontier.push(node);
     } else if (isRosettaEnumeration(node)) {
-      const existing = enumByName.get(node.name);
-      if (existing && existing !== node) reportNameCollision('Enum', node.name);
-      else enumByName.set(node.name, node);
+      if (claimSchemaName('Enum', node)) enumByName.set(node.name, node);
     } else {
-      const existing = typeAliasByName.get(node.name);
-      if (existing && existing !== node) reportNameCollision('typeAlias', node.name);
-      else typeAliasByName.set(node.name, node);
+      if (claimSchemaName('typeAlias', node)) typeAliasByName.set(node.name, node);
       frontier.push(node);
     }
   };
