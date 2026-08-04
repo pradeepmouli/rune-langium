@@ -183,6 +183,37 @@ describe('resolveTypeCallTarget', () => {
     expect(result).toEqual({ kind: 'primitive', value: 'string' });
   });
 
+  /**
+   * PR #469 live review finding (2026-08-04): the old `for (hop = 0; hop <=
+   * MAX_ALIAS_CHAIN; hop++)` loop silently misreported ANY genuinely valid,
+   * non-cyclic chain longer than 32 hops as unresolved — the `visitedAliases`
+   * `Set` cycle guard alone already guarantees termination (a real cycle is
+   * caught the moment a previously-seen alias recurs), so the hop cap was a
+   * redundant bound that could only ever misfire, never help. Removed in
+   * favor of `for (;;)` relying solely on the `Set` guard.
+   */
+  it('chases a 40-hop (deliberately > the old 32-hop cap) non-cyclic alias-to-alias-to-primitive chain', async () => {
+    const CHAIN_LENGTH = 40;
+    const aliasLines = [`typeAlias Alias0: string`];
+    for (let i = 1; i <= CHAIN_LENGTH; i++) {
+      aliasLines.push(`typeAlias Alias${i}: Alias${i - 1}`);
+    }
+    const { model, index } = await parseNamespace(`
+      namespace test
+      ${aliasLines.join('\n      ')}
+      type Foo:
+        bar Alias${CHAIN_LENGTH} (0..1)
+    `);
+    const data = model.elements.find((e) => isData(e) && e.name === 'Foo') as Data;
+    const result = resolveTypeCallTarget(
+      findAttrTypeCall(data, 'bar'),
+      index,
+      recordingVisitor(),
+      'file:///test.rosetta'
+    );
+    expect(result).toEqual({ kind: 'primitive', value: 'string' });
+  });
+
   it('reports unresolved for a field with no type reference match', async () => {
     const { model, index } = await parseNamespace(`
       namespace test
