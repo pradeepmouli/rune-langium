@@ -4,10 +4,9 @@
 
 import { Fragment, useCallback, useRef, useState } from 'react';
 import type React from 'react';
-import { Network, FileCode2, Info, MoreHorizontal, Layers } from 'lucide-react';
+import { Network, FileCode2, Info, Layers } from 'lucide-react';
 import { GraphFilterMenu } from '../../components/GraphFilterMenu.js';
 import { useCenterPanes, type CenterPane } from '../center-panes-context.js';
-import { useUtilityTrayControls } from '../utility-tray-context.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 
 const PANE_ORDER: CenterPane[] = ['graph', 'structure', 'source', 'inspector'];
@@ -40,7 +39,6 @@ export const CenterStackPanel = withInstrumentation(
     renderStructure
   }: CenterStackPanelProps): React.ReactElement {
     const { activePanes, toggle } = useCenterPanes();
-    const { utilitiesCollapsed, toggleUtilities } = useUtilityTrayControls();
     const ordered = PANE_ORDER.filter((p) => activePanes.has(p));
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -142,17 +140,6 @@ export const CenterStackPanel = withInstrumentation(
           <div className="flex-1" />
           <div className="studio-panel-actions" aria-label="Center stack actions">
             <GraphFilterMenu compact align="end" />
-            <button
-              type="button"
-              className="studio-panel-action studio-utility-toggle"
-              onClick={toggleUtilities}
-              aria-pressed={!utilitiesCollapsed}
-              aria-label={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
-              title={utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages'}
-              data-testid="toggle-utilities-chevron"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
           </div>
         </div>
 

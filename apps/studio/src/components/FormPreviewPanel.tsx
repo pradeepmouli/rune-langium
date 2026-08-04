@@ -361,7 +361,7 @@ export const FormPreviewPanel = withInstrumentation(
         <section
           aria-label="Form preview"
           data-testid="panel-formPreview"
-          className="studio-scroll flex h-full flex-col overflow-auto p-3"
+          className="studio-scroll flex h-full flex-col overflow-auto p-3 mr-[0px]"
         >
           {isWaiting ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

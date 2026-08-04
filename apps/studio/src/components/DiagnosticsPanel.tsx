@@ -12,7 +12,7 @@
  * diagnostic lists.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useContext, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   AlertCircle,
@@ -22,7 +22,8 @@ import {
   Lightbulb,
   CheckCircle2,
   Filter,
-  MoreHorizontal
+  MoreHorizontal,
+  ChevronDown
 } from 'lucide-react';
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
@@ -31,6 +32,7 @@ import { cn } from '@rune-langium/design-system/utils';
 import { flattenDiagnostics } from '../utils/flatten-diagnostics.js';
 import type { FlatDiagnosticRow } from '../utils/flatten-diagnostics.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
+import { UtilityTrayContext } from '../shell/utility-tray-context.js';
 
 export interface DiagnosticsPanelProps {
   fileDiagnostics: Map<string, LspDiagnostic[]>;
@@ -265,6 +267,22 @@ export const DiagnosticsPanel = withInstrumentation(
   { op: 'DiagnosticsPanel' }
 );
 
+function CollapseUtilitiesButton() {
+  const { toggleUtilities } = useUtilityTrayControls();
+  return (
+    <button
+      type="button"
+      className="studio-panel-action studio-utility-toggle"
+      onClick={toggleUtilities}
+      aria-label="Hide Problems &amp; Messages"
+      title="Hide Problems &amp; Messages"
+      data-testid="toggle-utilities-chevron"
+    >
+      <ChevronDown className="size-4" />
+    </button>
+  );
+}
+
 function PanelHeader({
   total,
   rawTotal,
@@ -306,6 +324,7 @@ function PanelHeader({
         </p>
       </div>
       <div className="studio-panel-actions" aria-label="Problems panel actions">
+        <CollapseUtilitiesButton />
         <Popover>
           <PopoverTrigger
             render={

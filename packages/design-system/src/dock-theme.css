@@ -259,6 +259,9 @@
 
 .studio-app .dv-view.visible {
   overflow: hidden !important;
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-right: 12px;
 }
 
 /* dockview leaves .dv-content-container without overflow, so tall panel content
@@ -303,6 +306,11 @@
  * surface. 10% matches the Daikonic reference design's base panel line
  * (`--rs-line` ≈ 10% near-white), giving the edge just enough definition
  * without becoming a heavy full border. */
+.studio-app .rune-dock-theme .dv-groupview.dv-groupview-header-top.dv-active-group {
+  margin-right: 0;
+  padding-right: 12px;
+}
+
 .studio-app .rune-dock-theme .dv-groupview {
   border-radius: var(--radius-lg, 12px);
   overflow: hidden;
