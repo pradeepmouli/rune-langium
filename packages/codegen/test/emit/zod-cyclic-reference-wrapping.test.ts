@@ -173,4 +173,55 @@ type Special extends Node:
     expect(SpecialSchema.safeParse({ note: 'x', child: { child: {} } }).success).toBe(true);
     expect(SpecialSchema.safeParse({ note: 123 }).success).toBe(false);
   });
+
+  /**
+   * PR #469 final-review finding (2026-08-04): the fold above only copied
+   * the IMMEDIATE cyclic parent's (`superRef`'s) own attributes — if
+   * `superRef` itself extends a FURTHER ancestor (here `Grandparent`, a
+   * non-cyclic Data), that further ancestor's own attributes were silently
+   * omitted from the fold. `Grandparent <- Node (self-referential) <-
+   * Special`: `Node` is the cyclic immediate parent of `Special`, and
+   * `Node` itself extends the non-cyclic `Grandparent`.
+   */
+  it('a Data extending a cyclic parent that itself extends a further ancestor folds the FULL ancestry, and genuinely evaluates', async () => {
+    const doc = await parseSource(
+      `
+namespace test.extendsCyclicMultiLevel
+version "0.0.0"
+
+type Grandparent:
+    gpField string (0..1)
+
+type Node extends Grandparent:
+    child Node (0..1)
+
+type Special extends Node:
+    note string (0..1)
+`,
+      'inmemory:///extendsCyclicMultiLevel.rosetta'
+    );
+    const model = walkNamespace([doc], 'test.extendsCyclicMultiLevel');
+    expect(Array.from(model.cyclicTypes)).toEqual(['Node']);
+    const output = emitNamespace(model, {});
+    expect(output.content).not.toContain('NodeSchema.extend(');
+    expect(output.content).toContain('gpField: z.string().optional()');
+    expect(output.content).toContain('child: z.lazy(() => NodeSchema).optional()');
+    expect(output.content).toContain('note: z.string().optional()');
+
+    const { z } = await import('zod');
+    const js = toEvaluableJs(output.content);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    const { SpecialSchema } = new Function('z', `${js}\nreturn { SpecialSchema };`)(z);
+    expect(SpecialSchema.safeParse({ note: 'x', gpField: 'g', child: { gpField: 'g2', child: {} } }).success).toBe(
+      true
+    );
+    // Without the fix, `gpField` is silently dropped from the schema shape —
+    // a non-strict z.object() would still accept an EXTRA gpField key, so
+    // the real regression signal is that omitting the (unenforced) field
+    // does NOT fail — assert the field is actually round-tripped instead.
+    const parsed = SpecialSchema.safeParse({ note: 'x', gpField: 'g', child: {} });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toMatchObject({ gpField: 'g' });
+    expect(SpecialSchema.safeParse({ note: 123, gpField: 'g' }).success).toBe(false);
+  });
 });

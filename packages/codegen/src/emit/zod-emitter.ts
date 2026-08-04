@@ -667,6 +667,29 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   /**
+   * Collect `start` plus every further Data ancestor reachable via
+   * `extends` (a visited-set guards a malformed cyclic chain, mirroring
+   * `findChoiceAncestor`'s own guard just above). Only called once
+   * `findChoiceAncestor(start)` has already returned `undefined` for the
+   * SAME `start`, so every link in the returned chain is known to be a
+   * Data (a Choice ancestor, if one existed, would have short-circuited
+   * that earlier check first) — this never needs to special-case a Choice
+   * terminator itself.
+   */
+  private static collectDataAncestryChain(start: Data): Data[] {
+    const chain: Data[] = [];
+    const visited = new Set<string>();
+    let current: Data | undefined = start;
+    while (current && !visited.has(current.name)) {
+      visited.add(current.name);
+      chain.push(current);
+      const parent: unknown = current.superType?.ref;
+      current = parent && isData(parent) ? parent : undefined;
+    }
+    return chain;
+  }
+
+  /**
    * Build the base (pre-condition, pre-lazy) schema expression for a Data
    * type's superType chain, at a given attribute-line indentation.
    *
@@ -736,11 +759,24 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       // `resolveTypeExpr`, so a folded attribute that itself references the
       // cyclic type (e.g. the parent's own self-referencing field) is still
       // correctly wrapped via `schemaRefExpr`.
+      //
+      // `superRef` may itself extend a FURTHER Data ancestor (e.g.
+      // `Grandparent <- Node <- Special` where `Node` is self-referential)
+      // — folding only `superRef`'s own attributes would silently omit
+      // `Grandparent`'s. `collectDataAncestryChain(superRef)` walks the
+      // full remaining chain (already known Choice-free — `choiceAncestor`
+      // above already ruled that out), so every ancestor's own attributes
+      // are folded in, nearest-declared-first (`data`, then `superRef`,
+      // then each further ancestor) — matching `buildRuneExtendChoiceExpr`'s
+      // own documented "nearest-declared wins" convention.
       const parentSchema = `${superRef.name}Schema`;
       if (this.ctx.lazyTypes.has(superRef.name)) {
         const seen = new Set<string>();
         const attrLines: string[] = [];
-        for (const attr of [...superRef.attributes, ...data.attributes]) {
+        for (const attr of [
+          ...data.attributes,
+          ...ZodNamespaceEmitter.collectDataAncestryChain(superRef).flatMap((ancestor) => ancestor.attributes)
+        ]) {
           if (seen.has(attr.name)) continue;
           seen.add(attr.name);
           attrLines.push(this.emitAttribute(attr, data.name));
