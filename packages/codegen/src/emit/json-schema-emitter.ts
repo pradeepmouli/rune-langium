@@ -36,8 +36,6 @@
 import {
   isChoice,
   isData,
-  isRosettaEnumeration,
-  isRosettaBasicType,
   type Choice,
   type Data,
   type Attribute,
@@ -57,6 +55,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { jsonSchemaProfile } from './json-schema-profile.js';
 import { mergeProfileTypeMaps, decodeCardinality, choiceOptionFieldName } from './base-namespace-emitter.js';
+import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { debug } from '../instrument.js';
 
 /** JSON Schema 2020-12 meta-schema URI. */
@@ -104,7 +103,43 @@ const JSON_BUILTIN_TYPE_MAP: Readonly<Record<string, object>> = mergeProfileType
   object
 >;
 
-function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
+/**
+ * Wrap a bare `ReadonlyMap<string, N>` (this emitter's own `EmissionContext`
+ * lookup maps) into the `{node, sourceUri}`-entry shape `resolveTypeCallTarget`
+ * (Task 1, type-ref-resolver.ts) requires. Mirrors zod-emitter.ts's identical
+ * adapter — see that file for the full rationale.
+ */
+function wrapTypeIndexEntries<N>(
+  map: ReadonlyMap<string, N>,
+  sourceUri: string
+): ReadonlyMap<string, TypeIndexEntry<N>> {
+  const wrapped = new Map<string, TypeIndexEntry<N>>();
+  for (const [name, node] of map) {
+    wrapped.set(name, { node, sourceUri });
+  }
+  return wrapped;
+}
+
+/**
+ * Adapt this emitter's `EmissionContext` (bare unwrapped lookup maps) to the
+ * `TypeIndexLookup` shape `resolveTypeCallTarget` expects. `sourceUri` is
+ * `fallbackSourceUri` — a real document URI (`model.docs[0]?.uri`), unlike
+ * zod-emitter's `ctx.namespace` stand-in.
+ */
+function toTypeIndexLookup(ctx: EmissionContext, sourceUri: string): TypeIndexLookup {
+  return {
+    enumByName: wrapTypeIndexEntries(ctx.enumByName, sourceUri),
+    dataByName: wrapTypeIndexEntries(ctx.dataByName, sourceUri),
+    choiceByName: wrapTypeIndexEntries(ctx.choiceByName, sourceUri),
+    typeAliasByName: wrapTypeIndexEntries(ctx.typeAliasByName, sourceUri)
+  };
+}
+
+function buildEmissionContext(
+  model: NamespaceWalkResult,
+  registry: NamespaceRegistry,
+  diagnostics: GeneratorDiagnostic[]
+): EmissionContext {
   return {
     namespace: model.namespace,
     relativePath: getTargetRelativePath(model.namespace, 'json-schema'),
@@ -118,7 +153,7 @@ function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceReg
     libraryFuncsByName: model.libraryFuncsByName,
     emitOrder: model.emitOrder,
     sourceMap: [],
-    diagnostics: [],
+    diagnostics,
     registry,
     builtinTypeMap: JSON_BUILTIN_TYPE_MAP
   };
@@ -146,6 +181,7 @@ export function emitNamespace(
 
 export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
+  private readonly typeIndex: TypeIndexLookup;
   private readonly $defs: Record<string, object> = {};
   private readonly pendingSourceMapEntries: PendingSourceMapEntry[] = [];
   private readonly fallbackSourceUri: string;
@@ -157,8 +193,9 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     super(model, options, registry);
-    this.ctx = buildEmissionContext(model, registry);
+    this.ctx = buildEmissionContext(model, registry, this.diagnostics);
     this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
+    this.typeIndex = toTypeIndexLookup(this.ctx, this.fallbackSourceUri);
     this.typesWithLocalSubtype = JsonSchemaNamespaceEmitter.computeTypesWithLocalSubtype(
       model.dataByName,
       model.choiceByName
@@ -329,80 +366,60 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Resolve the item schema for a scalar type reference.
    * Returns a JSON Schema object for the base (non-array) type.
+   *
+   * Delegates to the shared `resolveTypeCallTarget` resolver (Task 1,
+   * type-ref-resolver.ts), which transparently chases `RosettaTypeAlias`
+   * chains — the hand-rolled chain this replaced had no `isRosettaTypeAlias`
+   * branch, so a type-alias-typed attribute fell through every isRosettaBasicType/
+   * isRosettaEnumeration/isData/isChoice check and landed on the generic
+   * "Unknown type reference kind" diagnostic below instead of resolving.
+   *
+   * Diagnostic wording is preserved verbatim for every previously-working
+   * case: `onPrimitive`'s "mapped is falsy" branch keeps the distinct
+   * `'unmapped-builtin'` code (not routed through `reportUnresolvedReference`,
+   * which is `'unresolved-ref'`-only); `onUnresolved` reproduces the two
+   * distinct pre-migration wordings (truthy vs. falsy `refText`) exactly —
+   * the falsy-refText branch deliberately does NOT go through
+   * `reportUnresolvedReference`, since that helper always appends an
+   * `; emitting …` suffix this case never had. The old "Unknown type
+   * reference kind" message collapses into the truthy-refText `onUnresolved`
+   * branch (case 1's wording) — untested pre-migration (no existing fixture
+   * had a live-linked non-Basic/Enum/Data/Choice `typeCall.type.ref`), and
+   * that scenario is now exactly the type-alias case this migration fixes.
    */
   private resolveItemSchema(attr: Attribute): object {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      if (refText) {
-        const builtinSchema = this.ctx.builtinTypeMap[refText];
-        if (builtinSchema) return builtinSchema;
-
-        if (this.ctx.enumByName.has(refText)) {
-          return { $ref: `#/$defs/${refText}` };
+    return resolveTypeCallTarget(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no JSON Schema mapping; emitting {}`
+          });
+          return {};
+        },
+        onEnum: (node) => ({ $ref: `#/$defs/${node.name}` }),
+        onData: (node) => ({ $ref: `#/$defs/${node.name}` }),
+        onChoice: (node) => ({ $ref: `#/$defs/${node.name}` }),
+        onUnresolved: (refText) => {
+          if (refText) {
+            this.reportUnresolvedReference(attr.name, refText, '{}');
+          } else {
+            this.ctx.diagnostics.push({
+              severity: 'warning',
+              code: 'unresolved-ref',
+              message: `Attribute '${attr.name}' has an unresolved type reference`
+            });
+          }
+          return {};
         }
-        if (this.ctx.dataByName.has(refText)) {
-          return { $ref: `#/$defs/${refText}` };
-        }
-        if (this.ctx.choiceByName.has(refText)) {
-          return { $ref: `#/$defs/${refText}` };
-        }
-
-        this.ctx.diagnostics.push({
-          severity: 'warning',
-          code: 'unresolved-ref',
-          message: `Attribute '${attr.name}': type '${refText}' is not resolved; emitting {}`
-        });
-        return {};
-      }
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unresolved-ref',
-        message: `Attribute '${attr.name}' has an unresolved type reference`
-      });
-      return {};
-    }
-
-    if (isRosettaBasicType(typeRef)) {
-      const mapped = this.ctx.builtinTypeMap[typeRef.name];
-      if (mapped) return mapped;
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unmapped-builtin',
-        message: `Builtin type '${typeRef.name}' has no JSON Schema mapping; emitting {}`
-      });
-      return {};
-    }
-
-    if (isRosettaEnumeration(typeRef)) {
-      return { $ref: `#/$defs/${typeRef.name}` };
-    }
-
-    if (isData(typeRef)) {
-      return { $ref: `#/$defs/${typeRef.name}` };
-    }
-
-    // Item 3: a Choice-typed attribute resolves to the Choice's own $defs
-    // entry — same $ref convention as Data/Enum, was previously falling
-    // through to the unresolved-ref warning below (isChoice was never
-    // consulted in this mapping, mirroring the same pre-W2 gap ts/zod once
-    // had in resolveTypeExprAsTs/resolveTypeExpr).
-    if (isChoice(typeRef)) {
-      return { $ref: `#/$defs/${typeRef.name}` };
-    }
-
-    if (refText) {
-      const builtinSchema = this.ctx.builtinTypeMap[refText];
-      if (builtinSchema) return builtinSchema;
-    }
-
-    this.ctx.diagnostics.push({
-      severity: 'warning',
-      code: 'unresolved-ref',
-      message: `Unknown type reference kind for attribute '${attr.name}'`
-    });
-    return {};
+      },
+      this.fallbackSourceUri
+    );
   }
 
   /**
@@ -578,52 +595,43 @@ export class JsonSchemaNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   /**
-   * Emit the JSON Schema definition for a type alias.
+   * Emit the JSON Schema definition for a type alias's own right-hand side
+   * (`typeAlias A: B` — what does `B` resolve to).
+   *
+   * Delegates to the shared `resolveTypeCallTarget` resolver (Task 1),
+   * mirroring zod-emitter.ts's `emitTypeAliasSchema` migration. Before this
+   * fix, this method hand-rolled its own isRosettaBasicType/isRosettaEnumeration/
+   * isData/refText chain with no `isRosettaTypeAlias` branch and no
+   * alias-to-alias chasing — `typeAlias A: B` where `B` was itself
+   * `typeAlias B: C` silently fell through to `{ type: 'string' }`. It also
+   * hand-duplicated the same builtin-type-name→schema literal twice (once
+   * for the live-linked `typeRef` branch, once for the `refText` fallback
+   * branch) — collapsed here into one `TYPE_ALIAS_BUILTIN_MAP` constant,
+   * reused by `onPrimitive`.
+   *
+   * `onUnresolved` preserves the pre-migration silent fallback (no
+   * diagnostic push) verbatim — same shape as zod-emitter's
+   * `onUnresolved: () => 'z.unknown()'`.
+   *
+   * `onPrimitive` reuses `this.ctx.builtinTypeMap` (the SAME canonical
+   * profile map `resolveItemSchema`'s `onPrimitive` already uses) instead of
+   * either of the two hand-duplicated inline literals this replaces — both
+   * were missing `pattern`/`productType`/`eventType`/`calculation`, which
+   * `builtinTypeMap` already carries.
    */
   private emitTypeAliasDef(alias: RosettaTypeAlias): object {
-    const typeRef = alias.typeCall?.type?.ref;
-    const refText = alias.typeCall?.type?.$refText;
-
-    if (typeRef && isRosettaBasicType(typeRef)) {
-      const typeMap: Record<string, object> = {
-        string: { type: 'string' },
-        int: { type: 'integer' },
-        number: { type: 'number' },
-        boolean: { type: 'boolean' },
-        date: { type: 'string', format: 'date' },
-        dateTime: { type: 'string', format: 'date-time' },
-        zonedDateTime: { type: 'string', format: 'date-time' },
-        time: { type: 'string', format: 'time' }
-      };
-      return typeMap[typeRef.name] ?? { type: 'string' };
-    }
-
-    if (typeRef && isRosettaEnumeration(typeRef)) {
-      return { $ref: `#/$defs/${typeRef.name}` };
-    }
-
-    if (typeRef && isData(typeRef)) {
-      return { $ref: `#/$defs/${typeRef.name}` };
-    }
-
-    if (refText) {
-      const builtinMap: Record<string, object> = {
-        string: { type: 'string' },
-        int: { type: 'integer' },
-        number: { type: 'number' },
-        boolean: { type: 'boolean' },
-        date: { type: 'string', format: 'date' },
-        dateTime: { type: 'string', format: 'date-time' },
-        zonedDateTime: { type: 'string', format: 'date-time' },
-        time: { type: 'string', format: 'time' }
-      };
-      if (builtinMap[refText]) return builtinMap[refText];
-      if (this.ctx.enumByName.has(refText) || this.ctx.dataByName.has(refText)) {
-        return { $ref: `#/$defs/${refText}` };
-      }
-    }
-
-    return { type: 'string' };
+    return resolveTypeCallTarget(
+      alias.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => this.ctx.builtinTypeMap[basicTypeName] ?? { type: 'string' },
+        onEnum: (node) => ({ $ref: `#/$defs/${node.name}` }),
+        onData: (node) => ({ $ref: `#/$defs/${node.name}` }),
+        onChoice: (node) => ({ $ref: `#/$defs/${node.name}` }),
+        onUnresolved: () => ({ type: 'string' })
+      },
+      this.fallbackSourceUri
+    );
   }
 
   // ---------------------------------------------------------------------------

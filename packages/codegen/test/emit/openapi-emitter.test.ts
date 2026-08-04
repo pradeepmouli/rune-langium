@@ -248,6 +248,109 @@ func Triple:
   });
 });
 
+describe('OpenApiNamespaceEmitter — func param typed via a type alias (unified-type-reference-resolution follow-up)', () => {
+  it('resolves a func input/output typed via a type-alias-to-primitive to the builtin JSON Schema, not {}', async () => {
+    const out = await gen(`namespace test.funcAliasPrimitive
+
+typeAlias MyAlias: string
+
+func Echo:
+  inputs:
+    value MyAlias (1..1)
+  output:
+    result MyAlias (1..1)
+  set result: value
+`);
+    const doc = JSON.parse(out[0]!.content) as Record<string, unknown>;
+    const paths = doc['paths'] as Record<string, Record<string, unknown>>;
+    const op = paths['/functions/Echo']!['post'] as Record<string, unknown>;
+    const requestBody = op['requestBody'] as { content: { 'application/json': { schema: { properties: unknown } } } };
+    expect(requestBody.content['application/json'].schema.properties).toEqual({
+      value: { type: 'string' }
+    });
+    const responses = op['responses'] as { '200': { content: { 'application/json': { schema: unknown } } } };
+    expect(responses['200'].content['application/json'].schema).toEqual({ type: 'string' });
+    const warnDiags = out[0]!.diagnostics.filter((d) => d.code === 'unresolved-ref');
+    expect(warnDiags).toHaveLength(0);
+  });
+
+  it('resolves a func input/output typed via a type-alias-to-Data to a components.schemas $ref, not {}', async () => {
+    const out = await gen(`namespace test.funcAliasData
+
+type Party:
+  partyId string (1..1)
+
+typeAlias MyAlias: Party
+
+func Identity:
+  inputs:
+    value MyAlias (1..1)
+  output:
+    result MyAlias (1..1)
+  set result: value
+`);
+    const doc = JSON.parse(out[0]!.content) as Record<string, unknown>;
+    const paths = doc['paths'] as Record<string, Record<string, unknown>>;
+    const op = paths['/functions/Identity']!['post'] as Record<string, unknown>;
+    const requestBody = op['requestBody'] as { content: { 'application/json': { schema: { properties: unknown } } } };
+    expect(requestBody.content['application/json'].schema.properties).toEqual({
+      value: { $ref: '#/components/schemas/Party' }
+    });
+    const responses = op['responses'] as { '200': { content: { 'application/json': { schema: unknown } } } };
+    expect(responses['200'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/Party' });
+    const warnDiags = out[0]!.diagnostics.filter((d) => d.code === 'unresolved-ref');
+    expect(warnDiags).toHaveLength(0);
+  });
+
+  it('chases a 2-hop type-alias chain (alias-to-alias-to-Data) for a func param', async () => {
+    const out = await gen(`namespace test.funcAliasChain
+
+type Party:
+  partyId string (1..1)
+
+typeAlias Inner: Party
+typeAlias Outer: Inner
+
+func Identity:
+  inputs:
+    value Outer (1..1)
+  output:
+    result Outer (1..1)
+  set result: value
+`);
+    const doc = JSON.parse(out[0]!.content) as Record<string, unknown>;
+    const paths = doc['paths'] as Record<string, Record<string, unknown>>;
+    const op = paths['/functions/Identity']!['post'] as Record<string, unknown>;
+    const requestBody = op['requestBody'] as { content: { 'application/json': { schema: { properties: unknown } } } };
+    expect(requestBody.content['application/json'].schema.properties).toEqual({
+      value: { $ref: '#/components/schemas/Party' }
+    });
+    const responses = op['responses'] as { '200': { content: { 'application/json': { schema: unknown } } } };
+    expect(responses['200'].content['application/json'].schema).toEqual({ $ref: '#/components/schemas/Party' });
+    const warnDiags = out[0]!.diagnostics.filter((d) => d.code === 'unresolved-ref');
+    expect(warnDiags).toHaveLength(0);
+  });
+
+  it('still emits {} + unresolved-ref for a param type that is genuinely unknown (not a builtin/enum/Data/Choice/alias)', async () => {
+    const out = await gen(`namespace test.funcUnresolved
+
+func Bogus:
+  inputs:
+    value TotallyUnknownType (1..1)
+  output:
+    result int (1..1)
+  set result: 1
+`);
+    const doc = JSON.parse(out[0]!.content) as Record<string, unknown>;
+    const paths = doc['paths'] as Record<string, Record<string, unknown>>;
+    const op = paths['/functions/Bogus']!['post'] as Record<string, unknown>;
+    const requestBody = op['requestBody'] as { content: { 'application/json': { schema: { properties: unknown } } } };
+    expect(requestBody.content['application/json'].schema.properties).toEqual({ value: {} });
+    const warnDiags = out[0]!.diagnostics.filter((d) => d.code === 'unresolved-ref');
+    expect(warnDiags.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('OpenApiNamespaceEmitter — YAML/JSON output format', () => {
   it('emits JSON when the relativePath has no explicit yaml option', async () => {
     const out = await gen(`namespace test.fmt

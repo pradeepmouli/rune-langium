@@ -13,6 +13,7 @@ import type { NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
+import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { zodProfile } from './zod-profile.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { getElementNamespace } from '@rune-langium/core';
@@ -21,8 +22,6 @@ import {
   isChoice,
   isData,
   isRosettaEnumeration,
-  isRosettaBasicType,
-  isData as _isData,
   type Choice,
   type Data,
   type Attribute,
@@ -32,7 +31,8 @@ import {
   type RosettaRule,
   type RosettaReport,
   type Annotation,
-  type RosettaExternalFunction
+  type RosettaExternalFunction,
+  type TypeCall
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput, SourceMapEntry, GeneratorDiagnostic } from '../types.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
@@ -173,13 +173,53 @@ const ZOD_TS_TYPE_MAP: Readonly<Record<string, string>> = {
   zonedDateTime: 'string'
 } as Record<string, string>;
 
-function buildEmissionContext(model: NamespaceWalkResult, registry: NamespaceRegistry): EmissionContext {
+/**
+ * Wrap a bare `ReadonlyMap<string, N>` (this emitter's own `EmissionContext`
+ * lookup maps) into the `{node, sourceUri}`-entry shape `resolveTypeCallTarget`
+ * (Task 1, type-ref-resolver.ts) requires. Every entry shares one fallback
+ * `sourceUri` — this emitter never consumes the per-entry `sourceUri` in its
+ * own rendering (only `preview-schema.ts`'s later migration needs real
+ * per-entry source URIs for recursive structural expansion), so a single
+ * shared value for the whole namespace is correct here.
+ */
+function wrapTypeIndexEntries<N>(
+  map: ReadonlyMap<string, N>,
+  sourceUri: string
+): ReadonlyMap<string, TypeIndexEntry<N>> {
+  const wrapped = new Map<string, TypeIndexEntry<N>>();
+  for (const [name, node] of map) {
+    wrapped.set(name, { node, sourceUri });
+  }
+  return wrapped;
+}
+
+/**
+ * Adapt this emitter's `EmissionContext` (bare unwrapped lookup maps) to the
+ * `TypeIndexLookup` shape `resolveTypeCallTarget` expects. Built once per
+ * namespace emission (the underlying maps are immutable for the lifetime of
+ * one `ZodNamespaceEmitter` instance).
+ */
+function toTypeIndexLookup(ctx: EmissionContext): TypeIndexLookup {
+  const sourceUri = ctx.namespace;
+  return {
+    enumByName: wrapTypeIndexEntries(ctx.enumByName, sourceUri),
+    dataByName: wrapTypeIndexEntries(ctx.dataByName, sourceUri),
+    choiceByName: wrapTypeIndexEntries(ctx.choiceByName, sourceUri),
+    typeAliasByName: wrapTypeIndexEntries(ctx.typeAliasByName, sourceUri)
+  };
+}
+
+function buildEmissionContext(
+  model: NamespaceWalkResult,
+  registry: NamespaceRegistry,
+  diagnostics: GeneratorDiagnostic[]
+): EmissionContext {
   return {
     target: 'zod',
     emitOrder: model.emitOrder,
     lazyTypes: model.cyclicTypes,
     sourceMap: [],
-    diagnostics: [],
+    diagnostics,
     namespace: model.namespace,
     dataByName: model.dataByName,
     choiceByName: model.choiceByName,
@@ -210,6 +250,7 @@ export function emitNamespace(
 
 export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly ctx: EmissionContext;
+  private readonly typeIndex: TypeIndexLookup;
   private readonly sections: string[] = [];
 
   constructor(
@@ -218,7 +259,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     registry: NamespaceRegistry = { namespaces: new Map() }
   ) {
     super(model, options, registry);
-    this.ctx = buildEmissionContext(model, registry);
+    this.ctx = buildEmissionContext(model, registry, this.diagnostics);
+    this.typeIndex = toTypeIndexLookup(this.ctx);
   }
 
   emitHeader(): void {
@@ -335,6 +377,28 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       symbols.add(schemaName);
     };
 
+    // Route every import-candidate scan through the same `resolveTypeCallTarget`
+    // dispatch the VALUE-emitting code uses (resolveTypeExpr/emitTypeAliasSchema/
+    // emitChoiceSchema), so import-tracking can never drift from value-emission
+    // again: a `TypeCall` that resolves through a RosettaTypeAlias chain (any
+    // number of hops) to a cross-namespace Data/Enum/Choice is tracked against
+    // the TERMINAL resolved node, not the immediate (possibly same-namespace
+    // alias) reference.
+    const trackTypeCallImport = (typeCall: TypeCall | undefined): void => {
+      resolveTypeCallTarget(
+        typeCall,
+        this.typeIndex,
+        {
+          onPrimitive: () => undefined,
+          onEnum: (node) => trackRef(node, `${node.name}Schema`),
+          onData: (node) => trackRef(node, `${node.name}Schema`),
+          onChoice: (node) => trackRef(node, `${node.name}Schema`),
+          onUnresolved: () => undefined
+        },
+        this.ctx.namespace
+      );
+    };
+
     // Check data type inheritance and attribute references
     for (const data of this.ctx.dataByName.values()) {
       // Check superType
@@ -361,45 +425,71 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         const choiceAncestor = ZodNamespaceEmitter.findChoiceAncestor(parentRef);
         if (choiceAncestor) {
           trackRef(choiceAncestor.choice, `${choiceAncestor.choice.name}Schema`);
+          // Routed through trackTypeCallImport (not a direct `.typeCall?.type?.ref`
+          // check) so an inlined ancestor's alias-typed attribute is tracked
+          // against its TERMINAL resolved target too — matches the ordinary
+          // attribute-tracking loop below, which already chases alias chains.
           for (const link of [parentRef, ...choiceAncestor.intermediates]) {
             for (const attr of link.attributes) {
-              const attrTypeRef = attr.typeCall?.type?.ref;
-              if (attrTypeRef && (isData(attrTypeRef) || isRosettaEnumeration(attrTypeRef))) {
-                trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-              }
+              trackTypeCallImport(attr.typeCall);
             }
           }
         }
       }
-      // Check attribute types
+      // Check attribute types — chases RosettaTypeAlias chains via
+      // resolveTypeCallTarget so an attribute typed via an alias that
+      // resolves to a cross-namespace Data/Enum/Choice is tracked against
+      // the terminal target, matching resolveTypeExpr's value emission.
       for (const attr of data.attributes) {
-        const attrTypeRef = attr.typeCall?.type?.ref;
-        if (attrTypeRef && isData(attrTypeRef)) {
-          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-        } else if (attrTypeRef && isRosettaEnumeration(attrTypeRef)) {
-          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-        } else if (attrTypeRef && isChoice(attrTypeRef)) {
-          // Item 3 (docs/superpowers/specs/2026-07-02-emitter-crossns-
-          // hardening-design.md): a Choice-typed attribute resolves to
-          // `<Choice>Schema` via resolveTypeExpr (isChoice branch, W2) —
-          // same $import convention as Data/Enum attribute types, was
-          // previously untracked.
-          trackRef(attrTypeRef, `${attrTypeRef.name}Schema`);
-        }
+        trackTypeCallImport(attr.typeCall);
       }
     }
 
-    // Check type alias references
+    // Check type alias references — chases the alias's own RHS through any
+    // further alias links via resolveTypeCallTarget (a 2+ hop chain), matching
+    // emitTypeAliasSchema's value emission, instead of only tracking the
+    // alias's immediate direct ref (which for a 2+ hop chain would track the
+    // wrong, intermediate alias name).
     for (const alias of this.ctx.typeAliasByName.values()) {
-      const typeRef = alias.typeCall?.type?.ref;
-      if (typeRef && isData(typeRef)) {
-        trackRef(typeRef, `${typeRef.name}Schema`);
-      } else if (typeRef && isRosettaEnumeration(typeRef)) {
-        trackRef(typeRef, `${typeRef.name}Schema`);
+      trackTypeCallImport(alias.typeCall);
+    }
+
+    // Check Choice option type references — mirrors the attribute loop above;
+    // previously never scanned at all, so a Choice option typed as (or via an
+    // alias to) a cross-namespace Data/Enum/Choice produced a correct value
+    // reference (emitChoiceSchema) but no import line.
+    for (const choice of this.ctx.choiceByName.values()) {
+      for (const option of choice.attributes) {
+        trackTypeCallImport(option.typeCall);
       }
     }
 
     return buildCrossNsImportLines(imports, this.ctx.namespace, this.ctx.registry, '.zod.js');
+  }
+
+  /**
+   * Reference a Data/Choice schema by name from within `ownerName`'s own
+   * declaration. When `name` is itself cyclic (`this.ctx.lazyTypes`), a bare
+   * `${name}Schema` reference can be emitted BEFORE that `const` is
+   * declared — `topoSort` always places cyclic types after every non-cyclic
+   * one, regardless of whether a non-cyclic type depends on one of them —
+   * throwing a TDZ `ReferenceError` at evaluation time. `z.lazy(() => ...)`
+   * defers evaluation past module-initialization time, making the
+   * reference safe regardless of emit order.
+   *
+   * Only wraps when `ownerName` itself is NOT cyclic: a reference from
+   * WITHIN a cyclic type's own body (including a genuine self-reference, or
+   * a reference between two members of the same mutual cycle — A and B are
+   * each individually cyclic) is already safe, since `ownerName`'s own
+   * declaration is already inside its own `z.lazy()` closure — confirmed by
+   * `test/us1-structural.test.ts`'s byte-identical golden fixture for
+   * mutual cycles and self-references, which asserts the ORIGINAL
+   * unwrapped form for exactly this case.
+   */
+  private schemaRefExpr(name: string, ownerName: string): string {
+    return this.ctx.lazyTypes.has(name) && !this.ctx.lazyTypes.has(ownerName)
+      ? `z.lazy(() => ${name}Schema)`
+      : `${name}Schema`;
   }
 
   /**
@@ -409,87 +499,38 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * Falls back to $refText-based lookup for unresolved references (e.g., when
    * only a single file is parsed without the full workspace — common for fixtures).
    */
-  private resolveTypeExpr(attr: Attribute): string {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      // Unresolved reference — try to recover using $refText
-      if (refText) {
-        // Check if it's a known built-in type name
-        const builtinZod = this.ctx.builtinTypeMap[refText];
-        if (builtinZod) {
-          return builtinZod;
+  private resolveTypeExpr(attr: Attribute, ownerName: string): string {
+    return resolveTypeCallTarget(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no Zod mapping; emitting z.unknown()`
+          });
+          return 'z.unknown()';
+        },
+        onEnum: (node) => `${node.name}Schema`,
+        onData: (node) => this.schemaRefExpr(node.name, ownerName),
+        onChoice: (node) => this.schemaRefExpr(node.name, ownerName),
+        onUnresolved: (refText) => {
+          if (refText) {
+            // Unknown but named — emit schema reference optimistically
+            // (matches the pre-migration wording exactly).
+            this.reportUnresolvedReference(attr.name, refText, 'optimistic schema reference');
+            return `${refText}Schema`;
+          }
+          // Truly anonymous unresolved reference
+          this.reportUnresolvedReference(attr.name, undefined, 'z.unknown()');
+          return 'z.unknown()';
         }
-        // Check if it's an enum in the current namespace
-        if (this.ctx.enumByName.has(refText)) {
-          return `${refText}Schema`;
-        }
-        // Check if it's a data type in the current namespace
-        if (this.ctx.dataByName.has(refText)) {
-          return `${refText}Schema`;
-        }
-        // Check if it's a choice in the current namespace (W2)
-        if (this.ctx.choiceByName.has(refText)) {
-          return `${refText}Schema`;
-        }
-        // Unknown but named — emit schema reference optimistically
-        this.ctx.diagnostics.push({
-          severity: 'warning',
-          code: 'unresolved-ref',
-          message: `Attribute '${attr.name}': type '${refText}' is not resolved; emitting optimistic schema reference`
-        });
-        return `${refText}Schema`;
-      }
-      // Truly anonymous unresolved reference
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unresolved-ref',
-        message: `Attribute '${attr.name}' has an unresolved type reference; emitting z.unknown()`
-      });
-      return 'z.unknown()';
-    }
-
-    if (isRosettaBasicType(typeRef)) {
-      const typeName = typeRef.name;
-      const mapped = this.ctx.builtinTypeMap[typeName];
-      if (mapped) return mapped;
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unmapped-builtin',
-        message: `Builtin type '${typeName}' has no Zod mapping; emitting z.unknown()`
-      });
-      return 'z.unknown()';
-    }
-
-    if (isRosettaEnumeration(typeRef)) {
-      // Reference to an enum → use the enum schema name
-      return `${typeRef.name}Schema`;
-    }
-
-    if (isData(typeRef)) {
-      // Reference to a data type → use the schema name
-      return `${typeRef.name}Schema`;
-    }
-
-    if (isChoice(typeRef)) {
-      // W2: reference to a choice → use the choice union schema name
-      // (was falling to z.unknown() — isChoice was never consulted here).
-      return `${typeRef.name}Schema`;
-    }
-
-    // Unknown reference type — try $refText fallback
-    if (refText) {
-      const builtinZod = this.ctx.builtinTypeMap[refText];
-      if (builtinZod) return builtinZod;
-    }
-
-    this.ctx.diagnostics.push({
-      severity: 'warning',
-      code: 'unresolved-ref',
-      message: `Unknown type reference kind for attribute '${attr.name}'; emitting z.unknown()`
-    });
-    return 'z.unknown()';
+      },
+      this.ctx.namespace
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -506,10 +547,50 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     const schemaName = `${name}Schema`;
 
     const optionSchemas = choice.attributes.map((option) => {
+      // FIELD KEY: derived from the DIRECT/immediate reference's name, never
+      // the alias-chased terminal target — established convention (matches
+      // preview-schema.ts's buildChoiceOptionField); an option typed via a
+      // type alias keeps its author-given key (e.g. `myAlias`), not the
+      // alias's resolved target's name (e.g. `someData`).
       const optionTypeRef = option.typeCall?.type;
       const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
       const fieldName = choiceOptionFieldName(optionTypeName);
-      const optionSchemaExpr = this.ctx.builtinTypeMap[optionTypeName] ?? `${optionTypeName}Schema`;
+      // SCHEMA/TYPE REFERENCE: chases through any RosettaTypeAlias chain via
+      // resolveTypeCallTarget, same as resolveTypeExpr resolves an attribute's
+      // type reference.
+      const optionSchemaExpr = resolveTypeCallTarget(
+        option.typeCall,
+        this.typeIndex,
+        {
+          onPrimitive: (basicTypeName) => this.ctx.builtinTypeMap[basicTypeName] ?? `${basicTypeName}Schema`,
+          onEnum: (node) => `${node.name}Schema`,
+          // '' as owner, NOT `choice.name`: unlike a Data's own declaration
+          // (which gets an outer z.lazy() wrap when cyclic, per
+          // emitTypeSchema's isLazy branch), a Choice's own declaration
+          // (below) is NEVER itself wrapped — so a reference here always
+          // needs wrapping when its target is cyclic, with no "already
+          // inside my own lazy closure" exemption to apply. '' can never
+          // match a real type name in lazyTypes.
+          onData: (node) => this.schemaRefExpr(node.name, ''),
+          onChoice: (node) => this.schemaRefExpr(node.name, ''),
+          // Mirrors resolveTypeExpr's onUnresolved (attribute side): an
+          // unresolved Choice-option reference previously fell back to a
+          // guessed schema name with no diagnostic at all, unlike the
+          // attribute-reference case just above. Label follows
+          // xsd-emitter.ts's existing `${choice.name} option` convention for
+          // the same non-attribute (ChoiceOption has no `.name`) fallback.
+          onUnresolved: (refText) => {
+            const label = `${choice.name} option`;
+            if (refText) {
+              this.reportUnresolvedReference(label, refText, `${refText}Schema`);
+              return `${refText}Schema`;
+            }
+            this.reportUnresolvedReference(label, undefined, 'unknownSchema');
+            return 'unknownSchema';
+          }
+        },
+        this.ctx.namespace
+      );
       // .strict(): non-strict objects allow unknown keys, so {cash, commodity}
       // would satisfy the first arm — strict arms make multi-option objects
       // fail every arm, enforcing the exactly-one-of Choice semantics.
@@ -527,8 +608,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * Emit a single attribute as a Zod object property entry.
    * FR-003 (cardinality), FR-009 (reserved-word quoting).
    */
-  private emitAttribute(attr: Attribute): string {
-    const baseTypeExpr = this.resolveTypeExpr(attr);
+  private emitAttribute(attr: Attribute, ownerName: string): string {
+    const baseTypeExpr = this.resolveTypeExpr(attr, ownerName);
     const card = attr.card;
     const zodExpr = ZodNamespaceEmitter.applyCardinality(card, baseTypeExpr);
     const key = ZodNamespaceEmitter.quoteKey(attr.name);
@@ -543,7 +624,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     if (data.attributes.length === 0) {
       return 'z.object({})'; // FR-008
     }
-    const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+    const attrs = data.attributes.map((attr) => this.emitAttribute(attr, data.name));
     // Join with comma+newline between entries; no trailing comma (linter rule: trailingComma: "none")
     return `z.object({\n${attrs.join(',\n')}\n})`;
   }
@@ -584,6 +665,29 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       current = current.superType?.ref;
     }
     return undefined;
+  }
+
+  /**
+   * Collect `start` plus every further Data ancestor reachable via
+   * `extends` (a visited-set guards a malformed cyclic chain, mirroring
+   * `findChoiceAncestor`'s own guard just above). Only called once
+   * `findChoiceAncestor(start)` has already returned `undefined` for the
+   * SAME `start`, so every link in the returned chain is known to be a
+   * Data (a Choice ancestor, if one existed, would have short-circuited
+   * that earlier check first) — this never needs to special-case a Choice
+   * terminator itself.
+   */
+  private static collectDataAncestryChain(start: Data): Data[] {
+    const chain: Data[] = [];
+    const visited = new Set<string>();
+    let current: Data | undefined = start;
+    while (current && !visited.has(current.name)) {
+      visited.add(current.name);
+      chain.push(current);
+      const parent: unknown = current.superType?.ref;
+      current = parent && isData(parent) ? parent : undefined;
+    }
+    return chain;
   }
 
   /**
@@ -641,11 +745,54 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         );
       }
 
+      // When the parent is cyclic, `.extend()` cannot be used at all — a
+      // cyclic type's own declaration is `z.lazy(() => ...)` (per
+      // emitTypeSchema's `isLazy` branch above), and `ZodLazy` has no
+      // `.extend()` method, at either the type OR runtime level (confirmed:
+      // `NodeSchema.extend is not a function` at actual runtime, not just a
+      // TS type error — z.lazy() wrapping the WHOLE `.extend(...)` call
+      // still fails, since the call itself is illegal regardless of when it
+      // runs). Fold the parent's own attributes inline into a flat
+      // `z.object({...})` instead — the same technique
+      // `buildRuneExtendChoiceExpr` already uses for the Choice-ancestor
+      // case — so this never needs `.extend()` on the cyclic parent at all.
+      // Each folded attribute still goes through `emitAttribute` →
+      // `resolveTypeExpr`, so a folded attribute that itself references the
+      // cyclic type (e.g. the parent's own self-referencing field) is still
+      // correctly wrapped via `schemaRefExpr`.
+      //
+      // `superRef` may itself extend a FURTHER Data ancestor (e.g.
+      // `Grandparent <- Node <- Special` where `Node` is self-referential)
+      // — folding only `superRef`'s own attributes would silently omit
+      // `Grandparent`'s. `collectDataAncestryChain(superRef)` walks the
+      // full remaining chain (already known Choice-free — `choiceAncestor`
+      // above already ruled that out), so every ancestor's own attributes
+      // are folded in, nearest-declared-first (`data`, then `superRef`,
+      // then each further ancestor) — matching `buildRuneExtendChoiceExpr`'s
+      // own documented "nearest-declared wins" convention.
       const parentSchema = `${superRef.name}Schema`;
+      if (this.ctx.lazyTypes.has(superRef.name)) {
+        const seen = new Set<string>();
+        const attrLines: string[] = [];
+        for (const attr of [
+          ...data.attributes,
+          ...ZodNamespaceEmitter.collectDataAncestryChain(superRef).flatMap((ancestor) => ancestor.attributes)
+        ]) {
+          if (seen.has(attr.name)) continue;
+          seen.add(attr.name);
+          attrLines.push(this.emitAttribute(attr, data.name));
+        }
+        if (attrLines.length === 0) {
+          return 'z.object({})';
+        }
+        const reindented =
+          attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
+        return `z.object({\n${reindented}\n})`;
+      }
       if (data.attributes.length === 0) {
         return `${parentSchema}.extend({})`;
       }
-      const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+      const attrs = data.attributes.map((attr) => this.emitAttribute(attr, data.name));
       const reindented = attrIndent === '' ? attrs.join(',\n') : attrs.map((a) => `${attrIndent}${a}`).join(',\n');
       return `${parentSchema}.extend({\n${reindented}\n})`;
     }
@@ -660,6 +807,12 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private buildRuneExtendChoiceExpr(choice: Choice, dataChain: Data[], attrIndent: '' | '  '): string {
     const choiceSchema = `${choice.name}Schema`;
+    // Same reasoning as buildSuperTypeSchemaExpr's `wrap`: `runeExtendChoice`
+    // is a plain function CALL (not a chained method), so when `choice` is
+    // cyclic the whole call — not just `choiceSchema` — is wrapped in
+    // z.lazy() to defer the (otherwise eager) reference past
+    // module-initialization time.
+    const wrap = (expr: string): string => (this.ctx.lazyTypes.has(choice.name) ? `z.lazy(() => ${expr})` : expr);
 
     const seen = new Set<string>();
     const attrLines: string[] = [];
@@ -667,16 +820,23 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       for (const attr of link.attributes) {
         if (seen.has(attr.name)) continue;
         seen.add(attr.name);
-        attrLines.push(this.emitAttribute(attr));
+        // `choice.name`, not `link.name`: when `wrap()` fires (choice is
+        // cyclic), this whole expression — and every folded attribute in
+        // it — ends up inside `wrap()`'s own z.lazy() closure, so a
+        // reference back to `choice` from one of these attributes needs no
+        // further wrapping, same as any other within-its-own-lazy-closure
+        // reference. `link` (the Data instance an attribute happens to be
+        // folded from) isn't itself lazy-wrapped here at all.
+        attrLines.push(this.emitAttribute(attr, choice.name));
       }
     }
 
     if (attrLines.length === 0) {
-      return `runeExtendChoice(${choiceSchema}, {})`;
+      return wrap(`runeExtendChoice(${choiceSchema}, {})`);
     }
     const reindented =
       attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
-    return `runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`;
+    return wrap(`runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`);
   }
 
   /**
@@ -735,7 +895,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         return `export const ${schemaName} = ${chainedObjectExpr}\n${condIndented};`;
       } else {
         // z.object chain: build chain as `z\n  .object({...})\n  .refine(...)`
-        const attrLines = data.attributes.length === 0 ? [] : data.attributes.map((attr) => this.emitAttribute(attr));
+        const attrLines =
+          data.attributes.length === 0 ? [] : data.attributes.map((attr) => this.emitAttribute(attr, data.name));
         // Build object body with 4-space attribute indentation.
         // emitAttribute returns '  key: val' (2-space prefix), so add 2 more for 4 total.
         const objectBody =
@@ -786,37 +947,38 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * Resolve the TypeScript type expression for an attribute (for interface declarations).
    */
   private resolveTypeExprAsTs(attr: Attribute): string {
-    const typeRef = attr.typeCall?.type?.ref;
-    const refText = attr.typeCall?.type?.$refText;
-
-    if (!typeRef) {
-      if (refText) {
-        const builtinTs = ZOD_TS_TYPE_MAP[refText];
-        if (builtinTs) return builtinTs;
-        return refText; // data type name
-      }
-      return 'unknown';
-    }
-
-    if (isRosettaBasicType(typeRef)) {
-      const mapped = ZOD_TS_TYPE_MAP[typeRef.name];
-      if (mapped) return mapped;
-      this.ctx.diagnostics.push({
-        severity: 'warning',
-        code: 'unmapped-builtin',
-        message: `Builtin type '${typeRef.name}' has no TypeScript mapping in interface for '${attr.name}'; emitting unknown`
-      });
-      return 'unknown';
-    }
-
-    if (isRosettaEnumeration(typeRef)) return typeRef.name;
-    if (_isData(typeRef)) return typeRef.name;
-
-    if (refText) {
-      const builtinTs = ZOD_TS_TYPE_MAP[refText];
-      if (builtinTs) return builtinTs;
-    }
-    return 'unknown';
+    return resolveTypeCallTarget(
+      attr.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = ZOD_TS_TYPE_MAP[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no TypeScript mapping in interface for '${attr.name}'; emitting unknown`
+          });
+          return 'unknown';
+        },
+        onEnum: (node) => node.name,
+        onData: (node) => node.name,
+        onChoice: (node) => node.name,
+        onUnresolved: (refText) => {
+          // Pre-migration behavior never pushed a diagnostic on this path —
+          // it optimistically assumed an unresolved-but-named ref is a
+          // data/enum/choice type name used as-is; a genuinely anonymous
+          // ref falls back to 'unknown'. No diagnostic here, verbatim.
+          if (refText) {
+            const builtinTs = ZOD_TS_TYPE_MAP[refText];
+            if (builtinTs) return builtinTs;
+            return refText;
+          }
+          return 'unknown';
+        }
+      },
+      this.ctx.namespace
+    );
   }
 
   /**
@@ -944,38 +1106,56 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   /**
    * Emit a Zod schema and type alias for a RosettaTypeAlias node.
    * NOTE: not named `emitTypeAlias` — that name is taken by the public interface method.
+   *
+   * Resolves the alias's own right-hand side (`typeAlias A: B` — what `B`
+   * resolves to) via the shared `resolveTypeCallTarget` resolver, same as
+   * `resolveTypeExpr` resolves an ATTRIBUTE's type reference. This transparently
+   * chases `B` through further `RosettaTypeAlias` links (e.g. `typeAlias A: B`
+   * where `B` is itself `typeAlias B: C`) — the hand-rolled chain this replaces
+   * had no `isRosettaTypeAlias` branch, so `A` silently degraded to `z.unknown()`
+   * whenever its RHS was itself an alias (unified-type-reference-resolution
+   * follow-up; the earlier Task 3 migration only covered attribute references).
    */
   private emitTypeAliasSchema(alias: RosettaTypeAlias): string {
     const name = alias.name;
     const schemaName = `${name}Schema`;
-    const typeRef = alias.typeCall?.type?.ref;
-    const refText = alias.typeCall?.type?.$refText;
 
-    // Resolve to a Zod schema expression
-    let zodExpr = 'z.unknown()';
-
-    if (typeRef && isRosettaBasicType(typeRef)) {
-      const mapped = this.ctx.builtinTypeMap[typeRef.name];
-      if (mapped) {
-        zodExpr = mapped;
-      } else {
-        this.ctx.diagnostics.push({
-          severity: 'warning',
-          code: 'unmapped-builtin',
-          message: `Builtin type '${typeRef.name}' has no Zod mapping in type alias '${alias.name}'; emitting z.unknown()`
-        });
-      }
-    } else if (typeRef && isRosettaEnumeration(typeRef)) {
-      zodExpr = `${typeRef.name}Schema`;
-    } else if (typeRef && isData(typeRef)) {
-      zodExpr = `${typeRef.name}Schema`;
-    } else if (refText) {
-      const builtinZod = this.ctx.builtinTypeMap[refText];
-      if (builtinZod) zodExpr = builtinZod;
-      else if (this.ctx.enumByName.has(refText)) zodExpr = `${refText}Schema`;
-      else if (this.ctx.dataByName.has(refText)) zodExpr = `${refText}Schema`;
-      else zodExpr = 'z.unknown()';
-    }
+    const zodExpr = resolveTypeCallTarget(
+      alias.typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => {
+          const mapped = this.ctx.builtinTypeMap[basicTypeName];
+          if (mapped) return mapped;
+          this.ctx.diagnostics.push({
+            severity: 'warning',
+            code: 'unmapped-builtin',
+            message: `Builtin type '${basicTypeName}' has no Zod mapping in type alias '${alias.name}'; emitting z.unknown()`
+          });
+          return 'z.unknown()';
+        },
+        onEnum: (node) => `${node.name}Schema`,
+        // ALWAYS wrap Data/Choice targets in z.lazy() — unconditionally,
+        // not `schemaRefExpr`'s cyclic-only check. `emitNamespaceWithContract`
+        // emits every type alias unconditionally BEFORE any Data/Choice
+        // declaration (Enums → TypeAliases → Data prelude → Data/Choice via
+        // topo-sorted emitOrder), so a type alias's reference to ANY
+        // Data/Choice — cyclic or not — is a structural forward reference
+        // every single time, not something `lazyTypes` tracks at all
+        // (`lazyTypes` only tracks cycles among Data/Choice's OWN
+        // topo-sorted emit order, which type aliases sit entirely outside
+        // of). Enum targets need no such wrapping: Enums are emitted before
+        // type aliases too, so `onEnum` above stays a bare reference.
+        onData: (node) => `z.lazy(() => ${node.name}Schema)`,
+        onChoice: (node) => `z.lazy(() => ${node.name}Schema)`,
+        // Pre-migration behavior: a totally unresolved RHS (not a builtin,
+        // not a known Enum/Data/Choice/alias) falls back to `z.unknown()`
+        // with no diagnostic — verbatim, no optimistic `${refText}Schema`
+        // guess (unlike `resolveTypeExpr`'s attribute-side onUnresolved).
+        onUnresolved: () => 'z.unknown()'
+      },
+      this.ctx.namespace
+    );
 
     const lines: string[] = [
       `export const ${schemaName} = ${zodExpr};`,

@@ -9,52 +9,60 @@
  * tables, and inheritance are layered in by later tasks. Dialect rendering is
  * delegated to sql-dialect.ts.
  */
-import {
-  isData,
-  isRosettaEnumeration,
-  isRosettaBasicType,
-  isRosettaTypeAlias,
-  type Data,
-  type RosettaEnumeration,
-  type RosettaTypeAlias
-} from '@rune-langium/core';
-import type { GeneratorOptions, GeneratorOutput, GeneratorDiagnostic, SqlOptions } from '../types.js';
+import { type Data, type RosettaEnumeration, type RosettaTypeAlias, type TypeCall } from '@rune-langium/core';
+import type { GeneratorOptions, GeneratorOutput, SqlOptions } from '../types.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { dialectFor, type Dialect } from './sql-dialect.js';
 import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
 import { decodeCardinality } from './base-namespace-emitter.js';
+import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import { debug } from '../instrument.js';
+
+/** One attribute's resolved SQL modeling kind — FK column (Data), CHECK-constrained column (Enum), or a plain scalar column (builtin, possibly unresolved). */
+type ResolvedAttrType =
+  | { kind: 'data'; node: Data }
+  | { kind: 'enum'; node: RosettaEnumeration }
+  | { kind: 'scalar'; builtin: string | undefined; resolved: boolean };
+
+/**
+ * Wrap a bare `ReadonlyMap<string, N>` (`NamespaceWalkResult`'s own lookup
+ * maps) into the `{node, sourceUri}`-entry shape `resolveTypeCallTarget`
+ * requires — same adapter pattern as zod-emitter.ts/xsd-emitter.ts.
+ */
+function wrapTypeIndexEntries<N>(
+  map: ReadonlyMap<string, N>,
+  sourceUri: string
+): ReadonlyMap<string, TypeIndexEntry<N>> {
+  const wrapped = new Map<string, TypeIndexEntry<N>>();
+  for (const [name, node] of map) {
+    wrapped.set(name, { node, sourceUri });
+  }
+  return wrapped;
+}
+
+/** Adapt `NamespaceWalkResult`'s bare lookup maps to the `TypeIndexLookup` shape `resolveTypeCallTarget` expects. */
+function toTypeIndexLookup(model: NamespaceWalkResult, sourceUri: string): TypeIndexLookup {
+  return {
+    enumByName: wrapTypeIndexEntries(model.enumByName, sourceUri),
+    dataByName: wrapTypeIndexEntries(model.dataByName, sourceUri),
+    choiceByName: wrapTypeIndexEntries(model.choiceByName, sourceUri),
+    typeAliasByName: wrapTypeIndexEntries(model.typeAliasByName, sourceUri)
+  };
+}
 
 export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly dialect: Dialect;
   private readonly inheritance: 'single-table' | 'table-per-type';
   private readonly enumStrategy: 'check' | 'table';
   private enumTableFallbackFlagged = false;
-  private readonly enumNames: ReadonlySet<string>;
   private readonly statements: string[] = [];
   private readonly joinTables: string[] = [];
-  private readonly diagnostics: GeneratorDiagnostic[] = [];
   private readonly relativePath: string;
-
-  /**
-   * Walk a user-defined type-alias chain to its underlying basic-type name.
-   * Returns undefined for non-alias / non-builtin.
-   */
-  private static resolveAliasBuiltin(ref: unknown, depth = 0): string | undefined {
-    if (!ref || depth > 16) return undefined;
-    if (isRosettaBasicType(ref as never)) return (ref as { name: string }).name;
-    if (isRosettaTypeAlias(ref as never)) {
-      const typeCallType = (ref as { typeCall?: { type?: { ref?: unknown; $refText?: string } } }).typeCall?.type;
-      const innerRef = typeCallType?.ref;
-      if (innerRef) return SqlNamespaceEmitter.resolveAliasBuiltin(innerRef, depth + 1);
-      const innerRefText = typeCallType?.$refText;
-      if (innerRefText) return innerRefText;
-      return undefined;
-    }
-    return undefined;
-  }
+  /** A real document URI — used as both the shared `sourceUri` for `toTypeIndexLookup`'s wrapped entries and `resolveTypeCallTarget`'s own `fallbackSourceUri` argument. Mirrors xsd-emitter.ts's identically-named field. */
+  private readonly fallbackSourceUri: string;
+  private readonly typeIndex: TypeIndexLookup;
 
   /** Collect enum value names including inherited members (cycle-safe, own first). */
   private static allEnumValueNames(enumNode: RosettaEnumeration): string[] {
@@ -90,8 +98,39 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
     this.dialect = dialectFor(sql.dialect ?? 'postgres');
     this.inheritance = sql.inheritance ?? 'table-per-type';
     this.enumStrategy = sql.enumStrategy ?? 'check';
-    this.enumNames = new Set(model.enumByName.keys());
     this.relativePath = getTargetRelativePath(model.namespace, 'sql');
+    this.fallbackSourceUri = model.docs[0]?.uri?.toString() ?? '';
+    this.typeIndex = toTypeIndexLookup(model, this.fallbackSourceUri);
+  }
+
+  /**
+   * Resolve an attribute's `typeCall` to its SQL modeling kind, transparently
+   * chasing any `RosettaTypeAlias` chain in between (replaces the old
+   * `resolveAliasBuiltin` hand-rolled chain, which only ever chased down to a
+   * basic-type name and never terminated on a Data/Enum target). A basic type
+   * is always resolved: every `ROSETTA_BASIC_TYPE_NAMES` entry has a 1:1
+   * match in both `POSTGRES_TYPES` and `SQLSERVER_TYPES` (sql-dialect.ts).
+   */
+  private resolveAttrType(typeCall: TypeCall | undefined): ResolvedAttrType {
+    return resolveTypeCallTarget<ResolvedAttrType>(
+      typeCall,
+      this.typeIndex,
+      {
+        onPrimitive: (basicTypeName) => ({
+          kind: 'scalar',
+          builtin: basicTypeName,
+          resolved: this.dialect.isKnownBuiltin(basicTypeName)
+        }),
+        onEnum: (node) => ({ kind: 'enum', node }),
+        onData: (node) => ({ kind: 'data', node }),
+        // No pre-existing special Choice handling in this file (confirmed: it
+        // never imported isChoice) — a Choice-typed attribute already fell
+        // through to the unresolved-scalar fallback; preserve that exactly.
+        onChoice: () => ({ kind: 'scalar', builtin: undefined, resolved: false }),
+        onUnresolved: (refText) => ({ kind: 'scalar', builtin: refText, resolved: false })
+      },
+      this.fallbackSourceUri
+    );
   }
 
   @debug()
@@ -161,49 +200,35 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
 
     for (const attr of data.attributes) {
       const { lower, upper } = decodeCardinality(attr.card);
-      const ref = attr.typeCall?.type?.ref;
       const refText = attr.typeCall?.type?.$refText ?? '';
       const notNull = lower >= 1 ? ' NOT NULL' : '';
-      const refData = ref && isData(ref) ? ref : undefined;
-      const enumNode =
-        ref && isRosettaEnumeration(ref)
-          ? ref
-          : this.enumNames.has(refText)
-            ? this.model.enumByName.get(refText)
-            : undefined;
+      const resolved = this.resolveAttrType(attr.typeCall);
 
       // Multi-valued → a separate join/child table (emitted after the owner tables).
       if (upper === null || upper > 1) {
-        this.joinTables.push(this.buildJoinTable(data.name, attr.name, refData, enumNode, ref, refText));
+        this.joinTables.push(this.buildJoinTable(data.name, attr.name, resolved));
         continue;
       }
 
-      if (refData) {
+      if (resolved.kind === 'data') {
         // Scalar reference to another type → FK column + table-level constraint.
         const fkCol = uniqueCol(`${attr.name}_id`);
         cols.push(`${q(fkCol)} ${fkType}${notNull}`);
-        constraints.push(`FOREIGN KEY (${q(fkCol)}) REFERENCES ${q(refData.name)} (${q('id')})`);
-      } else if (enumNode) {
+        constraints.push(`FOREIGN KEY (${q(fkCol)}) REFERENCES ${q(resolved.node.name)} (${q('id')})`);
+      } else if (resolved.kind === 'enum') {
         this.flagEnumTableFallback();
         const col = uniqueCol(attr.name);
         cols.push(`${q(col)} ${this.dialect.columnType('string')}${notNull}`);
         // Include inherited enum members; skip the CHECK entirely for a valueless
         // enum (CHECK (... IN ()) is invalid SQL in both dialects).
-        const names = SqlNamespaceEmitter.allEnumValueNames(enumNode);
+        const names = SqlNamespaceEmitter.allEnumValueNames(resolved.node);
         if (names.length > 0) {
           constraints.push(`CHECK (${q(col)} IN (${SqlNamespaceEmitter.sqlEnumLiterals(names)}))`);
         } else {
-          this.flagEmptyEnum(enumNode.name);
+          this.flagEmptyEnum(resolved.node.name);
         }
       } else {
-        const aliasBuiltin = SqlNamespaceEmitter.resolveAliasBuiltin(ref);
-        const builtin = isRosettaBasicType(ref) ? ref.name : (aliasBuiltin ?? refText);
-        // Resolved = a real basic type OR a name the dialect actually knows. Do NOT
-        // trust aliasBuiltin alone: resolveAliasBuiltin returns the inner $refText
-        // even for an UNRESOLVED alias target (e.g. `typeAlias Amount: MissingType`),
-        // so an unknown name must still warn rather than silently mapping to TEXT.
-        const resolved = isRosettaBasicType(ref) || this.dialect.isKnownBuiltin(builtin);
-        if (!resolved) {
+        if (!resolved.resolved) {
           this.diagnostics.push({
             severity: 'warning',
             code: 'unresolved-ref',
@@ -211,7 +236,7 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
           });
         }
         const col = uniqueCol(attr.name);
-        cols.push(`${q(col)} ${this.dialect.columnType(builtin || 'string')}${notNull}`);
+        cols.push(`${q(col)} ${this.dialect.columnType(resolved.builtin || 'string')}${notNull}`);
       }
     }
 
@@ -225,14 +250,7 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
    * plus either an FK to the element type (Data) or a `value` column
    * (enum → CHECK; builtin → typed column).
    */
-  private buildJoinTable(
-    ownerName: string,
-    attrName: string,
-    refData: Data | undefined,
-    enumNode: RosettaEnumeration | undefined,
-    ref: unknown,
-    refText: string
-  ): string {
+  private buildJoinTable(ownerName: string, attrName: string, resolved: ResolvedAttrType): string {
     const q = (id: string) => this.dialect.quote(id);
     const fkType = this.dialect.fkColumnType();
     const tableName = `${ownerName}_${attrName}`;
@@ -241,31 +259,30 @@ export class SqlNamespaceEmitter extends BaseNamespaceEmitter {
     const cols: string[] = [`${q(ownerFk)} ${fkType} NOT NULL`];
     const constraints: string[] = [`FOREIGN KEY (${q(ownerFk)}) REFERENCES ${q(ownerName)} (${q('id')})`];
 
-    if (refData) {
+    if (resolved.kind === 'data') {
       // Disambiguate the target FK from the owner FK. The first fallback (attr
       // name) still collides when the attr name equals the owner type name
       // (e.g. `type Node: node Node (0..*)`), so add a guaranteed-distinct
       // second fallback.
-      let targetFk = `${refData.name.toLowerCase()}_id`;
+      let targetFk = `${resolved.node.name.toLowerCase()}_id`;
       if (targetFk === ownerFk) targetFk = `${attrName.toLowerCase()}_id`;
       if (targetFk === ownerFk) targetFk = `${attrName.toLowerCase()}_target_id`;
       cols.push(`${q(targetFk)} ${fkType} NOT NULL`);
-      constraints.push(`FOREIGN KEY (${q(targetFk)}) REFERENCES ${q(refData.name)} (${q('id')})`);
-    } else if (enumNode) {
+      constraints.push(`FOREIGN KEY (${q(targetFk)}) REFERENCES ${q(resolved.node.name)} (${q('id')})`);
+    } else if (resolved.kind === 'enum') {
       this.flagEnumTableFallback();
       cols.push(`${q('value')} ${this.dialect.columnType('string')} NOT NULL`);
       // Inherited members included; skip CHECK for a valueless enum (IN () is invalid).
-      const names = SqlNamespaceEmitter.allEnumValueNames(enumNode);
+      const names = SqlNamespaceEmitter.allEnumValueNames(resolved.node);
       if (names.length > 0) {
         constraints.push(`CHECK (${q('value')} IN (${SqlNamespaceEmitter.sqlEnumLiterals(names)}))`);
       } else {
-        this.flagEmptyEnum(enumNode.name);
+        this.flagEmptyEnum(resolved.node.name);
       }
     } else {
-      const builtin = isRosettaBasicType(ref as never)
-        ? (ref as { name: string }).name
-        : (SqlNamespaceEmitter.resolveAliasBuiltin(ref) ?? refText);
-      cols.push(`${q('value')} ${this.dialect.columnType(builtin || 'string')} NOT NULL`);
+      // Unresolved-scalar silence is existing behavior here — buildJoinTable
+      // never reported a diagnostic for this branch pre-migration; preserved.
+      cols.push(`${q('value')} ${this.dialect.columnType(resolved.builtin || 'string')} NOT NULL`);
     }
 
     const body = [...cols, ...constraints].map((line) => `  ${line}`).join(',\n');

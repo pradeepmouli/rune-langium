@@ -1,0 +1,9 @@
+namespace test.declaliasattr.b
+version "0.0.0"
+
+import test.declaliasattr.a.*
+
+typeAlias CashAlias: Cash
+
+type ObservableItem extends Asset:
+    holding CashAlias (0..1)
