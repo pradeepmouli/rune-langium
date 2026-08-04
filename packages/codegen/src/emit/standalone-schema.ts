@@ -57,6 +57,15 @@ export function buildGlobalTypeIndex(namespaceIndexes: readonly NamespaceIndex[]
  * preview-schema.ts's own generatePreviewSchemas targetId matching (compute
  * each candidate's own qualified id and compare, rather than parsing the
  * targetId string apart, since namespaces are themselves dot-separated).
+ *
+ * A `name` present in a namespace's `duplicateDataNames` (two or more `Data`
+ * declarations sharing the same name in the same namespace — a genuinely
+ * malformed corpus state) is skipped rather than resolved to whichever
+ * declaration `dataByName` happened to keep (the first one seen) —
+ * `generatePreviewSchemas` already refuses to silently pick a winner for
+ * exactly this case (`buildDuplicateTargetSchema`); this function does the
+ * same, surfacing as `emitStandaloneZodSchema`'s `ambiguous-target`
+ * diagnostic rather than an arbitrarily-chosen schema.
  */
 export function findTargetNode(
   namespaceIndexes: readonly NamespaceIndex[],
@@ -64,7 +73,10 @@ export function findTargetNode(
 ): ResolvedTarget | undefined {
   for (const ns of namespaceIndexes) {
     for (const [name, entry] of ns.dataByName) {
-      if (`${ns.namespace}.${name}` === targetId) return { kind: 'data', node: entry.node, sourceUri: entry.sourceUri };
+      if (`${ns.namespace}.${name}` === targetId) {
+        if (ns.duplicateDataNames.has(name)) return undefined;
+        return { kind: 'data', node: entry.node, sourceUri: entry.sourceUri };
+      }
     }
     for (const [name, entry] of ns.choiceByName) {
       if (`${ns.namespace}.${name}` === targetId)
@@ -296,14 +308,23 @@ export function emitStandaloneZodSchema(
   const namespaceIndexes = buildNamespaceIndexes(documents);
   const target = findTargetNode(namespaceIndexes, targetId);
   if (!target) {
+    const ambiguous = namespaceIndexes.some((ns) =>
+      Array.from(ns.duplicateDataNames).some((name) => `${ns.namespace}.${name}` === targetId)
+    );
     return {
       code: '',
       diagnostics: [
-        {
-          severity: 'error',
-          code: 'unknown-target',
-          message: `Target '${targetId}' was not found in the loaded documents.`
-        }
+        ambiguous
+          ? {
+              severity: 'error',
+              code: 'ambiguous-target',
+              message: `Target '${targetId}' matches more than one 'Data' declaration in the loaded documents.`
+            }
+          : {
+              severity: 'error',
+              code: 'unknown-target',
+              message: `Target '${targetId}' was not found in the loaded documents.`
+            }
       ]
     };
   }

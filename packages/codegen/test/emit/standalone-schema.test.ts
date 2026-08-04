@@ -400,4 +400,64 @@ describe('emitStandaloneZodSchema', () => {
     const result = emitStandaloneZodSchema(docs, 'test.Foo');
     expect(result.diagnostics.some((d) => d.code === 'unresolved-ref')).toBe(true);
   });
+
+  /**
+   * PR #470 final-review finding (bot comment id 3714695780) — findTargetNode
+   * used to silently pick whichever Data declaration dataByName happened to
+   * keep (the first one seen) when two `Data`s share a name in the same
+   * namespace, rather than refusing to resolve (mirrors preview-schema.ts's
+   * own generatePreviewSchemas 'marks duplicate target ids as unsupported
+   * instead of silently overwriting' test above).
+   */
+  skipIfNodeLt22(
+    'returns an ambiguous-target diagnostic for a targetId matching two same-named Data declarations',
+    async () => {
+      const docs = await parseModels([
+        `
+      namespace "test.standaloneDup"
+      version "1"
+
+      type Trade:
+        tradeId string (1..1)
+      `,
+        `
+      namespace "test.standaloneDup"
+      version "1"
+
+      type Trade:
+        settlementDate string (0..1)
+      `
+      ]);
+      const result = emitStandaloneZodSchema(docs, 'test.standaloneDup.Trade');
+      expect(result.code).toBe('');
+      expect(result.diagnostics).toEqual([
+        {
+          severity: 'error',
+          code: 'ambiguous-target',
+          message: "Target 'test.standaloneDup.Trade' matches more than one 'Data' declaration in the loaded documents."
+        }
+      ]);
+    }
+  );
+
+  skipIfNodeLt22('findTargetNode itself returns undefined for a duplicate-named Data target', async () => {
+    const docs = await parseModels([
+      `
+      namespace "test.standaloneDup2"
+      version "1"
+
+      type Trade:
+        tradeId string (1..1)
+      `,
+      `
+      namespace "test.standaloneDup2"
+      version "1"
+
+      type Trade:
+        settlementDate string (0..1)
+      `
+    ]);
+    const namespaceIndexes = buildNamespaceIndexes(docs);
+    expect(findTargetNode(namespaceIndexes, 'test.standaloneDup2.Trade')).toBeUndefined();
+  });
 });
