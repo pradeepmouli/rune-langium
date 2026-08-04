@@ -3,6 +3,45 @@
 
 import type { LangiumDocument } from 'langium';
 import { isChoice, isData, isRosettaModel, type Choice, type Data, type RosettaModel } from '@rune-langium/core';
+import { resolveTypeCallTarget, type TypeIndexLookup, type TypeResolutionVisitor } from './emit/type-ref-resolver.js';
+import type { TypeCall } from '@rune-langium/core';
+
+/**
+ * `resolveTypeCallTarget` requires a `TypeIndexLookup` for its refText-based
+ * FALLBACK path only (single-document-parsed-without-full-workspace
+ * scenarios) — `buildTypeReferenceGraph` always operates on already-linked
+ * `docs` (this module's callers all build through Langium's DocumentBuilder
+ * first), so a real cross-reference's `.ref` is already populated and the
+ * primary (`.ref`-based, alias-chasing) branch is all this ever needs. An
+ * empty lookup keeps the fallback branch's behavior identical to before this
+ * migration: a genuinely unresolved `.ref` still contributes no edge.
+ */
+const EMPTY_TYPE_INDEX: TypeIndexLookup = {
+  enumByName: new Map(),
+  dataByName: new Map(),
+  choiceByName: new Map(),
+  typeAliasByName: new Map()
+};
+
+/**
+ * Resolve `typeCall` to a Data/Choice edge target, chasing any
+ * `RosettaTypeAlias` chain transparently via the shared resolver — matches
+ * every emitter's own value-emission resolution, so a graph edge exists for
+ * exactly the same references the emitters actually depend on at
+ * evaluation/declaration order. Returns `undefined` for primitives, Enums,
+ * and unresolved references (none of which carry an emission-order
+ * dependency here).
+ */
+function resolveGraphEdgeTarget(typeCall: TypeCall | undefined): Data | Choice | undefined {
+  const visitor: TypeResolutionVisitor<Data | Choice | undefined> = {
+    onPrimitive: () => undefined,
+    onEnum: () => undefined,
+    onData: (node) => node,
+    onChoice: (node) => node,
+    onUnresolved: () => undefined
+  };
+  return resolveTypeCallTarget(typeCall, EMPTY_TYPE_INDEX, visitor, '');
+}
 
 /**
  * A directed graph of type references.
@@ -80,9 +119,9 @@ export function buildTypeReferenceGraph(
         const choiceName = getNodeId(element);
         ensureNode(choiceName, nodes, edges);
         for (const option of element.attributes) {
-          const optionTypeRef = option.typeCall?.type?.ref;
-          if (optionTypeRef && (isData(optionTypeRef) || isChoice(optionTypeRef))) {
-            addEdge(choiceName, getNodeId(optionTypeRef), nodes, edges);
+          const optionTarget = resolveGraphEdgeTarget(option.typeCall);
+          if (optionTarget) {
+            addEdge(choiceName, getNodeId(optionTarget), nodes, edges);
           }
         }
         continue;
@@ -99,12 +138,17 @@ export function buildTypeReferenceGraph(
       }
 
       // Add attribute type reference edges — Data or Choice targets only
-      // (primitives have no emission-order dependency).
+      // (primitives have no emission-order dependency). Chases any
+      // RosettaTypeAlias chain via resolveGraphEdgeTarget so an
+      // alias-typed attribute's dependency is tracked against its
+      // TERMINAL target, not silently dropped (an alias node is neither
+      // Data nor Choice, so a direct `.ref` check alone would miss it —
+      // this previously left alias-mediated dependencies invisible to
+      // both topo-sort ordering and cycle detection).
       for (const attr of element.attributes) {
-        const attrTypeRef = attr.typeCall?.type?.ref;
-        if (!attrTypeRef) continue;
-        if (!isData(attrTypeRef) && !isChoice(attrTypeRef)) continue;
-        addEdge(typeName, getNodeId(attrTypeRef), nodes, edges);
+        const attrTarget = resolveGraphEdgeTarget(attr.typeCall);
+        if (!attrTarget) continue;
+        addEdge(typeName, getNodeId(attrTarget), nodes, edges);
       }
     }
   }

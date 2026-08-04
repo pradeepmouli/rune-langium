@@ -14,11 +14,32 @@ export abstract class BaseNamespaceEmitter {
   protected readonly model: NamespaceWalkResult;
   protected readonly registry: NamespaceRegistry;
   protected readonly suppressBoilerplate: boolean;
+  protected readonly diagnostics: GeneratorDiagnostic[] = [];
 
   constructor(model: NamespaceWalkResult, options: NamespaceEmitterOptions, registry: NamespaceRegistry) {
     this.model = model;
     this.registry = registry;
     this.suppressBoilerplate = options.suppressBoilerplate ?? false;
+  }
+
+  /**
+   * Push the standard unresolved-type-reference diagnostic. `fallbackDescription`
+   * is the one piece that legitimately differs per emitter (what it falls back to
+   * emitting — e.g. `'z.unknown()'`, `'unknown'`, `'{}'`, `'xs:string'`), so each
+   * emitter's message text is unchanged; only the object-construction and push are shared.
+   */
+  protected reportUnresolvedReference(
+    attrName: string,
+    refText: string | undefined,
+    fallbackDescription: string
+  ): void {
+    this.diagnostics.push({
+      severity: 'warning',
+      code: 'unresolved-ref',
+      message: refText
+        ? `Attribute '${attrName}': type '${refText}' is not resolved; emitting ${fallbackDescription}`
+        : `Attribute '${attrName}' has an unresolved type reference; emitting ${fallbackDescription}`
+    });
   }
 
   abstract finalize(): GeneratorOutput;

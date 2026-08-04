@@ -29,7 +29,7 @@ const runeToZonedDateTime = (v: unknown): string | undefined =>
 
 export type Amount = number;
 
-export type Price = Amount;
+export type Price = number;
 
-export type UnitPrice = Price;
+export type UnitPrice = number;
 // (functions emitted by Phase 8b appear below this line)

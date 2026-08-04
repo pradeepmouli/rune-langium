@@ -1,0 +1,18 @@
+namespace test.xnsalias.holder
+version "0.0.0"
+
+import test.xnsalias.base.*
+
+typeAlias AliasToTarget: Target
+
+typeAlias AliasOfAlias: AliasToTarget
+
+type Holder:
+    direct Target (0..1)
+    viaAlias AliasToTarget (0..1)
+    viaChain AliasOfAlias (0..1)
+
+choice AssetChoice:
+    Target
+    AliasToTarget
+    OnlyInChoice

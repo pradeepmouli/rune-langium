@@ -1,0 +1,8 @@
+namespace test.xnsalias.base
+version "0.0.0"
+
+type Target:
+    value number (0..1)
+
+type OnlyInChoice:
+    note string (0..1)

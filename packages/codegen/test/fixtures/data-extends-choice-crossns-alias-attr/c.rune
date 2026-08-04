@@ -1,0 +1,7 @@
+namespace test.declaliasattr.c
+version "0.0.0"
+
+import test.declaliasattr.b.*
+
+type BasketConstituent extends ObservableItem:
+    weight number (0..1)
