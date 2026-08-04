@@ -51,6 +51,10 @@ export const CenterStackPanel = withInstrumentation(
     // leave a retry believing this pane-count change was already handled and
     // skip re-equalizing the split fractions (same class of issue Codex
     // flagged across several dialogs in this PR).
+    // While a split-handle drag is live, pane flex must track the pointer
+    // 1:1 — the CSS flex transition is disabled via this class.
+    const [isDragging, setIsDragging] = useState(false);
+
     const [prevCount, setPrevCount] = useState(ordered.length);
     if (ordered.length !== prevCount) {
       setPrevCount(ordered.length);
@@ -87,8 +91,10 @@ export const CenterStackPanel = withInstrumentation(
           window.removeEventListener('mouseup', onUp);
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
+          setIsDragging(false);
         };
 
+        setIsDragging(true);
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
         window.addEventListener('mousemove', onMove);
@@ -144,10 +150,23 @@ export const CenterStackPanel = withInstrumentation(
         </div>
 
         {/* Pane body — active panes split side-by-side */}
-        <div ref={containerRef} className="studio-center-stack" data-count={ordered.length} data-testid="center-stack">
+        <div
+          ref={containerRef}
+          className={isDragging ? 'studio-center-stack is-dragging' : 'studio-center-stack'}
+          data-count={ordered.length}
+          data-testid="center-stack"
+        >
           {ordered.map((pane, i) => (
             <Fragment key={pane}>
-              {i > 0 && <div className="studio-center-stack__split" onMouseDown={(e) => handleDragStart(i - 1, e)} />}
+              {i > 0 && (
+                <div
+                  className="studio-center-stack__split"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize panes"
+                  onMouseDown={(e) => handleDragStart(i - 1, e)}
+                />
+              )}
               <div
                 className="studio-center-stack__pane p-3 text-sm"
                 data-pane={pane}

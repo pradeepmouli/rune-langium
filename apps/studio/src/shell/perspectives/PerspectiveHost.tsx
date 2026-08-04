@@ -55,13 +55,15 @@ export const PerspectiveHost = withInstrumentation(
         {/* Explore: kept alive — hidden via display:none, NEVER unmounted. */}
         <div
           data-perspective-slot="explore"
-          className="h-full"
+          // `studio-perspective-enter` replays its fade-in each time the class
+          // is re-added (i.e. every time Explore becomes active again).
+          className={effective === 'explore' ? 'h-full studio-perspective-enter' : 'h-full'}
           style={{ display: effective === 'explore' ? undefined : 'none' }}
         >
           <ExplorePerspective />
         </div>
         {effective !== 'explore' && (
-          <div className="flex h-full min-h-0 min-w-0 flex-col">
+          <div key={effective} className="flex h-full min-h-0 min-w-0 flex-col studio-perspective-enter">
             {/* Same chrome row Explore renders inside DockShell (studio-layout-presets),
                 so the perspective heading sits in the same location everywhere. */}
             <div className="studio-layout-presets" data-testid="perspective-header-row">

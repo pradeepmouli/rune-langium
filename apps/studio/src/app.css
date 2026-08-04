@@ -2283,6 +2283,86 @@ html {
   background: color-mix(in oklch, var(--primary), transparent 70%);
 }
 
+/* ---------- Motion & fluidity ----------
+ *
+ * Shared motion layer added with the UX-fluidity pass. Uses the theme's
+ * motion tokens (--motion-fast: 140ms ease, --motion-default: 240ms
+ * ease-out — packages/design-system/src/theme.css). All rules animate
+ * transform/opacity or cheap paint properties only. A global
+ * prefers-reduced-motion guard at the end of this section near-zeroes
+ * every animation/transition for users who opt out. */
+
+/* Perspective switch — short fade+rise each time a perspective becomes
+ * active. Re-adding the class replays the animation (Explore keep-alive
+ * slot), and the `key={effective}` remount covers the other screens. */
+@keyframes studio-perspective-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.studio-app .studio-perspective-enter {
+  animation: studio-perspective-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Center-stack panes — animate the flex split when panes open/close.
+ * Disabled while a split-handle drag is live (`.is-dragging`) so the
+ * split tracks the pointer 1:1. */
+.studio-app .studio-center-stack__pane {
+  transition: flex-grow var(--motion-default);
+}
+
+.studio-app .studio-center-stack.is-dragging .studio-center-stack__pane {
+  transition: none;
+}
+
+/* File tabs — newly opened tabs scale/fade in. Removal is instant (exit
+ * animation would need unmount orchestration; not worth the complexity). */
+@keyframes studio-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.studio-app .studio-topbar__tab-wrapper {
+  animation: studio-tab-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Data entry — smooth focus/hover feedback for every field in the form
+ * preview, inspector, and search boxes. Chrome-only properties (border,
+ * ring shadow, background, color) on the fast token so typing never
+ * feels gated by motion. */
+.studio-app :is(input, textarea, select) {
+  transition:
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    background-color var(--motion-fast),
+    color var(--motion-fast);
+}
+
+/* Reduced motion — collapse all animation/transition to near-zero.
+ * Placed last in the sheet so it wins the cascade. JS-driven tweens
+ * (utility tray) check the same media query before animating. */
+@media (prefers-reduced-motion: reduce) {
+  .studio-app *,
+  .studio-app *::before,
+  .studio-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* All .rune-dock-theme structural dockview overrides moved to
  * packages/design-system/src/dock-theme.css (MIT). The studio imports that
  * partial from apps/studio/src/main.tsx (after this file, so Tailwind's @layer

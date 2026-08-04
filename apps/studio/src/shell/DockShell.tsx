@@ -361,13 +361,67 @@ export const DockShell = withInstrumentation(
       }
     }, []);
 
+    // Monotonically-increasing token so a re-toggle mid-animation cancels the
+    // in-flight tween (the stale rAF loop sees a newer token and stops).
+    // Bumped on EVERY path (animated, immediate, unmount) so no stale loop
+    // survives. `utilityHeightRef` tracks the last height we applied so a
+    // mid-flight reversal tweens from where the tray actually is instead of
+    // snapping to a hardcoded endpoint.
+    const utilityTweenTokenRef = useRef(0);
+    const utilityHeightRef = useRef<number | null>(null);
+
+    // Cancel any in-flight tray tween on unmount — the rAF loop would
+    // otherwise keep calling setSize on a disposed dockview group.
+    useEffect(() => {
+      return () => {
+        utilityTweenTokenRef.current++;
+      };
+    }, []);
+
     const setUtilitiesCollapsed = useCallback((collapsed: boolean) => {
       setUtilitiesCollapsedState(collapsed);
+      const token = ++utilityTweenTokenRef.current;
       const problemsPanel = apiRef.current?.getPanel('workspace.problems');
       if (!problemsPanel) {
         return;
       }
-      problemsPanel.group.api.setSize(collapsed ? { height: 0 } : { height: DEFAULT_UTILITY_HEIGHT });
+      const target = collapsed ? 0 : DEFAULT_UTILITY_HEIGHT;
+      const groupApi = problemsPanel.group.api;
+      // Animate the tray height with a short ease-out tween. Skip straight to
+      // the target when the environment can't animate (jsdom has no
+      // matchMedia) or the user prefers reduced motion.
+      let reduceMotion = true;
+      try {
+        reduceMotion =
+          typeof window.matchMedia !== 'function' || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch {
+        reduceMotion = true;
+      }
+      if (reduceMotion || typeof requestAnimationFrame !== 'function') {
+        utilityHeightRef.current = target;
+        groupApi.setSize({ height: target });
+        return;
+      }
+      // Start from the last height this code applied (mid-flight reversal),
+      // falling back to the logical opposite endpoint on the first toggle.
+      const from = utilityHeightRef.current ?? (collapsed ? DEFAULT_UTILITY_HEIGHT : 0);
+      const durationMs = 220;
+      const start = performance.now();
+      const step = (now: number) => {
+        if (utilityTweenTokenRef.current !== token) return;
+        const p = Math.min(1, (now - start) / durationMs);
+        const eased = 1 - (1 - p) ** 3; // ease-out cubic
+        const height = Math.round(from + (target - from) * eased);
+        utilityHeightRef.current = height;
+        try {
+          groupApi.setSize({ height });
+        } catch {
+          // Group disposed mid-tween (layout reset/teardown) — stop quietly.
+          return;
+        }
+        if (p < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
     }, []);
 
     const toggleUtilities = useCallback(() => {
