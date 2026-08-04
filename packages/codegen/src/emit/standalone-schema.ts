@@ -14,6 +14,7 @@ import { findCyclicTypes } from '../cycle-detector.js';
 import type { TypeReferenceGraph } from '../cycle-detector.js';
 import { topoSort } from '../topo-sort.js';
 import type { GeneratorDiagnostic } from '../types.js';
+import { RUNE_EXTEND_CHOICE_HELPER_JS_SOURCE } from './zod-runtime-helpers.js';
 
 export interface ResolvedTarget {
   kind: 'data' | 'choice' | 'enum' | 'typeAlias';
@@ -239,14 +240,20 @@ const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';(\r
  * (per the repo's DRY precept).
  *
  * The returned `code` is real TypeScript (types, `export`, and — for cyclic
- * types — an `interface` predeclaration all survive, unmodified), with one
- * exception: the spurious cross-namespace `import` lines described above are
- * stripped, since every symbol they'd reference is already declared locally
- * in this same script. The genuine `import { z } from 'zod';` header line is
- * NOT stripped — turning this into directly `new Function`-evaluable
- * JavaScript (erasing types/`export`/the cyclic-type `interface` block, and
- * binding `z`) is left to the caller, exactly as `RUNTIME_HELPER_JS_SOURCE`
- * is already caller-prepended rather than bundled into this return value.
+ * types — an `interface` predeclaration all survive, unmodified), with two
+ * exceptions: the spurious cross-namespace `import` lines described above
+ * are stripped, since every symbol they'd reference is already declared
+ * locally in this same script; and — only when the closure actually needs
+ * it — a JS-safe `runeExtendChoice` definition (Data-extends-Choice
+ * emission) is inlined right after the `import { z } from 'zod';` line,
+ * since that helper is Zod-specific and therefore NOT part of the shared,
+ * Zod-agnostic `RUNTIME_HELPER_JS_SOURCE` bundle the caller is expected to
+ * prepend for everything else. The genuine `import { z } from 'zod';`
+ * header line is NOT stripped — turning this into directly `new
+ * Function`-evaluable JavaScript (erasing types/`export`/the cyclic-type
+ * `interface` block, and binding `z`) is left to the caller, exactly as
+ * `RUNTIME_HELPER_JS_SOURCE` is already caller-prepended rather than
+ * bundled into this return value.
  *
  * Caveat inherited from `namespace-emitter.ts` (pre-existing there, not
  * introduced by this function): if `targetId` itself resolves to a
@@ -339,6 +346,25 @@ export function emitStandaloneZodSchema(
   // already been declared".
   const emitOptions: NamespaceEmitterOptions = { suppressBoilerplate: true };
   const result = emitNamespace(syntheticModel, emitOptions, { namespaces: new Map() });
-  const code = result.content.replace(CROSS_NAMESPACE_IMPORT_LINE, '');
+  const stripped = result.content.replace(CROSS_NAMESPACE_IMPORT_LINE, '');
+  // `runeExtendChoice` backs Data-extends-Choice emission and is NOT part
+  // of `RUNTIME_HELPER_JS_SOURCE` (that bundle is Zod-agnostic — shared
+  // with the zero-Zod-dependency TypeScript target — so a `z`-typed helper
+  // can't live there). `suppressBoilerplate: true` makes `emitNamespace`
+  // emit `runeExtendChoice` as an IMPORT from './runtime.zod.js', which
+  // the stripping above just removed along with the genuine cross-ns
+  // imports (same '.zod.js' shape) — inlined directly here instead, so the
+  // returned `code` stays self-contained for its own specific needs
+  // without changing the documented "always prepend RUNTIME_HELPER_JS_SOURCE,
+  // nothing else" caller contract. Conditional on actual use (`(` after
+  // the name — the closure may reference other identifiers ending in
+  // 'runeExtendChoice' in principle, but this codebase never generates
+  // one) to avoid injecting dead code into the common case.
+  const code = /\bruneExtendChoice\(/.test(stripped)
+    ? stripped.replace(
+        /^import \{ z \} from 'zod';\n/m,
+        (header) => `${header}\n${RUNE_EXTEND_CHOICE_HELPER_JS_SOURCE}\n`
+      )
+    : stripped;
   return { code, diagnostics: result.diagnostics };
 }

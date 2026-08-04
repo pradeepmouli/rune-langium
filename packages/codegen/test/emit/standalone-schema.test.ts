@@ -312,6 +312,50 @@ describe('emitStandaloneZodSchema', () => {
     expect(FooSchema.safeParse({ bar: { y: 123 } }).success).toBe(false);
   });
 
+  /**
+   * PR #469 live review finding (2026-08-04): a target closure containing a
+   * Data-extends-Choice usage emits `SpecialSchema = runeExtendChoice(...)`,
+   * but `runeExtendChoice` is Zod-specific and therefore excluded from the
+   * documented `RUNTIME_HELPER_JS_SOURCE` bundle (shared with the
+   * zero-Zod-dependency TypeScript target) — the reference was genuinely
+   * undefined at evaluation time (`ReferenceError: runeExtendChoice is not
+   * defined`), not just a theoretical gap. Fixed by conditionally inlining
+   * a JS-safe `runeExtendChoice` definition directly into the returned
+   * `code` whenever the closure actually uses it.
+   */
+  skipIfNodeLt22(
+    'inlines a JS-safe runeExtendChoice for a Data-extends-Choice closure, and genuinely evaluates',
+    async () => {
+      const docs = await parseModels([
+        `
+      namespace test.extendsChoice
+      version "1"
+
+      choice Wrapper:
+        Cash
+
+      type Cash:
+        amount string (0..1)
+
+      type Special extends Wrapper:
+        note string (0..1)
+      `
+      ]);
+      const result = emitStandaloneZodSchema(docs, 'test.extendsChoice.Special');
+      expect(result.code).toContain('runeExtendChoice(WrapperSchema');
+      expect(result.code).toContain('const runeExtendChoice = (choice, shape) =>');
+
+      const { RUNTIME_HELPER_JS_SOURCE } = await import('../../src/export.js');
+      const { z } = await import('zod');
+      const evaluableJs = await toEvaluableJs(result.code);
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+      const wrapper = new Function('z', `${RUNTIME_HELPER_JS_SOURCE}\n\n${evaluableJs}\nreturn SpecialSchema;`);
+      const SpecialSchema = wrapper(z);
+      expect(SpecialSchema.safeParse({ cash: { amount: '10' }, note: 'x' }).success).toBe(true);
+      expect(SpecialSchema.safeParse({ note: 123 }).success).toBe(false);
+    }
+  );
+
   skipIfNodeLt22('produces a script for a target with no dependencies at all', async () => {
     const docs = await parseModels([
       `
