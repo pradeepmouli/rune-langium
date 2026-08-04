@@ -159,7 +159,8 @@ import {
   type RosettaCardinality,
   type RosettaEnumeration,
   type RosettaTypeAlias,
-  type Condition
+  type Condition,
+  type TypeCall
 } from '@rune-langium/core';
 import type { GeneratorOptions, GeneratorOutput } from '../types.js';
 import { emitNamespaceWithContract } from './namespace-emitter.js';
@@ -385,10 +386,18 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
   // Private instance methods
   // ---------------------------------------------------------------------------
 
-  /** Resolves an attribute's XSD type name (builtin, enum, Data, or Choice reference — transparently chasing any `RosettaTypeAlias` chain in between) and any recognized scalar facets attached to it via its owning Data's conditions. */
-  private resolveAttributeType(attr: Attribute): string {
+  /**
+   * Shared body behind `resolveAttributeType` (a Data attribute's `typeCall`)
+   * and `renderChoiceComplexType`'s per-option type resolution (a Choice
+   * option's `typeCall` — same `TypeCall` shape, but `ChoiceOption` has no
+   * `name` field of its own to report in a diagnostic, hence the separate
+   * `diagnosticLabel` parameter rather than reading `attr.name` directly).
+   * Resolves to the XSD type name (builtin, enum, Data, or Choice reference —
+   * transparently chasing any `RosettaTypeAlias` chain in between).
+   */
+  private resolveTypeCallToXsdType(typeCall: TypeCall | undefined, diagnosticLabel: string): string {
     return resolveTypeCallTarget(
-      attr.typeCall,
+      typeCall,
       this.typeIndex,
       {
         onPrimitive: (basicTypeName) => {
@@ -406,7 +415,7 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
         onChoice: (node) => node.name,
         onUnresolved: (refText) => {
           if (refText) {
-            this.reportUnresolvedReference(attr.name, refText, 'xs:string');
+            this.reportUnresolvedReference(diagnosticLabel, refText, 'xs:string');
           } else {
             // No `refText` at all — preserve the original wording exactly
             // (no "; emitting xs:string" suffix); `reportUnresolvedReference`'s
@@ -415,7 +424,7 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
             this.diagnostics.push({
               severity: 'warning',
               code: 'unresolved-ref',
-              message: `Attribute '${attr.name}' has an unresolved type reference`
+              message: `Attribute '${diagnosticLabel}' has an unresolved type reference`
             });
           }
           return 'xs:string';
@@ -423,6 +432,11 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
       },
       this.fallbackSourceUri
     );
+  }
+
+  /** Resolves an attribute's XSD type name (builtin, enum, Data, or Choice reference — transparently chasing any `RosettaTypeAlias` chain in between) and any recognized scalar facets attached to it via its owning Data's conditions. */
+  private resolveAttributeType(attr: Attribute): string {
+    return this.resolveTypeCallToXsdType(attr.typeCall, attr.name);
   }
 
   /**
@@ -603,8 +617,16 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private renderChoiceComplexType(choice: Choice): string {
     const elements = choice.attributes.map((option): ResolvedElement => {
-      const optionTypeRef = option.typeCall?.type;
-      const optionTypeName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? 'unknown';
+      // A Choice option has no `name` of its own — its resolved XSD type
+      // name doubles as its element name (mirrors base-namespace-emitter.ts's
+      // `choiceOptionFieldName` convention, used identically by ts-emitter
+      // and zod-emitter for their own Choice-option keys).
+      // `resolveTypeCallToXsdType` shares the exact same resolver wiring
+      // `resolveAttributeType` uses (builtin map, Enum/Data/Choice, and
+      // RosettaTypeAlias-chasing), closing the gap where this path used to
+      // read `option.typeCall` directly and never mapped through
+      // `XSD_BUILTIN_TYPE_MAP` at all.
+      const optionTypeName = this.resolveTypeCallToXsdType(option.typeCall, `${choice.name} option`);
       return { name: optionTypeName, typeName: optionTypeName, minOccurs: '0', maxOccurs: '1' };
     });
 
