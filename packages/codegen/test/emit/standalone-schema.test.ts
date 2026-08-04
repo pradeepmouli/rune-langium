@@ -402,6 +402,36 @@ describe('emitStandaloneZodSchema', () => {
   });
 
   /**
+   * PR #470 final-review finding (bot comment id 3714778810) — `extends
+   * MissingParent` where `MissingParent` doesn't resolve to anything left
+   * `node.superType.ref` undefined, and both `computeStandaloneClosure` and
+   * `buildClosureReferenceGraph` silently treated it as "no parent at all",
+   * with no diagnostic distinguishing that from a genuine no-`extends` type.
+   * `node.superType` itself (the `Reference` wrapper, distinct from
+   * `node.superType.ref`) is present whenever `extends X` was written in
+   * source, regardless of whether `X` resolved — that's the signal used
+   * here.
+   */
+  skipIfNodeLt22('surfaces an unresolved supertype reference as a diagnostic, without dropping the child', async () => {
+    const docs = await parseModels([
+      `
+      namespace test
+      version "1"
+
+      type Foo extends MissingParent:
+        bar string (0..1)
+      `
+    ]);
+    const result = emitStandaloneZodSchema(docs, 'test.Foo');
+    expect(result.code).toContain('FooSchema');
+    expect(result.diagnostics).toContainEqual({
+      severity: 'warning',
+      code: 'unresolved-ref',
+      message: "Data 'Foo': supertype 'MissingParent' is not resolved; inherited attributes are omitted"
+    });
+  });
+
+  /**
    * PR #470 final-review finding (bot comment id 3714695780) — findTargetNode
    * used to silently pick whichever Data declaration dataByName happened to
    * keep (the first one seen) when two `Data`s share a name in the same

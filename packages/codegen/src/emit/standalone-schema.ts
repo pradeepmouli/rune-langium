@@ -99,6 +99,7 @@ export interface StandaloneClosure {
   enumByName: Map<string, RosettaEnumeration>;
   typeAliasByName: Map<string, RosettaTypeAlias>;
   docs: LangiumDocument[];
+  diagnostics: GeneratorDiagnostic[];
 }
 
 type FrontierNode = Data | Choice | RosettaTypeAlias;
@@ -119,6 +120,7 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
   const docs = new Set<LangiumDocument>();
   const visited = new Set<Data | Choice | RosettaEnumeration | RosettaTypeAlias>();
   const frontier: FrontierNode[] = [];
+  const diagnostics: GeneratorDiagnostic[] = [];
 
   const trackDoc = (node: { $container?: unknown }): void => {
     const withDoc = node as { $container?: { $document?: LangiumDocument } };
@@ -157,6 +159,21 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
   while (frontier.length > 0) {
     const node = frontier.shift()!;
     if (isData(node)) {
+      // `node.superType` is the `Reference` object itself (present whenever
+      // source wrote `extends X`); `.ref` is the RESOLVED target, `undefined`
+      // when `X` doesn't resolve to anything. These are two different falsy
+      // cases: no `extends` clause at all (`node.superType` itself absent)
+      // vs. `extends X` written but `X` unresolved (`node.superType` present,
+      // `.ref` undefined) — only the latter is a genuine corpus problem
+      // worth a diagnostic; the closure walk silently omits the (nonexistent)
+      // parent's attributes in both cases, since there is nothing to enqueue.
+      if (node.superType && !node.superType.ref) {
+        diagnostics.push({
+          severity: 'warning',
+          code: 'unresolved-ref',
+          message: `Data '${node.name}': supertype '${node.superType.$refText}' is not resolved; inherited attributes are omitted`
+        });
+      }
       const superRef = node.superType?.ref;
       if (superRef) enqueue(superRef);
       for (const attr of node.attributes) {
@@ -171,7 +188,7 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
     }
   }
 
-  return { dataByName, choiceByName, enumByName, typeAliasByName, docs: Array.from(docs) };
+  return { dataByName, choiceByName, enumByName, typeAliasByName, docs: Array.from(docs), diagnostics };
 }
 
 /**
@@ -387,5 +404,5 @@ export function emitStandaloneZodSchema(
         (header) => `${header}\n${RUNE_EXTEND_CHOICE_HELPER_JS_SOURCE}\n`
       )
     : stripped;
-  return { code, diagnostics: result.diagnostics };
+  return { code, diagnostics: [...closure.diagnostics, ...result.diagnostics] };
 }
