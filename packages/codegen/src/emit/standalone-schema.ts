@@ -58,14 +58,15 @@ export function buildGlobalTypeIndex(namespaceIndexes: readonly NamespaceIndex[]
  * each candidate's own qualified id and compare, rather than parsing the
  * targetId string apart, since namespaces are themselves dot-separated).
  *
- * A `name` present in a namespace's `duplicateDataNames` (two or more `Data`
- * declarations sharing the same name in the same namespace — a genuinely
- * malformed corpus state) is skipped rather than resolved to whichever
- * declaration `dataByName` happened to keep (the first one seen) —
- * `generatePreviewSchemas` already refuses to silently pick a winner for
- * exactly this case (`buildDuplicateTargetSchema`); this function does the
- * same, surfacing as `emitStandaloneZodSchema`'s `ambiguous-target`
- * diagnostic rather than an arbitrarily-chosen schema.
+ * A `name` present in a namespace's `duplicateDataNames`/`duplicateChoiceNames`
+ * (two or more `Data`/`Choice` declarations sharing the same name in the
+ * same namespace — a genuinely malformed corpus state) is skipped rather
+ * than resolved to whichever declaration `dataByName`/`choiceByName`
+ * happened to keep (the first one seen) — `generatePreviewSchemas` already
+ * refuses to silently pick a winner for exactly this case
+ * (`buildDuplicateTargetSchema`); this function does the same, surfacing as
+ * `emitStandaloneZodSchema`'s `ambiguous-target` diagnostic rather than an
+ * arbitrarily-chosen schema.
  */
 export function findTargetNode(
   namespaceIndexes: readonly NamespaceIndex[],
@@ -79,8 +80,10 @@ export function findTargetNode(
       }
     }
     for (const [name, entry] of ns.choiceByName) {
-      if (`${ns.namespace}.${name}` === targetId)
+      if (`${ns.namespace}.${name}` === targetId) {
+        if (ns.duplicateChoiceNames.has(name)) return undefined;
         return { kind: 'choice', node: entry.node, sourceUri: entry.sourceUri };
+      }
     }
     for (const [name, entry] of ns.enumByName) {
       if (`${ns.namespace}.${name}` === targetId) return { kind: 'enum', node: entry.node, sourceUri: entry.sourceUri };
@@ -128,20 +131,54 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
     if (doc) docs.add(doc);
   };
 
+  // `computeStandaloneClosure`'s own maps, like `emitNamespace`'s
+  // `NamespaceWalkResult` they feed into, are bare-name-keyed (ordinary
+  // single-namespace usage has no collisions, and `emitNamespace` stays
+  // UNMODIFIED per this module's design — it has no notion of qualifying a
+  // schema name by namespace). A closure that transitively reaches two
+  // DIFFERENT real namespaces' own same-named Data/Choice/Enum would
+  // otherwise silently let the second-enqueued node overwrite the first in
+  // the bare-name map — both real AST nodes are distinct (this function's
+  // OWN `visited` set, keyed by object identity, enqueues each independently
+  // once), but only ONE ends up with an actual `const <Name>Schema`
+  // declaration in the synthesized script, while every consumer of EITHER
+  // namespace's type still correctly resolves (via Langium's own `.ref`) to
+  // its own real node and emits the same bare `<Name>Schema` reference —
+  // silently validating one namespace's data against the OTHER namespace's
+  // structurally different shape. Detected here and reported as an error
+  // diagnostic; `emitStandaloneZodSchema` refuses to emit anything at all
+  // once one is found (mirrors the `ambiguous-target` precedent — guessing
+  // which namespace "wins" is worse than declining).
+  const reportNameCollision = (kind: string, name: string): void => {
+    diagnostics.push({
+      severity: 'error',
+      code: 'name-collision',
+      message: `Two different namespaces in the closure each declare a '${kind}' named '${name}'; the synthesized script cannot distinguish them.`
+    });
+  };
+
   const enqueue = (node: Data | Choice | RosettaEnumeration | RosettaTypeAlias): void => {
     if (visited.has(node)) return;
     visited.add(node);
     trackDoc(node);
     if (isData(node)) {
-      dataByName.set(node.name, node);
+      const existing = dataByName.get(node.name);
+      if (existing && existing !== node) reportNameCollision('Data', node.name);
+      else dataByName.set(node.name, node);
       frontier.push(node);
     } else if (isChoice(node)) {
-      choiceByName.set(node.name, node);
+      const existing = choiceByName.get(node.name);
+      if (existing && existing !== node) reportNameCollision('Choice', node.name);
+      else choiceByName.set(node.name, node);
       frontier.push(node);
     } else if (isRosettaEnumeration(node)) {
-      enumByName.set(node.name, node);
+      const existing = enumByName.get(node.name);
+      if (existing && existing !== node) reportNameCollision('Enum', node.name);
+      else enumByName.set(node.name, node);
     } else {
-      typeAliasByName.set(node.name, node);
+      const existing = typeAliasByName.get(node.name);
+      if (existing && existing !== node) reportNameCollision('typeAlias', node.name);
+      else typeAliasByName.set(node.name, node);
       frontier.push(node);
     }
   };
@@ -184,7 +221,32 @@ export function computeStandaloneClosure(target: ResolvedTarget, globalIndex: Ty
         resolveTypeCallTarget(option.typeCall, globalIndex, dependencyVisitor, nodeSourceUri(node, ''));
       }
     } else {
-      resolveTypeCallTarget(node.typeCall, globalIndex, dependencyVisitor, nodeSourceUri(node, ''));
+      // Only the initial seed (`target.node`) can ever reach this branch —
+      // resolveTypeCallTarget already collapses any RosettaTypeAlias chain
+      // reached via an attribute/option reference down to its terminal
+      // kind, so an alias reached that way is never itself enqueued. A
+      // dedicated onUnresolved (not the shared `dependencyVisitor`'s
+      // no-op) reports when the REQUESTED target itself is a type alias
+      // whose RHS doesn't resolve to anything — matches emitTypeAliasSchema's
+      // own z.unknown() fallback (zod-emitter.ts), which previously had no
+      // corresponding diagnostic here.
+      resolveTypeCallTarget(
+        node.typeCall,
+        globalIndex,
+        {
+          ...dependencyVisitor,
+          onUnresolved: (refText) => {
+            diagnostics.push({
+              severity: 'warning',
+              code: 'unresolved-ref',
+              message: refText
+                ? `typeAlias '${node.name}': type '${refText}' is not resolved; emitting z.unknown()`
+                : `typeAlias '${node.name}' has an unresolved type reference; emitting z.unknown()`
+            });
+          }
+        },
+        nodeSourceUri(node, '')
+      );
     }
   }
 
@@ -325,17 +387,23 @@ export function emitStandaloneZodSchema(
   const namespaceIndexes = buildNamespaceIndexes(documents);
   const target = findTargetNode(namespaceIndexes, targetId);
   if (!target) {
-    const ambiguous = namespaceIndexes.some((ns) =>
+    const ambiguousKind = namespaceIndexes.some((ns) =>
       Array.from(ns.duplicateDataNames).some((name) => `${ns.namespace}.${name}` === targetId)
-    );
+    )
+      ? 'Data'
+      : namespaceIndexes.some((ns) =>
+            Array.from(ns.duplicateChoiceNames).some((name) => `${ns.namespace}.${name}` === targetId)
+          )
+        ? 'Choice'
+        : undefined;
     return {
       code: '',
       diagnostics: [
-        ambiguous
+        ambiguousKind
           ? {
               severity: 'error',
               code: 'ambiguous-target',
-              message: `Target '${targetId}' matches more than one 'Data' declaration in the loaded documents.`
+              message: `Target '${targetId}' matches more than one '${ambiguousKind}' declaration in the loaded documents.`
             }
           : {
               severity: 'error',
@@ -348,6 +416,16 @@ export function emitStandaloneZodSchema(
 
   const globalIndex = buildGlobalTypeIndex(namespaceIndexes);
   const closure = computeStandaloneClosure(target, globalIndex);
+
+  // An error-severity closure diagnostic (currently only `name-collision`)
+  // means the closure itself is unsound — e.g. two different namespaces
+  // reached from `target` each declare a same-named Data/Choice/Enum, so
+  // the bare-name-keyed synthetic model below cannot represent both.
+  // Refuse to emit anything rather than silently picking a winner, mirroring
+  // the `ambiguous-target` precedent above.
+  if (closure.diagnostics.some((d) => d.severity === 'error')) {
+    return { code: '', diagnostics: closure.diagnostics };
+  }
 
   const graph = buildClosureReferenceGraph(closure, globalIndex);
   const cyclicTypes = findCyclicTypes(graph);

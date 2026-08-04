@@ -432,6 +432,33 @@ describe('emitStandaloneZodSchema', () => {
   });
 
   /**
+   * PR #470 final-review finding (2026-08-04, bot comment id 3715008786) —
+   * when the REQUESTED TARGET itself is a `typeAlias` whose RHS doesn't
+   * resolve (e.g. `typeAlias Target: MissingType`), the closure walk's
+   * frontier handling for a typeAlias node used the shared
+   * `dependencyVisitor`'s no-op `onUnresolved` — the emitted
+   * `TargetSchema = z.unknown()` had no corresponding diagnostic, unlike
+   * the Data-supertype and Choice-option unresolved cases.
+   */
+  skipIfNodeLt22('surfaces an unresolved type-alias target as a diagnostic', async () => {
+    const docs = await parseModels([
+      `
+      namespace test
+      version "1"
+
+      typeAlias Target: MissingType
+      `
+    ]);
+    const result = emitStandaloneZodSchema(docs, 'test.Target');
+    expect(result.code).toContain('TargetSchema = z.unknown()');
+    expect(result.diagnostics).toContainEqual({
+      severity: 'warning',
+      code: 'unresolved-ref',
+      message: "typeAlias 'Target': type 'MissingType' is not resolved; emitting z.unknown()"
+    });
+  });
+
+  /**
    * PR #470 final-review finding (bot comment id 3714695780) — findTargetNode
    * used to silently pick whichever Data declaration dataByName happened to
    * keep (the first one seen) when two `Data`s share a name in the same
@@ -489,5 +516,180 @@ describe('emitStandaloneZodSchema', () => {
     ]);
     const namespaceIndexes = buildNamespaceIndexes(docs);
     expect(findTargetNode(namespaceIndexes, 'test.standaloneDup2.Trade')).toBeUndefined();
+  });
+
+  /**
+   * PR #470 final-review finding (2026-08-04, bot comment id 3715080687) —
+   * findTargetNode's duplicate-name guard covered only the Data branch;
+   * a duplicate-named Choice target was silently resolved to whichever
+   * declaration choiceByName happened to keep.
+   */
+  skipIfNodeLt22(
+    'returns an ambiguous-target diagnostic for a targetId matching two same-named Choice declarations',
+    async () => {
+      const docs = await parseModels([
+        `
+      namespace "test.standaloneDupChoice"
+      version "1"
+
+      type Cash:
+        amount string (0..1)
+
+      choice Asset:
+        Cash
+      `,
+        `
+      namespace "test.standaloneDupChoice"
+      version "1"
+
+      type Commodity:
+        quantity string (0..1)
+
+      choice Asset:
+        Commodity
+      `
+      ]);
+      const result = emitStandaloneZodSchema(docs, 'test.standaloneDupChoice.Asset');
+      expect(result.code).toBe('');
+      expect(result.diagnostics).toEqual([
+        {
+          severity: 'error',
+          code: 'ambiguous-target',
+          message:
+            "Target 'test.standaloneDupChoice.Asset' matches more than one 'Choice' declaration in the loaded documents."
+        }
+      ]);
+    }
+  );
+
+  /**
+   * PR #470 final-review finding (2026-08-04, bot comment id 3715080676,
+   * P1) — `computeStandaloneClosure`'s bare-name-keyed maps silently let a
+   * SECOND, structurally different real namespace's same-named type
+   * overwrite the first: `Root` reaches `a.Left` (whose own `common`
+   * attribute is `a.Common`, `x: string`) and `b.Right` (whose own
+   * `common` attribute is `b.Common`, `y: number`) — two genuinely
+   * DIFFERENT `Common` types. Before the fix, only ONE `const CommonSchema`
+   * declaration survived, and BOTH `Left.common` and `Right.common` ended
+   * up referencing it — silently validating one branch against the
+   * OTHER namespace's shape. Now refuses to emit at all.
+   */
+  skipIfNodeLt22(
+    'refuses to emit (name-collision diagnostic) when the closure reaches two different namespaces declaring the same bare name',
+    async () => {
+      const docs = await parseModels([
+        `
+      namespace "test.collideClosure.a"
+      version "1"
+
+      type Common:
+        x string (0..1)
+
+      type Left:
+        common Common (0..1)
+      `,
+        `
+      namespace "test.collideClosure.b"
+      version "1"
+
+      type Common:
+        y number (0..1)
+
+      type Right:
+        common Common (0..1)
+      `,
+        `
+      namespace "test.collideClosure.root"
+      version "1"
+
+      import test.collideClosure.a.*
+      import test.collideClosure.b.*
+
+      type Root:
+        left Left (0..1)
+        right Right (0..1)
+      `
+      ]);
+      const result = emitStandaloneZodSchema(docs, 'test.collideClosure.root.Root');
+      expect(result.code).toBe('');
+      expect(result.diagnostics).toEqual([
+        {
+          severity: 'error',
+          code: 'name-collision',
+          message:
+            "Two different namespaces in the closure each declare a 'Data' named 'Common'; the synthesized script cannot distinguish them."
+        }
+      ]);
+    }
+  );
+
+  /**
+   * PR #470 final-review finding (2026-08-04, bot comment id 3714316831) —
+   * re-raised against the latest tip; verifies (rather than re-fixes) that
+   * `emitStandaloneZodSchema` genuinely inherits the schemaRefExpr fix
+   * already landed in zod-emitter.ts (PR #469, reused here UNMODIFIED): an
+   * acyclic Data depending on a cyclic one must not throw a TDZ
+   * ReferenceError at evaluation time.
+   */
+  skipIfNodeLt22('an acyclic target depending on a cyclic Data evaluates without a TDZ ReferenceError', async () => {
+    const docs = await parseModels([
+      `
+      namespace test.standaloneAcyclicDependsOnCyclic
+      version "1"
+
+      type Node:
+        child Node (0..1)
+
+      type Root:
+        n Node (0..1)
+      `
+    ]);
+    const result = emitStandaloneZodSchema(docs, 'test.standaloneAcyclicDependsOnCyclic.Root');
+    expect(result.code).toContain('n: z.lazy(() => NodeSchema).optional()');
+    const { RUNTIME_HELPER_JS_SOURCE } = await import('../../src/export.js');
+    const { z } = await import('zod');
+    const evaluableJs = await toEvaluableJs(result.code);
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    const wrapper = new Function('z', `${RUNTIME_HELPER_JS_SOURCE}\n\n${evaluableJs}\nreturn RootSchema;`);
+    const RootSchema = wrapper(z);
+    expect(RootSchema.safeParse({ n: { child: {} } }).success).toBe(true);
+  });
+
+  /**
+   * PR #470 final-review finding (2026-08-04, bot comment id 3714443467) —
+   * re-raised against the latest tip; verifies a mutually-recursive Choice
+   * <-> Choice pair (no Data intermediate) evaluates without a TDZ
+   * ReferenceError, inherited from zod-emitter.ts's emitChoiceSchema
+   * unconditional wrap of a cyclic option reference (PR #469).
+   */
+  skipIfNodeLt22('a mutually-recursive Choice <-> Choice pair evaluates without a TDZ ReferenceError', async () => {
+    const docs = await parseModels([
+      `
+      namespace test.standaloneChoiceMutualCycle
+      version "1"
+
+      choice A:
+        B
+
+      choice B:
+        A
+      `
+    ]);
+    const result = emitStandaloneZodSchema(docs, 'test.standaloneChoiceMutualCycle.A');
+    expect(result.code).toContain('export const ASchema = z.union([z.strictObject({ b: z.lazy(() => BSchema) })]);');
+    const { RUNTIME_HELPER_JS_SOURCE } = await import('../../src/export.js');
+    const { z } = await import('zod');
+    const evaluableJs = await toEvaluableJs(result.code);
+    // A and B reference only each other (no non-recursive leaf attribute),
+    // so no FINITE payload can ever satisfy either — this test's own
+    // signal is that DEFINING the schemas (evaluating `wrapper(z)`) does
+    // not throw a TDZ ReferenceError, not that parsing succeeds.
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    const wrapper = new Function('z', `${RUNTIME_HELPER_JS_SOURCE}\n\n${evaluableJs}\nreturn { ASchema, BSchema };`);
+    const { ASchema, BSchema } = wrapper(z);
+    expect(ASchema).toBeDefined();
+    expect(BSchema).toBeDefined();
+    expect(ASchema.safeParse({ b: {} }).success).toBe(false);
+    expect(() => ASchema.safeParse({ b: {} })).not.toThrow();
   });
 });
