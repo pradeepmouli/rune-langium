@@ -32,13 +32,6 @@ const ROSETTA_BASIC_TYPE_NAMES = new Set([
   'calculation'
 ]);
 
-/**
- * Bound on alias-to-alias chain length — defense-in-depth only; a real corpus never chains
- * this deep. The `Set` cycle guard already terminates any cycle in at most `visitedAliases.size + 1`
- * hops, so this bound is unreachable in practice but serves as a safety net.
- */
-const MAX_ALIAS_CHAIN = 32;
-
 export interface TypeResolutionVisitor<T> {
   onPrimitive(basicTypeName: string): T;
   onEnum(node: RosettaEnumeration, sourceUri: string): T;
@@ -86,7 +79,12 @@ export function resolveTypeCallTarget<T>(
   const visitedAliases = new Set<RosettaTypeAlias>();
   let currentTypeCall: TypeCall | undefined = typeCall;
 
-  for (let hop = 0; hop <= MAX_ALIAS_CHAIN; hop++) {
+  // No hop-count bound: `visitedAliases` alone guarantees termination — any
+  // cycle is caught the moment a previously-seen alias recurs, in at most
+  // `visitedAliases.size + 1` hops — so an explicit cap only risks
+  // misreporting a genuinely valid, merely long, non-cyclic chain as
+  // unresolved.
+  for (;;) {
     const typeRef = currentTypeCall?.type?.ref;
     const refText = currentTypeCall?.type?.$refText;
 
@@ -135,6 +133,4 @@ export function resolveTypeCallTarget<T>(
 
     return visitor.onUnresolved(originalRefText);
   }
-
-  return visitor.onUnresolved(originalRefText);
 }

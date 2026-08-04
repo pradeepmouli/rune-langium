@@ -165,7 +165,7 @@ import {
 import type { GeneratorOptions, GeneratorOutput } from '../types.js';
 import { emitNamespaceWithContract } from './namespace-emitter.js';
 import type { NamespaceEmitterOptions } from './namespace-emitter.js';
-import { BaseNamespaceEmitter, decodeCardinality } from './base-namespace-emitter.js';
+import { BaseNamespaceEmitter, decodeCardinality, choiceOptionFieldName } from './base-namespace-emitter.js';
 import type { NamespaceRegistry } from './namespace-registry.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { recognizeCondition } from './constraint-recognizer.js';
@@ -617,17 +617,22 @@ export class XsdNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private renderChoiceComplexType(choice: Choice): string {
     const elements = choice.attributes.map((option): ResolvedElement => {
-      // A Choice option has no `name` of its own — its resolved XSD type
-      // name doubles as its element name (mirrors base-namespace-emitter.ts's
-      // `choiceOptionFieldName` convention, used identically by ts-emitter
-      // and zod-emitter for their own Choice-option keys).
-      // `resolveTypeCallToXsdType` shares the exact same resolver wiring
-      // `resolveAttributeType` uses (builtin map, Enum/Data/Choice, and
-      // RosettaTypeAlias-chasing), closing the gap where this path used to
-      // read `option.typeCall` directly and never mapped through
-      // `XSD_BUILTIN_TYPE_MAP` at all.
-      const optionTypeName = this.resolveTypeCallToXsdType(option.typeCall, `${choice.name} option`);
-      return { name: optionTypeName, typeName: optionTypeName, minOccurs: '0', maxOccurs: '1' };
+      // A Choice option has no `name` of its own, so ELEMENT NAME and TYPE
+      // are two distinct values, per the FIELD-KEY-vs-RESOLVED-VALUE split
+      // convention ts-emitter's emitChoiceTypeDeclaration and zod-emitter's
+      // emitChoiceSchema already establish: the name is derived from the
+      // DIRECT/immediate reference (never the alias-chased terminal target,
+      // via the shared `choiceOptionFieldName` convention), while the type
+      // chases through any RosettaTypeAlias chain to the terminal resolved
+      // XSD type. Using the resolved TYPE for both — as this line used to —
+      // breaks for a primitive option (`choice Asset: string` resolves to
+      // `xs:string`, and `xs:` is not a valid NCName prefix for an element
+      // `name` attribute).
+      const optionTypeRef = option.typeCall?.type;
+      const directName = optionTypeRef?.ref?.name ?? optionTypeRef?.$refText ?? '?';
+      const elementName = choiceOptionFieldName(directName);
+      const typeName = this.resolveTypeCallToXsdType(option.typeCall, `${choice.name} option`);
+      return { name: elementName, typeName, minOccurs: '0', maxOccurs: '1' };
     });
 
     const bodyLines: string[] = ['<xs:choice>'];
