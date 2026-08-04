@@ -257,21 +257,30 @@ const CROSS_NAMESPACE_IMPORT_LINE = /^import \{[^}]*\} from '[^']*\.zod\.js';(\r
  * `ReferenceError`. See `test/fixtures/type-aliases/data-ref/expected.zod.ts`
  * for the same defect in ordinary per-namespace output.
  *
- * A second caveat, also inherited from shared infrastructure (`topo-sort.ts`
- * and `zod-emitter.ts`'s reference-emission, both entirely unmodified here)
- * and confirmed to reproduce in the REAL per-namespace `.zod.ts` output too
- * — not specific to standalone extraction: `topoSort` always appends cyclic
- * types LAST, after every non-cyclic type, regardless of whether a
- * non-cyclic type depends on one of them; and `zod-emitter.ts` only wraps a
- * cyclic type's own schema declaration in `z.lazy()`, never a reference TO
- * it from elsewhere. So a non-cyclic `Data`/`Choice` that references a
- * cyclic one (e.g. `Root { n: Node }` where `Node` is self-referencing)
- * emits `RootSchema`'s eager `const` initializer BEFORE `NodeSchema` is
- * declared, throwing a TDZ `ReferenceError` at evaluation time. The real
- * fix spans `topo-sort.ts`'s ordering algorithm and/or `zod-emitter.ts`'s
- * reference-emission (deciding whether to wrap a REFERENCE, not just a
- * declaration, in `z.lazy()`), well beyond this module's own scope — this
- * function inherits it unmodified.
+ * A second, unrelated ordering hazard was found and FIXED directly in
+ * `zod-emitter.ts` (not inherited/unfixed like the above): `topoSort`
+ * always appends cyclic types LAST, after every non-cyclic type, regardless
+ * of whether a non-cyclic type depends on one of them, and `zod-emitter.ts`
+ * previously only wrapped a cyclic type's OWN schema declaration in
+ * `z.lazy()`, never a reference TO it from elsewhere — confirmed to
+ * reproduce in the REAL per-namespace `.zod.ts` output too, not specific to
+ * standalone extraction. Fixed via `schemaRefExpr(name, ownerName)`, which
+ * wraps a cross-declaration reference in `z.lazy()` while leaving
+ * within-a-cycle references (self-references, mutual-cycle members) bare,
+ * matching `test/us1-structural.test.ts`'s existing byte-identical golden
+ * fixture; see `test/emit/zod-cyclic-reference-wrapping.test.ts` for full
+ * coverage, including the related fix folding a cyclic parent's attributes
+ * inline instead of `.extend()` (which `ZodLazy` doesn't support at all).
+ *
+ * A THIRD, separate, still-unfixed issue was found alongside this: a Data
+ * extending a CROSS-namespace parent leaks that parent into the child
+ * namespace's own `dataByName`/`emitOrder`, producing both a cross-ns
+ * `import` AND a duplicate local re-declaration of the same schema name —
+ * invalid ES module syntax regardless of cyclic-ness, reproducible against
+ * the already-committed `test/fixtures/data-extends-data-crossns` fixture.
+ * This is a `namespace-walker.ts`-level cross-namespace concern, unrelated
+ * to cyclic ordering, and genuinely out of scope for this module — it is
+ * NOT fixed here.
  */
 export function emitStandaloneZodSchema(
   documents: LangiumDocument[],
