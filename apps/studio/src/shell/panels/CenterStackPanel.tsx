@@ -162,7 +162,7 @@ export const CenterStackPanel = withInstrumentation(
             <Fragment key={pane}>
               {i > 0 && <div className="studio-center-stack__split" onMouseDown={(e) => handleDragStart(i - 1, e)} />}
               <div
-                className="studio-center-stack__pane"
+                className="studio-center-stack__pane pl-[12px] pr-[12px] pt-[12px] pb-[12px] text-[14px]"
                 data-pane={pane}
                 style={{
                   // e2e-batch fix: was `flex: <grow> 1 0%`, which gives a 0% basis
