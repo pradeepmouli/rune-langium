@@ -467,13 +467,38 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   /**
+   * Reference a Data/Choice schema by name from within `ownerName`'s own
+   * declaration. When `name` is itself cyclic (`this.ctx.lazyTypes`), a bare
+   * `${name}Schema` reference can be emitted BEFORE that `const` is
+   * declared — `topoSort` always places cyclic types after every non-cyclic
+   * one, regardless of whether a non-cyclic type depends on one of them —
+   * throwing a TDZ `ReferenceError` at evaluation time. `z.lazy(() => ...)`
+   * defers evaluation past module-initialization time, making the
+   * reference safe regardless of emit order.
+   *
+   * Only wraps when `ownerName` itself is NOT cyclic: a reference from
+   * WITHIN a cyclic type's own body (including a genuine self-reference, or
+   * a reference between two members of the same mutual cycle — A and B are
+   * each individually cyclic) is already safe, since `ownerName`'s own
+   * declaration is already inside its own `z.lazy()` closure — confirmed by
+   * `test/us1-structural.test.ts`'s byte-identical golden fixture for
+   * mutual cycles and self-references, which asserts the ORIGINAL
+   * unwrapped form for exactly this case.
+   */
+  private schemaRefExpr(name: string, ownerName: string): string {
+    return this.ctx.lazyTypes.has(name) && !this.ctx.lazyTypes.has(ownerName)
+      ? `z.lazy(() => ${name}Schema)`
+      : `${name}Schema`;
+  }
+
+  /**
    * Resolve the Zod type expression for an attribute's type reference.
    * Handles built-ins (RosettaBasicType), Data (object refs), Enumerations.
    *
    * Falls back to $refText-based lookup for unresolved references (e.g., when
    * only a single file is parsed without the full workspace — common for fixtures).
    */
-  private resolveTypeExpr(attr: Attribute): string {
+  private resolveTypeExpr(attr: Attribute, ownerName: string): string {
     return resolveTypeCallTarget(
       attr.typeCall,
       this.typeIndex,
@@ -489,8 +514,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
           return 'z.unknown()';
         },
         onEnum: (node) => `${node.name}Schema`,
-        onData: (node) => `${node.name}Schema`,
-        onChoice: (node) => `${node.name}Schema`,
+        onData: (node) => this.schemaRefExpr(node.name, ownerName),
+        onChoice: (node) => this.schemaRefExpr(node.name, ownerName),
         onUnresolved: (refText) => {
           if (refText) {
             // Unknown but named — emit schema reference optimistically
@@ -538,8 +563,15 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         {
           onPrimitive: (basicTypeName) => this.ctx.builtinTypeMap[basicTypeName] ?? `${basicTypeName}Schema`,
           onEnum: (node) => `${node.name}Schema`,
-          onData: (node) => `${node.name}Schema`,
-          onChoice: (node) => `${node.name}Schema`,
+          // '' as owner, NOT `choice.name`: unlike a Data's own declaration
+          // (which gets an outer z.lazy() wrap when cyclic, per
+          // emitTypeSchema's isLazy branch), a Choice's own declaration
+          // (below) is NEVER itself wrapped — so a reference here always
+          // needs wrapping when its target is cyclic, with no "already
+          // inside my own lazy closure" exemption to apply. '' can never
+          // match a real type name in lazyTypes.
+          onData: (node) => this.schemaRefExpr(node.name, ''),
+          onChoice: (node) => this.schemaRefExpr(node.name, ''),
           onUnresolved: (refText) => `${refText ?? 'unknown'}Schema`
         },
         this.ctx.namespace
@@ -561,8 +593,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    * Emit a single attribute as a Zod object property entry.
    * FR-003 (cardinality), FR-009 (reserved-word quoting).
    */
-  private emitAttribute(attr: Attribute): string {
-    const baseTypeExpr = this.resolveTypeExpr(attr);
+  private emitAttribute(attr: Attribute, ownerName: string): string {
+    const baseTypeExpr = this.resolveTypeExpr(attr, ownerName);
     const card = attr.card;
     const zodExpr = ZodNamespaceEmitter.applyCardinality(card, baseTypeExpr);
     const key = ZodNamespaceEmitter.quoteKey(attr.name);
@@ -577,7 +609,7 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
     if (data.attributes.length === 0) {
       return 'z.object({})'; // FR-008
     }
-    const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+    const attrs = data.attributes.map((attr) => this.emitAttribute(attr, data.name));
     // Join with comma+newline between entries; no trailing comma (linter rule: trailingComma: "none")
     return `z.object({\n${attrs.join(',\n')}\n})`;
   }
@@ -675,11 +707,41 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         );
       }
 
+      // When the parent is cyclic, `.extend()` cannot be used at all — a
+      // cyclic type's own declaration is `z.lazy(() => ...)` (per
+      // emitTypeSchema's `isLazy` branch above), and `ZodLazy` has no
+      // `.extend()` method, at either the type OR runtime level (confirmed:
+      // `NodeSchema.extend is not a function` at actual runtime, not just a
+      // TS type error — z.lazy() wrapping the WHOLE `.extend(...)` call
+      // still fails, since the call itself is illegal regardless of when it
+      // runs). Fold the parent's own attributes inline into a flat
+      // `z.object({...})` instead — the same technique
+      // `buildRuneExtendChoiceExpr` already uses for the Choice-ancestor
+      // case — so this never needs `.extend()` on the cyclic parent at all.
+      // Each folded attribute still goes through `emitAttribute` →
+      // `resolveTypeExpr`, so a folded attribute that itself references the
+      // cyclic type (e.g. the parent's own self-referencing field) is still
+      // correctly wrapped via `schemaRefExpr`.
       const parentSchema = `${superRef.name}Schema`;
+      if (this.ctx.lazyTypes.has(superRef.name)) {
+        const seen = new Set<string>();
+        const attrLines: string[] = [];
+        for (const attr of [...superRef.attributes, ...data.attributes]) {
+          if (seen.has(attr.name)) continue;
+          seen.add(attr.name);
+          attrLines.push(this.emitAttribute(attr, data.name));
+        }
+        if (attrLines.length === 0) {
+          return 'z.object({})';
+        }
+        const reindented =
+          attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
+        return `z.object({\n${reindented}\n})`;
+      }
       if (data.attributes.length === 0) {
         return `${parentSchema}.extend({})`;
       }
-      const attrs = data.attributes.map((attr) => this.emitAttribute(attr));
+      const attrs = data.attributes.map((attr) => this.emitAttribute(attr, data.name));
       const reindented = attrIndent === '' ? attrs.join(',\n') : attrs.map((a) => `${attrIndent}${a}`).join(',\n');
       return `${parentSchema}.extend({\n${reindented}\n})`;
     }
@@ -694,6 +756,12 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private buildRuneExtendChoiceExpr(choice: Choice, dataChain: Data[], attrIndent: '' | '  '): string {
     const choiceSchema = `${choice.name}Schema`;
+    // Same reasoning as buildSuperTypeSchemaExpr's `wrap`: `runeExtendChoice`
+    // is a plain function CALL (not a chained method), so when `choice` is
+    // cyclic the whole call — not just `choiceSchema` — is wrapped in
+    // z.lazy() to defer the (otherwise eager) reference past
+    // module-initialization time.
+    const wrap = (expr: string): string => (this.ctx.lazyTypes.has(choice.name) ? `z.lazy(() => ${expr})` : expr);
 
     const seen = new Set<string>();
     const attrLines: string[] = [];
@@ -701,16 +769,23 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
       for (const attr of link.attributes) {
         if (seen.has(attr.name)) continue;
         seen.add(attr.name);
-        attrLines.push(this.emitAttribute(attr));
+        // `choice.name`, not `link.name`: when `wrap()` fires (choice is
+        // cyclic), this whole expression — and every folded attribute in
+        // it — ends up inside `wrap()`'s own z.lazy() closure, so a
+        // reference back to `choice` from one of these attributes needs no
+        // further wrapping, same as any other within-its-own-lazy-closure
+        // reference. `link` (the Data instance an attribute happens to be
+        // folded from) isn't itself lazy-wrapped here at all.
+        attrLines.push(this.emitAttribute(attr, choice.name));
       }
     }
 
     if (attrLines.length === 0) {
-      return `runeExtendChoice(${choiceSchema}, {})`;
+      return wrap(`runeExtendChoice(${choiceSchema}, {})`);
     }
     const reindented =
       attrIndent === '' ? attrLines.join(',\n') : attrLines.map((a) => `${attrIndent}${a}`).join(',\n');
-    return `runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`;
+    return wrap(`runeExtendChoice(${choiceSchema}, {\n${reindented}\n})`);
   }
 
   /**
@@ -769,7 +844,8 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
         return `export const ${schemaName} = ${chainedObjectExpr}\n${condIndented};`;
       } else {
         // z.object chain: build chain as `z\n  .object({...})\n  .refine(...)`
-        const attrLines = data.attributes.length === 0 ? [] : data.attributes.map((attr) => this.emitAttribute(attr));
+        const attrLines =
+          data.attributes.length === 0 ? [] : data.attributes.map((attr) => this.emitAttribute(attr, data.name));
         // Build object body with 4-space attribute indentation.
         // emitAttribute returns '  key: val' (2-space prefix), so add 2 more for 4 total.
         const objectBody =
@@ -1008,8 +1084,11 @@ export class ZodNamespaceEmitter extends BaseNamespaceEmitter {
           return 'z.unknown()';
         },
         onEnum: (node) => `${node.name}Schema`,
-        onData: (node) => `${node.name}Schema`,
-        onChoice: (node) => `${node.name}Schema`,
+        // '' as owner: a type alias's own declaration is never itself
+        // wrapped in z.lazy() (same reasoning as emitChoiceSchema's option
+        // loop above) — always wrap when the target is cyclic.
+        onData: (node) => this.schemaRefExpr(node.name, ''),
+        onChoice: (node) => this.schemaRefExpr(node.name, ''),
         // Pre-migration behavior: a totally unresolved RHS (not a builtin,
         // not a known Enum/Data/Choice/alias) falls back to `z.unknown()`
         // with no diagnostic — verbatim, no optimistic `${refText}Schema`
