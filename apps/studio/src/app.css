@@ -2236,6 +2236,11 @@ html {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+
+  /* Animate the flex split when panes open/close. Disabled while a
+   * split-handle drag is live (`.is-dragging`) so the split tracks the
+   * pointer 1:1. */
+  transition: flex-grow var(--motion-default);
 }
 
 /* Aa font-size button — applies CSS `zoom` to the center-stack panes so
@@ -2326,13 +2331,6 @@ html {
   animation: studio-perspective-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Center-stack panes — animate the flex split when panes open/close.
- * Disabled while a split-handle drag is live (`.is-dragging`) so the
- * split tracks the pointer 1:1. */
-.studio-app .studio-center-stack__pane {
-  transition: flex-grow var(--motion-default);
-}
-
 .studio-app .studio-center-stack.is-dragging .studio-center-stack__pane {
   transition: none;
 }
@@ -2402,7 +2400,7 @@ html {
 
 /* Subtle press-down on pointer-down. Scoped with :where() on the inner
  * compound so it stays easy to override, and skipped for disabled buttons. */
-.studio-app :where(button:not([data-slot='button']):not(:disabled)):active {
+.studio-app :where(button:not([data-slot='button'], :disabled)):active {
   transform: scale(0.96);
 }
 
