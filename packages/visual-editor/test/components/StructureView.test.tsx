@@ -383,14 +383,21 @@ describe('StructureView — adapter + layout integration', () => {
 // when most are off-viewport. onlyRenderVisibleElements culls offscreen nodes
 // — a favorable trade-off for a read-only viewer with no edges and no minimap.
 // Perf benefit is only observable in real-browser scroll/pan; this test just
-// asserts the prop is passed so CI catches regressions.
+// asserts the prop is gated so CI catches regressions.
+//
+// PR #472 review: culling is now DEFERRED until the measurement pass has
+// converged for the current layout — culled nodes never mount, so enabling
+// culling before every node is measured would freeze estimate-based widths.
+// In jsdom the container reports 0×0 (treated as hidden — see the hidden-host
+// guard), so measurement never runs and the prop must stay false here. The
+// converged=true path is exercised in real-browser e2e verification.
 // ---------------------------------------------------------------------------
 
 describe('StructureView — onlyRenderVisibleElements (Finding H)', () => {
-  it('passes onlyRenderVisibleElements to ReactFlow', () => {
+  it('keeps onlyRenderVisibleElements off until measurement converges', () => {
     render(<StructureView focusedTypeId="cdm.trade.Trade" adapterDoc={tradeDoc} />);
     expect(screen.queryByTestId('structure-empty-state')).toBeNull();
     const flow = screen.getByTestId('mock-react-flow');
-    expect(flow.getAttribute('data-only-render-visible')).toBe('true');
+    expect(flow.getAttribute('data-only-render-visible')).toBe('false');
   });
 });

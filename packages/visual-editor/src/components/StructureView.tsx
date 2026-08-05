@@ -538,15 +538,41 @@ function StructureFlowInner({
   // found (the re-measured widths match within epsilon), which ends the
   // measure → re-layout → measure loop after one correction in practice.
   // Synchronous in useLayoutEffect, so the style mutations never paint.
+  //
+  // Hidden-host guard (PR #472 review): PerspectiveHost keeps Explore
+  // mounted under `display:none`, so this effect can fire while the
+  // container is hidden — every offsetWidth reads 0, the measurer returns
+  // null, and we must NOT treat that as convergence. Skip instead, and use
+  // a ResizeObserver to bump `visibilityTick` when the container gains
+  // real dimensions again so the measurement pass re-runs on reveal.
+  const [visibilityTick, setVisibilityTick] = useState(0);
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || nodes.length === 0) return;
+    if (container.offsetWidth === 0 && container.offsetHeight === 0) return; // hidden — skip
     const next = measureStructureNodeWidths(container, measuredWidths);
     if (next) setMeasured({ key: layoutKey, widths: next });
     // null → converged: every rendered node's measured width matches the
     // layout input within epsilon. Safe to enable viewport culling now.
     else setConvergedKey(layoutKey);
-  }, [nodes, layoutKey, measuredWidths]);
+  }, [nodes, layoutKey, measuredWidths, visibilityTick]);
+
+  // Re-trigger measurement when the container transitions hidden → visible
+  // (display:none flips offsetWidth 0 → real). ResizeObserver fires on that
+  // transition; the tick only bumps on the 0 → >0 edge to avoid re-running
+  // measurement on ordinary panel resizes.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    let wasHidden = container.offsetWidth === 0 && container.offsetHeight === 0;
+    const ro = new ResizeObserver(() => {
+      const hidden = container.offsetWidth === 0 && container.offsetHeight === 0;
+      if (wasHidden && !hidden) setVisibilityTick((t) => t + 1);
+      wasHidden = hidden;
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   // Auto-fit on focus or expansion change. User feedback: when nodes are
   // expanded the structure tree grows past the viewport edge. Re-fitting
