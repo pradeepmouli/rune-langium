@@ -74,12 +74,16 @@ const UTILITY_PANEL_IDS = new Set(['workspace.problems', 'workspace.activity', '
 function UtilityGroupHeaderActions(props: IDockviewHeaderActionsProps) {
   const { actions } = useContext(UtilityHeaderActionsContext);
   const { utilitiesCollapsed, toggleUtilities } = useContext(UtilityTrayContext);
-  const activeId = props.activePanel?.id;
-  if (!activeId || !UTILITY_PANEL_IDS.has(activeId)) return null;
+  // Use `api.component` (the registered component name, e.g.
+  // "workspace.problems") rather than `activePanel.id` — in native (fromJSON)
+  // layouts dockview may assign a different panel id (e.g. "p-problems"), so
+  // id-based lookup misses the header-actions registry entry and the chevron.
+  const activeComponent = props.activePanel?.api.component;
+  if (!activeComponent || !UTILITY_PANEL_IDS.has(activeComponent)) return null;
   const label = utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages';
   return (
     <div className="studio-panel-actions mr-1" aria-label="Utility panel actions">
-      {actions.get(activeId) ?? null}
+      {actions.get(activeComponent) ?? null}
       <button
         type="button"
         className="studio-panel-action studio-utility-toggle"
