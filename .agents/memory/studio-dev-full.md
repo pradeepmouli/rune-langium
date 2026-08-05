@@ -21,3 +21,8 @@ Upstream assumes vite on :5173; Replit preview needs :5000. Five local-only conf
 ## Styling gotchas (Aug 2026)
 - dock-theme.css sash rules are DUPLICATED (layered + unlayered copies) — edit both. Never apply `top/bottom:0 !important` to all sashes; it overrides dockview's inline `top:Npx` on vertical-split sashes and makes the bottom tray non-resizable.
 - Studio app.css `@layer components` rules lose to Tailwind's `@layer utilities` (button variant hover/active classes). Interaction-state overrides for chrome buttons must be unlayered (see `.studio-chrome-button:active`).
+
+## CI gates (PR checks)
+- Every `.ts/.tsx` needs an SPDX header in the first 3 lines: MIT under `packages/`, FSL-1.1-ALv2 under `apps/studio/` — new files fail check-headers otherwise.
+- `rune(no-uninstrumented-export)` lint blocks CI too, not just commits: any exported function in apps/studio must be wrapped in `withInstrumentation(fn)` (single arg, no options object).
+- stylelint runs on studio CSS: no duplicate selectors, and `:not(a):not(b)` must be written as `:not(a, b)`.
