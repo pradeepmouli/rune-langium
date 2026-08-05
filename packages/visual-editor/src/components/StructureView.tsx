@@ -419,6 +419,14 @@ function StructureFlowInner({
     key: string;
     widths: ReadonlyMap<string, MeasuredNodeWidths>;
   } | null>(null);
+  // Viewport culling (`onlyRenderVisibleElements`) must stay OFF until the
+  // measurement pass has converged for the current layout: culled nodes are
+  // never mounted, so they would keep their character-count estimates, and
+  // nothing re-runs measurement when a pan/fitView later mounts them
+  // (PR #472 review). Once measureStructureNodeWidths returns null (nothing
+  // changed — every node measured within epsilon) for the current layoutKey,
+  // all widths are real and culling is safe to enable.
+  const [convergedKey, setConvergedKey] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const expansionSignature = useMemo(() => {
     const entries: string[] = [];
@@ -535,6 +543,9 @@ function StructureFlowInner({
     if (!container || nodes.length === 0) return;
     const next = measureStructureNodeWidths(container, measuredWidths);
     if (next) setMeasured({ key: layoutKey, widths: next });
+    // null → converged: every rendered node's measured width matches the
+    // layout input within epsilon. Safe to enable viewport culling now.
+    else setConvergedKey(layoutKey);
   }, [nodes, layoutKey, measuredWidths]);
 
   // Auto-fit on focus or expansion change. User feedback: when nodes are
@@ -596,7 +607,7 @@ function StructureFlowInner({
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
-          onlyRenderVisibleElements
+          onlyRenderVisibleElements={convergedKey === layoutKey}
           proOptions={{ hideAttribution: true }}
           // e2e-batch fix #3: selection sync — clicking any node in the
           // Structure tree writes the OWNER type's canonical id to the shared
