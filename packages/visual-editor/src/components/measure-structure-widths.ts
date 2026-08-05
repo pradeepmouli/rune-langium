@@ -64,7 +64,10 @@ export function measureStructureNodeWidths(
     targets.push({
       id,
       rows: el.querySelector<HTMLElement>('.rune-node-rows, .rune-graph-group__base-rows'),
-      header: el.querySelector<HTMLElement>('.rune-node-header')
+      // Base-type containers (GroupContainerNode) render their header as
+      // `.rune-graph-group__header`, not `.rune-node-header` — include both
+      // so long base type names get real measurements too (PR #472 review).
+      header: el.querySelector<HTMLElement>('.rune-node-header, .rune-graph-group__header')
     });
   }
   if (targets.length === 0) return null;
