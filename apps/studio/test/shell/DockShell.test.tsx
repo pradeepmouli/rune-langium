@@ -510,6 +510,41 @@ describe('DockShell — dockview integration (T065)', () => {
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
   });
+
+  it('finds the utility tray even when the snapshot lacks a Problems panel', async () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        initialLayout={
+          {
+            version: LAYOUT_SCHEMA_VERSION,
+            writtenBy: '0.1.0',
+            dockview: {
+              shape: 'native',
+              json: {
+                grid: { root: {} },
+                panels: {
+                  // A valid native snapshot may contain any subset of the
+                  // utility tabs — here Activity only, with an arbitrary id.
+                  'p-activity': { contentComponent: 'workspace.activity', testGroupHeight: 42 }
+                }
+              }
+            }
+          } as never
+        }
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    // Collapsed-state derivation and the toggle must both work off the
+    // Activity group: toggle offers SHOW and the first click expands it.
+    const toggle = screen.getByTestId('toggle-utilities');
+    expect(toggle.textContent).toMatch(/show utilities/i);
+    const sizeCalls = lastApi?.groups?.get('p-activity')?.sizeCalls ?? [];
+    fireEvent.click(toggle);
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
+  });
 });
 
 describe('DockShell — keyboard shortcuts (T074 / T075)', () => {

@@ -336,7 +336,7 @@ export const DockShell = withInstrumentation(
             // Look up by registered component name, not panel id — native
             // snapshots may key utility panels with arbitrary ids
             // (e.g. "p-problems") while contentComponent stays stable.
-            const bottomGroup = event.api.panels.find((p) => p.api.component === 'workspace.problems')?.group;
+            const bottomGroup = event.api.panels.find((p) => UTILITY_PANEL_IDS.has(p.api.component))?.group;
             if (bottomGroup) {
               setUtilitiesCollapsedState(bottomGroup.api.height <= COLLAPSED_UTILITY_HEIGHT + 8);
             }
@@ -443,7 +443,7 @@ export const DockShell = withInstrumentation(
       setUtilitiesCollapsedState(collapsed);
       const token = ++utilityTweenTokenRef.current;
       // Look up by component name — native snapshots may use arbitrary ids.
-      const problemsPanel = apiRef.current?.panels.find((p) => p.api.component === 'workspace.problems');
+      const problemsPanel = apiRef.current?.panels.find((p) => UTILITY_PANEL_IDS.has(p.api.component));
       if (!problemsPanel) {
         return;
       }

@@ -48,6 +48,9 @@ const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
  * when collapsed, hiding the tray toolbar entirely.
  */
 const BOTTOM_GROUP_MIN_HEIGHT = 42;
+// Components that live in the bottom utility tray — used to find the
+// restored tray group regardless of which tabs a snapshot contains.
+const UTILITY_COMPONENTS = new Set(['workspace.problems', 'workspace.activity', 'workspace.output']);
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
@@ -90,9 +93,10 @@ export const applyLayout = withInstrumentation(
         throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
       }
       // Look up by registered component name, not panel id — native
-      // snapshots may key utility panels with arbitrary ids.
+      // snapshots may key utility panels with arbitrary ids, and the tray
+      // may hold any subset of the utility tabs (e.g. Activity only).
       restoredPanels
-        .find((panel) => panel.api.component === 'workspace.problems')
+        .find((panel) => UTILITY_COMPONENTS.has(panel.api.component))
         ?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
     } catch (err) {
       // The user just lost their saved layout. Don't be silent — log the
