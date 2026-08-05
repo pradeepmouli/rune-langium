@@ -324,6 +324,15 @@ export const DockShell = withInstrumentation(
           applyPanelTabMeta(event.api, panelTabMetaRef.current);
           if (currentLayout.dockview?.shape === 'factory') {
             setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
+          } else {
+            // Native layouts (persisted after user interaction) restore the
+            // bottom group height via fromJSON without carrying an explicit
+            // `collapsed` flag — derive it from the restored group height so
+            // the chevron direction and first toggle behave correctly.
+            const bottomGroup = event.api.getPanel('workspace.problems')?.group;
+            if (bottomGroup) {
+              setUtilitiesCollapsedState(bottomGroup.api.height <= COLLAPSED_UTILITY_HEIGHT + 8);
+            }
           }
         } catch (err) {
           const fallback = buildDefaultLayout({

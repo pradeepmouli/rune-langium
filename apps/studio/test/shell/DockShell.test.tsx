@@ -16,6 +16,7 @@ import { useState } from 'react';
 
 interface FakeGroupSpy {
   api: {
+    height: number;
     setSize: (s: { width?: number; height?: number }) => void;
     setConstraints: (c: {
       minimumHeight?: number;
@@ -40,11 +41,12 @@ interface FakePanelSpy {
   group: FakeGroupSpy;
 }
 
-function makeFakeGroup(): FakeGroupSpy {
+function makeFakeGroup(height = 220): FakeGroupSpy {
   const spy: FakeGroupSpy = {
     sizeCalls: [],
     constraintCalls: [],
     api: {
+      height,
       setSize: (s) => spy.sizeCalls.push(s),
       setConstraints: (c) => spy.constraintCalls.push(c)
     }
@@ -101,7 +103,32 @@ class FakeApi {
       group
     };
   };
-  fromJSON = () => {};
+  // Restores panels from a native-shape snapshot. Supports the optional
+  // per-panel `testGroupHeight` hook so tests can restore a collapsed tray.
+  fromJSON = (data: unknown) => {
+    const panels = (data as { panels?: Record<string, { contentComponent?: string; testGroupHeight?: number }> })
+      ?.panels;
+    for (const [id, panel] of Object.entries(panels ?? {})) {
+      const component = panel?.contentComponent ?? id;
+      const group = makeFakeGroup(typeof panel?.testGroupHeight === 'number' ? panel.testGroupHeight : 220);
+      const panelSpy: FakePanelSpy = {
+        activeCalls: 0,
+        parameterCalls: [],
+        api: {
+          setActive: () => {
+            panelSpy.activeCalls++;
+          },
+          updateParameters: (parameters) => {
+            panelSpy.parameterCalls.push(parameters);
+          }
+        },
+        group
+      };
+      this.panels.push({ id, component, api: { component } } as unknown as (typeof this.panels)[number]);
+      this.groups.set(id, group);
+      this.panelStates.set(id, panelSpy);
+    }
+  };
   toJSON = () => {
     return { panels: this.panels.map((p) => p.id) };
   };
@@ -443,6 +470,40 @@ describe('DockShell — dockview integration (T065)', () => {
 
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 42 });
+    fireEvent.click(toggle);
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
+  });
+
+  it('derives collapsed state from group height when restoring a native layout', async () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        initialLayout={
+          {
+            version: LAYOUT_SCHEMA_VERSION,
+            writtenBy: '0.1.0',
+            dockview: {
+              shape: 'native',
+              json: {
+                grid: { root: {} },
+                panels: {
+                  'workspace.problems': { contentComponent: 'workspace.problems', testGroupHeight: 42 }
+                }
+              }
+            }
+          } as never
+        }
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    // Restored group height (42px) is at the collapsed threshold, so the
+    // shell must treat the tray as collapsed: the toolbar toggle offers to
+    // SHOW utilities, and the first click EXPANDS (not a redundant collapse).
+    const toggle = screen.getByTestId('toggle-utilities');
+    expect(toggle.textContent).toMatch(/show utilities/i);
+    const sizeCalls = lastApi?.groups?.get('workspace.problems')?.sizeCalls ?? [];
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
   });
