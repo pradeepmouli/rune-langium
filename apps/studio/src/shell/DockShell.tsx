@@ -333,7 +333,10 @@ export const DockShell = withInstrumentation(
             // bottom group height via fromJSON without carrying an explicit
             // `collapsed` flag — derive it from the restored group height so
             // the chevron direction and first toggle behave correctly.
-            const bottomGroup = event.api.getPanel('workspace.problems')?.group;
+            // Look up by registered component name, not panel id — native
+            // snapshots may key utility panels with arbitrary ids
+            // (e.g. "p-problems") while contentComponent stays stable.
+            const bottomGroup = event.api.panels.find((p) => p.api.component === 'workspace.problems')?.group;
             if (bottomGroup) {
               setUtilitiesCollapsedState(bottomGroup.api.height <= COLLAPSED_UTILITY_HEIGHT + 8);
             }
@@ -439,7 +442,8 @@ export const DockShell = withInstrumentation(
     const setUtilitiesCollapsed = useCallback((collapsed: boolean) => {
       setUtilitiesCollapsedState(collapsed);
       const token = ++utilityTweenTokenRef.current;
-      const problemsPanel = apiRef.current?.getPanel('workspace.problems');
+      // Look up by component name — native snapshots may use arbitrary ids.
+      const problemsPanel = apiRef.current?.panels.find((p) => p.api.component === 'workspace.problems');
       if (!problemsPanel) {
         return;
       }

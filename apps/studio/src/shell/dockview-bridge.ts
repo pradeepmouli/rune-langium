@@ -89,7 +89,11 @@ export const applyLayout = withInstrumentation(
       if (unknownPanels.length > 0) {
         throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
       }
-      api.getPanel('workspace.problems')?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
+      // Look up by registered component name, not panel id — native
+      // snapshots may key utility panels with arbitrary ids.
+      restoredPanels
+        .find((panel) => panel.api.component === 'workspace.problems')
+        ?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
     } catch (err) {
       // The user just lost their saved layout. Don't be silent — log the
       // cause + a sample of the JSON so the bug is filable. layout-migrations

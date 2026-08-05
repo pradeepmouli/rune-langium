@@ -64,7 +64,7 @@ const captured: CapturedReady = { components: {}, defaultTabComponent: undefined
 let lastApi: FakeApi | null = null;
 
 class FakeApi {
-  panels: Array<{ id: string; component: string }> = [];
+  panels: Array<{ id: string; component: string; api: { component: string }; group: FakeGroupSpy }> = [];
   cleared = 0;
   groups = new Map<string, FakeGroupSpy>();
   panelStates = new Map<string, FakePanelSpy>();
@@ -80,8 +80,8 @@ class FakeApi {
     };
   };
   addPanel = (opts: { id: string; component: string }) => {
-    this.panels.push(opts);
     const group = makeFakeGroup();
+    this.panels.push({ id: opts.id, component: opts.component, api: { component: opts.component }, group });
     const panelSpy: FakePanelSpy = {
       activeCalls: 0,
       parameterCalls: [],
@@ -124,7 +124,7 @@ class FakeApi {
         },
         group
       };
-      this.panels.push({ id, component, api: { component } } as unknown as (typeof this.panels)[number]);
+      this.panels.push({ id, component, api: { component }, group });
       this.groups.set(id, group);
       this.panelStates.set(id, panelSpy);
     }
@@ -488,7 +488,10 @@ describe('DockShell — dockview integration (T065)', () => {
               json: {
                 grid: { root: {} },
                 panels: {
-                  'workspace.problems': { contentComponent: 'workspace.problems', testGroupHeight: 42 }
+                  // Arbitrary panel id on purpose: native snapshots don't
+                  // guarantee id === component name, so all utility-tray
+                  // lookups must go through api.component.
+                  'p-problems': { contentComponent: 'workspace.problems', testGroupHeight: 42 }
                 }
               }
             }
@@ -503,7 +506,7 @@ describe('DockShell — dockview integration (T065)', () => {
     // SHOW utilities, and the first click EXPANDS (not a redundant collapse).
     const toggle = screen.getByTestId('toggle-utilities');
     expect(toggle.textContent).toMatch(/show utilities/i);
-    const sizeCalls = lastApi?.groups?.get('workspace.problems')?.sizeCalls ?? [];
+    const sizeCalls = lastApi?.groups?.get('p-problems')?.sizeCalls ?? [];
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
   });
