@@ -21,7 +21,7 @@ export const WorkspacesPerspective = withInstrumentation(
     } = useWorkspaceActions();
 
     return (
-      <section data-testid="workspaces-perspective" className="h-full overflow-auto">
+      <section data-testid="workspaces-perspective" className="studio-scroll h-full overflow-auto">
         <div className="flex flex-col items-center justify-center min-h-full px-8 py-12 gap-8">
           <FileLoader
             onFilesLoaded={onFilesLoaded}

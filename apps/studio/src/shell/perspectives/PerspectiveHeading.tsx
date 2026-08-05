@@ -8,10 +8,15 @@
  * layout-presets bar; the other screens get it via PerspectiveHost.
  */
 import type React from 'react';
+import { withInstrumentation } from '@rune-langium/instrumentation-core';
 import { PERSPECTIVES } from './perspective-registry.js';
 import type { PerspectiveId } from './perspective-types.js';
 
-export function PerspectiveHeading({ perspectiveId }: { perspectiveId: PerspectiveId }): React.ReactElement | null {
+export const PerspectiveHeading = withInstrumentation(function PerspectiveHeading({
+  perspectiveId
+}: {
+  perspectiveId: PerspectiveId;
+}): React.ReactElement | null {
   const perspective = PERSPECTIVES.find((p) => p.id === perspectiveId);
   if (!perspective) return null;
   const Icon = perspective.icon;
@@ -21,4 +26,4 @@ export function PerspectiveHeading({ perspectiveId }: { perspectiveId: Perspecti
       <span>{perspective.title ?? perspective.label}</span>
     </div>
   );
-}
+});

@@ -16,6 +16,7 @@ import { useState } from 'react';
 
 interface FakeGroupSpy {
   api: {
+    height: number;
     setSize: (s: { width?: number; height?: number }) => void;
     setConstraints: (c: {
       minimumHeight?: number;
@@ -40,11 +41,12 @@ interface FakePanelSpy {
   group: FakeGroupSpy;
 }
 
-function makeFakeGroup(): FakeGroupSpy {
+function makeFakeGroup(height = 220): FakeGroupSpy {
   const spy: FakeGroupSpy = {
     sizeCalls: [],
     constraintCalls: [],
     api: {
+      height,
       setSize: (s) => spy.sizeCalls.push(s),
       setConstraints: (c) => spy.constraintCalls.push(c)
     }
@@ -62,7 +64,7 @@ const captured: CapturedReady = { components: {}, defaultTabComponent: undefined
 let lastApi: FakeApi | null = null;
 
 class FakeApi {
-  panels: Array<{ id: string; component: string }> = [];
+  panels: Array<{ id: string; component: string; api: { component: string }; group: FakeGroupSpy }> = [];
   cleared = 0;
   groups = new Map<string, FakeGroupSpy>();
   panelStates = new Map<string, FakePanelSpy>();
@@ -78,8 +80,8 @@ class FakeApi {
     };
   };
   addPanel = (opts: { id: string; component: string }) => {
-    this.panels.push(opts);
     const group = makeFakeGroup();
+    this.panels.push({ id: opts.id, component: opts.component, api: { component: opts.component }, group });
     const panelSpy: FakePanelSpy = {
       activeCalls: 0,
       parameterCalls: [],
@@ -101,7 +103,32 @@ class FakeApi {
       group
     };
   };
-  fromJSON = () => {};
+  // Restores panels from a native-shape snapshot. Supports the optional
+  // per-panel `testGroupHeight` hook so tests can restore a collapsed tray.
+  fromJSON = (data: unknown) => {
+    const panels = (data as { panels?: Record<string, { contentComponent?: string; testGroupHeight?: number }> })
+      ?.panels;
+    for (const [id, panel] of Object.entries(panels ?? {})) {
+      const component = panel?.contentComponent ?? id;
+      const group = makeFakeGroup(typeof panel?.testGroupHeight === 'number' ? panel.testGroupHeight : 220);
+      const panelSpy: FakePanelSpy = {
+        activeCalls: 0,
+        parameterCalls: [],
+        api: {
+          setActive: () => {
+            panelSpy.activeCalls++;
+          },
+          updateParameters: (parameters) => {
+            panelSpy.parameterCalls.push(parameters);
+          }
+        },
+        group
+      };
+      this.panels.push({ id, component, api: { component }, group });
+      this.groups.set(id, group);
+      this.panelStates.set(id, panelSpy);
+    }
+  };
   toJSON = () => {
     return { panels: this.panels.map((p) => p.id) };
   };
@@ -437,12 +464,84 @@ describe('DockShell — dockview integration (T065)', () => {
       fireEvent.click(toggle);
       expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
       fireEvent.click(toggle);
-      expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 0 });
+      expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 42 });
       return;
     }
 
     fireEvent.click(toggle);
-    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 0 });
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 42 });
+    fireEvent.click(toggle);
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
+  });
+
+  it('derives collapsed state from group height when restoring a native layout', async () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        initialLayout={
+          {
+            version: LAYOUT_SCHEMA_VERSION,
+            writtenBy: '0.1.0',
+            dockview: {
+              shape: 'native',
+              json: {
+                grid: { root: {} },
+                panels: {
+                  // Arbitrary panel id on purpose: native snapshots don't
+                  // guarantee id === component name, so all utility-tray
+                  // lookups must go through api.component.
+                  'p-problems': { contentComponent: 'workspace.problems', testGroupHeight: 42 }
+                }
+              }
+            }
+          } as never
+        }
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    // Restored group height (42px) is at the collapsed threshold, so the
+    // shell must treat the tray as collapsed: the toolbar toggle offers to
+    // SHOW utilities, and the first click EXPANDS (not a redundant collapse).
+    const toggle = screen.getByTestId('toggle-utilities');
+    expect(toggle.textContent).toMatch(/show utilities/i);
+    const sizeCalls = lastApi?.groups?.get('p-problems')?.sizeCalls ?? [];
+    fireEvent.click(toggle);
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
+  });
+
+  it('finds the utility tray even when the snapshot lacks a Problems panel', async () => {
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        initialLayout={
+          {
+            version: LAYOUT_SCHEMA_VERSION,
+            writtenBy: '0.1.0',
+            dockview: {
+              shape: 'native',
+              json: {
+                grid: { root: {} },
+                panels: {
+                  // A valid native snapshot may contain any subset of the
+                  // utility tabs — here Activity only, with an arbitrary id.
+                  'p-activity': { contentComponent: 'workspace.activity', testGroupHeight: 42 }
+                }
+              }
+            }
+          } as never
+        }
+      />
+    );
+    await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+
+    // Collapsed-state derivation and the toggle must both work off the
+    // Activity group: toggle offers SHOW and the first click expands it.
+    const toggle = screen.getByTestId('toggle-utilities');
+    expect(toggle.textContent).toMatch(/show utilities/i);
+    const sizeCalls = lastApi?.groups?.get('p-activity')?.sizeCalls ?? [];
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
   });

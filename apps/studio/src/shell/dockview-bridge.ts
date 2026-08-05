@@ -39,11 +39,18 @@ const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
  * group's height floor unless the group's own constraints override it.
  * DockShell's utility-tray collapse (`setUtilitiesCollapsed` →
  * `group.api.setSize({ height: 0 })`) needs to shrink the bottom group down
- * to just its tab strip (`--dv-tabs-and-actions-container-height: 24px` in
- * dock-theme.css) — without this override every "collapsed" request
+ * to just its tab strip — without this override every "collapsed" request
  * silently clamps to 100px instead of retracting to the header.
+ *
+ * 42px = the REAL rendered header height (.dv-tabs-and-actions-container:
+ * min-height 34px + 3px/4px vertical padding + hairline). The previous 24px
+ * (stale --dv-tabs-and-actions-container-height token) clipped the tab strip
+ * when collapsed, hiding the tray toolbar entirely.
  */
-const BOTTOM_GROUP_MIN_HEIGHT = 24;
+const BOTTOM_GROUP_MIN_HEIGHT = 42;
+// Components that live in the bottom utility tray — used to find the
+// restored tray group regardless of which tabs a snapshot contains.
+const UTILITY_COMPONENTS = new Set(['workspace.problems', 'workspace.activity', 'workspace.output']);
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';
@@ -85,7 +92,12 @@ export const applyLayout = withInstrumentation(
       if (unknownPanels.length > 0) {
         throw new Error(`restored layout contains unknown panels: ${unknownPanels.join(', ')}`);
       }
-      api.getPanel('workspace.problems')?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
+      // Look up by registered component name, not panel id — native
+      // snapshots may key utility panels with arbitrary ids, and the tray
+      // may hold any subset of the utility tabs (e.g. Activity only).
+      restoredPanels
+        .find((panel) => UTILITY_COMPONENTS.has(panel.api.component))
+        ?.group.api.setConstraints({ minimumHeight: BOTTOM_GROUP_MIN_HEIGHT });
     } catch (err) {
       // The user just lost their saved layout. Don't be silent — log the
       // cause + a sample of the JSON so the bug is filable. layout-migrations

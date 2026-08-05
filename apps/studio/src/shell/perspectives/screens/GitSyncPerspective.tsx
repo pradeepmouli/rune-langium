@@ -95,7 +95,7 @@ export const GitSyncPerspective = withInstrumentation(
     );
 
     return (
-      <section data-testid="git-perspective" className="h-full overflow-auto p-6 space-y-6">
+      <section data-testid="git-perspective" className="studio-scroll h-full overflow-auto p-6 space-y-6">
         {!isGitBacked ? (
           <GitNotConnectedEmptyState />
         ) : (

@@ -17,7 +17,7 @@
  * @module
  */
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { indexById } from '@rune-langium/core';
 import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
@@ -26,7 +26,8 @@ import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph, STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
 import { NavigationContext } from './nodes/NavigationContext.js';
-import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
+import type { MeasuredNodeWidths, StructureExpansionKey, StructureRow } from '../types/structure-view.js';
+import { measureStructureNodeWidths } from './measure-structure-widths.js';
 import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
 
 /**
@@ -35,6 +36,24 @@ import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
  * adapter emits fresh `StructureRow` arrays per pass but the individual
  * rows are simple records that should be compared structurally.
  */
+/**
+ * Stable per-document version numbers for the measure-then-layout key.
+ * WeakMap lookup-or-assign is idempotent: the same document object always
+ * maps to the same version, no matter how many times (or in which aborted
+ * render) it is asked — making it safe to call during render, unlike a
+ * mutable ref bump.
+ */
+const docVersions = new WeakMap<object, number>();
+let nextDocVersion = 0;
+function getDocVersion(doc: object): number {
+  let v = docVersions.get(doc);
+  if (v === undefined) {
+    v = nextDocVersion++;
+    docVersions.set(doc, v);
+  }
+  return v;
+}
+
 function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: T) => boolean = Object.is): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -382,6 +401,44 @@ function StructureFlowInner({
   // reference where the data shallow-equals the new one limits the
   // re-render fan-out to the actually-changed nodes.
   const prevNodesRef = useRef<ReadonlyArray<Node>>([]);
+
+  // ── Measure-then-layout ────────────────────────────────────────────────
+  // Pass 1 lays out with character-count estimates (positions must exist
+  // before render). After commit, a layout effect measures each rendered
+  // node's natural rows-column/header widths from the real DOM and re-runs
+  // the layout with those measurements, so nodes hug their true content.
+  //
+  // `layoutKey` identifies one logical layout: measurements are only valid
+  // for the doc/focus/expansion state they were taken from, so the key
+  // gates both application (stale measurements are ignored) and reset.
+  // Doc identity → version via module-level WeakMap (see getDocVersion):
+  // a pure lookup-or-assign that is idempotent across renders, so it is
+  // safe to call during render (no ref mutation, no phantom bumps under
+  // StrictMode double-invoke or aborted concurrent renders).
+  const [measured, setMeasured] = useState<{
+    key: string;
+    widths: ReadonlyMap<string, MeasuredNodeWidths>;
+  } | null>(null);
+  // Viewport culling (`onlyRenderVisibleElements`) must stay OFF until the
+  // measurement pass has converged for the current layout: culled nodes are
+  // never mounted, so they would keep their character-count estimates, and
+  // nothing re-runs measurement when a pan/fitView later mounts them
+  // (PR #472 review). Once measureStructureNodeWidths returns null (nothing
+  // changed — every node measured within epsilon) for the current layoutKey,
+  // all widths are real and culling is safe to enable.
+  const [convergedKey, setConvergedKey] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const expansionSignature = useMemo(() => {
+    const entries: string[] = [];
+    for (const [k, v] of expansionMap) entries.push(`${k}=${v ? '1' : '0'}`);
+    entries.sort();
+    return entries.join('|');
+  }, [expansionMap]);
+  const layoutKey = `${getDocVersion(adapterDoc)}|${focusedTypeId}|${expansionSignature}`;
+  // Only measurements taken under the CURRENT key participate in layout —
+  // stale ones (older doc/focus/expansion) are ignored, not applied.
+  const measuredWidths = measured && measured.key === layoutKey ? measured.widths : undefined;
+
   const { nodes, edges } = useMemo(() => {
     const input = buildStructureGraph(adapterDoc, {
       focusedTypeId,
@@ -389,7 +446,7 @@ function StructureFlowInner({
     });
     // layoutStructureGraph returns LayoutResult: { nodes: ReadonlyArray<Node>, edges: ReadonlyArray<Edge> }
     // where Node/Edge are from @xyflow/react. Spreading to mutable arrays satisfies ReactFlow's prop type.
-    const result = layoutStructureGraph(input);
+    const result = layoutStructureGraph(measuredWidths ? { ...input, measuredWidths } : input);
     // Inject cellComponents AND row-expansion plumbing into the data payload of
     // 'data'-typed nodes so that DataNode's structure variant renders editable
     // cells and the per-row expand/collapse chevron (Finding 1).
@@ -462,7 +519,8 @@ function StructureFlowInner({
     cellComponents,
     onToggleExpansion,
     onNavigateToEnumType,
-    structureDiagnostics
+    structureDiagnostics,
+    measuredWidths
   ]);
 
   // Commit the identity-preserving cache only after the render reaches
@@ -471,6 +529,50 @@ function StructureFlowInner({
   useLayoutEffect(() => {
     prevNodesRef.current = nodes;
   }, [nodes]);
+
+  // Measurement pass — runs after every committed layout. Reads the natural
+  // (max-content) widths of each rendered node's rows column and header and,
+  // when they differ from what the current layout used, stores them so the
+  // useMemo above re-runs the layout with real dimensions. Convergence:
+  // measureStructureNodeWidths returns null when nothing new/changed was
+  // found (the re-measured widths match within epsilon), which ends the
+  // measure → re-layout → measure loop after one correction in practice.
+  // Synchronous in useLayoutEffect, so the style mutations never paint.
+  //
+  // Hidden-host guard (PR #472 review): PerspectiveHost keeps Explore
+  // mounted under `display:none`, so this effect can fire while the
+  // container is hidden — every offsetWidth reads 0, the measurer returns
+  // null, and we must NOT treat that as convergence. Skip instead, and use
+  // a ResizeObserver to bump `visibilityTick` when the container gains
+  // real dimensions again so the measurement pass re-runs on reveal.
+  const [visibilityTick, setVisibilityTick] = useState(0);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || nodes.length === 0) return;
+    if (container.offsetWidth === 0 && container.offsetHeight === 0) return; // hidden — skip
+    const next = measureStructureNodeWidths(container, measuredWidths);
+    if (next) setMeasured({ key: layoutKey, widths: next });
+    // null → converged: every rendered node's measured width matches the
+    // layout input within epsilon. Safe to enable viewport culling now.
+    else setConvergedKey(layoutKey);
+  }, [nodes, layoutKey, measuredWidths, visibilityTick]);
+
+  // Re-trigger measurement when the container transitions hidden → visible
+  // (display:none flips offsetWidth 0 → real). ResizeObserver fires on that
+  // transition; the tick only bumps on the 0 → >0 edge to avoid re-running
+  // measurement on ordinary panel resizes.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    let wasHidden = container.offsetWidth === 0 && container.offsetHeight === 0;
+    const ro = new ResizeObserver(() => {
+      const hidden = container.offsetWidth === 0 && container.offsetHeight === 0;
+      if (wasHidden && !hidden) setVisibilityTick((t) => t + 1);
+      wasHidden = hidden;
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   // Auto-fit on focus or expansion change. User feedback: when nodes are
   // expanded the structure tree grows past the viewport edge. Re-fitting
@@ -493,12 +595,6 @@ function StructureFlowInner({
   // on StructureFlowInnerProps; the previous `if (!focusedTypeId) return`
   // and `expansionMap?.size` guards were dead.
   const rf = useReactFlow();
-  const expansionSignature = useMemo(() => {
-    const entries: string[] = [];
-    for (const [k, v] of expansionMap) entries.push(`${k}=${v ? '1' : '0'}`);
-    entries.sort();
-    return entries.join('|');
-  }, [expansionMap]);
   useEffect(() => {
     if (nodes.length === 0) return;
     // requestAnimationFrame so the new node positions have been
@@ -507,7 +603,11 @@ function StructureFlowInner({
       rf.fitView({ padding: 0.1, duration: 300 });
     });
     return () => cancelAnimationFrame(id);
-  }, [focusedTypeId, expansionSignature, nodes.length, rf]);
+    // `measuredWidths` (P2 review): the measured re-layout changes node
+    // positions without changing focus/expansion/count, so the refit must
+    // follow the applied-measurement identity — but NOT raw `nodes`
+    // reference churn (document edits would cause spurious camera moves).
+  }, [focusedTypeId, expansionSignature, nodes.length, measuredWidths, rf]);
 
   const navigationCtx = useMemo(
     () => ({
@@ -521,6 +621,7 @@ function StructureFlowInner({
   return (
     <NavigationContext.Provider value={navigationCtx}>
       <div
+        ref={containerRef}
         data-testid="structure-view-flow"
         style={{ width: '100%', height: '100%', minHeight: 320, ...STRUCTURE_LAYOUT_CSS_VARS }}
       >
@@ -532,7 +633,7 @@ function StructureFlowInner({
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
-          onlyRenderVisibleElements
+          onlyRenderVisibleElements={convergedKey === layoutKey}
           proOptions={{ hideAttribution: true }}
           // e2e-batch fix #3: selection sync — clicking any node in the
           // Structure tree writes the OWNER type's canonical id to the shared
@@ -599,17 +700,26 @@ export function StructureView({
       // caller ever needs to omit `kind`, the right move is to relax the
       // prop type at the same time.
       return (
-        <div data-testid="structure-unsupported-kind-state">
+        <div
+          data-testid="structure-unsupported-kind-state"
+          className="flex h-full flex-col items-center justify-center gap-2 px-6 py-8 text-center text-sm text-muted-foreground"
+        >
           <p>
-            <strong>{unsupportedSelectedType.name}</strong> is a <code>{unsupportedSelectedType.kind}</code> type and is
-            not supported in Structure View.
+            <strong className="text-foreground">{unsupportedSelectedType.name}</strong> is a{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{unsupportedSelectedType.kind}</code> type
+            and is not supported in Structure View.
           </p>
-          <p>Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
+          <p className="text-xs">Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
         </div>
       );
     }
     return (
-      <div data-testid="structure-empty-state">Select a type from the Namespace Explorer to view its structure.</div>
+      <div
+        data-testid="structure-empty-state"
+        className="flex h-full items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground"
+      >
+        Select a type from the Namespace Explorer to view its structure.
+      </div>
     );
   }
 
@@ -620,7 +730,10 @@ export function StructureView({
   const rootNode = adapterDoc.nodes.find((n) => n.id === focusedTypeId);
   if (!rootNode) {
     return (
-      <div data-testid="structure-unsupported-root-state">
+      <div
+        data-testid="structure-unsupported-root-state"
+        className="flex h-full items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground"
+      >
         The selected type is no longer available. Select a type from the Namespace Explorer.
       </div>
     );

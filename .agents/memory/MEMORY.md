@@ -1,1 +1,2 @@
 - [Studio dev:full local setup](studio-dev-full.md) — four services (vite:5000, lsp:8790, mirror:8789, pages:8788) need specific env/config to connect in Replit; re-apply after any hard reset to origin.
+- [Studio e2e verification](studio-e2e-verification.md) — local Playwright can't launch (missing glib); CDM/FpML never hydrate (curated manifest 404s upstream); verify via testing subagent + blank workspace with pasted Rune source.

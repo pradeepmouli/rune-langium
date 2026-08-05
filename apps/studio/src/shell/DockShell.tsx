@@ -25,7 +25,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import type { DockviewApi, DockviewReadyEvent, IDockviewPanelHeaderProps, IDockviewPanelProps } from 'dockview-react';
+import type {
+  DockviewApi,
+  DockviewReadyEvent,
+  IDockviewHeaderActionsProps,
+  IDockviewPanelHeaderProps,
+  IDockviewPanelProps
+} from 'dockview-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { FileTreePanel } from './panels/FileTreePanel.js';
@@ -47,15 +54,60 @@ import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
-import { UtilityTrayContext } from './utility-tray-context.js';
+import { UtilityTrayContext, type UtilityGroupApi } from './utility-tray-context.js';
+import { UtilityHeaderActionsContext, UtilityHeaderActionsProvider } from './utility-header-actions-context.js';
 import { PerspectiveHeading } from './perspectives/PerspectiveHeading.js';
 import { CenterPanesContext, type CenterPane } from './center-panes-context.js';
 import { useStudioToast } from '../components/StudioToastProvider.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
+const UTILITY_PANEL_IDS = new Set(['workspace.problems', 'workspace.activity', 'workspace.output']);
+
+/**
+ * Right-side actions rendered in the dockview group header (FIRST row).
+ * For the utility tray group only: the active panel's published toolbar
+ * (filters / "..." — see utility-header-actions-context) followed by the
+ * open/close chevron. Living in the tab row keeps the whole toolbar
+ * visible while the tray is collapsed to header height.
+ */
+function UtilityGroupHeaderActions(props: IDockviewHeaderActionsProps) {
+  const { actions } = useContext(UtilityHeaderActionsContext);
+  const { utilitiesCollapsed, toggleUtilities } = useContext(UtilityTrayContext);
+  // Use `api.component` (the registered component name, e.g.
+  // "workspace.problems") rather than `activePanel.id` — in native (fromJSON)
+  // layouts dockview may assign a different panel id (e.g. "p-problems"), so
+  // id-based lookup misses the header-actions registry entry and the chevron.
+  const activeComponent = props.activePanel?.api.component;
+  if (!activeComponent || !UTILITY_PANEL_IDS.has(activeComponent)) return null;
+  const label = utilitiesCollapsed ? 'Show Problems & Messages' : 'Hide Problems & Messages';
+  // Pass this header's own group API so the tween resizes THIS group, not
+  // whichever utility panel the global panel search happens to find first.
+  const groupApi = props.group.api as unknown as UtilityGroupApi;
+  return (
+    <div className="studio-panel-actions mr-1" aria-label="Utility panel actions">
+      {actions.get(activeComponent) ?? null}
+      <button
+        type="button"
+        className="studio-panel-action studio-utility-toggle"
+        onClick={() => toggleUtilities(groupApi)}
+        aria-label={label}
+        title={label}
+        aria-expanded={!utilitiesCollapsed}
+        data-testid="toggle-utilities-chevron"
+      >
+        {utilitiesCollapsed ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+      </button>
+    </div>
+  );
+}
+
 const DEFAULT_VIEWPORT_WIDTH = 1920;
 const DEFAULT_UTILITY_HEIGHT = 220;
+// Collapsed target keeps the group's tabs-and-actions row (first row —
+// tabs, panel actions, open/close chevron) fully visible; matches
+// BOTTOM_GROUP_MIN_HEIGHT in dockview-bridge.ts.
+const COLLAPSED_UTILITY_HEIGHT = 42;
 const _PRESET_OPTIONS: Array<{ id: LayoutPreset; label: string }> = [
   { id: 'navigate', label: 'Navigate' },
   { id: 'edit', label: 'Edit' },
@@ -279,6 +331,18 @@ export const DockShell = withInstrumentation(
           applyPanelTabMeta(event.api, panelTabMetaRef.current);
           if (currentLayout.dockview?.shape === 'factory') {
             setUtilitiesCollapsedState(currentLayout.dockview.bottomGroup.collapsed);
+          } else {
+            // Native layouts (persisted after user interaction) restore the
+            // bottom group height via fromJSON without carrying an explicit
+            // `collapsed` flag — derive it from the restored group height so
+            // the chevron direction and first toggle behave correctly.
+            // Look up by registered component name, not panel id — native
+            // snapshots may key utility panels with arbitrary ids
+            // (e.g. "p-problems") while contentComponent stays stable.
+            const bottomGroup = event.api.panels.find((p) => UTILITY_PANEL_IDS.has(p.api.component))?.group;
+            if (bottomGroup) {
+              setUtilitiesCollapsedState(bottomGroup.api.height <= COLLAPSED_UTILITY_HEIGHT + 8);
+            }
           }
         } catch (err) {
           const fallback = buildDefaultLayout({
@@ -378,15 +442,19 @@ export const DockShell = withInstrumentation(
       };
     }, []);
 
-    const setUtilitiesCollapsed = useCallback((collapsed: boolean) => {
+    const setUtilitiesCollapsed = useCallback((collapsed: boolean, groupApi?: UtilityGroupApi) => {
       setUtilitiesCollapsedState(collapsed);
       const token = ++utilityTweenTokenRef.current;
-      const problemsPanel = apiRef.current?.getPanel('workspace.problems');
-      if (!problemsPanel) {
+      // Prefer the caller-supplied group API (from the chevron's own header
+      // group) so we always resize the right group. Fall back to a global
+      // utility-panel search for callers that don't know which group to target
+      // (e.g. the toolbar button, keyboard shortcut).
+      const resolvedGroupApi =
+        groupApi ?? apiRef.current?.panels.find((p) => UTILITY_PANEL_IDS.has(p.api.component))?.group.api;
+      if (!resolvedGroupApi) {
         return;
       }
-      const target = collapsed ? 0 : DEFAULT_UTILITY_HEIGHT;
-      const groupApi = problemsPanel.group.api;
+      const target = collapsed ? COLLAPSED_UTILITY_HEIGHT : DEFAULT_UTILITY_HEIGHT;
       // Animate the tray height with a short ease-out tween. Skip straight to
       // the target when the environment can't animate (jsdom has no
       // matchMedia) or the user prefers reduced motion.
@@ -399,12 +467,12 @@ export const DockShell = withInstrumentation(
       }
       if (reduceMotion || typeof requestAnimationFrame !== 'function') {
         utilityHeightRef.current = target;
-        groupApi.setSize({ height: target });
+        resolvedGroupApi.setSize({ height: target });
         return;
       }
       // Start from the last height this code applied (mid-flight reversal),
       // falling back to the logical opposite endpoint on the first toggle.
-      const from = utilityHeightRef.current ?? (collapsed ? DEFAULT_UTILITY_HEIGHT : 0);
+      const from = utilityHeightRef.current ?? (collapsed ? DEFAULT_UTILITY_HEIGHT : COLLAPSED_UTILITY_HEIGHT);
       const durationMs = 220;
       const start = performance.now();
       const step = (now: number) => {
@@ -414,7 +482,7 @@ export const DockShell = withInstrumentation(
         const height = Math.round(from + (target - from) * eased);
         utilityHeightRef.current = height;
         try {
-          groupApi.setSize({ height });
+          resolvedGroupApi.setSize({ height });
         } catch {
           // Group disposed mid-tween (layout reset/teardown) — stop quietly.
           return;
@@ -424,9 +492,12 @@ export const DockShell = withInstrumentation(
       requestAnimationFrame(step);
     }, []);
 
-    const toggleUtilities = useCallback(() => {
-      setUtilitiesCollapsed(!utilitiesCollapsed);
-    }, [setUtilitiesCollapsed, utilitiesCollapsed]);
+    const toggleUtilities = useCallback(
+      (groupApi?: UtilityGroupApi) => {
+        setUtilitiesCollapsed(!utilitiesCollapsed, groupApi);
+      },
+      [setUtilitiesCollapsed, utilitiesCollapsed]
+    );
     // Memoized so UtilityTrayContext consumers don't re-render on every
     // DockShell render — only when one of these actually changes.
     const utilityTrayContextValue = useMemo(
@@ -511,7 +582,7 @@ export const DockShell = withInstrumentation(
               type="button"
               variant="secondary"
               size="xs"
-              onClick={toggleUtilities}
+              onClick={() => toggleUtilities()}
               data-testid="toggle-utilities"
               aria-pressed={!utilitiesCollapsed}
               className="studio-chrome-button"
@@ -548,14 +619,17 @@ export const DockShell = withInstrumentation(
         <CenterPanesContext.Provider value={centerPanesContextValue}>
           <PanelRegistryContext.Provider value={panelRegistry}>
             <UtilityTrayContext.Provider value={utilityTrayContextValue}>
-              <div className="min-h-0 min-w-0 flex-1">
-                <DockLayout
-                  components={DOCKVIEW_COMPONENTS}
-                  defaultTabComponent={StudioDockTab}
-                  onReady={onReady}
-                  className="h-full min-w-0 w-full"
-                />
-              </div>
+              <UtilityHeaderActionsProvider>
+                <div className="min-h-0 min-w-0 flex-1">
+                  <DockLayout
+                    components={DOCKVIEW_COMPONENTS}
+                    defaultTabComponent={StudioDockTab}
+                    rightHeaderActionsComponent={UtilityGroupHeaderActions}
+                    onReady={onReady}
+                    className="h-full min-w-0 w-full"
+                  />
+                </div>
+              </UtilityHeaderActionsProvider>
             </UtilityTrayContext.Provider>
           </PanelRegistryContext.Provider>
         </CenterPanesContext.Provider>

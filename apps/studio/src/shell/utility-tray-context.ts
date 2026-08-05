@@ -5,10 +5,18 @@
 import { createContext, useContext } from 'react';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
+/** Minimal slice of a dockview group API needed by the tray toggle. */
+export interface UtilityGroupApi {
+  setSize(opts: { height: number }): void;
+}
+
 export const UtilityTrayContext = createContext<{
   utilitiesCollapsed: boolean;
-  setUtilitiesCollapsed(collapsed: boolean): void;
-  toggleUtilities(): void;
+  /** Collapse or expand the utility tray. Supply `groupApi` when the caller
+   *  knows which specific dockview group to resize (e.g. the chevron inside a
+   *  group header); omit it to fall back to a global utility-panel search. */
+  setUtilitiesCollapsed(collapsed: boolean, groupApi?: UtilityGroupApi): void;
+  toggleUtilities(groupApi?: UtilityGroupApi): void;
 }>({
   utilitiesCollapsed: false,
   setUtilitiesCollapsed: () => undefined,

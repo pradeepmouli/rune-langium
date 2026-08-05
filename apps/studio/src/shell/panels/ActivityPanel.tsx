@@ -3,6 +3,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@rune-langium/design-system/utils';
+import { useUtilityHeaderActions } from '../utility-header-actions-context.js';
 import { useActivityStore } from '../../store/activity-store.js';
 import { withInstrumentation } from '../../services/instrumentation/core.js';
 import type { InstrumentationNamespace } from '../../services/instrumentation/namespace.js';
@@ -36,6 +37,37 @@ export const ActivityPanel = withInstrumentation(
       }
     }, [filteredEntries]);
 
+    // Filter + Clear live in the dockview group header (first row) so they
+    // stay visible while the utility tray is collapsed to header height.
+    const headerActions = useMemo(
+      () => (
+        <>
+          <select
+            aria-label="Filter activity by namespace"
+            data-testid="activity-namespace-filter"
+            className="rounded border border-border bg-transparent px-1.5 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as InstrumentationNamespace | 'all')}
+          >
+            {NAMESPACE_FILTERS.map((ns) => (
+              <option key={ns} value={ns}>
+                {ns === 'all' ? 'All' : ns}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="rounded border border-border px-2 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
+            onClick={clearEntries}
+          >
+            Clear
+          </button>
+        </>
+      ),
+      [filter, clearEntries]
+    );
+    useUtilityHeaderActions('workspace.activity', headerActions);
+
     return (
       <section
         aria-label="Activity"
@@ -43,31 +75,6 @@ export const ActivityPanel = withInstrumentation(
         data-component="workspace.activity"
         className="flex h-full min-h-0 flex-col overflow-hidden"
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/70 px-3 py-1.5">
-          <span className="text-xs font-medium text-foreground">Activity</span>
-          <div className="flex items-center gap-2">
-            <select
-              aria-label="Filter activity by namespace"
-              data-testid="activity-namespace-filter"
-              className="rounded border border-border bg-transparent px-1.5 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as InstrumentationNamespace | 'all')}
-            >
-              {NAMESPACE_FILTERS.map((ns) => (
-                <option key={ns} value={ns}>
-                  {ns === 'all' ? 'All' : ns}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="rounded border border-border px-2 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
-              onClick={clearEntries}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
         <div ref={scrollRef} aria-live="polite" className="studio-scroll flex-1 overflow-auto px-1 py-1">
           {filteredEntries.length === 0 ? (
             <p className="px-2 py-3 font-mono text-2xs text-muted-foreground/60">
@@ -78,7 +85,7 @@ export const ActivityPanel = withInstrumentation(
               {filteredEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  className="grid items-center gap-2.5 rounded px-1.5 py-1 text-foreground/70 hover:bg-accent"
+                  className="studio-fade-in grid items-center gap-2.5 rounded px-1.5 py-1 text-foreground/70 transition-colors hover:bg-accent"
                   style={{ gridTemplateColumns: '48px 80px 1fr' }}
                 >
                   <span className="text-muted-foreground/60">{entry.time}</span>

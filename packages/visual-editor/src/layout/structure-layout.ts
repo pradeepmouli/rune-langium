@@ -276,6 +276,37 @@ function rowIsExpandable(typeKind: string): boolean {
 }
 
 /**
+ * Measure-then-layout (user-requested sizing fix): when the StructureView's
+ * post-render measurement pass has recorded a node's real rows-column width,
+ * prefer it over the character-count estimate. Measured values go through the
+ * same [COL_WIDTH, COL_WIDTH_MAX] clamp the estimator applies so the layout's
+ * existing floor/ceiling invariants (connector anchors, pathological names)
+ * hold either way.
+ */
+function measuredOrEstimatedRowsColWidth(
+  input: StructureGraphInput,
+  instanceId: string,
+  estimate: () => number
+): number {
+  const measured = input.measuredWidths?.get(instanceId)?.rowsColWidth;
+  if (measured !== undefined && measured > 0) {
+    return Math.min(COL_WIDTH_MAX, Math.max(COL_WIDTH, measured));
+  }
+  return estimate();
+}
+
+/** Header counterpart of {@link measuredOrEstimatedRowsColWidth} (no clamp — headers never had one). */
+function measuredOrEstimatedHeaderWidth(
+  input: StructureGraphInput,
+  instanceId: string,
+  estimate: () => number
+): number {
+  const measured = input.measuredWidths?.get(instanceId)?.headerWidth;
+  if (measured !== undefined && measured > 0) return measured;
+  return estimate();
+}
+
+/**
  * Estimate the rendered width of a structure node's HEADER — the
  * `NodeKindBadge` + the type name + (optionally) the meta-indicator cluster.
  *
@@ -442,15 +473,19 @@ function sizeData(
   // Width is SPLIT: the framed rows shrink-wrap to their widest member
   // (rowsColWidth, rows-only), while the node's content width also respects the
   // header (kind badge + name + meta) when it is the wider element.
-  const rowsColWidth = estimateRowsColWidth(
-    rows.map((r) => ({
-      name: r.attrName,
-      typeName: r.typeName,
-      card: r.cardinality,
-      expandable: rowIsExpandable(r.typeKind)
-    }))
+  const rowsColWidth = measuredOrEstimatedRowsColWidth(input, nodeInstanceId(node), () =>
+    estimateRowsColWidth(
+      rows.map((r) => ({
+        name: r.attrName,
+        typeName: r.typeName,
+        card: r.cardinality,
+        expandable: rowIsExpandable(r.typeKind)
+      }))
+    )
   );
-  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node), 'Data');
+  const headerWidth = measuredOrEstimatedHeaderWidth(input, nodeInstanceId(node), () =>
+    estimateHeaderWidth(node.name, nodeHasMeta(node), 'Data')
+  );
   // Wrapper dimensions = inner content + NODE_PADDING on the sides (×2) and
   // bottom only for the expansion column (the rows stack carries its own
   // DATA_ROWS_PADDING bottom). rightColumnAbsBottom is measured from the
@@ -509,9 +544,15 @@ function sizeChoice(
   // attrName / cardinality — pass empty strings so the row estimate only widens
   // for long typeNames.
   const rowsColWidth = Math.max(
-    // Choice arms always expand into their referenced type, so reserve chevron room.
-    estimateRowsColWidth(node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '', expandable: true }))),
-    estimateHeaderWidth(node.name, nodeHasMeta(node), 'Choice')
+    measuredOrEstimatedRowsColWidth(input, nodeInstanceId(node), () =>
+      // Choice arms always expand into their referenced type, so reserve chevron room.
+      estimateRowsColWidth(
+        node.options.map((arm) => ({ name: arm.typeName, typeName: '', card: '', expandable: true }))
+      )
+    ),
+    measuredOrEstimatedHeaderWidth(input, nodeInstanceId(node), () =>
+      estimateHeaderWidth(node.name, nodeHasMeta(node), 'Choice')
+    )
   );
   const innerWidth = childrenWidth > 0 ? rowsColWidth + COL_GAP + childrenWidth : rowsColWidth;
   const innerHeight = Math.max(rowsHeight, rightColumnAbsBottom);
@@ -529,7 +570,7 @@ const EMPTY_EXPANSIONS: ReadonlyMap<string, string> = new Map();
  * Size a read-only Enum node (Phase 14e/A). Mirrors `sizeChoice` for the
  * value-only case (no expansions). Each value renders as a row at ROW_HEIGHT.
  */
-function sizeEnum(node: StructureEnumNode): SizedNode {
+function sizeEnum(node: StructureEnumNode, input: StructureGraphInput): SizedNode {
   const rowOffsets = new Map<string, number>();
   for (const [i, value] of node.values.entries()) {
     rowOffsets.set(value, HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2);
@@ -538,8 +579,10 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
   // Width is max(longest value name, header) — Enum headers carry no meta
   // cluster (StructureEnumNode has no doc/annotation/condition fields).
   const rowsColWidth = Math.max(
-    estimateRowsColWidth(node.values.map((v) => ({ name: v, typeName: '', card: '' }))),
-    estimateHeaderWidth(node.name, false, 'Enum')
+    measuredOrEstimatedRowsColWidth(input, nodeInstanceId(node), () =>
+      estimateRowsColWidth(node.values.map((v) => ({ name: v, typeName: '', card: '' })))
+    ),
+    measuredOrEstimatedHeaderWidth(input, nodeInstanceId(node), () => estimateHeaderWidth(node.name, false, 'Enum'))
   );
   return {
     width: rowsColWidth,
@@ -574,7 +617,7 @@ function sizeEnum(node: StructureEnumNode): SizedNode {
  */
 const FUNCTION_OUTPUT_ROW_KEY = '__output__';
 
-function sizeFunction(node: StructureFunctionNode): SizedNode {
+function sizeFunction(node: StructureFunctionNode, input: StructureGraphInput): SizedNode {
   const inputRows = node.inputRows;
 
   // Framed input rows: the stack begins one DATA_ROWS_PADDING below the header,
@@ -610,8 +653,12 @@ function sizeFunction(node: StructureFunctionNode): SizedNode {
     });
   }
   // Split width — framed rows shrink-wrap (rows-only), node respects the header.
-  const rowsColWidth = estimateRowsColWidth(rowTexts);
-  const headerWidth = estimateHeaderWidth(node.name, nodeHasMeta(node), 'Function');
+  const rowsColWidth = measuredOrEstimatedRowsColWidth(input, nodeInstanceId(node), () =>
+    estimateRowsColWidth(rowTexts)
+  );
+  const headerWidth = measuredOrEstimatedHeaderWidth(input, nodeInstanceId(node), () =>
+    estimateHeaderWidth(node.name, nodeHasMeta(node), 'Function')
+  );
 
   // Reserve the rows-stack bottom DATA_ROWS_PADDING (mirrors the func rows CSS).
   const height = contentBottom + DATA_ROWS_PADDING;
@@ -696,15 +743,19 @@ function sizeBase(
   // Base rows fill the column (header floor folded in via estimateHeaderWidth),
   // mirroring Choice/Enum — only top-level Data rows shrink-wrap.
   const baseRowsColWidth = Math.max(
-    estimateRowsColWidth(
-      node.baseRows.map((r) => ({
-        name: r.attrName,
-        typeName: r.typeName,
-        card: r.cardinality,
-        expandable: rowIsExpandable(r.typeKind)
-      }))
+    measuredOrEstimatedRowsColWidth(input, nodeInstanceId(node), () =>
+      estimateRowsColWidth(
+        node.baseRows.map((r) => ({
+          name: r.attrName,
+          typeName: r.typeName,
+          card: r.cardinality,
+          expandable: rowIsExpandable(r.typeKind)
+        }))
+      )
     ),
-    estimateHeaderWidth(node.baseTypeName, false, 'base')
+    measuredOrEstimatedHeaderWidth(input, nodeInstanceId(node), () =>
+      estimateHeaderWidth(node.baseTypeName, false, 'base')
+    )
   );
   const rowsColWidth = Math.max(baseRowsColWidth, childSize.rowsColWidth);
 
@@ -773,8 +824,8 @@ function sizeOf(
     let sized: SizedNode;
     if (node.kind === 'data') sized = sizeData(node, sizes, input, sizing);
     else if (node.kind === 'choice') sized = sizeChoice(node, sizes, input, sizing);
-    else if (node.kind === 'enum') sized = sizeEnum(node);
-    else if (node.kind === 'function') sized = sizeFunction(node);
+    else if (node.kind === 'enum') sized = sizeEnum(node, input);
+    else if (node.kind === 'function') sized = sizeFunction(node, input);
     else sized = sizeBase(node, sizes, input, sizing);
     sizes.set(cacheKey, sized);
     return sized;

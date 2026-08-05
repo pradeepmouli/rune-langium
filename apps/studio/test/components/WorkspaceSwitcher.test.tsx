@@ -82,12 +82,12 @@ describe('WorkspaceSwitcher (T059)', () => {
   it('Delete button on a row calls onDelete after confirmation', async () => {
     await saveWorkspace(ws('w-1', 'Doomed', 'browser-only', '2026-04-25T00:00:00Z'));
     const onDelete = vi.fn();
-    // jsdom window.confirm returns false by default; stub to true.
-    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     render(<WorkspaceSwitcher onOpen={() => {}} onCreate={() => {}} onDelete={onDelete} />);
     await waitFor(() => screen.getByText(/Doomed/));
     fireEvent.click(screen.getByRole('button', { name: /delete doomed/i }));
+    // Confirmation now goes through the design-system dialog, not window.confirm.
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByTestId('workspace-delete-confirm'));
     expect(onDelete).toHaveBeenCalledWith('w-1');
-    confirmSpy.mockRestore();
   });
 });

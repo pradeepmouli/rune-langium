@@ -12,7 +12,7 @@
  * diagnostic lists.
  */
 
-import { useContext, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   AlertCircle,
@@ -22,8 +22,7 @@ import {
   Lightbulb,
   CheckCircle2,
   Filter,
-  MoreHorizontal,
-  ChevronDown
+  MoreHorizontal
 } from 'lucide-react';
 import type { LspDiagnostic } from '../store/diagnostics-store.js';
 import { Popover, PopoverContent, PopoverTrigger } from '@rune-langium/design-system/ui/popover';
@@ -32,7 +31,7 @@ import { cn } from '@rune-langium/design-system/utils';
 import { flattenDiagnostics } from '../utils/flatten-diagnostics.js';
 import type { FlatDiagnosticRow } from '../utils/flatten-diagnostics.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
-import { UtilityTrayContext } from '../shell/utility-tray-context.js';
+import { useUtilityHeaderActions } from '../shell/utility-header-actions-context.js';
 
 export interface DiagnosticsPanelProps {
   fileDiagnostics: Map<string, LspDiagnostic[]>;
@@ -141,13 +140,35 @@ export const DiagnosticsPanel = withInstrumentation(
     const isEmpty = counts.total === 0;
     const isFilteredEmpty = rawCounts.total > 0 && isEmpty;
 
-    const toggleSeverity = (severity: SeverityKind) => {
+    const toggleSeverity = useCallback((severity: SeverityKind) => {
       setVisibleSeverities((current) => ({ ...current, [severity]: !current[severity] }));
-    };
+    }, []);
 
-    const resetFilters = () => {
+    const resetFilters = useCallback(() => {
       setVisibleSeverities(DEFAULT_VISIBLE_SEVERITIES);
-    };
+    }, []);
+
+    const toggleSummary = useCallback(() => setShowSummary((current) => !current), []);
+
+    // Publish the Filter / "..." popovers into the dockview group header
+    // (first row) via the utility header-actions registry — they stay
+    // visible and usable while the tray is collapsed to header height.
+    // Memoized so the registry effect only re-registers on real state
+    // changes (all handlers are stable useCallbacks).
+    const headerActions = useMemo(
+      () => (
+        <ProblemsHeaderActions
+          hasActiveSeverityFilters={hasActiveSeverityFilters}
+          showSummary={showSummary}
+          onToggleSummary={toggleSummary}
+          onResetFilters={resetFilters}
+          visibleSeverities={visibleSeverities}
+          onToggleSeverity={toggleSeverity}
+        />
+      ),
+      [hasActiveSeverityFilters, showSummary, toggleSummary, resetFilters, visibleSeverities, toggleSeverity]
+    );
+    useUtilityHeaderActions('workspace.problems', headerActions);
 
     const virtualizer = useVirtualizer({
       count: flatRows.length,
@@ -167,11 +188,6 @@ export const DiagnosticsPanel = withInstrumentation(
             total={counts.total}
             rawTotal={rawCounts.total}
             hasActiveSeverityFilters={hasActiveSeverityFilters}
-            showSummary={showSummary}
-            onToggleSummary={() => setShowSummary((current) => !current)}
-            onResetFilters={resetFilters}
-            visibleSeverities={visibleSeverities}
-            onToggleSeverity={toggleSeverity}
           />
           <div className="flex flex-1 items-center justify-center px-4 py-6">
             <div className="flex max-w-60 flex-col items-center gap-2 text-center">
@@ -211,11 +227,6 @@ export const DiagnosticsPanel = withInstrumentation(
           total={counts.total}
           rawTotal={rawCounts.total}
           hasActiveSeverityFilters={hasActiveSeverityFilters}
-          showSummary={showSummary}
-          onToggleSummary={() => setShowSummary((current) => !current)}
-          onResetFilters={resetFilters}
-          visibleSeverities={visibleSeverities}
-          onToggleSeverity={toggleSeverity}
         />
         {showSummary ? (
           <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-card/40 px-3 py-2 text-sm">
@@ -267,40 +278,14 @@ export const DiagnosticsPanel = withInstrumentation(
   { op: 'DiagnosticsPanel' }
 );
 
-function CollapseUtilitiesButton() {
-  const { toggleUtilities } = useContext(UtilityTrayContext);
-  return (
-    <button
-      type="button"
-      className="studio-panel-action studio-utility-toggle"
-      onClick={toggleUtilities}
-      aria-label="Hide Problems &amp; Messages"
-      title="Hide Problems &amp; Messages"
-      data-testid="toggle-utilities-chevron"
-    >
-      <ChevronDown className="size-4" />
-    </button>
-  );
-}
-
 function PanelHeader({
   total,
   rawTotal,
-  hasActiveSeverityFilters,
-  showSummary,
-  onToggleSummary,
-  onResetFilters,
-  visibleSeverities,
-  onToggleSeverity
+  hasActiveSeverityFilters
 }: {
   total: number;
   rawTotal: number;
   hasActiveSeverityFilters: boolean;
-  showSummary: boolean;
-  onToggleSummary: () => void;
-  onResetFilters: () => void;
-  visibleSeverities: Record<SeverityKind, boolean>;
-  onToggleSeverity: (severity: SeverityKind) => void;
 }) {
   const titleMeta =
     rawTotal === 0
@@ -323,98 +308,121 @@ function PanelHeader({
             : 'Review diagnostics and jump straight to the affected source.'}
         </p>
       </div>
-      <div className="studio-panel-actions" aria-label="Problems panel actions">
-        <CollapseUtilitiesButton />
-        <Popover>
-          <PopoverTrigger
-            render={
-              <button
-                type="button"
-                className="studio-panel-action"
-                data-active={hasActiveSeverityFilters ? 'true' : undefined}
-                aria-label="Filter diagnostics"
-                title="Filter diagnostics"
-              >
-                <Filter className="size-4" />
-              </button>
-            }
-          />
-          <PopoverContent className="w-56 p-2" align="end" sideOffset={6}>
-            <div className="space-y-1">
-              <p className="px-2 pb-1 text-3xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Visible severities
-              </p>
-              {SEVERITY_ORDER.map((severity) => {
-                const active = visibleSeverities[severity];
-                return (
-                  <button
-                    key={severity}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors',
-                      active ? 'bg-accent/65 text-foreground' : 'text-muted-foreground hover:bg-accent/45'
-                    )}
-                    onClick={() => onToggleSeverity(severity)}
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'size-2.5 rounded-full border',
-                          severity === 'error' && 'border-destructive bg-destructive',
-                          severity === 'warning' && 'border-warning bg-warning',
-                          severity === 'info' && 'border-info bg-info',
-                          severity === 'hint' && 'border-data bg-data',
-                          !active && 'bg-transparent opacity-60'
-                        )}
-                      />
-                      <span className="capitalize">{severity}</span>
-                    </span>
-                    <span className="text-3xs font-medium uppercase tracking-[0.12em]">{active ? 'On' : 'Off'}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </PopoverContent>
-        </Popover>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <button
-                type="button"
-                className="studio-panel-action"
-                aria-label="Problem panel options"
-                title="Problem panel options"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-            }
-          />
-          <PopoverContent className="w-52 p-2" align="end" sideOffset={6}>
-            <div className="space-y-1">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
-                onClick={onToggleSummary}
-              >
-                <span>{showSummary ? 'Hide summary row' : 'Show summary row'}</span>
-                <span className="text-3xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  {showSummary ? 'On' : 'Off'}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-50"
-                onClick={onResetFilters}
-                disabled={!hasActiveSeverityFilters}
-              >
-                <span>Show all severities</span>
-                <span className="text-3xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Reset</span>
-              </button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
     </div>
+  );
+}
+
+/**
+ * Filter + "..." popovers, published into the dockview group header (first
+ * row) via useUtilityHeaderActions — NOT rendered inside the panel body, so
+ * they remain visible/usable while the utility tray is collapsed.
+ */
+function ProblemsHeaderActions({
+  hasActiveSeverityFilters,
+  showSummary,
+  onToggleSummary,
+  onResetFilters,
+  visibleSeverities,
+  onToggleSeverity
+}: {
+  hasActiveSeverityFilters: boolean;
+  showSummary: boolean;
+  onToggleSummary: () => void;
+  onResetFilters: () => void;
+  visibleSeverities: Record<SeverityKind, boolean>;
+  onToggleSeverity: (severity: SeverityKind) => void;
+}) {
+  return (
+    <>
+      <Popover>
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="studio-panel-action"
+              data-active={hasActiveSeverityFilters ? 'true' : undefined}
+              aria-label="Filter diagnostics"
+              title="Filter diagnostics"
+            >
+              <Filter className="size-4" />
+            </button>
+          }
+        />
+        <PopoverContent className="w-56 p-2" align="end" sideOffset={6}>
+          <div className="space-y-1">
+            <p className="px-2 pb-1 text-3xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Visible severities
+            </p>
+            {SEVERITY_ORDER.map((severity) => {
+              const active = visibleSeverities[severity];
+              return (
+                <button
+                  key={severity}
+                  type="button"
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors',
+                    active ? 'bg-accent/65 text-foreground' : 'text-muted-foreground hover:bg-accent/45'
+                  )}
+                  onClick={() => onToggleSeverity(severity)}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className={cn(
+                        'size-2.5 rounded-full border',
+                        severity === 'error' && 'border-destructive bg-destructive',
+                        severity === 'warning' && 'border-warning bg-warning',
+                        severity === 'info' && 'border-info bg-info',
+                        severity === 'hint' && 'border-data bg-data',
+                        !active && 'bg-transparent opacity-60'
+                      )}
+                    />
+                    <span className="capitalize">{severity}</span>
+                  </span>
+                  <span className="text-3xs font-medium uppercase tracking-[0.12em]">{active ? 'On' : 'Off'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <Popover>
+        <PopoverTrigger
+          render={
+            <button
+              type="button"
+              className="studio-panel-action"
+              aria-label="Problem panel options"
+              title="Problem panel options"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          }
+        />
+        <PopoverContent className="w-52 p-2" align="end" sideOffset={6}>
+          <div className="space-y-1">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+              onClick={onToggleSummary}
+            >
+              <span>{showSummary ? 'Hide summary row' : 'Show summary row'}</span>
+              <span className="text-3xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                {showSummary ? 'On' : 'Off'}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-50"
+              onClick={onResetFilters}
+              disabled={!hasActiveSeverityFilters}
+            >
+              <span>Show all severities</span>
+              <span className="text-3xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Reset</span>
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }
 

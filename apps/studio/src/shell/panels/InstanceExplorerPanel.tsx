@@ -62,19 +62,21 @@ export const InstanceExplorerPanel = withInstrumentation(
           </div>
         </div>
         <input
+          type="search"
+          aria-label="Search instances"
           placeholder="Search instances"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="border-b border-border bg-transparent px-2 py-1 text-sm outline-none"
+          className="border-b border-border bg-transparent px-2 py-1 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:bg-accent/20"
         />
-        <ul className="flex-1 overflow-auto">
+        <ul className="studio-scroll flex-1 overflow-auto">
           {rows.map((r) => (
-            <li key={r.id}>
+            <li key={r.id} className="studio-fade-in">
               <button
                 type="button"
                 onClick={() => onSelect(r.id)}
                 aria-current={r.id === selectedId}
-                className="w-full truncate px-2 py-1 text-left text-sm hover:bg-accent aria-[current=true]:bg-accent"
+                className="w-full truncate px-2 py-1 text-left text-sm hover:bg-accent aria-[current=true]:bg-accent aria-[current=true]:font-medium"
               >
                 {r.name}
               </button>
