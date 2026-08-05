@@ -2,8 +2,11 @@
 # Copyright (c) 2026 Pradeep Mouli
 #
 # Cloudflare Worker config for the Rune DSL LSP host (feature 014-studio-prod-ready).
-# Per-workspace Durable Object holds langium services + WS hibernation; the
-# Worker mints HMAC-signed session tokens and gates WS upgrades.
+# DO-only Worker since spec 019 Phase 3: it hosts the RuneLspSession Durable
+# Object that apps/studio/functions/api/lsp/* (Pages Functions) bind to via
+# apps/studio/wrangler.toml's [[durable_objects.bindings]] script_name.
+# This Worker no longer serves any HTTP routes itself — those were migrated
+# to the Pages Functions — so it has no [[routes]] zone-route block.
 
 name = "rune-lsp-worker"
 main = "src/index.ts"
@@ -16,10 +19,6 @@ compatibility_flags = ["nodejs_compat"]
 
 account_id = "8327a4da4660eab7d78695268282da09"
 workers_dev = false
-
-[[routes]]
-pattern = "www.daikonic.dev/rune-studio/api/lsp/*"
-zone_name = "daikonic.dev"
 
 # DO class for per-workspace LSP sessions. Implemented in src/session.ts.
 # Binding name MUST match env.LSP_SESSION in src/.
