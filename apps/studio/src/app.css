@@ -2197,6 +2197,22 @@ html {
   background: var(--accent);
   color: var(--foreground);
 }
+/* Pressed: flatten the hover lift and darken so click reads distinctly.
+ * Unlayered on purpose — Tailwind's @layer utilities (hover:bg-*, shadow-*)
+ * would override a @layer components rule; unlayered author CSS wins. */
+.studio-app .studio-chrome-button:not(:disabled):active {
+  background: color-mix(in srgb, var(--muted) 85%, var(--background)) !important;
+  box-shadow:
+    inset 0 1.5px 3px rgba(2, 6, 23, 0.45),
+    0 0 0 1px rgba(8, 12, 22, 0.1) !important;
+  transform: translateY(0.5px);
+}
+
+/* Pressed state one step past hover so click reads distinctly. */
+.studio-app .studio-panel-action:active {
+  background: color-mix(in oklch, var(--accent) 70%, transparent);
+  color: var(--foreground);
+}
 .studio-app .studio-panel-action[data-active='true'],
 .studio-app .studio-panel-action[aria-pressed='true'] {
   background: color-mix(in oklch, var(--accent) 88%, transparent);

@@ -39,18 +39,26 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
         destructive:
           'bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
-          'border bg-background shadow-xs hover:bg-accent hover:text-primary-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
+          // Hover text uses accent-foreground (light on the dark accent
+          // surface) — the previous primary-foreground token resolves to a
+          // dark surface tone in this theme, making label ≈ background on
+          // hover (buttons "disappeared"). Active adds a step past hover so
+          // press is visually distinct.
+          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground active:bg-accent/70 dark:bg-input/30 dark:border-input dark:hover:bg-input/50 dark:active:bg-input/70',
         // T054 (014/FR-023, R8) — was `bg-secondary text-secondary-foreground
         // hover:bg-secondary/80` (solid amber), which made empty-state
         // CTAs visually outrank the actual primary button. Now matches
         // landing's `.btn-secondary` + docs' `.VPButton.alt`: transparent
         // surface with a visible border.
-        secondary: 'bg-transparent border border-input/70 hover:bg-muted text-foreground',
-        ghost: 'hover:bg-accent hover:text-primary-foreground dark:hover:bg-accent/50',
+        secondary: 'bg-transparent border border-input/70 hover:bg-muted active:bg-muted/70 text-foreground',
+        // Same fix as `outline`: accent-foreground for readable hover text,
+        // plus a distinct pressed step.
+        ghost:
+          'hover:bg-accent hover:text-accent-foreground active:bg-accent/70 dark:hover:bg-accent/50 dark:active:bg-accent/70',
         link: 'text-primary underline-offset-4 hover:underline',
         // Translucent frosted-glass treatment for chrome surfaces (toolbar /
         // header). Was the contextual `.glass-toolbar [data-slot=button]`

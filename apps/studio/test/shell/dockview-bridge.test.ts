@@ -186,12 +186,12 @@ describe('applyLayout — factory shape', () => {
     expect(api.activatedPanels).toContain('workspace.problems');
   });
 
-  it('constrains the bottom group minimum height so collapse can reach the tab-strip height', () => {
+  it('constrains the bottom group minimum height so collapse can reach the header height', () => {
     const layout = buildDefaultLayout({ studioVersion: '0.1.0', viewportWidth: 1920 });
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const bottomGroup = api.groups.get('workspace.problems');
-    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 24 });
+    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 42 });
   });
 
   it('sets the minimum-height constraint before any collapse setSize call', () => {
@@ -204,10 +204,10 @@ describe('applyLayout — factory shape', () => {
     const api = new FakeDockviewApi();
     applyLayout(api as never, layout);
     const bottomGroup = api.groups.get('workspace.problems');
-    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 24 });
+    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 42 });
     expect(bottomGroup?.sizeCalls).toContainEqual({ height: 0 });
     // setConstraints must fire before setSize so the height: 0 request is clamped
-    // against the 24px floor, not dockview's default 100px floor.
+    // against the 42px header floor, not dockview's default 100px floor.
     expect(bottomGroup?.callOrder).toEqual(['setConstraints', 'setSize']);
   });
 });
@@ -229,7 +229,7 @@ describe('applyLayout — native shape', () => {
     expect(api.calls).toHaveLength(1);
   });
 
-  it('constrains the restored bottom group minimum height so a later collapse can reach 24px', () => {
+  it('constrains the restored bottom group minimum height so a later collapse can reach the header height', () => {
     const native = {
       version: 1,
       writtenBy: '0.1.0',
@@ -244,7 +244,7 @@ describe('applyLayout — native shape', () => {
     applyLayout(api as never, native);
     expect(api.fromJSONCalls).toBe(1);
     const bottomGroup = api.groups.get('workspace.problems');
-    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 24 });
+    expect(bottomGroup?.constraintCalls).toContainEqual({ minimumHeight: 42 });
   });
 
   it('logs and falls back to factory layout when api.fromJSON throws', () => {

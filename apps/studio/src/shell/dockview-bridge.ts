@@ -39,11 +39,15 @@ const KNOWN_COMPONENTS = new Set<string>(Object.keys(PANEL_TITLES));
  * group's height floor unless the group's own constraints override it.
  * DockShell's utility-tray collapse (`setUtilitiesCollapsed` →
  * `group.api.setSize({ height: 0 })`) needs to shrink the bottom group down
- * to just its tab strip (`--dv-tabs-and-actions-container-height: 24px` in
- * dock-theme.css) — without this override every "collapsed" request
+ * to just its tab strip — without this override every "collapsed" request
  * silently clamps to 100px instead of retracting to the header.
+ *
+ * 42px = the REAL rendered header height (.dv-tabs-and-actions-container:
+ * min-height 34px + 3px/4px vertical padding + hairline). The previous 24px
+ * (stale --dv-tabs-and-actions-container-height token) clipped the tab strip
+ * when collapsed, hiding the tray toolbar entirely.
  */
-const BOTTOM_GROUP_MIN_HEIGHT = 24;
+const BOTTOM_GROUP_MIN_HEIGHT = 42;
 
 /** Re-export for callers that previously imported from this module. */
 export type { FactoryShape } from './layout-factory.js';

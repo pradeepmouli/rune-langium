@@ -437,12 +437,12 @@ describe('DockShell — dockview integration (T065)', () => {
       fireEvent.click(toggle);
       expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
       fireEvent.click(toggle);
-      expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 0 });
+      expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 42 });
       return;
     }
 
     fireEvent.click(toggle);
-    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 0 });
+    expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 42 });
     fireEvent.click(toggle);
     expect(sizeCalls[sizeCalls.length - 1]).toEqual({ height: 220 });
   });
