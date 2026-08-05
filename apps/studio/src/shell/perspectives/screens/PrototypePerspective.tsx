@@ -57,7 +57,7 @@ export const PrototypePerspective = withInstrumentation(
               </TabsContent>
             </Tabs>
           ) : (
-            <div className="flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
+            <div className="studio-fade-in flex h-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
               Select an instance from the list, or create one, to start editing.
             </div>
           )}

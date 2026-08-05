@@ -599,17 +599,26 @@ export function StructureView({
       // caller ever needs to omit `kind`, the right move is to relax the
       // prop type at the same time.
       return (
-        <div data-testid="structure-unsupported-kind-state">
+        <div
+          data-testid="structure-unsupported-kind-state"
+          className="flex h-full flex-col items-center justify-center gap-2 px-6 py-8 text-center text-sm text-muted-foreground"
+        >
           <p>
-            <strong>{unsupportedSelectedType.name}</strong> is a <code>{unsupportedSelectedType.kind}</code> type and is
-            not supported in Structure View.
+            <strong className="text-foreground">{unsupportedSelectedType.name}</strong> is a{' '}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{unsupportedSelectedType.kind}</code> type
+            and is not supported in Structure View.
           </p>
-          <p>Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
+          <p className="text-xs">Pick a Data, Choice, or Enum type from the Namespace Explorer to see its structure.</p>
         </div>
       );
     }
     return (
-      <div data-testid="structure-empty-state">Select a type from the Namespace Explorer to view its structure.</div>
+      <div
+        data-testid="structure-empty-state"
+        className="flex h-full items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground"
+      >
+        Select a type from the Namespace Explorer to view its structure.
+      </div>
     );
   }
 
@@ -620,7 +629,10 @@ export function StructureView({
   const rootNode = adapterDoc.nodes.find((n) => n.id === focusedTypeId);
   if (!rootNode) {
     return (
-      <div data-testid="structure-unsupported-root-state">
+      <div
+        data-testid="structure-unsupported-root-state"
+        className="flex h-full items-center justify-center px-6 py-8 text-center text-sm text-muted-foreground"
+      >
         The selected type is no longer available. Select a type from the Namespace Explorer.
       </div>
     );

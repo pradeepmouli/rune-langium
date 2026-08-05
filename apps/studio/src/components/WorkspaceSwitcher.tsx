@@ -18,6 +18,14 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@rune-langium/design-system/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@rune-langium/design-system/ui/dialog';
 import { listRecents, type RecentWorkspaceRecord } from '../workspace/persistence.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
@@ -57,15 +65,18 @@ function formatRelativeTime(iso: string): string {
 export const WorkspaceSwitcher = withInstrumentation(
   function WorkspaceSwitcher({ onOpen, onCreate: _onCreate, onDelete }: Props): React.ReactElement {
     const [rows, setRows] = useState<RecentWorkspaceRecord[]>([]);
+    // Row awaiting delete confirmation — replaces the native window.confirm
+    // with the design-system's animated Dialog for visual consistency.
+    const [pendingDelete, setPendingDelete] = useState<RecentWorkspaceRecord | null>(null);
 
     useEffect(() => {
       void listRecents().then(setRows);
     }, []);
 
-    function handleDelete(row: RecentWorkspaceRecord) {
-      if (typeof confirm === 'function' && !confirm(`Delete workspace "${row.name}"?`)) return;
+    function confirmDelete(row: RecentWorkspaceRecord) {
       onDelete(row.id);
       setRows((rs) => rs.filter((r) => r.id !== row.id));
+      setPendingDelete(null);
     }
 
     return (
@@ -78,7 +89,7 @@ export const WorkspaceSwitcher = withInstrumentation(
         ) : (
           <ul className="space-y-1.5">
             {rows.map((row) => (
-              <li key={row.id} data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
+              <li key={row.id} className="studio-fade-in" data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
                 <div className="group flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm hover:bg-accent/50 transition-colors">
                   <button
                     type="button"
@@ -98,7 +109,7 @@ export const WorkspaceSwitcher = withInstrumentation(
                     variant="ghost"
                     size="sm"
                     className="size-5 p-0 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    onClick={() => handleDelete(row)}
+                    onClick={() => setPendingDelete(row)}
                     aria-label={`Delete ${row.name}`}
                   >
                     ×
@@ -108,6 +119,29 @@ export const WorkspaceSwitcher = withInstrumentation(
             ))}
           </ul>
         )}
+        <Dialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
+          <DialogContent className="max-w-sm" data-testid="workspace-delete-dialog">
+            <DialogHeader>
+              <DialogTitle>Delete workspace?</DialogTitle>
+              <DialogDescription>
+                {pendingDelete ? `"${pendingDelete.name}" will be removed. This cannot be undone.` : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="secondary" size="sm" onClick={() => setPendingDelete(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="workspace-delete-confirm"
+                onClick={() => pendingDelete && confirmDelete(pendingDelete)}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   },

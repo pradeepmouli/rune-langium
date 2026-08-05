@@ -14,7 +14,7 @@ export const SettingsPerspective = withInstrumentation(
     const setTelemetryEnabled = useTelemetrySettingsStore((s) => s.setEnabled);
 
     return (
-      <section data-testid="settings-perspective" className="h-full overflow-auto p-6 space-y-8">
+      <section data-testid="settings-perspective" className="studio-scroll h-full overflow-auto p-6 space-y-8">
         {/* ── Appearance ──────────────────────────────────────────────────── */}
         <section className="space-y-4">
           <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Appearance</h2>
@@ -55,11 +55,13 @@ export const SettingsPerspective = withInstrumentation(
 
           <p className="text-xs text-muted-foreground">
             The following settings will be configurable per-project via{' '}
-            <code className="font-mono">.runestudio/config.json</code> once git-backed shared project config ships. They
-            are <strong>not editable yet</strong>.
+            <code className="font-mono">.runestudio/config.json</code> once git-backed shared project config ships.{' '}
+            <span className="ml-1 inline-flex items-center rounded-full border border-border px-1.5 py-px text-3xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Coming soon
+            </span>
           </p>
 
-          <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside">
+          <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside opacity-60" aria-disabled="true">
             <li>
               <span className="font-medium">Project</span> — name, description
             </li>

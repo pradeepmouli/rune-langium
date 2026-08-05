@@ -134,7 +134,10 @@ function LoadedModelBadge({ model }: { model: { source: ModelSource; files: { pa
     <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md text-sm">
       <span className="font-medium">{model.source.name}</span>
       <span
-        className={`text-muted-foreground${isHydrating && hasTimedOut ? ' text-destructive' : ''}`}
+        // Keyed on the rendered text so the count fades in when hydration
+        // completes instead of popping from "loading…" to "N files".
+        key={count}
+        className={`studio-fade-in text-muted-foreground${isHydrating && hasTimedOut ? ' text-destructive' : ''}`}
         aria-live={isHydrating ? 'polite' : undefined}
       >
         ({count})

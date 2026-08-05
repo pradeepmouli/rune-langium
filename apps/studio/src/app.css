@@ -2350,6 +2350,22 @@ html {
     color var(--motion-fast);
 }
 
+/* Content fade-in — soft entrance for async content that used to pop
+ * (panel lists after workspace load, hydrated file counts, codegen
+ * output). Re-adding the class (via key remount) replays it. */
+@keyframes studio-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.studio-app .studio-fade-in {
+  animation: studio-fade-in 180ms ease-out;
+}
+
 /* Buttons — universal hover/press feedback for every custom-styled button
  * in the studio and the embedded visual-editor package: node nav buttons in
  * the namespace explorer / structure view / inspector, codegen actions,

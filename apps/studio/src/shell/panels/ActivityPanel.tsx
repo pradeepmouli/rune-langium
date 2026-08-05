@@ -78,7 +78,7 @@ export const ActivityPanel = withInstrumentation(
               {filteredEntries.map((entry) => (
                 <div
                   key={entry.id}
-                  className="grid items-center gap-2.5 rounded px-1.5 py-1 text-foreground/70 hover:bg-accent"
+                  className="studio-fade-in grid items-center gap-2.5 rounded px-1.5 py-1 text-foreground/70 transition-colors hover:bg-accent"
                   style={{ gridTemplateColumns: '48px 80px 1fr' }}
                 >
                   <span className="text-muted-foreground/60">{entry.time}</span>

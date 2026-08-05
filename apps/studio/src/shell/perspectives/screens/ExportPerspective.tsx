@@ -157,8 +157,10 @@ export const ExportPerspective = withInstrumentation(
       return TARGET_LABELS[activeTarget];
     }, [activeTarget]);
 
+    // overflow-hidden (not auto): the targets table and the preview <pre>
+    // each own their scrolling — an outer scrollbar would double up.
     return (
-      <section data-testid="export-perspective" className="h-full overflow-auto flex flex-col">
+      <section data-testid="export-perspective" className="h-full overflow-hidden flex flex-col">
         <div className="flex flex-col flex-1 min-h-0">
           {/* Target selector — always visible */}
           <div data-testid="export-targets-section" className="shrink-0">
@@ -214,8 +216,11 @@ export const ExportPerspective = withInstrumentation(
               {/* Content */}
               {activeContent !== undefined ? (
                 <pre
+                  // Keyed on the target so switching targets fades the new
+                  // output in instead of popping.
+                  key={activeTarget}
                   data-testid="export-preview-content"
-                  className="flex-1 overflow-auto p-3 text-xs font-mono text-foreground bg-card/20 whitespace-pre"
+                  className="studio-fade-in studio-scroll flex-1 overflow-auto p-3 text-xs font-mono text-foreground bg-card/20 whitespace-pre"
                 >
                   {activeContent}
                 </pre>
