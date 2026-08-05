@@ -17,3 +17,7 @@ Upstream assumes vite on :5173; Replit preview needs :5000. Five local-only conf
 **Why:** origin doesn't carry these (macOS devs use 5173); any `git reset --hard origin/master` wipes items 1, 3, 4, 5 and the workflow build list. `.dev.vars` files are gitignored and survive.
 
 **How to apply:** after pulling/resetting, re-apply the edits, add any new workspace packages (e.g. `instrumentation-core`) to the workflow's build chain in `.replit`, run `CI=true pnpm install` in the shell first (workflow's interactive pnpm prompt hangs otherwise), then restart the workflow.
+
+## Styling gotchas (Aug 2026)
+- dock-theme.css sash rules are DUPLICATED (layered + unlayered copies) — edit both. Never apply `top/bottom:0 !important` to all sashes; it overrides dockview's inline `top:Npx` on vertical-split sashes and makes the bottom tray non-resizable.
+- Studio app.css `@layer components` rules lose to Tailwind's `@layer utilities` (button variant hover/active classes). Interaction-state overrides for chrome buttons must be unlayered (see `.studio-chrome-button:active`).
