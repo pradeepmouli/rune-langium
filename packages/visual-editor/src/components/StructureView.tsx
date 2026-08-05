@@ -17,7 +17,7 @@
  * @module
  */
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { indexById } from '@rune-langium/core';
 import { ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
@@ -26,7 +26,8 @@ import { buildStructureGraph } from '../adapters/structure-graph-adapter.js';
 import { layoutStructureGraph, STRUCTURE_LAYOUT_CSS_VARS } from '../layout/structure-layout.js';
 import { nodeTypes } from './nodes/index.js';
 import { NavigationContext } from './nodes/NavigationContext.js';
-import type { StructureExpansionKey, StructureRow } from '../types/structure-view.js';
+import type { MeasuredNodeWidths, StructureExpansionKey, StructureRow } from '../types/structure-view.js';
+import { measureStructureNodeWidths } from './measure-structure-widths.js';
 import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
 
 /**
@@ -35,6 +36,24 @@ import type { RangeDiagnostic } from '../hooks/useDiagnosticsForRange.js';
  * adapter emits fresh `StructureRow` arrays per pass but the individual
  * rows are simple records that should be compared structurally.
  */
+/**
+ * Stable per-document version numbers for the measure-then-layout key.
+ * WeakMap lookup-or-assign is idempotent: the same document object always
+ * maps to the same version, no matter how many times (or in which aborted
+ * render) it is asked — making it safe to call during render, unlike a
+ * mutable ref bump.
+ */
+const docVersions = new WeakMap<object, number>();
+let nextDocVersion = 0;
+function getDocVersion(doc: object): number {
+  let v = docVersions.get(doc);
+  if (v === undefined) {
+    v = nextDocVersion++;
+    docVersions.set(doc, v);
+  }
+  return v;
+}
+
 function arraysEqual<T>(a: ReadonlyArray<T>, b: ReadonlyArray<T>, eq: (x: T, y: T) => boolean = Object.is): boolean {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -382,6 +401,36 @@ function StructureFlowInner({
   // reference where the data shallow-equals the new one limits the
   // re-render fan-out to the actually-changed nodes.
   const prevNodesRef = useRef<ReadonlyArray<Node>>([]);
+
+  // ── Measure-then-layout ────────────────────────────────────────────────
+  // Pass 1 lays out with character-count estimates (positions must exist
+  // before render). After commit, a layout effect measures each rendered
+  // node's natural rows-column/header widths from the real DOM and re-runs
+  // the layout with those measurements, so nodes hug their true content.
+  //
+  // `layoutKey` identifies one logical layout: measurements are only valid
+  // for the doc/focus/expansion state they were taken from, so the key
+  // gates both application (stale measurements are ignored) and reset.
+  // Doc identity → version via module-level WeakMap (see getDocVersion):
+  // a pure lookup-or-assign that is idempotent across renders, so it is
+  // safe to call during render (no ref mutation, no phantom bumps under
+  // StrictMode double-invoke or aborted concurrent renders).
+  const [measured, setMeasured] = useState<{
+    key: string;
+    widths: ReadonlyMap<string, MeasuredNodeWidths>;
+  } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const expansionSignature = useMemo(() => {
+    const entries: string[] = [];
+    for (const [k, v] of expansionMap) entries.push(`${k}=${v ? '1' : '0'}`);
+    entries.sort();
+    return entries.join('|');
+  }, [expansionMap]);
+  const layoutKey = `${getDocVersion(adapterDoc)}|${focusedTypeId}|${expansionSignature}`;
+  // Only measurements taken under the CURRENT key participate in layout —
+  // stale ones (older doc/focus/expansion) are ignored, not applied.
+  const measuredWidths = measured && measured.key === layoutKey ? measured.widths : undefined;
+
   const { nodes, edges } = useMemo(() => {
     const input = buildStructureGraph(adapterDoc, {
       focusedTypeId,
@@ -389,7 +438,7 @@ function StructureFlowInner({
     });
     // layoutStructureGraph returns LayoutResult: { nodes: ReadonlyArray<Node>, edges: ReadonlyArray<Edge> }
     // where Node/Edge are from @xyflow/react. Spreading to mutable arrays satisfies ReactFlow's prop type.
-    const result = layoutStructureGraph(input);
+    const result = layoutStructureGraph(measuredWidths ? { ...input, measuredWidths } : input);
     // Inject cellComponents AND row-expansion plumbing into the data payload of
     // 'data'-typed nodes so that DataNode's structure variant renders editable
     // cells and the per-row expand/collapse chevron (Finding 1).
@@ -462,7 +511,8 @@ function StructureFlowInner({
     cellComponents,
     onToggleExpansion,
     onNavigateToEnumType,
-    structureDiagnostics
+    structureDiagnostics,
+    measuredWidths
   ]);
 
   // Commit the identity-preserving cache only after the render reaches
@@ -471,6 +521,21 @@ function StructureFlowInner({
   useLayoutEffect(() => {
     prevNodesRef.current = nodes;
   }, [nodes]);
+
+  // Measurement pass — runs after every committed layout. Reads the natural
+  // (max-content) widths of each rendered node's rows column and header and,
+  // when they differ from what the current layout used, stores them so the
+  // useMemo above re-runs the layout with real dimensions. Convergence:
+  // measureStructureNodeWidths returns null when nothing new/changed was
+  // found (the re-measured widths match within epsilon), which ends the
+  // measure → re-layout → measure loop after one correction in practice.
+  // Synchronous in useLayoutEffect, so the style mutations never paint.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || nodes.length === 0) return;
+    const next = measureStructureNodeWidths(container, measuredWidths);
+    if (next) setMeasured({ key: layoutKey, widths: next });
+  }, [nodes, layoutKey, measuredWidths]);
 
   // Auto-fit on focus or expansion change. User feedback: when nodes are
   // expanded the structure tree grows past the viewport edge. Re-fitting
@@ -493,12 +558,6 @@ function StructureFlowInner({
   // on StructureFlowInnerProps; the previous `if (!focusedTypeId) return`
   // and `expansionMap?.size` guards were dead.
   const rf = useReactFlow();
-  const expansionSignature = useMemo(() => {
-    const entries: string[] = [];
-    for (const [k, v] of expansionMap) entries.push(`${k}=${v ? '1' : '0'}`);
-    entries.sort();
-    return entries.join('|');
-  }, [expansionMap]);
   useEffect(() => {
     if (nodes.length === 0) return;
     // requestAnimationFrame so the new node positions have been
@@ -507,7 +566,11 @@ function StructureFlowInner({
       rf.fitView({ padding: 0.1, duration: 300 });
     });
     return () => cancelAnimationFrame(id);
-  }, [focusedTypeId, expansionSignature, nodes.length, rf]);
+    // `measuredWidths` (P2 review): the measured re-layout changes node
+    // positions without changing focus/expansion/count, so the refit must
+    // follow the applied-measurement identity — but NOT raw `nodes`
+    // reference churn (document edits would cause spurious camera moves).
+  }, [focusedTypeId, expansionSignature, nodes.length, measuredWidths, rf]);
 
   const navigationCtx = useMemo(
     () => ({
@@ -521,6 +584,7 @@ function StructureFlowInner({
   return (
     <NavigationContext.Provider value={navigationCtx}>
       <div
+        ref={containerRef}
         data-testid="structure-view-flow"
         style={{ width: '100%', height: '100%', minHeight: 320, ...STRUCTURE_LAYOUT_CSS_VARS }}
       >
