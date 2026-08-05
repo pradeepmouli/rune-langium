@@ -174,10 +174,20 @@ Expect to see entries shaped like `cdm/<version>.tar.gz`,
 
 ## Step 6 — Studio Pages rebuild
 
-The Studio app picks up the production endpoints at build time via
-`resolveTelemetryEndpoint()` and `model-registry.ts`. Trigger a CF Pages
-rebuild of `daikonic-dev` (push a no-op commit, or use the dashboard's
-manual rebuild button).
+The Studio app picks up production config (`VITE_*` env vars) and endpoint
+defaults at build time — see `apps/studio/src/config.ts`. Trigger a CF Pages
+rebuild of `daikonic-dev` via the dashboard's manual "Retry deployment" /
+"Create deployment" button, or `POST /accounts/{id}/pages/projects/daikonic-dev/deployments`.
+
+**If the rebuild is specifically to pick up an env var change you just set**,
+it MUST be this kind of manual/`ad_hoc` trigger — **a no-op `git push`
+commit will NOT work**. Confirmed empirically: `github:push`-triggered
+deployments do not consume `deployment_configs.{production,preview}.env_vars`
+changes made via the Pages API/dashboard after the last such deployment, even
+though the project immediately reports the new value as "set" — only an
+`ad_hoc` deployment actually bakes it into the build. See the root README's
+Deployment section for the full writeup; this bit `VITE_ENABLE_TELEMETRY`
+twice in one debugging session before the cause was found.
 
 ---
 
