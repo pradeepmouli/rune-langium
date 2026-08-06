@@ -35,7 +35,7 @@ import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
-import type { Target } from '@rune-langium/codegen/export';
+import type { Target, FormPreviewSchema, GeneratorOutput } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
@@ -126,7 +126,8 @@ let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let cachedFuncCode = new Map<string, string>();
 let previewFilesVersion = 0;
-let documentsCache: { version: number; documents: LangiumDocument[] } | undefined;
+const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
+const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -203,6 +204,51 @@ function hydrateCuratedDocuments(entries: FileEntry[]): void {
     console.warn('[codegen-worker] Failed to hydrate curated documents; excluded from preview.', err);
     cachedCuratedDocuments = [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Versioned cache primitive
+// ---------------------------------------------------------------------------
+
+/**
+ * Every cache in this file is invalidated by comparing a stored version
+ * number against a live counter (`previewFilesVersion`/`codegenFilesVersion`)
+ * bumped whenever the relevant file set changes — never by content hashing
+ * or a TTL.
+ */
+interface VersionedEntry<T> {
+  version: number;
+  value: T;
+}
+
+function getOrCompute<T>(cache: Map<string, VersionedEntry<T>>, key: string, version: number, compute: () => T): T {
+  const cached = cache.get(key);
+  if (cached && cached.version === version) return cached.value;
+  const value = compute();
+  cache.set(key, { version, value });
+  return value;
+}
+
+/**
+ * Async variant. Captures `getVersion()` BEFORE awaiting `compute()`, and
+ * only writes to `cache` if the version is still current when `compute()`
+ * resolves — otherwise a call suspended across a file-set change would
+ * silently overwrite a correct, already-cached result with one built from
+ * now-stale state. See `buildDocuments()`'s adoption of this helper for the
+ * concrete failure mode this guards against.
+ */
+async function getOrComputeAsync<T>(
+  cache: Map<string, VersionedEntry<T>>,
+  key: string,
+  getVersion: () => number,
+  compute: () => Promise<T>
+): Promise<T> {
+  const versionAtStart = getVersion();
+  const cached = cache.get(key);
+  if (cached && cached.version === versionAtStart) return cached.value;
+  const value = await compute();
+  if (getVersion() === versionAtStart) cache.set(key, { version: versionAtStart, value });
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -299,77 +345,63 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 }
 
 async function buildDocuments(): Promise<LangiumDocument[]> {
-  if (documentsCache && documentsCache.version === previewFilesVersion) {
-    return documentsCache.documents;
-  }
+  return getOrComputeAsync(
+    documentsCache,
+    'documents',
+    () => previewFilesVersion,
+    async () => {
+      if (currentPreviewFiles.length === 0) {
+        return [];
+      }
 
-  // Captured before the only `await` below, so a `preview:setFiles` that
-  // arrives while this call is suspended in `builder.build` (bumping
-  // `previewFilesVersion` and swapping `currentPreviewFiles`/
-  // `cachedCuratedDocuments` out from under this in-flight call) is
-  // detectable on resume: this call's own `userDocuments` are already
-  // stale by then, and `curatedDocuments` below would read the NEW
-  // curated set, silently mixing old user documents with new curated
-  // ones. Populating the cache under the now-current version would
-  // poison it for every other caller until the next `preview:setFiles`.
-  const versionAtStart = previewFilesVersion;
+      // 019 Task #88 follow-up: split into user files (parse path) and
+      // curated files (deserialize path). Curated entries arrive with
+      // `serializedModelJson` set (the pre-parsed Langium AST) and
+      // `content === ''` — parsing an empty string would produce a parse
+      // error and the doc would be filtered out, leaving form preview
+      // unable to find curated types. Hydrate them via the serializer
+      // instead.
+      const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson && isPreviewUserEntryParseable(e));
 
-  if (currentPreviewFiles.length === 0) {
-    return [];
-  }
+      const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
+        factory.fromString(content, URI.parse(uri))
+      );
+      if (userDocuments.length > 0) {
+        await builder.build(userDocuments, { validation: false, eagerLinking: false });
+      }
 
-  // 019 Task #88 follow-up: split into user files (parse path) and
-  // curated files (deserialize path). Curated entries arrive with
-  // `serializedModelJson` set (the pre-parsed Langium AST) and
-  // `content === ''` — parsing an empty string would produce a parse
-  // error and the doc would be filtered out, leaving form preview
-  // unable to find curated types. Hydrate them via the serializer
-  // instead.
-  const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson && isPreviewUserEntryParseable(e));
+      // Curated docs come pre-linked from the curated-mirror build (CI runs
+      // Langium with a higher heap budget than the browser can spare).
+      // Build here would try to re-link and fail because the live Langium
+      // service hasn't indexed cross-references.
+      //
+      // Codex review on PR #169: use `factory.fromModel` + add to the
+      // service's document store. The earlier synthetic doc literal
+      // (`{ uri, parseResult: { value, [], [] } }`) skipped Langium's
+      // LangiumDocument ownership, which `RuneDslLinker.loadAstNode`
+      // relies on to resolve cross-references through `.ref`. For curated
+      // models with typed fields, refs would silently fail to resolve and
+      // the preview / codegen output would be missing typed children.
+      //
+      // The batch relink itself already ran once in `hydrateCuratedDocuments`
+      // (called from the `preview:setFiles` handler) — this just reads the
+      // cached result rather than re-registering/re-linking on every build.
+      const curatedDocuments = cachedCuratedDocuments;
 
-  const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
-    factory.fromString(content, URI.parse(uri))
+      // Filter out user files with parse/lex errors. Corpus files may
+      // contain constructs the parser doesn't fully support; excluding them
+      // keeps the namespace index intact for the remaining files.
+      const validUserDocuments = userDocuments.filter((d) => !hasDocumentErrors(d));
+      if (validUserDocuments.length < userDocuments.length) {
+        console.warn(
+          `[codegen-worker] ${
+            userDocuments.length - validUserDocuments.length
+          } user file(s) had parse errors and were excluded from preview.`
+        );
+      }
+      return [...validUserDocuments, ...curatedDocuments];
+    }
   );
-  if (userDocuments.length > 0) {
-    await builder.build(userDocuments, { validation: false, eagerLinking: false });
-  }
-
-  // Curated docs come pre-linked from the curated-mirror build (CI runs
-  // Langium with a higher heap budget than the browser can spare).
-  // Build here would try to re-link and fail because the live Langium
-  // service hasn't indexed cross-references.
-  //
-  // Codex review on PR #169: use `factory.fromModel` + add to the
-  // service's document store. The earlier synthetic doc literal
-  // (`{ uri, parseResult: { value, [], [] } }`) skipped Langium's
-  // LangiumDocument ownership, which `RuneDslLinker.loadAstNode`
-  // relies on to resolve cross-references through `.ref`. For curated
-  // models with typed fields, refs would silently fail to resolve and
-  // the preview / codegen output would be missing typed children.
-  //
-  // The batch relink itself already ran once in `hydrateCuratedDocuments`
-  // (called from the `preview:setFiles` handler) — this just reads the
-  // cached result rather than re-registering/re-linking on every build.
-  const curatedDocuments = cachedCuratedDocuments;
-
-  // Filter out user files with parse/lex errors. Corpus files may
-  // contain constructs the parser doesn't fully support; excluding them
-  // keeps the namespace index intact for the remaining files.
-  const validUserDocuments = userDocuments.filter((d) => !hasDocumentErrors(d));
-  if (validUserDocuments.length < userDocuments.length) {
-    console.warn(
-      `[codegen-worker] ${
-        userDocuments.length - validUserDocuments.length
-      } user file(s) had parse errors and were excluded from preview.`
-    );
-  }
-  const documents = [...validUserDocuments, ...curatedDocuments];
-  // Only cache this result if the file set is still the same one this call
-  // started with — see the `versionAtStart` comment above.
-  if (versionAtStart === previewFilesVersion) {
-    documentsCache = { version: versionAtStart, documents };
-  }
-  return documents;
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {
@@ -399,7 +431,9 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       return;
     }
 
-    const [schema] = generatePreviewSchemas(documents, { targetId });
+    const [schema] = getOrCompute(previewSchemaCache, targetId, previewFilesVersion, () =>
+      generatePreviewSchemas(documents, { targetId })
+    );
     if (!schema) {
       scope.postMessage({
         type: 'preview:stale',
@@ -457,7 +491,9 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
       return;
     }
 
-    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    const [schema] = getOrCompute(previewSchemaCache, typeFqn, previewFilesVersion, () =>
+      generatePreviewSchemas(documents, { targetId: typeFqn })
+    );
     if (!schema) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',
@@ -643,7 +679,9 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
     // resolve, Choice included. "Unknown type" is only correct when NEITHER
     // resolves the target.
     const dataNode = findDataNode(typeFqn, documents);
-    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    const [schema] = getOrCompute(previewSchemaCache, typeFqn, previewFilesVersion, () =>
+      generatePreviewSchemas(documents, { targetId: typeFqn })
+    );
     if (!dataNode && !schema) {
       scope.postMessage({
         type: 'instance:validateResult',

@@ -246,14 +246,8 @@ describe('codegen-worker preview messages', () => {
   });
 
   it('caches buildDocuments() results across calls when files have not changed', async () => {
-    generatePreviewSchemasMock.mockReturnValue([
-      {
-        schemaVersion: 1,
-        targetId: 'beta.Trade',
-        title: 'Trade',
-        status: 'ready',
-        fields: []
-      }
+    generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
+      { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }
     ]);
 
     const { dispatch } = await loadWorkerModule();
@@ -272,9 +266,13 @@ describe('codegen-worker preview messages', () => {
     });
     await flushWorker();
 
+    // A DIFFERENT targetId, so previewSchemaCache (which caches per-targetId)
+    // doesn't short-circuit this second call before it reaches
+    // generatePreviewSchemas — isolating this test to buildDocuments()'s own
+    // cache rather than the schema-level one added on top of it.
     dispatch({
       type: 'preview:generate',
-      targetId: 'beta.Trade',
+      targetId: 'beta.Event',
       requestId: 'cache:3'
     });
     await flushWorker();
@@ -328,14 +326,8 @@ describe('codegen-worker preview messages', () => {
   });
 
   it('does not let a build suspended across a preview:setFiles poison the cache with stale documents', async () => {
-    generatePreviewSchemasMock.mockReturnValue([
-      {
-        schemaVersion: 1,
-        targetId: 'beta.Trade',
-        title: 'Trade',
-        status: 'ready',
-        fields: []
-      }
+    generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
+      { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }
     ]);
 
     const buildResolvers: Array<() => void> = [];
@@ -380,17 +372,22 @@ describe('codegen-worker preview messages', () => {
     buildResolvers[0]!();
     await flushWorker();
 
-    // A third call must hit the cache (no new parse) and see file set B —
-    // never the stale file set A that call #1 was built from.
-    const fromStringCallsBeforeThirdRequest = fromStringMock.mock.calls.length;
-    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'race:4' });
+    // Query a DIFFERENT targetId — previewSchemaCache has no entry for it
+    // yet (only 'beta.Trade' was resolved above), so this forces a fresh
+    // generatePreviewSchemas call using whatever buildDocuments() actually
+    // has cached, isolating this assertion to documentsCache's own race
+    // guard rather than previewSchemaCache's (which already cached the
+    // correct schema for 'beta.Trade' above and would otherwise mask a
+    // documentsCache regression for a same-targetId re-query).
+    const fromStringCallsBeforeFourthRequest = fromStringMock.mock.calls.length;
+    dispatch({ type: 'instance:generateSchema', typeFqn: 'beta.Event', requestId: 'race:4' });
     await flushWorker();
 
-    expect(fromStringMock).toHaveBeenCalledTimes(fromStringCallsBeforeThirdRequest);
+    expect(fromStringMock).toHaveBeenCalledTimes(fromStringCallsBeforeFourthRequest);
 
-    const thirdCallDocuments = generatePreviewSchemasMock.mock.calls[2]![0] as Array<{ content?: string }>;
-    expect(thirdCallDocuments.some((d) => d.content === 'namespace "B"')).toBe(true);
-    expect(thirdCallDocuments.some((d) => d.content === 'namespace "A"')).toBe(false);
+    const fourthCallDocuments = generatePreviewSchemasMock.mock.calls.at(-1)![0] as Array<{ content?: string }>;
+    expect(fourthCallDocuments.some((d) => d.content === 'namespace "B"')).toBe(true);
+    expect(fourthCallDocuments.some((d) => d.content === 'namespace "A"')).toBe(false);
   });
 
   it('posts preview:stale with unsupported-target when no preview schema is available', async () => {
@@ -1077,6 +1074,118 @@ describe('codegen-worker preview:setFiles curated document relinking', () => {
 
     expect(deleteDocumentMock).not.toHaveBeenCalled();
     expect(addDocumentMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('codegen-worker previewSchemaCache (shared across preview/instance handlers)', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generatePreviewSchemasMock.mockReset();
+    findDataNodeMock.mockReset();
+    getActiveConditionPredicatesMock.mockReset();
+    getActiveConditionPredicatesMock.mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shares one generatePreviewSchemas result across runPreview and validateInstance for the same targetId', async () => {
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'shared:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'shared:2' });
+    await flushWorker();
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'shared:3' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches a repeated preview:generate for the same targetId', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'hit:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'hit:2' });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'hit:3' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps separate cache entries for different targetIds', async () => {
+    generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
+      { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'multi:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'multi:2' });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Event', requestId: 'multi:3' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidates the schema cache after preview:setFiles', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'inv:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inv:2' });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'inv:3'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inv:4' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(2);
   });
 });
 
