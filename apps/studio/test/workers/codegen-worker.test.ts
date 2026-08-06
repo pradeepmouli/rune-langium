@@ -1427,3 +1427,93 @@ describe('codegen-worker instance:validate messages', () => {
     });
   });
 });
+
+describe('codegen-worker codegenGenerateCache (runCodegen)', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generateMock.mockClear();
+    generateMock.mockReturnValue([
+      { relativePath: 'out.ts', content: 'x', sourceMap: undefined, diagnostics: [], funcs: [] }
+    ]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('caches generate() across repeated codegen:generate calls for the same target', async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    // codegen:setFiles's own handler auto-triggers runCodegen(lastTarget)
+    // — lastTarget defaults to 'zod', so this dispatch alone already
+    // computes and caches the 'zod' entry (call #1).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'hit:1'
+    });
+    await flushWorker();
+
+    // Both explicit dispatches below are the SAME target as the cache
+    // entry setFiles already populated — neither should trigger a new call.
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'hit:2' });
+    await flushWorker();
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'hit:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps separate cache entries per target', async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    // Populates the 'zod' cache entry (call #1) — see the prior test.
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'multi:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'multi:2' });
+    await flushWorker();
+    // A DIFFERENT target — must miss the cache and compute independently
+    // (call #2), coexisting with the 'zod' entry rather than replacing it.
+    dispatch({ type: 'codegen:generate', target: 'typescript', requestId: 'multi:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidates the codegen cache after codegen:setFiles', async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    // Populates the 'zod' cache entry at version 1 (call #1); the explicit
+    // generate below is a cache hit against that same entry (no new call).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'inv:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'inv:2' });
+    await flushWorker();
+
+    // Bumps codegenFilesVersion — its own auto-triggered runCodegen('zod')
+    // is a fresh miss at the new version (call #2).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'inv:3'
+    });
+    await flushWorker();
+    // Same version/target as the entry inv:3's auto-triggered run just
+    // populated — a cache hit, no new call.
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'inv:4' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+});

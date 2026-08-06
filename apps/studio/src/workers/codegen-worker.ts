@@ -128,6 +128,8 @@ let previewFilesVersion = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
+let codegenFilesVersion = 0;
+const codegenGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -287,7 +289,12 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
       return;
     }
 
-    const results = await generate(documents, { target });
+    const results = await getOrComputeAsync(
+      codegenGenerateCache,
+      target,
+      () => codegenFilesVersion,
+      () => generate(documents, { target })
+    );
 
     // 018 Task 0.7 follow-up — when every output carries an error
     // diagnostic AND no content (the shape returned by `runGenerate`
@@ -745,6 +752,7 @@ if (isWorkerGlobalScope()) {
 
       if (msg.type === 'codegen:setFiles') {
         currentCodegenFiles = msg.files;
+        codegenFilesVersion++;
         if (msg.requestId) {
           lastCodegenRequestId = msg.requestId;
         }
