@@ -124,10 +124,10 @@ let lastTarget: Target = 'zod';
 let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
-let cachedFuncCode = new Map<string, string>();
 let previewFilesVersion = 0;
 const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
 const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
+const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -305,22 +305,6 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
         message: firstError?.message ?? 'Code generation produced only errors.'
       });
       return;
-    }
-
-    // Cache generated function code for preview:execute, keyed by namespace.funcName.
-    // Store func.fileContents (isolated function declaration only) rather than
-    // result.content (full file with imports, interfaces, helper declarations) so
-    // that stripTypeAnnotations only has to handle a plain function body — no TS
-    // constructs that would cause a SyntaxError at execution time.
-    if (target === 'typescript') {
-      cachedFuncCode = new Map();
-      for (const result of results) {
-        const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
-        for (const func of result.funcs) {
-          cachedFuncCode.set(func.name, func.fileContents);
-          cachedFuncCode.set(`${ns}.${func.name}`, func.fileContents);
-        }
-      }
     }
 
     scope.postMessage({
@@ -608,20 +592,32 @@ function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  if (!cachedFuncCode.has(funcName)) {
-    const documents = await buildDocuments();
-    if (documents.length > 0) {
-      const results = await generate(documents, { target: 'typescript' });
-      cachedFuncCode = new Map();
-      for (const result of results) {
-        for (const func of result.funcs) {
-          cachedFuncCode.set(func.name, func.fileContents);
-        }
-      }
+  const documents = await buildDocuments();
+  const results =
+    documents.length > 0
+      ? await getOrComputeAsync(
+          previewGenerateCache,
+          'generate:typescript',
+          () => previewFilesVersion,
+          () => generate(documents, { target: 'typescript' })
+        )
+      : [];
+
+  // Matches both the bare function name and the namespace-qualified form
+  // (`${ns}.${func.name}`, derived the same way runCodegen's own cache
+  // population always did) — real callers (e.g. preview-store.ts's
+  // dispatchExecute) pass the qualified form.
+  let code: string | undefined;
+  for (const result of results) {
+    const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
+    const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
+    if (func) {
+      code = func.fileContents;
+      break;
     }
   }
 
-  if (!cachedFuncCode.has(funcName)) {
+  if (code === undefined) {
     scope.postMessage({
       type: 'preview:execute-error',
       requestId,
@@ -631,19 +627,21 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     return;
   }
 
-  const code = cachedFuncCode.get(funcName)!;
-
   try {
     // Strip TS type annotations from the isolated function body stored in
     // func.fileContents. This contains only the function declaration — no
     // imports, interface blocks, or helper declarations — so stripTypeAnnotations
     // only needs to handle inline type syntax. Execution goes through
     // runInWorkerSandbox — see its threat-model comment.
+    // `code`'s declaration is always the BARE function name regardless of
+    // whether `funcName` (the caller's request) was qualified — the return
+    // expression below must call by that same bare name.
+    const bareName = funcName.includes('.') ? funcName.slice(funcName.lastIndexOf('.') + 1) : funcName;
     const output = runInWorkerSandbox(
       stripTypeAnnotations(code),
       'input',
       inputs,
-      `typeof ${funcName} === 'function' ? ${funcName}(input) : undefined`
+      `typeof ${bareName} === 'function' ? ${bareName}(input) : undefined`
     );
 
     scope.postMessage({

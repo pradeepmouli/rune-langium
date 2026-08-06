@@ -717,6 +717,115 @@ describe('codegen-worker execute messages', () => {
   });
 });
 
+describe('codegen-worker previewGenerateCache (executeFunction)', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generateMock.mockClear();
+    generateMock.mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('resolves a qualified function name on a fresh worker, without codegen:generate ever having run', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: '',
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'qualified:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.CalcTrade',
+      inputs: {},
+      requestId: 'qualified:2'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'preview:execute-result', requestId: 'qualified:2', funcName: 'alpha.CalcTrade' })
+    );
+  });
+
+  it('caches generate() across repeated preview:execute calls', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: '',
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
+      }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'hit:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'hit:2' });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'hit:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates the cached function code after preview:setFiles', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: '',
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
+      }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'inv:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'inv:2' });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'inv:3'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'inv:4' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('codegen-worker code preview messages', () => {
   beforeEach(() => {
     buildMock.mockReset();
