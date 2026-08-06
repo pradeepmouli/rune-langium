@@ -125,6 +125,8 @@ let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let cachedFuncCode = new Map<string, string>();
+let previewFilesVersion = 0;
+let documentsCache: { version: number; documents: LangiumDocument[] } | undefined;
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -297,6 +299,21 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 }
 
 async function buildDocuments(): Promise<LangiumDocument[]> {
+  if (documentsCache && documentsCache.version === previewFilesVersion) {
+    return documentsCache.documents;
+  }
+
+  // Captured before the only `await` below, so a `preview:setFiles` that
+  // arrives while this call is suspended in `builder.build` (bumping
+  // `previewFilesVersion` and swapping `currentPreviewFiles`/
+  // `cachedCuratedDocuments` out from under this in-flight call) is
+  // detectable on resume: this call's own `userDocuments` are already
+  // stale by then, and `curatedDocuments` below would read the NEW
+  // curated set, silently mixing old user documents with new curated
+  // ones. Populating the cache under the now-current version would
+  // poison it for every other caller until the next `preview:setFiles`.
+  const versionAtStart = previewFilesVersion;
+
   if (currentPreviewFiles.length === 0) {
     return [];
   }
@@ -346,7 +363,13 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
       } user file(s) had parse errors and were excluded from preview.`
     );
   }
-  return [...validUserDocuments, ...curatedDocuments];
+  const documents = [...validUserDocuments, ...curatedDocuments];
+  // Only cache this result if the file set is still the same one this call
+  // started with — see the `versionAtStart` comment above.
+  if (versionAtStart === previewFilesVersion) {
+    documentsCache = { version: versionAtStart, documents };
+  }
+  return documents;
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {
@@ -701,6 +724,7 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'preview:setFiles') {
         hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
+        previewFilesVersion++;
         if (msg.requestId) {
           lastPreviewRequestId = msg.requestId;
         }
