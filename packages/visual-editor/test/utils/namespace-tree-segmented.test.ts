@@ -724,6 +724,72 @@ describe('buildSegmentedNamespaceTreeFromOptions', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Nameless entries (un-hydrated/malformed node data) — must be dropped, not
+// crash the sort. Reproduces "Cannot read properties of undefined (reading
+// 'localeCompare')" thrown from buildSegmentsFromEntries when a node's
+// `data.name` is absent (e.g. a not-yet-hydrated curated stub).
+// ---------------------------------------------------------------------------
+
+describe('nodes/options with a missing name', () => {
+  function namelessNode(ns: string): TypeGraphNode {
+    return {
+      id: `${ns}.__nameless__`,
+      type: 'data',
+      position: { x: 0, y: 0 },
+      data: {
+        $type: 'Data',
+        namespace: ns,
+        hasExternalRefs: false,
+        errors: []
+        // `name` intentionally absent.
+      } as any,
+      meta: testMeta(ns)
+    };
+  }
+
+  it('buildSegmentedNamespaceTree drops a nameless node instead of throwing', () => {
+    const nodes = [makeNode('com.rosetta.model', 'Trade', 'data'), namelessNode('com.rosetta.model')];
+    expect(() => buildSegmentedNamespaceTree(repoOf(nodes))).not.toThrow();
+    const roots = buildSegmentedNamespaceTree(repoOf(nodes));
+    const model = findByPath(roots, 'com.rosetta.model')!;
+    expect(model.types.map((t) => t.name)).toEqual(['Trade']);
+  });
+
+  it('buildNamespaceTree (flat variant) drops a nameless node instead of throwing', async () => {
+    const { buildNamespaceTree } = await import('../../src/utils/namespace-tree.js');
+    const nodes = [makeNode('com.rosetta.model', 'Trade', 'data'), namelessNode('com.rosetta.model')];
+    expect(() => buildNamespaceTree(nodes)).not.toThrow();
+    const tree = buildNamespaceTree(nodes);
+    expect(tree[0]!.types.map((t) => t.name)).toEqual(['Trade']);
+  });
+
+  it('buildSegmentedNamespaceTreeFromOptions drops an option with an empty label instead of throwing', () => {
+    const options: TypeOption[] = [
+      { value: 'com.rosetta.model.Trade', label: 'Trade', kind: 'data', namespace: 'com.rosetta.model' },
+      { value: 'com.rosetta.model.__nameless__', label: '', kind: 'data', namespace: 'com.rosetta.model' }
+    ];
+    expect(() => buildSegmentedNamespaceTreeFromOptions(options)).not.toThrow();
+    const roots = buildSegmentedNamespaceTreeFromOptions(options);
+    const model = findByPath(roots, 'com.rosetta.model')!;
+    expect(model.types.map((t) => t.name)).toEqual(['Trade']);
+  });
+
+  it('buildSegmentedNamespaceTree omits a namespace left with zero entries after dropping its only (nameless) node', () => {
+    const nodes = [makeNode('com.rosetta.model', 'Trade', 'data'), namelessNode('com.rosetta.empty')];
+    const roots = buildSegmentedNamespaceTree(repoOf(nodes));
+    expect(findByPath(roots, 'com.rosetta.model')).toBeDefined();
+    expect(findByPath(roots, 'com.rosetta.empty')).toBeUndefined();
+  });
+
+  it('buildNamespaceTree (flat variant) omits a namespace left with zero entries after dropping its only (nameless) node', async () => {
+    const { buildNamespaceTree } = await import('../../src/utils/namespace-tree.js');
+    const nodes = [makeNode('com.rosetta.model', 'Trade', 'data'), namelessNode('com.rosetta.empty')];
+    const tree = buildNamespaceTree(nodes);
+    expect(tree.map((entry) => entry.namespace)).toEqual(['com.rosetta.model']);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // collectSegmentSubtreePaths — recursive expand/collapse support
 // ---------------------------------------------------------------------------
 
