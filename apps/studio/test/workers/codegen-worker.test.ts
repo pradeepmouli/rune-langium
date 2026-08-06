@@ -245,6 +245,88 @@ describe('codegen-worker preview messages', () => {
     });
   });
 
+  it('caches buildDocuments() results across calls when files have not changed', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        targetId: 'beta.Trade',
+        title: 'Trade',
+        status: 'ready',
+        fields: []
+      }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'cache:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Trade',
+      requestId: 'cache:2'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:generate',
+      targetId: 'beta.Trade',
+      requestId: 'cache:3'
+    });
+    await flushWorker();
+
+    // Only the FIRST preview:generate should have triggered a real parse —
+    // the second must hit the cache instead of re-parsing.
+    expect(fromStringMock).toHaveBeenCalledTimes(1);
+    expect(buildMock).toHaveBeenCalledTimes(1);
+
+    // Both calls to generatePreviewSchemas must have received the exact
+    // same documents array instance (not just equal content) — proves
+    // buildDocuments() returned its cached result, not a fresh array.
+    const firstCallDocuments = generatePreviewSchemasMock.mock.calls[0]![0];
+    const secondCallDocuments = generatePreviewSchemasMock.mock.calls[1]![0];
+    expect(secondCallDocuments).toBe(firstCallDocuments);
+  });
+
+  it('invalidates the documents cache after preview:setFiles, even when file content is unchanged', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        targetId: 'beta.Trade',
+        title: 'Trade',
+        status: 'ready',
+        fields: []
+      }
+    ]);
+
+    const files = [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }];
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({ type: 'preview:setFiles', files, requestId: 'inval:1' });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inval:2' });
+    await flushWorker();
+
+    // Resend the IDENTICAL file content — must still invalidate the cache.
+    // previewFilesVersion bumps unconditionally on every preview:setFiles
+    // call, not on a content diff (see the design doc's Decision #1).
+    dispatch({ type: 'preview:setFiles', files: [...files], requestId: 'inval:3' });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inval:4' });
+    await flushWorker();
+
+    expect(fromStringMock).toHaveBeenCalledTimes(2);
+    expect(buildMock).toHaveBeenCalledTimes(2);
+
+    const firstCallDocuments = generatePreviewSchemasMock.mock.calls[0]![0];
+    const secondCallDocuments = generatePreviewSchemasMock.mock.calls[1]![0];
+    expect(secondCallDocuments).not.toBe(firstCallDocuments);
+  });
+
   it('posts preview:stale with unsupported-target when no preview schema is available', async () => {
     generatePreviewSchemasMock.mockReturnValue([]);
 

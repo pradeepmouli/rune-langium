@@ -125,6 +125,8 @@ let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
 let cachedFuncCode = new Map<string, string>();
+let previewFilesVersion = 0;
+let documentsCache: { version: number; documents: LangiumDocument[] } | undefined;
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -297,6 +299,10 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
 }
 
 async function buildDocuments(): Promise<LangiumDocument[]> {
+  if (documentsCache && documentsCache.version === previewFilesVersion) {
+    return documentsCache.documents;
+  }
+
   if (currentPreviewFiles.length === 0) {
     return [];
   }
@@ -346,7 +352,9 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
       } user file(s) had parse errors and were excluded from preview.`
     );
   }
-  return [...validUserDocuments, ...curatedDocuments];
+  const documents = [...validUserDocuments, ...curatedDocuments];
+  documentsCache = { version: previewFilesVersion, documents };
+  return documents;
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {
@@ -701,6 +709,7 @@ if (isWorkerGlobalScope()) {
       } else if (msg.type === 'preview:setFiles') {
         hydrateCuratedDocuments(msg.files);
         currentPreviewFiles = msg.files;
+        previewFilesVersion++;
         if (msg.requestId) {
           lastPreviewRequestId = msg.requestId;
         }
