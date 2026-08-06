@@ -91,13 +91,14 @@ export function countEntriesByKind(entries: readonly NamespaceTypeEntry[]): Part
 export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] {
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
   for (const node of nodes) {
+    const entry = extractTypeEntry(node);
+    if (!entry) continue;
     let bucket = nsMap.get(node.meta.namespace);
     if (bucket === undefined) {
       bucket = [];
       nsMap.set(node.meta.namespace, bucket);
     }
-    const entry = extractTypeEntry(node);
-    if (entry) bucket.push(entry);
+    bucket.push(entry);
   }
   const tree: NamespaceTreeNode[] = [];
   for (const [namespace, types] of nsMap) {
@@ -280,7 +281,10 @@ export function buildSegmentedNamespaceTree(repo: NodeRepository): SegmentNode[]
       .byNamespace(namespace)
       .map(extractTypeEntry)
       .filter((entry) => entry !== undefined);
-    nsMap.set(namespace, entries);
+    // A namespace whose only nodes were dropped as nameless would otherwise
+    // still land in `nsMap` with an empty array, producing a ghost header
+    // with `totalCount: 0` in the explorer.
+    if (entries.length > 0) nsMap.set(namespace, entries);
   }
   return buildSegmentsFromEntries(nsMap);
 }

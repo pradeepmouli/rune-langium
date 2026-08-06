@@ -773,6 +773,20 @@ describe('nodes/options with a missing name', () => {
     const model = findByPath(roots, 'com.rosetta.model')!;
     expect(model.types.map((t) => t.name)).toEqual(['Trade']);
   });
+
+  it('buildSegmentedNamespaceTree omits a namespace left with zero entries after dropping its only (nameless) node', () => {
+    const nodes = [makeNode('com.rosetta.model', 'Trade', 'data'), namelessNode('com.rosetta.empty')];
+    const roots = buildSegmentedNamespaceTree(repoOf(nodes));
+    expect(findByPath(roots, 'com.rosetta.model')).toBeDefined();
+    expect(findByPath(roots, 'com.rosetta.empty')).toBeUndefined();
+  });
+
+  it('buildNamespaceTree (flat variant) omits a namespace left with zero entries after dropping its only (nameless) node', async () => {
+    const { buildNamespaceTree } = await import('../../src/utils/namespace-tree.js');
+    const nodes = [makeNode('com.rosetta.model', 'Trade', 'data'), namelessNode('com.rosetta.empty')];
+    const tree = buildNamespaceTree(nodes);
+    expect(tree.map((entry) => entry.namespace)).toEqual(['com.rosetta.model']);
+  });
 });
 
 // ---------------------------------------------------------------------------
