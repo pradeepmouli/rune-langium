@@ -96,7 +96,8 @@ export function buildNamespaceTree(nodes: TypeGraphNode[]): NamespaceTreeNode[] 
       bucket = [];
       nsMap.set(node.meta.namespace, bucket);
     }
-    bucket.push(extractTypeEntry(node));
+    const entry = extractTypeEntry(node);
+    if (entry) bucket.push(entry);
   }
   const tree: NamespaceTreeNode[] = [];
   for (const [namespace, types] of nsMap) {
@@ -234,12 +235,21 @@ export interface SegmentNode {
 /**
  * Extract a `NamespaceTypeEntry` from a graph node using the same logic as
  * `buildNamespaceTree`, so both builders produce identical entry objects.
+ *
+ * Returns `undefined` when `node.data` has no real (non-empty string) `name`
+ * — e.g. a not-yet-hydrated curated stub node, or any domain `$type` whose
+ * shape doesn't carry a `name` at all. `NamespaceTypeEntry.name` is typed as
+ * a non-optional `string`; degrading to `''` would let a nameless ghost row
+ * appear in the tree (and still requires every caller to guard the sort
+ * comparator), so such nodes are excluded here instead of fabricated.
  */
-function extractTypeEntry(node: TypeGraphNode): NamespaceTypeEntry {
+function extractTypeEntry(node: TypeGraphNode): NamespaceTypeEntry | undefined {
   const d = node.data as AnyGraphNode;
+  const name = (d as { name?: unknown }).name;
+  if (typeof name !== 'string' || name === '') return undefined;
   return {
     nodeId: node.id,
-    name: d.name as string,
+    name,
     kind: resolveNodeKind(node) as TypeKind
   };
 }
@@ -266,7 +276,11 @@ export function buildSegmentedNamespaceTree(repo: NodeRepository): SegmentNode[]
   // construction (nesting, totals, sorting) is identical, so it lives once.
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
   for (const namespace of repo.namespaces()) {
-    nsMap.set(namespace, repo.byNamespace(namespace).map(extractTypeEntry));
+    const entries = repo
+      .byNamespace(namespace)
+      .map(extractTypeEntry)
+      .filter((entry) => entry !== undefined);
+    nsMap.set(namespace, entries);
   }
   return buildSegmentsFromEntries(nsMap);
 }
@@ -284,6 +298,7 @@ export function buildSegmentedNamespaceTreeFromOptions(options: TypeOption[]): S
 
   const nsMap = new Map<string, NamespaceTypeEntry[]>();
   for (const opt of options) {
+    if (typeof opt.label !== 'string' || opt.label === '') continue;
     const isBuiltin = opt.kind === 'builtin';
     const ns = opt.namespace ?? (isBuiltin ? 'Built-in' : '');
     const kind = (isBuiltin ? 'basicType' : opt.kind) as TypeKind;
