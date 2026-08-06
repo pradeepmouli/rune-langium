@@ -1,8 +1,8 @@
 # Retire `preview-validator.ts`'s Structural Validator Design
 
-**Goal:** Replace `apps/studio/src/services/preview-validator.ts`'s hand-rolled structural Zod validator (`buildFieldValidator`/`buildSchemaValidator`/`validatePreviewSample`) with real validation against the actual generated Zod schema, using `emitStandaloneZodSchema` (merged via PR #470), at both of its call sites — and fix the pre-existing, uncached `buildDocuments()` re-parse-on-every-call cost this change would otherwise stack more work on top of.
+**Goal:** Replace `apps/studio/src/services/preview-validator.ts`'s hand-rolled structural Zod validator (`buildFieldValidator`/`buildSchemaValidator`/`validatePreviewSample`) with real validation against the actual generated Zod schema, using `emitStandaloneZodSchema` (merged via PR #470), at both of its call sites.
 
-**Architecture:** `codegen-worker.ts` compiles the target type's real Zod schema (via `emitStandaloneZodSchema` + a `new Function` sandbox extending the existing `runInWorkerSandbox` pattern) and validates instance data against it with one `.safeParse()` call — which also absorbs the separately-run condition-predicate loop, since the real schema already embeds `.refine()`/`.superRefine()` condition checks. Both consumers of structural validation (Prototype Workspace's instance editor and the plain Form Preview panel) route through this one worker-side path via the existing `instance:validate`/`instance:validateResult` message pair. `buildDocuments()` and the compiled validator are both cached, invalidated by a single files-version counter bumped on `preview:setFiles`.
+**Architecture:** `codegen-worker.ts` compiles the target type's real Zod schema (via `emitStandaloneZodSchema` + a `new Function` sandbox extending the existing `runInWorkerSandbox` pattern) and validates instance data against it with one `.safeParse()` call — which also absorbs the separately-run condition-predicate loop, since the real schema already embeds `.refine()`/`.superRefine()` condition checks. Both consumers of structural validation (Prototype Workspace's instance editor and the plain Form Preview panel) route through this one worker-side path via the existing `instance:validate`/`instance:validateResult` message pair. The compiled validator is cached, invalidated by the `previewFilesVersion` counter introduced in `docs/superpowers/specs/2026-08-06-codegen-worker-document-cache-design.md` — that spec is a **dependency** of this one, not duplicated here.
 
 **Tech Stack:** TypeScript, Zod, the existing Web Worker (`codegen-worker.ts`) sandbox infrastructure, zustand stores.
 
@@ -12,7 +12,7 @@ CLAUDE.md documents `preview-validator.ts` as the incident that established this
 
 `emitStandaloneZodSchema(documents, targetId)` (`packages/codegen/src/emit/standalone-schema.ts`, merged via PR #470) removed the blocker: it computes a target type's transitive closure and runs the real, unmodified `emitNamespace()` (zod target) against a synthetic single-namespace view, producing one self-contained script (real TypeScript, with a genuine `import { z } from 'zod';` header, cross-namespace imports stripped, `runeExtendChoice` inlined when needed). It is not yet wired into Studio anywhere.
 
-Separately, `codegen-worker.ts`'s `buildDocuments()` (used by `validateInstance`, `runInstanceSchema`, and `runPreview` alike) re-parses and re-links `currentPreviewFiles` from scratch on **every call, with no caching at all** — including on every keystroke-triggered `instance:validate` today. This design's new `compileStandaloneValidator` step (closure walk + real emit + TS strip + `new Function` compile) would stack meaningfully more per-call work on top of that same already-uncached path, so this design fixes the caching gap at its root rather than adding a narrower cache just for the new code.
+Separately, `codegen-worker.ts`'s `buildDocuments()` (used by `validateInstance`, `runInstanceSchema`, and `runPreview` alike) re-parses and re-links `currentPreviewFiles` from scratch on every call, with no caching at all — including on every keystroke-triggered `instance:validate` today. This design's new `compileStandaloneValidator` step (closure walk + real emit + TS strip + `new Function` compile) would stack meaningfully more per-call work on top of that same already-uncached path. Rather than fold that fix in here, it's split into its own spec (`docs/superpowers/specs/2026-08-06-codegen-worker-document-cache-design.md`) since it's independently useful — every existing `buildDocuments()` consumer benefits, not just this work — and independently shippable. This design **depends on** that spec's `previewFilesVersion` counter existing; `compileStandaloneValidator`'s own cache (below) is keyed against that same counter.
 
 ## Scope
 
@@ -21,31 +21,19 @@ Separately, `codegen-worker.ts`'s `buildDocuments()` (used by `validateInstance`
 1. `codegen-worker.ts`'s `validateInstance()` — the Prototype Workspace `instance:validate` handler.
 2. `FormPreviewPanel.tsx`'s per-keystroke live validation for the plain Form Preview panel.
 
-Also in scope: caching `buildDocuments()`'s result (see Decisions below — broadened from a validator-only cache after confirming the baseline recompute-per-keystroke cost predates this change and every `buildDocuments()` consumer in the worker benefits).
-
 **Out of scope / non-goals:**
 
 - `preview-validator.ts`'s default-value/path helpers (`fieldRootKey`, `fieldLeafKey`, `resolveArmPaths`, `splitChoiceArmFields`, `buildDefaultValue`, `buildDefaultObjectValue`, `buildArmValue`, `buildDefaultFieldsObject`, `buildDefaultValues`). These derive sensible blank form values from the `PreviewField` tree and don't approximate Zod semantics — not part of the incident, left unchanged.
 - The `@zod-to-form`/`useZodForm` integration and retiring `FormPreviewPanel.tsx`'s hand-rolled *rendering* (`emitStandaloneZodSchema`'s own design doc flagged this as a separate future sub-project; this design is validation-only).
 - Robust general-purpose TypeScript-to-JS erasure (see Decisions below — deliberately deferred in favor of extending the existing regex stripper).
+- Caching `buildDocuments()` itself — covered by the dependency spec (`2026-08-06-codegen-worker-document-cache-design.md`), not this one.
 - Caching `currentCodegenFiles`-driven state (`codegen:setFiles`/`codegen:generate`, `cachedFuncCode`) — unrelated to `currentPreviewFiles`, unaffected by this change.
 
 ## Architecture
 
-### `buildDocuments()` caching
-
-New module-level state in `codegen-worker.ts`:
-
-```ts
-let previewFilesVersion = 0;
-let documentsCache: { version: number; documents: LangiumDocument[] } | undefined;
-```
-
-`previewFilesVersion` is incremented exactly where `currentPreviewFiles = msg.files` is currently set (the `preview:setFiles` handler — the single assignment site for `currentPreviewFiles` in this file today). `buildDocuments()` checks `documentsCache?.version === previewFilesVersion` first; on a hit, returns the cached array immediately, skipping the parse/link work entirely. On a miss, it runs exactly as it does today and populates `documentsCache` before returning. This benefits every existing consumer (`validateInstance`'s `dataNode`/`schema` lookup, `generatePreviewSchemas`, `runInstanceSchema`, `runPreview`) as well as the new `compileStandaloneValidator`, not just the new code path.
-
-Not handled (accepted for MVP, noted as a follow-up if it proves to matter): two `instance:validate` calls arriving close together can both observe a cache miss before either resolves (the worker is single-threaded, but `buildDocuments` is `async` and yields at its `await builder.build(...)` point), causing duplicate parse work in that race window. Not a correctness issue — just wasted work — and no worse than today's unconditional-recompute baseline.
-
 ### Worker-side compilation
+
+Assumes `docs/superpowers/specs/2026-08-06-codegen-worker-document-cache-design.md` has already landed — this design reuses its `previewFilesVersion` counter for its own cache invalidation rather than introducing a second, independent one.
 
 New in `codegen-worker.ts`:
 
@@ -101,7 +89,7 @@ handleFieldChange
   → (if validated) usePreviewStore.dispatchValidate(schema.targetId, nextValues)
   → postMessage 'instance:validate' { typeFqn, data, requestId }
   → codegen-worker.ts validateInstance()
-      → buildDocuments()                                  // cache hit unless files changed
+      → buildDocuments()                                  // cached — see the document-cache spec
       → compileStandaloneValidator(documents, typeFqn)     // cache hit unless files changed
       → validator.safeParse(data)
       → translate issues → ValidationDiagnostic[]
@@ -115,7 +103,7 @@ The controlled-mode (Prototype Workspace) flow is identical except it already ex
 
 ## Files touched
 
-- `apps/studio/src/workers/codegen-worker.ts` — `previewFilesVersion` + `documentsCache`, cached `buildDocuments()`, `stripModuleTypeAnnotations`, `compileStandaloneValidator` (+ its own cache map), rewritten `validateInstance`.
+- `apps/studio/src/workers/codegen-worker.ts` — `stripModuleTypeAnnotations`, `compileStandaloneValidator` (+ its own cache map, keyed against the `previewFilesVersion` counter from the document-cache spec), rewritten `validateInstance`.
 - `apps/studio/src/store/preview-store.ts` — new `dispatchValidate`/`receiveValidateResult` + `pendingRequests`/staleness-guard state, mirroring `instance-store.ts`.
 - `apps/studio/src/shell/providers/CodegenProvider.tsx` — route `instance:validateResult` to `usePreviewStore` as well as `useInstanceStore`.
 - `apps/studio/src/components/FormPreviewPanel.tsx` — `applyValidation` drops its local `validatePreviewSample` call in both branches; uncontrolled mode reads `errors`/`valid` from `usePreviewStore` instead of computing them inline.
@@ -135,7 +123,7 @@ The controlled-mode (Prototype Workspace) flow is identical except it already ex
 - **Condition attribution**: a Data type with exactly one active condition (message-prefix attribution) and a Data type with two+ active conditions (`path`-based attribution) — both must produce diagnostics matching today's `{ path, message, conditionName }` shape.
 - **Cyclic-type target**: exercises the `interface`-block stripping path end-to-end (compile + eval + safeParse succeeds).
 - **Diagnostic fallback**: a target whose closure has a real `name-collision`, and a target with an `unresolved-ref` warning (validation still succeeds for the rest of the schema).
-- **Cache invalidation**: `buildDocuments()` returns the same array reference on a second call with no intervening `preview:setFiles`; returns a freshly-parsed result after one. Same pattern for `compileStandaloneValidator`'s cache.
+- **Cache invalidation**: `compileStandaloneValidator`'s cache returns the same compiled validator on a second call for the same `typeFqn` with no intervening `preview:setFiles`; recompiles after one (`buildDocuments()`'s own cache behavior is covered by the document-cache spec's tests, not repeated here).
 - **Store-level**: `preview-store.ts`'s `dispatchValidate`/`receiveValidateResult` staleness guard (out-of-order response for a stale requestId is dropped), mirroring `instance-store.ts`'s existing test coverage for the same pattern.
 - **Component-level**: `FormPreviewPanel.test.tsx` — uncontrolled mode's validation now flows through a mocked `usePreviewStore` dispatch instead of asserting on `validatePreviewSample` output directly; controlled mode's redundant local-validation assertions are removed.
 - Full `apps/studio` suite run after the change (per this repo's standing "run the whole package suite" practice) to catch any other caller of the deleted exports.
@@ -145,4 +133,4 @@ The controlled-mode (Prototype Workspace) flow is identical except it already ex
 1. **Scope: both call sites**, not just the worker-side one — confirmed with the project owner rather than splitting into two follow-on PRs.
 2. **Main-thread eval was rejected** in favor of routing the plain Form Preview panel's validation through the worker (like Prototype Workspace's instance editor already does), reusing `instance-store.ts`'s proven no-debounce/staleness-guard pattern instead of adding a new main-thread `new Function` sandbox or new debounce logic.
 3. **TS erasure extends the existing regex stripper** rather than adding `typescript`'s `transpileModule` as a runtime dependency — narrower risk than a general-purpose stripper since both the emitter and the stripper are ours to control, and it avoids a real bundle-size cost.
-4. **Caching was broadened from "just the new compiled validator" to `buildDocuments()` itself**, after recognizing the uncached-parse-per-keystroke cost predates this change and every consumer in the worker benefits from fixing it at that root, not just the new code path. A single `previewFilesVersion` counter drives invalidation for both caches.
+4. **`buildDocuments()` caching was split into its own spec** (`2026-08-06-codegen-worker-document-cache-design.md`) rather than folded in here, after recognizing the uncached-parse-per-keystroke cost predates this change and every `buildDocuments()` consumer in the worker benefits from fixing it at that root — it's independently useful and independently shippable. This design depends on that spec's `previewFilesVersion` counter for its own compiled-validator cache.
