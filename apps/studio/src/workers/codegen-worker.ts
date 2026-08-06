@@ -303,6 +303,17 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
     return documentsCache.documents;
   }
 
+  // Captured before the only `await` below, so a `preview:setFiles` that
+  // arrives while this call is suspended in `builder.build` (bumping
+  // `previewFilesVersion` and swapping `currentPreviewFiles`/
+  // `cachedCuratedDocuments` out from under this in-flight call) is
+  // detectable on resume: this call's own `userDocuments` are already
+  // stale by then, and `curatedDocuments` below would read the NEW
+  // curated set, silently mixing old user documents with new curated
+  // ones. Populating the cache under the now-current version would
+  // poison it for every other caller until the next `preview:setFiles`.
+  const versionAtStart = previewFilesVersion;
+
   if (currentPreviewFiles.length === 0) {
     return [];
   }
@@ -353,7 +364,11 @@ async function buildDocuments(): Promise<LangiumDocument[]> {
     );
   }
   const documents = [...validUserDocuments, ...curatedDocuments];
-  documentsCache = { version: previewFilesVersion, documents };
+  // Only cache this result if the file set is still the same one this call
+  // started with — see the `versionAtStart` comment above.
+  if (versionAtStart === previewFilesVersion) {
+    documentsCache = { version: versionAtStart, documents };
+  }
   return documents;
 }
 

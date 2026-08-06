@@ -327,6 +327,72 @@ describe('codegen-worker preview messages', () => {
     expect(secondCallDocuments).not.toBe(firstCallDocuments);
   });
 
+  it('does not let a build suspended across a preview:setFiles poison the cache with stale documents', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      {
+        schemaVersion: 1,
+        targetId: 'beta.Trade',
+        title: 'Trade',
+        status: 'ready',
+        fields: []
+      }
+    ]);
+
+    const buildResolvers: Array<() => void> = [];
+    buildMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          buildResolvers.push(resolve);
+        })
+    );
+
+    const { dispatch } = await loadWorkerModule();
+
+    // Call #1 starts against file set A and suspends inside builder.build.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "A"' }],
+      requestId: 'race:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'race:2' });
+    await flushWorker();
+
+    // The file set changes to B WHILE call #1 is still suspended. This bumps
+    // previewFilesVersion and — because lastPreviewTargetId is already set —
+    // triggers a second, independent buildDocuments() call (#2) against B,
+    // which also suspends inside its own builder.build.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "B"' }],
+      requestId: 'race:3'
+    });
+    await flushWorker();
+
+    expect(buildResolvers).toHaveLength(2);
+
+    // Resolve the SECOND (current, correct) call first, then the FIRST
+    // (now-stale) call last — the exact ordering that would let a stale
+    // resume silently overwrite an already-cached correct result if the
+    // version weren't re-checked before writing to documentsCache.
+    buildResolvers[1]!();
+    await flushWorker();
+    buildResolvers[0]!();
+    await flushWorker();
+
+    // A third call must hit the cache (no new parse) and see file set B —
+    // never the stale file set A that call #1 was built from.
+    const fromStringCallsBeforeThirdRequest = fromStringMock.mock.calls.length;
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'race:4' });
+    await flushWorker();
+
+    expect(fromStringMock).toHaveBeenCalledTimes(fromStringCallsBeforeThirdRequest);
+
+    const thirdCallDocuments = generatePreviewSchemasMock.mock.calls[2]![0] as Array<{ content?: string }>;
+    expect(thirdCallDocuments.some((d) => d.content === 'namespace "B"')).toBe(true);
+    expect(thirdCallDocuments.some((d) => d.content === 'namespace "A"')).toBe(false);
+  });
+
   it('posts preview:stale with unsupported-target when no preview schema is available', async () => {
     generatePreviewSchemasMock.mockReturnValue([]);
 
