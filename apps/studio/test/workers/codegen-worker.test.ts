@@ -246,14 +246,8 @@ describe('codegen-worker preview messages', () => {
   });
 
   it('caches buildDocuments() results across calls when files have not changed', async () => {
-    generatePreviewSchemasMock.mockReturnValue([
-      {
-        schemaVersion: 1,
-        targetId: 'beta.Trade',
-        title: 'Trade',
-        status: 'ready',
-        fields: []
-      }
+    generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
+      { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }
     ]);
 
     const { dispatch } = await loadWorkerModule();
@@ -272,9 +266,13 @@ describe('codegen-worker preview messages', () => {
     });
     await flushWorker();
 
+    // A DIFFERENT targetId, so previewSchemaCache (which caches per-targetId)
+    // doesn't short-circuit this second call before it reaches
+    // generatePreviewSchemas — isolating this test to buildDocuments()'s own
+    // cache rather than the schema-level one added on top of it.
     dispatch({
       type: 'preview:generate',
-      targetId: 'beta.Trade',
+      targetId: 'beta.Event',
       requestId: 'cache:3'
     });
     await flushWorker();
@@ -328,14 +326,8 @@ describe('codegen-worker preview messages', () => {
   });
 
   it('does not let a build suspended across a preview:setFiles poison the cache with stale documents', async () => {
-    generatePreviewSchemasMock.mockReturnValue([
-      {
-        schemaVersion: 1,
-        targetId: 'beta.Trade',
-        title: 'Trade',
-        status: 'ready',
-        fields: []
-      }
+    generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
+      { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }
     ]);
 
     const buildResolvers: Array<() => void> = [];
@@ -380,17 +372,22 @@ describe('codegen-worker preview messages', () => {
     buildResolvers[0]!();
     await flushWorker();
 
-    // A third call must hit the cache (no new parse) and see file set B —
-    // never the stale file set A that call #1 was built from.
-    const fromStringCallsBeforeThirdRequest = fromStringMock.mock.calls.length;
-    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'race:4' });
+    // Query a DIFFERENT targetId — previewSchemaCache has no entry for it
+    // yet (only 'beta.Trade' was resolved above), so this forces a fresh
+    // generatePreviewSchemas call using whatever buildDocuments() actually
+    // has cached, isolating this assertion to documentsCache's own race
+    // guard rather than previewSchemaCache's (which already cached the
+    // correct schema for 'beta.Trade' above and would otherwise mask a
+    // documentsCache regression for a same-targetId re-query).
+    const fromStringCallsBeforeFourthRequest = fromStringMock.mock.calls.length;
+    dispatch({ type: 'instance:generateSchema', typeFqn: 'beta.Event', requestId: 'race:4' });
     await flushWorker();
 
-    expect(fromStringMock).toHaveBeenCalledTimes(fromStringCallsBeforeThirdRequest);
+    expect(fromStringMock).toHaveBeenCalledTimes(fromStringCallsBeforeFourthRequest);
 
-    const thirdCallDocuments = generatePreviewSchemasMock.mock.calls[2]![0] as Array<{ content?: string }>;
-    expect(thirdCallDocuments.some((d) => d.content === 'namespace "B"')).toBe(true);
-    expect(thirdCallDocuments.some((d) => d.content === 'namespace "A"')).toBe(false);
+    const fourthCallDocuments = generatePreviewSchemasMock.mock.calls.at(-1)![0] as Array<{ content?: string }>;
+    expect(fourthCallDocuments.some((d) => d.content === 'namespace "B"')).toBe(true);
+    expect(fourthCallDocuments.some((d) => d.content === 'namespace "A"')).toBe(false);
   });
 
   it('posts preview:stale with unsupported-target when no preview schema is available', async () => {
@@ -717,6 +714,115 @@ describe('codegen-worker execute messages', () => {
         })
       );
     });
+  });
+});
+
+describe('codegen-worker previewGenerateCache (executeFunction)', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generateMock.mockClear();
+    generateMock.mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('resolves a qualified function name on a fresh worker, without codegen:generate ever having run', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: '',
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
+      }
+    ]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'qualified:1'
+    });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:execute',
+      funcName: 'alpha.CalcTrade',
+      inputs: {},
+      requestId: 'qualified:2'
+    });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'preview:execute-result', requestId: 'qualified:2', funcName: 'alpha.CalcTrade' })
+    );
+  });
+
+  it('caches generate() across repeated preview:execute calls', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: '',
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
+      }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'hit:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'hit:2' });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'hit:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates the cached function code after preview:setFiles', async () => {
+    generateMock.mockReturnValue([
+      {
+        relativePath: 'alpha.ts',
+        content: '',
+        sourceMap: undefined,
+        diagnostics: [],
+        funcs: [{ name: 'CalcTrade', fileContents: 'function CalcTrade(input) { return input; }' }]
+      }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'inv:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'inv:2' });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "alpha"' }],
+      requestId: 'inv:3'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:execute', funcName: 'CalcTrade', inputs: {}, requestId: 'inv:4' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1080,6 +1186,195 @@ describe('codegen-worker preview:setFiles curated document relinking', () => {
   });
 });
 
+describe('codegen-worker previewSchemaCache (shared across preview/instance handlers)', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generatePreviewSchemasMock.mockReset();
+    findDataNodeMock.mockReset();
+    getActiveConditionPredicatesMock.mockReset();
+    getActiveConditionPredicatesMock.mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shares one generatePreviewSchemas result across runPreview and validateInstance for the same targetId', async () => {
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'shared:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'shared:2' });
+    await flushWorker();
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'shared:3' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches a repeated preview:generate for the same targetId', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'hit:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'hit:2' });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'hit:3' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps separate cache entries for different targetIds', async () => {
+    generatePreviewSchemasMock.mockImplementation((_documents: unknown, options: { targetId: string }) => [
+      { schemaVersion: 1, targetId: options.targetId, title: options.targetId, status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'multi:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'multi:2' });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Event', requestId: 'multi:3' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidates the schema cache after preview:setFiles', async () => {
+    generatePreviewSchemasMock.mockReturnValue([
+      { schemaVersion: 1, targetId: 'beta.Trade', title: 'Trade', status: 'ready', fields: [] }
+    ]);
+
+    const { dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'inv:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inv:2' });
+    await flushWorker();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'inv:3'
+    });
+    await flushWorker();
+    dispatch({ type: 'preview:generate', targetId: 'beta.Trade', requestId: 'inv:4' });
+    await flushWorker();
+
+    expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a build suspended across a preview:setFiles poison previewSchemaCache with a stale schema', async () => {
+    generatePreviewSchemasMock.mockImplementation(
+      (documents: Array<{ content?: string }>, options: { targetId: string }) => [
+        {
+          schemaVersion: 1,
+          targetId: options.targetId,
+          title: documents.some((d) => d.content === 'namespace "B"') ? 'FromB' : 'FromA',
+          status: 'ready',
+          fields: []
+        }
+      ]
+    );
+
+    const buildResolvers: Array<() => void> = [];
+    buildMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          buildResolvers.push(resolve);
+        })
+    );
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "A"' }],
+      requestId: 'poison:1'
+    });
+    await flushWorker();
+
+    // instance:generateSchema deliberately never touches lastPreviewTargetId
+    // (see its own doc comment), so — unlike preview:generate — the
+    // preview:setFiles below will NOT auto-trigger a second, competing call
+    // that could populate previewSchemaCache first. This call is the ONLY
+    // one in flight, and it suspends inside builder.build against file set A.
+    dispatch({ type: 'instance:generateSchema', typeFqn: 'beta.Trade', requestId: 'poison:2' });
+    await flushWorker();
+
+    // File set changes to B WHILE the call above is still suspended.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "B"' }],
+      requestId: 'poison:3'
+    });
+    await flushWorker();
+
+    expect(buildResolvers).toHaveLength(1);
+
+    // Resolve the suspended build. buildDocuments()'s own guard correctly
+    // refuses to cache this now-stale (file-set-A) result under the live
+    // version, but its RETURNED documents are still A-based — without
+    // tagging the previewSchemaCache write with the version those documents
+    // were ACTUALLY built from (not the live counter, already at 2), this
+    // caches a schema computed from stale documents as if it were valid for
+    // the current version.
+    buildResolvers[0]!();
+    await flushWorker();
+
+    // Back to immediate resolution — the controllable-promise implementation
+    // above only exists to suspend the ONE call under test.
+    buildMock.mockImplementation(async () => undefined);
+
+    // A fresh request for the SAME targetId must recompute against the
+    // CURRENT (B-based) documents and see the correct schema — never the
+    // stale A-based one the suspended call computed.
+    dispatch({ type: 'instance:generateSchema', typeFqn: 'beta.Trade', requestId: 'poison:4' });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'instance:generateSchemaResult',
+        requestId: 'poison:4',
+        schema: expect.objectContaining({ title: 'FromB' })
+      })
+    );
+  });
+});
+
 describe('codegen-worker instance:validate messages', () => {
   beforeEach(() => {
     buildMock.mockReset();
@@ -1207,5 +1502,165 @@ describe('codegen-worker instance:validate messages', () => {
       requestId: 'validate:3',
       diagnostics: []
     });
+  });
+});
+
+describe('codegen-worker codegenGenerateCache (runCodegen)', () => {
+  beforeEach(() => {
+    buildMock.mockReset();
+    buildMock.mockImplementation(async () => undefined);
+    fromStringMock.mockClear();
+    generateMock.mockClear();
+    generateMock.mockReturnValue([
+      { relativePath: 'out.ts', content: 'x', sourceMap: undefined, diagnostics: [], funcs: [] }
+    ]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('caches generate() across repeated codegen:generate calls for the same target', async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    // codegen:setFiles's own handler auto-triggers runCodegen(lastTarget)
+    // — lastTarget defaults to 'zod', so this dispatch alone already
+    // computes and caches the 'zod' entry (call #1).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'hit:1'
+    });
+    await flushWorker();
+
+    // Both explicit dispatches below are the SAME target as the cache
+    // entry setFiles already populated — neither should trigger a new call.
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'hit:2' });
+    await flushWorker();
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'hit:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps separate cache entries per target', async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    // Populates the 'zod' cache entry (call #1) — see the prior test.
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'multi:1'
+    });
+    await flushWorker();
+
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'multi:2' });
+    await flushWorker();
+    // A DIFFERENT target — must miss the cache and compute independently
+    // (call #2), coexisting with the 'zod' entry rather than replacing it.
+    dispatch({ type: 'codegen:generate', target: 'typescript', requestId: 'multi:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('invalidates the codegen cache after codegen:setFiles', async () => {
+    const { dispatch } = await loadWorkerModule();
+
+    // Populates the 'zod' cache entry at version 1 (call #1); the explicit
+    // generate below is a cache hit against that same entry (no new call).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'inv:1'
+    });
+    await flushWorker();
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'inv:2' });
+    await flushWorker();
+
+    // Bumps codegenFilesVersion — its own auto-triggered runCodegen('zod')
+    // is a fresh miss at the new version (call #2).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma"' }],
+      requestId: 'inv:3'
+    });
+    await flushWorker();
+    // Same version/target as the entry inv:3's auto-triggered run just
+    // populated — a cache hit, no new call.
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'inv:4' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let an older run whose generate() resolves late clobber a newer entry already cached', async () => {
+    // Two runCodegen('zod') calls in flight for the SAME cache key, each
+    // suspended inside its own generate() call, captured under a DIFFERENT
+    // codegenFilesVersion. The older one's generate() resolves LAST —
+    // reproduces the out-of-order-completion race: getOrComputeAsync's write
+    // guard must compare against the cache's own current state, not
+    // re-invoke `getVersion()` — for these two call sites `getVersion` is a
+    // closure over an already-fixed `documentsVersion`, so re-invoking it
+    // trivially always equals `versionAtStart` and would let the older,
+    // stale write clobber the newer, correct entry.
+    const generateResolvers: Array<(value: unknown) => void> = [];
+    generateMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          generateResolvers.push(resolve);
+        })
+    );
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    // Call A: codegenFilesVersion becomes 1; its auto-triggered
+    // runCodegen('zod') suspends inside generate() (resolver #0).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma-v1"' }],
+      requestId: 'race:1'
+    });
+    await flushWorker();
+
+    // Call B: codegenFilesVersion becomes 2; its OWN auto-triggered
+    // runCodegen('zod') also suspends inside generate() (resolver #1) — a
+    // second, independent in-flight call for the same cache key.
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma-v2"' }],
+      requestId: 'race:2'
+    });
+    await flushWorker();
+
+    expect(generateResolvers).toHaveLength(2);
+
+    // Resolve B (the NEWER call, version 2) FIRST — it correctly caches.
+    generateResolvers[1]!([{ relativePath: 'out.ts', content: 'B', sourceMap: undefined, diagnostics: [], funcs: [] }]);
+    await flushWorker();
+
+    // Resolve A (the OLDER call, version 1) SECOND. Its write must be
+    // refused — the cache already holds a newer (version 2) entry.
+    generateResolvers[0]!([{ relativePath: 'out.ts', content: 'A', sourceMap: undefined, diagnostics: [], funcs: [] }]);
+    await flushWorker();
+
+    // Back to immediate resolution for the follow-up dispatch below. Its
+    // content is a sentinel that must never actually be returned — a cache
+    // hit should serve B's already-cached result without calling generate() again.
+    generateMock.mockImplementation(async () => [
+      { relativePath: 'out.ts', content: 'SHOULD-NOT-BE-CALLED', sourceMap: undefined, diagnostics: [], funcs: [] }
+    ]);
+
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'race:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'codegen:result',
+        requestId: 'race:3',
+        files: [expect.objectContaining({ relativePath: 'out.ts', content: 'B' })]
+      })
+    );
   });
 });

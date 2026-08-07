@@ -35,7 +35,7 @@ import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
 import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
-import type { Target } from '@rune-langium/codegen/export';
+import type { Target, FormPreviewSchema, GeneratorOutput } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
@@ -124,9 +124,12 @@ let lastTarget: Target = 'zod';
 let lastCodegenRequestId: string | undefined;
 let lastPreviewTargetId: string | undefined;
 let lastPreviewRequestId: string | undefined;
-let cachedFuncCode = new Map<string, string>();
 let previewFilesVersion = 0;
-let documentsCache: { version: number; documents: LangiumDocument[] } | undefined;
+const documentsCache = new Map<string, VersionedEntry<LangiumDocument[]>>();
+const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>();
+const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
+let codegenFilesVersion = 0;
+const codegenGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -206,6 +209,96 @@ function hydrateCuratedDocuments(entries: FileEntry[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Versioned cache primitive
+// ---------------------------------------------------------------------------
+
+/**
+ * Every cache in this file is invalidated by comparing a stored version
+ * number against a live counter (`previewFilesVersion`/`codegenFilesVersion`)
+ * bumped whenever the relevant file set changes — never by content hashing
+ * or a TTL.
+ */
+interface VersionedEntry<T> {
+  version: number;
+  value: T;
+}
+
+/**
+ * Returns the full `VersionedEntry`, not just its `value` — callers that
+ * feed this result into a FURTHER downstream cache (e.g. `buildDocuments()`'s
+ * result feeding `previewSchemaCache`/`previewGenerateCache`) must tag that
+ * downstream entry with the version returned here, not with whatever the
+ * live counter reads at that later point. Re-sampling the live counter
+ * after this call already reflects a file-set change that this specific
+ * result predates — see `getOrComputeAsync`'s own doc comment for the
+ * concrete failure mode.
+ */
+function getOrCompute<T>(
+  cache: Map<string, VersionedEntry<T>>,
+  key: string,
+  version: number,
+  compute: () => T
+): VersionedEntry<T> {
+  const cached = cache.get(key);
+  if (cached && cached.version === version) return cached;
+  const entry: VersionedEntry<T> = { version, value: compute() };
+  // Never let a write tagged with a STALE version (an out-of-order caller
+  // whose own input predates a concurrently-already-cached, newer entry —
+  // see this function's doc comment) clobber that newer entry. This call's
+  // own request is still answered with a freshly-computed, correctly-tagged
+  // result; it just isn't allowed to regress the shared cache.
+  if (!cached || cached.version < version) {
+    cache.set(key, entry);
+  }
+  return entry;
+}
+
+/**
+ * Async variant. Captures `getVersion()` BEFORE awaiting `compute()`, and
+ * tags the result with that captured version regardless of what `getVersion()`
+ * reads once `compute()` resolves.
+ *
+ * The write guard compares against the CACHE's own current state, not
+ * `getVersion()` re-invoked — mirrors `getOrCompute`'s guard above. Re-reading
+ * `getVersion()` here would work for a caller passing a live counter
+ * (`buildDocuments()`'s `() => previewFilesVersion`) but is a no-op for a
+ * caller passing a closure over an already-fixed version (`executeFunction`/
+ * `runCodegen`'s `() => documentsVersion`, threaded forward from an earlier
+ * `getOrComputeAsync` call per this cache's own doc comment) — that closure
+ * returns the same value both before and after `await compute()`, so the
+ * "still current?" check would trivially always pass, letting an
+ * out-of-order caller (started under an older version, but whose OWN
+ * `compute()` — e.g. `generate()` — takes longer than a concurrent newer
+ * call's) overwrite an already-cached newer entry with its stale one. The
+ * cache-state comparison catches this uniformly for both kinds of callers.
+ *
+ * Returns the full `VersionedEntry`, tagged with `versionAtStart` even when
+ * the write was skipped — callers that feed this result into a FURTHER
+ * downstream cache must tag that entry with THIS version, not the live
+ * counter (see `getOrCompute`'s doc comment for the concrete failure mode).
+ * `buildDocuments()`, `executeFunction`, and `runCodegen` all thread this
+ * returned `version` forward into their own `getOrCompute`/`getOrComputeAsync`
+ * calls for exactly this reason.
+ */
+async function getOrComputeAsync<T>(
+  cache: Map<string, VersionedEntry<T>>,
+  key: string,
+  getVersion: () => number,
+  compute: () => Promise<T>
+): Promise<VersionedEntry<T>> {
+  const versionAtStart = getVersion();
+  const cached = cache.get(key);
+  if (cached && cached.version === versionAtStart) return cached;
+  const value = await compute();
+  const entry: VersionedEntry<T> = { version: versionAtStart, value };
+  const cachedNow = cache.get(key);
+  if (!cachedNow || cachedNow.version < versionAtStart) {
+    cache.set(key, entry);
+  }
+  return entry;
+}
+
+// ---------------------------------------------------------------------------
 // Generation logic
 // ---------------------------------------------------------------------------
 
@@ -223,6 +316,15 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 
   try {
+    // Captured before the only `await` below, mirroring buildDocuments()'s
+    // own guard — a codegen:setFiles that arrives while this call is
+    // suspended in builder.build bumps codegenFilesVersion out from under
+    // `documents`, which is already stale by then. Tagging the downstream
+    // codegenGenerateCache write with THIS captured version (not the live
+    // counter re-sampled after the build) ensures a stale-derived result
+    // is never marked valid for the new version.
+    const documentsVersion = codegenFilesVersion;
+
     const documents: LangiumDocument[] = currentCodegenFiles.map(({ uri, content }) =>
       factory.fromString(content, URI.parse(uri))
     );
@@ -241,7 +343,12 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
       return;
     }
 
-    const results = await generate(documents, { target });
+    const { value: results } = await getOrComputeAsync(
+      codegenGenerateCache,
+      target,
+      () => documentsVersion,
+      () => generate(documents, { target })
+    );
 
     // 018 Task 0.7 follow-up — when every output carries an error
     // diagnostic AND no content (the shape returned by `runGenerate`
@@ -259,22 +366,6 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
         message: firstError?.message ?? 'Code generation produced only errors.'
       });
       return;
-    }
-
-    // Cache generated function code for preview:execute, keyed by namespace.funcName.
-    // Store func.fileContents (isolated function declaration only) rather than
-    // result.content (full file with imports, interfaces, helper declarations) so
-    // that stripTypeAnnotations only has to handle a plain function body — no TS
-    // constructs that would cause a SyntaxError at execution time.
-    if (target === 'typescript') {
-      cachedFuncCode = new Map();
-      for (const result of results) {
-        const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
-        for (const func of result.funcs) {
-          cachedFuncCode.set(func.name, func.fileContents);
-          cachedFuncCode.set(`${ns}.${func.name}`, func.fileContents);
-        }
-      }
     }
 
     scope.postMessage({
@@ -298,78 +389,64 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 }
 
-async function buildDocuments(): Promise<LangiumDocument[]> {
-  if (documentsCache && documentsCache.version === previewFilesVersion) {
-    return documentsCache.documents;
-  }
+async function buildDocuments(): Promise<VersionedEntry<LangiumDocument[]>> {
+  return getOrComputeAsync(
+    documentsCache,
+    'documents',
+    () => previewFilesVersion,
+    async () => {
+      if (currentPreviewFiles.length === 0) {
+        return [];
+      }
 
-  // Captured before the only `await` below, so a `preview:setFiles` that
-  // arrives while this call is suspended in `builder.build` (bumping
-  // `previewFilesVersion` and swapping `currentPreviewFiles`/
-  // `cachedCuratedDocuments` out from under this in-flight call) is
-  // detectable on resume: this call's own `userDocuments` are already
-  // stale by then, and `curatedDocuments` below would read the NEW
-  // curated set, silently mixing old user documents with new curated
-  // ones. Populating the cache under the now-current version would
-  // poison it for every other caller until the next `preview:setFiles`.
-  const versionAtStart = previewFilesVersion;
+      // 019 Task #88 follow-up: split into user files (parse path) and
+      // curated files (deserialize path). Curated entries arrive with
+      // `serializedModelJson` set (the pre-parsed Langium AST) and
+      // `content === ''` — parsing an empty string would produce a parse
+      // error and the doc would be filtered out, leaving form preview
+      // unable to find curated types. Hydrate them via the serializer
+      // instead.
+      const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson && isPreviewUserEntryParseable(e));
 
-  if (currentPreviewFiles.length === 0) {
-    return [];
-  }
+      const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
+        factory.fromString(content, URI.parse(uri))
+      );
+      if (userDocuments.length > 0) {
+        await builder.build(userDocuments, { validation: false, eagerLinking: false });
+      }
 
-  // 019 Task #88 follow-up: split into user files (parse path) and
-  // curated files (deserialize path). Curated entries arrive with
-  // `serializedModelJson` set (the pre-parsed Langium AST) and
-  // `content === ''` — parsing an empty string would produce a parse
-  // error and the doc would be filtered out, leaving form preview
-  // unable to find curated types. Hydrate them via the serializer
-  // instead.
-  const userEntries = currentPreviewFiles.filter((e) => !e.serializedModelJson && isPreviewUserEntryParseable(e));
+      // Curated docs come pre-linked from the curated-mirror build (CI runs
+      // Langium with a higher heap budget than the browser can spare).
+      // Build here would try to re-link and fail because the live Langium
+      // service hasn't indexed cross-references.
+      //
+      // Codex review on PR #169: use `factory.fromModel` + add to the
+      // service's document store. The earlier synthetic doc literal
+      // (`{ uri, parseResult: { value, [], [] } }`) skipped Langium's
+      // LangiumDocument ownership, which `RuneDslLinker.loadAstNode`
+      // relies on to resolve cross-references through `.ref`. For curated
+      // models with typed fields, refs would silently fail to resolve and
+      // the preview / codegen output would be missing typed children.
+      //
+      // The batch relink itself already ran once in `hydrateCuratedDocuments`
+      // (called from the `preview:setFiles` handler) — this just reads the
+      // cached result rather than re-registering/re-linking on every build.
+      const curatedDocuments = cachedCuratedDocuments;
 
-  const userDocuments: LangiumDocument[] = userEntries.map(({ uri, content }) =>
-    factory.fromString(content, URI.parse(uri))
+      // Filter out user files with parse/lex errors. Corpus files may
+      // contain constructs the parser doesn't fully support; excluding them
+      // keeps the namespace index intact for the remaining files.
+      const validUserDocuments = userDocuments.filter((d) => !hasDocumentErrors(d));
+      if (validUserDocuments.length < userDocuments.length) {
+        console.warn(
+          `[codegen-worker] ${
+            userDocuments.length - validUserDocuments.length
+          } user file(s) had parse errors and were excluded from preview.`
+        );
+      }
+      return [...validUserDocuments, ...curatedDocuments];
+    }
   );
-  if (userDocuments.length > 0) {
-    await builder.build(userDocuments, { validation: false, eagerLinking: false });
-  }
-
-  // Curated docs come pre-linked from the curated-mirror build (CI runs
-  // Langium with a higher heap budget than the browser can spare).
-  // Build here would try to re-link and fail because the live Langium
-  // service hasn't indexed cross-references.
-  //
-  // Codex review on PR #169: use `factory.fromModel` + add to the
-  // service's document store. The earlier synthetic doc literal
-  // (`{ uri, parseResult: { value, [], [] } }`) skipped Langium's
-  // LangiumDocument ownership, which `RuneDslLinker.loadAstNode`
-  // relies on to resolve cross-references through `.ref`. For curated
-  // models with typed fields, refs would silently fail to resolve and
-  // the preview / codegen output would be missing typed children.
-  //
-  // The batch relink itself already ran once in `hydrateCuratedDocuments`
-  // (called from the `preview:setFiles` handler) — this just reads the
-  // cached result rather than re-registering/re-linking on every build.
-  const curatedDocuments = cachedCuratedDocuments;
-
-  // Filter out user files with parse/lex errors. Corpus files may
-  // contain constructs the parser doesn't fully support; excluding them
-  // keeps the namespace index intact for the remaining files.
-  const validUserDocuments = userDocuments.filter((d) => !hasDocumentErrors(d));
-  if (validUserDocuments.length < userDocuments.length) {
-    console.warn(
-      `[codegen-worker] ${
-        userDocuments.length - validUserDocuments.length
-      } user file(s) had parse errors and were excluded from preview.`
-    );
-  }
-  const documents = [...validUserDocuments, ...curatedDocuments];
-  // Only cache this result if the file set is still the same one this call
-  // started with — see the `versionAtStart` comment above.
-  if (versionAtStart === previewFilesVersion) {
-    documentsCache = { version: versionAtStart, documents };
-  }
-  return documents;
 }
 
 async function runPreview(targetId: string, requestId: string): Promise<void> {
@@ -387,7 +464,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
   }
 
   try {
-    const documents = await buildDocuments();
+    const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
         type: 'preview:stale',
@@ -399,7 +476,16 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       return;
     }
 
-    const [schema] = generatePreviewSchemas(documents, { targetId });
+    // Tagged with `documentsVersion` (the version `documents` was ACTUALLY
+    // built from), not the live `previewFilesVersion` — a `buildDocuments()`
+    // call suspended across a `preview:setFiles` returns documents that
+    // predate the live counter; caching under the live counter would mark
+    // that stale-derived schema as valid for the new version.
+    const {
+      value: [schema]
+    } = getOrCompute(previewSchemaCache, targetId, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId })
+    );
     if (!schema) {
       scope.postMessage({
         type: 'preview:stale',
@@ -446,7 +532,7 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
   }
 
   try {
-    const documents = await buildDocuments();
+    const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',
@@ -457,7 +543,13 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
       return;
     }
 
-    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    // See runPreview's identical comment — tagged with documentsVersion,
+    // not the live previewFilesVersion.
+    const {
+      value: [schema]
+    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId: typeFqn })
+    );
     if (!schema) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',
@@ -572,20 +664,43 @@ function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  if (!cachedFuncCode.has(funcName)) {
-    const documents = await buildDocuments();
-    if (documents.length > 0) {
-      const results = await generate(documents, { target: 'typescript' });
-      cachedFuncCode = new Map();
-      for (const result of results) {
-        for (const func of result.funcs) {
-          cachedFuncCode.set(func.name, func.fileContents);
-        }
-      }
+  const { version: documentsVersion, value: documents } = await buildDocuments();
+  // Tagged with documentsVersion (fixed — `documents` is an immutable local
+  // array once obtained, so no further staleness can be introduced during
+  // this call), not the live previewFilesVersion — see runPreview's
+  // identical comment for why re-sampling the live counter here would be
+  // wrong.
+  const results =
+    documents.length > 0
+      ? (
+          await getOrComputeAsync(
+            previewGenerateCache,
+            'generate:typescript',
+            () => documentsVersion,
+            () => generate(documents, { target: 'typescript' })
+          )
+        ).value
+      : [];
+
+  // Matches both the bare function name and the namespace-qualified form
+  // (`${ns}.${func.name}`, derived the same way runCodegen's own cache
+  // population always did). The real UI caller (FormPreviewPanel.tsx) always
+  // passes the qualified `schema.targetId`, not the bare `schema.title` —
+  // two namespaces can share a bare func name, and only the qualified form
+  // disambiguates which one to run; the bare-name branch here exists only
+  // for callers (tests, `instance:execute`-style future callers) that don't
+  // have a namespace-qualified name to give.
+  let code: string | undefined;
+  for (const result of results) {
+    const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
+    const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
+    if (func) {
+      code = func.fileContents;
+      break;
     }
   }
 
-  if (!cachedFuncCode.has(funcName)) {
+  if (code === undefined) {
     scope.postMessage({
       type: 'preview:execute-error',
       requestId,
@@ -595,19 +710,21 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     return;
   }
 
-  const code = cachedFuncCode.get(funcName)!;
-
   try {
     // Strip TS type annotations from the isolated function body stored in
     // func.fileContents. This contains only the function declaration — no
     // imports, interface blocks, or helper declarations — so stripTypeAnnotations
     // only needs to handle inline type syntax. Execution goes through
     // runInWorkerSandbox — see its threat-model comment.
+    // `code`'s declaration is always the BARE function name regardless of
+    // whether `funcName` (the caller's request) was qualified — the return
+    // expression below must call by that same bare name.
+    const bareName = funcName.includes('.') ? funcName.slice(funcName.lastIndexOf('.') + 1) : funcName;
     const output = runInWorkerSandbox(
       stripTypeAnnotations(code),
       'input',
       inputs,
-      `typeof ${funcName} === 'function' ? ${funcName}(input) : undefined`
+      `typeof ${bareName} === 'function' ? ${bareName}(input) : undefined`
     );
 
     scope.postMessage({
@@ -634,7 +751,7 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
   try {
-    const documents = await buildDocuments();
+    const { version: documentsVersion, value: documents } = await buildDocuments();
     // `findDataNode` only searches Data types — it returns undefined for a
     // Choice target even though `generatePreviewSchemas` (the structural
     // validator source) supports Choice targets too. Only condition-
@@ -643,7 +760,13 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
     // resolve, Choice included. "Unknown type" is only correct when NEITHER
     // resolves the target.
     const dataNode = findDataNode(typeFqn, documents);
-    const [schema] = generatePreviewSchemas(documents, { targetId: typeFqn });
+    // See runPreview's identical comment — tagged with documentsVersion,
+    // not the live previewFilesVersion.
+    const {
+      value: [schema]
+    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
+      generatePreviewSchemas(documents, { targetId: typeFqn })
+    );
     if (!dataNode && !schema) {
       scope.postMessage({
         type: 'instance:validateResult',
@@ -709,6 +832,7 @@ if (isWorkerGlobalScope()) {
 
       if (msg.type === 'codegen:setFiles') {
         currentCodegenFiles = msg.files;
+        codegenFilesVersion++;
         if (msg.requestId) {
           lastCodegenRequestId = msg.requestId;
         }

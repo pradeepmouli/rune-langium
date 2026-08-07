@@ -63,7 +63,11 @@ export const FormPreviewPanel = withInstrumentation(
     const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
     const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
 
-    const funcName = schema?.kind === 'function' ? schema.title : undefined;
+    // Namespace-qualified `targetId` (`${namespace}.${name}`), NOT the bare
+    // `title` — two different namespaces can declare a func with the same
+    // bare name, and `title` alone can't disambiguate which one the worker's
+    // executeFunction should actually run.
+    const funcName = schema?.kind === 'function' ? schema.targetId : undefined;
     const storeExecResult = usePreviewStore((s) => (funcName ? s.executionResults.get(funcName) : undefined));
     // Remaining lazy-hydration retry attempts for the CURRENTLY selected target
     // (Task 3's hydrationRetriesRemaining, mirrored from
