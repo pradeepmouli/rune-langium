@@ -1296,6 +1296,83 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
 
     expect(generatePreviewSchemasMock).toHaveBeenCalledTimes(2);
   });
+
+  it('does not let a build suspended across a preview:setFiles poison previewSchemaCache with a stale schema', async () => {
+    generatePreviewSchemasMock.mockImplementation(
+      (documents: Array<{ content?: string }>, options: { targetId: string }) => [
+        {
+          schemaVersion: 1,
+          targetId: options.targetId,
+          title: documents.some((d) => d.content === 'namespace "B"') ? 'FromB' : 'FromA',
+          status: 'ready',
+          fields: []
+        }
+      ]
+    );
+
+    const buildResolvers: Array<() => void> = [];
+    buildMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          buildResolvers.push(resolve);
+        })
+    );
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "A"' }],
+      requestId: 'poison:1'
+    });
+    await flushWorker();
+
+    // instance:generateSchema deliberately never touches lastPreviewTargetId
+    // (see its own doc comment), so — unlike preview:generate — the
+    // preview:setFiles below will NOT auto-trigger a second, competing call
+    // that could populate previewSchemaCache first. This call is the ONLY
+    // one in flight, and it suspends inside builder.build against file set A.
+    dispatch({ type: 'instance:generateSchema', typeFqn: 'beta.Trade', requestId: 'poison:2' });
+    await flushWorker();
+
+    // File set changes to B WHILE the call above is still suspended.
+    dispatch({
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "B"' }],
+      requestId: 'poison:3'
+    });
+    await flushWorker();
+
+    expect(buildResolvers).toHaveLength(1);
+
+    // Resolve the suspended build. buildDocuments()'s own guard correctly
+    // refuses to cache this now-stale (file-set-A) result under the live
+    // version, but its RETURNED documents are still A-based — without
+    // tagging the previewSchemaCache write with the version those documents
+    // were ACTUALLY built from (not the live counter, already at 2), this
+    // caches a schema computed from stale documents as if it were valid for
+    // the current version.
+    buildResolvers[0]!();
+    await flushWorker();
+
+    // Back to immediate resolution — the controllable-promise implementation
+    // above only exists to suspend the ONE call under test.
+    buildMock.mockImplementation(async () => undefined);
+
+    // A fresh request for the SAME targetId must recompute against the
+    // CURRENT (B-based) documents and see the correct schema — never the
+    // stale A-based one the suspended call computed.
+    dispatch({ type: 'instance:generateSchema', typeFqn: 'beta.Trade', requestId: 'poison:4' });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'instance:generateSchemaResult',
+        requestId: 'poison:4',
+        schema: expect.objectContaining({ title: 'FromB' })
+      })
+    );
+  });
 });
 
 describe('codegen-worker instance:validate messages', () => {

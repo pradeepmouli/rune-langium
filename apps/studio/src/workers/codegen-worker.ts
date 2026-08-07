@@ -223,12 +223,34 @@ interface VersionedEntry<T> {
   value: T;
 }
 
-function getOrCompute<T>(cache: Map<string, VersionedEntry<T>>, key: string, version: number, compute: () => T): T {
+/**
+ * Returns the full `VersionedEntry`, not just its `value` — callers that
+ * feed this result into a FURTHER downstream cache (e.g. `buildDocuments()`'s
+ * result feeding `previewSchemaCache`/`previewGenerateCache`) must tag that
+ * downstream entry with the version returned here, not with whatever the
+ * live counter reads at that later point. Re-sampling the live counter
+ * after this call already reflects a file-set change that this specific
+ * result predates — see `getOrComputeAsync`'s own doc comment for the
+ * concrete failure mode.
+ */
+function getOrCompute<T>(
+  cache: Map<string, VersionedEntry<T>>,
+  key: string,
+  version: number,
+  compute: () => T
+): VersionedEntry<T> {
   const cached = cache.get(key);
-  if (cached && cached.version === version) return cached.value;
-  const value = compute();
-  cache.set(key, { version, value });
-  return value;
+  if (cached && cached.version === version) return cached;
+  const entry: VersionedEntry<T> = { version, value: compute() };
+  // Never let a write tagged with a STALE version (an out-of-order caller
+  // whose own input predates a concurrently-already-cached, newer entry —
+  // see this function's doc comment) clobber that newer entry. This call's
+  // own request is still answered with a freshly-computed, correctly-tagged
+  // result; it just isn't allowed to regress the shared cache.
+  if (!cached || cached.version < version) {
+    cache.set(key, entry);
+  }
+  return entry;
 }
 
 /**
@@ -236,21 +258,36 @@ function getOrCompute<T>(cache: Map<string, VersionedEntry<T>>, key: string, ver
  * only writes to `cache` if the version is still current when `compute()`
  * resolves — otherwise a call suspended across a file-set change would
  * silently overwrite a correct, already-cached result with one built from
- * now-stale state. See `buildDocuments()`'s adoption of this helper for the
- * concrete failure mode this guards against.
+ * now-stale state.
+ *
+ * Returns the full `VersionedEntry`, tagged with `versionAtStart` even when
+ * the version moved during `compute()` (and the result was therefore NOT
+ * written to `cache`) — callers that feed this result into a FURTHER
+ * downstream cache must tag that entry with THIS version, not the live
+ * counter. A caller that instead re-samples the live counter after this
+ * call returns can silently poison its own downstream cache: the live
+ * counter may already have moved past the version this specific result was
+ * actually built from (e.g. `buildDocuments()` was suspended in
+ * `builder.build` across an intervening `preview:setFiles` — its result
+ * predates the bump, but a caller that tags its own cache write with the
+ * NOW-current counter would mark a stale-derived value as valid for the
+ * new version). `buildDocuments()`, `executeFunction`, and `runCodegen` all
+ * thread this returned `version` forward into their own `getOrCompute`/
+ * `getOrComputeAsync` calls for exactly this reason.
  */
 async function getOrComputeAsync<T>(
   cache: Map<string, VersionedEntry<T>>,
   key: string,
   getVersion: () => number,
   compute: () => Promise<T>
-): Promise<T> {
+): Promise<VersionedEntry<T>> {
   const versionAtStart = getVersion();
   const cached = cache.get(key);
-  if (cached && cached.version === versionAtStart) return cached.value;
+  if (cached && cached.version === versionAtStart) return cached;
   const value = await compute();
-  if (getVersion() === versionAtStart) cache.set(key, { version: versionAtStart, value });
-  return value;
+  const entry: VersionedEntry<T> = { version: versionAtStart, value };
+  if (getVersion() === versionAtStart) cache.set(key, entry);
+  return entry;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +308,15 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 
   try {
+    // Captured before the only `await` below, mirroring buildDocuments()'s
+    // own guard — a codegen:setFiles that arrives while this call is
+    // suspended in builder.build bumps codegenFilesVersion out from under
+    // `documents`, which is already stale by then. Tagging the downstream
+    // codegenGenerateCache write with THIS captured version (not the live
+    // counter re-sampled after the build) ensures a stale-derived result
+    // is never marked valid for the new version.
+    const documentsVersion = codegenFilesVersion;
+
     const documents: LangiumDocument[] = currentCodegenFiles.map(({ uri, content }) =>
       factory.fromString(content, URI.parse(uri))
     );
@@ -289,10 +335,10 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
       return;
     }
 
-    const results = await getOrComputeAsync(
+    const { value: results } = await getOrComputeAsync(
       codegenGenerateCache,
       target,
-      () => codegenFilesVersion,
+      () => documentsVersion,
       () => generate(documents, { target })
     );
 
@@ -335,7 +381,7 @@ async function runCodegen(target: Target, requestId?: string): Promise<void> {
   }
 }
 
-async function buildDocuments(): Promise<LangiumDocument[]> {
+async function buildDocuments(): Promise<VersionedEntry<LangiumDocument[]>> {
   return getOrComputeAsync(
     documentsCache,
     'documents',
@@ -410,7 +456,7 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
   }
 
   try {
-    const documents = await buildDocuments();
+    const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
         type: 'preview:stale',
@@ -422,7 +468,14 @@ async function runPreview(targetId: string, requestId: string): Promise<void> {
       return;
     }
 
-    const [schema] = getOrCompute(previewSchemaCache, targetId, previewFilesVersion, () =>
+    // Tagged with `documentsVersion` (the version `documents` was ACTUALLY
+    // built from), not the live `previewFilesVersion` — a `buildDocuments()`
+    // call suspended across a `preview:setFiles` returns documents that
+    // predate the live counter; caching under the live counter would mark
+    // that stale-derived schema as valid for the new version.
+    const {
+      value: [schema]
+    } = getOrCompute(previewSchemaCache, targetId, documentsVersion, () =>
       generatePreviewSchemas(documents, { targetId })
     );
     if (!schema) {
@@ -471,7 +524,7 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
   }
 
   try {
-    const documents = await buildDocuments();
+    const { version: documentsVersion, value: documents } = await buildDocuments();
     if (documents.length === 0) {
       scope.postMessage({
         type: 'instance:generateSchemaStale',
@@ -482,7 +535,11 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
       return;
     }
 
-    const [schema] = getOrCompute(previewSchemaCache, typeFqn, previewFilesVersion, () =>
+    // See runPreview's identical comment — tagged with documentsVersion,
+    // not the live previewFilesVersion.
+    const {
+      value: [schema]
+    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
       generatePreviewSchemas(documents, { targetId: typeFqn })
     );
     if (!schema) {
@@ -599,15 +656,22 @@ function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown
 async function executeFunction(funcName: string, inputs: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
-  const documents = await buildDocuments();
+  const { version: documentsVersion, value: documents } = await buildDocuments();
+  // Tagged with documentsVersion (fixed — `documents` is an immutable local
+  // array once obtained, so no further staleness can be introduced during
+  // this call), not the live previewFilesVersion — see runPreview's
+  // identical comment for why re-sampling the live counter here would be
+  // wrong.
   const results =
     documents.length > 0
-      ? await getOrComputeAsync(
-          previewGenerateCache,
-          'generate:typescript',
-          () => previewFilesVersion,
-          () => generate(documents, { target: 'typescript' })
-        )
+      ? (
+          await getOrComputeAsync(
+            previewGenerateCache,
+            'generate:typescript',
+            () => documentsVersion,
+            () => generate(documents, { target: 'typescript' })
+          )
+        ).value
       : [];
 
   // Matches both the bare function name and the namespace-qualified form
@@ -675,7 +739,7 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
   try {
-    const documents = await buildDocuments();
+    const { version: documentsVersion, value: documents } = await buildDocuments();
     // `findDataNode` only searches Data types — it returns undefined for a
     // Choice target even though `generatePreviewSchemas` (the structural
     // validator source) supports Choice targets too. Only condition-
@@ -684,7 +748,11 @@ async function validateInstance(typeFqn: string, data: Record<string, unknown>, 
     // resolve, Choice included. "Unknown type" is only correct when NEITHER
     // resolves the target.
     const dataNode = findDataNode(typeFqn, documents);
-    const [schema] = getOrCompute(previewSchemaCache, typeFqn, previewFilesVersion, () =>
+    // See runPreview's identical comment — tagged with documentsVersion,
+    // not the live previewFilesVersion.
+    const {
+      value: [schema]
+    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
       generatePreviewSchemas(documents, { targetId: typeFqn })
     );
     if (!dataNode && !schema) {
