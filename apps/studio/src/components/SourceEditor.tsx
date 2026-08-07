@@ -25,7 +25,7 @@ import {
   type KeyboardEvent
 } from 'react';
 import { EditorView, keymap } from '@codemirror/view';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { basicSetup } from 'codemirror';
 import { defaultKeymap } from '@codemirror/commands';
 import { runeDslLanguage } from '../lang/rune-dsl.js';
@@ -65,6 +65,16 @@ export interface SourceEditorProps {
   onContentChange?: (path: string, content: string) => void;
   /** LSP client service (injected). */
   lspClient?: LspClientService;
+  /**
+   * Whether the LSP connection has finished connecting. The `lspClient`
+   * object identity does NOT change across its connect lifecycle (the same
+   * instance is reused), so it can't be used on its own to detect this
+   * transition — this prop is the reactive signal that does. Late-binds the
+   * LSP CodeMirror plugin (diagnostics, hover, completion, go-to-definition)
+   * into the already-mounted editor via a Compartment once this flips true,
+   * instead of requiring a full EditorView recreation.
+   */
+  lspReady?: boolean;
   /**
    * Called when go-to-definition resolves to a graph node (Task 7).
    * The nodeId is derived from the definition target URI.
@@ -257,6 +267,7 @@ const renderSourceEditor = withInstrumentation(
       onFileClose,
       onContentChange,
       lspClient,
+      lspReady,
       onNavigateToNode,
       onEditorViewCreated,
       hideTabs
@@ -266,6 +277,13 @@ const renderSourceEditor = withInstrumentation(
     const [selectedPath, setSelectedPath] = useState<string>(activeFile ?? files[0]?.path ?? '');
     const editorContainerRef = useRef<HTMLDivElement>(null);
     const editorViewRef = useRef<EditorView | null>(null);
+    // Holds the Compartment reserved for the LSP plugin slot in the CURRENTLY
+    // MOUNTED EditorView (recreated alongside it — see the editor-creation
+    // effect below). Lets the LSP plugin be late-bound via a dispatched
+    // reconfigure once the async LSP connection finishes, without tearing
+    // down and recreating the whole EditorView (which would drop the user's
+    // cursor position, scroll offset, and undo history).
+    const lspCompartmentRef = useRef<Compartment | null>(null);
 
     // Sync selectedPath when activeFile prop changes externally. Adjusted
     // during render (React's blessed pattern) rather than in an effect, so
@@ -424,7 +442,7 @@ const renderSourceEditor = withInstrumentation(
 
     // Build extensions — uses refs for callbacks to keep extensions stable
     const buildExtensions = useCallback(
-      (filePath: string, isReadOnly: boolean): Extension[] => {
+      (filePath: string, isReadOnly: boolean, lspCompartment: Compartment): Extension[] => {
         const exts: Extension[] = [
           basicSetup,
           keymap.of(defaultKeymap),
@@ -477,11 +495,11 @@ const renderSourceEditor = withInstrumentation(
           })
         );
 
-        // Wire LSP plugin if client is available
-        if (lspClient?.isInitialized()) {
-          const lspPlugin = lspClient.getPlugin(pathToUri(filePath));
-          if (lspPlugin) exts.push(lspPlugin);
-        }
+        // Reserve the LSP plugin slot as an empty Compartment — the lspReady
+        // effect below fills it in (both for "already connected at mount"
+        // and "connects later") via a single dispatched reconfigure, so the
+        // plugin never needs recreating this EditorView to attach.
+        exts.push(lspCompartment.of([]));
 
         // Phase 9: accept type-ref drops from NamespaceExplorer onto the editor surface.
         // Delegates to pure helpers (handleTypeRefDragOver / handleTypeRefDrop) so the
@@ -500,12 +518,18 @@ const renderSourceEditor = withInstrumentation(
         }
 
         return exts;
+        // No external reactive values captured — callbacks route through
+        // stable refs, and the LSP plugin is wired separately via the
+        // reserved compartment (see the lspReady effect below).
       },
-      [lspClient]
+      []
     );
 
-    // Create / update editor view when file PATH changes (tab switch) or LSP connects.
+    // Create / update editor view when the file PATH changes (tab switch).
     // Content changes are handled by CodeMirror's internal state + updateListener.
+    // The LSP connecting later does NOT recreate the view — see the lspReady
+    // effect below, which late-binds the LSP plugin into the existing view
+    // via the lspCompartmentRef reserved here.
     useEffect(() => {
       if (!editorContainerRef.current || !currentFile) return;
 
@@ -516,10 +540,12 @@ const renderSourceEditor = withInstrumentation(
       }
 
       const content = contentMapRef.current.get(currentFile.path) ?? currentFile.content;
+      const lspCompartment = new Compartment();
+      lspCompartmentRef.current = lspCompartment;
 
       const state = EditorState.create({
         doc: content,
-        extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false)
+        extensions: buildExtensions(currentFile.path, currentFile.readOnly ?? false, lspCompartment)
       });
 
       const view = new EditorView({
@@ -537,11 +563,28 @@ const renderSourceEditor = withInstrumentation(
       return () => {
         view.destroy();
         editorViewRef.current = null;
+        lspCompartmentRef.current = null;
       };
-      // Only recreate editor when file path changes (tab switch) or LSP connects.
+      // Only recreate editor when file path changes (tab switch).
       // Content updates are handled by the updateListener extension, NOT by recreating.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentFile?.path, buildExtensions]);
+
+    // Late-bind the LSP plugin once the async LSP connection finishes,
+    // reconfiguring the reserved compartment in the already-mounted
+    // EditorView instead of recreating it (see lspCompartmentRef above).
+    // `lspReady` is the reactive signal for this — `lspClient`'s object
+    // identity never changes across its connect lifecycle, so a dependency
+    // on `lspClient` alone would never re-fire this effect.
+    useEffect(() => {
+      if (!lspReady || !lspClient?.isInitialized() || !currentFile) return;
+      const view = editorViewRef.current;
+      const compartment = lspCompartmentRef.current;
+      if (!view || !compartment) return;
+      const lspPlugin = lspClient.getPlugin(pathToUri(currentFile.path));
+      if (!lspPlugin) return;
+      view.dispatch({ effects: compartment.reconfigure(lspPlugin) });
+    }, [lspReady, lspClient, currentFile]);
 
     // Empty state
     if (files.length === 0) {

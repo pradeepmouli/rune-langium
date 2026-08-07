@@ -415,6 +415,11 @@ export const ExplorePerspective = withInstrumentation(
     // LSP handles — formerly props, now from LspProvider.
     const { lspClient: lspClientValue, transportState, reconnect } = useLsp();
     const lspClient = lspClientValue ?? undefined;
+    // `lspClient`'s object identity never changes across its connect
+    // lifecycle (LspProvider reuses one instance) — `transportState.status`
+    // is the reactive signal SourceEditor needs to late-bind the LSP plugin
+    // (diagnostics/hover/completion/go-to-definition) once connected.
+    const lspReady = transportState?.status === 'connected';
     const onReconnect = reconnect;
 
     // Workspace actions — formerly props, now from the actions context.
@@ -1696,6 +1701,7 @@ export const ExplorePerspective = withInstrumentation(
             files={sourceEditorFiles}
             activeFile={activeEditorFile}
             lspClient={lspClient}
+            lspReady={lspReady}
             onFileSelect={(path) => setActiveEditorFile(path)}
             onContentChange={handleSourceChange}
             onNavigateToNode={navigateToNode}
@@ -1704,7 +1710,15 @@ export const ExplorePerspective = withInstrumentation(
           />
         </div>
       );
-    }, [sourceEditorFiles, activeEditorFile, lspClient, handleSourceChange, navigateToNode, handleEditorViewCreated]);
+    }, [
+      sourceEditorFiles,
+      activeEditorFile,
+      lspClient,
+      lspReady,
+      handleSourceChange,
+      navigateToNode,
+      handleEditorViewCreated
+    ]);
 
     // Namespaces that belong to refOnly curated files. Earlier revisions
     // inferred this by matching `deferredExports[i].filePath.split('/')[0]`
