@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, within } from '@testing-library/react';
 import { SourceEditor, handleTypeRefDragOver, handleTypeRefDrop } from '../../src/components/SourceEditor.js';
 import type { SourceEditorProps, DropTargetView } from '../../src/components/SourceEditor.js';
+import type { LspClientService } from '../../src/services/lsp-client.js';
 import { TYPE_REF_PAYLOAD_MIME } from '@rune-langium/visual-editor';
 
 // Mock CodeMirror since it needs a real DOM
@@ -68,6 +69,14 @@ vi.mock('@codemirror/state', () => ({
       doc: { toString: () => '' }
     }),
     readOnly: { of: vi.fn().mockReturnValue([]) }
+  },
+  Compartment: class MockCompartment {
+    of(ext: unknown) {
+      return ext;
+    }
+    reconfigure(ext: unknown) {
+      return ext;
+    }
   }
 }));
 
@@ -367,6 +376,58 @@ describe('SourceEditor', () => {
       await fireSelectionTransaction('select.keyboard', headPos);
 
       expect(onNavigateToNode).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('late-binding the LSP plugin (issue: no squiggles/autocomplete)', () => {
+    it('does not wire the LSP plugin while the client has not finished connecting', () => {
+      const isInitialized = vi.fn().mockReturnValue(false);
+      const getPlugin = vi.fn().mockReturnValue('mock-lsp-plugin');
+      const lspClient = { isInitialized, getPlugin } as unknown as LspClientService;
+
+      render(
+        <SourceEditor files={sampleFiles} activeFile={sampleFiles[0]!.path} lspClient={lspClient} lspReady={false} />
+      );
+
+      expect(getPlugin).not.toHaveBeenCalled();
+      expect(mockEditorViewDispatch).not.toHaveBeenCalled();
+    });
+
+    it('attaches the LSP plugin once lspReady flips true, without recreating the EditorView', () => {
+      const isInitialized = vi.fn().mockReturnValue(false);
+      const getPlugin = vi.fn().mockReturnValue('mock-lsp-plugin');
+      const lspClient = { isInitialized, getPlugin } as unknown as LspClientService;
+
+      const { rerender } = render(
+        <SourceEditor files={sampleFiles} activeFile={sampleFiles[0]!.path} lspClient={lspClient} lspReady={false} />
+      );
+      expect(mockEditorViewDispatch).not.toHaveBeenCalled();
+
+      // The LSP connection finishes — the client's underlying object identity
+      // never changes (the same LspClientService instance is reused across
+      // the connect lifecycle), only `lspReady` (a separately-tracked, truly
+      // reactive prop) flips.
+      isInitialized.mockReturnValue(true);
+      rerender(
+        <SourceEditor files={sampleFiles} activeFile={sampleFiles[0]!.path} lspClient={lspClient} lspReady={true} />
+      );
+
+      expect(getPlugin).toHaveBeenCalledWith(expect.stringContaining('model.rosetta'));
+      expect(mockEditorViewDispatch).toHaveBeenCalledWith({ effects: 'mock-lsp-plugin' });
+      // Must NOT tear down and recreate the whole EditorView for this — that
+      // would drop the user's cursor position, scroll offset, and undo
+      // history mid-session just because the LSP connection finished.
+      expect(mockEditorViewDestroy).not.toHaveBeenCalled();
+    });
+
+    it('wires the LSP plugin immediately on mount when the client is already ready', () => {
+      const isInitialized = vi.fn().mockReturnValue(true);
+      const getPlugin = vi.fn().mockReturnValue('mock-lsp-plugin');
+      const lspClient = { isInitialized, getPlugin } as unknown as LspClientService;
+
+      render(<SourceEditor files={sampleFiles} activeFile={sampleFiles[0]!.path} lspClient={lspClient} lspReady />);
+
+      expect(getPlugin).toHaveBeenCalledWith(expect.stringContaining('model.rosetta'));
     });
   });
 });
