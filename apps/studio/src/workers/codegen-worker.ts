@@ -34,12 +34,17 @@
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
 import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
-import { generate, generatePreviewSchemas, RUNTIME_HELPER_JS_SOURCE } from '@rune-langium/codegen/export';
-import type { Target, FormPreviewSchema, GeneratorOutput } from '@rune-langium/codegen/export';
+import {
+  generate,
+  generatePreviewSchemas,
+  emitStandaloneZodSchema,
+  RUNTIME_HELPER_JS_SOURCE
+} from '@rune-langium/codegen/export';
+import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import type { PreviewWorkerRequest } from '../services/codegen-service.js';
-import { validatePreviewSample } from '../services/preview-validator.js';
+import { z } from 'zod';
 import { isWorkerGlobalScope } from './runtime-guards.js';
 import { installInstrumentationWorkerSink } from '../services/instrumentation/worker-sink.js';
 
@@ -130,6 +135,7 @@ const previewSchemaCache = new Map<string, VersionedEntry<FormPreviewSchema[]>>(
 const previewGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
 let codegenFilesVersion = 0;
 const codegenGenerateCache = new Map<string, VersionedEntry<GeneratorOutput[]>>();
+const standaloneValidatorCache = new Map<string, VersionedEntry<StandaloneValidatorResult>>();
 
 // Curated documents are relinked as a BATCH once per `preview:setFiles`
 // (the only message that ever carries new curated content) and cached here
@@ -296,6 +302,50 @@ async function getOrComputeAsync<T>(
     cache.set(key, entry);
   }
   return entry;
+}
+
+interface StandaloneValidatorResult {
+  validator: z.ZodTypeAny | undefined;
+  diagnostics: GeneratorDiagnostic[];
+}
+
+/**
+ * Compiles `typeFqn`'s real Zod schema via `emitStandaloneZodSchema`
+ * (packages/codegen/src/emit/standalone-schema.ts) and evaluates it through
+ * `runInWorkerSandbox` — the same hardened `new Function` path
+ * `executeFunction`/`validateInstance`'s condition predicates already use;
+ * do not add a second one.
+ *
+ * Fully synchronous — `emitStandaloneZodSchema` and the sandbox eval both
+ * have no `await` anywhere in this call — so its cache (below) uses the
+ * sync `getOrCompute`, not `getOrComputeAsync`.
+ */
+function compileStandaloneValidator(documents: LangiumDocument[], typeFqn: string): StandaloneValidatorResult {
+  const { code, diagnostics } = emitStandaloneZodSchema(documents, typeFqn);
+  if (diagnostics.some((d) => d.severity === 'error')) {
+    return { validator: undefined, diagnostics };
+  }
+  // emitStandaloneZodSchema always names the target's own schema constant
+  // `${bareName}Schema` (zod-emitter.ts's schemaName convention), and
+  // typeFqn's own bare name (its final `.`-segment) is exactly that name.
+  const targetName = typeFqn.slice(typeFqn.lastIndexOf('.') + 1);
+  try {
+    const stripped = stripModuleTypeAnnotations(code);
+    const validator = runInWorkerSandbox(stripped, 'z', z, `${targetName}Schema`) as z.ZodTypeAny;
+    return { validator, diagnostics };
+  } catch (err) {
+    return {
+      validator: undefined,
+      diagnostics: [
+        ...diagnostics,
+        {
+          severity: 'error',
+          code: 'compile-error',
+          message: err instanceof Error ? err.message : String(err)
+        }
+      ]
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -614,6 +664,84 @@ function stripTypeAnnotations(tsCode: string): string {
   return output.join('\n');
 }
 
+// Balanced-brace scan (not regex — a cyclic type's interface body could in
+// principle nest braces, e.g. a field typed as an inline object) for
+// `export interface <Name> { ... }` blocks — emitStandaloneZodSchema
+// predeclares these for cyclic targets (zod-emitter.ts's
+// emitCyclicInterface).
+function stripInterfaceBlocks(tsCode: string): string {
+  const marker = 'export interface ';
+  let result = '';
+  let i = 0;
+  while (i < tsCode.length) {
+    const idx = tsCode.indexOf(marker, i);
+    if (idx === -1) {
+      result += tsCode.slice(i);
+      break;
+    }
+    result += tsCode.slice(i, idx);
+    const braceStart = tsCode.indexOf('{', idx);
+    let depth = 0;
+    let j = braceStart;
+    for (; j < tsCode.length; j++) {
+      if (tsCode[j] === '{') depth++;
+      else if (tsCode[j] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    i = j + 1;
+    if (tsCode[i] === '\n') i++;
+  }
+  return result;
+}
+
+/**
+ * Turns `emitStandaloneZodSchema`'s returned TypeScript module into plain,
+ * `runInWorkerSandbox`-evaluable JavaScript: drops any cyclic-type
+ * `export interface` predeclaration block, drops the `import { z } from
+ * 'zod';` header line (the caller binds `z` as an explicit sandbox
+ * parameter instead — `new Function` bodies cannot contain `import`
+ * statements), drops every `export type <Name> = ...;` alias line entirely
+ * (zod-emitter.ts's `emitInferAlias`/`emitEnum`/`emitTypeAliasSchema` emit
+ * one of these — always `z.infer<typeof ...>` or a resolved primitive — for
+ * EVERY non-cyclic Data, Choice, Enum, and RosettaTypeAlias in the closure;
+ * merely stripping `export` off them left a bare `type X = ...;` statement,
+ * which is TypeScript-only syntax `new Function` cannot parse at all — so
+ * every real (non-trivial) standalone schema failed to compile and
+ * `validateInstance` always fell back to "Structural validation
+ * unavailable", even though the hand-authored test fixtures — which never
+ * included one of these lines — all passed), drops `export ` on each
+ * remaining top-level declaration, and strips a top-level variable's own
+ * type annotation (`export const XSchema: z.ZodType<X> = ...` — the
+ * cyclic-type case, per zod-emitter.ts's `emitCyclicInterface` pairing).
+ *
+ * Deliberately NOT `stripTypeAnnotations`'s per-line regex passes: those are
+ * scoped to FUNCTION-signature shapes (`executeFunction`'s isolated
+ * function bodies) — their parameter-annotation regexes match any
+ * `identifier: <paren-containing-expression>` followed by `,`/`)`, which is
+ * exactly the shape of every field inside a Zod schema's own
+ * `z.object({ id: z.string().min(1) })` — reusing them here corrupted real
+ * schema bodies (e.g. `id: z.string().min(1)` → `id)`). The variable-
+ * annotation regex below is anchored to the START of the line
+ * (`const`/`let`/`var NAME:`), so it can never match a field deeper inside
+ * an object literal.
+ */
+function stripModuleTypeAnnotations(tsCode: string): string {
+  const withoutInterfaces = stripInterfaceBlocks(tsCode);
+  const withoutDroppedLines = withoutInterfaces
+    .split('\n')
+    .filter((line) => !/^import .*;$/.test(line) && !/^export type \w+ = .*;$/.test(line))
+    .join('\n');
+  return withoutDroppedLines
+    .split('\n')
+    .map((line) => {
+      const withoutExport = line.replace(/^export\s+/, '');
+      return withoutExport.replace(/^((?:const|let|var)\s+\w+)\s*:\s*[\w.<>()[\] |&?,]+\s*(=|;)/, '$1 $2');
+    })
+    .join('\n');
+}
+
 // ---------------------------------------------------------------------------
 // Hardened `new Function(...)` execution — shared sandbox wrapper
 // ---------------------------------------------------------------------------
@@ -747,63 +875,87 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
 // Instance validation
 // ---------------------------------------------------------------------------
 
+// Translates issue path back to the Rune-idiomatic dotted/bracketed form
+// preview-validator.ts's original formatIssuePath used — presentation logic
+// only, not part of the deleted structural validator.
+function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
+  return path
+    .filter((segment): segment is string | number => typeof segment === 'string' || typeof segment === 'number')
+    .map((segment) => (typeof segment === 'number' ? `[${segment}]` : segment))
+    .join('.')
+    .replace('.[', '[');
+}
+
+/**
+ * Translates real Zod issues into ValidationDiagnostic[], attributing an
+ * issue back to a named Rune condition when possible:
+ *  - path.length >= 1 and path[0] matches an active condition's name → the
+ *    multi-condition .superRefine() case (zod-emitter.ts's emitOneOf/
+ *    emitChoice/etc. always emit `path: [conditionName]`).
+ *  - path.length === 0, there is exactly one active condition, AND the
+ *    issue's own message starts with that condition's name → the
+ *    single-condition .refine() case (Zod's shorthand form carries no path;
+ *    buildConditionMessage (transpiler.ts) always prefixes its message with
+ *    the condition name, in every branch). The message check is required,
+ *    not just the empty path: an unrelated root-path structural issue (e.g.
+ *    a Data-extends-Choice's runeExtendChoice union, or any other
+ *    `z.strictObject`-flavored `unrecognized_keys` issue surfacing at the
+ *    root) would otherwise be silently mislabeled as the condition's own
+ *    failure just because it happens to share the sole condition's target.
+ *  - everything else → an ordinary field-structural diagnostic.
+ */
+function translateValidationIssues(
+  issues: z.ZodError['issues'],
+  activeConditionNames: string[]
+): ValidationDiagnostic[] {
+  const conditionNameSet = new Set(activeConditionNames);
+  const soleConditionName = activeConditionNames.length === 1 ? activeConditionNames[0] : undefined;
+  return issues.map((issue) => {
+    const first = issue.path[0];
+    if (issue.path.length >= 1 && typeof first === 'string' && conditionNameSet.has(first)) {
+      return { path: first, message: issue.message, conditionName: first };
+    }
+    if (issue.path.length === 0 && soleConditionName && issue.message.startsWith(soleConditionName)) {
+      return { path: soleConditionName, message: issue.message, conditionName: soleConditionName };
+    }
+    return { path: formatIssuePath(issue.path), message: issue.message };
+  });
+}
+
 async function validateInstance(typeFqn: string, data: Record<string, unknown>, requestId: string): Promise<void> {
   const scope = self as unknown as DedicatedWorkerGlobalScope;
 
   try {
     const { version: documentsVersion, value: documents } = await buildDocuments();
-    // `findDataNode` only searches Data types — it returns undefined for a
-    // Choice target even though `generatePreviewSchemas` (the structural
-    // validator source) supports Choice targets too. Only condition-
-    // predicate extraction genuinely needs the Data AST node; structural
-    // validation must proceed for any target `generatePreviewSchemas` can
-    // resolve, Choice included. "Unknown type" is only correct when NEITHER
-    // resolves the target.
-    const dataNode = findDataNode(typeFqn, documents);
-    // See runPreview's identical comment — tagged with documentsVersion,
-    // not the live previewFilesVersion.
-    const {
-      value: [schema]
-    } = getOrCompute(previewSchemaCache, typeFqn, documentsVersion, () =>
-      generatePreviewSchemas(documents, { targetId: typeFqn })
+    const { value: compiled } = getOrCompute(standaloneValidatorCache, typeFqn, documentsVersion, () =>
+      compileStandaloneValidator(documents, typeFqn)
     );
-    if (!dataNode && !schema) {
+
+    if (!compiled.validator) {
+      const firstError = compiled.diagnostics.find((d) => d.severity === 'error');
       scope.postMessage({
         type: 'instance:validateResult',
         requestId,
-        diagnostics: [{ path: '', message: `Unknown type '${typeFqn}'` }]
+        diagnostics: [
+          { path: '', message: `Structural validation unavailable: ${firstError?.message ?? 'unknown error'}` }
+        ]
       });
       return;
     }
 
-    const structural = validatePreviewSample(
-      schema ?? { schemaVersion: 1, targetId: typeFqn, title: dataNode!.name, status: 'ready', fields: [] },
-      data
-    );
-    const structuralDiagnostics: ValidationDiagnostic[] = Object.entries(structural.errors).map(([path, message]) => ({
-      path,
-      message
-    }));
+    // Condition NAMES are still needed to attribute a Zod issue back to a
+    // named Rune condition (translateValidationIssues) — the predicates
+    // themselves are no longer executed separately; the real schema already
+    // embeds every active condition as a .refine()/.superRefine().
+    const dataNode = findDataNode(typeFqn, documents);
+    const activeConditionNames = dataNode ? getActiveConditionPredicates(dataNode).map(({ name }) => name) : [];
 
-    // Condition predicates are the same plain-JS boolean strings
-    // transpileCondition() emits into `.refine((data) => <predicate>, ...)`
-    // for the zod target — executed here through runInWorkerSandbox so
-    // runeAttrExists/runeCount/etc. are in scope. Only Data targets carry
-    // conditions; a Choice target (no `dataNode`) has none to evaluate.
-    const conditionDiagnostics: ValidationDiagnostic[] = [];
-    if (dataNode) {
-      for (const { name, predicate } of getActiveConditionPredicates(dataNode)) {
-        if (!runInWorkerSandbox('', 'data', data, `(${predicate})`)) {
-          conditionDiagnostics.push({ path: name, message: `Condition '${name}' failed`, conditionName: name });
-        }
-      }
-    }
+    const result = compiled.validator.safeParse(data);
+    const diagnostics: ValidationDiagnostic[] = result.success
+      ? []
+      : translateValidationIssues(result.error.issues, activeConditionNames);
 
-    scope.postMessage({
-      type: 'instance:validateResult',
-      requestId,
-      diagnostics: [...structuralDiagnostics, ...conditionDiagnostics]
-    });
+    scope.postMessage({ type: 'instance:validateResult', requestId, diagnostics });
   } catch (err) {
     console.error('[codegen-worker] Instance validation error:', err);
     scope.postMessage({

@@ -319,7 +319,15 @@ describe('usePreviewStore', () => {
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
     usePreviewStore.getState().ensureSample('alpha.Trade', { value: '' });
 
-    usePreviewStore.getState().updateSample('alpha.Trade', { value: '' }, { value: 'Value is required' }, false, true);
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: '' }, true);
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: '' });
+    usePreviewStore
+      .getState()
+      .receiveValidateResult(postMessage.mock.calls[0]![0].requestId, [
+        { path: 'value', message: 'Value is required' }
+      ]);
 
     expect(usePreviewStore.getState().status).toEqual({
       state: 'invalid',
@@ -358,7 +366,15 @@ describe('usePreviewStore', () => {
     ]);
     usePreviewStore.getState().selectTarget('alpha.Trade');
     usePreviewStore.getState().receivePreviewResult(schema('alpha.Trade', 'Trade'));
-    usePreviewStore.getState().updateSample('alpha.Trade', { value: '' }, { value: 'Value is required' }, false, true);
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: '' }, true);
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: '' });
+    usePreviewStore
+      .getState()
+      .receiveValidateResult(postMessage.mock.calls[0]![0].requestId, [
+        { path: 'value', message: 'Value is required' }
+      ]);
 
     usePreviewStore.getState().setAvailableTargets([
       {
@@ -472,6 +488,93 @@ describe('usePreviewStore', () => {
     usePreviewStore.getState().clearHydrationRetriesRemaining('NeverSet');
     expect(usePreviewStore.getState().hydrationRetriesRemaining).toEqual({});
     expect(usePreviewStore.getState()).toBe(stateBefore);
+  });
+});
+
+describe('preview-store dispatchValidate/receiveValidateResult', () => {
+  beforeEach(() => {
+    usePreviewStore.getState().resetPreviewState();
+  });
+
+  it('dispatchValidate posts an instance:validate message and receiveValidateResult writes errors/valid onto the sample', () => {
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: '' }, true);
+
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: '' });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'instance:validate', typeFqn: 'alpha.Trade', data: { value: '' } })
+    );
+    const requestId = postMessage.mock.calls[0]![0].requestId as string;
+
+    usePreviewStore.getState().receiveValidateResult(requestId, [{ path: 'value', message: 'Value is required' }]);
+
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+      values: { value: '' },
+      errors: { value: 'Value is required' },
+      valid: false,
+      validated: true
+    });
+    expect(usePreviewStore.getState().status).toEqual({ state: 'invalid', targetId: 'alpha.Trade' });
+  });
+
+  it('drops a stale out-of-order receiveValidateResult in favor of the latest dispatched request', () => {
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: 'a' }, true);
+
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: 'a' });
+    const firstRequestId = postMessage.mock.calls[0]![0].requestId as string;
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: 'ab' });
+    const secondRequestId = postMessage.mock.calls[1]![0].requestId as string;
+
+    usePreviewStore.getState().receiveValidateResult(secondRequestId, []);
+    usePreviewStore.getState().receiveValidateResult(firstRequestId, [{ path: 'value', message: 'stale' }]);
+
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({ errors: {}, valid: true });
+  });
+
+  it('updateSampleValues clears prior errors/valid immediately so stale errors never linger against new values', () => {
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: '' }, true);
+    usePreviewStore.getState().receiveValidateResult('nonexistent', []); // no-op, requestId never dispatched
+
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: '' });
+    const requestId = postMessage.mock.calls[0]![0].requestId as string;
+    usePreviewStore.getState().receiveValidateResult(requestId, [{ path: 'value', message: 'Value is required' }]);
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')?.errors).toEqual({ value: 'Value is required' });
+
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: 'x' }, true);
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+      values: { value: 'x' },
+      errors: {},
+      valid: true
+    });
+  });
+
+  it('resetSample invalidates an in-flight validate request so its stale response cannot attach to the reset defaults', () => {
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: 'invalid input' }, true);
+
+    // A validate request goes out for the pre-reset values but never gets a
+    // response before the user hits Reset.
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: 'invalid input' });
+    const staleRequestId = postMessage.mock.calls[0]![0].requestId as string;
+
+    usePreviewStore.getState().resetSample('alpha.Trade', { value: '' });
+
+    // The stale response for the discarded values arrives late — it must
+    // NOT overwrite the freshly-reset sample's clean errors/valid state.
+    usePreviewStore.getState().receiveValidateResult(staleRequestId, [{ path: 'value', message: 'stale' }]);
+
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+      values: { value: '' },
+      errors: {},
+      valid: true,
+      validated: false
+    });
   });
 });
 

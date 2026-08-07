@@ -101,6 +101,7 @@ export const CodegenProvider = withInstrumentation(
     const receivePreviewStale = usePreviewStore((s) => s.receivePreviewStale);
     const receiveExecutionResult = usePreviewStore((s) => s.receiveExecutionResult);
     const receiveExecutionError = usePreviewStore((s) => s.receiveExecutionError);
+    const receiveValidateResult = usePreviewStore((s) => s.receiveValidateResult);
     const setHydrationRetriesRemaining = usePreviewStore((s) => s.setHydrationRetriesRemaining);
     const clearHydrationRetriesRemaining = usePreviewStore((s) => s.clearHydrationRetriesRemaining);
 
@@ -271,6 +272,7 @@ export const CodegenProvider = withInstrumentation(
         }
         if (isInstanceValidateResultMessage(msg)) {
           useInstanceStore.getState().receiveValidateResult(msg.requestId, msg.diagnostics);
+          receiveValidateResult(msg.requestId, msg.diagnostics);
           return;
         }
         // Instance-store's schema fetches use their OWN `instance:generateSchema`/
@@ -403,6 +405,7 @@ export const CodegenProvider = withInstrumentation(
       receivePreviewStale,
       receiveExecutionResult,
       receiveExecutionError,
+      receiveValidateResult,
       setHydrationRetriesRemaining,
       clearHydrationRetriesRemaining,
       setWorkerRef

@@ -5,6 +5,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PrototypePerspective } from '../../../../src/shell/perspectives/screens/PrototypePerspective.js';
 import { useInstanceStore } from '../../../../src/store/instance-store.js';
+import { installFakeValidatingWorkerForInstances } from '../../../helpers/fake-validating-worker.js';
 
 describe('PrototypePerspective', () => {
   beforeEach(() => {
@@ -55,17 +56,28 @@ describe('PrototypePerspective', () => {
   });
 
   it('does not carry over stale field-level validation errors when switching between instances of the same type (finding #8)', () => {
+    const partySchema = {
+      schemaVersion: 1 as const,
+      targetId: 'test.Party',
+      title: 'Party',
+      status: 'ready' as const,
+      fields: [{ path: 'name', label: 'Name', kind: 'string' as const, required: true }]
+    };
     useInstanceStore.setState((s) => ({
-      schemas: new Map(s.schemas).set('test.Party', {
-        schemaVersion: 1,
-        targetId: 'test.Party',
-        title: 'Party',
-        status: 'ready',
-        fields: [{ path: 'name', label: 'Name', kind: 'string', required: true }]
-      })
+      schemas: new Map(s.schemas).set('test.Party', partySchema)
     }));
+    installFakeValidatingWorkerForInstances(partySchema);
     const idA = useInstanceStore.getState().createInstance('test.Party', 'Instance A');
     const idB = useInstanceStore.getState().createInstance('test.Party', 'Instance B');
+    // Instance B has its own genuinely-valid data (not just "never
+    // touched") — createInstance/updateInstanceData validate eagerly on
+    // every change (round-5 finding #2), so B's own validationErrors entry
+    // is real, not absent-because-unvalidated. This isolates the actual
+    // regression this test guards against: A's error must not leak onto
+    // B, distinct from B correctly having no error of its own.
+    act(() => {
+      useInstanceStore.getState().updateInstanceData(idB, { name: 'Bob' });
+    });
 
     render(<PrototypePerspective />);
 
@@ -79,8 +91,8 @@ describe('PrototypePerspective', () => {
     });
     expect(screen.getByText('Name is required')).toBeInTheDocument();
 
-    // Switch to instance B — its Name field is equally empty, but it was
-    // never touched/blurred, so it must NOT show A's stale error.
+    // Switch to instance B — its Name field is genuinely valid, so it must
+    // NOT show A's stale error.
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Instance B' }));
     });

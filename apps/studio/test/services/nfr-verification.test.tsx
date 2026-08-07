@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { installFakeValidatingWorker } from '../helpers/fake-validating-worker.js';
 
 const previewSchema: FormPreviewSchema = {
   schemaVersion: 1,
@@ -92,6 +93,7 @@ describe('form preview NFR verification', () => {
   });
 
   it('keeps summary status visible and updates within the preview latency budget', () => {
+    installFakeValidatingWorker(previewSchema);
     const startedAt = performance.now();
 
     render(<FormPreviewPanel schema={previewSchema} status={{ state: 'ready', targetId: previewSchema.targetId }} />);

@@ -25,8 +25,7 @@ import {
   buildDefaultValue,
   buildDefaultValues,
   resolveArmPaths,
-  splitChoiceArmFields,
-  validatePreviewSample
+  splitChoiceArmFields
 } from '../services/preview-validator.js';
 import { withInstrumentation } from '../services/instrumentation/core.js';
 
@@ -38,6 +37,13 @@ export interface FormPreviewPanelProps {
   onExecute?: (funcName: string, inputs: Record<string, unknown>) => void;
   values?: Record<string, unknown>;
   onValuesChange?: (values: Record<string, unknown>) => void;
+  /** Controlled-mode only — sourced from the real worker-validated
+   *  diagnostics (e.g. InstanceFormPanel reading instance-store.ts's
+   *  validationErrors). Ignored in uncontrolled mode, which reads its own
+   *  errors/valid/validated from usePreviewStore's samples map instead. */
+  errors?: Record<string, string>;
+  valid?: boolean;
+  validated?: boolean;
 }
 
 export const FormPreviewPanel = withInstrumentation(
@@ -48,18 +54,17 @@ export const FormPreviewPanel = withInstrumentation(
     getFieldSource,
     onExecute,
     values,
-    onValuesChange
+    onValuesChange,
+    errors: controlledErrors,
+    valid: controlledValid,
+    validated: controlledValidated
   }: FormPreviewPanelProps): ReactElement {
     const isControlled = values !== undefined;
     const ensureSample = usePreviewStore((s) => s.ensureSample);
-    const updateSample = usePreviewStore((s) => s.updateSample);
+    const updateSampleValues = usePreviewStore((s) => s.updateSampleValues);
+    const dispatchValidate = usePreviewStore((s) => s.dispatchValidate);
     const resetSample = usePreviewStore((s) => s.resetSample);
     const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
-    const [controlledMeta, setControlledMeta] = useState<{
-      errors: Record<string, string>;
-      valid: boolean;
-      validated: boolean;
-    }>({ errors: {}, valid: true, validated: false });
     const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
     const [executionState, setExecutionState] = useState<'idle' | 'running'>('idle');
 
@@ -176,9 +181,9 @@ export const FormPreviewPanel = withInstrumentation(
           targetId: schema.targetId,
           values: values ?? defaultValues,
           serialized: JSON.stringify(values ?? defaultValues, null, 2),
-          errors: controlledMeta.errors,
-          valid: controlledMeta.valid,
-          validated: controlledMeta.validated,
+          errors: controlledErrors ?? {},
+          valid: controlledValid ?? true,
+          validated: controlledValidated ?? false,
           updatedAt: 0
         };
       }
@@ -193,24 +198,30 @@ export const FormPreviewPanel = withInstrumentation(
           updatedAt: 0
         }
       );
-    }, [controlledMeta, defaultValues, isControlled, sample, schema, values]);
+    }, [controlledErrors, controlledValid, controlledValidated, defaultValues, isControlled, sample, schema, values]);
 
     const showStatusOnly = !schema || status.state === 'unavailable' || schema.schemaVersion !== 1;
 
     const applyValidation = useCallback(
       (nextValues: Record<string, unknown>, validated: boolean) => {
         if (!schema) return;
-        const result = validated
-          ? validatePreviewSample(schema, nextValues)
-          : { errors: {} as Record<string, string>, valid: true };
         if (isControlled) {
-          setControlledMeta({ errors: result.errors, valid: result.valid, validated });
+          // Structural + condition validation already round-trips through
+          // the worker via the caller's own onValuesChange handler (e.g.
+          // InstanceFormPanel's updateInstanceData → dispatchValidate) —
+          // this component only forwards the edit. `validated` is not used
+          // here; the errors/valid/validated PROPS (sourced from that real
+          // round trip) drive activeSample above instead of a locally
+          // computed approximation.
           onValuesChange?.(nextValues);
           return;
         }
-        updateSample(schema.targetId, nextValues, result.errors, result.valid, validated);
+        updateSampleValues(schema.targetId, nextValues, validated);
+        if (validated) {
+          dispatchValidate(schema.targetId, nextValues);
+        }
       },
-      [isControlled, onValuesChange, schema, updateSample]
+      [dispatchValidate, isControlled, onValuesChange, schema, updateSampleValues]
     );
 
     const handleFieldBlur = useCallback(() => {
@@ -319,7 +330,10 @@ export const FormPreviewPanel = withInstrumentation(
     const handleReset = useCallback(() => {
       if (!schema) return;
       if (isControlled) {
-        setControlledMeta({ errors: {}, valid: true, validated: false });
+        // errors/valid/validated are owned by the caller (props, sourced
+        // from instance-store.ts's real validationErrors) — no local state
+        // to reset here. onValuesChange triggers the real worker round
+        // trip, which updates those props once it resolves.
         onValuesChange?.(defaultValues);
       } else {
         resetSample(schema.targetId, defaultValues);
@@ -1106,8 +1120,8 @@ function getInputValue(field: PreviewField, event: ChangeEvent<HTMLInputElement>
   if (field.kind === 'number') {
     if (event.target.value === '') {
       // '' (not undefined) — matches buildDefaultValue's own "no value
-      // yet" representation for a number field, and validatePreviewSample's
-      // number preprocessing already normalizes '' and undefined
+      // yet" representation for a number field; the real generated Zod
+      // schema's number preprocessing already normalizes '' and undefined
       // identically. Returning undefined here made a Choice arm's presence
       // check (`value !== undefined`) read a cleared numeric arm as
       // "unselected" mid-edit — unchecking its radio and unmounting the

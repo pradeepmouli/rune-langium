@@ -9,6 +9,7 @@ import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { useOutputStore } from '../../src/store/output-store.js';
+import { installFakeValidatingWorker } from '../helpers/fake-validating-worker.js';
 
 const tradeSchema: FormPreviewSchema = {
   schemaVersion: 1,
@@ -461,6 +462,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('shows invalid and valid summary states, nested validation errors, and reset behavior', () => {
+    installFakeValidatingWorker(validationTradeSchema);
     render(
       <FormPreviewPanel
         schema={validationTradeSchema}
@@ -494,6 +496,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('enforces array max-cardinality validation when a repeatable field exceeds its preview limit', () => {
+    installFakeValidatingWorker(validationTradeSchema);
     render(
       <FormPreviewPanel
         schema={validationTradeSchema}
@@ -512,6 +515,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('lets optional object sections stay absent until explicitly added', () => {
+    installFakeValidatingWorker(optionalSectionSchema);
     render(
       <FormPreviewPanel
         schema={optionalSectionSchema}
@@ -602,8 +606,8 @@ describe('FormPreviewPanel', () => {
       expect(usePreviewStore.getState().samples.has(validationTradeSchema.targetId)).toBe(false);
     });
 
-    it('calls onValuesChange with the full merged object on a scalar edit + blur, and does not call updateSample', () => {
-      const updateSampleSpy = vi.spyOn(usePreviewStore.getState(), 'updateSample');
+    it('calls onValuesChange with the full merged object on a scalar edit + blur, and does not call updateSampleValues', () => {
+      const updateSampleSpy = vi.spyOn(usePreviewStore.getState(), 'updateSampleValues');
       const onValuesChange = vi.fn();
       render(
         <FormPreviewPanel
@@ -1013,6 +1017,45 @@ describe('FormPreviewPanel', () => {
       expect(onValuesChange).toHaveBeenLastCalledWith({
         bond: { couponFrequency: '', floatingRate: '' }
       });
+    });
+  });
+
+  describe('controlled mode error display (errors/valid/validated props)', () => {
+    it('shows an inline field error sourced from the errors prop, gated by validated', () => {
+      const { rerender } = render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+          errors={{ tradeId: 'Trade id is required' }}
+          valid={false}
+          validated={false}
+        />
+      );
+      expect(screen.queryByText('Trade id is required')).not.toBeInTheDocument();
+
+      rerender(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+          errors={{ tradeId: 'Trade id is required' }}
+          valid={false}
+          validated={true}
+        />
+      );
+      expect(screen.getByText('Trade id is required')).toBeInTheDocument();
+    });
+
+    it('shows no errors when errors/valid/validated props are omitted (defaults)', () => {
+      render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+        />
+      );
+      expect(screen.queryByText(/is required/i)).not.toBeInTheDocument();
     });
   });
 

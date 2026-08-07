@@ -3,9 +3,11 @@
 
 import { create } from 'zustand';
 import type { FormPreviewSchema, PreviewField, PreviewSourceMapEntry } from '@rune-langium/codegen/export';
+import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import { useOutputStore, fmtLine } from './output-store.js';
 import { useActivityStore } from './activity-store.js';
 import { allocateOpId } from '../services/op-log.js';
+import { createInstanceValidateMessage } from '../services/codegen-service.js';
 import {
   buildArmValue,
   buildDefaultValue,
@@ -68,13 +70,9 @@ interface PreviewStoreActions {
   receivePreviewStale(input: { targetId?: string; reason: PreviewStaleReason; message: string }): void;
   getFieldSource(targetId: string | undefined, fieldPath: string): PreviewSourceMapEntry | undefined;
   ensureSample(targetId: string, values: Record<string, unknown>): void;
-  updateSample(
-    targetId: string,
-    values: Record<string, unknown>,
-    errors: Record<string, string>,
-    valid: boolean,
-    validated: boolean
-  ): void;
+  updateSampleValues(targetId: string, values: Record<string, unknown>, validated: boolean): void;
+  dispatchValidate(targetId: string, data: Record<string, unknown>): void;
+  receiveValidateResult(requestId: string, diagnostics: ValidationDiagnostic[]): void;
   resetSample(targetId: string, values: Record<string, unknown>): void;
   setSampleValues(targetId: string, values: Record<string, unknown>): void;
   clearSample(targetId: string): void;
@@ -106,6 +104,13 @@ let dispatchExecuteCounter = 0;
 let _lastExecuteRequestId = '';
 let workerRef: Worker | null = null;
 const executeSpans = new Map<string, { opId: number; startedAt: number }>();
+let dispatchValidateCounter = 0;
+const pendingValidateRequests = new Map<string, string>(); // requestId -> targetId
+// Tracks the LATEST outstanding validate requestId per targetId so an
+// out-of-order response (an older request's result arriving after a newer
+// one) can be dropped instead of overwriting fresher diagnostics with stale
+// ones — mirrors instance-store.ts's identical latestValidateRequestForInstance.
+const latestValidateRequestForTarget = new Map<string, string>();
 
 function serializeSampleValues(values: Record<string, unknown>): string {
   return JSON.stringify(values, null, 2);
@@ -406,30 +411,77 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     set({ samples });
   },
 
-  updateSample(targetId, values, errors, valid, validated) {
+  // Updates values immediately (optimistic — no wait for the worker) and
+  // clears errors/valid to the "nothing wrong yet" state, so a still-in-
+  // flight validate response for the PREVIOUS values can never be
+  // displayed against these NEW values once it arrives late (see
+  // receiveValidateResult's staleness guard for the complementary half of
+  // this invariant). The real errors/valid land asynchronously via
+  // dispatchValidate → receiveValidateResult.
+  updateSampleValues(targetId, values, validated) {
     const samples = new Map(get().samples);
     samples.set(targetId, {
       targetId,
       values,
       serialized: serializeSampleValues(values),
-      errors,
-      valid,
+      errors: {},
+      valid: true,
       validated,
       updatedAt: Date.now()
     });
     const currentStatus = get().status;
-    let nextStatus: PreviewStatus;
-    if (currentStatus.state === 'stale' || currentStatus.state === 'unavailable') {
-      nextStatus = currentStatus;
-    } else if (validated && !valid) {
-      nextStatus = { state: 'invalid', targetId };
-    } else {
-      nextStatus = { state: 'ready', targetId };
-    }
+    set({
+      samples,
+      status:
+        currentStatus.state === 'stale' || currentStatus.state === 'unavailable'
+          ? currentStatus
+          : { state: 'ready', targetId }
+    });
+  },
+
+  dispatchValidate(targetId, data) {
+    if (!workerRef) return;
+    const worker = workerRef;
+    dispatchValidateCounter++;
+    const requestId = `validate:${targetId}:${dispatchValidateCounter}`;
+    pendingValidateRequests.set(requestId, targetId);
+    latestValidateRequestForTarget.set(targetId, requestId);
+    worker.postMessage(createInstanceValidateMessage(targetId, data, requestId));
+  },
+
+  receiveValidateResult(requestId, diagnostics) {
+    const targetId = pendingValidateRequests.get(requestId);
+    if (!targetId) return;
+    pendingValidateRequests.delete(requestId);
+    // Drop an out-of-order response: only the LATEST request issued for
+    // this target is allowed to write errors/valid.
+    if (latestValidateRequestForTarget.get(targetId) !== requestId) return;
+    const sample = get().samples.get(targetId);
+    if (!sample) return;
+    const errors: Record<string, string> = Object.fromEntries(diagnostics.map((d) => [d.path, d.message]));
+    const valid = diagnostics.length === 0;
+    const samples = new Map(get().samples);
+    samples.set(targetId, { ...sample, errors, valid });
+    const currentStatus = get().status;
+    const nextStatus: PreviewStatus =
+      currentStatus.state === 'stale' || currentStatus.state === 'unavailable'
+        ? currentStatus
+        : sample.validated && !valid
+          ? { state: 'invalid', targetId }
+          : { state: 'ready', targetId };
     set({ samples, status: nextStatus });
   },
 
   resetSample(targetId, values) {
+    // Invalidate any validate request still in flight for the PRE-reset
+    // values. receiveValidateResult's staleness guard only rejects a
+    // response once a NEWER request has been recorded for the target —
+    // resetSample doesn't dispatch a new one (unlike updateSampleValues,
+    // which is always immediately followed by a fresh dispatchValidate),
+    // so without this the old in-flight response would still pass that
+    // guard and attach diagnostics computed for the discarded values onto
+    // the just-reset defaults.
+    latestValidateRequestForTarget.delete(targetId);
     const samples = new Map(get().samples);
     samples.set(targetId, {
       targetId,
@@ -574,5 +626,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     });
     workerRef = null;
     executeSpans.clear();
+    pendingValidateRequests.clear();
+    latestValidateRequestForTarget.clear();
   }
 }));
