@@ -1403,6 +1403,12 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
   }
 
   it('validates real sample data through a plain-object emitted schema', async () => {
+    // The trailing `export type Trade = z.infer<typeof TradeSchema>;` line
+    // matches zod-emitter.ts's emitInferAlias, which real
+    // emitStandaloneZodSchema output always includes for a non-cyclic Data
+    // type — stripModuleTypeAnnotations must drop it entirely (it's
+    // TypeScript-only syntax `new Function` cannot parse), not merely strip
+    // `export` off it.
     emitStandaloneZodSchemaMock.mockReturnValue({
       code: [
         "import { z } from 'zod';",
@@ -1411,7 +1417,8 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
         '  .object({',
         '    id: z.string().min(1)',
         '  })',
-        '  .strict();'
+        '  .strict();',
+        'export type Trade = z.infer<typeof TradeSchema>;'
       ].join('\n'),
       diagnostics: []
     });
@@ -1532,7 +1539,8 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
         '    if (present !== 1) {',
         "      ctx.addIssue({ code: 'custom', message: 'oneRateKind: exactly one of [fixedRate, floatingRate] must be present in Trade', path: ['oneRateKind'] });",
         '    }',
-        '  });'
+        '  });',
+        'export type Trade = z.infer<typeof TradeSchema>;'
       ].join('\n'),
       diagnostics: []
     });
@@ -1566,7 +1574,8 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
         'export const TradeSchema = z',
         '  .object({ id: z.string().optional() })',
         '  .strict()',
-        "  .refine((data) => data.id !== undefined, 'hasId: id must be present in Trade');"
+        "  .refine((data) => data.id !== undefined, 'hasId: id must be present in Trade');",
+        'export type Trade = z.infer<typeof TradeSchema>;'
       ].join('\n'),
       diagnostics: []
     });
@@ -1586,9 +1595,46 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
     });
   });
 
+  it('does not attribute an unrelated root-path structural issue to the sole active condition', async () => {
+    // The sole condition's own .refine() always PASSES here (predicate is
+    // `true`); the only issue that can occur is `.strict()`'s
+    // `unrecognized_keys` for the extra `bogus` key, which lands at the
+    // root path with a message that does NOT start with the condition's
+    // name. Without the message-prefix guard, translateValidationIssues
+    // would mislabel this structural issue as 'hasId's own failure just
+    // because the path is empty and there's exactly one active condition.
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: [
+        "import { z } from 'zod';",
+        '',
+        'export const TradeSchema = z',
+        '  .object({ id: z.string().optional() })',
+        '  .strict()',
+        "  .refine(() => true, 'hasId: id must be present in Trade');",
+        'export type Trade = z.infer<typeof TradeSchema>;'
+      ].join('\n'),
+      diagnostics: []
+    });
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'hasId', predicate: 'runeAttrExists(data.id)' }]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: { bogus: 'nope' }, requestId: 'v:1' });
+    await flushWorker();
+
+    const call = scope.postMessage.mock.calls.at(-1)![0];
+    expect(call.type).toBe('instance:validateResult');
+    expect(call.diagnostics).toHaveLength(1);
+    expect(call.diagnostics[0].conditionName).toBeUndefined();
+    expect(call.diagnostics[0].path).toBe('');
+    expect(call.diagnostics[0].message).not.toMatch(/^hasId/);
+  });
+
   it('caches the compiled validator across repeated instance:validate calls for the same typeFqn', async () => {
     emitStandaloneZodSchemaMock.mockReturnValue({
-      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({}).strict();",
+      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({}).strict();\nexport type Trade = z.infer<typeof TradeSchema>;",
       diagnostics: []
     });
 
@@ -1605,7 +1651,7 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
 
   it('recompiles the validator after a preview:setFiles bumps the file version', async () => {
     emitStandaloneZodSchemaMock.mockReturnValue({
-      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({}).strict();",
+      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({}).strict();\nexport type Trade = z.infer<typeof TradeSchema>;",
       diagnostics: []
     });
 

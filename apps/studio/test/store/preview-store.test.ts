@@ -552,6 +552,30 @@ describe('preview-store dispatchValidate/receiveValidateResult', () => {
       valid: true
     });
   });
+
+  it('resetSample invalidates an in-flight validate request so its stale response cannot attach to the reset defaults', () => {
+    const postMessage = vi.fn();
+    usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+    usePreviewStore.getState().updateSampleValues('alpha.Trade', { value: 'invalid input' }, true);
+
+    // A validate request goes out for the pre-reset values but never gets a
+    // response before the user hits Reset.
+    usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: 'invalid input' });
+    const staleRequestId = postMessage.mock.calls[0]![0].requestId as string;
+
+    usePreviewStore.getState().resetSample('alpha.Trade', { value: '' });
+
+    // The stale response for the discarded values arrives late — it must
+    // NOT overwrite the freshly-reset sample's clean errors/valid state.
+    usePreviewStore.getState().receiveValidateResult(staleRequestId, [{ path: 'value', message: 'stale' }]);
+
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+      values: { value: '' },
+      errors: {},
+      valid: true,
+      validated: false
+    });
+  });
 });
 
 // Task 1 (2026-07-17 prod-ux-checkout-harness Phase 2): dispatchExecute/

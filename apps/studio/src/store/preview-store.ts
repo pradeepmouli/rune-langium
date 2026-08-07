@@ -473,6 +473,15 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
   },
 
   resetSample(targetId, values) {
+    // Invalidate any validate request still in flight for the PRE-reset
+    // values. receiveValidateResult's staleness guard only rejects a
+    // response once a NEWER request has been recorded for the target —
+    // resetSample doesn't dispatch a new one (unlike updateSampleValues,
+    // which is always immediately followed by a fresh dispatchValidate),
+    // so without this the old in-flight response would still pass that
+    // guard and attach diagnostics computed for the discarded values onto
+    // the just-reset defaults.
+    latestValidateRequestForTarget.delete(targetId);
     const samples = new Map(get().samples);
     samples.set(targetId, {
       targetId,

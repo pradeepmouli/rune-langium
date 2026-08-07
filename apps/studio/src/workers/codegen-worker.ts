@@ -702,10 +702,19 @@ function stripInterfaceBlocks(tsCode: string): string {
  * `export interface` predeclaration block, drops the `import { z } from
  * 'zod';` header line (the caller binds `z` as an explicit sandbox
  * parameter instead — `new Function` bodies cannot contain `import`
- * statements), drops `export ` on each remaining top-level declaration, and
- * strips a top-level variable's own type annotation (`export const
- * XSchema: z.ZodType<X> = ...` — the cyclic-type case, per zod-emitter.ts's
- * `emitCyclicInterface` pairing).
+ * statements), drops every `export type <Name> = ...;` alias line entirely
+ * (zod-emitter.ts's `emitInferAlias`/`emitEnum`/`emitTypeAliasSchema` emit
+ * one of these — always `z.infer<typeof ...>` or a resolved primitive — for
+ * EVERY non-cyclic Data, Choice, Enum, and RosettaTypeAlias in the closure;
+ * merely stripping `export` off them left a bare `type X = ...;` statement,
+ * which is TypeScript-only syntax `new Function` cannot parse at all — so
+ * every real (non-trivial) standalone schema failed to compile and
+ * `validateInstance` always fell back to "Structural validation
+ * unavailable", even though the hand-authored test fixtures — which never
+ * included one of these lines — all passed), drops `export ` on each
+ * remaining top-level declaration, and strips a top-level variable's own
+ * type annotation (`export const XSchema: z.ZodType<X> = ...` — the
+ * cyclic-type case, per zod-emitter.ts's `emitCyclicInterface` pairing).
  *
  * Deliberately NOT `stripTypeAnnotations`'s per-line regex passes: those are
  * scoped to FUNCTION-signature shapes (`executeFunction`'s isolated
@@ -720,11 +729,11 @@ function stripInterfaceBlocks(tsCode: string): string {
  */
 function stripModuleTypeAnnotations(tsCode: string): string {
   const withoutInterfaces = stripInterfaceBlocks(tsCode);
-  const withoutImports = withoutInterfaces
+  const withoutDroppedLines = withoutInterfaces
     .split('\n')
-    .filter((line) => !/^import .*;$/.test(line))
+    .filter((line) => !/^import .*;$/.test(line) && !/^export type \w+ = .*;$/.test(line))
     .join('\n');
-  return withoutImports
+  return withoutDroppedLines
     .split('\n')
     .map((line) => {
       const withoutExport = line.replace(/^export\s+/, '');
@@ -883,9 +892,16 @@ function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
  *  - path.length >= 1 and path[0] matches an active condition's name → the
  *    multi-condition .superRefine() case (zod-emitter.ts's emitOneOf/
  *    emitChoice/etc. always emit `path: [conditionName]`).
- *  - path.length === 0 and there is exactly one active condition → the
+ *  - path.length === 0, there is exactly one active condition, AND the
+ *    issue's own message starts with that condition's name → the
  *    single-condition .refine() case (Zod's shorthand form carries no path;
- *    its message is always prefixed with the condition name).
+ *    buildConditionMessage (transpiler.ts) always prefixes its message with
+ *    the condition name, in every branch). The message check is required,
+ *    not just the empty path: an unrelated root-path structural issue (e.g.
+ *    a Data-extends-Choice's runeExtendChoice union, or any other
+ *    `z.strictObject`-flavored `unrecognized_keys` issue surfacing at the
+ *    root) would otherwise be silently mislabeled as the condition's own
+ *    failure just because it happens to share the sole condition's target.
  *  - everything else → an ordinary field-structural diagnostic.
  */
 function translateValidationIssues(
@@ -899,7 +915,7 @@ function translateValidationIssues(
     if (issue.path.length >= 1 && typeof first === 'string' && conditionNameSet.has(first)) {
       return { path: first, message: issue.message, conditionName: first };
     }
-    if (issue.path.length === 0 && soleConditionName) {
+    if (issue.path.length === 0 && soleConditionName && issue.message.startsWith(soleConditionName)) {
       return { path: soleConditionName, message: issue.message, conditionName: soleConditionName };
     }
     return { path: formatIssuePath(issue.path), message: issue.message };
