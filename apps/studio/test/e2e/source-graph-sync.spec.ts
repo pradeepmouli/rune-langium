@@ -68,6 +68,26 @@ async function navigateToType(page: Page, typeName: string) {
   await page.getByRole('button', { name: `Navigate to ${typeName}` }).click();
 }
 
+/**
+ * Skips the current test at runtime when the LSP client couldn't connect
+ * (studio surfaces this as a "Language services unavailable" status).
+ * Graph-node rendering for a freshly file-loaded, non-persisted model
+ * depends on the on-demand document linking that connection provides —
+ * this is a real environment gap (no LSP session-signing secret
+ * configured), not a code bug, and it's environment-dependent: local dev
+ * hits it, CI may not if the secret is configured there. A conditional
+ * runtime skip (rather than a blanket test.skip) lets CI opt in
+ * automatically instead of always skipping regardless of whether the
+ * dependency is actually met.
+ */
+async function skipIfLspUnavailable(page: Page) {
+  const unavailable = await page
+    .getByText('Language services unavailable')
+    .isVisible()
+    .catch(() => false);
+  test.skip(unavailable, 'LSP client unavailable in this environment — see skipIfLspUnavailable doc comment.');
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -79,17 +99,8 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
     await loadModel(page);
   });
 
-  // Skipped in local dev: a freshly file-input-loaded model's own nodes
-  // (as opposed to a persisted/hydrated workspace's) never appear in the
-  // Graph pane here — reproducibly, not a timing flake (Playwright's own
-  // retry gave it a full second independent attempt). This matches the
-  // same local-only gap documented elsewhere this session: on-demand
-  // document linking for non-system files depends on a working LSP
-  // connection, which fails locally (signing_key_not_configured — no LSP
-  // session-signing secret configured under plain `pnpm dev`/`dev:full`).
-  // Un-skip once that secret is available (e.g. in CI, if configured
-  // there) to confirm.
-  test.skip('graph should render nodes for the selected type and its neighbors', async ({ page }) => {
+  test('graph should render nodes for the selected type and its neighbors', async ({ page }) => {
+    await skipIfLspUnavailable(page);
     await openPane(page, 'Graph');
     await navigateToType(page, 'Customer');
     await expect(page.getByTestId('rf__node-sync.test.Customer')).toBeVisible({ timeout: 10000 });
@@ -107,9 +118,8 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
     await expect(sourceEditor.getByText('Customer', { exact: false })).toBeVisible();
   });
 
-  // Skipped in local dev for the same reason as the test above — see its
-  // comment.
-  test.skip('graph nodes should reflect model structure', async ({ page }) => {
+  test('graph nodes should reflect model structure', async ({ page }) => {
+    await skipIfLspUnavailable(page);
     await openPane(page, 'Graph');
 
     await navigateToType(page, 'Customer');
