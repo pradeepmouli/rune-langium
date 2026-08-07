@@ -68,26 +68,6 @@ async function navigateToType(page: Page, typeName: string) {
   await page.getByRole('button', { name: `Navigate to ${typeName}` }).click();
 }
 
-/**
- * Skips the current test at runtime when the LSP client couldn't connect
- * (studio surfaces this as a "Language services unavailable" status).
- * Graph-node rendering for a freshly file-loaded, non-persisted model
- * depends on the on-demand document linking that connection provides —
- * this is a real environment gap (no LSP session-signing secret
- * configured), not a code bug, and it's environment-dependent: local dev
- * hits it, CI may not if the secret is configured there. A conditional
- * runtime skip (rather than a blanket test.skip) lets CI opt in
- * automatically instead of always skipping regardless of whether the
- * dependency is actually met.
- */
-async function skipIfLspUnavailable(page: Page) {
-  const unavailable = await page
-    .getByText('Language services unavailable')
-    .isVisible()
-    .catch(() => false);
-  test.skip(unavailable, 'LSP client unavailable in this environment — see skipIfLspUnavailable doc comment.');
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -100,7 +80,6 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
   });
 
   test('graph should render nodes for the selected type and its neighbors', async ({ page }) => {
-    await skipIfLspUnavailable(page);
     await openPane(page, 'Graph');
     await navigateToType(page, 'Customer');
     await expect(page.getByTestId('rf__node-sync.test.Customer')).toBeVisible({ timeout: 10000 });
@@ -119,7 +98,6 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
   });
 
   test('graph nodes should reflect model structure', async ({ page }) => {
-    await skipIfLspUnavailable(page);
     await openPane(page, 'Graph');
 
     await navigateToType(page, 'Customer');
@@ -132,6 +110,15 @@ test.describe('Source ↔ Graph ↔ Form Sync', () => {
     await expect(tierNode).toBeVisible({ timeout: 10000 });
     await expect(tierNode.getByText('Gold')).toBeVisible();
     await expect(tierNode.getByText('Silver')).toBeVisible();
+  });
+
+  test('structure pane should render a freshly loaded type', async ({ page }) => {
+    await openPane(page, 'Structure');
+    await navigateToType(page, 'Customer');
+
+    const structureFlow = page.getByTestId('structure-view-flow');
+    await expect(structureFlow).toBeVisible({ timeout: 10000 });
+    await expect(structureFlow.getByText('Customer', { exact: false })).toBeVisible();
   });
 
   test('selecting a type should open the editor form panel', async ({ page }) => {

@@ -418,6 +418,23 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       return;
     }
     if (measuredLayoutKeyRef.current === measuredLayoutKey) return;
+    // Guard against the same staleness hazard as the focus-fit/selection-fit
+    // effects above: `graphNodes` is derived from local `nodes` state, which
+    // can still reflect the PRE-update value when this effect fires in the
+    // same commit as the "sync store data into local ReactFlow state" effect
+    // (e.g. right after a `selectNode` call changes `visibility`). Relaying
+    // out over that stale set here would silently clobber the sync effect's
+    // correct, freshly-filtered `setNodes` result back to the unfiltered
+    // node list. Only proceed once `graphNodes` actually agrees with the
+    // current store-derived `visibleNodes` set — a mismatch means the sync
+    // effect's update hasn't landed yet, and this effect will re-fire
+    // correctly (with a fresh `measuredLayoutKey`) once it has.
+    if (
+      graphNodes.length !== visibleNodes.length ||
+      !graphNodes.every((n) => visibleNodes.some((v) => v.id === n.id))
+    ) {
+      return;
+    }
     measuredLayoutKeyRef.current = measuredLayoutKey;
     if ((activeLayout.engine ?? 'dagre') === 'elk') {
       computeLayoutAsync(graphNodes, edges, activeLayout).then((relayoutedNodes) => {
@@ -432,7 +449,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
     if (shouldReplaceLayoutPositions(graphNodes, relayoutedNodes)) {
       setNodes(relayoutedNodes);
     }
-  }, [activeLayout, edges, graphNodes, measuredLayoutKey, setNodes]);
+  }, [activeLayout, edges, graphNodes, measuredLayoutKey, setNodes, visibleNodes]);
 
   // Initial viewport restore — runs once after nodes are measured for the first time.
   // Replaces the old setTimeout(50) approach which fired before dimensions were ready.
@@ -478,14 +495,46 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       focusNodeId?: string;
       mode?: 'fit-graph' | 'fit-node' | 'center-and-fit-node';
       fitOptions?: Parameters<typeof fitView>[0];
+      /**
+       * Source nodes/edges for a `relayout: true` call. Defaults to the local
+       * `graphNodes`/`edges` React Flow state — correct for user-triggered
+       * calls (imperative ref methods, toolbar buttons), which always run
+       * after the component has settled.
+       *
+       * Callers invoked from a `useEffect` that reacts to the SAME store
+       * change as the "sync store data into local ReactFlow state" effect
+       * (below) MUST pass the store-derived `visibleNodes`/`visibleEdges`
+       * here instead. Both effects fire in the same commit; `graphNodes`
+       * (derived from local `nodes` state) still reflects the PRE-update
+       * value until the sync effect's `setNodes` call is itself re-rendered,
+       * one commit later. Relaying out over that stale set here would
+       * silently clobber the sync effect's correct `setNodes` result back to
+       * the unfiltered node list — this was the root cause of newly-added
+       * namespace nodes (e.g. a freshly uploaded/typed type) never
+       * rendering once focus mode selected them (2026-08-07).
+       */
+      relayoutNodes?: TypeGraphNode[];
+      relayoutEdges?: TypeGraphEdge[];
     }) => {
-      const { relayout = false, layoutOptions, focusNodeId, mode = 'fit-graph', fitOptions } = params ?? {};
+      const {
+        relayout = false,
+        layoutOptions,
+        focusNodeId,
+        mode = 'fit-graph',
+        fitOptions,
+        relayoutNodes: relayoutNodesParam,
+        relayoutEdges: relayoutEdgesParam
+      } = params ?? {};
+      const relayoutSourceNodes = relayoutNodesParam ?? graphNodes;
+      const relayoutSourceEdges = relayoutEdgesParam ?? edges;
       const effectiveLayout = layoutOptions ?? activeLayout;
       const layoutEngine = effectiveLayout.engine ?? 'dagre';
       const nextNodes =
-        relayout && layoutEngine !== 'elk' ? computeLayout(graphNodes, edges, effectiveLayout) : graphNodes;
+        relayout && layoutEngine !== 'elk'
+          ? computeLayout(relayoutSourceNodes, relayoutSourceEdges, effectiveLayout)
+          : relayoutSourceNodes;
       if (relayout && layoutEngine === 'elk') {
-        computeLayoutAsync(graphNodes, edges, effectiveLayout).then((relayoutedNodes) => {
+        computeLayoutAsync(relayoutSourceNodes, relayoutSourceEdges, effectiveLayout).then((relayoutedNodes) => {
           if (!relayoutedNodes) return;
           setNodes(relayoutedNodes);
           const focusedRelayoutedNode = focusNodeId
@@ -553,13 +602,24 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   // Re-layout and fit view whenever the focus subgraph changes.
   // Guard with `nodesInitialized` (canonical React Flow pattern) so layout runs
   // only after React Flow has measured actual node dimensions — not fallbacks.
+  //
+  // Uses `visibleNodes`/`visibleEdges` (store-derived, always current for this
+  // render) rather than `graphNodes`/`edges` (derived from local React Flow
+  // `nodes` state) for both the membership check and the relayout source. The
+  // "sync store data into local ReactFlow state" effect above and this effect
+  // both fire in the same commit whenever a `selectNode` call changes
+  // `visibility` — `graphNodes` still reflects the PRE-update `nodes` value at
+  // that point, one commit behind. Using it here would race with (and silently
+  // clobber) the sync effect's `setNodes` call back to the stale, unfiltered
+  // node list — the root cause of a freshly focus-selected node (e.g. a type
+  // from a just-uploaded file) never rendering (2026-08-07).
   useEffect(() => {
     if (!focusMode || !selectedNodeId || visibility.hiddenNodeIds.size === 0) {
       focusFitKeyRef.current = null;
       return;
     }
-    if (!graphNodes.some((node) => node.id === selectedNodeId)) return;
-    const focusKey = `${selectedNodeId}:${graphNodes
+    if (!visibleNodes.some((node) => node.id === selectedNodeId)) return;
+    const focusKey = `${selectedNodeId}:${visibleNodes
       .map((node) => node.id)
       .sort()
       .join('|')}`;
@@ -574,6 +634,8 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         ...activeLayout,
         direction: 'TB'
       },
+      relayoutNodes: visibleNodes,
+      relayoutEdges: visibleEdges,
       focusNodeId: selectedNodeId,
       mode: 'center-and-fit-node',
       fitOptions: {
@@ -585,13 +647,19 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
   }, [
     activeLayout,
     focusMode,
-    graphNodes,
+    visibleNodes,
+    visibleEdges,
     nodesInitialized,
     runViewportAction,
     selectedNodeId,
     visibility.hiddenNodeIds.size
   ]);
 
+  // Same staleness hazard as the focus-fit effect above: uses `layoutedNodes`
+  // (store-derived via a synchronous memo, always current for this render —
+  // exactly what the sync effect is about to push into local `nodes` state)
+  // rather than `graphNodes` (derived from local `nodes` state, one commit
+  // behind when this effect fires in the same commit as the sync effect).
   useEffect(() => {
     if (!selectedNodeId || !nodesInitialized) {
       selectionFitKeyRef.current = null;
@@ -601,12 +669,13 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
       selectionFitKeyRef.current = null;
       return;
     }
-    const selectedNode = graphNodes.find((node) => node.id === selectedNodeId);
+    const selectedNode = layoutedNodes.find((node) => node.id === selectedNodeId);
     if (!selectedNode) return;
     const selectionKey = `${selectedNodeId}:${Math.round(selectedNode.position.x)}:${Math.round(selectedNode.position.y)}:${Math.round(getNodeWidth(selectedNode))}x${Math.round(getNodeHeight(selectedNode))}`;
     if (selectionFitKeyRef.current === selectionKey) return;
     selectionFitKeyRef.current = selectionKey;
     return runViewportAction({
+      relayoutNodes: layoutedNodes,
       focusNodeId: selectedNodeId,
       mode: 'fit-node',
       fitOptions: {
@@ -616,7 +685,7 @@ const RuneTypeGraphInner = forwardRef<RuneTypeGraphRef, RuneTypeGraphProps>(func
         nodes: [selectedNode]
       }
     });
-  }, [focusMode, graphNodes, nodesInitialized, runViewportAction, selectedNodeId, visibility.hiddenNodeIds.size]);
+  }, [focusMode, layoutedNodes, nodesInitialized, runViewportAction, selectedNodeId, visibility.hiddenNodeIds.size]);
 
   const hoveredEdge = useMemo(
     () => (hoveredEdgeId ? (edges.find((edge) => edge.id === hoveredEdgeId) ?? null) : null),
