@@ -289,6 +289,86 @@ describe('SourceEditor', () => {
       expect(EditorView.domEventHandlers).toHaveBeenCalledOnce();
     });
   });
+
+  describe('graph navigation via source clicks (issue #453 follow-up)', () => {
+    // A minimal CM6-Text-like `doc` — only the methods extractNodeIdAtPosition
+    // (SourceEditor.tsx, module-private) actually reads: lineAt(pos),
+    // line(n), and the `lines` count.
+    function makeFakeDoc(lines: string[]) {
+      return {
+        lines: lines.length,
+        lineAt: (pos: number) => {
+          let offset = 0;
+          for (let i = 0; i < lines.length; i++) {
+            const lineLength = lines[i]!.length + 1;
+            if (pos < offset + lineLength) return { number: i + 1, text: lines[i]! };
+            offset += lineLength;
+          }
+          return { number: lines.length, text: lines[lines.length - 1] ?? '' };
+        },
+        line: (n: number) => ({ text: lines[n - 1] ?? '' })
+      };
+    }
+
+    const navFile = {
+      name: 'nav.rosetta',
+      path: '/workspace/nav.rosetta',
+      content: ['namespace foo.bar', '', 'type MyType:', '  x string (1..1)'].join('\n'),
+      dirty: false
+    };
+
+    // Invokes every EditorView.updateListener.of(...) callback registered
+    // during render with a synthetic update carrying one transaction tagged
+    // `userEvent` — mirrors how @codemirror/view actually tags a real
+    // mouse-driven selection change ("select.pointer") vs. the LSP client's
+    // go-to-definition ("select.definition"), verified against the
+    // installed @codemirror/view package. The docChanged-only listener
+    // (registered for non-readOnly files) no-ops on this synthetic update
+    // since `docChanged` is left undefined, so invoking every captured
+    // listener is safe — no need to single out "the navigation one".
+    async function fireSelectionTransaction(userEvent: string, headPos: number) {
+      const { EditorView } = vi.mocked(await import('@codemirror/view'));
+      const state = { doc: makeFakeDoc(navFile.content.split('\n')) };
+      const update = {
+        transactions: [{ isUserEvent: (e: string) => e === userEvent, newSelection: { main: { head: headPos } } }],
+        state
+      };
+      for (const call of EditorView.updateListener.of.mock.calls) {
+        (call[0] as (u: unknown) => void)(update);
+      }
+    }
+
+    it('navigates to the graph node when the cursor is placed via a plain click (select.pointer)', async () => {
+      const onNavigateToNode = vi.fn();
+      render(<SourceEditor files={[navFile]} activeFile={navFile.path} onNavigateToNode={onNavigateToNode} />);
+
+      // Position within "type MyType:" (line 3, 0-indexed offset within the doc).
+      const headPos = navFile.content.indexOf('type MyType:') + 5;
+      await fireSelectionTransaction('select.pointer', headPos);
+
+      expect(onNavigateToNode).toHaveBeenCalledWith('foo.bar.MyType');
+    });
+
+    it('still navigates on an explicit go-to-definition (select.definition)', async () => {
+      const onNavigateToNode = vi.fn();
+      render(<SourceEditor files={[navFile]} activeFile={navFile.path} onNavigateToNode={onNavigateToNode} />);
+
+      const headPos = navFile.content.indexOf('type MyType:') + 5;
+      await fireSelectionTransaction('select.definition', headPos);
+
+      expect(onNavigateToNode).toHaveBeenCalledWith('foo.bar.MyType');
+    });
+
+    it('does not navigate on plain keyboard cursor movement (select.keyboard)', async () => {
+      const onNavigateToNode = vi.fn();
+      render(<SourceEditor files={[navFile]} activeFile={navFile.path} onNavigateToNode={onNavigateToNode} />);
+
+      const headPos = navFile.content.indexOf('type MyType:') + 5;
+      await fireSelectionTransaction('select.keyboard', headPos);
+
+      expect(onNavigateToNode).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────────────

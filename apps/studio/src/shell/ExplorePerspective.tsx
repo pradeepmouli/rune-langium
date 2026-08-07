@@ -1302,13 +1302,32 @@ export const ExplorePerspective = withInstrumentation(
       };
     }, [lspClient, files, openFileInSource]);
 
-    const handleEditorViewCreated = useCallback((filePath: string, view: import('@codemirror/view').EditorView) => {
-      const resolve = pendingDisplayFileRef.current.get(filePath);
-      if (resolve) {
-        pendingDisplayFileRef.current.delete(filePath);
-        resolve(view);
-      }
+    // Applies a pending reveal request once its target file's CodeMirror
+    // view actually exists — shared by both the mount-triggered consumer
+    // effect below and handleEditorViewCreated (the Source pane may not be
+    // mounted yet, e.g. it starts collapsed by default (DockShell's
+    // activePanes), so no EditorView exists for `filePath` until the user
+    // toggles the pane on and CodeMirror creates one).
+    const applyPendingReveal = useCallback((filePath: string) => {
+      const pending = pendingRevealRef.current;
+      if (!pending || pending.filePath !== filePath) return;
+      pendingRevealRef.current = null;
+      requestAnimationFrame(() => {
+        sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
+      });
     }, []);
+
+    const handleEditorViewCreated = useCallback(
+      (filePath: string, view: import('@codemirror/view').EditorView) => {
+        const resolve = pendingDisplayFileRef.current.get(filePath);
+        if (resolve) {
+          pendingDisplayFileRef.current.delete(filePath);
+          resolve(view);
+        }
+        applyPendingReveal(filePath);
+      },
+      [applyPendingReveal]
+    );
 
     const sourceEditorFiles = useMemo(() => {
       const resolvedActiveFile =
@@ -1318,16 +1337,18 @@ export const ExplorePerspective = withInstrumentation(
       return resolvedActiveFile ? [resolvedActiveFile] : [];
     }, [activeEditorFile, files]);
 
+    // Only consumes the pending reveal when the Source pane is actually
+    // mounted (sourceEditorRef.current is live) — the Source pane starts
+    // collapsed by default, so selecting a node elsewhere must leave the
+    // reveal request intact (not silently discard it) until the user opens
+    // the pane; handleEditorViewCreated picks it up once that view mounts.
     useEffect(() => {
       const pending = pendingRevealRef.current;
-      if (!pending) return;
+      if (!pending || !sourceEditorRef.current) return;
       if (sourceEditorFiles.some((f) => f.path === pending.filePath)) {
-        pendingRevealRef.current = null;
-        requestAnimationFrame(() => {
-          sourceEditorRef.current?.revealLine(pending.line, pending.filePath);
-        });
+        applyPendingReveal(pending.filePath);
       }
-    }, [sourceEditorFiles, selectedNodeId]);
+    }, [sourceEditorFiles, selectedNodeId, applyPendingReveal]);
 
     const getSerializedFiles = useCallback((): Map<string, string> => {
       const rosettaText = graphRef.current?.exportRosetta?.();
