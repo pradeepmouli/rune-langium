@@ -447,16 +447,26 @@ const renderSourceEditor = withInstrumentation(
           );
         }
 
-        // Task 7: detect go-to-definition navigation and fire onNavigateToNode.
-        // The @codemirror/lsp-client jumpToDefinition dispatches transactions with
-        // userEvent "select.definition". We listen for these and attempt to derive
-        // a graph nodeId from the definition target position in the document.
+        // Task 7 (+ issue #453 follow-up): detect go-to-definition navigation
+        // AND plain click-driven cursor placement, firing onNavigateToNode
+        // for either. @codemirror/lsp-client's jumpToDefinition tags its
+        // transaction "select.definition"; CodeMirror's own built-in mouse
+        // handling tags a click-to-position-cursor transaction
+        // "select.pointer" (@codemirror/view's MouseSelectionDragging —
+        // verified against the installed package). Originally this only
+        // listened for "select.definition", so placing the cursor in a
+        // type's own declaration via a plain click never synced selection
+        // elsewhere — only the LSP's explicit go-to-definition action did.
+        // Deliberately NOT "select.keyboard" (arrow-key cursor movement) —
+        // that would resync on every keystroke while just moving around;
+        // add it separately if that granularity is ever wanted.
         exts.push(
           EditorView.updateListener.of((update) => {
             for (const tr of update.transactions) {
-              if (tr.isUserEvent('select.definition')) {
-                // The transaction has already moved the cursor to the definition site.
-                // Try to extract the type name at the cursor position for graph navigation.
+              if (tr.isUserEvent('select.definition') || tr.isUserEvent('select.pointer')) {
+                // The transaction has already moved the cursor to its new
+                // position. Try to extract the type name at the cursor
+                // position for graph navigation.
                 const pos = tr.newSelection.main.head;
                 const nodeId = extractNodeIdAtPosition(update.state, pos);
                 if (nodeId && onNavigateToNodeRef.current) {
