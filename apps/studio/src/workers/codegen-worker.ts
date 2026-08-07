@@ -255,25 +255,30 @@ function getOrCompute<T>(
 
 /**
  * Async variant. Captures `getVersion()` BEFORE awaiting `compute()`, and
- * only writes to `cache` if the version is still current when `compute()`
- * resolves — otherwise a call suspended across a file-set change would
- * silently overwrite a correct, already-cached result with one built from
- * now-stale state.
+ * tags the result with that captured version regardless of what `getVersion()`
+ * reads once `compute()` resolves.
+ *
+ * The write guard compares against the CACHE's own current state, not
+ * `getVersion()` re-invoked — mirrors `getOrCompute`'s guard above. Re-reading
+ * `getVersion()` here would work for a caller passing a live counter
+ * (`buildDocuments()`'s `() => previewFilesVersion`) but is a no-op for a
+ * caller passing a closure over an already-fixed version (`executeFunction`/
+ * `runCodegen`'s `() => documentsVersion`, threaded forward from an earlier
+ * `getOrComputeAsync` call per this cache's own doc comment) — that closure
+ * returns the same value both before and after `await compute()`, so the
+ * "still current?" check would trivially always pass, letting an
+ * out-of-order caller (started under an older version, but whose OWN
+ * `compute()` — e.g. `generate()` — takes longer than a concurrent newer
+ * call's) overwrite an already-cached newer entry with its stale one. The
+ * cache-state comparison catches this uniformly for both kinds of callers.
  *
  * Returns the full `VersionedEntry`, tagged with `versionAtStart` even when
- * the version moved during `compute()` (and the result was therefore NOT
- * written to `cache`) — callers that feed this result into a FURTHER
+ * the write was skipped — callers that feed this result into a FURTHER
  * downstream cache must tag that entry with THIS version, not the live
- * counter. A caller that instead re-samples the live counter after this
- * call returns can silently poison its own downstream cache: the live
- * counter may already have moved past the version this specific result was
- * actually built from (e.g. `buildDocuments()` was suspended in
- * `builder.build` across an intervening `preview:setFiles` — its result
- * predates the bump, but a caller that tags its own cache write with the
- * NOW-current counter would mark a stale-derived value as valid for the
- * new version). `buildDocuments()`, `executeFunction`, and `runCodegen` all
- * thread this returned `version` forward into their own `getOrCompute`/
- * `getOrComputeAsync` calls for exactly this reason.
+ * counter (see `getOrCompute`'s doc comment for the concrete failure mode).
+ * `buildDocuments()`, `executeFunction`, and `runCodegen` all thread this
+ * returned `version` forward into their own `getOrCompute`/`getOrComputeAsync`
+ * calls for exactly this reason.
  */
 async function getOrComputeAsync<T>(
   cache: Map<string, VersionedEntry<T>>,
@@ -286,7 +291,10 @@ async function getOrComputeAsync<T>(
   if (cached && cached.version === versionAtStart) return cached;
   const value = await compute();
   const entry: VersionedEntry<T> = { version: versionAtStart, value };
-  if (getVersion() === versionAtStart) cache.set(key, entry);
+  const cachedNow = cache.get(key);
+  if (!cachedNow || cachedNow.version < versionAtStart) {
+    cache.set(key, entry);
+  }
   return entry;
 }
 

@@ -1593,4 +1593,74 @@ describe('codegen-worker codegenGenerateCache (runCodegen)', () => {
 
     expect(generateMock).toHaveBeenCalledTimes(2);
   });
+
+  it('does not let an older run whose generate() resolves late clobber a newer entry already cached', async () => {
+    // Two runCodegen('zod') calls in flight for the SAME cache key, each
+    // suspended inside its own generate() call, captured under a DIFFERENT
+    // codegenFilesVersion. The older one's generate() resolves LAST —
+    // reproduces the out-of-order-completion race: getOrComputeAsync's write
+    // guard must compare against the cache's own current state, not
+    // re-invoke `getVersion()` — for these two call sites `getVersion` is a
+    // closure over an already-fixed `documentsVersion`, so re-invoking it
+    // trivially always equals `versionAtStart` and would let the older,
+    // stale write clobber the newer, correct entry.
+    const generateResolvers: Array<(value: unknown) => void> = [];
+    generateMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          generateResolvers.push(resolve);
+        })
+    );
+
+    const { scope, dispatch } = await loadWorkerModule();
+
+    // Call A: codegenFilesVersion becomes 1; its auto-triggered
+    // runCodegen('zod') suspends inside generate() (resolver #0).
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma-v1"' }],
+      requestId: 'race:1'
+    });
+    await flushWorker();
+
+    // Call B: codegenFilesVersion becomes 2; its OWN auto-triggered
+    // runCodegen('zod') also suspends inside generate() (resolver #1) — a
+    // second, independent in-flight call for the same cache key.
+    dispatch({
+      type: 'codegen:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "gamma-v2"' }],
+      requestId: 'race:2'
+    });
+    await flushWorker();
+
+    expect(generateResolvers).toHaveLength(2);
+
+    // Resolve B (the NEWER call, version 2) FIRST — it correctly caches.
+    generateResolvers[1]!([{ relativePath: 'out.ts', content: 'B', sourceMap: undefined, diagnostics: [], funcs: [] }]);
+    await flushWorker();
+
+    // Resolve A (the OLDER call, version 1) SECOND. Its write must be
+    // refused — the cache already holds a newer (version 2) entry.
+    generateResolvers[0]!([{ relativePath: 'out.ts', content: 'A', sourceMap: undefined, diagnostics: [], funcs: [] }]);
+    await flushWorker();
+
+    // Back to immediate resolution for the follow-up dispatch below. Its
+    // content is a sentinel that must never actually be returned — a cache
+    // hit should serve B's already-cached result without calling generate() again.
+    generateMock.mockImplementation(async () => [
+      { relativePath: 'out.ts', content: 'SHOULD-NOT-BE-CALLED', sourceMap: undefined, diagnostics: [], funcs: [] }
+    ]);
+
+    dispatch({ type: 'codegen:generate', target: 'zod', requestId: 'race:3' });
+    await flushWorker();
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    expect(scope.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'codegen:result',
+        requestId: 'race:3',
+        files: [expect.objectContaining({ relativePath: 'out.ts', content: 'B' })]
+      })
+    );
+  });
 });
