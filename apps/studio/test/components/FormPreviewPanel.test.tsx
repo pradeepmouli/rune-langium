@@ -9,6 +9,7 @@ import type { FormPreviewSchema } from '@rune-langium/codegen/export';
 import { FormPreviewPanel } from '../../src/components/FormPreviewPanel.js';
 import { usePreviewStore } from '../../src/store/preview-store.js';
 import { useOutputStore } from '../../src/store/output-store.js';
+import { installFakeValidatingWorker } from '../helpers/fake-validating-worker.js';
 
 const tradeSchema: FormPreviewSchema = {
   schemaVersion: 1,
@@ -461,6 +462,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('shows invalid and valid summary states, nested validation errors, and reset behavior', () => {
+    installFakeValidatingWorker(validationTradeSchema);
     render(
       <FormPreviewPanel
         schema={validationTradeSchema}
@@ -494,6 +496,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('enforces array max-cardinality validation when a repeatable field exceeds its preview limit', () => {
+    installFakeValidatingWorker(validationTradeSchema);
     render(
       <FormPreviewPanel
         schema={validationTradeSchema}
@@ -512,6 +515,7 @@ describe('FormPreviewPanel', () => {
   });
 
   it('lets optional object sections stay absent until explicitly added', () => {
+    installFakeValidatingWorker(optionalSectionSchema);
     render(
       <FormPreviewPanel
         schema={optionalSectionSchema}
@@ -602,8 +606,8 @@ describe('FormPreviewPanel', () => {
       expect(usePreviewStore.getState().samples.has(validationTradeSchema.targetId)).toBe(false);
     });
 
-    it('calls onValuesChange with the full merged object on a scalar edit + blur, and does not call updateSample', () => {
-      const updateSampleSpy = vi.spyOn(usePreviewStore.getState(), 'updateSample');
+    it('calls onValuesChange with the full merged object on a scalar edit + blur, and does not call updateSampleValues', () => {
+      const updateSampleSpy = vi.spyOn(usePreviewStore.getState(), 'updateSampleValues');
       const onValuesChange = vi.fn();
       render(
         <FormPreviewPanel

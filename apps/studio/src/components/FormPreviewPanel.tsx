@@ -52,7 +52,8 @@ export const FormPreviewPanel = withInstrumentation(
   }: FormPreviewPanelProps): ReactElement {
     const isControlled = values !== undefined;
     const ensureSample = usePreviewStore((s) => s.ensureSample);
-    const updateSample = usePreviewStore((s) => s.updateSample);
+    const updateSampleValues = usePreviewStore((s) => s.updateSampleValues);
+    const dispatchValidate = usePreviewStore((s) => s.dispatchValidate);
     const resetSample = usePreviewStore((s) => s.resetSample);
     const sample = usePreviewStore((s) => (schema ? s.samples.get(schema.targetId) : undefined));
     const [controlledMeta, setControlledMeta] = useState<{
@@ -200,17 +201,20 @@ export const FormPreviewPanel = withInstrumentation(
     const applyValidation = useCallback(
       (nextValues: Record<string, unknown>, validated: boolean) => {
         if (!schema) return;
-        const result = validated
-          ? validatePreviewSample(schema, nextValues)
-          : { errors: {} as Record<string, string>, valid: true };
         if (isControlled) {
+          const result = validated
+            ? validatePreviewSample(schema, nextValues)
+            : { errors: {} as Record<string, string>, valid: true };
           setControlledMeta({ errors: result.errors, valid: result.valid, validated });
           onValuesChange?.(nextValues);
           return;
         }
-        updateSample(schema.targetId, nextValues, result.errors, result.valid, validated);
+        updateSampleValues(schema.targetId, nextValues, validated);
+        if (validated) {
+          dispatchValidate(schema.targetId, nextValues);
+        }
       },
-      [isControlled, onValuesChange, schema, updateSample]
+      [dispatchValidate, isControlled, onValuesChange, schema, updateSampleValues]
     );
 
     const handleFieldBlur = useCallback(() => {
