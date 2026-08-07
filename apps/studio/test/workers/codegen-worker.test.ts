@@ -12,6 +12,7 @@ const fromStringMock = vi.fn((content: string, uri: string) => ({
 }));
 const generateMock = vi.fn(() => []);
 const generatePreviewSchemasMock = vi.fn(() => []);
+const emitStandaloneZodSchemaMock = vi.fn(() => ({ code: '', diagnostics: [] }));
 // 019 Task #88 follow-up — curated entries hit `RuneDsl.serializer.JsonSerializer.deserialize`
 // in `buildDocuments`. Mock returns a marker object that the assertions
 // can identify in the deserialized-docs array.
@@ -101,6 +102,7 @@ vi.mock('@rune-langium/core', () => {
 vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
   generatePreviewSchemas: generatePreviewSchemasMock,
+  emitStandaloneZodSchema: emitStandaloneZodSchemaMock,
   RUNTIME_HELPER_JS_SOURCE: ''
 }));
 
@@ -1375,133 +1377,255 @@ describe('codegen-worker previewSchemaCache (shared across preview/instance hand
   });
 });
 
-describe('codegen-worker instance:validate messages', () => {
+describe('codegen-worker validateInstance (real standalone Zod validator)', () => {
   beforeEach(() => {
     buildMock.mockReset();
     buildMock.mockImplementation(async () => undefined);
     fromStringMock.mockClear();
-    generatePreviewSchemasMock.mockReset();
-    generatePreviewSchemasMock.mockReturnValue([]);
-    getActiveConditionPredicatesMock.mockReset();
+    emitStandaloneZodSchemaMock.mockReset();
     findDataNodeMock.mockReset();
+    findDataNodeMock.mockReturnValue(undefined);
+    getActiveConditionPredicatesMock.mockReset();
+    getActiveConditionPredicatesMock.mockReturnValue([]);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('handles instance:validate — structural error and condition violation both surface as diagnostics', async () => {
-    findDataNodeMock.mockReturnValue({ name: 'Trade' });
-    generatePreviewSchemasMock.mockReturnValue([
-      {
-        schemaVersion: 1,
-        targetId: 'test.Trade',
-        title: 'Trade',
-        status: 'ready',
-        fields: [
-          { path: 'symbol', label: 'Symbol', kind: 'string', required: true },
-          { path: 'quantity', label: 'Quantity', kind: 'number', required: true }
-        ]
-      }
-    ]);
-    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'PositiveQuantity', predicate: 'data.quantity > 0' }]);
-
-    const { scope, dispatch } = await loadWorkerModule();
-
+  async function setFilesAndFlush(dispatch: (data: unknown) => void, flush: () => Promise<void>) {
     dispatch({
       type: 'preview:setFiles',
-      files: [{ uri: 'file:///trade.rosetta', content: 'namespace test' }],
-      requestId: 'validate:setup'
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta"' }],
+      requestId: 'setup:1'
     });
+    await flush();
+  }
+
+  it('validates real sample data through a plain-object emitted schema', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: [
+        "import { z } from 'zod';",
+        '',
+        'export const TradeSchema = z',
+        '  .object({',
+        '    id: z.string().min(1)',
+        '  })',
+        '  .strict();'
+      ].join('\n'),
+      diagnostics: []
+    });
+
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: { id: 'T-1' }, requestId: 'v:1' });
     await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'v:1',
+      diagnostics: []
+    });
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:2' });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'v:2',
+      diagnostics: [{ path: 'id', message: expect.any(String) }]
+    });
+  });
+
+  it('exercises the cyclic-type interface-stripping path end-to-end', async () => {
+    // Mirrors zod-emitter.ts's emitCyclicInterface + the z.ZodType<Name> =
+    // z.lazy(...) shape it pairs with for a self-referencing Data type.
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: [
+        "import { z } from 'zod';",
+        '',
+        'export interface Node {',
+        '  value: string;',
+        '  child?: Node;',
+        '}',
+        '',
+        'export const NodeSchema: z.ZodType<Node> = z.lazy(() =>',
+        '  z',
+        '    .object({',
+        '      value: z.string().min(1),',
+        '      child: NodeSchema.optional()',
+        '    })',
+        '    .strict()',
+        ');'
+      ].join('\n'),
+      diagnostics: []
+    });
+
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
 
     dispatch({
       type: 'instance:validate',
-      typeFqn: 'test.Trade',
-      data: { quantity: -1 },
-      requestId: 'validate:1'
+      typeFqn: 'beta.Node',
+      data: { value: 'root', child: { value: 'leaf' } },
+      requestId: 'v:1'
     });
     await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'v:1',
+      diagnostics: []
+    });
+  });
 
-    expect(findDataNodeMock).toHaveBeenCalledWith('test.Trade', expect.any(Array));
-    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.Trade' });
-    expect(getActiveConditionPredicatesMock).toHaveBeenCalledWith({ name: 'Trade' });
+  it('reports "Structural validation unavailable" when the closure has an error diagnostic', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: '',
+      diagnostics: [{ severity: 'error', code: 'unknown-target', message: "Target 'beta.Ghost' was not found." }]
+    });
+
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Ghost', data: {}, requestId: 'v:1' });
+    await flushWorker();
 
     expect(scope.postMessage).toHaveBeenLastCalledWith({
       type: 'instance:validateResult',
-      requestId: 'validate:1',
+      requestId: 'v:1',
+      diagnostics: [{ path: '', message: "Structural validation unavailable: Target 'beta.Ghost' was not found." }]
+    });
+  });
+
+  it('reports "Structural validation unavailable" when the stripped script throws on compile/eval', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({ id: notAFunction() });",
+      diagnostics: []
+    });
+
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:1' });
+    await flushWorker();
+
+    const call = scope.postMessage.mock.calls.at(-1)![0];
+    expect(call.type).toBe('instance:validateResult');
+    expect(call.requestId).toBe('v:1');
+    expect(call.diagnostics).toHaveLength(1);
+    expect(call.diagnostics[0].path).toBe('');
+    expect(call.diagnostics[0].message).toMatch(/^Structural validation unavailable:/);
+  });
+
+  it('attributes a multi-condition superRefine issue to its condition name via path', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: [
+        "import { z } from 'zod';",
+        '',
+        'export const TradeSchema = z',
+        '  .object({',
+        '    fixedRate: z.string().optional(),',
+        '    floatingRate: z.string().optional()',
+        '  })',
+        '  .strict()',
+        '  .superRefine((data, ctx) => {',
+        '    const present = [data.fixedRate, data.floatingRate].filter((v) => v !== undefined).length;',
+        '    if (present !== 1) {',
+        "      ctx.addIssue({ code: 'custom', message: 'oneRateKind: exactly one of [fixedRate, floatingRate] must be present in Trade', path: ['oneRateKind'] });",
+        '    }',
+        '  });'
+      ].join('\n'),
+      diagnostics: []
+    });
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'oneRateKind', predicate: 'runeCheckOneOf([...])' }]);
+
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:1' });
+    await flushWorker();
+
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'v:1',
       diagnostics: [
-        { path: 'symbol', message: 'Symbol is required' },
         {
-          path: 'PositiveQuantity',
-          message: "Condition 'PositiveQuantity' failed",
-          conditionName: 'PositiveQuantity'
+          path: 'oneRateKind',
+          message: 'oneRateKind: exactly one of [fixedRate, floatingRate] must be present in Trade',
+          conditionName: 'oneRateKind'
         }
       ]
     });
   });
 
-  it('posts an unknown-type diagnostic when the typeFqn cannot be resolved by either findDataNode or generatePreviewSchemas', async () => {
-    findDataNodeMock.mockReturnValue(undefined);
-    generatePreviewSchemasMock.mockReturnValue([]);
+  it('attributes a single-condition refine issue (empty path) to the sole active condition', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: [
+        "import { z } from 'zod';",
+        '',
+        'export const TradeSchema = z',
+        '  .object({ id: z.string().optional() })',
+        '  .strict()',
+        "  .refine((data) => data.id !== undefined, 'hasId: id must be present in Trade');"
+      ].join('\n'),
+      diagnostics: []
+    });
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'hasId', predicate: 'runeAttrExists(data.id)' }]);
 
     const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
 
-    dispatch({
-      type: 'instance:validate',
-      typeFqn: 'test.Unknown',
-      data: {},
-      requestId: 'validate:2'
-    });
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:1' });
     await flushWorker();
 
-    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.Unknown' });
-    expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
     expect(scope.postMessage).toHaveBeenLastCalledWith({
       type: 'instance:validateResult',
-      requestId: 'validate:2',
-      diagnostics: [{ path: '', message: "Unknown type 'test.Unknown'" }]
+      requestId: 'v:1',
+      diagnostics: [{ path: 'hasId', message: 'hasId: id must be present in Trade', conditionName: 'hasId' }]
     });
   });
 
-  it('validates a Choice-type instance structurally via generatePreviewSchemas even though findDataNode cannot resolve it (Choice types are not Data nodes)', async () => {
-    findDataNodeMock.mockReturnValue(undefined);
-    generatePreviewSchemasMock.mockReturnValue([
-      {
-        schemaVersion: 1,
-        kind: 'choice',
-        targetId: 'test.PaymentMethod',
-        title: 'PaymentMethod',
-        status: 'ready',
-        fields: [{ path: 'Cash', label: 'Cash', kind: 'string', required: false }]
-      }
-    ]);
+  it('caches the compiled validator across repeated instance:validate calls for the same typeFqn', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({}).strict();",
+      diagnostics: []
+    });
 
-    const { scope, dispatch } = await loadWorkerModule();
+    const { dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:1' });
+    await flushWorker();
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:2' });
+    await flushWorker();
+
+    expect(emitStandaloneZodSchemaMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('recompiles the validator after a preview:setFiles bumps the file version', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: "import { z } from 'zod';\n\nexport const TradeSchema = z.object({}).strict();",
+      diagnostics: []
+    });
+
+    const { dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:1' });
+    await flushWorker();
 
     dispatch({
-      type: 'instance:validate',
-      // Exactly one option present — the Choice "exactly one option" rule
-      // (Codex round-2 finding #2) is covered separately in
-      // preview-validator.test.ts; this test's own concern is only that
-      // Choice targets get routed through generatePreviewSchemas at all
-      // despite findDataNode returning undefined for them.
-      typeFqn: 'test.PaymentMethod',
-      data: { Cash: 'value' },
-      requestId: 'validate:3'
+      type: 'preview:setFiles',
+      files: [{ uri: 'file:///trade.rosetta', content: 'namespace "beta" // changed' }],
+      requestId: 'setup:2'
     });
     await flushWorker();
 
-    expect(findDataNodeMock).toHaveBeenCalledWith('test.PaymentMethod', expect.any(Array));
-    expect(generatePreviewSchemasMock).toHaveBeenCalledWith(expect.any(Array), { targetId: 'test.PaymentMethod' });
-    // Condition predicates need the real Data AST node; a Choice target has
-    // none, so they must be skipped rather than blocking validation entirely.
-    expect(getActiveConditionPredicatesMock).not.toHaveBeenCalled();
-    expect(scope.postMessage).toHaveBeenLastCalledWith({
-      type: 'instance:validateResult',
-      requestId: 'validate:3',
-      diagnostics: []
-    });
+    dispatch({ type: 'instance:validate', typeFqn: 'beta.Trade', data: {}, requestId: 'v:2' });
+    await flushWorker();
+
+    expect(emitStandaloneZodSchemaMock).toHaveBeenCalledTimes(2);
   });
 });
 
