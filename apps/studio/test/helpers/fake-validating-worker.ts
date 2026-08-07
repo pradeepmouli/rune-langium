@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import type { FormPreviewSchema, PreviewField } from '@rune-langium/codegen/export';
 import type { ValidationDiagnostic } from '@rune-langium/codegen/instances';
 import { usePreviewStore } from '../../src/store/preview-store.js';
+import { useInstanceStore } from '../../src/store/instance-store.js';
 
 /**
  * Test-only structural-validation stand-in for a real codegen-worker
@@ -77,4 +78,21 @@ export function installFakeValidatingWorker(schema: FormPreviewSchema): void {
     usePreviewStore.getState().receiveValidateResult(m.requestId, computeFakeDiagnostics(schema.fields, m.data));
   });
   usePreviewStore.getState().setWorkerRef({ postMessage } as unknown as Worker);
+}
+
+/**
+ * Same as `installFakeValidatingWorker`, but for `instance-store.ts`'s own
+ * worker ref (Prototype Workspace's controlled-mode instance editor) —
+ * `updateInstanceData` dispatches `instance:validate` unconditionally on
+ * every edit, and without a worker attached `dispatchValidate` silently
+ * no-ops, leaving `validationErrors[id]` (and therefore
+ * `InstanceFormPanel`'s errors/valid/validated props) permanently empty.
+ */
+export function installFakeValidatingWorkerForInstances(schema: FormPreviewSchema): void {
+  const postMessage = vi.fn((msg: unknown) => {
+    const m = msg as { type: string; typeFqn: string; data: Record<string, unknown>; requestId: string };
+    if (m.type !== 'instance:validate' || m.typeFqn !== schema.targetId) return;
+    useInstanceStore.getState().receiveValidateResult(m.requestId, computeFakeDiagnostics(schema.fields, m.data));
+  });
+  useInstanceStore.getState().setWorker({ postMessage } as unknown as Worker);
 }

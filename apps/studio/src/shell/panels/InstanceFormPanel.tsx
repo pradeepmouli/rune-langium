@@ -18,6 +18,7 @@ export const InstanceFormPanel = withInstrumentation(
     const schema = useInstanceStore((s) => (record ? s.schemas.get(record.typeFqn) : undefined));
     const schemaError = useInstanceStore((s) => (record ? s.schemaErrors.get(record.typeFqn) : undefined));
     const updateInstanceData = useInstanceStore((s) => s.updateInstanceData);
+    const rawDiagnostics = useInstanceStore((s) => s.validationErrors[instanceId]);
 
     useEffect(() => {
       if (!record) return;
@@ -45,12 +46,28 @@ export const InstanceFormPanel = withInstrumentation(
         ? { state: 'unavailable', targetId: record.typeFqn, reason: schemaError.reason, message: schemaError.message }
         : { state: 'waiting', targetId: record.typeFqn };
 
+    // `undefined` means no instance:validateResult has arrived yet for this
+    // instance (e.g. it was just created and the round trip is still in
+    // flight) — treat as "nothing to show yet", matching the uncontrolled
+    // panel's own pre-first-validation convention, rather than surfacing a
+    // stale/empty result as either "all valid" or "all invalid".
+    const { errors, valid, validated } = rawDiagnostics
+      ? {
+          errors: Object.fromEntries(rawDiagnostics.map((d) => [d.path, d.message])),
+          valid: rawDiagnostics.length === 0,
+          validated: true
+        }
+      : { errors: {}, valid: true, validated: false };
+
     return (
       <FormPreviewPanel
         schema={schema}
         status={status}
         values={record.data as Record<string, unknown>}
         onValuesChange={(values) => updateInstanceData(instanceId, values)}
+        errors={errors}
+        valid={valid}
+        validated={validated}
       />
     );
   },

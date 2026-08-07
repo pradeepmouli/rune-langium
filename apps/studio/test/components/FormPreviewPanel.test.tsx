@@ -1020,6 +1020,45 @@ describe('FormPreviewPanel', () => {
     });
   });
 
+  describe('controlled mode error display (errors/valid/validated props)', () => {
+    it('shows an inline field error sourced from the errors prop, gated by validated', () => {
+      const { rerender } = render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+          errors={{ tradeId: 'Trade id is required' }}
+          valid={false}
+          validated={false}
+        />
+      );
+      expect(screen.queryByText('Trade id is required')).not.toBeInTheDocument();
+
+      rerender(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+          errors={{ tradeId: 'Trade id is required' }}
+          valid={false}
+          validated={true}
+        />
+      );
+      expect(screen.getByText('Trade id is required')).toBeInTheDocument();
+    });
+
+    it('shows no errors when errors/valid/validated props are omitted (defaults)', () => {
+      render(
+        <FormPreviewPanel
+          schema={validationTradeSchema}
+          status={{ state: 'ready', targetId: validationTradeSchema.targetId }}
+          values={{ tradeId: '', party: { name: '' }, aliases: [] }}
+        />
+      );
+      expect(screen.queryByText(/is required/i)).not.toBeInTheDocument();
+    });
+  });
+
   describe('function execution', () => {
     // `schema.title` is deliberately just the BARE function name (see
     // `buildFunctionSchema` in packages/codegen/src/preview-schema.ts) —
