@@ -684,8 +684,12 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
 
   // Matches both the bare function name and the namespace-qualified form
   // (`${ns}.${func.name}`, derived the same way runCodegen's own cache
-  // population always did) — real callers (e.g. preview-store.ts's
-  // dispatchExecute) pass the qualified form.
+  // population always did). The real UI caller (FormPreviewPanel.tsx) always
+  // passes the qualified `schema.targetId`, not the bare `schema.title` —
+  // two namespaces can share a bare func name, and only the qualified form
+  // disambiguates which one to run; the bare-name branch here exists only
+  // for callers (tests, `instance:execute`-style future callers) that don't
+  // have a namespace-qualified name to give.
   let code: string | undefined;
   for (const result of results) {
     const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');

@@ -1015,4 +1015,42 @@ describe('FormPreviewPanel', () => {
       });
     });
   });
+
+  describe('function execution', () => {
+    // `schema.title` is deliberately just the BARE function name (see
+    // `buildFunctionSchema` in packages/codegen/src/preview-schema.ts) —
+    // two different namespaces can declare a func with the same bare name.
+    // `schema.targetId` is the namespace-qualified `${namespace}.${name}`
+    // and is globally unique; `onExecute` must be called with THAT, not
+    // `schema.title`, or the worker's executeFunction has no way to tell
+    // which namespace's function the user actually selected.
+    const calcTradeSchema: FormPreviewSchema = {
+      schemaVersion: 1,
+      targetId: 'beta.CalcTrade',
+      title: 'CalcTrade',
+      kind: 'function',
+      status: 'ready',
+      fields: []
+    };
+
+    it('runs the function using the qualified targetId, not the bare title', async () => {
+      const user = userEvent.setup();
+      const onExecute = vi.fn();
+
+      await act(async () => {
+        render(
+          <FormPreviewPanel
+            schema={calcTradeSchema}
+            status={{ state: 'ready', targetId: calcTradeSchema.targetId }}
+            onExecute={onExecute}
+          />
+        );
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Run' }));
+
+      expect(onExecute).toHaveBeenCalledWith('beta.CalcTrade', {});
+      expect(onExecute).not.toHaveBeenCalledWith('CalcTrade', expect.anything());
+    });
+  });
 });
