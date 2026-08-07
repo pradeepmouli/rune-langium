@@ -39,12 +39,18 @@ interface VersionedEntry<T> {
   value: T;
 }
 
-function getOrCompute<T>(cache: Map<string, VersionedEntry<T>>, key: string, version: number, compute: () => T): T {
+function getOrCompute<T>(
+  cache: Map<string, VersionedEntry<T>>,
+  key: string,
+  version: number,
+  compute: () => T
+): VersionedEntry<T> {
   const cached = cache.get(key);
-  if (cached && cached.version === version) return cached.value;
-  const value = compute();
-  cache.set(key, { version, value });
-  return value;
+  if (cached && cached.version === version) return cached;
+  const entry: VersionedEntry<T> = { version, value: compute() };
+  // Never let a write tagged with a STALE version clobber an already-cached NEWER entry.
+  if (!cached || cached.version < version) cache.set(key, entry);
+  return entry;
 }
 
 async function getOrComputeAsync<T>(
@@ -52,29 +58,35 @@ async function getOrComputeAsync<T>(
   key: string,
   getVersion: () => number,
   compute: () => Promise<T>
-): Promise<T> {
+): Promise<VersionedEntry<T>> {
   const versionAtStart = getVersion();
   const cached = cache.get(key);
-  if (cached && cached.version === versionAtStart) return cached.value;
+  if (cached && cached.version === versionAtStart) return cached;
   const value = await compute();
-  if (getVersion() === versionAtStart) cache.set(key, { version: versionAtStart, value });
-  return value;
+  const entry: VersionedEntry<T> = { version: versionAtStart, value };
+  // Compare against the cache's OWN current state, not getVersion() re-invoked
+  // — see the note on downstream callers below for why.
+  const cachedNow = cache.get(key);
+  if (!cachedNow || cachedNow.version < versionAtStart) cache.set(key, entry);
+  return entry;
 }
 ```
 
-`getOrComputeAsync` carries forward PR #474's fix directly: it captures the version *before* awaiting `compute()`, and only writes to the cache if that version is still current when `compute()` resolves — the same guard that stops a build suspended across a file change from poisoning the cache with stale results. Every async cache consumer gets this for free by construction, instead of needing to independently discover and hand-roll the same fix (as `documentsCache` originally did).
+Both helpers now return the full `VersionedEntry<T>`, not just its `value`. This matters for any caller that feeds its result into a FURTHER downstream cache (e.g. `buildDocuments()`'s result feeding `previewSchemaCache`/`previewGenerateCache`, or `runCodegen`'s own document-build feeding `codegenGenerateCache`): that downstream write must be tagged with the version the input was ACTUALLY built from, not with whatever the live file-set counter (`previewFilesVersion`/`codegenFilesVersion`) reads at that later point — re-sampling the live counter after an intervening `await` can tag a stale-derived result as valid for a version it doesn't represent, silently poisoning the cache until the next file change.
+
+`getOrComputeAsync`'s write guard compares the new entry's version against the cache's *own current state* (mirroring `getOrCompute`'s guard above), not against `getVersion()` re-invoked. Re-reading `getVersion()` is correct for a caller passing a live counter (`buildDocuments()`'s `() => previewFilesVersion`), but a no-op for a caller passing a closure over an already-fixed version (`executeFunction`/`runCodegen`'s `() => documentsVersion`, threaded forward from an earlier `getOrComputeAsync` call per the paragraph above) — that closure returns the same value both before and after `await compute()`, so re-checking it would trivially always pass, letting an out-of-order caller (started under an older version, but whose own `compute()` settles after a concurrent newer call's) overwrite an already-cached newer entry with its stale one. The cache-state comparison catches this uniformly for both kinds of callers, and every async cache consumer gets it for free by construction.
 
 ### Preview domain (`previewFilesVersion`)
 
-- `documentsCache: Map<string, VersionedEntry<LangiumDocument[]>>` — `buildDocuments()` refactored onto `getOrComputeAsync` with a single constant key (e.g. `'documents'`), replacing its bespoke single-slot object with the same mechanism every other cache uses. Behavior is unchanged; only the storage shape is generalized.
-- `previewSchemaCache: Map<string, VersionedEntry<FormPreviewSchema[]>>` — keyed directly by `targetId`. `runPreview`, `runInstanceSchema`, and `validateInstance` all call `getOrCompute(previewSchemaCache, targetId, previewFilesVersion, () => generatePreviewSchemas(documents, { targetId }))` — since `generatePreviewSchemas` is synchronous (no `await` inside it), this call introduces no new race window at all; a synchronous compute-and-store has no yield point for anything else to interleave through. All three call sites for the same `targetId` now share one cache entry, not just each independently avoiding its own redundant recompute.
-- `previewGenerateCache: Map<string, VersionedEntry<GeneratorOutput[]>>` — `executeFunction` calls `getOrComputeAsync(previewGenerateCache, 'generate:typescript', () => previewFilesVersion, () => generate(documents, { target: 'typescript' }))`, then finds the requested function by name via a small loop over the (now-cached) `results[].funcs`. This replaces `cachedFuncCode` entirely — no separate persistent name-indexed map is kept; rebuilding the lookup from the cached array on each call is cheap (an in-memory loop, no re-generation, no re-parsing) since the expensive step is what's actually cached.
+- `documentsCache: Map<string, VersionedEntry<LangiumDocument[]>>` — `buildDocuments()` refactored onto `getOrComputeAsync` with a single constant key (e.g. `'documents'`), replacing its bespoke single-slot object with the same mechanism every other cache uses, and now returns the `VersionedEntry` (not just the documents) so callers can thread its actual version forward.
+- `previewSchemaCache: Map<string, VersionedEntry<FormPreviewSchema[]>>` — keyed directly by `targetId`. `runPreview`, `runInstanceSchema`, and `validateInstance` each `await buildDocuments()`, destructure its `{ version: documentsVersion, value: documents }`, and call `getOrCompute(previewSchemaCache, targetId, documentsVersion, () => generatePreviewSchemas(documents, { targetId }))` — tagged with the documents' actual version, not the live `previewFilesVersion`. Since `generatePreviewSchemas` is synchronous (no `await` inside it), this call introduces no new race window at all; a synchronous compute-and-store has no yield point for anything else to interleave through. All three call sites for the same `targetId` now share one cache entry, not just each independently avoiding its own redundant recompute.
+- `previewGenerateCache: Map<string, VersionedEntry<GeneratorOutput[]>>` — `executeFunction` destructures `buildDocuments()`'s `{ version: documentsVersion, value: documents }` and calls `getOrComputeAsync(previewGenerateCache, 'generate:typescript', () => documentsVersion, () => generate(documents, { target: 'typescript' }))`, then finds the requested function by name via a small loop over the (now-cached) `results[].funcs`. This replaces `cachedFuncCode` entirely — no separate persistent name-indexed map is kept; rebuilding the lookup from the cached array on each call is cheap (an in-memory loop, no re-generation, no re-parsing) since the expensive step is what's actually cached.
 
 ### Codegen domain (`codegenFilesVersion`, new)
 
 Bumped in the `codegen:setFiles` handler only, mirroring exactly how `previewFilesVersion` is bumped in `preview:setFiles`. `codegen:generate` (which can change only `target`, not `currentCodegenFiles`) never bumps it — switching targets on the same files reuses whatever's already cached for a previously-generated target.
 
-`codegenGenerateCache: Map<string, VersionedEntry<GeneratorOutput[]>>`, keyed by `target`. `runCodegen` calls `getOrComputeAsync(codegenGenerateCache, target, () => codegenFilesVersion, () => generate(documents, { target }))`.
+`codegenGenerateCache: Map<string, VersionedEntry<GeneratorOutput[]>>`, keyed by `target`. `runCodegen` captures `const documentsVersion = codegenFilesVersion` before its own `await builder.build(...)` (mirroring `buildDocuments()`'s own guard — a `codegen:setFiles` arriving while that build is suspended must not let the resulting documents be tagged with the now-current counter), then calls `getOrComputeAsync(codegenGenerateCache, target, () => documentsVersion, () => generate(documents, { target }))`.
 
 ## Files touched
 
@@ -105,3 +117,4 @@ Full `apps/studio` suite run after the change, per this repo's standing practice
 4. **No persistent name-indexed lookup structure survives** for function execution — the cached `generate()` result is the single source of truth; the name→code lookup is rebuilt cheaply on each call from that already-cached array, rather than maintaining a second cache layer that could itself drift out of sync with the first.
 5. **No eviction/size-bounding** — accepted as negligible for realistic session-scale usage rather than solved; see Scope.
 6. **Race-safety tests are not repeated per async cache consumer** — the primitive itself is the single source of correctness for that property, proven once against `documentsCache`'s existing race test.
+7. **Post-implementation (PR #475 review):** the initial `getOrComputeAsync` (re-checking `getVersion()` after `compute()` resolves) turned out to be insufficient for a downstream cache tagged with an already-fixed version rather than a live counter — see the Architecture section above, now updated to the corrected primitive. The implementation plan's own Task 1-3 code blocks were intentionally left as originally written (historically accurate to what each task shipped at the time) rather than rewritten to match; it carries a pointer note to this design instead.

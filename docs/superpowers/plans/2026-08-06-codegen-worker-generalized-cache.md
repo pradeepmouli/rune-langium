@@ -18,6 +18,8 @@
 
 Design doc: `docs/superpowers/specs/2026-08-06-codegen-worker-generalized-cache-design.md`.
 
+> **Post-implementation note:** after all three tasks below were executed and this PR (#475) went to review, two further bot-review findings landed as direct follow-up commits (not by re-executing any task in this plan): **P1** — `buildDocuments()`, `executeFunction`, and `runCodegen` were re-sampling the LIVE `previewFilesVersion`/`codegenFilesVersion` counter to tag their own downstream cache writes, instead of the version their already-fetched input documents were actually built from; and **P2** — `getOrComputeAsync`'s write guard re-invoked `getVersion()` after `compute()` resolved, which is a no-op for a caller passing a closure over an already-fixed version (as the P1 fix made `executeFunction`/`runCodegen` do), letting an out-of-order stale write clobber an already-cached newer entry. Both fixes changed `getOrCompute`/`getOrComputeAsync` to return the full `VersionedEntry<T>` (not just `T`) and made the async write guard compare against the cache's own current state rather than `getVersion()`. **The code blocks in Task 1/2/3 below are the ORIGINAL, pre-fix versions** (historically accurate to what each task actually shipped at the time) — for the current, corrected primitive and call-site signatures, see the design doc's Architecture section (updated in place) or `apps/studio/src/workers/codegen-worker.ts` directly.
+
 ---
 
 ### Task 1: Generic cache primitive, `documentsCache` refactor, and `previewSchemaCache`
