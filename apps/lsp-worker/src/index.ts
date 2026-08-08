@@ -183,11 +183,13 @@ async function handleWsUpgrade(req: Request, env: Env, token: string): Promise<R
     return jsonResponse(409, { error: 'nonce_replay' });
   }
 
-  // Forward to the per-workspace DO. Identity = `<sessionToken>:<workspaceId>`
-  // per data-model §1; using just workspaceId for now keeps multi-tab on
-  // the same DO (simpler), and the existing studio multi-tab broadcast
-  // arbitrates within. Token is presented downstream as-is.
-  const id = env.LSP_SESSION.idFromName(verified.token.workspaceId);
+  // Per-connection DO identity (spec 2026-05-13-lsp-server-feature-parity §7,
+  // decided 2026-08-08): each session-token mint carries a fresh `nonce`
+  // (apps/studio/src/services/transport-provider.ts mints one per connect()/
+  // reconnect() call), so combining it with workspaceId gives every tab/
+  // reconnect its own DO instance and Langium server — @lspeasy/server's own
+  // docs say never to share one LSPServer across multiple transports.
+  const id = env.LSP_SESSION.idFromName(`${verified.token.workspaceId}:${verified.token.nonce}`);
   const stub = env.LSP_SESSION.get(id);
   return stub.fetch(req);
 }

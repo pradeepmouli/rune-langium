@@ -207,6 +207,47 @@ describe('apps/lsp-worker WS upgrade contract (T037)', () => {
     expect(typeof RuneLspSession).toBe('function');
   });
 
+  it('keys the DO per connection (workspaceId:nonce), not by workspaceId alone', async () => {
+    const seenIds: string[] = [];
+    const env = makeEnv({
+      LSP_SESSION: {
+        idFromName: (name: string) => {
+          seenIds.push(name);
+          return { name, toString: () => name };
+        },
+        get: () => ({
+          fetch: async (req: Request) =>
+            req.headers.get('Upgrade') === 'websocket' ? makeFakeUpgradeResponse() : new Response(null, { status: 200 })
+        })
+      } as unknown as Env['LSP_SESSION']
+    });
+
+    const token1 = await signSessionToken(SIGNING_KEY, {
+      v: 1,
+      workspaceId: '01J7M8AAAAAAAAAAAAAAAAAAAA',
+      issuedAt: Date.now(),
+      exp: Date.now() + 24 * 60 * 60 * 1000,
+      origin: 'https://www.daikonic.dev',
+      nonce: 'nonce-connection-one'
+    });
+    const token2 = await signSessionToken(SIGNING_KEY, {
+      v: 1,
+      workspaceId: '01J7M8AAAAAAAAAAAAAAAAAAAA', // same workspace
+      issuedAt: Date.now(),
+      exp: Date.now() + 24 * 60 * 60 * 1000,
+      origin: 'https://www.daikonic.dev',
+      nonce: 'nonce-connection-two' // different connection
+    });
+
+    await worker.fetch(makeWsUpgradeReq(token1), env);
+    await worker.fetch(makeWsUpgradeReq(token2), env);
+
+    expect(seenIds).toHaveLength(2);
+    expect(seenIds[0]).not.toBe(seenIds[1]);
+    expect(seenIds[0]).toContain('nonce-connection-one');
+    expect(seenIds[1]).toContain('nonce-connection-two');
+  });
+
   it('101 Switching Protocols on valid token + valid origin', async () => {
     const env = makeEnv();
     const token = await signSessionToken(SIGNING_KEY, {

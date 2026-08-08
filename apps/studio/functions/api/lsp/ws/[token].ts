@@ -136,9 +136,15 @@ export const onRequestGet: PagesFunction<Env, 'token'> = withInstrumentation(
       return res;
     }
 
-    // 7. Forward upgrade request to the per-workspace Durable Object.
-    //    DO identity = workspaceId (one DO per workspace; multi-tab shares same DO).
-    const id = env.LSP_SESSION.idFromName(verified.token.workspaceId);
+    // 7. Forward upgrade request to the Durable Object, keyed per connection
+    //    (spec 2026-05-13-lsp-server-feature-parity §7, decided 2026-08-08):
+    //    combining workspaceId with the token's nonce (fresh per mint) gives
+    //    every tab/reconnect its own DO instance and Langium server, matching
+    //    apps/lsp-worker/src/index.ts's handleWsUpgrade — kept consistent here
+    //    since it's ambiguous which of the two entry points is actually live
+    //    in production (Pages Functions vs. this Worker's own registered Route
+    //    on the same URL pattern).
+    const id = env.LSP_SESSION.idFromName(`${verified.token.workspaceId}:${verified.token.nonce}`);
     const stub = env.LSP_SESSION.get(id);
 
     const doResponse = await stub.fetch(request);
