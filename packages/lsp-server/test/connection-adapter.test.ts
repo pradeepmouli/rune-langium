@@ -26,6 +26,7 @@ function createMockServer() {
     }),
     sendRequest: vi.fn(async () => undefined),
     sendNotification: vi.fn(async () => undefined),
+    isListening: vi.fn(() => true),
     close: vi.fn(async () => undefined)
   };
 }
@@ -109,6 +110,22 @@ describe('createConnectionAdapter', () => {
     await conn.sendDiagnostics(params);
 
     expect(server.sendNotification).toHaveBeenCalledWith('textDocument/publishDiagnostics', params);
+  });
+
+  it('should skip sendNotification instead of throwing when the server is no longer listening', async () => {
+    // sendDiagnostics can fire after a build settles asynchronously, which
+    // can be after the client has already disconnected — sendNotification
+    // throws "Server is not listening" in that case; the adapter guards
+    // with isListening() so this is a silent no-op, not an unhandled
+    // rejection.
+    const server = createMockServer();
+    server.isListening = vi.fn(() => false);
+    const conn = createConnectionAdapter(server as any);
+
+    const params = { uri: 'file:///test.rosetta', diagnostics: [] };
+    await expect(conn.sendDiagnostics(params)).resolves.toBeUndefined();
+
+    expect(server.sendNotification).not.toHaveBeenCalled();
   });
 
   it('should handle sendNotification with string method', async () => {

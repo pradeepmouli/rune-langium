@@ -16,19 +16,15 @@
  *   6. Nonce replay       → 409 (nonce_replay)
  *   7. Forward to DO       → 101
  *
- * Re-exports RuneLspSession so wrangler's
- * `[[durable_objects.bindings]] class_name = "RuneLspSession"` can resolve
- * it from this module (Task 1.7 adds the binding to wrangler.toml).
+ * Does NOT define or re-export a RuneLspSession class — Cloudflare Pages
+ * cannot host a Durable Object. `env.LSP_SESSION` below cross-script-binds
+ * (per apps/studio/wrangler.toml's `script_name = "rune-lsp-worker"`) to the
+ * real DO class defined and deployed in apps/lsp-worker.
  */
 
 import { verifySessionToken, isOriginAllowed, checkAndRecordNonce } from '../../../lib/lsp-auth.js';
 import { logRequest } from '../../../lib/lsp-log.js';
-import { RuneLspSession } from '../../../lib/lsp-session-do.js';
 import { withInstrumentation } from '../../../../src/services/instrumentation/core.js';
-
-// Re-export so wrangler's `[[durable_objects.bindings]]` binding can resolve
-// `class_name = "RuneLspSession"`. (Task 1.7 will add the binding to wrangler.toml.)
-export { RuneLspSession };
 
 export interface Env {
   LSP_SESSION: DurableObjectNamespace;
@@ -140,9 +136,15 @@ export const onRequestGet: PagesFunction<Env, 'token'> = withInstrumentation(
       return res;
     }
 
-    // 7. Forward upgrade request to the per-workspace Durable Object.
-    //    DO identity = workspaceId (one DO per workspace; multi-tab shares same DO).
-    const id = env.LSP_SESSION.idFromName(verified.token.workspaceId);
+    // 7. Forward upgrade request to the Durable Object, keyed per connection
+    //    (spec 2026-05-13-lsp-server-feature-parity §7, decided 2026-08-08):
+    //    combining workspaceId with the token's nonce (fresh per mint) gives
+    //    every tab/reconnect its own DO instance and Langium server, matching
+    //    apps/lsp-worker/src/index.ts's handleWsUpgrade — kept consistent here
+    //    since it's ambiguous which of the two entry points is actually live
+    //    in production (Pages Functions vs. this Worker's own registered Route
+    //    on the same URL pattern).
+    const id = env.LSP_SESSION.idFromName(`${verified.token.workspaceId}:${verified.token.nonce}`);
     const stub = env.LSP_SESSION.get(id);
 
     const doResponse = await stub.fetch(request);

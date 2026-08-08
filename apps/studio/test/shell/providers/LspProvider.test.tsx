@@ -47,6 +47,7 @@ import { LspProvider } from '../../../src/shell/providers/LspProvider.js';
 import { useLsp } from '../../../src/shell/providers/lsp-context.js';
 import { WorkspaceStateContext, type WorkspaceState } from '../../../src/shell/providers/workspace-context.js';
 import { useActivityStore } from '../../../src/store/activity-store.js';
+import { useExploreFileNavStore } from '../../../src/shell/explore-file-nav-store.js';
 
 function wsState(files: WorkspaceState['files']): WorkspaceState {
   return {
@@ -71,6 +72,7 @@ beforeEach(() => {
   reconnect.mockClear();
   syncWorkspaceFiles.mockClear();
   fireConnectedOnSubscribe = true;
+  useExploreFileNavStore.setState({ activeEditorFile: undefined, syncStatus: null });
 });
 
 describe('LspProvider', () => {
@@ -95,6 +97,47 @@ describe('LspProvider', () => {
     act(() => screen.getByText('add').click());
     expect(syncWorkspaceFiles).toHaveBeenCalled(); // doc-set re-sync on file change
     expect(reconnect).not.toHaveBeenCalled(); // switch is NOT a reconnect
+  });
+
+  it('syncs only the active editor document to the LSP client, not the whole workspace', () => {
+    useExploreFileNavStore.setState({ activeEditorFile: 'a.rosetta', syncStatus: null });
+    const files: WorkspaceState['files'] = [
+      { name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false },
+      { name: 'b.rosetta', path: 'b.rosetta', content: 'namespace b', dirty: false }
+    ];
+    render(
+      <WorkspaceStateContext.Provider value={wsState(files)}>
+        <LspProvider>
+          <LspProbe />
+        </LspProvider>
+      </WorkspaceStateContext.Provider>
+    );
+
+    expect(syncWorkspaceFiles).toHaveBeenCalled();
+    const lastCall = syncWorkspaceFiles.mock.calls.at(-1)![0];
+    expect(lastCall).toEqual([{ name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false }]);
+  });
+
+  it('re-syncs to the newly active document when the active editor file changes', () => {
+    const files: WorkspaceState['files'] = [
+      { name: 'a.rosetta', path: 'a.rosetta', content: 'namespace a', dirty: false },
+      { name: 'b.rosetta', path: 'b.rosetta', content: 'namespace b', dirty: false }
+    ];
+    function Host() {
+      return (
+        <WorkspaceStateContext.Provider value={wsState(files)}>
+          <LspProvider>
+            <LspProbe />
+          </LspProvider>
+        </WorkspaceStateContext.Provider>
+      );
+    }
+    useExploreFileNavStore.setState({ activeEditorFile: 'a.rosetta', syncStatus: null });
+    render(<Host />);
+    act(() => useExploreFileNavStore.getState().setActiveEditorFile('b.rosetta'));
+
+    const lastCall = syncWorkspaceFiles.mock.calls.at(-1)![0];
+    expect(lastCall).toEqual([{ name: 'b.rosetta', path: 'b.rosetta', content: 'namespace b', dirty: false }]);
   });
 
   it('connect success publishes an activity entry with op-log opId and durationMs', async () => {

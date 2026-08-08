@@ -383,7 +383,16 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
       // Typed send shortcuts (e.g. connection.sendDiagnostics)
       if (name in SEND_NOTIFICATION_MAP) {
         const method = SEND_NOTIFICATION_MAP[name];
-        return (params: any) => server.sendNotification(method as any, params);
+        return (params: any) => {
+          // A server→client notification (e.g. publishDiagnostics firing
+          // once an async build settles) can legitimately arrive after the
+          // client has already disconnected — sendNotification throws in
+          // that case, and per its own doc comment the documented fix is
+          // to guard with isListening() rather than treat an expected
+          // post-disconnect notification as an error.
+          if (!server.isListening()) return Promise.resolve();
+          return server.sendNotification(method as any, params);
+        };
       }
 
       // Fall-through: any unknown onXxx → no-op disposable
