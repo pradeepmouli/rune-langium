@@ -17,7 +17,7 @@
     "@rune-langium/core": "workspace:*",
     "@rune-langium/curated-schema": "workspace:*",
     "langium": "^4.3.1",
-    "pako": "^2.2.0",
+    "pako": "^3.0.1",
     "pino": "^10.3.1"
   },
   "devDependencies": {
