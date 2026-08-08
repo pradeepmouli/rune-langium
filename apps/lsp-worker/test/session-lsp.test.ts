@@ -152,4 +152,62 @@ describe('RuneLspSession — real Langium wiring', () => {
     // come back as a ServerNotInitialized error, proving the replay ran.
     expect(hoverResult.error?.message ?? '').not.toMatch(/not.*initialized/i);
   });
+
+  it('persists the current full document text on every real content change, and removes it on close', async () => {
+    const backing = new Map<string, unknown>();
+    const state = makeState(backing);
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///b.rosetta', languageId: 'rosetta', version: 0, text: 'namespace a' } }
+      })
+    );
+
+    // A real editor-style INCREMENTAL didChange — a range replace, not a
+    // full-text replace. This is exactly the shape that corrupted the old
+    // hand-rolled mirror (it took contentChanges[0].text as the WHOLE doc).
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didChange',
+        params: {
+          textDocument: { uri: 'file:///b.rosetta', version: 1 },
+          contentChanges: [{ range: { start: { line: 0, character: 10 }, end: { line: 0, character: 11 } }, text: 'b' }]
+        }
+      })
+    );
+
+    await vi.waitFor(() => expect(backing.get('docs:file:///b.rosetta')).toBe('namespace b'));
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: { textDocument: { uri: 'file:///b.rosetta' } }
+      })
+    );
+
+    await vi.waitFor(() => expect(backing.has('docs:file:///b.rosetta')).toBe(false));
+  });
 });

@@ -18,26 +18,24 @@
  */
 
 import { DefaultDocumentUpdateHandler } from 'langium/lsp';
-import type { LangiumSharedServices } from 'langium/lsp';
 import type { TextDocumentChangeEvent } from 'vscode-languageserver';
-import { URI, type TextDocument, type LangiumDocuments } from 'langium';
+import { URI, type TextDocument } from 'langium';
 
 export class RuneDocumentUpdateHandler extends DefaultDocumentUpdateHandler {
-  protected readonly langiumDocuments: LangiumDocuments;
-
-  constructor(services: LangiumSharedServices) {
-    super(services);
-    this.langiumDocuments = services.workspace.LangiumDocuments;
-  }
-
   // Not `override` — DefaultDocumentUpdateHandler doesn't implement
   // didCloseDocument at all (it's optional on the DocumentUpdateHandler
   // interface the base class satisfies); this class adds a real
   // implementation, it doesn't override an existing one.
   didCloseDocument(event: TextDocumentChangeEvent<TextDocument>): void {
     const uri = URI.parse(event.document.uri);
-    this.langiumDocuments.deleteDocument(uri);
-    // protected on the base class — accessible from this subclass.
-    this.fireDocumentUpdate([], [uri]);
+    // Do NOT also call `this.langiumDocuments.deleteDocument(uri)` here —
+    // `fireDocumentUpdate`'s underlying `DocumentBuilder.update([], [uri])`
+    // already deletes it internally (via `LangiumDocuments.deleteDocuments`)
+    // and only reports a URI in the `deleted` array passed to `onUpdate`
+    // listeners if ITS OWN delete call actually found something to remove.
+    // Pre-deleting it here left that internal delete with nothing to find,
+    // so `onUpdate` listeners (e.g. a storage-mirror cleanup hook) never
+    // saw the URI as deleted.
+    this.fireDocumentUpdate([], [uri]); // protected on the base class
   }
 }

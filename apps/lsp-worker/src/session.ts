@@ -35,6 +35,7 @@
 
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { createRuneLspServer, DurableObjectWebSocketTransport, type RuneLspServer } from '@rune-langium/lsp-server';
+import { DocumentState } from 'langium';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Storage shape (data-model §1)
@@ -218,12 +219,50 @@ export class RuneLspSession {
       );
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
+      this.registerStorageMirror();
       await this.replayIfColdWake();
       return true;
     } catch (err) {
       this.langiumLoadError = err instanceof Error ? err.message : String(err);
       return false;
     }
+  }
+
+  /**
+   * Mirror docs:* storage from Langium's own post-build document text, not
+   * from raw wire deltas — sidesteps the incremental-sync corruption bug
+   * entirely (a hand-rolled mirror that treats `contentChanges[0].text` as
+   * the whole document is wrong once the client sends range-scoped deltas)
+   * and stays hibernation-safe (fires on every real content change, not
+   * just at close/shutdown, which would lose edits made just before an
+   * eviction — `webSocketClose` never fires on a hibernation eviction).
+   *
+   * Two separate hooks, deliberately: `DocumentBuilder.onUpdate` fires
+   * BEFORE the rebuild runs (it's the "here's what's about to change"
+   * signal `emitUpdate` sends ahead of `buildDocuments`), so reading
+   * `doc.textDocument.getText()` there returns stale/empty text — only
+   * good for the DELETE half, which doesn't need to wait on a rebuild.
+   * `DocumentBuilder.onBuildPhase(DocumentState.Parsed, ...)` fires AFTER
+   * each document has actually been re-parsed, which is when its text is
+   * trustworthy.
+   */
+  private registerStorageMirror(): void {
+    if (!this.langium) return;
+    const { DocumentBuilder } = this.langium.shared.workspace;
+    DocumentBuilder.onBuildPhase(DocumentState.Parsed, (builtDocs) => {
+      void this.state.blockConcurrencyWhile(async () => {
+        for (const doc of builtDocs) {
+          await this.state.storage.put(`${DOC_PREFIX}${doc.uri.toString()}`, doc.textDocument.getText());
+        }
+      });
+    });
+    DocumentBuilder.onUpdate((_changed, deleted) => {
+      void this.state.blockConcurrencyWhile(async () => {
+        for (const uri of deleted) {
+          await this.state.storage.delete(`${DOC_PREFIX}${uri.toString()}`);
+        }
+      });
+    });
   }
 
   /**
