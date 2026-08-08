@@ -17,9 +17,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { RuneLspSession } from '../src/session.js';
 
-// Matches the private key in session.ts — the test needs it to assert on
+// Matches the private keys in session.ts — the test needs them to assert on
 // storage keys without importing a private symbol.
 const INIT_PARAMS_KEY_FOR_TEST = 'meta:initializeParams';
+const META_KEY_FOR_TEST = 'meta';
 
 // ── Fake DurableObjectState ──────────────────────────────────────────────
 
@@ -276,5 +277,93 @@ describe('RuneLspSession — real Langium wiring', () => {
 
     // Internal field — cast to access it for this white-box assertion.
     expect((session as unknown as { transport: unknown }).transport).toBeNull();
+  });
+
+  it('purges docs:*, init params, and meta storage on a real close — not just a graceful shutdown request', async () => {
+    // Per-connection DO keying (index.ts's handleWsUpgrade) mints a fresh
+    // nonce → fresh DO id on every reconnect, so a real disconnect (tab
+    // closed, crash, network loss) without a prior `shutdown` request
+    // leaves this exact instance permanently unreachable. Its storage must
+    // not be left behind to accumulate forever.
+    const backing = new Map<string, unknown>();
+    const state = makeState(backing);
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///d.rosetta', languageId: 'rosetta', version: 0, text: 'namespace d' } }
+      })
+    );
+    await vi.waitFor(() => expect(backing.get('docs:file:///d.rosetta')).toBe('namespace d'));
+    expect(backing.has(INIT_PARAMS_KEY_FOR_TEST)).toBe(true);
+    // touchMeta() only runs from fetch()'s WS-upgrade path, which this test
+    // bypasses (it drives webSocketMessage directly, matching the file's
+    // existing convention) — seed it directly to prove the purge itself
+    // covers META_KEY, not just that it was never set.
+    backing.set(META_KEY_FOR_TEST, { workspaceId: 'test-do-id', createdAt: 0, lastActiveAt: 0 });
+
+    // No `shutdown` request was ever sent — this is a real close only.
+    await session.webSocketClose(ws as unknown as WebSocket, 1000, 'normal', true);
+
+    const remainingDocKeys = Array.from(backing.keys()).filter((k) => k.startsWith('docs:'));
+    expect(remainingDocKeys).toHaveLength(0);
+    expect(backing.has(INIT_PARAMS_KEY_FOR_TEST)).toBe(false);
+    expect(backing.has(META_KEY_FOR_TEST)).toBe(false);
+  });
+
+  it('waits for the actual initialize response before replaying initialized/didOpen, rather than a fixed delay', async () => {
+    // White-box: exercises the response-ack mechanism `replayIfColdWake`
+    // relies on directly. The real bug this guards against is timing-
+    // dependent (a slower-than-usual real `initialize` racing a fixed
+    // sleep), which isn't reliably reproducible by making Langium's actual
+    // init handler run slowly — so this proves the mechanism itself is
+    // genuinely response-driven, not a fixed-delay guess: it stays pending
+    // until the matching response arrives, however long that takes.
+    const state = makeState();
+    const session = new RuneLspSession(state) as unknown as {
+      waitForResponse(id: string, timeoutMs: number): Promise<void>;
+      notifyResponseWaiters(raw: string): void;
+    };
+
+    let resolved = false;
+    const ack = session.waitForResponse('probe-id', 200).then(() => {
+      resolved = true;
+    });
+
+    await new Promise((r) => setTimeout(r, 20));
+    expect(resolved).toBe(false); // still genuinely waiting — no fixed-delay shortcut
+
+    session.notifyResponseWaiters(JSON.stringify({ jsonrpc: '2.0', id: 'probe-id', result: {} }));
+    await ack;
+    expect(resolved).toBe(true);
+  });
+
+  it('the response-ack wait has a bounded safety-net timeout so a never-answered id cannot hang the DO', async () => {
+    const state = makeState();
+    const session = new RuneLspSession(state) as unknown as {
+      waitForResponse(id: string, timeoutMs: number): Promise<void>;
+    };
+
+    const startedAt = Date.now();
+    await session.waitForResponse('never-answered', 30);
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(25);
   });
 });

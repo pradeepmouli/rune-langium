@@ -53,6 +53,24 @@ const DOC_PREFIX = 'docs:';
 const META_KEY = 'meta';
 /** Persisted verbatim client `initialize` params — replayed on a cold DO wake. */
 const INIT_PARAMS_KEY = 'meta:initializeParams';
+/** Dummy id on the replayed `initialize` — never seen by the real client. */
+const SENTINEL_INITIALIZE_ID = '__replay_initialize__';
+/**
+ * Safety-net ceiling for {@link RuneLspSession.waitForResponse} while
+ * awaiting the replayed `initialize`'s real ack. Generous on purpose: it
+ * only fires if something is genuinely wrong (a bug, a hung handler), in
+ * which case forwarding traffic anyway is better than hanging the DO
+ * forever, but 20ms-style short guesses are exactly what raced a slower
+ * real init in production.
+ */
+const REPLAY_ACK_TIMEOUT_MS = 5000;
+
+/** Minimal CF WebSocket surface `DurableObjectWebSocketTransport` needs. */
+interface CfSocketLike {
+  readonly readyState: number;
+  send(data: string): void;
+  close?(code?: number, reason?: string): void;
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // JSON-RPC 2.0 framing helpers
@@ -99,6 +117,9 @@ export class RuneLspSession {
 
   /** Active client WS, or null while hibernating / before accept. */
   private ws: WebSocket | null = null;
+
+  /** Resolvers for {@link waitForResponse}, keyed by the awaited response id. */
+  private readonly pendingResponseWaiters = new Map<string, () => void>();
 
   constructor(private readonly state: DurableObjectState) {}
 
@@ -195,13 +216,7 @@ export class RuneLspSession {
     // server also answers it. Privacy invariant per contracts/lsp-worker.md
     // and data-model.md §1.
     if (isJsonRpcRequest(parsed) && parsed.method === 'shutdown') {
-      await this.state.blockConcurrencyWhile(async () => {
-        const docs = await this.state.storage.list({ prefix: DOC_PREFIX });
-        const keys = Array.from(docs.keys());
-        if (keys.length > 0) await this.state.storage.delete(keys);
-        await this.state.storage.delete(INIT_PARAMS_KEY);
-        await this.state.storage.delete(META_KEY);
-      });
+      await this.purgeStorage();
     }
 
     this.transport!.receive(text);
@@ -209,7 +224,18 @@ export class RuneLspSession {
 
   /**
    * CF Worker hibernation API entry — fires when the client disconnects.
-   * Clears in-memory state; storage survives until the DO is reaped.
+   * A real close (tab shut, crash, network loss) is NOT the same thing as a
+   * hibernation eviction — hibernation never calls this hook (that's the
+   * whole reason `replayIfColdWake` exists), so purging storage here can
+   * never discard state a legitimate cold wake still needs.
+   *
+   * Under this DO's per-connection keying (`index.ts`'s `handleWsUpgrade`:
+   * every reconnect mints a fresh nonce → a fresh DO id), a real close also
+   * means THIS instance is now permanently unreachable — nothing will ever
+   * replay from its storage again. Without purging here, a client that
+   * disconnects without sending a graceful `shutdown` (the common case:
+   * closing a tab, a crash, losing network) leaves its `docs:*` source text
+   * behind forever, accumulating across every reconnect.
    */
   async webSocketClose(_ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.ws = null;
@@ -220,6 +246,18 @@ export class RuneLspSession {
     // ever violated.
     this.transport?.signalClose();
     this.transport = null;
+    await this.purgeStorage();
+  }
+
+  /** Deletes all `docs:*` source text plus the persisted handshake/meta records. */
+  private async purgeStorage(): Promise<void> {
+    await this.state.blockConcurrencyWhile(async () => {
+      const docs = await this.state.storage.list({ prefix: DOC_PREFIX });
+      const keys = Array.from(docs.keys());
+      if (keys.length > 0) await this.state.storage.delete(keys);
+      await this.state.storage.delete(INIT_PARAMS_KEY);
+      await this.state.storage.delete(META_KEY);
+    });
   }
 
   // ── Lazy init ───────────────────────────────────────────────────────────
@@ -230,7 +268,7 @@ export class RuneLspSession {
     try {
       this.langium = createRuneLspServer();
       this.transport = new DurableObjectWebSocketTransport(
-        ws as unknown as { readyState: number; send(data: string): void; close?(code?: number, reason?: string): void }
+        this.wrapSocketForAckDetection(ws as unknown as CfSocketLike)
       );
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
@@ -241,6 +279,65 @@ export class RuneLspSession {
       this.langiumLoadError = err instanceof Error ? err.message : String(err);
       return false;
     }
+  }
+
+  /**
+   * Wraps the real CF socket so outbound JSON-RPC responses are inspected
+   * for a matching {@link waitForResponse} id before being forwarded
+   * unchanged to the client. This is how `replayIfColdWake` learns the
+   * replayed `initialize` has actually finished — `@lspeasy/server` only
+   * sends that response once `registerInitializeHandler` (connection-adapter.ts)
+   * has already flipped its internal state to Initialized, so observing the
+   * response IS observing the state transition, not an approximation of it.
+   */
+  private wrapSocketForAckDetection(socket: CfSocketLike): CfSocketLike {
+    return {
+      get readyState() {
+        return socket.readyState;
+      },
+      send: (data: string) => {
+        this.notifyResponseWaiters(data);
+        socket.send(data);
+      },
+      close: socket.close?.bind(socket)
+    };
+  }
+
+  private notifyResponseWaiters(raw: string): void {
+    if (this.pendingResponseWaiters.size === 0) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (typeof parsed !== 'object' || parsed === null) return;
+    const id = (parsed as Record<string, unknown>).id;
+    if (typeof id !== 'string' && typeof id !== 'number') return;
+    const key = String(id);
+    const resolve = this.pendingResponseWaiters.get(key);
+    if (resolve) {
+      this.pendingResponseWaiters.delete(key);
+      resolve();
+    }
+  }
+
+  /**
+   * Resolves once a JSON-RPC response carrying `id` has actually been sent
+   * to the client, or after `timeoutMs` as a safety net so a malformed or
+   * never-answered request can't hang the DO forever.
+   */
+  private waitForResponse(id: string, timeoutMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingResponseWaiters.delete(id);
+        resolve();
+      }, timeoutMs);
+      this.pendingResponseWaiters.set(id, () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 
   /**
@@ -295,16 +392,19 @@ export class RuneLspSession {
     const initParams = await this.state.storage.get<unknown>(INIT_PARAMS_KEY);
     if (initParams === undefined) return; // brand-new connection — nothing to replay
 
-    const SENTINEL_ID = '__replay_initialize__';
-    this.transport.receive(
-      JSON.stringify({ jsonrpc: '2.0', id: SENTINEL_ID, method: 'initialize', params: initParams })
-    );
     // registerInitializeHandler's composite handler is async (state
     // transition + delegating to Langium's own onInitialize chain); receive()
     // dispatches to it fire-and-forget, so forwarding real traffic
     // immediately after would race the state transition out of `Created`.
-    // Yield past the pending microtask/macrotask chain before continuing.
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Wait for the actual response instead of guessing a fixed delay — a
+    // slower-than-expected real init (more documents, cold module init)
+    // would otherwise send `initialized`/`didOpen` while the server is
+    // still `Initializing`, risking a rejected request or a lost edit.
+    const initializeAck = this.waitForResponse(SENTINEL_INITIALIZE_ID, REPLAY_ACK_TIMEOUT_MS);
+    this.transport.receive(
+      JSON.stringify({ jsonrpc: '2.0', id: SENTINEL_INITIALIZE_ID, method: 'initialize', params: initParams })
+    );
+    await initializeAck;
     this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
     const stored = await this.state.storage.list({ prefix: DOC_PREFIX });
