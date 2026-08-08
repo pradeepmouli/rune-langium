@@ -56,14 +56,16 @@ const INIT_PARAMS_KEY = 'meta:initializeParams';
 /** Dummy id on the replayed `initialize` — never seen by the real client. */
 const SENTINEL_INITIALIZE_ID = '__replay_initialize__';
 /**
- * Safety-net ceiling for {@link RuneLspSession.waitForResponse} while
- * awaiting the replayed `initialize`'s real ack. Generous on purpose: it
- * only fires if something is genuinely wrong (a bug, a hung handler), in
- * which case forwarding traffic anyway is better than hanging the DO
- * forever, but 20ms-style short guesses are exactly what raced a slower
- * real init in production.
+ * Safety-net ceiling for {@link RuneLspSession.waitForResponse} — used both
+ * while awaiting the replayed `initialize`'s real ack, and while keeping a
+ * real request's event alive via {@link RuneLspSession.webSocketMessage}'s
+ * `state.waitUntil` registration. Generous on purpose: it only fires if
+ * something is genuinely wrong (a bug, a hung handler), in which case
+ * letting the event end anyway is better than hanging the DO forever, but
+ * 20ms-style short guesses are exactly what raced a slower real init in
+ * production.
  */
-const REPLAY_ACK_TIMEOUT_MS = 5000;
+const RESPONSE_ACK_TIMEOUT_MS = 5000;
 
 /** Minimal CF WebSocket surface `DurableObjectWebSocketTransport` needs. */
 interface CfSocketLike {
@@ -102,6 +104,17 @@ function isJsonRpcNotification(msg: unknown): msg is JsonRpcNotification {
 // JSON-RPC 2.0 standard error codes
 const ERR_PARSE = -32700;
 const ERR_INTERNAL = -32603;
+
+/**
+ * Notification methods that kick off an async Langium document build.
+ * `webSocketMessage` only registers a `DocumentBuilder.waitUntil` wait with
+ * `state.waitUntil` for these — calling it unconditionally would hang: with
+ * no pending build (e.g. right after a bare `initialize`, before any
+ * document is open), `DocumentBuilder`'s internal state never reaches
+ * `Validated` and its `waitUntil` promise never resolves, since nothing
+ * ever fires the build-phase event it's listening for.
+ */
+const DOCUMENT_MUTATING_METHODS = new Set(['textDocument/didOpen', 'textDocument/didChange', 'textDocument/didClose']);
 
 // ────────────────────────────────────────────────────────────────────────────
 // RuneLspSession DO
@@ -244,6 +257,32 @@ export class RuneLspSession {
     }
 
     this.transport!.receive(text);
+
+    // receive() dispatches synchronously but the real work — computing a
+    // response, running Langium's async build/validate pipeline, sending
+    // diagnostics — continues via handlers this function never awaits.
+    // Cloudflare's hibernation API may end this event, and evict the DO's
+    // in-memory state, as soon as this function's own promise resolves;
+    // `state.waitUntil` is the documented way to tell the runtime real work
+    // is still outstanding so it keeps the event alive until it settles.
+    const pending: Array<Promise<unknown>> = [];
+    if (isJsonRpcRequest(parsed)) {
+      // waitForResponse has its own safety-net timeout, so this can never
+      // hang the event indefinitely even on a genuinely stuck request.
+      pending.push(this.waitForResponse(String(parsed.id), RESPONSE_ACK_TIMEOUT_MS));
+    }
+    if (this.langium && isJsonRpcNotification(parsed) && DOCUMENT_MUTATING_METHODS.has(parsed.method)) {
+      // Gated to methods that actually trigger a build — this notification
+      // JUST caused one, so it genuinely will reach Validated. Calling this
+      // unconditionally (e.g. for a bare `initialize` with no documents
+      // open yet) would hang forever instead: with no pending build,
+      // Langium's internal state never advances to Validated and nothing
+      // ever fires the event this promise is waiting on.
+      pending.push(this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Validated));
+    }
+    if (pending.length > 0) {
+      this.state.waitUntil(Promise.all(pending));
+    }
   }
 
   /**
@@ -443,7 +482,7 @@ export class RuneLspSession {
     // slower-than-expected real init (more documents, cold module init)
     // would otherwise send `initialized`/`didOpen` while the server is
     // still `Initializing`, risking a rejected request or a lost edit.
-    const initializeAck = this.waitForResponse(SENTINEL_INITIALIZE_ID, REPLAY_ACK_TIMEOUT_MS);
+    const initializeAck = this.waitForResponse(SENTINEL_INITIALIZE_ID, RESPONSE_ACK_TIMEOUT_MS);
     this.transport.receive(
       JSON.stringify({ jsonrpc: '2.0', id: SENTINEL_INITIALIZE_ID, method: 'initialize', params: initParams })
     );

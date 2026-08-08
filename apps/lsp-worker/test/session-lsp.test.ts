@@ -57,6 +57,11 @@ function makeState(storageBacking = new Map<string, unknown>()) {
     storage,
     async blockConcurrencyWhile<T>(fn: () => Promise<T>): Promise<T> {
       return fn();
+    },
+    // No real hibernation lifecycle to protect in tests — just accept the
+    // promise the way the real DurableObjectState's waitUntil does.
+    waitUntil(promise: Promise<unknown>): void {
+      void promise;
     }
   } as unknown as import('@cloudflare/workers-types').DurableObjectState;
 }
@@ -101,6 +106,86 @@ describe('RuneLspSession — real Langium wiring', () => {
     const initResult = ws.sent.find((m: any) => m.id === 1) as any;
     expect(initResult.result.capabilities.hoverProvider).toBe(true);
     expect(initResult.result.capabilities.textDocumentSync.change).toBe(2); // Incremental
+  });
+
+  it('registers a pending response with state.waitUntil for a real request', async () => {
+    // receive() dispatches to Langium's async handlers without awaiting
+    // them — on a real hibernatable DO, the runtime may evict the isolate
+    // as soon as webSocketMessage's own promise resolves. state.waitUntil
+    // is how the DO tells the runtime real work is still outstanding.
+    const waitUntilCalls: Array<Promise<unknown>> = [];
+    const baseState = makeState();
+    const state = {
+      ...baseState,
+      waitUntil: (p: Promise<unknown>) => {
+        waitUntilCalls.push(p);
+      }
+    } as unknown as import('@cloudflare/workers-types').DurableObjectState;
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+
+    expect(waitUntilCalls.length).toBeGreaterThan(0);
+    // The registered work must actually correlate with the real response —
+    // awaiting it should not resolve before the response has been sent.
+    await Promise.all(waitUntilCalls);
+    expect(ws.sent.some((m: any) => m.id === 1)).toBe(true);
+  });
+
+  it('registers in-flight document-build work with state.waitUntil for a didOpen notification', async () => {
+    const backing = new Map<string, unknown>();
+    const waitUntilCalls: Array<Promise<unknown>> = [];
+    const baseState = makeState(backing);
+    const state = {
+      ...baseState,
+      waitUntil: (p: Promise<unknown>) => {
+        waitUntilCalls.push(p);
+      }
+    } as unknown as import('@cloudflare/workers-types').DurableObjectState;
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+
+    waitUntilCalls.length = 0; // only care about the registration below
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///i.rosetta', languageId: 'rosetta', version: 0, text: 'namespace ns' } }
+      })
+    );
+
+    expect(waitUntilCalls.length).toBeGreaterThan(0);
+    // By the time the registered work resolves, the build has genuinely
+    // reached the Parsed phase and the storage mirror reflects it — proving
+    // this isn't a premature/spurious resolve.
+    await Promise.all(waitUntilCalls);
+    expect(backing.get('docs:file:///i.rosetta')).toBe('namespace ns');
   });
 
   it('replays initialize + didOpen on a cold wake after simulated hibernation eviction', async () => {
