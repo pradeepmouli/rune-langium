@@ -5,6 +5,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LspContext, type LspContextValue } from './lsp-context.js';
 import { useWorkspace } from './workspace-context.js';
+import { useExploreFileNavStore } from '../explore-file-nav-store.js';
 import { createLspClientService, type LspClientService } from '../../services/lsp-client.js';
 import { createTransportProvider, type TransportState } from '../../services/transport-provider.js';
 import { getLspSessionId } from '../../services/lsp-session.js';
@@ -101,12 +102,20 @@ export const LspProvider = withInstrumentation(
       };
     }, []);
 
-    // Doc-set re-sync when the model's files change — NOT a reconnect.
+    const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
+
+    // Doc-set re-sync when the active file or its content changes — NOT a
+    // reconnect. Scoped to the single active editor document (not the whole
+    // loaded workspace) to bound the DO's Langium index to what one tab has
+    // open — see docs/superpowers/plans/2026-08-08-lsp-do-wiring.md Task 6
+    // for what this trades away (cross-file hover/go-to-def into non-active
+    // files won't resolve) and why.
     useEffect(() => {
-      lspClientRef.current?.syncWorkspaceFiles(
-        files.filter((f) => !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly)
+      const active = files.filter(
+        (f) => f.path === activeEditorFile && !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly
       );
-    }, [files]);
+      lspClientRef.current?.syncWorkspaceFiles(active);
+    }, [files, activeEditorFile]);
 
     const reconnect = useCallback(() => {
       void (async () => {
