@@ -16,19 +16,15 @@
  *   6. Nonce replay       → 409 (nonce_replay)
  *   7. Forward to DO       → 101
  *
- * Re-exports RuneLspSession so wrangler's
- * `[[durable_objects.bindings]] class_name = "RuneLspSession"` can resolve
- * it from this module (Task 1.7 adds the binding to wrangler.toml).
+ * Does NOT define or re-export a RuneLspSession class — Cloudflare Pages
+ * cannot host a Durable Object. `env.LSP_SESSION` below cross-script-binds
+ * (per apps/studio/wrangler.toml's `script_name = "rune-lsp-worker"`) to the
+ * real DO class defined and deployed in apps/lsp-worker.
  */
 
 import { verifySessionToken, isOriginAllowed, checkAndRecordNonce } from '../../../lib/lsp-auth.js';
 import { logRequest } from '../../../lib/lsp-log.js';
-import { RuneLspSession } from '../../../lib/lsp-session-do.js';
 import { withInstrumentation } from '../../../../src/services/instrumentation/core.js';
-
-// Re-export so wrangler's `[[durable_objects.bindings]]` binding can resolve
-// `class_name = "RuneLspSession"`. (Task 1.7 will add the binding to wrangler.toml.)
-export { RuneLspSession };
 
 export interface Env {
   LSP_SESSION: DurableObjectNamespace;
