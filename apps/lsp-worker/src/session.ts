@@ -56,11 +56,14 @@ const INIT_PARAMS_KEY = 'meta:initializeParams';
 /** Dummy id on the replayed `initialize` — never seen by the real client. */
 const SENTINEL_INITIALIZE_ID = '__replay_initialize__';
 /**
- * Safety-net ceiling for {@link RuneLspSession.waitForResponse} — used both
- * while awaiting the replayed `initialize`'s real ack, and while keeping a
- * real request's event alive via {@link RuneLspSession.webSocketMessage}'s
- * `state.waitUntil` registration. Generous on purpose: it only fires if
- * something is genuinely wrong (a bug, a hung handler), in which case
+ * Safety-net ceiling used in three places: {@link RuneLspSession.waitForResponse}
+ * while awaiting the replayed `initialize`'s real ack; a real request's
+ * `state.waitUntil` response-ack registration in
+ * {@link RuneLspSession.webSocketMessage}; and that same method's
+ * document-build-settle wait, which bounds a delete-only rebuild round
+ * that never fires the event it would otherwise wait on. Generous on
+ * purpose: it only fires if something is genuinely wrong (a bug, a hung
+ * handler, or — for the build wait — an empty rebuild set), in which case
  * letting the event end anyway is better than hanging the DO forever, but
  * 20ms-style short guesses are exactly what raced a slower real init in
  * production.
@@ -273,12 +276,22 @@ export class RuneLspSession {
     }
     if (this.langium && isJsonRpcNotification(parsed) && DOCUMENT_MUTATING_METHODS.has(parsed.method)) {
       // Gated to methods that actually trigger a build — this notification
-      // JUST caused one, so it genuinely will reach Validated. Calling this
-      // unconditionally (e.g. for a bare `initialize` with no documents
-      // open yet) would hang forever instead: with no pending build,
-      // Langium's internal state never advances to Validated and nothing
-      // ever fires the event this promise is waiting on.
-      pending.push(this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Validated));
+      // JUST caused one, so it will normally reach Validated. But a
+      // delete-only update whose rebuild set ends up empty (e.g. closing
+      // the LAST open document) still advances DocumentBuilder's internal
+      // state to Validated — Langium's own runCancelable does that
+      // unconditionally — WITHOUT ever firing an onBuildPhase(Validated,
+      // ...) listener (notifyBuildPhase explicitly skips notifying when
+      // the built-documents set is empty). A wait registered just before
+      // that internal advance would then hang forever on an event that
+      // will never come, so this is bounded the same way waitForResponse
+      // is: letting the event end anyway beats hanging the DO forever.
+      pending.push(
+        Promise.race([
+          this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Validated),
+          new Promise<void>((resolve) => setTimeout(resolve, RESPONSE_ACK_TIMEOUT_MS))
+        ])
+      );
     }
     if (pending.length > 0) {
       this.state.waitUntil(Promise.all(pending));

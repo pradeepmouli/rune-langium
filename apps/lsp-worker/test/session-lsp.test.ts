@@ -188,6 +188,68 @@ describe('RuneLspSession — real Langium wiring', () => {
     expect(backing.get('docs:file:///i.rosetta')).toBe('namespace ns');
   });
 
+  it('bounds the document-build wait so closing the only open document cannot hang state.waitUntil forever', async () => {
+    // A didClose that empties the rebuild set is a real Langium edge
+    // case (confirmed by reading document-builder.js): runCancelable
+    // still advances DocumentBuilder's internal currentState to
+    // Validated for an empty batch, but notifyBuildPhase explicitly
+    // skips firing onBuildPhase listeners when that batch is empty — so
+    // an unbounded wait registered here could hang on an event that
+    // never comes. This is the normal Studio case now that only the
+    // active editor document is synchronized (Task 6).
+    const waitUntilCalls: Array<Promise<unknown>> = [];
+    const baseState = makeState();
+    const state = {
+      ...baseState,
+      waitUntil: (p: Promise<unknown>) => {
+        waitUntilCalls.push(p);
+      }
+    } as unknown as import('@cloudflare/workers-types').DurableObjectState;
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///j.rosetta', languageId: 'rosetta', version: 0, text: 'namespace ns' } }
+      })
+    );
+
+    waitUntilCalls.length = 0; // only care about the didClose registration below
+
+    // Closes the ONLY open document — a delete-only update whose rebuild
+    // set is empty.
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: { textDocument: { uri: 'file:///j.rosetta' } }
+      })
+    );
+
+    expect(waitUntilCalls.length).toBeGreaterThan(0);
+    // Must resolve at all — proves the timeout bound actually releases
+    // the registration instead of hanging forever.
+    await Promise.all(waitUntilCalls);
+  }, 7000);
+
   it('replays initialize + didOpen on a cold wake after simulated hibernation eviction', async () => {
     const backing = new Map<string, unknown>();
     const state1 = makeState(backing);
