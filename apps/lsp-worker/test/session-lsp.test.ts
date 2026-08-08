@@ -557,4 +557,66 @@ describe('RuneLspSession — real Langium wiring', () => {
 
     expect(backing.has('docs:file:///g.rosetta')).toBe(false);
   });
+
+  it('does not let an in-flight build resurrect storage after a graceful shutdown purges it', async () => {
+    // Same race as the real-close case above, but via the OTHER path that
+    // calls purgeStorage: a graceful `shutdown` request. A client that
+    // sends `shutdown` and then goes quiet without ever sending `exit`
+    // must not leave source text behind either.
+    const backing = new Map<string, unknown>();
+    const state = makeState(backing);
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///h.rosetta', languageId: 'rosetta', version: 0, text: 'namespace a' } }
+      })
+    );
+    await vi.waitFor(() => expect(backing.get('docs:file:///h.rosetta')).toBe('namespace a'));
+
+    // Fire a didChange but do NOT wait for its async build to settle
+    // before the client sends `shutdown` — the build is still in flight
+    // when purgeStorage runs.
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didChange',
+        params: {
+          textDocument: { uri: 'file:///h.rosetta', version: 1 },
+          contentChanges: [{ range: { start: { line: 0, character: 10 }, end: { line: 0, character: 11 } }, text: 'z' }]
+        }
+      })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'shutdown', params: null })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 2)).toBe(true));
+
+    // Give the in-flight build time to actually finish and reach its
+    // onBuildPhase callback — pre-fix, this would re-write the doc that
+    // shutdown's purge just deleted.
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(backing.has('docs:file:///h.rosetta')).toBe(false);
+  });
 });

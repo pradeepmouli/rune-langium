@@ -133,9 +133,9 @@ export class RuneLspSession {
   private ensureLangiumPromise: Promise<boolean> | null = null;
 
   /**
-   * Set once a real close has been observed — storage-mirror writes queued
-   * from an in-flight build must not resurrect data `purgeStorage` already
-   * deleted.
+   * Set by {@link purgeStorage} (real close OR graceful shutdown) — storage-
+   * mirror writes queued from an in-flight build must not resurrect data
+   * that purge already deleted.
    */
   private closed = false;
 
@@ -263,12 +263,6 @@ export class RuneLspSession {
    */
   async webSocketClose(_ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.ws = null;
-    // Set BEFORE purging: an in-flight build kicked off by a message just
-    // before this close (e.g. a didChange right as the tab shut) can still
-    // reach registerStorageMirror's write callback after this point — the
-    // flag makes that callback a no-op instead of resurrecting a doc this
-    // purge is about to delete.
-    this.closed = true;
     // Defensive — under this DO's per-connection keying (each reconnect
     // mints a fresh nonce → fresh DO id), a second fetch() on this exact
     // instance should never happen, but clearing eagerly means a stale,
@@ -279,8 +273,19 @@ export class RuneLspSession {
     await this.purgeStorage();
   }
 
-  /** Deletes all `docs:*` source text plus the persisted handshake/meta records. */
+  /**
+   * Deletes all `docs:*` source text plus the persisted handshake/meta
+   * records — used by BOTH a real close and a graceful `shutdown` request,
+   * so `closed` is set here rather than at each call site: an in-flight
+   * build kicked off by a message just before either path (e.g. a
+   * didChange right as the tab shut, or racing a client that sends
+   * `shutdown` then goes quiet without `exit`) can still reach
+   * `registerStorageMirror`'s write callback after this point. Setting the
+   * flag here — not at the call sites — means no future caller of
+   * `purgeStorage` can forget it.
+   */
   private async purgeStorage(): Promise<void> {
+    this.closed = true;
     await this.state.blockConcurrencyWhile(async () => {
       const docs = await this.state.storage.list({ prefix: DOC_PREFIX });
       const keys = Array.from(docs.keys());
