@@ -17,6 +17,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { RuneLspSession } from '../src/session.js';
 
+// Matches the private key in session.ts — the test needs it to assert on
+// storage keys without importing a private symbol.
+const INIT_PARAMS_KEY_FOR_TEST = 'meta:initializeParams';
+
 // ── Fake DurableObjectState ──────────────────────────────────────────────
 
 function makeStorage(backing = new Map<string, unknown>()) {
@@ -209,5 +213,68 @@ describe('RuneLspSession — real Langium wiring', () => {
     );
 
     await vi.waitFor(() => expect(backing.has('docs:file:///b.rosetta')).toBe(false));
+  });
+
+  it('purges all docs:* storage on a real shutdown request', async () => {
+    const backing = new Map<string, unknown>();
+    const state = makeState(backing);
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///c.rosetta', languageId: 'rosetta', version: 0, text: 'namespace c' } }
+      })
+    );
+    await vi.waitFor(() => expect(backing.get('docs:file:///c.rosetta')).toBe('namespace c'));
+    expect(backing.has(INIT_PARAMS_KEY_FOR_TEST)).toBe(true);
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'shutdown', params: null })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 2)).toBe(true));
+
+    const remainingDocKeys = Array.from(backing.keys()).filter((k) => k.startsWith('docs:'));
+    expect(remainingDocKeys).toHaveLength(0);
+  });
+
+  it('clears the transport on webSocketClose so it is never reused after close', async () => {
+    const state = makeState();
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+
+    await session.webSocketClose(ws as unknown as WebSocket, 1000, 'normal', true);
+
+    // Internal field — cast to access it for this white-box assertion.
+    expect((session as unknown as { transport: unknown }).transport).toBeNull();
   });
 });

@@ -189,6 +189,21 @@ export class RuneLspSession {
       });
     }
 
+    // Langium's own shutdown handler (via startLanguageServer) correctly
+    // transitions server state, but has no knowledge of DO storage — purge
+    // it here as a side effect, then still forward the request so the real
+    // server also answers it. Privacy invariant per contracts/lsp-worker.md
+    // and data-model.md §1.
+    if (isJsonRpcRequest(parsed) && parsed.method === 'shutdown') {
+      await this.state.blockConcurrencyWhile(async () => {
+        const docs = await this.state.storage.list({ prefix: DOC_PREFIX });
+        const keys = Array.from(docs.keys());
+        if (keys.length > 0) await this.state.storage.delete(keys);
+        await this.state.storage.delete(INIT_PARAMS_KEY);
+        await this.state.storage.delete(META_KEY);
+      });
+    }
+
     this.transport!.receive(text);
   }
 
