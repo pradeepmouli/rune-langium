@@ -218,10 +218,52 @@ export class RuneLspSession {
       );
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
+      await this.replayIfColdWake();
       return true;
     } catch (err) {
       this.langiumLoadError = err instanceof Error ? err.message : String(err);
       return false;
+    }
+  }
+
+  /**
+   * On a fresh DO construction that already has a persisted `initialize`
+   * handshake (i.e. this is a cold wake after hibernation, not a brand-new
+   * connection), replay initialize → initialized → one didOpen per stored
+   * document — all with sentinel/dummy ids so the client never sees them —
+   * before any real traffic is forwarded. Without this, a freshly-
+   * reconstructed LSPServer instance stays in the Created state forever
+   * (ServerNotInitialized on every request) and Langium's DocumentBuilder
+   * never fires (no diagnostics), both silently.
+   */
+  private async replayIfColdWake(): Promise<void> {
+    if (!this.transport) return;
+    const initParams = await this.state.storage.get<unknown>(INIT_PARAMS_KEY);
+    if (initParams === undefined) return; // brand-new connection — nothing to replay
+
+    const SENTINEL_ID = '__replay_initialize__';
+    this.transport.receive(
+      JSON.stringify({ jsonrpc: '2.0', id: SENTINEL_ID, method: 'initialize', params: initParams })
+    );
+    // registerInitializeHandler's composite handler is async (state
+    // transition + delegating to Langium's own onInitialize chain); receive()
+    // dispatches to it fire-and-forget, so forwarding real traffic
+    // immediately after would race the state transition out of `Created`.
+    // Yield past the pending microtask/macrotask chain before continuing.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
+
+    const stored = await this.state.storage.list({ prefix: DOC_PREFIX });
+    for (const [key, value] of stored) {
+      const uri = key.slice(DOC_PREFIX.length);
+      const text = typeof value === 'string' ? value : '';
+      this.transport.receive(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'textDocument/didOpen',
+          params: { textDocument: { uri, languageId: 'rosetta', version: 0, text } }
+        })
+      );
     }
   }
 

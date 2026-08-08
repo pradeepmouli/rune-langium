@@ -96,4 +96,60 @@ describe('RuneLspSession — real Langium wiring', () => {
     expect(initResult.result.capabilities.hoverProvider).toBe(true);
     expect(initResult.result.capabilities.textDocumentSync.change).toBe(2); // Incremental
   });
+
+  it('replays initialize + didOpen on a cold wake after simulated hibernation eviction', async () => {
+    const backing = new Map<string, unknown>();
+    const state1 = makeState(backing);
+    const session1 = new RuneLspSession(state1);
+    const ws1 = makeFakeWs();
+
+    // Real client handshake, first "instance" of the DO.
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws1.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///a.rosetta', languageId: 'rosetta', version: 0, text: 'namespace ns' } }
+      })
+    );
+    // Let Langium's async build settle before we "evict".
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Simulate hibernation eviction: a FRESH RuneLspSession instance (fresh
+    // constructor, fresh in-memory state) sharing the SAME storage backing —
+    // exactly what a real wake after eviction looks like.
+    const state2 = makeState(backing);
+    const session2 = new RuneLspSession(state2);
+    const ws2 = makeFakeWs();
+
+    await session2.webSocketMessage(
+      ws2 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'textDocument/hover',
+        params: { textDocument: { uri: 'file:///a.rosetta' }, position: { line: 0, character: 2 } }
+      })
+    );
+
+    await vi.waitFor(() => expect(ws2.sent.some((m: any) => m.id === 2)).toBe(true));
+    const hoverResult = ws2.sent.find((m: any) => m.id === 2) as any;
+    // The point isn't the hover content — it's that the request did NOT
+    // come back as a ServerNotInitialized error, proving the replay ran.
+    expect(hoverResult.error?.message ?? '').not.toMatch(/not.*initialized/i);
+  });
 });
