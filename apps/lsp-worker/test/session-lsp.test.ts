@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { URI, DocumentState } from 'langium';
 import { RuneLspSession } from '../src/session.js';
 
 // Matches the private keys in session.ts — the test needs them to assert on
@@ -365,5 +366,195 @@ describe('RuneLspSession — real Langium wiring', () => {
     const startedAt = Date.now();
     await session.waitForResponse('never-answered', 30);
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(25);
+  });
+
+  it('waits for replayed documents to finish building before forwarding the triggering request', async () => {
+    const backing = new Map<string, unknown>();
+    const state1 = makeState(backing);
+    const session1 = new RuneLspSession(state1);
+    const ws1 = makeFakeWs();
+
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws1.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///e.rosetta', languageId: 'rosetta', version: 0, text: 'namespace ns' } }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 20));
+
+    const state2 = makeState(backing);
+    const session2 = new RuneLspSession(state2);
+    const ws2 = makeFakeWs();
+
+    // The very first message after a cold wake drives ensureLangium +
+    // replayIfColdWake to completion within this SAME await — by the time
+    // it resolves, the replayed document must already be Linked (not just
+    // Parsed), or a query running immediately after could see an
+    // unresolved/empty index.
+    await session2.webSocketMessage(
+      ws2 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'textDocument/hover',
+        params: { textDocument: { uri: 'file:///e.rosetta' }, position: { line: 0, character: 2 } }
+      })
+    );
+
+    // White-box: read the replayed document's actual build state off the
+    // real Langium instance this session constructed.
+    const langium = (
+      session2 as unknown as {
+        langium: {
+          shared: { workspace: { LangiumDocuments: { getDocument(uri: URI): { state: DocumentState } | undefined } } };
+        };
+      }
+    ).langium;
+    const doc = langium.shared.workspace.LangiumDocuments.getDocument(URI.parse('file:///e.rosetta'));
+    expect(doc?.state).toBeGreaterThanOrEqual(DocumentState.Linked);
+  });
+
+  it('gates every concurrent frame on the in-flight cold-wake replay, not just the first', async () => {
+    const backing = new Map<string, unknown>();
+    const state1 = makeState(backing);
+    const session1 = new RuneLspSession(state1);
+    const ws1 = makeFakeWs();
+
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws1.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session1.webSocketMessage(
+      ws1 as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///f.rosetta', languageId: 'rosetta', version: 0, text: 'namespace ns' } }
+      })
+    );
+    await new Promise((r) => setTimeout(r, 20));
+
+    const state2 = makeState(backing);
+    const session2 = new RuneLspSession(state2);
+    const ws2 = makeFakeWs();
+
+    // Two frames land back-to-back — neither is awaited before the other
+    // starts, simulating two nearly-simultaneous client messages hitting
+    // the DO while it is still replaying. Pre-fix, the second frame would
+    // see `this.transport` already set by the first and forward straight
+    // through, racing ahead of the still-in-flight replay.
+    await Promise.all([
+      session2.webSocketMessage(
+        ws2 as unknown as WebSocket,
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 10,
+          method: 'textDocument/hover',
+          params: { textDocument: { uri: 'file:///f.rosetta' }, position: { line: 0, character: 2 } }
+        })
+      ),
+      session2.webSocketMessage(
+        ws2 as unknown as WebSocket,
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 11,
+          method: 'textDocument/hover',
+          params: { textDocument: { uri: 'file:///f.rosetta' }, position: { line: 0, character: 2 } }
+        })
+      )
+    ]);
+
+    await vi.waitFor(() => {
+      expect(ws2.sent.some((m: any) => m.id === 10)).toBe(true);
+      expect(ws2.sent.some((m: any) => m.id === 11)).toBe(true);
+    });
+
+    const res10 = ws2.sent.find((m: any) => m.id === 10) as any;
+    const res11 = ws2.sent.find((m: any) => m.id === 11) as any;
+    // Neither concurrent frame should see the server still Initializing —
+    // both must have waited on the SAME in-flight replay to finish.
+    expect(res10.error?.message ?? '').not.toMatch(/not.*initialized/i);
+    expect(res11.error?.message ?? '').not.toMatch(/not.*initialized/i);
+  });
+
+  it('does not let an in-flight build resurrect storage after a real close purges it', async () => {
+    const backing = new Map<string, unknown>();
+    const state = makeState(backing);
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///g.rosetta', languageId: 'rosetta', version: 0, text: 'namespace a' } }
+      })
+    );
+    await vi.waitFor(() => expect(backing.get('docs:file:///g.rosetta')).toBe('namespace a'));
+
+    // Fire a didChange but do NOT wait for its async build to settle
+    // before closing — this simulates a real disconnect racing an
+    // in-flight build triggered just before the socket closed.
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didChange',
+        params: {
+          textDocument: { uri: 'file:///g.rosetta', version: 1 },
+          contentChanges: [{ range: { start: { line: 0, character: 10 }, end: { line: 0, character: 11 } }, text: 'z' }]
+        }
+      })
+    );
+    await session.webSocketClose(ws as unknown as WebSocket, 1000, 'normal', true);
+
+    // Give the in-flight build (kicked off by the didChange above,
+    // fire-and-forget) time to actually finish and reach its
+    // onBuildPhase callback — pre-fix, this would re-write the doc that
+    // was just purged.
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(backing.has('docs:file:///g.rosetta')).toBe(false);
   });
 });

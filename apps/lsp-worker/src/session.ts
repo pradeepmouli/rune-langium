@@ -121,6 +121,24 @@ export class RuneLspSession {
   /** Resolvers for {@link waitForResponse}, keyed by the awaited response id. */
   private readonly pendingResponseWaiters = new Map<string, () => void>();
 
+  /**
+   * Caches the in-flight/completed {@link ensureLangium} call so every frame
+   * that arrives while a cold-wake replay is still running awaits the SAME
+   * promise instead of racing ahead. `ensureLangium` sets `this.transport`
+   * synchronously before its own `await`s (construction, then replay) — a
+   * naive `if (!this.transport)` re-check from a second concurrent frame
+   * would see it already set and skip straight to forwarding, jumping the
+   * queue ahead of the replay it depends on.
+   */
+  private ensureLangiumPromise: Promise<boolean> | null = null;
+
+  /**
+   * Set once a real close has been observed — storage-mirror writes queued
+   * from an in-flight build must not resurrect data `purgeStorage` already
+   * deleted.
+   */
+  private closed = false;
+
   constructor(private readonly state: DurableObjectState) {}
 
   // ── Worker entry: forwarded WS upgrade ─────────────────────────────────
@@ -177,16 +195,22 @@ export class RuneLspSession {
     this.ws = ws;
     const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
-    if (!this.transport) {
-      const ok = await this.ensureLangium(ws);
-      if (!ok) {
-        this.send({
-          jsonrpc: '2.0',
-          id: null,
-          error: { code: ERR_INTERNAL, message: 'langium_load_failed', data: this.langiumLoadError ?? 'unknown' }
-        });
-        return;
-      }
+    // Every frame — not just the first — awaits the SAME cached promise, so
+    // a frame arriving while `ensureLangium` (construction + cold-wake
+    // replay) is still in flight blocks until it fully finishes, instead of
+    // seeing `this.transport` already set and forwarding ahead of the
+    // replay it depends on.
+    if (!this.ensureLangiumPromise) {
+      this.ensureLangiumPromise = this.ensureLangium(ws);
+    }
+    const ok = await this.ensureLangiumPromise;
+    if (!ok) {
+      this.send({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: ERR_INTERNAL, message: 'langium_load_failed', data: this.langiumLoadError ?? 'unknown' }
+      });
+      return;
     }
 
     let parsed: unknown;
@@ -239,6 +263,12 @@ export class RuneLspSession {
    */
   async webSocketClose(_ws: WebSocket, _code: number, _reason: string, _wasClean: boolean): Promise<void> {
     this.ws = null;
+    // Set BEFORE purging: an in-flight build kicked off by a message just
+    // before this close (e.g. a didChange right as the tab shut) can still
+    // reach registerStorageMirror's write callback after this point — the
+    // flag makes that callback a no-op instead of resurrecting a doc this
+    // purge is about to delete.
+    this.closed = true;
     // Defensive — under this DO's per-connection keying (each reconnect
     // mints a fresh nonce → fresh DO id), a second fetch() on this exact
     // instance should never happen, but clearing eagerly means a stale,
@@ -263,8 +293,9 @@ export class RuneLspSession {
   // ── Lazy init ───────────────────────────────────────────────────────────
 
   private async ensureLangium(ws: WebSocket): Promise<boolean> {
-    if (this.langium && this.transport) return true;
-    if (this.langiumLoadError) return false;
+    // No fast-path/failure-cache checks here: `webSocketMessage` caches this
+    // method's own promise in `ensureLangiumPromise` and calls it exactly
+    // once per DO instance, so a second invocation can't happen.
     try {
       this.langium = createRuneLspServer();
       this.transport = new DurableObjectWebSocketTransport(
@@ -362,6 +393,12 @@ export class RuneLspSession {
     if (!this.langium) return;
     const { DocumentBuilder } = this.langium.shared.workspace;
     DocumentBuilder.onBuildPhase(DocumentState.Parsed, (builtDocs) => {
+      // A build queued just before a real close can still reach this
+      // callback after `webSocketClose` has already purged storage —
+      // `this.closed` is read fresh inside the callback (not captured at
+      // registration time), so it correctly reflects a close that happened
+      // in between, and skips writing content back that was just deleted.
+      if (this.closed) return;
       void this.state.blockConcurrencyWhile(async () => {
         for (const doc of builtDocs) {
           await this.state.storage.put(`${DOC_PREFIX}${doc.uri.toString()}`, doc.textDocument.getText());
@@ -369,6 +406,7 @@ export class RuneLspSession {
       });
     });
     DocumentBuilder.onUpdate((_changed, deleted) => {
+      if (this.closed) return; // storage is already purged — nothing to delete
       void this.state.blockConcurrencyWhile(async () => {
         for (const uri of deleted) {
           await this.state.storage.delete(`${DOC_PREFIX}${uri.toString()}`);
@@ -408,6 +446,8 @@ export class RuneLspSession {
     this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
     const stored = await this.state.storage.list({ prefix: DOC_PREFIX });
+    if (stored.size === 0) return;
+
     for (const [key, value] of stored) {
       const uri = key.slice(DOC_PREFIX.length);
       const text = typeof value === 'string' ? value : '';
@@ -418,6 +458,17 @@ export class RuneLspSession {
           params: { textDocument: { uri, languageId: 'rosetta', version: 0, text } }
         })
       );
+    }
+
+    // Each didOpen dispatches into Langium's DocumentUpdateHandler → an
+    // async DocumentBuilder.update() — receive() itself is fire-and-forget,
+    // so without this, the request that triggered this cold wake (hover,
+    // completion, definition) would be forwarded and can run against an
+    // empty or not-yet-linked index, returning an empty/stale result.
+    // `waitUntil` with no uri waits for the whole workspace — correct here
+    // since this DO's Langium instance holds only this connection's docs.
+    if (this.langium) {
+      await this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Linked);
     }
   }
 
