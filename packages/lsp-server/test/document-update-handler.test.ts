@@ -67,4 +67,60 @@ describe('RuneDocumentUpdateHandler', () => {
       expect(lsp.shared.workspace.LangiumDocuments.getDocument(uri)).toBeUndefined();
     });
   });
+
+  it('publishes an empty diagnostics array for a closed document (clears client-side diagnostics)', async () => {
+    // Not RuneDocumentUpdateHandler's own responsibility — Langium's
+    // built-in addDiagnosticsHandler (wired automatically by
+    // startLanguageServer, see language-server.js) listens on the SAME
+    // DocumentBuilder.onUpdate hook didCloseDocument's fireDocumentUpdate
+    // drives, and publishes `{ uri, diagnostics: [] }` for every deleted
+    // URI. Without this, a client's Problems panel would keep showing a
+    // closed file's last diagnostics forever. Locking this in here since
+    // it's easy to assume (incorrectly) that it needs adding by hand.
+    const lsp = createRuneLspServer();
+    const ws = makeFakeWs();
+    const transport = new DurableObjectWebSocketTransport(ws);
+    void lsp.listen(transport);
+    const uri = URI.parse('file:///c.rosetta');
+
+    transport.receive(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => {
+      expect(ws.sent.some((m: any) => m.id === 1)).toBe(true);
+    });
+    transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
+
+    transport.receive(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: uri.toString(), languageId: 'rosetta', version: 0, text: 'namespace c' } }
+      })
+    );
+    await vi.waitFor(() => {
+      expect(lsp.shared.workspace.LangiumDocuments.getDocument(uri)).toBeDefined();
+    });
+
+    transport.receive(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didClose',
+        params: { textDocument: { uri: uri.toString() } }
+      })
+    );
+
+    await vi.waitFor(() => {
+      const cleared = ws.sent.find(
+        (m: any) => m.method === 'textDocument/publishDiagnostics' && m.params?.uri === uri.toString()
+      ) as any;
+      expect(cleared).toBeDefined();
+      expect(cleared.params.diagnostics).toEqual([]);
+    });
+  });
 });

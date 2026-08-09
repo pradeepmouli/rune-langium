@@ -108,6 +108,48 @@ describe('RuneLspSession — real Langium wiring', () => {
     expect(initResult.result.capabilities.textDocumentSync.change).toBe(2); // Incremental
   });
 
+  it('echoes the triggering request id when Langium fails to load (not id: null)', async () => {
+    // Without a correlatable id, the JSON-RPC client can never match this
+    // error to its outstanding request — it just waits for its own
+    // client-side timeout instead of learning about the failure
+    // immediately. Force ensureLangium's failure path via storage.get
+    // throwing inside replayIfColdWake (its first await).
+    const state = {
+      id: { toString: () => 'test-do-id' },
+      storage: {
+        get: async () => {
+          throw new Error('boom');
+        },
+        put: async () => undefined,
+        delete: async () => false,
+        list: async () => new Map()
+      },
+      async blockConcurrencyWhile<T>(fn: () => Promise<T>): Promise<T> {
+        return fn();
+      },
+      waitUntil(promise: Promise<unknown>): void {
+        void promise;
+      }
+    } as unknown as import('@cloudflare/workers-types').DurableObjectState;
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 42,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+
+    expect(ws.sent).toHaveLength(1);
+    const errorResponse = ws.sent[0] as any;
+    expect(errorResponse.id).toBe(42);
+    expect(errorResponse.error.message).toBe('langium_load_failed');
+  });
+
   it('registers a pending response with state.waitUntil for a real request', async () => {
     // receive() dispatches to Langium's async handlers without awaiting
     // them — on a real hibernatable DO, the runtime may evict the isolate

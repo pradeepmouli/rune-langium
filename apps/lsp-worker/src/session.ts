@@ -211,6 +211,19 @@ export class RuneLspSession {
     this.ws = ws;
     const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
+    // Parsed BEFORE ensureLangium so a load failure can echo the
+    // triggering request's real id back — without it, the JSON-RPC client
+    // can never correlate the error with its outstanding request and just
+    // sits waiting for its own client-side timeout instead of learning
+    // about the failure immediately.
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      this.send({ jsonrpc: '2.0', id: null, error: { code: ERR_PARSE, message: 'parse_error' } });
+      return;
+    }
+
     // Every frame — not just the first — awaits the SAME cached promise, so
     // a frame arriving while `ensureLangium` (construction + cold-wake
     // replay) is still in flight blocks until it fully finishes, instead of
@@ -221,19 +234,15 @@ export class RuneLspSession {
     }
     const ok = await this.ensureLangiumPromise;
     if (!ok) {
-      this.send({
-        jsonrpc: '2.0',
-        id: null,
-        error: { code: ERR_INTERNAL, message: 'langium_load_failed', data: this.langiumLoadError ?? 'unknown' }
-      });
-      return;
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      this.send({ jsonrpc: '2.0', id: null, error: { code: ERR_PARSE, message: 'parse_error' } });
+      // Notifications have no id to correlate a response to — a failed
+      // notification isn't itself answerable, so nothing is sent for one.
+      if (isJsonRpcRequest(parsed)) {
+        this.send({
+          jsonrpc: '2.0',
+          id: parsed.id,
+          error: { code: ERR_INTERNAL, message: 'langium_load_failed', data: this.langiumLoadError ?? 'unknown' }
+        });
+      }
       return;
     }
 
