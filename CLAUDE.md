@@ -79,7 +79,7 @@ populate + show a hydrating spinner correctly.
   Regenerate with the `generate:zod` / `generate:domain` / `generate:schemas` scripts above.
   The `langium-zod` pin lives in `pnpm-workspace.yaml` (overrides + catalog) plus the
   `packages/core` and `packages/visual-editor` devDependencies; bump all of them together.
-- Studio prefers the embedded browser LSP worker transport first; direct WebSocket and Cloudflare Worker LSP remain fallbacks, and an explicit `wsUri` selects the direct WebSocket path.
+- The in-browser embedded LSP worker was retired (spec `2026-05-12-studio-workers-pages-functions-design.md` Phase 2); Studio's LSP is now network-only. `transport-provider.ts` uses a same-origin, session-token-gated WebSocket to the `RuneLspSession` Durable Object (`apps/lsp-worker`) by default, or connects directly via an explicit `wsUri` (falling back to the token-gated path on failure).
 - Tailwind CSS 4 IntelliSense in this monorepo depends on `.vscode/settings.json` using `tailwindCSS.experimental.configFile` with `apps/studio/src/app.css` as the entry stylesheet mapped to `apps/studio/src/**`, `packages/design-system/src/**`, and `packages/visual-editor/src/**`.
 - Real CDM/source fixtures live under the hidden `.resources/` tree. Use those files for runtime repros, and guard/skip tests that depend on them when the corpus is absent.
 - Studio Playwright flows should wait for visible UI readiness rather than `networkidle` on routes that keep worker/LSP connections open.
