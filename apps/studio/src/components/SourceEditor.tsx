@@ -576,6 +576,17 @@ const renderSourceEditor = withInstrumentation(
     // `lspReady` is the reactive signal for this — `lspClient`'s object
     // identity never changes across its connect lifecycle, so a dependency
     // on `lspClient` alone would never re-fire this effect.
+    //
+    // Depend on `currentFile?.path`, NOT the `currentFile` object itself —
+    // every content edit produces a brand-new file object (handleSourceChange
+    // in ExplorePerspective.tsx spreads `{ ...f, content, dirty: true }`), so
+    // depending on the object would reconfigure the compartment on every
+    // keystroke, not just on tab switches. Reconfiguring destroys the current
+    // LSPPlugin instance and constructs a fresh one, whose constructor resets
+    // `unsyncedChanges` to empty against the CURRENT (already-edited) doc —
+    // silently discarding whatever hadn't yet reached the server via
+    // @codemirror/lsp-client's own debounced autoSync, which believes from
+    // then on that the document is fully synced when it never was.
     useEffect(() => {
       if (!lspReady || !lspClient?.isInitialized() || !currentFile) return;
       const view = editorViewRef.current;
@@ -584,7 +595,8 @@ const renderSourceEditor = withInstrumentation(
       const lspPlugin = lspClient.getPlugin(pathToUri(currentFile.path));
       if (!lspPlugin) return;
       view.dispatch({ effects: compartment.reconfigure(lspPlugin) });
-    }, [lspReady, lspClient, currentFile]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lspReady, lspClient, currentFile?.path]);
 
     // Empty state
     if (files.length === 0) {

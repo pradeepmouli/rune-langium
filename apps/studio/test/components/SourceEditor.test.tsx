@@ -429,6 +429,38 @@ describe('SourceEditor', () => {
 
       expect(getPlugin).toHaveBeenCalledWith(expect.stringContaining('model.rosetta'));
     });
+
+    it('does not re-wire the LSP plugin on a content-only edit (same path, new object identity)', () => {
+      // handleSourceChange in ExplorePerspective.tsx spreads `{ ...f, content,
+      // dirty: true }` on every edit, so `files` (and therefore the file
+      // object matching `activeFile`) gets a brand-new reference on every
+      // keystroke even though the path never changes. Reconfiguring the LSP
+      // compartment on every such edit would destroy and recreate the
+      // LSPPlugin instance, silently discarding whatever hadn't yet reached
+      // the server via @codemirror/lsp-client's own debounced autoSync.
+      const isInitialized = vi.fn().mockReturnValue(true);
+      const getPlugin = vi.fn().mockReturnValue('mock-lsp-plugin');
+      const lspClient = { isInitialized, getPlugin } as unknown as LspClientService;
+
+      const { rerender } = render(
+        <SourceEditor files={sampleFiles} activeFile={sampleFiles[0]!.path} lspClient={lspClient} lspReady />
+      );
+      expect(getPlugin).toHaveBeenCalledTimes(1);
+      mockEditorViewDispatch.mockClear();
+      getPlugin.mockClear();
+
+      const editedFiles: SourceEditorProps['files'] = sampleFiles.map((f) =>
+        f.path === sampleFiles[0]!.path ? { ...f, content: 'namespace foo\ntype Baz:', dirty: true } : f
+      );
+      rerender(<SourceEditor files={editedFiles} activeFile={sampleFiles[0]!.path} lspClient={lspClient} lspReady />);
+
+      expect(getPlugin).not.toHaveBeenCalled();
+      // The editor's own content-sync effect legitimately dispatches a
+      // `changes` transaction to reflect the new prop content — only the
+      // LSP-compartment RECONFIGURE (which would destroy/recreate the
+      // LSPPlugin and its unsyncedChanges) must not happen.
+      expect(mockEditorViewDispatch).not.toHaveBeenCalledWith({ effects: 'mock-lsp-plugin' });
+    });
   });
 });
 
