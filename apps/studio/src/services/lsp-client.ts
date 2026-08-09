@@ -110,18 +110,26 @@ export class StudioWorkspace extends Workspace {
   }
 
   // Deliberately does NOT call this.client.didOpen/didClose — document
-  // lifecycle is owned solely by LspProvider.tsx's syncWorkspaceFiles,
-  // which already opens/closes the active editor's file regardless of
-  // which panel (Source/Graph/Structure/Form) edits it. This workspace
-  // only tracks `this.files` for the CodeMirror plugin's own bookkeeping
-  // (getFile/syncFiles/displayFile — used for in-editor hover/completion/
-  // diagnostics UI). Before this, an EditorView mounting/unmounting (e.g.
-  // collapsing the Source pane, or a tab switch destroying + recreating
-  // the view) sent a REAL didOpen/didClose behind syncWorkspaceFiles's
-  // back: its own snapshot never learned the doc had been closed, so it
-  // kept sending didChange-only for a document the server no longer
-  // tracked as open — silently breaking builds/diagnostics for every
-  // other editing surface on that file until the Source editor reopened.
+  // open/close lifecycle is owned solely by LspProvider.tsx's
+  // syncWorkspaceFiles, which already opens/closes the active editor's
+  // file regardless of which panel (Source/Graph/Structure/Form) edits
+  // it. This workspace tracks `this.files` for the CodeMirror plugin's
+  // own bookkeeping (getFile/syncFiles/displayFile — used for in-editor
+  // hover/completion/diagnostics UI), AND is the sole sender of
+  // didChange for any uri it currently tracks: @codemirror/lsp-client's
+  // own autoSync/client.sync() drains syncFiles()'s unsyncedChanges and
+  // sends the wire notification. syncWorkspaceFiles checks
+  // `client.workspace.getFile(uri)` and skips sending its own didChange
+  // whenever a live view already owns the uri, so the two paths never
+  // race each other with independently-numbered versions against the
+  // same document. Before the didOpen/didClose fix, an EditorView
+  // mounting/unmounting (e.g. collapsing the Source pane, or a tab
+  // switch destroying + recreating the view) sent a REAL didOpen/
+  // didClose behind syncWorkspaceFiles's back: its own snapshot never
+  // learned the doc had been closed, so it kept sending didChange-only
+  // for a document the server no longer tracked as open — silently
+  // breaking builds/diagnostics for every other editing surface on that
+  // file until the Source editor reopened.
 
   openFile(uri: string, languageId: string, view: EditorView): void {
     // Allow re-opening the same file (tab switch destroys + recreates).
@@ -287,7 +295,14 @@ export const createLspClientService = withInstrumentation(
             const version = prev.version + 1;
             workspaceSnapshot.set(uri, { version, content: file.content });
             changedUris.add(uri);
-            if (client && initialized) {
+            // A live editor view for this uri (StudioWorkspace.openFile) owns
+            // didChange for it via @codemirror/lsp-client's own autoSync/
+            // client.sync() path — sending a second, independently-versioned
+            // didChange here races it and can desync the server's document
+            // (a range-based edit from the live view applied against text a
+            // full-text replace from here has already superseded, or vice
+            // versa). Only send when no live view is tracking this uri.
+            if (client && initialized && !client.workspace.getFile(uri)) {
               client.notification('textDocument/didChange', {
                 textDocument: { uri, version },
                 contentChanges: [{ text: file.content }]
@@ -319,7 +334,7 @@ export const createLspClientService = withInstrumentation(
             _pendingRefreshId = null;
             if (!client || !initialized) return;
             for (const [uri, entry] of workspaceSnapshot) {
-              if (urisToSkip.has(uri)) continue;
+              if (urisToSkip.has(uri) || client.workspace.getFile(uri)) continue;
               const version = entry.version + 1;
               workspaceSnapshot.set(uri, { version, content: entry.content });
               client.notification('textDocument/didChange', {
