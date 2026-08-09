@@ -346,6 +346,11 @@ describe('RuneLspSession — real Langium wiring', () => {
     // The point isn't the hover content — it's that the request did NOT
     // come back as a ServerNotInitialized error, proving the replay ran.
     expect(hoverResult.error?.message ?? '').not.toMatch(/not.*initialized/i);
+
+    // The replayed sentinel initialize's own response must never reach the
+    // real client — it's purely internal (used only to detect the state
+    // transition), and the client never sent a request with this id.
+    expect(ws2.sent.some((m: any) => m.id === '__replay_initialize__')).toBe(false);
   });
 
   it('persists the current full document text on every real content change, and removes it on close', async () => {

@@ -394,10 +394,30 @@ export class RuneLspSession {
       },
       send: (data: string) => {
         this.notifyResponseWaiters(data);
+        // The replayed sentinel `initialize`'s response is purely
+        // internal — it exists only so replayIfColdWake can detect the
+        // real state transition via notifyResponseWaiters above. The real
+        // client never sent a request with this id and must never see
+        // this response on the wire: forwarding it risks a spec-strict
+        // JSON-RPC client treating an unrecognized response id as a
+        // protocol error, or — worse — misattributing it to whatever its
+        // own pending request happens to be.
+        if (this.isSentinelInitializeResponse(data)) return;
         socket.send(data);
       },
       close: socket.close?.bind(socket)
     };
+  }
+
+  private isSentinelInitializeResponse(raw: string): boolean {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+    if (typeof parsed !== 'object' || parsed === null) return false;
+    return (parsed as Record<string, unknown>).id === SENTINEL_INITIALIZE_ID;
   }
 
   private notifyResponseWaiters(raw: string): void {
