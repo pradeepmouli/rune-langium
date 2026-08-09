@@ -19,12 +19,19 @@ import { StudioWorkspace } from '../../src/services/lsp-client.js';
 function makeFakeClient() {
   return {
     didOpen: vi.fn(),
-    didClose: vi.fn()
+    didClose: vi.fn(),
+    notification: vi.fn()
   };
 }
 
-function makeFakeView(text: string): EditorView {
-  return { state: { doc: Text.of(text.split('\n')) } } as unknown as EditorView;
+/** `plugin` stands in for what a real EditorView.plugin(lspPlugin) lookup
+ * would return — LSPPlugin.get(view) forwards it verbatim. Defaults to
+ * null, matching "no LSPPlugin currently mounted on this bare view". */
+function makeFakeView(text: string, plugin: unknown = null): EditorView {
+  return {
+    state: { doc: Text.of(text.split('\n')) },
+    plugin: () => plugin
+  } as unknown as EditorView;
 }
 
 describe('StudioWorkspace', () => {
@@ -78,5 +85,47 @@ describe('StudioWorkspace', () => {
 
     expect(() => ws.closeFile('file:///never-opened.rosetta', view)).not.toThrow();
     expect(client.didClose).not.toHaveBeenCalled();
+  });
+
+  it('flushes pending unsynced changes as a full-text didChange before untracking on closeFile', () => {
+    // Regression: an edit made just before a tab switch or pane collapse,
+    // before @codemirror/lsp-client's own 500ms autoSync debounce fires,
+    // must not be silently dropped when closeFile untracks the file.
+    const client = makeFakeClient();
+    const ws = new StudioWorkspace(client as unknown as LSPClient);
+    const fakePlugin = { unsyncedChanges: { empty: false }, clear: vi.fn() };
+    const view = makeFakeView('namespace a\ntype Foo:', fakePlugin);
+    ws.openFile('file:///a.rosetta', 'rosetta', view);
+
+    ws.closeFile('file:///a.rosetta', view);
+
+    expect(client.notification).toHaveBeenCalledWith('textDocument/didChange', {
+      textDocument: { uri: 'file:///a.rosetta', version: expect.any(Number) },
+      contentChanges: [{ text: 'namespace a\ntype Foo:' }]
+    });
+    expect(fakePlugin.clear).toHaveBeenCalledOnce();
+  });
+
+  it('does not send a didChange on closeFile when there are no unsynced changes', () => {
+    const client = makeFakeClient();
+    const ws = new StudioWorkspace(client as unknown as LSPClient);
+    const fakePlugin = { unsyncedChanges: { empty: true }, clear: vi.fn() };
+    const view = makeFakeView('namespace a', fakePlugin);
+    ws.openFile('file:///a.rosetta', 'rosetta', view);
+
+    ws.closeFile('file:///a.rosetta', view);
+
+    expect(client.notification).not.toHaveBeenCalled();
+    expect(fakePlugin.clear).not.toHaveBeenCalled();
+  });
+
+  it('does not flush when no LSPPlugin is found for the view (plugin already detached)', () => {
+    const client = makeFakeClient();
+    const ws = new StudioWorkspace(client as unknown as LSPClient);
+    const view = makeFakeView('namespace a', null);
+    ws.openFile('file:///a.rosetta', 'rosetta', view);
+
+    expect(() => ws.closeFile('file:///a.rosetta', view)).not.toThrow();
+    expect(client.notification).not.toHaveBeenCalled();
   });
 });

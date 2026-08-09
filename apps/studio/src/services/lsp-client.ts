@@ -148,7 +148,28 @@ export class StudioWorkspace extends Workspace {
     this.files.push(file);
   }
 
-  closeFile(uri: string, _view: EditorView): void {
+  closeFile(uri: string, view: EditorView): void {
+    // Flush any edits autoSync's 500ms debounce hasn't drained yet. closeFile
+    // runs synchronously from within LSPPlugin's own destroy() — confirmed
+    // via @codemirror/view's updatePlugins that the PluginInstance's `.value`
+    // (this same LSPPlugin) isn't cleared until after destroy() returns, so
+    // LSPPlugin.get(view) here still resolves it and its live
+    // unsyncedChanges. Without this, an edit made just before a tab switch
+    // or pane collapse is silently discarded: closeFile untracks the file
+    // without ever telling the server, and syncWorkspaceFiles only resumes
+    // sending didChange for this uri once `client.workspace.getFile(uri)`
+    // returns null — which happens right after this method returns, too
+    // late for the already-lost edit. Full-text (no range), matching
+    // syncWorkspaceFiles's own no-live-view branch — simpler and always
+    // correct, unlike replicating the incremental-diff internals here.
+    const plugin = LSPPlugin.get(view);
+    if (plugin && !plugin.unsyncedChanges.empty) {
+      this.client.notification('textDocument/didChange', {
+        textDocument: { uri, version: this.nextFileVersion(uri) },
+        contentChanges: [{ text: view.state.doc.toString() }]
+      });
+      plugin.clear();
+    }
     const file = this.getFile(uri);
     if (file) {
       this.files = this.files.filter((f) => f !== file);
