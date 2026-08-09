@@ -296,23 +296,7 @@ export class RuneLspSession {
       pending.push(this.waitForResponse(String(parsed.id), RESPONSE_ACK_TIMEOUT_MS));
     }
     if (this.langium && isJsonRpcNotification(parsed) && DOCUMENT_MUTATING_METHODS.has(parsed.method)) {
-      // Gated to methods that actually trigger a build — this notification
-      // JUST caused one, so it will normally reach Validated. But a
-      // delete-only update whose rebuild set ends up empty (e.g. closing
-      // the LAST open document) still advances DocumentBuilder's internal
-      // state to Validated — Langium's own runCancelable does that
-      // unconditionally — WITHOUT ever firing an onBuildPhase(Validated,
-      // ...) listener (notifyBuildPhase explicitly skips notifying when
-      // the built-documents set is empty). A wait registered just before
-      // that internal advance would then hang forever on an event that
-      // will never come, so this is bounded the same way waitForResponse
-      // is: letting the event end anyway beats hanging the DO forever.
-      pending.push(
-        Promise.race([
-          this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Validated),
-          new Promise<void>((resolve) => setTimeout(resolve, RESPONSE_ACK_TIMEOUT_MS))
-        ])
-      );
+      pending.push(this.waitForDocumentUpdateSettle(RESPONSE_ACK_TIMEOUT_MS));
     }
     if (pending.length > 0) {
       this.state.waitUntil(Promise.all(pending));
@@ -467,6 +451,55 @@ export class RuneLspSession {
       this.pendingResponseWaiters.set(id, () => {
         clearTimeout(timer);
         resolve();
+      });
+    });
+  }
+
+  /**
+   * Resolves once the DocumentBuilder update THIS specific notification
+   * triggers reaches Validated — not a snapshot check of the builder's
+   * current global state.
+   *
+   * `DocumentBuilder.waitUntil(Validated)` alone is unreliable for this:
+   * `workspaceLock.write()` (langium's workspace-lock.js) defers the actual
+   * update by at least one microtask via `Promise.resolve().then(...)`, so
+   * if the document was ALREADY Validated from a prior build — the
+   * ordinary "type more after the file is already open" case — a
+   * `waitUntil(Validated)` called synchronously right after dispatching
+   * hits the fast-path check against that STALE prior state and resolves
+   * before the queued update for THIS notification has even started.
+   *
+   * Registers `onUpdate` (fires when this notification's update starts,
+   * before the rebuild) and `onBuildPhase(Validated)` (fires after it
+   * completes) BEFORE the deferred update can run, so it observes the
+   * transition genuinely caused by this notification rather than a stale
+   * snapshot. Bounded by the same safety-net timeout as `waitForResponse`:
+   * a delete-only update that empties the rebuild set never fires
+   * `onBuildPhase` at all (`notifyBuildPhase` skips notifying an empty
+   * batch), and a write superseded by a newer one in quick succession
+   * (`workspaceLock.write` cancels the previous pending write) may never
+   * reach Validated on its own attempt either.
+   */
+  private waitForDocumentUpdateSettle(timeoutMs: number): Promise<void> {
+    if (!this.langium) return Promise.resolve();
+    const { DocumentBuilder } = this.langium.shared.workspace;
+    return new Promise<void>((resolve) => {
+      let updateStarted = false;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        updateDisposable.dispose();
+        phaseDisposable.dispose();
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      const updateDisposable = DocumentBuilder.onUpdate(() => {
+        updateStarted = true;
+      });
+      const phaseDisposable = DocumentBuilder.onBuildPhase(DocumentState.Validated, () => {
+        if (updateStarted) finish();
       });
     });
   }

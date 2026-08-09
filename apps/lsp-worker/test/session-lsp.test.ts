@@ -230,6 +230,75 @@ describe('RuneLspSession — real Langium wiring', () => {
     expect(backing.get('docs:file:///i.rosetta')).toBe('namespace ns');
   });
 
+  it('registered document-build work for a SUBSEQUENT didChange waits for the NEW update, not a stale already-Validated snapshot', async () => {
+    // The common "type more after the file is already open and validated"
+    // case. DocumentBuilder.waitUntil(Validated) alone is unreliable here:
+    // workspaceLock.write() (workspace-lock.js) defers the actual update by
+    // at least one microtask, so if the document is ALREADY Validated from
+    // a prior build, a naive waitUntil(Validated) called synchronously
+    // right after dispatching resolves immediately against the STALE prior
+    // state, before the queued update for THIS didChange has even started.
+    const backing = new Map<string, unknown>();
+    const waitUntilCalls: Array<Promise<unknown>> = [];
+    const baseState = makeState(backing);
+    const state = {
+      ...baseState,
+      waitUntil: (p: Promise<unknown>) => {
+        waitUntilCalls.push(p);
+      }
+    } as unknown as import('@cloudflare/workers-types').DurableObjectState;
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === 1)).toBe(true));
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} })
+    );
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didOpen',
+        params: { textDocument: { uri: 'file:///k.rosetta', languageId: 'rosetta', version: 0, text: 'namespace k' } }
+      })
+    );
+    // Let the didOpen's build genuinely settle to Validated before the
+    // subsequent didChange — this is the state the bug depends on.
+    await vi.waitFor(() => expect(backing.get('docs:file:///k.rosetta')).toBe('namespace k'));
+
+    waitUntilCalls.length = 0; // only care about the didChange registration below
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'textDocument/didChange',
+        params: {
+          textDocument: { uri: 'file:///k.rosetta', version: 1 },
+          contentChanges: [{ range: { start: { line: 0, character: 10 }, end: { line: 0, character: 11 } }, text: 'z' }]
+        }
+      })
+    );
+
+    expect(waitUntilCalls.length).toBeGreaterThan(0);
+    // By the time the registered work resolves, the storage mirror must
+    // already reflect the NEW content — proving the wait genuinely tracked
+    // this didChange's own update, not a stale already-Validated snapshot
+    // from the earlier didOpen.
+    await Promise.all(waitUntilCalls);
+    expect(backing.get('docs:file:///k.rosetta')).toBe('namespace z');
+  });
+
   it('bounds the document-build wait so closing the only open document cannot hang state.waitUntil forever', async () => {
     // A didClose that empties the rebuild set is a real Langium edge
     // case (confirmed by reading document-builder.js): runCancelable
