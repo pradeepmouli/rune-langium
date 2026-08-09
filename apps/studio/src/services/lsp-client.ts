@@ -84,7 +84,7 @@ interface StudioWorkspaceFile extends WorkspaceFile {
  * The handler (set via `onDisplayFile`) is responsible for opening the
  * target file tab in the SourceEditor and returning the EditorView.
  */
-class StudioWorkspace extends Workspace {
+export class StudioWorkspace extends Workspace {
   files: StudioWorkspaceFile[] = [];
   private fileVersions: Record<string, number> = Object.create(null);
   displayFileHandler: DisplayFileHandler | null = null;
@@ -109,13 +109,25 @@ class StudioWorkspace extends Workspace {
     return result;
   }
 
+  // Deliberately does NOT call this.client.didOpen/didClose — document
+  // lifecycle is owned solely by LspProvider.tsx's syncWorkspaceFiles,
+  // which already opens/closes the active editor's file regardless of
+  // which panel (Source/Graph/Structure/Form) edits it. This workspace
+  // only tracks `this.files` for the CodeMirror plugin's own bookkeeping
+  // (getFile/syncFiles/displayFile — used for in-editor hover/completion/
+  // diagnostics UI). Before this, an EditorView mounting/unmounting (e.g.
+  // collapsing the Source pane, or a tab switch destroying + recreating
+  // the view) sent a REAL didOpen/didClose behind syncWorkspaceFiles's
+  // back: its own snapshot never learned the doc had been closed, so it
+  // kept sending didChange-only for a document the server no longer
+  // tracked as open — silently breaking builds/diagnostics for every
+  // other editing surface on that file until the Source editor reopened.
+
   openFile(uri: string, languageId: string, view: EditorView): void {
     // Allow re-opening the same file (tab switch destroys + recreates).
-    // Send didClose first to keep open/close pairs balanced for the LSP server.
     const existing = this.files.findIndex((f) => f.uri === uri);
     if (existing >= 0) {
       this.files.splice(existing, 1);
-      this.client.didClose(uri);
     }
     const file: StudioWorkspaceFile = {
       uri,
@@ -126,14 +138,12 @@ class StudioWorkspace extends Workspace {
       getView: () => view
     };
     this.files.push(file);
-    this.client.didOpen(file);
   }
 
   closeFile(uri: string, _view: EditorView): void {
     const file = this.getFile(uri);
     if (file) {
       this.files = this.files.filter((f) => f !== file);
-      this.client.didClose(uri);
     }
   }
 
