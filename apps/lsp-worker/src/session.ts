@@ -138,6 +138,18 @@ export class RuneLspSession {
   private readonly pendingResponseWaiters = new Map<string, () => void>();
 
   /**
+   * True only for the exact window {@link replayIfColdWake} is awaiting the
+   * sentinel `initialize`'s response — NOT derived from
+   * `pendingResponseWaiters.has(SENTINEL_INITIALIZE_ID)`, because that map
+   * is shared with the per-request `state.waitUntil` response-ack
+   * registration in `webSocketMessage`: a real client request whose OWN id
+   * happens to equal the sentinel id would register itself under that same
+   * key for that unrelated reason, making the map's presence alone an
+   * unreliable signal for "a replay is genuinely in flight."
+   */
+  private awaitingSentinelInitializeReply = false;
+
+  /**
    * Caches the in-flight/completed {@link ensureLangium} call so every frame
    * that arrives while a cold-wake replay is still running awaits the SAME
    * promise instead of racing ahead. `ensureLangium` sets `this.transport`
@@ -393,16 +405,18 @@ export class RuneLspSession {
         return socket.readyState;
       },
       send: (data: string) => {
+        // Gated on the dedicated `awaitingSentinelInitializeReply` flag —
+        // not on the id string alone — so suppression is narrowed to
+        // exactly the window a genuine sentinel-replay handshake is
+        // outstanding, not the transport's entire lifetime. A real client
+        // response can never collide with this window regardless of what
+        // id it uses: `webSocketMessage` gates every frame on
+        // `ensureLangiumPromise` (which includes this replay), so no real
+        // client message is forwarded to Langium until the sentinel
+        // response has already been consumed and the flag cleared.
+        const isPendingSentinelReply = this.awaitingSentinelInitializeReply && this.isSentinelInitializeResponse(data);
         this.notifyResponseWaiters(data);
-        // The replayed sentinel `initialize`'s response is purely
-        // internal — it exists only so replayIfColdWake can detect the
-        // real state transition via notifyResponseWaiters above. The real
-        // client never sent a request with this id and must never see
-        // this response on the wire: forwarding it risks a spec-strict
-        // JSON-RPC client treating an unrecognized response id as a
-        // protocol error, or — worse — misattributing it to whatever its
-        // own pending request happens to be.
-        if (this.isSentinelInitializeResponse(data)) return;
+        if (isPendingSentinelReply) return;
         socket.send(data);
       },
       close: socket.close?.bind(socket)
@@ -524,11 +538,13 @@ export class RuneLspSession {
     // slower-than-expected real init (more documents, cold module init)
     // would otherwise send `initialized`/`didOpen` while the server is
     // still `Initializing`, risking a rejected request or a lost edit.
+    this.awaitingSentinelInitializeReply = true;
     const initializeAck = this.waitForResponse(SENTINEL_INITIALIZE_ID, RESPONSE_ACK_TIMEOUT_MS);
     this.transport.receive(
       JSON.stringify({ jsonrpc: '2.0', id: SENTINEL_INITIALIZE_ID, method: 'initialize', params: initParams })
     );
     await initializeAck;
+    this.awaitingSentinelInitializeReply = false;
     this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
     const stored = await this.state.storage.list({ prefix: DOC_PREFIX });

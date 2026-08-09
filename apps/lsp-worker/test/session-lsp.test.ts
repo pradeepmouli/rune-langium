@@ -353,6 +353,30 @@ describe('RuneLspSession — real Langium wiring', () => {
     expect(ws2.sent.some((m: any) => m.id === '__replay_initialize__')).toBe(false);
   });
 
+  it('does not suppress a real request that happens to reuse the internal sentinel id on a brand-new connection', async () => {
+    // No persisted handshake exists yet, so replayIfColdWake returns
+    // immediately without ever waiting on the sentinel id — the
+    // suppression above must not engage just because this real request's
+    // id happens to be the same literal string.
+    const state = makeState();
+    const session = new RuneLspSession(state);
+    const ws = makeFakeWs();
+
+    await session.webSocketMessage(
+      ws as unknown as WebSocket,
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: '__replay_initialize__',
+        method: 'initialize',
+        params: { processId: null, rootUri: null, capabilities: {} }
+      })
+    );
+
+    await vi.waitFor(() => expect(ws.sent.some((m: any) => m.id === '__replay_initialize__')).toBe(true));
+    const result = ws.sent.find((m: any) => m.id === '__replay_initialize__') as any;
+    expect(result.result.capabilities.hoverProvider).toBe(true);
+  });
+
   it('persists the current full document text on every real content change, and removes it on close', async () => {
     const backing = new Map<string, unknown>();
     const state = makeState(backing);
