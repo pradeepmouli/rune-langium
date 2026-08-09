@@ -6,14 +6,25 @@
  * WebSocket → CM Transport adapter (T008).
  *
  * Wraps the browser WebSocket API to implement @codemirror/lsp-client's
- * Transport interface: { send, subscribe, unsubscribe }.
+ * Transport interface: { send, subscribe, unsubscribe }, plus a `close`
+ * the library doesn't define but callers need for lifecycle cleanup.
  */
 
 import type { Transport } from '@codemirror/lsp-client';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
 
+/**
+ * `@codemirror/lsp-client`'s own `Transport` type has no `close` — the
+ * library never manages transport lifecycle, leaving it entirely to the
+ * consumer. `TransportProvider` needs to close the underlying WebSocket
+ * before discarding a transport (on `reconnect()`/`dispose()`), or the
+ * connection — and, under per-connection Durable Object keying, its
+ * server-side DO and stored documents — leaks for the lifetime of the tab.
+ */
+export type CloseableTransport = Transport & { close(): void };
+
 export const createWebSocketTransport = withInstrumentation(
-  function createWebSocketTransport(uri: string, timeout = 2000): Promise<Transport> {
+  function createWebSocketTransport(uri: string, timeout = 2000): Promise<CloseableTransport> {
     return new Promise((resolve, reject) => {
       const handlers: ((value: string) => void)[] = [];
       const sock = new WebSocket(uri);
@@ -40,6 +51,9 @@ export const createWebSocketTransport = withInstrumentation(
           unsubscribe(handler: (value: string) => void) {
             const idx = handlers.indexOf(handler);
             if (idx >= 0) handlers.splice(idx, 1);
+          },
+          close() {
+            sock.close();
           }
         });
       };

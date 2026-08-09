@@ -29,7 +29,8 @@ function makeFakeTransport() {
   return {
     send: vi.fn(),
     subscribe: vi.fn(),
-    unsubscribe: vi.fn()
+    unsubscribe: vi.fn(),
+    close: vi.fn()
   };
 }
 
@@ -327,5 +328,40 @@ describe('createTransportProvider', () => {
     expect(provider.getState().mode).toBe('websocket');
 
     provider.dispose();
+  });
+
+  it('reconnect() closes the previous transport before minting a new one', async () => {
+    // Under per-connection Durable Object keying, every reconnect mints a
+    // fresh DO. The old one only purges its storage on a real WebSocket
+    // close — a bare reassignment here would leak the old socket and its
+    // server-side DO+documents for the life of the tab.
+    const firstTransport = makeFakeTransport();
+    mockWsTransport.mockResolvedValueOnce(firstTransport);
+
+    const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
+    await provider.getTransport();
+    expect(firstTransport.close).not.toHaveBeenCalled();
+
+    const secondTransport = makeFakeTransport();
+    mockWsTransport.mockResolvedValueOnce(secondTransport);
+    const transport = await provider.reconnect();
+
+    expect(firstTransport.close).toHaveBeenCalledTimes(1);
+    expect(transport).toBe(secondTransport);
+
+    provider.dispose();
+  });
+
+  it('dispose() closes the current transport', async () => {
+    const wsTransport = makeFakeTransport();
+    mockWsTransport.mockResolvedValueOnce(wsTransport);
+
+    const provider = createTransportProvider({ wsUri: 'ws://localhost:3001' });
+    await provider.getTransport();
+    expect(wsTransport.close).not.toHaveBeenCalled();
+
+    provider.dispose();
+
+    expect(wsTransport.close).toHaveBeenCalledTimes(1);
   });
 });

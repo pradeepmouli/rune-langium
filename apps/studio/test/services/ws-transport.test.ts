@@ -68,6 +68,7 @@ describe('createWebSocketTransport', () => {
     expect(typeof transport.send).toBe('function');
     expect(typeof transport.subscribe).toBe('function');
     expect(typeof transport.unsubscribe).toBe('function');
+    expect(typeof transport.close).toBe('function');
   });
 
   it('rejects when connection fails', async () => {
@@ -77,6 +78,19 @@ describe('createWebSocketTransport', () => {
     ws.simulateError();
 
     await expect(promise).rejects.toThrow();
+  });
+
+  it('close() closes the underlying WebSocket', async () => {
+    const promise = createWebSocketTransport('ws://localhost:3001');
+    const ws = MockWebSocket.instances[0]!;
+    ws.simulateOpen();
+
+    const transport = await promise;
+    expect(ws.readyState).toBe(1); // OPEN
+
+    transport.close();
+
+    expect(ws.readyState).toBe(3); // CLOSED
   });
 
   it('sends messages through the WebSocket', async () => {

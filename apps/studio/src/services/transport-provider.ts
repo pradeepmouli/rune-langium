@@ -27,7 +27,7 @@
 
 import type { Transport } from '@codemirror/lsp-client';
 import { config } from '../config.js';
-import { createWebSocketTransport } from './ws-transport.js';
+import { createWebSocketTransport, type CloseableTransport } from './ws-transport.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
 
@@ -108,7 +108,7 @@ export const createTransportProvider = withInstrumentation(
     const preferDirectWebSocket = opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
 
     let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
-    let currentTransport: Transport | undefined;
+    let currentTransport: CloseableTransport | undefined;
     const listeners: ((state: TransportState) => void)[] = [];
 
     function setState(next: TransportState): void {
@@ -176,7 +176,7 @@ export const createTransportProvider = withInstrumentation(
      * Transport via `createWebSocketTransport`; surfaces the underlying WS
      * error untouched so the caller's retry logic can branch.
      */
-    async function openPagesFunctionWs(token: string): Promise<Transport> {
+    async function openPagesFunctionWs(token: string): Promise<CloseableTransport> {
       const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
       return createWebSocketTransport(wsUrl, connectionTimeout);
     }
@@ -292,6 +292,14 @@ export const createTransportProvider = withInstrumentation(
       },
 
       async reconnect(): Promise<Transport> {
+        // Close the old WebSocket before discarding it — under per-
+        // connection Durable Object keying, every reconnect mints a fresh
+        // DO, and the OLD one only purges its storage on a real close.
+        // The transport is never otherwise observed to close (no `onclose`
+        // handling in ws-transport.ts): a bare reassignment here abandons
+        // the old socket AND its server-side DO+documents for the life of
+        // the tab.
+        currentTransport?.close();
         currentTransport = undefined;
         return connect();
       },
@@ -305,6 +313,9 @@ export const createTransportProvider = withInstrumentation(
       },
 
       dispose(): void {
+        // Same reasoning as reconnect() — close before discarding, or
+        // unmounting LspProvider leaks the same way.
+        currentTransport?.close();
         currentTransport = undefined;
         listeners.length = 0;
         setState({ mode: 'disconnected', status: 'disconnected' });
