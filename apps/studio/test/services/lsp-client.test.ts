@@ -14,16 +14,16 @@ vi.mock('../../src/services/transport-provider.js', () => ({
 }));
 
 // Mock @codemirror/lsp-client to capture didOpen/didClose/notification calls
-const { mockDidOpen, mockDidClose, mockNotification, mockLspDisconnect, mockLspConnect, mockPlugin } = vi.hoisted(
-  () => ({
+const { mockDidOpen, mockDidClose, mockNotification, mockLspDisconnect, mockLspConnect, mockPlugin, mockGetFile } =
+  vi.hoisted(() => ({
     mockDidOpen: vi.fn(),
     mockDidClose: vi.fn(),
     mockNotification: vi.fn(),
     mockLspDisconnect: vi.fn(),
     mockLspConnect: vi.fn(),
-    mockPlugin: vi.fn().mockReturnValue([])
-  })
-);
+    mockPlugin: vi.fn().mockReturnValue([]),
+    mockGetFile: vi.fn().mockReturnValue(null)
+  }));
 
 vi.mock('@codemirror/lsp-client', () => {
   class MockWorkspace {
@@ -32,8 +32,8 @@ vi.mock('@codemirror/lsp-client', () => {
     constructor(client: unknown) {
       this.client = client;
     }
-    getFile() {
-      return null;
+    getFile(uri: string) {
+      return mockGetFile(uri);
     }
     syncFiles() {
       return [];
@@ -233,6 +233,7 @@ describe('createLspClientService', () => {
 describe('syncWorkspaceFiles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetFile.mockReturnValue(null);
     vi.useFakeTimers();
   });
 
@@ -437,5 +438,75 @@ describe('syncWorkspaceFiles', () => {
     expect(mockDidOpen).not.toHaveBeenCalled();
     expect(mockNotification).not.toHaveBeenCalled();
     expect(mockDidClose).not.toHaveBeenCalled();
+  });
+
+  it('skips sending didChange when a live editor view already owns the uri (avoids racing autoSync)', async () => {
+    const service = await createConnectedService();
+
+    // First sync — opens the file (no live view yet, so didOpen still comes from here)
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace foo' }]);
+    vi.runAllTimers();
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+
+    // A live editor view now owns this uri (StudioWorkspace.openFile ran via
+    // client.plugin(uri)) — @codemirror/lsp-client's own autoSync/client.sync()
+    // is responsible for this uri's didChange from here on.
+    mockGetFile.mockImplementation((uri: string) => (uri === 'file:///workspace/foo.rosetta' ? {} : null));
+
+    service.syncWorkspaceFiles([{ path: 'foo.rosetta', content: 'namespace bar' }]);
+    vi.runAllTimers();
+
+    expect(mockNotification).not.toHaveBeenCalled();
+  });
+
+  it('still sends didChange for a modified file with no live view even while another uri has one', async () => {
+    const service = await createConnectedService();
+
+    service.syncWorkspaceFiles([
+      { path: 'foo.rosetta', content: 'namespace foo' },
+      { path: 'bar.rosetta', content: 'namespace bar' }
+    ]);
+    vi.runAllTimers();
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+
+    // Only foo.rosetta has a live view; bar.rosetta does not.
+    mockGetFile.mockImplementation((uri: string) => (uri === 'file:///workspace/foo.rosetta' ? {} : null));
+
+    service.syncWorkspaceFiles([
+      { path: 'foo.rosetta', content: 'namespace foo changed' },
+      { path: 'bar.rosetta', content: 'namespace bar changed' }
+    ]);
+    vi.runAllTimers();
+
+    const changeCalls = mockNotification.mock.calls.filter((c) => c[0] === 'textDocument/didChange');
+    expect(changeCalls.some((c) => c[1].textDocument.uri === 'file:///workspace/foo.rosetta')).toBe(false);
+    const barChange = changeCalls.find((c) => c[1].textDocument.uri === 'file:///workspace/bar.rosetta');
+    expect(barChange).toBeTruthy();
+    expect(barChange![1].contentChanges[0].text).toBe('namespace bar changed');
+  });
+
+  it('skips the batch-refresh didChange for a uri with a live editor view', async () => {
+    const service = await createConnectedService();
+
+    // First sync — one file, already tracked with a live view.
+    service.syncWorkspaceFiles([{ path: 'a.rosetta', content: 'namespace a' }]);
+    vi.runAllTimers();
+    mockDidOpen.mockClear();
+    mockNotification.mockClear();
+    mockGetFile.mockImplementation((uri: string) => (uri === 'file:///workspace/a.rosetta' ? {} : null));
+
+    // Second sync — add a new file alongside the live-viewed one; this
+    // triggers the debounced no-op refresh across unchanged files.
+    service.syncWorkspaceFiles([
+      { path: 'a.rosetta', content: 'namespace a' },
+      { path: 'b.rosetta', content: 'namespace b' }
+    ]);
+    vi.runAllTimers();
+
+    expect(mockDidOpen).toHaveBeenCalledOnce();
+    const changeCalls = mockNotification.mock.calls.filter((c) => c[0] === 'textDocument/didChange');
+    expect(changeCalls.some((c) => c[1].textDocument.uri === 'file:///workspace/a.rosetta')).toBe(false);
   });
 });

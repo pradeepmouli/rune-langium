@@ -84,7 +84,7 @@ interface StudioWorkspaceFile extends WorkspaceFile {
  * The handler (set via `onDisplayFile`) is responsible for opening the
  * target file tab in the SourceEditor and returning the EditorView.
  */
-class StudioWorkspace extends Workspace {
+export class StudioWorkspace extends Workspace {
   files: StudioWorkspaceFile[] = [];
   private fileVersions: Record<string, number> = Object.create(null);
   displayFileHandler: DisplayFileHandler | null = null;
@@ -109,13 +109,33 @@ class StudioWorkspace extends Workspace {
     return result;
   }
 
+  // Deliberately does NOT call this.client.didOpen/didClose — document
+  // open/close lifecycle is owned solely by LspProvider.tsx's
+  // syncWorkspaceFiles, which already opens/closes the active editor's
+  // file regardless of which panel (Source/Graph/Structure/Form) edits
+  // it. This workspace tracks `this.files` for the CodeMirror plugin's
+  // own bookkeeping (getFile/syncFiles/displayFile — used for in-editor
+  // hover/completion/diagnostics UI), AND is the sole sender of
+  // didChange for any uri it currently tracks: @codemirror/lsp-client's
+  // own autoSync/client.sync() drains syncFiles()'s unsyncedChanges and
+  // sends the wire notification. syncWorkspaceFiles checks
+  // `client.workspace.getFile(uri)` and skips sending its own didChange
+  // whenever a live view already owns the uri, so the two paths never
+  // race each other with independently-numbered versions against the
+  // same document. Before the didOpen/didClose fix, an EditorView
+  // mounting/unmounting (e.g. collapsing the Source pane, or a tab
+  // switch destroying + recreating the view) sent a REAL didOpen/
+  // didClose behind syncWorkspaceFiles's back: its own snapshot never
+  // learned the doc had been closed, so it kept sending didChange-only
+  // for a document the server no longer tracked as open — silently
+  // breaking builds/diagnostics for every other editing surface on that
+  // file until the Source editor reopened.
+
   openFile(uri: string, languageId: string, view: EditorView): void {
     // Allow re-opening the same file (tab switch destroys + recreates).
-    // Send didClose first to keep open/close pairs balanced for the LSP server.
     const existing = this.files.findIndex((f) => f.uri === uri);
     if (existing >= 0) {
       this.files.splice(existing, 1);
-      this.client.didClose(uri);
     }
     const file: StudioWorkspaceFile = {
       uri,
@@ -126,14 +146,33 @@ class StudioWorkspace extends Workspace {
       getView: () => view
     };
     this.files.push(file);
-    this.client.didOpen(file);
   }
 
-  closeFile(uri: string, _view: EditorView): void {
+  closeFile(uri: string, view: EditorView): void {
+    // Flush any edits autoSync's 500ms debounce hasn't drained yet. closeFile
+    // runs synchronously from within LSPPlugin's own destroy() — confirmed
+    // via @codemirror/view's updatePlugins that the PluginInstance's `.value`
+    // (this same LSPPlugin) isn't cleared until after destroy() returns, so
+    // LSPPlugin.get(view) here still resolves it and its live
+    // unsyncedChanges. Without this, an edit made just before a tab switch
+    // or pane collapse is silently discarded: closeFile untracks the file
+    // without ever telling the server, and syncWorkspaceFiles only resumes
+    // sending didChange for this uri once `client.workspace.getFile(uri)`
+    // returns null — which happens right after this method returns, too
+    // late for the already-lost edit. Full-text (no range), matching
+    // syncWorkspaceFiles's own no-live-view branch — simpler and always
+    // correct, unlike replicating the incremental-diff internals here.
+    const plugin = LSPPlugin.get(view);
+    if (plugin && !plugin.unsyncedChanges.empty) {
+      this.client.notification('textDocument/didChange', {
+        textDocument: { uri, version: this.nextFileVersion(uri) },
+        contentChanges: [{ text: view.state.doc.toString() }]
+      });
+      plugin.clear();
+    }
     const file = this.getFile(uri);
     if (file) {
       this.files = this.files.filter((f) => f !== file);
-      this.client.didClose(uri);
     }
   }
 
@@ -277,7 +316,14 @@ export const createLspClientService = withInstrumentation(
             const version = prev.version + 1;
             workspaceSnapshot.set(uri, { version, content: file.content });
             changedUris.add(uri);
-            if (client && initialized) {
+            // A live editor view for this uri (StudioWorkspace.openFile) owns
+            // didChange for it via @codemirror/lsp-client's own autoSync/
+            // client.sync() path — sending a second, independently-versioned
+            // didChange here races it and can desync the server's document
+            // (a range-based edit from the live view applied against text a
+            // full-text replace from here has already superseded, or vice
+            // versa). Only send when no live view is tracking this uri.
+            if (client && initialized && !client.workspace.getFile(uri)) {
               client.notification('textDocument/didChange', {
                 textDocument: { uri, version },
                 contentChanges: [{ text: file.content }]
@@ -309,7 +355,7 @@ export const createLspClientService = withInstrumentation(
             _pendingRefreshId = null;
             if (!client || !initialized) return;
             for (const [uri, entry] of workspaceSnapshot) {
-              if (urisToSkip.has(uri)) continue;
+              if (urisToSkip.has(uri) || client.workspace.getFile(uri)) continue;
               const version = entry.version + 1;
               workspaceSnapshot.set(uri, { version, content: entry.content });
               client.notification('textDocument/didChange', {

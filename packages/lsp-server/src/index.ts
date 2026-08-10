@@ -31,3 +31,8 @@ export { createConnectionAdapter } from './connection-adapter.js';
 // is delivered via the DO's webSocketMessage/Close hooks rather than
 // browser-style addEventListener.
 export { DurableObjectWebSocketTransport } from './cf-durable-object-transport.js';
+
+// Custom document-update handling — evicts closed documents from the
+// workspace index (Langium's default doesn't). Exported so consumers
+// (tests, the DO) can reference its type.
+export { RuneDocumentUpdateHandler } from './document-update-handler.js';
