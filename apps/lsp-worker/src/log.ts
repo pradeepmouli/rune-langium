@@ -69,9 +69,14 @@ export const logger: Logger = pino({
   level: 'info',
   browser: {
     asObject: true,
+    // Cloudflare Workers Logs only extracts queryable per-field indexes when
+    // console.log receives the raw object — console.log(JSON.stringify(obj))
+    // is stored as an opaque {message: "<string>"} line, unindexed beyond
+    // full-text search. See
+    // https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects
     write: (obj: unknown) => {
       // eslint-disable-next-line no-console
-      console.log(JSON.stringify(obj));
+      console.log(obj);
     }
   },
   redact: {
