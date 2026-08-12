@@ -120,6 +120,32 @@ const ERR_INTERNAL = -32603;
 const DOCUMENT_MUTATING_METHODS = new Set(['textDocument/didOpen', 'textDocument/didChange', 'textDocument/didClose']);
 
 // ────────────────────────────────────────────────────────────────────────────
+// TEMPORARY diagnostic instrumentation — investigating production hover/
+// completion requests timing out client-side (@codemirror/lsp-client's
+// default 3000ms request timeout). Buckets each request's server-side
+// receive-to-response-sent latency and whether it landed on a cold DO wake,
+// so `[DIAG] response ...` log lines are visible via Cloudflare Workers
+// Observability without needing per-request raw traces. Remove once the
+// timeout root cause is confirmed — see specs/014-studio-prod-ready.
+// ────────────────────────────────────────────────────────────────────────────
+
+const DIAG_ELAPSED_BUCKETS: ReadonlyArray<readonly [number, string]> = [
+  [500, '0-500ms'],
+  [1000, '500-1000ms'],
+  [2000, '1000-2000ms'],
+  [3000, '2000-3000ms'],
+  [5000, '3000-5000ms'],
+  [Infinity, '5000ms+']
+];
+
+function diagBucket(elapsedMs: number): string {
+  for (const [ceiling, label] of DIAG_ELAPSED_BUCKETS) {
+    if (elapsedMs < ceiling) return label;
+  }
+  return '5000ms+';
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // RuneLspSession DO
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -136,6 +162,14 @@ export class RuneLspSession {
 
   /** Resolvers for {@link waitForResponse}, keyed by the awaited response id. */
   private readonly pendingResponseWaiters = new Map<string, () => void>();
+
+  /**
+   * TEMPORARY diagnostic instrumentation (see top of file) — receive time,
+   * method, and cold-wake status for each in-flight client request, keyed
+   * the same as {@link pendingResponseWaiters}. Consumed and logged in
+   * {@link notifyResponseWaiters} once the matching response is sent.
+   */
+  private readonly diagRequestStarts = new Map<string, { method: string; startedAt: number; coldWake: boolean }>();
 
   /**
    * True only for the exact window {@link replayIfColdWake} is awaiting the
@@ -241,10 +275,16 @@ export class RuneLspSession {
     // replay) is still in flight blocks until it fully finishes, instead of
     // seeing `this.transport` already set and forwarding ahead of the
     // replay it depends on.
+    // [DIAG] temporary — see top-of-file note.
+    const diagWasColdWake = !this.ensureLangiumPromise;
+    const diagEnsureStart = Date.now();
     if (!this.ensureLangiumPromise) {
       this.ensureLangiumPromise = this.ensureLangium(ws);
     }
     const ok = await this.ensureLangiumPromise;
+    if (diagWasColdWake) {
+      console.log(`[DIAG] ensureLangium coldWake=true ok=${ok} elapsedMs=${Date.now() - diagEnsureStart}`);
+    }
     if (!ok) {
       // Notifications have no id to correlate a response to — a failed
       // notification isn't itself answerable, so nothing is sent for one.
@@ -278,6 +318,17 @@ export class RuneLspSession {
     // and data-model.md §1.
     if (isJsonRpcRequest(parsed) && parsed.method === 'shutdown') {
       await this.purgeStorage();
+    }
+
+    // [DIAG] temporary — see top-of-file note. Recorded here, right before
+    // forwarding, so elapsed time in the log below covers exactly the same
+    // span the client's own request timeout is measuring.
+    if (isJsonRpcRequest(parsed)) {
+      this.diagRequestStarts.set(String(parsed.id), {
+        method: parsed.method,
+        startedAt: Date.now(),
+        coldWake: diagWasColdWake
+      });
     }
 
     this.transport!.receive(text);
@@ -419,7 +470,7 @@ export class RuneLspSession {
   }
 
   private notifyResponseWaiters(raw: string): void {
-    if (this.pendingResponseWaiters.size === 0) return;
+    if (this.pendingResponseWaiters.size === 0 && this.diagRequestStarts.size === 0) return;
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
@@ -430,6 +481,17 @@ export class RuneLspSession {
     const id = (parsed as Record<string, unknown>).id;
     if (typeof id !== 'string' && typeof id !== 'number') return;
     const key = String(id);
+
+    // [DIAG] temporary — see top-of-file note.
+    const diag = this.diagRequestStarts.get(key);
+    if (diag) {
+      this.diagRequestStarts.delete(key);
+      const elapsedMs = Date.now() - diag.startedAt;
+      console.log(
+        `[DIAG] response method=${diag.method} coldWake=${diag.coldWake} elapsedBucket=${diagBucket(elapsedMs)} elapsedMs=${elapsedMs}`
+      );
+    }
+
     const resolve = this.pendingResponseWaiters.get(key);
     if (resolve) {
       this.pendingResponseWaiters.delete(key);
@@ -446,6 +508,17 @@ export class RuneLspSession {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pendingResponseWaiters.delete(id);
+        // [DIAG] temporary — see top-of-file note. If a request's own diag
+        // entry is still present here, the server never sent a response
+        // within the safety-net window at all — a genuinely stuck request,
+        // not a client-timeout-budget issue.
+        const diag = this.diagRequestStarts.get(id);
+        if (diag) {
+          this.diagRequestStarts.delete(id);
+          console.log(
+            `[DIAG] response method=${diag.method} coldWake=${diag.coldWake} elapsedBucket=NEVER_SENT elapsedMs=${Date.now() - diag.startedAt}`
+          );
+        }
         resolve();
       }, timeoutMs);
       this.pendingResponseWaiters.set(id, () => {
