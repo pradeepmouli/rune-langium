@@ -189,6 +189,16 @@ export class RuneLspSession {
   private diagDidReplay = false;
 
   /**
+   * TEMPORARY diagnostic instrumentation (see top of file) — true only
+   * while the FIRST {@link ensureLangium} call for this DO instance is
+   * still in flight (construction + cold-wake replay). Per-REQUEST, unlike
+   * {@link diagDidReplay}: a request reads this BEFORE awaiting, so it
+   * reflects whether THIS request personally waited through construction —
+   * not whether the instance ever replayed at any point in its lifetime.
+   */
+  private diagConstructionInFlight = false;
+
+  /**
    * True only for the exact window {@link replayIfColdWake} is awaiting the
    * sentinel `initialize`'s response — NOT derived from
    * `pendingResponseWaiters.has(SENTINEL_INITIALIZE_ID)`, because that map
@@ -300,23 +310,33 @@ export class RuneLspSession {
     // seeing `this.transport` already set and forwarding ahead of the
     // replay it depends on.
     // [DIAG] temporary — see top-of-file note. `diagIsConstructor` is true
-    // only for the ONE request that triggers `ensureLangium()`, used to log
-    // the construction event exactly once. `diagExperiencedColdWake` is
-    // read from `this.diagDidReplay` AFTER awaiting — set inside
-    // `ensureLangium`/`replayIfColdWake` before that promise ever resolves,
-    // so it's already stable for every awaiter (the constructor AND any
-    // request that arrives while construction is still in flight), and —
-    // critically — it distinguishes a REAL post-hibernation replay from a
-    // brand-new connection's first-ever `ensureLangium` call, which also
-    // has `!this.ensureLangiumPromise` but does no replay I/O at all and
-    // has a completely different latency profile.
+    // only for the ONE request that triggers `ensureLangium()`. Two
+    // DIFFERENT signals combine into a request's final `coldWake` tag,
+    // deliberately kept separate:
+    //  - `diagAwaitedInFlight` (per REQUEST, captured before awaiting): did
+    //    THIS request personally wait through a still-unresolved
+    //    `ensureLangiumPromise`? True for the constructor and any request
+    //    arriving while that same construction is still in flight — false
+    //    for every later request on an already-warm instance, which
+    //    incurs none of that latency no matter how the instance was
+    //    originally constructed.
+    //  - `this.diagDidReplay` (per INSTANCE, read after awaiting, stable
+    //    for the instance's whole lifetime): did construction do genuine
+    //    post-hibernation replay I/O, vs. a brand-new connection's first
+    //    construction (also `!this.ensureLangiumPromise`, but no replay
+    //    I/O and a very different latency profile)?
+    // Both must be true for `coldWake=true` — a request that merely landed
+    // on an instance that replayed *at some point in the past* did not
+    // itself experience that delay.
     const diagIsConstructor = !this.ensureLangiumPromise;
+    const diagAwaitedInFlight = diagIsConstructor || this.diagConstructionInFlight;
     if (diagIsConstructor) {
+      this.diagConstructionInFlight = true;
       this.ensureLangiumPromise = this.ensureLangium(ws);
     }
     const ok = await this.ensureLangiumPromise;
-    const diagExperiencedColdWake = this.diagDidReplay;
     if (diagIsConstructor) {
+      this.diagConstructionInFlight = false;
       logger.info(
         {
           ts: Date.now(),
@@ -328,6 +348,7 @@ export class RuneLspSession {
         'lsp-worker.diag'
       );
     }
+    const diagExperiencedColdWake = diagAwaitedInFlight && this.diagDidReplay;
     if (!ok) {
       // Notifications have no id to correlate a response to — a failed
       // notification isn't itself answerable, so nothing is sent for one.
