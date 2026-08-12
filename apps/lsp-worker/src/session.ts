@@ -123,10 +123,13 @@ const DOCUMENT_MUTATING_METHODS = new Set(['textDocument/didOpen', 'textDocument
 // TEMPORARY diagnostic instrumentation — investigating production hover/
 // completion requests timing out client-side (@codemirror/lsp-client's
 // default 3000ms request timeout). Buckets each request's server-side
-// receive-to-response-sent latency and whether it landed on a cold DO wake,
-// so `[DIAG] response ...` log lines are visible via Cloudflare Workers
-// Observability without needing per-request raw traces. Remove once the
-// timeout root cause is confirmed — see specs/014-studio-prod-ready.
+// receive-to-response-sent latency and whether it landed on a cold DO wake.
+// Logged as structured objects (`console.log({...})`, not template
+// strings) so each field — `diag`, `method`, `coldWake`, `elapsedBucket`,
+// `elapsedMs` — is independently queryable/groupable via the Cloudflare
+// Workers Observability API, not just visible as opaque message text.
+// Remove once the timeout root cause is confirmed — see
+// specs/014-studio-prod-ready.
 // ────────────────────────────────────────────────────────────────────────────
 
 const DIAG_ELAPSED_BUCKETS: ReadonlyArray<readonly [number, string]> = [
@@ -170,6 +173,16 @@ export class RuneLspSession {
    * {@link notifyResponseWaiters} once the matching response is sent.
    */
   private readonly diagRequestStarts = new Map<string, { method: string; startedAt: number; coldWake: boolean }>();
+
+  /**
+   * TEMPORARY diagnostic instrumentation (see top of file) — true only
+   * while the FIRST {@link ensureLangium} call for this DO instance is
+   * still in flight (construction + cold-wake replay). Lets a request that
+   * arrives mid-construction — not just the one that triggered it — be
+   * correctly tagged `coldWake=true` too, since it waits through the same
+   * delay.
+   */
+  private diagLangiumInitializing = false;
 
   /**
    * True only for the exact window {@link replayIfColdWake} is awaiting the
@@ -257,6 +270,13 @@ export class RuneLspSession {
     this.ws = ws;
     const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
+    // [DIAG] temporary — see top-of-file note. Captured on arrival, before
+    // any cold-wake wait, so elapsed time in the `[DIAG] response` log
+    // below covers the SAME span the client's own request timeout is
+    // measuring — including any cold-wake reconstruction this request has
+    // to wait through, not just its own processing time afterward.
+    const diagArrivedAt = Date.now();
+
     // Parsed BEFORE ensureLangium so a load failure can echo the
     // triggering request's real id back — without it, the JSON-RPC client
     // can never correlate the error with its outstanding request and just
@@ -275,15 +295,23 @@ export class RuneLspSession {
     // replay) is still in flight blocks until it fully finishes, instead of
     // seeing `this.transport` already set and forwarding ahead of the
     // replay it depends on.
-    // [DIAG] temporary — see top-of-file note.
-    const diagWasColdWake = !this.ensureLangiumPromise;
-    const diagEnsureStart = Date.now();
-    if (!this.ensureLangiumPromise) {
+    // [DIAG] temporary — see top-of-file note. `diagIsConstructor` is true
+    // only for the ONE request that triggers `ensureLangium()`, used to log
+    // the construction event exactly once. `diagExperiencedColdWake` is
+    // true for that request AND any other arriving while that same
+    // construction/replay is still in flight — both wait through the full
+    // delay, so both must be tagged `coldWake=true` on their own response
+    // log, not just the request that happened to trigger construction.
+    const diagIsConstructor = !this.ensureLangiumPromise;
+    const diagExperiencedColdWake = diagIsConstructor || this.diagLangiumInitializing;
+    if (diagIsConstructor) {
+      this.diagLangiumInitializing = true;
       this.ensureLangiumPromise = this.ensureLangium(ws);
     }
     const ok = await this.ensureLangiumPromise;
-    if (diagWasColdWake) {
-      console.log(`[DIAG] ensureLangium coldWake=true ok=${ok} elapsedMs=${Date.now() - diagEnsureStart}`);
+    if (diagIsConstructor) {
+      this.diagLangiumInitializing = false;
+      console.log({ diag: 'coldWake', ok, elapsedMs: Date.now() - diagArrivedAt });
     }
     if (!ok) {
       // Notifications have no id to correlate a response to — a failed
@@ -320,14 +348,12 @@ export class RuneLspSession {
       await this.purgeStorage();
     }
 
-    // [DIAG] temporary — see top-of-file note. Recorded here, right before
-    // forwarding, so elapsed time in the log below covers exactly the same
-    // span the client's own request timeout is measuring.
+    // [DIAG] temporary — see top-of-file note.
     if (isJsonRpcRequest(parsed)) {
       this.diagRequestStarts.set(String(parsed.id), {
         method: parsed.method,
-        startedAt: Date.now(),
-        coldWake: diagWasColdWake
+        startedAt: diagArrivedAt,
+        coldWake: diagExperiencedColdWake
       });
     }
 
@@ -487,9 +513,13 @@ export class RuneLspSession {
     if (diag) {
       this.diagRequestStarts.delete(key);
       const elapsedMs = Date.now() - diag.startedAt;
-      console.log(
-        `[DIAG] response method=${diag.method} coldWake=${diag.coldWake} elapsedBucket=${diagBucket(elapsedMs)} elapsedMs=${elapsedMs}`
-      );
+      console.log({
+        diag: 'response',
+        method: diag.method,
+        coldWake: diag.coldWake,
+        elapsedBucket: diagBucket(elapsedMs),
+        elapsedMs
+      });
     }
 
     const resolve = this.pendingResponseWaiters.get(key);
@@ -515,9 +545,13 @@ export class RuneLspSession {
         const diag = this.diagRequestStarts.get(id);
         if (diag) {
           this.diagRequestStarts.delete(id);
-          console.log(
-            `[DIAG] response method=${diag.method} coldWake=${diag.coldWake} elapsedBucket=NEVER_SENT elapsedMs=${Date.now() - diag.startedAt}`
-          );
+          console.log({
+            diag: 'response',
+            method: diag.method,
+            coldWake: diag.coldWake,
+            elapsedBucket: 'NEVER_SENT',
+            elapsedMs: Date.now() - diag.startedAt
+          });
         }
         resolve();
       }, timeoutMs);
