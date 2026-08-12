@@ -70,6 +70,18 @@ const SENTINEL_INITIALIZE_ID = '__replay_initialize__';
  * production.
  */
 const RESPONSE_ACK_TIMEOUT_MS = 5000;
+/**
+ * TEMPORARY diagnostic instrumentation (see top of file) — how long a
+ * {@link RuneLspSession.diagRequestStarts} entry is retained waiting for a
+ * response that may still legitimately arrive late (see
+ * {@link RuneLspSession.waitForResponse}'s "still pending" checkpoint at
+ * `RESPONSE_ACK_TIMEOUT_MS`), before being treated as abandoned and
+ * cleaned up. Long enough that no real — if very slow — response should
+ * ever hit it, but bounded so a genuinely stuck request (no response at
+ * all) doesn't retain a diagnostic-only record for the rest of a
+ * sustained, actively-warm DO instance's lifetime.
+ */
+const DIAG_ABANDON_TIMEOUT_MS = 60_000;
 
 /** Minimal CF WebSocket surface `DurableObjectWebSocketTransport` needs. */
 interface CfSocketLike {
@@ -384,13 +396,40 @@ export class RuneLspSession {
       await this.purgeStorage();
     }
 
-    // [DIAG] temporary — see top-of-file note.
+    // [DIAG] temporary — see top-of-file note. The abandon timer is
+    // independent of waitForResponse's own RESPONSE_ACK_TIMEOUT_MS timer
+    // (a different purpose — state.waitUntil bookkeeping, not diagnostic
+    // retention) and of notifyResponseWaiters (which still wins and
+    // reports the real response normally if it arrives before this
+    // fires). A bare setTimeout is sufficient here: it's best-effort
+    // bookkeeping for a temporary diagnostic, not something whose failure
+    // would affect real behavior, and a DO instance that hibernates
+    // before this fires drops the whole in-memory diagRequestStarts map
+    // anyway.
     if (isJsonRpcRequest(parsed)) {
-      this.diagRequestStarts.set(String(parsed.id), {
+      const diagKey = String(parsed.id);
+      this.diagRequestStarts.set(diagKey, {
         method: parsed.method,
         startedAt: diagArrivedAt,
         coldWake: diagExperiencedColdWake
       });
+      setTimeout(() => {
+        const diag = this.diagRequestStarts.get(diagKey);
+        if (diag) {
+          this.diagRequestStarts.delete(diagKey);
+          logger.info(
+            {
+              ts: Date.now(),
+              diagEvent: 'response',
+              method: diag.method,
+              coldWake: diag.coldWake,
+              elapsedBucket: 'ABANDONED',
+              elapsedMs: Date.now() - diag.startedAt
+            },
+            'lsp-worker.diag'
+          );
+        }
+      }, DIAG_ABANDON_TIMEOUT_MS);
     }
 
     this.transport!.receive(text);
