@@ -30,7 +30,10 @@ describe('logRequest (T034)', () => {
     });
     expect(spy).toHaveBeenCalledTimes(1);
     const [payload] = spy.mock.calls[0]!;
-    const entry = JSON.parse(payload as string) as Record<string, unknown>;
+    // Raw object, not a JSON string — see @rune-langium/worker-core/log's
+    // write() doc comment: Cloudflare Workers Logs only indexes fields
+    // from a raw object passed to console.log.
+    const entry = payload as Record<string, unknown>;
     expect(entry).toMatchObject({
       ts: expect.any(Number),
       ip_hash: 'abcdef0123456789',
@@ -53,7 +56,10 @@ describe('logRequest (T034)', () => {
       status: 200,
       coldStart: false
     });
-    const out = spy.mock.calls.map((c) => String(c[0])).join('\n');
+    // JSON.stringify, not String() — String(anObject) is always the
+    // literal text "[object Object]" and would make this assertion pass
+    // vacuously regardless of the payload's actual content.
+    const out = spy.mock.calls.map((c) => JSON.stringify(c[0])).join('\n');
     expect(out).not.toContain(sensitive);
     expect(out).not.toContain('203.0.113.5'); // raw IP
   });
@@ -64,10 +70,12 @@ describe('logRequest (T034)', () => {
     // @ts-expect-error — intentionally pass wrong shape to verify guard
     logRequest({ ip: '203.0.113.5', language: 'ts', bytesOut: 0, durationMs: 1, status: 200 });
     // Either nothing logged to stdout, or the error went to stderr; the raw IP
-    // MUST NOT appear anywhere.
-    const combined = [...spy.mock.calls.map((c) => String(c[0])), ...errSpy.mock.calls.map((c) => String(c[0]))].join(
-      '\n'
-    );
+    // MUST NOT appear anywhere. JSON.stringify, not String() — see the
+    // identical comment on the previous test.
+    const combined = [
+      ...spy.mock.calls.map((c) => JSON.stringify(c[0])),
+      ...errSpy.mock.calls.map((c) => JSON.stringify(c[0]))
+    ].join('\n');
     expect(combined).not.toContain('203.0.113.5');
   });
 
@@ -81,7 +89,7 @@ describe('logRequest (T034)', () => {
       status: 200,
       coldStart: true
     });
-    const entry = JSON.parse(spy.mock.calls[0]![0] as string) as Record<string, unknown>;
+    const entry = spy.mock.calls[0]![0] as Record<string, unknown>;
     expect(entry.cold_start).toBe(true);
   });
 });

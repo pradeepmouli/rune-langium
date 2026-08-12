@@ -111,9 +111,9 @@ importers:
 
   apps/codegen-worker:
     dependencies:
-      pino:
-        specifier: ^10.3.1
-        version: 10.3.1
+      '@rune-langium/worker-core':
+        specifier: workspace:*
+        version: link:../../packages/worker-core
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260625.1
@@ -136,15 +136,15 @@ importers:
       '@rune-langium/curated-schema':
         specifier: workspace:*
         version: link:../../packages/curated-schema
+      '@rune-langium/worker-core':
+        specifier: workspace:*
+        version: link:../../packages/worker-core
       langium:
         specifier: ^4.3.1
         version: 4.3.1
       pako:
         specifier: ^2.2.0
         version: 2.2.0
-      pino:
-        specifier: ^10.3.1
-        version: 10.3.1
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260625.1
@@ -217,12 +217,12 @@ importers:
       '@rune-langium/lsp-server':
         specifier: workspace:*
         version: link:../../packages/lsp-server
+      '@rune-langium/worker-core':
+        specifier: workspace:*
+        version: link:../../packages/worker-core
       langium:
         specifier: ^4.3.1
         version: 4.3.1
-      pino:
-        specifier: ^10.3.1
-        version: 10.3.1
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -450,9 +450,9 @@ importers:
       '@rune-langium/curated-schema':
         specifier: workspace:*
         version: link:../../packages/curated-schema
-      pino:
-        specifier: ^10.3.1
-        version: 10.3.1
+      '@rune-langium/worker-core':
+        specifier: workspace:*
+        version: link:../../packages/worker-core
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -803,6 +803,19 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+
+  packages/worker-core:
+    dependencies:
+      '@pinojs/redact':
+        specifier: ^0.4.0
+        version: 0.4.0
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+    devDependencies:
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.10)(@vitest/ui@4.1.10)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
   scratch/lsp-spike:
     dependencies:

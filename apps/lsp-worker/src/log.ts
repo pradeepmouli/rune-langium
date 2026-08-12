@@ -4,19 +4,15 @@
 /**
  * Structured request logging for the LSP Worker (T042).
  *
- * Mirrors `apps/codegen-worker/src/log.ts` and `apps/telemetry-worker/src/log.ts`
- * so all three Workers share the same redact rules; extends the redact set
- * with LSP-specific paths (`params.contentChanges`, `params.text`,
- * `result.contents`) so source code never appears in logs — see
+ * The `pino/browser` construction + redact-path baseline live in
+ * `@rune-langium/worker-core/log`, shared with codegen-worker,
+ * telemetry-worker, and curated-mirror-worker. This module only adds the
+ * LSP-specific redact paths (`params.contentChanges`, `params.text`,
+ * `result.contents`, ...) so source code never appears in logs — see
  * `specs/014-studio-prod-ready/contracts/lsp-worker.md` "Privacy invariants".
- *
- * Pino's `redact` config enforces these paths at the framework level: even
- * if a caller accidentally passes the full LSP message tree, pino replaces
- * the offending subtree with "[Redacted]" BEFORE anything is written.
  */
 
-import pino from 'pino/browser';
-import type { Logger, LoggerOptions } from 'pino';
+import { createWorkerLogger, type Logger } from '@rune-langium/worker-core/log';
 
 export interface LspWorkerLogEntry {
   /** Route the request hit, e.g. `/api/lsp/session`, `/api/lsp/health`, `/api/lsp/ws/<token>`. */
@@ -34,27 +30,8 @@ export interface LspWorkerLogEntry {
   errorCategory?: string;
 }
 
-/**
- * Paths whose value is replaced with "[Redacted]" in every emitted log
- * line. Carries the codegen-worker / telemetry-worker baseline plus the
- * LSP-source-body paths that are unique to this Worker.
- */
-const REDACT_PATHS = [
-  // Carried-forward (mirror codegen-worker + telemetry-worker)
-  'request',
-  'response',
-  'body',
-  'files',
-  'content',
-  'raw_ip',
-  'ip',
-  'remote_ip',
-  'cf-connecting-ip',
-  'cookie',
-  'headers.authorization',
-  'headers.cookie',
-  'headers["set-cookie"]',
-  // LSP-specific — anything that may carry source code
+/** LSP-specific redact paths, on top of `@rune-langium/worker-core/log`'s shared baseline — anything that may carry source code. */
+const LSP_EXTRA_REDACT_PATHS = [
   'params.contentChanges',
   'params.text',
   'params.textDocument.text',
@@ -65,25 +42,7 @@ const REDACT_PATHS = [
   'message.params.textDocument.text'
 ];
 
-export const logger: Logger = pino({
-  level: 'info',
-  browser: {
-    asObject: true,
-    // Cloudflare Workers Logs only extracts queryable per-field indexes when
-    // console.log receives the raw object — console.log(JSON.stringify(obj))
-    // is stored as an opaque {message: "<string>"} line, unindexed beyond
-    // full-text search. See
-    // https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects
-    write: (obj: unknown) => {
-      // eslint-disable-next-line no-console
-      console.log(obj);
-    }
-  },
-  redact: {
-    paths: REDACT_PATHS,
-    censor: '[Redacted]'
-  }
-} as LoggerOptions);
+export const logger: Logger = createWorkerLogger(LSP_EXTRA_REDACT_PATHS);
 
 /**
  * Emit one structured log line for a completed Worker request.
