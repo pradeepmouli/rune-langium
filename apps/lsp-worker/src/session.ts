@@ -588,20 +588,27 @@ export class RuneLspSession {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pendingResponseWaiters.delete(id);
-        // [DIAG] temporary — see top-of-file note. If a request's own diag
-        // entry is still present here, the server never sent a response
-        // within the safety-net window at all — a genuinely stuck request,
-        // not a client-timeout-budget issue.
+        // [DIAG] temporary — see top-of-file note. Do NOT delete the
+        // diagRequestStarts entry here, and do NOT log this as
+        // "never sent" — this timer is only this method's own
+        // state.waitUntil bookkeeping safety net (RESPONSE_ACK_TIMEOUT_MS),
+        // completely independent of whether the real request/response
+        // machinery is still working. A genuinely slow-but-successful
+        // response can still arrive after this fires; deleting the entry
+        // here would make notifyResponseWaiters find nothing when it does,
+        // permanently misclassifying a real (if slow) response as a
+        // server that never answered at all, and making the 5000ms+
+        // bucket unreachable. Log a still-pending checkpoint instead —
+        // notifyResponseWaiters remains the ONLY place that consumes and
+        // finally logs a request's diag entry, however late.
         const diag = this.diagRequestStarts.get(id);
         if (diag) {
-          this.diagRequestStarts.delete(id);
           logger.info(
             {
               ts: Date.now(),
-              diagEvent: 'response',
+              diagEvent: 'responseStillPending',
               method: diag.method,
               coldWake: diag.coldWake,
-              elapsedBucket: 'NEVER_SENT',
               elapsedMs: Date.now() - diag.startedAt
             },
             'lsp-worker.diag'
