@@ -36,6 +36,7 @@
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { createRuneLspServer, DurableObjectWebSocketTransport, type RuneLspServer } from '@rune-langium/lsp-server';
 import { DocumentState } from 'langium';
+import { logger } from './log.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Storage shape (data-model §1)
@@ -124,10 +125,12 @@ const DOCUMENT_MUTATING_METHODS = new Set(['textDocument/didOpen', 'textDocument
 // completion requests timing out client-side (@codemirror/lsp-client's
 // default 3000ms request timeout). Buckets each request's server-side
 // receive-to-response-sent latency and whether it landed on a cold DO wake.
-// Logged as structured objects (`console.log({...})`, not template
-// strings) so each field — `diag`, `method`, `coldWake`, `elapsedBucket`,
-// `elapsedMs` — is independently queryable/groupable via the Cloudflare
-// Workers Observability API, not just visible as opaque message text.
+// Routed through `./log.ts`'s shared `logger` (the same pino instance
+// `logRequest` uses for this Worker's HTTP-entry logging) rather than raw
+// `console.log`, so these lines carry the fleet's existing redact rules
+// and format — one structured object per line, fields `diagEvent`,
+// `method`, `coldWake`, `elapsedBucket`, `elapsedMs` independently
+// queryable/groupable via the Cloudflare Workers Observability API.
 // Remove once the timeout root cause is confirmed — see
 // specs/014-studio-prod-ready.
 // ────────────────────────────────────────────────────────────────────────────
@@ -311,7 +314,10 @@ export class RuneLspSession {
     const ok = await this.ensureLangiumPromise;
     if (diagIsConstructor) {
       this.diagLangiumInitializing = false;
-      console.log({ diag: 'coldWake', ok, elapsedMs: Date.now() - diagArrivedAt });
+      logger.info(
+        { ts: Date.now(), diagEvent: 'coldWake', ok, elapsedMs: Date.now() - diagArrivedAt },
+        'lsp-worker.diag'
+      );
     }
     if (!ok) {
       // Notifications have no id to correlate a response to — a failed
@@ -513,13 +519,17 @@ export class RuneLspSession {
     if (diag) {
       this.diagRequestStarts.delete(key);
       const elapsedMs = Date.now() - diag.startedAt;
-      console.log({
-        diag: 'response',
-        method: diag.method,
-        coldWake: diag.coldWake,
-        elapsedBucket: diagBucket(elapsedMs),
-        elapsedMs
-      });
+      logger.info(
+        {
+          ts: Date.now(),
+          diagEvent: 'response',
+          method: diag.method,
+          coldWake: diag.coldWake,
+          elapsedBucket: diagBucket(elapsedMs),
+          elapsedMs
+        },
+        'lsp-worker.diag'
+      );
     }
 
     const resolve = this.pendingResponseWaiters.get(key);
@@ -545,13 +555,17 @@ export class RuneLspSession {
         const diag = this.diagRequestStarts.get(id);
         if (diag) {
           this.diagRequestStarts.delete(id);
-          console.log({
-            diag: 'response',
-            method: diag.method,
-            coldWake: diag.coldWake,
-            elapsedBucket: 'NEVER_SENT',
-            elapsedMs: Date.now() - diag.startedAt
-          });
+          logger.info(
+            {
+              ts: Date.now(),
+              diagEvent: 'response',
+              method: diag.method,
+              coldWake: diag.coldWake,
+              elapsedBucket: 'NEVER_SENT',
+              elapsedMs: Date.now() - diag.startedAt
+            },
+            'lsp-worker.diag'
+          );
         }
         resolve();
       }, timeoutMs);
