@@ -178,14 +178,15 @@ export class RuneLspSession {
   private readonly diagRequestStarts = new Map<string, { method: string; startedAt: number; coldWake: boolean }>();
 
   /**
-   * TEMPORARY diagnostic instrumentation (see top of file) — true only
-   * while the FIRST {@link ensureLangium} call for this DO instance is
-   * still in flight (construction + cold-wake replay). Lets a request that
-   * arrives mid-construction — not just the one that triggered it — be
-   * correctly tagged `coldWake=true` too, since it waits through the same
-   * delay.
+   * TEMPORARY diagnostic instrumentation (see top of file) — set by
+   * {@link ensureLangium} from {@link replayIfColdWake}'s own return value:
+   * `true` only when this DO instance actually replayed persisted state
+   * (a genuine post-hibernation cold wake), `false` for a brand-new
+   * connection's first-ever construction, which does no replay I/O and has
+   * a very different latency profile despite also being this instance's
+   * first {@link ensureLangium} call.
    */
-  private diagLangiumInitializing = false;
+  private diagDidReplay = false;
 
   /**
    * True only for the exact window {@link replayIfColdWake} is awaiting the
@@ -301,21 +302,29 @@ export class RuneLspSession {
     // [DIAG] temporary — see top-of-file note. `diagIsConstructor` is true
     // only for the ONE request that triggers `ensureLangium()`, used to log
     // the construction event exactly once. `diagExperiencedColdWake` is
-    // true for that request AND any other arriving while that same
-    // construction/replay is still in flight — both wait through the full
-    // delay, so both must be tagged `coldWake=true` on their own response
-    // log, not just the request that happened to trigger construction.
+    // read from `this.diagDidReplay` AFTER awaiting — set inside
+    // `ensureLangium`/`replayIfColdWake` before that promise ever resolves,
+    // so it's already stable for every awaiter (the constructor AND any
+    // request that arrives while construction is still in flight), and —
+    // critically — it distinguishes a REAL post-hibernation replay from a
+    // brand-new connection's first-ever `ensureLangium` call, which also
+    // has `!this.ensureLangiumPromise` but does no replay I/O at all and
+    // has a completely different latency profile.
     const diagIsConstructor = !this.ensureLangiumPromise;
-    const diagExperiencedColdWake = diagIsConstructor || this.diagLangiumInitializing;
     if (diagIsConstructor) {
-      this.diagLangiumInitializing = true;
       this.ensureLangiumPromise = this.ensureLangium(ws);
     }
     const ok = await this.ensureLangiumPromise;
+    const diagExperiencedColdWake = this.diagDidReplay;
     if (diagIsConstructor) {
-      this.diagLangiumInitializing = false;
       logger.info(
-        { ts: Date.now(), diagEvent: 'coldWake', ok, elapsedMs: Date.now() - diagArrivedAt },
+        {
+          ts: Date.now(),
+          diagEvent: 'coldWake',
+          ok,
+          replayed: this.diagDidReplay,
+          elapsedMs: Date.now() - diagArrivedAt
+        },
         'lsp-worker.diag'
       );
     }
@@ -449,7 +458,8 @@ export class RuneLspSession {
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
       this.registerStorageMirror();
-      await this.replayIfColdWake();
+      // [DIAG] temporary — see top-of-file note re: diagDidReplay.
+      this.diagDidReplay = await this.replayIfColdWake();
       return true;
     } catch (err) {
       this.langiumLoadError = err instanceof Error ? err.message : String(err);
@@ -510,7 +520,16 @@ export class RuneLspSession {
       return;
     }
     if (typeof parsed !== 'object' || parsed === null) return;
-    const id = (parsed as Record<string, unknown>).id;
+    const record = parsed as Record<string, unknown>;
+    // A genuine JSON-RPC response never carries `method` — only requests
+    // and notifications do. The server itself can send OUTBOUND requests
+    // (e.g. `workspace/configuration`, `workspace/applyEdit` —
+    // connection-adapter.ts) through this same `send()` path, in a
+    // namespace independent of the client's own request ids; without this
+    // check, one of those coincidentally reusing an id a client request is
+    // still waiting on would be mistaken for that request's response.
+    if ('method' in record) return;
+    const id = record.id;
     if (typeof id !== 'string' && typeof id !== 'number') return;
     const key = String(id);
 
@@ -679,10 +698,13 @@ export class RuneLspSession {
    * (ServerNotInitialized on every request) and Langium's DocumentBuilder
    * never fires (no diagnostics), both silently.
    */
-  private async replayIfColdWake(): Promise<void> {
-    if (!this.transport) return;
+  // [DIAG] temporary — return type widened from `void` to `boolean` (see
+  // top-of-file note re: diagDidReplay) so callers can tell a genuine
+  // replay apart from a brand-new connection's no-op early return.
+  private async replayIfColdWake(): Promise<boolean> {
+    if (!this.transport) return false;
     const initParams = await this.state.storage.get<unknown>(INIT_PARAMS_KEY);
-    if (initParams === undefined) return; // brand-new connection — nothing to replay
+    if (initParams === undefined) return false; // brand-new connection — nothing to replay
 
     // registerInitializeHandler's composite handler is async (state
     // transition + delegating to Langium's own onInitialize chain); receive()
@@ -702,7 +724,10 @@ export class RuneLspSession {
     this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
     const stored = await this.state.storage.list({ prefix: DOC_PREFIX });
-    if (stored.size === 0) return;
+    // A real replay happened above (the initialize/initialized handshake,
+    // including the awaited round-trip) even with zero stored documents —
+    // only the earlier `initParams === undefined` branch means no replay.
+    if (stored.size === 0) return true;
 
     for (const [key, value] of stored) {
       const uri = key.slice(DOC_PREFIX.length);
@@ -726,6 +751,7 @@ export class RuneLspSession {
     if (this.langium) {
       await this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Linked);
     }
+    return true;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
