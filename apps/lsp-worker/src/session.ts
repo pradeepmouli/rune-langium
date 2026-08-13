@@ -183,11 +183,20 @@ export class RuneLspSession {
 
   /**
    * TEMPORARY diagnostic instrumentation (see top of file) — receive time,
-   * method, and cold-wake status for each in-flight client request, keyed
-   * the same as {@link pendingResponseWaiters}. Consumed and logged in
-   * {@link notifyResponseWaiters} once the matching response is sent.
+   * method, cold-wake status, and the abandon-timer handle for each
+   * in-flight client request, keyed the same as
+   * {@link pendingResponseWaiters}. Consumed and logged in
+   * {@link notifyResponseWaiters} once the matching response is sent —
+   * which MUST also clear `abandonTimer` there: a pending `setTimeout`
+   * keeps a hibernatable Durable Object resident, so an uncleared timer
+   * would hold every successful request's instance alive for the full
+   * `DIAG_ABANDON_TIMEOUT_MS` after each response, corrupting the very
+   * hibernation frequency this instrumentation exists to measure.
    */
-  private readonly diagRequestStarts = new Map<string, { method: string; startedAt: number; coldWake: boolean }>();
+  private readonly diagRequestStarts = new Map<
+    string,
+    { method: string; startedAt: number; coldWake: boolean; abandonTimer: ReturnType<typeof setTimeout> }
+  >();
 
   /**
    * TEMPORARY diagnostic instrumentation (see top of file) — set by
@@ -399,21 +408,16 @@ export class RuneLspSession {
     // [DIAG] temporary — see top-of-file note. The abandon timer is
     // independent of waitForResponse's own RESPONSE_ACK_TIMEOUT_MS timer
     // (a different purpose — state.waitUntil bookkeeping, not diagnostic
-    // retention) and of notifyResponseWaiters (which still wins and
-    // reports the real response normally if it arrives before this
-    // fires). A bare setTimeout is sufficient here: it's best-effort
-    // bookkeeping for a temporary diagnostic, not something whose failure
-    // would affect real behavior, and a DO instance that hibernates
-    // before this fires drops the whole in-memory diagRequestStarts map
-    // anyway.
+    // retention). A pending setTimeout keeps a hibernatable DO resident,
+    // so notifyResponseWaiters MUST clear this timer on the normal
+    // response path — otherwise every successful request would hold this
+    // instance alive for the full DIAG_ABANDON_TIMEOUT_MS afterward,
+    // corrupting the real hibernation frequency this instrumentation
+    // exists to measure. Only a genuinely unanswered request lets the
+    // timer run to completion and keep the instance resident until then.
     if (isJsonRpcRequest(parsed)) {
       const diagKey = String(parsed.id);
-      this.diagRequestStarts.set(diagKey, {
-        method: parsed.method,
-        startedAt: diagArrivedAt,
-        coldWake: diagExperiencedColdWake
-      });
-      setTimeout(() => {
+      const abandonTimer = setTimeout(() => {
         const diag = this.diagRequestStarts.get(diagKey);
         if (diag) {
           this.diagRequestStarts.delete(diagKey);
@@ -430,6 +434,12 @@ export class RuneLspSession {
           );
         }
       }, DIAG_ABANDON_TIMEOUT_MS);
+      this.diagRequestStarts.set(diagKey, {
+        method: parsed.method,
+        startedAt: diagArrivedAt,
+        coldWake: diagExperiencedColdWake,
+        abandonTimer
+      });
     }
 
     this.transport!.receive(text);
@@ -593,9 +603,15 @@ export class RuneLspSession {
     if (typeof id !== 'string' && typeof id !== 'number') return;
     const key = String(id);
 
-    // [DIAG] temporary — see top-of-file note.
+    // [DIAG] temporary — see top-of-file note. Clearing abandonTimer here
+    // is load-bearing, not cleanup hygiene: a pending setTimeout keeps a
+    // hibernatable DO resident, so leaving it running past a normal
+    // response would hold this instance alive for DIAG_ABANDON_TIMEOUT_MS
+    // after every successful request, corrupting the real hibernation
+    // frequency this instrumentation exists to measure.
     const diag = this.diagRequestStarts.get(key);
     if (diag) {
+      clearTimeout(diag.abandonTimer);
       this.diagRequestStarts.delete(key);
       const elapsedMs = Date.now() - diag.startedAt;
       logger.info(
