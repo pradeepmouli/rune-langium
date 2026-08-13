@@ -489,6 +489,20 @@ export class RuneLspSession {
     // ever violated.
     this.transport?.signalClose();
     this.transport = null;
+    // [DIAG] temporary — see top-of-file note. A real client disconnect
+    // orphans any outstanding request's diag entry: no more response can
+    // ever arrive for it (this.ws is now null, and per-connection keying
+    // means this DO instance is permanently unreachable). Left alone, the
+    // abandon timer would eventually log it as `ABANDONED` — misreporting
+    // a client disconnect as a server hang — AND keep this instance
+    // resident for up to DIAG_ABANDON_TIMEOUT_MS past a close that should
+    // free it immediately. Clear every pending timer and discard the
+    // entries silently; this is normal disconnect behavior, not a
+    // diagnostic-worthy event.
+    for (const diag of this.diagRequestStarts.values()) {
+      clearTimeout(diag.abandonTimer);
+    }
+    this.diagRequestStarts.clear();
     await this.purgeStorage();
   }
 
