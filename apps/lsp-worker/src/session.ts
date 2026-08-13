@@ -70,18 +70,6 @@ const SENTINEL_INITIALIZE_ID = '__replay_initialize__';
  * production.
  */
 const RESPONSE_ACK_TIMEOUT_MS = 5000;
-/**
- * TEMPORARY diagnostic instrumentation (see top of file) — how long a
- * {@link RuneLspSession.diagRequestStarts} entry is retained waiting for a
- * response that may still legitimately arrive late (see
- * {@link RuneLspSession.waitForResponse}'s "still pending" checkpoint at
- * `RESPONSE_ACK_TIMEOUT_MS`), before being treated as abandoned and
- * cleaned up. Long enough that no real — if very slow — response should
- * ever hit it, but bounded so a genuinely stuck request (no response at
- * all) doesn't retain a diagnostic-only record for the rest of a
- * sustained, actively-warm DO instance's lifetime.
- */
-const DIAG_ABANDON_TIMEOUT_MS = 60_000;
 
 /** Minimal CF WebSocket surface `DurableObjectWebSocketTransport` needs. */
 interface CfSocketLike {
@@ -183,20 +171,14 @@ export class RuneLspSession {
 
   /**
    * TEMPORARY diagnostic instrumentation (see top of file) — receive time,
-   * method, cold-wake status, and the abandon-timer handle for each
-   * in-flight client request, keyed the same as
-   * {@link pendingResponseWaiters}. Consumed and logged in
-   * {@link notifyResponseWaiters} once the matching response is sent —
-   * which MUST also clear `abandonTimer` there: a pending `setTimeout`
-   * keeps a hibernatable Durable Object resident, so an uncleared timer
-   * would hold every successful request's instance alive for the full
-   * `DIAG_ABANDON_TIMEOUT_MS` after each response, corrupting the very
-   * hibernation frequency this instrumentation exists to measure.
+   * method, and cold-wake status for each in-flight client request, keyed
+   * the same as {@link pendingResponseWaiters}. Consumed and logged in
+   * {@link notifyResponseWaiters} once the matching response is sent
+   * (however late), or discarded silently in {@link webSocketClose} on a
+   * real disconnect. Deliberately NOT bounded by any timer — see the
+   * comment at the entry's creation site in {@link webSocketMessage}.
    */
-  private readonly diagRequestStarts = new Map<
-    string,
-    { method: string; startedAt: number; coldWake: boolean; abandonTimer: ReturnType<typeof setTimeout> }
-  >();
+  private readonly diagRequestStarts = new Map<string, { method: string; startedAt: number; coldWake: boolean }>();
 
   /**
    * TEMPORARY diagnostic instrumentation (see top of file) — set by
@@ -405,40 +387,24 @@ export class RuneLspSession {
       await this.purgeStorage();
     }
 
-    // [DIAG] temporary — see top-of-file note. The abandon timer is
-    // independent of waitForResponse's own RESPONSE_ACK_TIMEOUT_MS timer
-    // (a different purpose — state.waitUntil bookkeeping, not diagnostic
-    // retention). A pending setTimeout keeps a hibernatable DO resident,
-    // so notifyResponseWaiters MUST clear this timer on the normal
-    // response path — otherwise every successful request would hold this
-    // instance alive for the full DIAG_ABANDON_TIMEOUT_MS afterward,
-    // corrupting the real hibernation frequency this instrumentation
-    // exists to measure. Only a genuinely unanswered request lets the
-    // timer run to completion and keep the instance resident until then.
+    // [DIAG] temporary — see top-of-file note. Deliberately NOT bounded by
+    // a setTimeout — per Cloudflare's own Durable Object lifecycle docs,
+    // hibernation requires (among other things) NO setTimeout/setInterval
+    // scheduled callbacks, at all, for the whole instance. A per-request
+    // abandon timer here was tried and reverted: it kept every DO instance
+    // artificially resident for up to a minute past any genuinely slow
+    // (not hung) response, actively suppressing the exact hibernation
+    // behavior this instrumentation exists to measure — a much worse cost
+    // than the residual risk it traded away (diagRequestStarts entries for
+    // a genuinely unanswered request stay until notifyResponseWaiters
+    // consumes them or webSocketClose discards them). Real hangs should be
+    // rare; a sustained warm instance accumulating many of them is itself
+    // diagnostically interesting, not silent data loss.
     if (isJsonRpcRequest(parsed)) {
-      const diagKey = String(parsed.id);
-      const abandonTimer = setTimeout(() => {
-        const diag = this.diagRequestStarts.get(diagKey);
-        if (diag) {
-          this.diagRequestStarts.delete(diagKey);
-          logger.info(
-            {
-              ts: Date.now(),
-              diagEvent: 'response',
-              method: diag.method,
-              coldWake: diag.coldWake,
-              elapsedBucket: 'ABANDONED',
-              elapsedMs: Date.now() - diag.startedAt
-            },
-            'lsp-worker.diag'
-          );
-        }
-      }, DIAG_ABANDON_TIMEOUT_MS);
-      this.diagRequestStarts.set(diagKey, {
+      this.diagRequestStarts.set(String(parsed.id), {
         method: parsed.method,
         startedAt: diagArrivedAt,
-        coldWake: diagExperiencedColdWake,
-        abandonTimer
+        coldWake: diagExperiencedColdWake
       });
     }
 
@@ -492,16 +458,9 @@ export class RuneLspSession {
     // [DIAG] temporary — see top-of-file note. A real client disconnect
     // orphans any outstanding request's diag entry: no more response can
     // ever arrive for it (this.ws is now null, and per-connection keying
-    // means this DO instance is permanently unreachable). Left alone, the
-    // abandon timer would eventually log it as `ABANDONED` — misreporting
-    // a client disconnect as a server hang — AND keep this instance
-    // resident for up to DIAG_ABANDON_TIMEOUT_MS past a close that should
-    // free it immediately. Clear every pending timer and discard the
-    // entries silently; this is normal disconnect behavior, not a
-    // diagnostic-worthy event.
-    for (const diag of this.diagRequestStarts.values()) {
-      clearTimeout(diag.abandonTimer);
-    }
+    // means this DO instance is permanently unreachable). Discard the
+    // entries silently — this is normal disconnect behavior, not a
+    // diagnostic-worthy server-hang event.
     this.diagRequestStarts.clear();
     await this.purgeStorage();
   }
@@ -617,15 +576,9 @@ export class RuneLspSession {
     if (typeof id !== 'string' && typeof id !== 'number') return;
     const key = String(id);
 
-    // [DIAG] temporary — see top-of-file note. Clearing abandonTimer here
-    // is load-bearing, not cleanup hygiene: a pending setTimeout keeps a
-    // hibernatable DO resident, so leaving it running past a normal
-    // response would hold this instance alive for DIAG_ABANDON_TIMEOUT_MS
-    // after every successful request, corrupting the real hibernation
-    // frequency this instrumentation exists to measure.
+    // [DIAG] temporary — see top-of-file note.
     const diag = this.diagRequestStarts.get(key);
     if (diag) {
-      clearTimeout(diag.abandonTimer);
       this.diagRequestStarts.delete(key);
       const elapsedMs = Date.now() - diag.startedAt;
       logger.info(
