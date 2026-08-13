@@ -85,10 +85,12 @@ populate + show a hydrating spinner correctly.
 - Studio Playwright flows should wait for visible UI readiness rather than `networkidle` on routes that keep worker/LSP connections open.
 - Codegen is now split between a shared namespace walker and language-specific emitters. `packages/codegen/src/generator.ts` walks each namespace once via `packages/codegen/src/emit/namespace-walker.ts`, then passes a readonly `NamespaceWalkResult` to the Zod, TypeScript, and JSON Schema emitters.
 - Target-specific output paths are centralized in `getTargetRelativePath`, while TypeScript-only func extraction stays in `packages/codegen/src/emit/ts-emitter.ts` so non-TS targets do not pick up func diagnostics.
+- `apps/lsp-worker`, `apps/codegen-worker`, `apps/telemetry-worker`, and `apps/curated-mirror-worker` (the plain Cloudflare Workers, distinct from Pages Functions) all get their structured logging from the shared `@rune-langium/worker-core` package (`./log` subpath: `createWorkerLogger()`, `REDACT_PATHS_BASELINE`) — never hand-roll a per-Worker `pino/browser` construction again. Two invariants this package enforces that a hand-rolled copy will silently miss: (1) `write` must pass the RAW object to `console.log`, not `JSON.stringify(obj)` — Cloudflare Workers Logs only indexes queryable per-field data from a raw object; a stringified payload is stored as an opaque unindexed message. (2) `pino/browser.js` never wires up the `redact` option at all (zero references anywhere in its source) — real redaction is implemented by hand in `worker-core` via `@pinojs/redact` (confirmed non-code-generating — no `new Function`/`eval`, unlike the `fast-redact` it replaced in pino 10.x — verified by reading its full source AND empirically via a real `wrangler dev` request). `worker-core` is designed to grow other shared cross-cutting Worker concerns as sibling modules alongside `./log`.
 
 ## Recent Changes
 
 - Codegen cleanup: shared namespace walking was extracted so emitters focus on target-specific output; regression coverage lives in `packages/codegen/test/namespace-walker.test.ts`.
+- Extracted `@rune-langium/worker-core` (`./log`) from four Workers' copy-pasted, already-drifted `log.ts` files; fixed a Cloudflare Workers Logs field-indexing bug (stringify-before-console.log) and a redaction gap (`pino/browser` never implements `redact`) along the way. See `packages/worker-core/src/log.ts`'s doc comment for details.
 
 ## Licensing Boundary
 
