@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: FSL-1.1-ALv2
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
 // pino ships a browser-safe build at `pino/browser` but no explicit

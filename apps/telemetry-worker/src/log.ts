@@ -4,15 +4,15 @@
 /**
  * Structured request logging for the telemetry Worker.
  *
- * Mirrors `apps/codegen-worker/src/log.ts` so both Workers share the
- * same redact rules. The privacy contract for telemetry is stricter
- * than for codegen — we never persist a raw IP, never log file paths,
- * and never log request bodies. Pino's `redact` config enforces this
- * at the framework level.
+ * The `pino/browser` construction + shared redact-path baseline live in
+ * `@rune-langium/worker-core/log`, shared with lsp-worker, codegen-worker,
+ * and curated-mirror-worker. The privacy contract for telemetry is
+ * stricter than for codegen — we never persist a raw IP, never log file
+ * paths, and never log request bodies; the shared baseline covers all of
+ * these already, so this Worker adds no extra redact paths of its own.
  */
 
-import pino from 'pino/browser';
-import type { Logger, LoggerOptions } from 'pino';
+import { createWorkerLogger, type Logger } from '@rune-langium/worker-core/log';
 
 export interface TelemetryLogEntry {
   ipHash: string;
@@ -45,41 +45,7 @@ export interface TelemetrySpanLogEntry {
   signature?: string;
 }
 
-const REDACT_PATHS = [
-  'request',
-  'response',
-  'body',
-  'files',
-  'content',
-  'raw_ip',
-  'ip',
-  'remote_ip',
-  'cf-connecting-ip',
-  'cookie',
-  'headers.authorization',
-  'headers.cookie',
-  'headers["set-cookie"]'
-];
-
-export const logger: Logger = pino({
-  level: 'info',
-  browser: {
-    asObject: true,
-    // Cloudflare Workers Logs only extracts queryable per-field indexes when
-    // console.log receives the raw object — console.log(JSON.stringify(obj))
-    // is stored as an opaque {message: "<string>"} line, unindexed beyond
-    // full-text search. See
-    // https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects
-    write: (obj: unknown) => {
-      // eslint-disable-next-line no-console
-      console.log(obj);
-    }
-  },
-  redact: {
-    paths: REDACT_PATHS,
-    censor: '[Redacted]'
-  }
-} as LoggerOptions);
+export const logger: Logger = createWorkerLogger();
 
 export function logRequest(entry: TelemetryLogEntry): void {
   logger.info(

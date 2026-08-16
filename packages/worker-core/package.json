@@ -1,0 +1,41 @@
+{
+  "name": "@rune-langium/worker-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared cross-cutting utilities for rune-langium's plain Cloudflare Workers (lsp-worker, codegen-worker, telemetry-worker, curated-mirror-worker). Ships structured logging (./log) today — a pino/browser logger with this fleet's shared redact-path baseline, real redaction, and console.log(obj) convention baked in — with room to grow other shared Worker concerns as sibling modules.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./log": {
+      "types": "./dist/log.d.ts",
+      "import": "./dist/log.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pinojs/redact": "^0.4.0",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "license": "MIT",
+  "author": "Pradeep Mouli <pmouli@mac.com> (https://github.com/pradeepmouli)"
+}

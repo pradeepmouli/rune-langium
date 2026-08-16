@@ -2,44 +2,17 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Structured logging for the curated-mirror Worker. Same redact set as
- * apps/codegen-worker/src/log.ts so log shape is uniform across all
- * rune-langium Workers.
+ * Structured logging for the curated-mirror Worker.
+ *
+ * The `pino/browser` construction + shared redact-path baseline live in
+ * `@rune-langium/worker-core/log`, shared with lsp-worker, codegen-worker,
+ * and telemetry-worker, so log shape is uniform across all rune-langium
+ * Workers.
  */
 
-import pino from 'pino/browser';
-import type { Logger, LoggerOptions } from 'pino';
+import { createWorkerLogger, type Logger } from '@rune-langium/worker-core/log';
 
-const REDACT_PATHS = [
-  'request',
-  'response',
-  'body',
-  'files',
-  'content',
-  'raw_ip',
-  'ip',
-  'remote_ip',
-  'cf-connecting-ip',
-  'cookie',
-  'headers.authorization',
-  'headers.cookie',
-  'headers["set-cookie"]'
-];
-
-export const logger: Logger = pino({
-  level: 'info',
-  browser: {
-    asObject: true,
-    write: (obj: unknown) => {
-      // eslint-disable-next-line no-console
-      console.log(JSON.stringify(obj));
-    }
-  },
-  redact: {
-    paths: REDACT_PATHS,
-    censor: '[Redacted]'
-  }
-} as LoggerOptions);
+export const logger: Logger = createWorkerLogger();
 
 export interface PublishLogEntry {
   modelId: string;

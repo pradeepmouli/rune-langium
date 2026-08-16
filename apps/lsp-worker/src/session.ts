@@ -36,6 +36,7 @@
 import type { DurableObjectState } from '@cloudflare/workers-types';
 import { createRuneLspServer, DurableObjectWebSocketTransport, type RuneLspServer } from '@rune-langium/lsp-server';
 import { DocumentState } from 'langium';
+import { logger } from './log.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Storage shape (data-model §1)
@@ -120,6 +121,37 @@ const ERR_INTERNAL = -32603;
 const DOCUMENT_MUTATING_METHODS = new Set(['textDocument/didOpen', 'textDocument/didChange', 'textDocument/didClose']);
 
 // ────────────────────────────────────────────────────────────────────────────
+// TEMPORARY diagnostic instrumentation — investigating production hover/
+// completion requests timing out client-side (@codemirror/lsp-client's
+// default 3000ms request timeout). Buckets each request's server-side
+// receive-to-response-sent latency and whether it landed on a cold DO wake.
+// Routed through `./log.ts`'s shared `logger` (the same pino instance
+// `logRequest` uses for this Worker's HTTP-entry logging) rather than raw
+// `console.log`, so these lines carry the fleet's existing redact rules
+// and format — one structured object per line, fields `diagEvent`,
+// `method`, `coldWake`, `elapsedBucket`, `elapsedMs` independently
+// queryable/groupable via the Cloudflare Workers Observability API.
+// Remove once the timeout root cause is confirmed — see
+// specs/014-studio-prod-ready.
+// ────────────────────────────────────────────────────────────────────────────
+
+const DIAG_ELAPSED_BUCKETS: ReadonlyArray<readonly [number, string]> = [
+  [500, '0-500ms'],
+  [1000, '500-1000ms'],
+  [2000, '1000-2000ms'],
+  [3000, '2000-3000ms'],
+  [5000, '3000-5000ms'],
+  [Infinity, '5000ms+']
+];
+
+function diagBucket(elapsedMs: number): string {
+  for (const [ceiling, label] of DIAG_ELAPSED_BUCKETS) {
+    if (elapsedMs < ceiling) return label;
+  }
+  return '5000ms+';
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // RuneLspSession DO
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -136,6 +168,38 @@ export class RuneLspSession {
 
   /** Resolvers for {@link waitForResponse}, keyed by the awaited response id. */
   private readonly pendingResponseWaiters = new Map<string, () => void>();
+
+  /**
+   * TEMPORARY diagnostic instrumentation (see top of file) — receive time,
+   * method, and cold-wake status for each in-flight client request, keyed
+   * the same as {@link pendingResponseWaiters}. Consumed and logged in
+   * {@link notifyResponseWaiters} once the matching response is sent
+   * (however late), or discarded silently in {@link webSocketClose} on a
+   * real disconnect. Deliberately NOT bounded by any timer — see the
+   * comment at the entry's creation site in {@link webSocketMessage}.
+   */
+  private readonly diagRequestStarts = new Map<string, { method: string; startedAt: number; coldWake: boolean }>();
+
+  /**
+   * TEMPORARY diagnostic instrumentation (see top of file) — set by
+   * {@link ensureLangium} from {@link replayIfColdWake}'s own return value:
+   * `true` only when this DO instance actually replayed persisted state
+   * (a genuine post-hibernation cold wake), `false` for a brand-new
+   * connection's first-ever construction, which does no replay I/O and has
+   * a very different latency profile despite also being this instance's
+   * first {@link ensureLangium} call.
+   */
+  private diagDidReplay = false;
+
+  /**
+   * TEMPORARY diagnostic instrumentation (see top of file) — true only
+   * while the FIRST {@link ensureLangium} call for this DO instance is
+   * still in flight (construction + cold-wake replay). Per-REQUEST, unlike
+   * {@link diagDidReplay}: a request reads this BEFORE awaiting, so it
+   * reflects whether THIS request personally waited through construction —
+   * not whether the instance ever replayed at any point in its lifetime.
+   */
+  private diagConstructionInFlight = false;
 
   /**
    * True only for the exact window {@link replayIfColdWake} is awaiting the
@@ -223,6 +287,13 @@ export class RuneLspSession {
     this.ws = ws;
     const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
 
+    // [DIAG] temporary — see top-of-file note. Captured on arrival, before
+    // any cold-wake wait, so elapsed time in the `[DIAG] response` log
+    // below covers the SAME span the client's own request timeout is
+    // measuring — including any cold-wake reconstruction this request has
+    // to wait through, not just its own processing time afterward.
+    const diagArrivedAt = Date.now();
+
     // Parsed BEFORE ensureLangium so a load failure can echo the
     // triggering request's real id back — without it, the JSON-RPC client
     // can never correlate the error with its outstanding request and just
@@ -241,10 +312,46 @@ export class RuneLspSession {
     // replay) is still in flight blocks until it fully finishes, instead of
     // seeing `this.transport` already set and forwarding ahead of the
     // replay it depends on.
-    if (!this.ensureLangiumPromise) {
+    // [DIAG] temporary — see top-of-file note. `diagIsConstructor` is true
+    // only for the ONE request that triggers `ensureLangium()`. Two
+    // DIFFERENT signals combine into a request's final `coldWake` tag,
+    // deliberately kept separate:
+    //  - `diagAwaitedInFlight` (per REQUEST, captured before awaiting): did
+    //    THIS request personally wait through a still-unresolved
+    //    `ensureLangiumPromise`? True for the constructor and any request
+    //    arriving while that same construction is still in flight — false
+    //    for every later request on an already-warm instance, which
+    //    incurs none of that latency no matter how the instance was
+    //    originally constructed.
+    //  - `this.diagDidReplay` (per INSTANCE, read after awaiting, stable
+    //    for the instance's whole lifetime): did construction do genuine
+    //    post-hibernation replay I/O, vs. a brand-new connection's first
+    //    construction (also `!this.ensureLangiumPromise`, but no replay
+    //    I/O and a very different latency profile)?
+    // Both must be true for `coldWake=true` — a request that merely landed
+    // on an instance that replayed *at some point in the past* did not
+    // itself experience that delay.
+    const diagIsConstructor = !this.ensureLangiumPromise;
+    const diagAwaitedInFlight = diagIsConstructor || this.diagConstructionInFlight;
+    if (diagIsConstructor) {
+      this.diagConstructionInFlight = true;
       this.ensureLangiumPromise = this.ensureLangium(ws);
     }
     const ok = await this.ensureLangiumPromise;
+    if (diagIsConstructor) {
+      this.diagConstructionInFlight = false;
+      logger.info(
+        {
+          ts: Date.now(),
+          diagEvent: 'coldWake',
+          ok,
+          replayed: this.diagDidReplay,
+          elapsedMs: Date.now() - diagArrivedAt
+        },
+        'lsp-worker.diag'
+      );
+    }
+    const diagExperiencedColdWake = diagAwaitedInFlight && this.diagDidReplay;
     if (!ok) {
       // Notifications have no id to correlate a response to — a failed
       // notification isn't itself answerable, so nothing is sent for one.
@@ -278,6 +385,27 @@ export class RuneLspSession {
     // and data-model.md §1.
     if (isJsonRpcRequest(parsed) && parsed.method === 'shutdown') {
       await this.purgeStorage();
+    }
+
+    // [DIAG] temporary — see top-of-file note. Deliberately NOT bounded by
+    // a setTimeout — per Cloudflare's own Durable Object lifecycle docs,
+    // hibernation requires (among other things) NO setTimeout/setInterval
+    // scheduled callbacks, at all, for the whole instance. A per-request
+    // abandon timer here was tried and reverted: it kept every DO instance
+    // artificially resident for up to a minute past any genuinely slow
+    // (not hung) response, actively suppressing the exact hibernation
+    // behavior this instrumentation exists to measure — a much worse cost
+    // than the residual risk it traded away (diagRequestStarts entries for
+    // a genuinely unanswered request stay until notifyResponseWaiters
+    // consumes them or webSocketClose discards them). Real hangs should be
+    // rare; a sustained warm instance accumulating many of them is itself
+    // diagnostically interesting, not silent data loss.
+    if (isJsonRpcRequest(parsed)) {
+      this.diagRequestStarts.set(String(parsed.id), {
+        method: parsed.method,
+        startedAt: diagArrivedAt,
+        coldWake: diagExperiencedColdWake
+      });
     }
 
     this.transport!.receive(text);
@@ -327,6 +455,13 @@ export class RuneLspSession {
     // ever violated.
     this.transport?.signalClose();
     this.transport = null;
+    // [DIAG] temporary — see top-of-file note. A real client disconnect
+    // orphans any outstanding request's diag entry: no more response can
+    // ever arrive for it (this.ws is now null, and per-connection keying
+    // means this DO instance is permanently unreachable). Discard the
+    // entries silently — this is normal disconnect behavior, not a
+    // diagnostic-worthy server-hang event.
+    this.diagRequestStarts.clear();
     await this.purgeStorage();
   }
 
@@ -366,7 +501,8 @@ export class RuneLspSession {
       // Does not await — listen() only resolves when the transport closes.
       void this.langium.listen(this.transport);
       this.registerStorageMirror();
-      await this.replayIfColdWake();
+      // [DIAG] temporary — see top-of-file note re: diagDidReplay.
+      this.diagDidReplay = await this.replayIfColdWake();
       return true;
     } catch (err) {
       this.langiumLoadError = err instanceof Error ? err.message : String(err);
@@ -419,7 +555,7 @@ export class RuneLspSession {
   }
 
   private notifyResponseWaiters(raw: string): void {
-    if (this.pendingResponseWaiters.size === 0) return;
+    if (this.pendingResponseWaiters.size === 0 && this.diagRequestStarts.size === 0) return;
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
@@ -427,9 +563,37 @@ export class RuneLspSession {
       return;
     }
     if (typeof parsed !== 'object' || parsed === null) return;
-    const id = (parsed as Record<string, unknown>).id;
+    const record = parsed as Record<string, unknown>;
+    // A genuine JSON-RPC response never carries `method` — only requests
+    // and notifications do. The server itself can send OUTBOUND requests
+    // (e.g. `workspace/configuration`, `workspace/applyEdit` —
+    // connection-adapter.ts) through this same `send()` path, in a
+    // namespace independent of the client's own request ids; without this
+    // check, one of those coincidentally reusing an id a client request is
+    // still waiting on would be mistaken for that request's response.
+    if ('method' in record) return;
+    const id = record.id;
     if (typeof id !== 'string' && typeof id !== 'number') return;
     const key = String(id);
+
+    // [DIAG] temporary — see top-of-file note.
+    const diag = this.diagRequestStarts.get(key);
+    if (diag) {
+      this.diagRequestStarts.delete(key);
+      const elapsedMs = Date.now() - diag.startedAt;
+      logger.info(
+        {
+          ts: Date.now(),
+          diagEvent: 'response',
+          method: diag.method,
+          coldWake: diag.coldWake,
+          elapsedBucket: diagBucket(elapsedMs),
+          elapsedMs
+        },
+        'lsp-worker.diag'
+      );
+    }
+
     const resolve = this.pendingResponseWaiters.get(key);
     if (resolve) {
       this.pendingResponseWaiters.delete(key);
@@ -446,6 +610,32 @@ export class RuneLspSession {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pendingResponseWaiters.delete(id);
+        // [DIAG] temporary — see top-of-file note. Do NOT delete the
+        // diagRequestStarts entry here, and do NOT log this as
+        // "never sent" — this timer is only this method's own
+        // state.waitUntil bookkeeping safety net (RESPONSE_ACK_TIMEOUT_MS),
+        // completely independent of whether the real request/response
+        // machinery is still working. A genuinely slow-but-successful
+        // response can still arrive after this fires; deleting the entry
+        // here would make notifyResponseWaiters find nothing when it does,
+        // permanently misclassifying a real (if slow) response as a
+        // server that never answered at all, and making the 5000ms+
+        // bucket unreachable. Log a still-pending checkpoint instead —
+        // notifyResponseWaiters remains the ONLY place that consumes and
+        // finally logs a request's diag entry, however late.
+        const diag = this.diagRequestStarts.get(id);
+        if (diag) {
+          logger.info(
+            {
+              ts: Date.now(),
+              diagEvent: 'responseStillPending',
+              method: diag.method,
+              coldWake: diag.coldWake,
+              elapsedMs: Date.now() - diag.startedAt
+            },
+            'lsp-worker.diag'
+          );
+        }
         resolve();
       }, timeoutMs);
       this.pendingResponseWaiters.set(id, () => {
@@ -558,10 +748,13 @@ export class RuneLspSession {
    * (ServerNotInitialized on every request) and Langium's DocumentBuilder
    * never fires (no diagnostics), both silently.
    */
-  private async replayIfColdWake(): Promise<void> {
-    if (!this.transport) return;
+  // [DIAG] temporary — return type widened from `void` to `boolean` (see
+  // top-of-file note re: diagDidReplay) so callers can tell a genuine
+  // replay apart from a brand-new connection's no-op early return.
+  private async replayIfColdWake(): Promise<boolean> {
+    if (!this.transport) return false;
     const initParams = await this.state.storage.get<unknown>(INIT_PARAMS_KEY);
-    if (initParams === undefined) return; // brand-new connection — nothing to replay
+    if (initParams === undefined) return false; // brand-new connection — nothing to replay
 
     // registerInitializeHandler's composite handler is async (state
     // transition + delegating to Langium's own onInitialize chain); receive()
@@ -581,7 +774,10 @@ export class RuneLspSession {
     this.transport.receive(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }));
 
     const stored = await this.state.storage.list({ prefix: DOC_PREFIX });
-    if (stored.size === 0) return;
+    // A real replay happened above (the initialize/initialized handshake,
+    // including the awaited round-trip) even with zero stored documents —
+    // only the earlier `initParams === undefined` branch means no replay.
+    if (stored.size === 0) return true;
 
     for (const [key, value] of stored) {
       const uri = key.slice(DOC_PREFIX.length);
@@ -605,6 +801,7 @@ export class RuneLspSession {
     if (this.langium) {
       await this.langium.shared.workspace.DocumentBuilder.waitUntil(DocumentState.Linked);
     }
+    return true;
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────
