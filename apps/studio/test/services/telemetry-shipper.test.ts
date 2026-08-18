@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useOutputStore } from '../../src/store/output-store.js';
 import { useActivityStore } from '../../src/store/activity-store.js';
 import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
-import { installTelemetryShipper } from '../../src/services/telemetry-shipper.js';
+import { installTelemetryShipper, resetTelemetryShipperForTests } from '../../src/services/telemetry-shipper.js';
 import { createTelemetryClient } from '../../src/services/telemetry.js';
 
 describe('installTelemetryShipper', () => {
@@ -16,6 +16,7 @@ describe('installTelemetryShipper', () => {
     useOutputStore.setState({ lines: [] });
     useActivityStore.setState({ entries: [] });
     useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
+    resetTelemetryShipperForTests();
   });
 
   afterEach(() => {
@@ -251,5 +252,50 @@ describe('installTelemetryShipper', () => {
         spans: expect.arrayContaining([expect.objectContaining({ op: 'afterRotation', level: 'error' })])
       })
     );
+  });
+
+  // Regression coverage for the App.tsx boot-order race: for a returning
+  // user, hydrateTelemetrySettings() resolving (and this shipper's effect
+  // installing) can lag behind a namespace-tagged span that already
+  // completed and landed in the Activity store — see this file's own
+  // "hasInstalledBefore" comment in telemetry-shipper.ts. Caught via PR
+  // review on rune-langium#486's connect-phase instrumentation, whose
+  // whole point is capturing exactly this kind of cold-start span.
+  it('ships an activity-store entry that arrived BEFORE the first-ever install of a session', async () => {
+    // Simulate the race directly: the entry lands in the store first,
+    // exactly as it would while the app is still waiting on
+    // hydrateTelemetrySettings() to resolve. `ok: false` (-> level
+    // 'error') for a deterministic 100%-sampled assertion, matching this
+    // file's other sample-rate-sensitive tests.
+    useActivityStore.getState().addActivity('lsp', false, 'connectPagesFunctionLsp', { durationMs: 42 });
+
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'op_spans',
+        spans: expect.arrayContaining([expect.objectContaining({ op: 'lsp', durationMs: 42, level: 'error' })])
+      })
+    );
+  });
+
+  it('does NOT re-ship a backlog on a re-toggle (second) install within the same session', async () => {
+    const firstEmit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit: firstEmit });
+    // User toggles telemetry off — App.tsx's effect teardown runs.
+    uninstall();
+    uninstall = undefined;
+
+    // While off, an entry accumulates (e.g. a background reconnect).
+    useActivityStore.getState().addActivity('lsp', true, 'connectPagesFunctionLsp', { durationMs: 99 });
+
+    // User toggles telemetry back on — a SECOND install in the same
+    // session, deliberately NOT calling resetTelemetryShipperForTests()
+    // (that's test-only scaffolding for simulating a fresh session).
+    const secondEmit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit: secondEmit });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(secondEmit).not.toHaveBeenCalled();
   });
 });

@@ -80,6 +80,26 @@ function maxId(ids: Array<{ id: number }>): number {
   return max;
 }
 
+// Module-scope, not per-install: App.tsx's shipper effect only installs
+// once telemetryEnabled resolves true (hydrateTelemetrySettings() is a
+// fire-and-forget async read — see App.tsx's own comment), but the
+// instrumentation Activity sink (installInstrumentationActivitySink) is
+// installed unconditionally at module load in main.tsx, before React even
+// mounts. For a RETURNING user whose opt-in is already persisted enabled,
+// a namespace-tagged span (e.g. transport-provider.ts's connect-phase
+// timing) can complete and land in the Activity store BEFORE this effect
+// ever runs. Starting the watermark at "current max" — correct for every
+// LATER re-install, where it deliberately avoids re-shipping a backlog
+// accumulated while telemetry was off — would permanently skip exactly
+// those pre-hydration cold-start spans on the FIRST install of a session.
+let hasInstalledBefore = false;
+
+/** Test-only: lets a fresh test simulate "first install of a new browser session" without carrying state across test files/cases. */
+// oxlint-disable-next-line rune/no-uninstrumented-export -- test-only reset scaffolding (matches resetInstrumentationForTests's own exemption in instrumentation-core), never called from a real app code path; instrumenting it would just be noise in every test run.
+export function resetTelemetryShipperForTests(): void {
+  hasInstalledBefore = false;
+}
+
 export const installTelemetryShipper = withInstrumentation(
   function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): () => void {
     let buffer: Span[] = [];
@@ -101,8 +121,9 @@ export const installTelemetryShipper = withInstrumentation(
     // a length-based watermark would silently stop capturing new entries.
     // `id` values are never reused and always increase, so they survive
     // rotation as well as growth.
-    let lastOutputId = maxId(useOutputStore.getState().lines);
-    let lastActivityId = maxId(useActivityStore.getState().entries);
+    let lastOutputId = hasInstalledBefore ? maxId(useOutputStore.getState().lines) : 0;
+    let lastActivityId = hasInstalledBefore ? maxId(useActivityStore.getState().entries) : 0;
+    hasInstalledBefore = true;
 
     function bufferSpan(span: Span): void {
       if (span.opId !== undefined) {
@@ -132,7 +153,7 @@ export const installTelemetryShipper = withInstrumentation(
       if (buffer.length >= MAX_BATCH) flush();
     }
 
-    const unsubOutput = useOutputStore.subscribe((state) => {
+    function processOutputState(state: { lines: OutputLine[] }): void {
       const lines: OutputLine[] = state.lines;
       const newLines = lines.filter((line) => line.id > lastOutputId);
       if (newLines.length === 0) return;
@@ -146,9 +167,9 @@ export const installTelemetryShipper = withInstrumentation(
       }
       lastOutputId = maxId(lines);
       considerFlush();
-    });
+    }
 
-    const unsubActivity = useActivityStore.subscribe((state) => {
+    function processActivityState(state: { entries: ActivityEntry[] }): void {
       const entries: ActivityEntry[] = state.entries;
       const newEntries = entries.filter((entry) => entry.id > lastActivityId);
       if (newEntries.length === 0) return;
@@ -161,7 +182,20 @@ export const installTelemetryShipper = withInstrumentation(
       }
       lastActivityId = maxId(entries);
       considerFlush();
-    });
+    }
+
+    const unsubOutput = useOutputStore.subscribe(processOutputState);
+    const unsubActivity = useActivityStore.subscribe(processActivityState);
+    // Zustand's subscribe() only fires on FUTURE state changes — it never
+    // replays existing state to a newly-registered listener. Without this
+    // catch-up sweep, a first-install watermark of 0 (see hasInstalledBefore
+    // above) would still never actually ship anything that arrived before
+    // install: the listener simply never runs for entries that predate the
+    // subscription. On a later (re-toggle) install this is a harmless no-op
+    // — the watermark already equals the current max, so nothing new is
+    // found.
+    processOutputState(useOutputStore.getState());
+    processActivityState(useActivityStore.getState());
 
     const interval = setInterval(flush, FLUSH_INTERVAL_MS);
 
