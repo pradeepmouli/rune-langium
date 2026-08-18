@@ -156,7 +156,12 @@ function StudioToastInner({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     return addInstrumentationSink((record: TelemetryRecord) => {
-      if (!record.namespace) return;
+      // `toast === false` opts a namespace-tagged call OUT of the toast UI
+      // specifically while staying Activity/telemetry-eligible — see
+      // TelemetryRecord.toast's doc comment. Used by background spans
+      // (e.g. transport-provider.ts's connection-establish timing) that
+      // fire on every reconnect and would otherwise spam a toast per call.
+      if (!record.namespace || record.toast === false) return;
       notify({
         title: record.namespace,
         description: record.message ?? record.op,

@@ -28,7 +28,8 @@ export const installInstrumentationActivitySink = withInstrumentation(
       // while still being an error, so `level !== 'error'` would misreport
       // handled errors as successes.
       useActivityStore.getState().addActivity(record.namespace, !isFailureRecord(record), record.message ?? record.op, {
-        durationMs: record.durationMs
+        durationMs: record.durationMs,
+        signature: record.signature
       });
     });
   },

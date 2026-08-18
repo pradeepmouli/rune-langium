@@ -13,12 +13,14 @@ export interface ActivityEntry {
   subject?: string;
   durationMs?: number;
   opId?: number;
+  signature?: string;
 }
 
 export interface AddActivityMeta {
   subject?: string;
   durationMs?: number;
   opId?: number;
+  signature?: string;
 }
 
 interface ActivityState {

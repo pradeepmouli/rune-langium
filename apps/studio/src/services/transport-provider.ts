@@ -182,9 +182,14 @@ export const createTransportProvider = withInstrumentation(
         // response's `token` is a bearer credential. The HTTP status code
         // IS captured via sanitizeError — it's what distinguishes a
         // signing-key rotation (401), rate limiting (429), and a genuine
-        // 5xx outage, none of which carry any user/model content.
+        // 5xx outage, none of which carry any user/model content. `toast:
+        // false` keeps this out of the Toast UI — it fires on every
+        // reconnect, and the pre-existing LSP-unavailable toast (fired by
+        // createPagesFunctionUnavailableError's caller) already covers the
+        // user-facing failure signal; this is background diagnostic data.
         op: 'mintSessionToken',
         namespace: 'lsp' satisfies InstrumentationNamespace,
+        toast: false,
         sanitizeError: (err) => {
           const status = (err as { status?: number }).status;
           return {
@@ -206,11 +211,12 @@ export const createTransportProvider = withInstrumentation(
         return createWebSocketTransport(wsUrl, connectionTimeout);
       },
       {
-        // Same rationale as mintSessionToken above. `token` is never
-        // captured (default capture: 0) — it's the bearer credential this
-        // call consumes.
+        // Same rationale as mintSessionToken above, including `toast:
+        // false`. `token` is never captured (default capture: 0) — it's
+        // the bearer credential this call consumes.
         op: 'openPagesFunctionWs',
-        namespace: 'lsp' satisfies InstrumentationNamespace
+        namespace: 'lsp' satisfies InstrumentationNamespace,
+        toast: false
       }
     );
 
@@ -269,9 +275,13 @@ export const createTransportProvider = withInstrumentation(
         // cover, since that only starts timing once a WebSocket message
         // arrives on an already-open connection. A slow or failing connect
         // here is exactly what would make the client's hover/completion
-        // request time out before the DO ever sees the message.
+        // request time out before the DO ever sees the message. `toast:
+        // false` for the same reason as mintSessionToken/openPagesFunctionWs
+        // above — this fires on every reconnect and would otherwise stack a
+        // toast on top of the pre-existing LSP-unavailable toast on failure.
         op: 'connectPagesFunctionLsp',
-        namespace: 'lsp' satisfies InstrumentationNamespace
+        namespace: 'lsp' satisfies InstrumentationNamespace,
+        toast: false
       }
     );
 

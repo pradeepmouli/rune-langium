@@ -29,6 +29,16 @@ export interface TelemetryRecord {
   context?: unknown;
   namespace?: string;
   message?: string;
+  /**
+   * Explicit `false` suppresses the Toast sink for this record while
+   * leaving Activity-panel and telemetry-shipper visibility untouched.
+   * Undefined (the default) preserves the original behavior of a
+   * namespace-tagged call: both Toast and Activity render it. Use this
+   * for calls that are activity/telemetry-worthy but not something a user
+   * should see a popup for on every invocation (e.g. a background
+   * connection-establish span that fires on every reconnect).
+   */
+  toast?: boolean;
   ts: number;
 }
 
@@ -183,6 +193,14 @@ export interface InstrumentationOptions {
    * back to `op` when absent — most call sites should leave this unset.
    */
   message?: string;
+  /**
+   * Set to `false` to keep a namespace-tagged call out of the Toast sink
+   * while it still reaches the Activity panel and telemetry-shipper.
+   * Undefined (the default) means "toast-eligible", matching every
+   * existing namespace-tagged call site's current behavior. See
+   * TelemetryRecord.toast's doc comment for the rationale.
+   */
+  toast?: boolean;
 }
 
 let threshold: Level = 'info';
@@ -231,6 +249,7 @@ function emitError(
     context: context ?? bindingContext,
     namespace: opts.namespace,
     message: opts.message,
+    toast: opts.toast,
     ts: Date.now()
   });
 }
@@ -271,7 +290,8 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
             undefined,
             opts.namespace,
             opts.message,
-            emitToAdditionalSinksOnly
+            emitToAdditionalSinksOnly,
+            opts.toast
           );
           return value;
         },
@@ -292,7 +312,8 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
       undefined,
       opts.namespace,
       opts.message,
-      emitToAdditionalSinksOnly
+      emitToAdditionalSinksOnly,
+      opts.toast
     );
     return result;
   } catch (err) {
@@ -402,7 +423,9 @@ function makeWithInstrumentation(binding?: ChildBinding) {
                   performance.now() - start,
                   context,
                   opts.namespace,
-                  opts.message
+                  opts.message,
+                  undefined,
+                  opts.toast
                 );
               return value;
             },
@@ -426,7 +449,9 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             performance.now() - start,
             context,
             opts.namespace,
-            opts.message
+            opts.message,
+            undefined,
+            opts.toast
           );
         return result;
       } catch (err) {
@@ -475,7 +500,8 @@ function emitSuccessWithContext(
   context: unknown,
   namespace: string | undefined,
   message: string | undefined,
-  dispatch: Emit = emitRecord
+  dispatch: Emit = emitRecord,
+  toast?: boolean
 ): void {
   const record: TelemetryRecord = {
     op,
@@ -485,7 +511,8 @@ function emitSuccessWithContext(
     durationMs,
     context,
     namespace,
-    message
+    message,
+    toast
   };
   if (capture & Capture.Input) record.input = sanitize(args, 'input');
   if (capture & Capture.Output) record.output = sanitize(output, 'output');

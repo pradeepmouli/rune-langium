@@ -155,7 +155,9 @@ export const installTelemetryShipper = withInstrumentation(
       for (const entry of newEntries) {
         const level = entry.ok ? 'info' : 'error';
         if (!shouldSample(level)) continue;
-        bufferSpan(toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId));
+        bufferSpan(
+          toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId, entry.signature)
+        );
       }
       lastActivityId = maxId(entries);
       considerFlush();
