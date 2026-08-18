@@ -232,13 +232,20 @@ function errorLevelFor(opts: InstrumentationOptions): Level {
 // context to error records the same way success records do. `dispatch`
 // defaults to the normal full fan-out (emitRecord); the notify-only fast
 // path below passes emitToAdditionalSinksOnly instead, reusing this exact
-// signature/context-extraction logic without duplicating it.
+// signature/context-extraction logic without duplicating it. `durationMs` is
+// optional (callers that never captured a start time, e.g. legacy callers of
+// this internal function, simply omit it) but every real call site in this
+// module now passes the real elapsed time — a 100%-sampled failure span
+// with no duration can't distinguish an immediate rejection from one that
+// only failed after a real timeout, which defeats exactly the kind of
+// latency investigation this instrumentation exists for.
 function emitError(
   op: string,
   opts: InstrumentationOptions,
   err: unknown,
   bindingContext?: unknown,
-  dispatch: Emit = emitRecord
+  dispatch: Emit = emitRecord,
+  durationMs?: number
 ): void {
   const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
   dispatch({
@@ -250,6 +257,7 @@ function emitError(
     namespace: opts.namespace,
     message: opts.message,
     toast: opts.toast,
+    durationMs,
     ts: Date.now()
   });
 }
@@ -304,7 +312,7 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
           return value;
         },
         (err) => {
-          emitError(op, opts, err, undefined, emitToAdditionalSinksOnly);
+          emitError(op, opts, err, undefined, emitToAdditionalSinksOnly, performance.now() - start);
           throw err;
         }
       ) as ReturnType<F>;
@@ -325,7 +333,7 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
     );
     return result;
   } catch (err) {
-    emitError(op, opts, err, undefined, emitToAdditionalSinksOnly);
+    emitError(op, opts, err, undefined, emitToAdditionalSinksOnly, performance.now() - start);
     throw err;
   }
 }
@@ -439,7 +447,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             },
             (err) => {
               depth--;
-              emitError(op, opts, err, context);
+              emitError(op, opts, err, context, undefined, performance.now() - start);
               throw err;
             }
           );
@@ -463,7 +471,7 @@ function makeWithInstrumentation(binding?: ChildBinding) {
           );
         return result;
       } catch (err) {
-        emitError(op, opts, err, context);
+        emitError(op, opts, err, context, undefined, performance.now() - start);
         throw err;
       } finally {
         if (!isAsync) depth--;

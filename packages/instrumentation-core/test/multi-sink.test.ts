@@ -142,4 +142,48 @@ describe('addInstrumentationSink', () => {
     expect(received).toHaveLength(1);
     expect(received[0].durationMs).toBeGreaterThan(0);
   });
+
+  // Regression coverage for emitError's durationMs — previously always
+  // undefined everywhere in the module, including the notify-only fast
+  // path. A 100%-sampled failure span with no duration can't distinguish
+  // an immediate rejection from one that only failed after a real
+  // connection-establish timeout, which defeats exactly the latency
+  // investigation rune-langium#486 exists for.
+  it('the notify-only fast path reports real elapsed time on a rejected async call too', async () => {
+    const received: { durationMs?: number }[] = [];
+    configureInstrumentation(
+      () => {},
+      () => false
+    );
+    addInstrumentationSink((r) => received.push(r));
+    const wrapped = withInstrumentation(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        throw new Error('connect failed');
+      },
+      { op: 'failingNamespacedCall', namespace: 'lsp' }
+    );
+    await expect(wrapped()).rejects.toThrow('connect failed');
+    expect(received).toHaveLength(1);
+    expect(received[0].durationMs).toBeGreaterThan(0);
+  });
+
+  it('the full wrapper path (threshold-gated, non-prod) also reports real elapsed time on a thrown error', () => {
+    const received: { durationMs?: number }[] = [];
+    configureInstrumentation((r) => received.push(r));
+    setInstrumentationThreshold('info');
+    const wrapped = withInstrumentation(
+      () => {
+        const until = performance.now() + 5;
+        while (performance.now() < until) {
+          /* spin */
+        }
+        throw new Error('boom');
+      },
+      { op: 'failingCall' }
+    );
+    expect(() => wrapped()).toThrow('boom');
+    expect(received).toHaveLength(1);
+    expect(received[0].durationMs).toBeGreaterThan(0);
+  });
 });
