@@ -30,6 +30,7 @@ import { config } from '../config.js';
 import { createWebSocketTransport, type CloseableTransport } from './ws-transport.js';
 import { useOutputStore, fmtLine } from '../store/output-store.js';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
+import type { InstrumentationNamespace } from './instrumentation/namespace.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -150,36 +151,68 @@ export const createTransportProvider = withInstrumentation(
      * 200 body. Throws an Error tagged with the HTTP status when the mint
      * is rejected so the caller can branch on 401 / 429 / 5xx.
      */
-    async function mintSessionToken(): Promise<string> {
-      const res = await fetch(sessionUrl, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId })
-      });
-      if (!res.ok) {
-        const err = new Error(`session_mint_failed:${res.status}`) as Error & {
-          status: number;
-        };
-        err.status = res.status;
-        throw err;
+    const mintSessionToken = withInstrumentation(
+      async function mintSessionToken(): Promise<string> {
+        const res = await fetch(sessionUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspaceId })
+        });
+        if (!res.ok) {
+          const err = new Error(`session_mint_failed:${res.status}`) as Error & {
+            status: number;
+          };
+          err.status = res.status;
+          throw err;
+        }
+        const body = (await res.json()) as { token: string; expiresAt: number };
+        if (!body || typeof body.token !== 'string') {
+          throw new Error('session_mint_invalid_response');
+        }
+        return body.token;
+      },
+      {
+        // `namespace: 'lsp'` is what makes this call survive the production
+        // build's IS_PROD short-circuit in withInstrumentation (an
+        // un-namespaced wrap is skipped entirely in prod) — without it this
+        // phase would be invisible to the Activity sink / telemetry-shipper
+        // in exactly the environment this exists to diagnose. Neither the
+        // token nor workspaceId is captured (default capture: 0) — a mint
+        // response's `token` is a bearer credential. The HTTP status code
+        // IS captured via sanitizeError — it's what distinguishes a
+        // signing-key rotation (401), rate limiting (429), and a genuine
+        // 5xx outage, none of which carry any user/model content.
+        op: 'mintSessionToken',
+        namespace: 'lsp' satisfies InstrumentationNamespace,
+        sanitizeError: (err) => {
+          const status = (err as { status?: number }).status;
+          return {
+            signature: err instanceof Error ? `${err.name}:${status ?? 'network'}` : 'Error:unspecified',
+            context: status !== undefined ? { status } : undefined
+          };
+        }
       }
-      const body = (await res.json()) as { token: string; expiresAt: number };
-      if (!body || typeof body.token !== 'string') {
-        throw new Error('session_mint_invalid_response');
-      }
-      return body.token;
-    }
+    );
 
     /**
      * Open a token-gated WS to the Pages Function LSP. Returns a real
      * Transport via `createWebSocketTransport`; surfaces the underlying WS
      * error untouched so the caller's retry logic can branch.
      */
-    async function openPagesFunctionWs(token: string): Promise<CloseableTransport> {
-      const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
-      return createWebSocketTransport(wsUrl, connectionTimeout);
-    }
+    const openPagesFunctionWs = withInstrumentation(
+      async function openPagesFunctionWs(token: string): Promise<CloseableTransport> {
+        const wsUrl = `${cfWsBase.replace(/\/$/, '')}/ws/${encodeURIComponent(token)}`;
+        return createWebSocketTransport(wsUrl, connectionTimeout);
+      },
+      {
+        // Same rationale as mintSessionToken above. `token` is never
+        // captured (default capture: 0) — it's the bearer credential this
+        // call consumes.
+        op: 'openPagesFunctionWs',
+        namespace: 'lsp' satisfies InstrumentationNamespace
+      }
+    );
 
     /**
      * Pages Function LSP via session token. On 401 from the mint, refreshes
@@ -187,47 +220,60 @@ export const createTransportProvider = withInstrumentation(
      * "language services unavailable" copy from FR-014 and falls through
      * to the disconnected error state.
      */
-    async function tryPagesFunction(): Promise<Transport> {
-      setState({ mode: 'pages-function', status: 'connecting' });
-      let token: string;
-      try {
-        token = await mintSessionToken();
-      } catch (err) {
-        const status = (err as { status?: number }).status;
-        if (status === 401) {
-          // Per the contract, a 401 from the mint is a stale/missing
-          // signing-key on the server side OR a rotated key that
-          // invalidated the cached token; one retry buys us the happy-path
-          // on a fresh session.
-          try {
-            token = await mintSessionToken();
-          } catch (err2) {
-            throw createPagesFunctionUnavailableError(err2);
-          }
-        } else {
-          throw createPagesFunctionUnavailableError(err);
-        }
-      }
-      try {
-        const transport = await openPagesFunctionWs(token);
-        setState({ mode: 'pages-function', status: 'connected' });
-        currentTransport = transport;
-        return transport;
-      } catch (err) {
-        // The WS open MAY itself fail with 401 (server rotated the signing
-        // key between mint and connect) — handle that with one retry,
-        // matching the documented state-machine.
+    const tryPagesFunction = withInstrumentation(
+      async function tryPagesFunction(): Promise<Transport> {
+        setState({ mode: 'pages-function', status: 'connecting' });
+        let token: string;
         try {
           token = await mintSessionToken();
+        } catch (err) {
+          const status = (err as { status?: number }).status;
+          if (status === 401) {
+            // Per the contract, a 401 from the mint is a stale/missing
+            // signing-key on the server side OR a rotated key that
+            // invalidated the cached token; one retry buys us the happy-path
+            // on a fresh session.
+            try {
+              token = await mintSessionToken();
+            } catch (err2) {
+              throw createPagesFunctionUnavailableError(err2);
+            }
+          } else {
+            throw createPagesFunctionUnavailableError(err);
+          }
+        }
+        try {
           const transport = await openPagesFunctionWs(token);
           setState({ mode: 'pages-function', status: 'connected' });
           currentTransport = transport;
           return transport;
-        } catch (err2) {
-          throw createPagesFunctionUnavailableError(err2 ?? err);
+        } catch (err) {
+          // The WS open MAY itself fail with 401 (server rotated the signing
+          // key between mint and connect) — handle that with one retry,
+          // matching the documented state-machine.
+          try {
+            token = await mintSessionToken();
+            const transport = await openPagesFunctionWs(token);
+            setState({ mode: 'pages-function', status: 'connected' });
+            currentTransport = transport;
+            return transport;
+          } catch (err2) {
+            throw createPagesFunctionUnavailableError(err2 ?? err);
+          }
         }
+      },
+      {
+        // The end-to-end connection-establish phase (mint + WS upgrade,
+        // including any 401 retry) — the phase this repo's [DIAG] hover-
+        // timing instrumentation on rune-lsp-worker's session.ts does NOT
+        // cover, since that only starts timing once a WebSocket message
+        // arrives on an already-open connection. A slow or failing connect
+        // here is exactly what would make the client's hover/completion
+        // request time out before the DO ever sees the message.
+        op: 'connectPagesFunctionLsp',
+        namespace: 'lsp' satisfies InstrumentationNamespace
       }
-    }
+    );
 
     /**
      * Surface the "language services unavailable" terminal state and reject
