@@ -274,6 +274,14 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
   thisArg: unknown,
   args: unknown[]
 ): ReturnType<F> {
+  // Real elapsed time, not a placeholder: this fast path skips the full
+  // wrapper's depth/threshold machinery, but a namespace-tagged call's
+  // duration is exactly what a diagnostic span (e.g. a connect-phase
+  // timing) exists to report — a hardcoded 0 here would silently defeat
+  // that for every production build, since this is the ONLY path
+  // namespace-tagged calls take in prod (see makeWithInstrumentation's
+  // IS_PROD branch above).
+  const start = performance.now();
   try {
     const result = fn.apply(thisArg, args);
     if (result instanceof Promise) {
@@ -286,7 +294,7 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
             args,
             value,
             identitySanitize,
-            0,
+            performance.now() - start,
             undefined,
             opts.namespace,
             opts.message,
@@ -308,7 +316,7 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
       args,
       result,
       identitySanitize,
-      0,
+      performance.now() - start,
       undefined,
       opts.namespace,
       opts.message,

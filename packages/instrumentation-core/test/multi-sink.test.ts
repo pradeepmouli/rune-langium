@@ -88,4 +88,58 @@ describe('addInstrumentationSink', () => {
     const wrapped = withInstrumentation(() => 'real result', { op: 'test', level: 'info' });
     expect(wrapped()).toBe('real result');
   });
+
+  // Regression coverage for the notify-only fast path (runNotifyOnly) — the
+  // one namespace-tagged calls actually take in production (IS_PROD is a
+  // build-time constant we can't flip in a test, but `isEnabled: () =>
+  // false` reaches the exact same code path). It previously hardcoded
+  // `durationMs: 0` regardless of real elapsed time, which silently
+  // defeated any namespace-tagged span whose whole purpose was measuring
+  // latency (caught via PR review on rune-langium#486's connect-phase
+  // instrumentation).
+  it('the notify-only fast path reports real elapsed time, not a hardcoded 0', async () => {
+    const received: { durationMs?: number }[] = [];
+    configureInstrumentation(
+      () => {},
+      () => false
+    );
+    addInstrumentationSink((r) => received.push(r));
+    const wrapped = withInstrumentation(
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return 'ok';
+      },
+      { op: 'slowNamespacedCall', namespace: 'lsp' }
+    );
+    await wrapped();
+    expect(received).toHaveLength(1);
+    expect(received[0].durationMs).toBeGreaterThan(0);
+  });
+
+  it('the notify-only fast path reports real elapsed time for a sync call too', () => {
+    const received: { durationMs?: number }[] = [];
+    configureInstrumentation(
+      () => {},
+      () => false
+    );
+    addInstrumentationSink((r) => received.push(r));
+    const wrapped = withInstrumentation(
+      () => {
+        // Busy-wait a few ms so there is real elapsed time to measure —
+        // Date.now()/performance.now() aren't frozen in this test env
+        // (that freeze is a Cloudflare Workers isolate behavior, not a
+        // browser/Node one; see reference_cloudflare_pages_deploy_mechanism
+        // memory for where that DOES matter, server-side).
+        const until = performance.now() + 5;
+        while (performance.now() < until) {
+          /* spin */
+        }
+        return 'ok';
+      },
+      { op: 'slowSyncNamespacedCall', namespace: 'lsp' }
+    );
+    wrapped();
+    expect(received).toHaveLength(1);
+    expect(received[0].durationMs).toBeGreaterThan(0);
+  });
 });
