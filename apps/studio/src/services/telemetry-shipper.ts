@@ -100,8 +100,24 @@ export function resetTelemetryShipperForTests(): void {
   hasInstalledBefore = false;
 }
 
+export interface InstallTelemetryShipperOptions {
+  /**
+   * Set true ONLY when this install's opt-in came from
+   * hydrateTelemetrySettings() loading an already-persisted, returning
+   * user's consent (useTelemetrySettingsStore's `enabledFromHydration`)
+   * — never for a fresh, explicit Settings-checkbox toggle this session.
+   * Defaults to false: the safe default is NEVER backfilling, matching
+   * App.tsx's "never install-then-gate-at-emit-time" invariant. A caller
+   * that omits this gets exactly today's privacy-safe behavior.
+   */
+  backfillPreInstall?: boolean;
+}
+
 export const installTelemetryShipper = withInstrumentation(
-  function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): () => void {
+  function installTelemetryShipper(
+    client: Pick<TelemetryClient, 'emit'>,
+    options: InstallTelemetryShipperOptions = {}
+  ): () => void {
     let buffer: Span[] = [];
     // Some ops (e.g. model-store.ts's load success/failure paths) publish the
     // SAME logical event to BOTH output-store and activity-store, sharing one
@@ -121,8 +137,9 @@ export const installTelemetryShipper = withInstrumentation(
     // a length-based watermark would silently stop capturing new entries.
     // `id` values are never reused and always increase, so they survive
     // rotation as well as growth.
-    let lastOutputId = hasInstalledBefore ? maxId(useOutputStore.getState().lines) : 0;
-    let lastActivityId = hasInstalledBefore ? maxId(useActivityStore.getState().entries) : 0;
+    const shouldBackfill = !hasInstalledBefore && options.backfillPreInstall === true;
+    let lastOutputId = shouldBackfill ? 0 : maxId(useOutputStore.getState().lines);
+    let lastActivityId = shouldBackfill ? 0 : maxId(useActivityStore.getState().entries);
     hasInstalledBefore = true;
 
     function bufferSpan(span: Span): void {
@@ -176,9 +193,15 @@ export const installTelemetryShipper = withInstrumentation(
       for (const entry of newEntries) {
         const level = entry.ok ? 'info' : 'error';
         if (!shouldSample(level)) continue;
-        bufferSpan(
-          toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId, entry.signature)
-        );
+        // `entry.op` (the real instrumentation op, e.g. `mintSessionToken`)
+        // is the correct Span.op — `entry.tag` (the InstrumentationNamespace,
+        // e.g. `lsp`) is coarser and shared across every op in that
+        // namespace, which would otherwise collapse distinct connect-phase
+        // spans into one indistinguishable telemetry sample. `?? entry.tag`
+        // only matters for pre-existing/hand-built entries that predate
+        // this field.
+        const op = entry.op ?? entry.tag;
+        bufferSpan(toSpan(level, op, safeSubject(op, entry.subject), entry.durationMs, entry.opId, entry.signature));
       }
       lastActivityId = maxId(entries);
       considerFlush();
@@ -188,14 +211,18 @@ export const installTelemetryShipper = withInstrumentation(
     const unsubActivity = useActivityStore.subscribe(processActivityState);
     // Zustand's subscribe() only fires on FUTURE state changes — it never
     // replays existing state to a newly-registered listener. Without this
-    // catch-up sweep, a first-install watermark of 0 (see hasInstalledBefore
+    // catch-up sweep, a first-install watermark of 0 (see shouldBackfill
     // above) would still never actually ship anything that arrived before
     // install: the listener simply never runs for entries that predate the
-    // subscription. On a later (re-toggle) install this is a harmless no-op
-    // — the watermark already equals the current max, so nothing new is
-    // found.
-    processOutputState(useOutputStore.getState());
-    processActivityState(useActivityStore.getState());
+    // subscription. Gated on shouldBackfill (not just run unconditionally):
+    // when it's false the watermark already equals current max, so this
+    // would be a no-op anyway, but skipping it outright keeps the "never
+    // backfill without explicit consent" invariant obvious from the control
+    // flow, not just from the watermark's incidental value.
+    if (shouldBackfill) {
+      processOutputState(useOutputStore.getState());
+      processActivityState(useActivityStore.getState());
+    }
 
     const interval = setInterval(flush, FLUSH_INTERVAL_MS);
 

@@ -14,6 +14,14 @@ export interface ActivityEntry {
   durationMs?: number;
   opId?: number;
   signature?: string;
+  /**
+   * The originating instrumentation op name (e.g. `mintSessionToken`),
+   * distinct from `tag` (the coarser `InstrumentationNamespace`, e.g.
+   * `lsp`, used for the Activity panel's namespace filter/badge). Ships
+   * as `Span.op` — without it, every op sharing a namespace collapses
+   * into one indistinguishable telemetry sample.
+   */
+  op?: string;
 }
 
 export interface AddActivityMeta {
@@ -21,6 +29,7 @@ export interface AddActivityMeta {
   durationMs?: number;
   opId?: number;
   signature?: string;
+  op?: string;
 }
 
 interface ActivityState {

@@ -29,7 +29,11 @@ export const installInstrumentationActivitySink = withInstrumentation(
       // handled errors as successes.
       useActivityStore.getState().addActivity(record.namespace, !isFailureRecord(record), record.message ?? record.op, {
         durationMs: record.durationMs,
-        signature: record.signature
+        signature: record.signature,
+        // `tag` (record.namespace) stays the coarse UI filter/badge value —
+        // `op` carries the real distinguishing op name through to the
+        // shipped telemetry span (see ActivityEntry.op's doc comment).
+        op: record.op
       });
     });
   },

@@ -261,16 +261,17 @@ describe('installTelemetryShipper', () => {
   // "hasInstalledBefore" comment in telemetry-shipper.ts. Caught via PR
   // review on rune-langium#486's connect-phase instrumentation, whose
   // whole point is capturing exactly this kind of cold-start span.
-  it('ships an activity-store entry that arrived BEFORE the first-ever install of a session', async () => {
+  it('ships an activity-store entry that arrived BEFORE the first-ever install of a session, when backfillPreInstall is explicitly requested', async () => {
     // Simulate the race directly: the entry lands in the store first,
     // exactly as it would while the app is still waiting on
-    // hydrateTelemetrySettings() to resolve. `ok: false` (-> level
-    // 'error') for a deterministic 100%-sampled assertion, matching this
-    // file's other sample-rate-sensitive tests.
+    // hydrateTelemetrySettings() to resolve for a RETURNING, already-
+    // consenting user. `ok: false` (-> level 'error') for a deterministic
+    // 100%-sampled assertion, matching this file's other sample-rate-
+    // sensitive tests.
     useActivityStore.getState().addActivity('lsp', false, 'connectPagesFunctionLsp', { durationMs: 42 });
 
     const emit = vi.fn(async () => {});
-    uninstall = installTelemetryShipper({ emit });
+    uninstall = installTelemetryShipper({ emit }, { backfillPreInstall: true });
     await vi.advanceTimersByTimeAsync(15_000);
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -280,9 +281,23 @@ describe('installTelemetryShipper', () => {
     );
   });
 
-  it('does NOT re-ship a backlog on a re-toggle (second) install within the same session', async () => {
+  // Regression for the privacy-adjacent gap the first version of the fix
+  // above had (caught in the same PR review round): a FRESH, first-time
+  // explicit opt-in this session must NEVER backfill — any activity
+  // predates the user's consent. This is App.tsx omitting
+  // backfillPreInstall (the safe default), not a hydration race.
+  it('does NOT ship a pre-install entry when backfillPreInstall is omitted (the default) — a fresh explicit opt-in, not a hydration race', async () => {
+    useActivityStore.getState().addActivity('lsp', false, 'connectPagesFunctionLsp', { durationMs: 42 });
+
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('does NOT re-ship a backlog on a re-toggle (second) install, even if backfillPreInstall is passed again', async () => {
     const firstEmit = vi.fn(async () => {});
-    uninstall = installTelemetryShipper({ emit: firstEmit });
+    uninstall = installTelemetryShipper({ emit: firstEmit }, { backfillPreInstall: true });
     // User toggles telemetry off — App.tsx's effect teardown runs.
     uninstall();
     uninstall = undefined;
@@ -293,9 +308,29 @@ describe('installTelemetryShipper', () => {
     // User toggles telemetry back on — a SECOND install in the same
     // session, deliberately NOT calling resetTelemetryShipperForTests()
     // (that's test-only scaffolding for simulating a fresh session).
+    // Passing backfillPreInstall: true again proves the guard is really
+    // "only the first install ever" (hasInstalledBefore), not just
+    // whichever flag value was passed most recently.
     const secondEmit = vi.fn(async () => {});
-    uninstall = installTelemetryShipper({ emit: secondEmit });
+    uninstall = installTelemetryShipper({ emit: secondEmit }, { backfillPreInstall: true });
     await vi.advanceTimersByTimeAsync(15_000);
     expect(secondEmit).not.toHaveBeenCalled();
+  });
+
+  // Regression for the sibling finding in the same review round: the
+  // Activity sink previously stored only record.namespace as the shipped
+  // span's op, collapsing every op sharing a namespace (e.g.
+  // mintSessionToken/openPagesFunctionWs/connectPagesFunctionLsp, all
+  // namespace: 'lsp') into one indistinguishable telemetry sample.
+  it('ships the real op name, not the coarser namespace tag, when an activity entry carries one', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useActivityStore.getState().addActivity('lsp', false, 'connect failed', { durationMs: 7, op: 'mintSessionToken' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spans: expect.arrayContaining([expect.objectContaining({ op: 'mintSessionToken' })])
+      })
+    );
   });
 });
