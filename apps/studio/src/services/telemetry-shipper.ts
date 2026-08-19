@@ -5,7 +5,7 @@
 import { useOutputStore, type OutputLine } from '../store/output-store.js';
 import { useActivityStore, type ActivityEntry } from '../store/activity-store.js';
 import { useTelemetrySettingsStore } from '../store/telemetry-settings.js';
-import type { TelemetryClient } from './telemetry.js';
+import { MAX_SPAN_DURATION_MS, type TelemetryClient } from './telemetry.js';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import { withInstrumentation } from './instrumentation/core.js';
 
@@ -39,9 +39,15 @@ function toSpan(
   // client.emit()'s schema validation throws for any span carrying a
   // fractional duration, and flush()'s catch(() => {}) silently discards
   // the WHOLE batch (including any 100%-sampled error entries bundled in
-  // it), not just the offending span.
-  const roundedDurationMs = durationMs !== undefined ? Math.round(durationMs) : undefined;
-  return { op, subject, durationMs: roundedDurationMs, level, opId, signature };
+  // it), not just the offending span. Clamping to MAX_SPAN_DURATION_MS is
+  // the same fix for the same failure mode: an instrumented call with no
+  // abort timeout (e.g. transport-provider.ts's mintSessionToken fetch)
+  // can in principle stay pending past the schema's max before rejecting
+  // — clamp rather than omit, so "it took at least this long" still
+  // survives as a signal instead of silently dropping the whole batch.
+  const clampedDurationMs =
+    durationMs !== undefined ? Math.min(Math.round(durationMs), MAX_SPAN_DURATION_MS) : undefined;
+  return { op, subject, durationMs: clampedDurationMs, level, opId, signature };
 }
 
 function shouldSample(level: 'info' | 'warn' | 'error'): boolean {

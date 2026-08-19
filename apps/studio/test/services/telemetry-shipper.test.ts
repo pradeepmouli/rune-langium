@@ -6,7 +6,7 @@ import { useOutputStore } from '../../src/store/output-store.js';
 import { useActivityStore } from '../../src/store/activity-store.js';
 import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
 import { installTelemetryShipper, resetTelemetryShipperForTests } from '../../src/services/telemetry-shipper.js';
-import { createTelemetryClient } from '../../src/services/telemetry.js';
+import { createTelemetryClient, MAX_SPAN_DURATION_MS } from '../../src/services/telemetry.js';
 
 describe('installTelemetryShipper', () => {
   let uninstall: (() => void) | undefined;
@@ -202,6 +202,43 @@ describe('installTelemetryShipper', () => {
     const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
     const span = body.spans.find((s: { op: string }) => s.op === 'modelLoad');
     expect(Number.isInteger(span.durationMs)).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  // Regression for the sibling failure mode Codex flagged in the same PR
+  // review round: an instrumented call with no abort timeout (e.g.
+  // transport-provider.ts's mintSessionToken fetch) can in principle stay
+  // pending past the wire schema's 600_000ms (10 min) max before finally
+  // rejecting. toSpan() only rounded, never clamped — an out-of-range
+  // durationMs fails REAL schema validation the same way a fractional one
+  // did above, silently dropping the whole batch.
+  it('clamps a durationMs exceeding the wire schema max instead of shipping it unclamped', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('boom', 'error', { op: 'mintSessionToken', durationMs: 999_999 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const span = spans.find((s: { op: string }) => s.op === 'mintSessionToken');
+    expect(span).toBeDefined();
+    expect(span.durationMs).toBe(MAX_SPAN_DURATION_MS);
+  });
+
+  it('an over-max durationMs no longer fails REAL schema validation, so the batch actually reaches fetch()', async () => {
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const client = createTelemetryClient({
+      endpoint: 'https://example.invalid/rune-studio/api/telemetry/v1/event',
+      enabled: true,
+      studioVersion: '0.1.0',
+      uaClass: 'test'
+    });
+    uninstall = installTelemetryShipper(client);
+    useOutputStore.getState().addLine('boom', 'error', { op: 'mintSessionToken', durationMs: 999_999 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
+    const span = body.spans.find((s: { op: string }) => s.op === 'mintSessionToken');
+    expect(span.durationMs).toBe(MAX_SPAN_DURATION_MS);
     vi.unstubAllGlobals();
   });
 
