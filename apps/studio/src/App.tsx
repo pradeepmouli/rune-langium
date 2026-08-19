@@ -587,7 +587,17 @@ function AppContent() {
         enabled: config.telemetryEnabled && !config.devMode,
         studioVersion: STUDIO_VERSION,
         uaClass: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop'
-      })
+      }),
+      // Only backfill spans that predate this install when this transition
+      // to enabled came from loading an already-persisted, returning
+      // user's consent — never for a fresh explicit Settings-checkbox
+      // toggle this session, which must not retroactively ship whatever
+      // pre-consent activity happened to be sitting in the stores. A
+      // one-shot getState() read (not the reactive `telemetryEnabled`
+      // above) is correct here: this effect body only runs at the moment
+      // of the true->transition, so this captures exactly "why did THIS
+      // transition happen."
+      { backfillPreInstall: useTelemetrySettingsStore.getState().enabledFromHydration }
     );
     return () => {
       uninstallCapture();

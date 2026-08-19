@@ -17,6 +17,17 @@ import { z } from 'zod';
 import { CuratedModelIdSchema, ErrorCategorySchema } from '@rune-langium/curated-schema';
 import { withInstrumentation, Capture } from './instrumentation/core.js';
 
+/**
+ * Shared duration ceiling for every `durationMs` field in the wire schema
+ * below. Also imported by telemetry-shipper.ts's `toSpan()`, which must
+ * clamp to this same value before shipping — an instrumented call with no
+ * abort timeout (e.g. transport-provider.ts's mintSessionToken fetch) can
+ * in principle stay pending well past this, and `client.emit()`'s schema
+ * validation rejecting one out-of-range span silently drops the WHOLE
+ * batch (see flush()'s swallowed-rejection comment), not just that span.
+ */
+export const MAX_SPAN_DURATION_MS = 600_000;
+
 const TelemetryEventSchema = z.discriminatedUnion('event', [
   z
     .object({
@@ -28,7 +39,7 @@ const TelemetryEventSchema = z.discriminatedUnion('event', [
     .object({
       event: z.literal('curated_load_success'),
       modelId: CuratedModelIdSchema,
-      durationMs: z.number().int().nonnegative().max(600_000)
+      durationMs: z.number().int().nonnegative().max(MAX_SPAN_DURATION_MS)
     })
     .strict(),
   z
@@ -56,7 +67,7 @@ const TelemetryEventSchema = z.discriminatedUnion('event', [
           z.object({
             op: z.string().max(64),
             subject: z.string().max(200).optional(),
-            durationMs: z.number().int().nonnegative().max(600_000).optional(),
+            durationMs: z.number().int().nonnegative().max(MAX_SPAN_DURATION_MS).optional(),
             level: z.enum(['info', 'warn', 'error']),
             signature: z.string().max(200).optional(),
             opId: z.number().int().optional()

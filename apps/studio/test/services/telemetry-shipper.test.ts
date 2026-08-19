@@ -5,8 +5,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useOutputStore } from '../../src/store/output-store.js';
 import { useActivityStore } from '../../src/store/activity-store.js';
 import { useTelemetrySettingsStore } from '../../src/store/telemetry-settings.js';
-import { installTelemetryShipper } from '../../src/services/telemetry-shipper.js';
-import { createTelemetryClient } from '../../src/services/telemetry.js';
+import { installTelemetryShipper, resetTelemetryShipperForTests } from '../../src/services/telemetry-shipper.js';
+import { createTelemetryClient, MAX_SPAN_DURATION_MS } from '../../src/services/telemetry.js';
 
 describe('installTelemetryShipper', () => {
   let uninstall: (() => void) | undefined;
@@ -16,6 +16,7 @@ describe('installTelemetryShipper', () => {
     useOutputStore.setState({ lines: [] });
     useActivityStore.setState({ entries: [] });
     useTelemetrySettingsStore.setState({ enabled: true, hydrated: true });
+    resetTelemetryShipperForTests();
   });
 
   afterEach(() => {
@@ -204,6 +205,43 @@ describe('installTelemetryShipper', () => {
     vi.unstubAllGlobals();
   });
 
+  // Regression for the sibling failure mode Codex flagged in the same PR
+  // review round: an instrumented call with no abort timeout (e.g.
+  // transport-provider.ts's mintSessionToken fetch) can in principle stay
+  // pending past the wire schema's 600_000ms (10 min) max before finally
+  // rejecting. toSpan() only rounded, never clamped — an out-of-range
+  // durationMs fails REAL schema validation the same way a fractional one
+  // did above, silently dropping the whole batch.
+  it('clamps a durationMs exceeding the wire schema max instead of shipping it unclamped', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useOutputStore.getState().addLine('boom', 'error', { op: 'mintSessionToken', durationMs: 999_999 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+    const span = spans.find((s: { op: string }) => s.op === 'mintSessionToken');
+    expect(span).toBeDefined();
+    expect(span.durationMs).toBe(MAX_SPAN_DURATION_MS);
+  });
+
+  it('an over-max durationMs no longer fails REAL schema validation, so the batch actually reaches fetch()', async () => {
+    const fetchSpy = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const client = createTelemetryClient({
+      endpoint: 'https://example.invalid/rune-studio/api/telemetry/v1/event',
+      enabled: true,
+      studioVersion: '0.1.0',
+      uaClass: 'test'
+    });
+    uninstall = installTelemetryShipper(client);
+    useOutputStore.getState().addLine('boom', 'error', { op: 'mintSessionToken', durationMs: 999_999 });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchSpy.mock.calls[0]?.[1]?.body as string);
+    const span = body.spans.find((s: { op: string }) => s.op === 'mintSessionToken');
+    expect(span.durationMs).toBe(MAX_SPAN_DURATION_MS);
+    vi.unstubAllGlobals();
+  });
+
   it('flushes early once the buffer reaches 20 entries without waiting for the timer', async () => {
     const emit = vi.fn(async () => {});
     uninstall = installTelemetryShipper({ emit });
@@ -249,6 +287,86 @@ describe('installTelemetryShipper', () => {
       expect.objectContaining({
         event: 'op_spans',
         spans: expect.arrayContaining([expect.objectContaining({ op: 'afterRotation', level: 'error' })])
+      })
+    );
+  });
+
+  // Regression coverage for the App.tsx boot-order race: for a returning
+  // user, hydrateTelemetrySettings() resolving (and this shipper's effect
+  // installing) can lag behind a namespace-tagged span that already
+  // completed and landed in the Activity store — see this file's own
+  // "hasInstalledBefore" comment in telemetry-shipper.ts. Caught via PR
+  // review on rune-langium#486's connect-phase instrumentation, whose
+  // whole point is capturing exactly this kind of cold-start span.
+  it('ships an activity-store entry that arrived BEFORE the first-ever install of a session, when backfillPreInstall is explicitly requested', async () => {
+    // Simulate the race directly: the entry lands in the store first,
+    // exactly as it would while the app is still waiting on
+    // hydrateTelemetrySettings() to resolve for a RETURNING, already-
+    // consenting user. `ok: false` (-> level 'error') for a deterministic
+    // 100%-sampled assertion, matching this file's other sample-rate-
+    // sensitive tests.
+    useActivityStore.getState().addActivity('lsp', false, 'connectPagesFunctionLsp', { durationMs: 42 });
+
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit }, { backfillPreInstall: true });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'op_spans',
+        spans: expect.arrayContaining([expect.objectContaining({ op: 'lsp', durationMs: 42, level: 'error' })])
+      })
+    );
+  });
+
+  // Regression for the privacy-adjacent gap the first version of the fix
+  // above had (caught in the same PR review round): a FRESH, first-time
+  // explicit opt-in this session must NEVER backfill — any activity
+  // predates the user's consent. This is App.tsx omitting
+  // backfillPreInstall (the safe default), not a hydration race.
+  it('does NOT ship a pre-install entry when backfillPreInstall is omitted (the default) — a fresh explicit opt-in, not a hydration race', async () => {
+    useActivityStore.getState().addActivity('lsp', false, 'connectPagesFunctionLsp', { durationMs: 42 });
+
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('does NOT re-ship a backlog on a re-toggle (second) install, even if backfillPreInstall is passed again', async () => {
+    const firstEmit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit: firstEmit }, { backfillPreInstall: true });
+    // User toggles telemetry off — App.tsx's effect teardown runs.
+    uninstall();
+    uninstall = undefined;
+
+    // While off, an entry accumulates (e.g. a background reconnect).
+    useActivityStore.getState().addActivity('lsp', true, 'connectPagesFunctionLsp', { durationMs: 99 });
+
+    // User toggles telemetry back on — a SECOND install in the same
+    // session, deliberately NOT calling resetTelemetryShipperForTests()
+    // (that's test-only scaffolding for simulating a fresh session).
+    // Passing backfillPreInstall: true again proves the guard is really
+    // "only the first install ever" (hasInstalledBefore), not just
+    // whichever flag value was passed most recently.
+    const secondEmit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit: secondEmit }, { backfillPreInstall: true });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(secondEmit).not.toHaveBeenCalled();
+  });
+
+  // Regression for the sibling finding in the same review round: the
+  // Activity sink previously stored only record.namespace as the shipped
+  // span's op, collapsing every op sharing a namespace (e.g.
+  // mintSessionToken/openPagesFunctionWs/connectPagesFunctionLsp, all
+  // namespace: 'lsp') into one indistinguishable telemetry sample.
+  it('ships the real op name, not the coarser namespace tag, when an activity entry carries one', async () => {
+    const emit = vi.fn(async () => {});
+    uninstall = installTelemetryShipper({ emit });
+    useActivityStore.getState().addActivity('lsp', false, 'connect failed', { durationMs: 7, op: 'mintSessionToken' });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spans: expect.arrayContaining([expect.objectContaining({ op: 'mintSessionToken' })])
       })
     );
   });

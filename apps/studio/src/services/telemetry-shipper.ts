@@ -5,7 +5,7 @@
 import { useOutputStore, type OutputLine } from '../store/output-store.js';
 import { useActivityStore, type ActivityEntry } from '../store/activity-store.js';
 import { useTelemetrySettingsStore } from '../store/telemetry-settings.js';
-import type { TelemetryClient } from './telemetry.js';
+import { MAX_SPAN_DURATION_MS, type TelemetryClient } from './telemetry.js';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import { withInstrumentation } from './instrumentation/core.js';
 
@@ -39,9 +39,15 @@ function toSpan(
   // client.emit()'s schema validation throws for any span carrying a
   // fractional duration, and flush()'s catch(() => {}) silently discards
   // the WHOLE batch (including any 100%-sampled error entries bundled in
-  // it), not just the offending span.
-  const roundedDurationMs = durationMs !== undefined ? Math.round(durationMs) : undefined;
-  return { op, subject, durationMs: roundedDurationMs, level, opId, signature };
+  // it), not just the offending span. Clamping to MAX_SPAN_DURATION_MS is
+  // the same fix for the same failure mode: an instrumented call with no
+  // abort timeout (e.g. transport-provider.ts's mintSessionToken fetch)
+  // can in principle stay pending past the schema's max before rejecting
+  // — clamp rather than omit, so "it took at least this long" still
+  // survives as a signal instead of silently dropping the whole batch.
+  const clampedDurationMs =
+    durationMs !== undefined ? Math.min(Math.round(durationMs), MAX_SPAN_DURATION_MS) : undefined;
+  return { op, subject, durationMs: clampedDurationMs, level, opId, signature };
 }
 
 function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
@@ -80,8 +86,44 @@ function maxId(ids: Array<{ id: number }>): number {
   return max;
 }
 
+// Module-scope, not per-install: App.tsx's shipper effect only installs
+// once telemetryEnabled resolves true (hydrateTelemetrySettings() is a
+// fire-and-forget async read — see App.tsx's own comment), but the
+// instrumentation Activity sink (installInstrumentationActivitySink) is
+// installed unconditionally at module load in main.tsx, before React even
+// mounts. For a RETURNING user whose opt-in is already persisted enabled,
+// a namespace-tagged span (e.g. transport-provider.ts's connect-phase
+// timing) can complete and land in the Activity store BEFORE this effect
+// ever runs. Starting the watermark at "current max" — correct for every
+// LATER re-install, where it deliberately avoids re-shipping a backlog
+// accumulated while telemetry was off — would permanently skip exactly
+// those pre-hydration cold-start spans on the FIRST install of a session.
+let hasInstalledBefore = false;
+
+/** Test-only: lets a fresh test simulate "first install of a new browser session" without carrying state across test files/cases. */
+// oxlint-disable-next-line rune/no-uninstrumented-export -- test-only reset scaffolding (matches resetInstrumentationForTests's own exemption in instrumentation-core), never called from a real app code path; instrumenting it would just be noise in every test run.
+export function resetTelemetryShipperForTests(): void {
+  hasInstalledBefore = false;
+}
+
+export interface InstallTelemetryShipperOptions {
+  /**
+   * Set true ONLY when this install's opt-in came from
+   * hydrateTelemetrySettings() loading an already-persisted, returning
+   * user's consent (useTelemetrySettingsStore's `enabledFromHydration`)
+   * — never for a fresh, explicit Settings-checkbox toggle this session.
+   * Defaults to false: the safe default is NEVER backfilling, matching
+   * App.tsx's "never install-then-gate-at-emit-time" invariant. A caller
+   * that omits this gets exactly today's privacy-safe behavior.
+   */
+  backfillPreInstall?: boolean;
+}
+
 export const installTelemetryShipper = withInstrumentation(
-  function installTelemetryShipper(client: Pick<TelemetryClient, 'emit'>): () => void {
+  function installTelemetryShipper(
+    client: Pick<TelemetryClient, 'emit'>,
+    options: InstallTelemetryShipperOptions = {}
+  ): () => void {
     let buffer: Span[] = [];
     // Some ops (e.g. model-store.ts's load success/failure paths) publish the
     // SAME logical event to BOTH output-store and activity-store, sharing one
@@ -101,8 +143,10 @@ export const installTelemetryShipper = withInstrumentation(
     // a length-based watermark would silently stop capturing new entries.
     // `id` values are never reused and always increase, so they survive
     // rotation as well as growth.
-    let lastOutputId = maxId(useOutputStore.getState().lines);
-    let lastActivityId = maxId(useActivityStore.getState().entries);
+    const shouldBackfill = !hasInstalledBefore && options.backfillPreInstall === true;
+    let lastOutputId = shouldBackfill ? 0 : maxId(useOutputStore.getState().lines);
+    let lastActivityId = shouldBackfill ? 0 : maxId(useActivityStore.getState().entries);
+    hasInstalledBefore = true;
 
     function bufferSpan(span: Span): void {
       if (span.opId !== undefined) {
@@ -132,7 +176,7 @@ export const installTelemetryShipper = withInstrumentation(
       if (buffer.length >= MAX_BATCH) flush();
     }
 
-    const unsubOutput = useOutputStore.subscribe((state) => {
+    function processOutputState(state: { lines: OutputLine[] }): void {
       const lines: OutputLine[] = state.lines;
       const newLines = lines.filter((line) => line.id > lastOutputId);
       if (newLines.length === 0) return;
@@ -146,20 +190,45 @@ export const installTelemetryShipper = withInstrumentation(
       }
       lastOutputId = maxId(lines);
       considerFlush();
-    });
+    }
 
-    const unsubActivity = useActivityStore.subscribe((state) => {
+    function processActivityState(state: { entries: ActivityEntry[] }): void {
       const entries: ActivityEntry[] = state.entries;
       const newEntries = entries.filter((entry) => entry.id > lastActivityId);
       if (newEntries.length === 0) return;
       for (const entry of newEntries) {
         const level = entry.ok ? 'info' : 'error';
         if (!shouldSample(level)) continue;
-        bufferSpan(toSpan(level, entry.tag, safeSubject(entry.tag, entry.subject), entry.durationMs, entry.opId));
+        // `entry.op` (the real instrumentation op, e.g. `mintSessionToken`)
+        // is the correct Span.op — `entry.tag` (the InstrumentationNamespace,
+        // e.g. `lsp`) is coarser and shared across every op in that
+        // namespace, which would otherwise collapse distinct connect-phase
+        // spans into one indistinguishable telemetry sample. `?? entry.tag`
+        // only matters for pre-existing/hand-built entries that predate
+        // this field.
+        const op = entry.op ?? entry.tag;
+        bufferSpan(toSpan(level, op, safeSubject(op, entry.subject), entry.durationMs, entry.opId, entry.signature));
       }
       lastActivityId = maxId(entries);
       considerFlush();
-    });
+    }
+
+    const unsubOutput = useOutputStore.subscribe(processOutputState);
+    const unsubActivity = useActivityStore.subscribe(processActivityState);
+    // Zustand's subscribe() only fires on FUTURE state changes — it never
+    // replays existing state to a newly-registered listener. Without this
+    // catch-up sweep, a first-install watermark of 0 (see shouldBackfill
+    // above) would still never actually ship anything that arrived before
+    // install: the listener simply never runs for entries that predate the
+    // subscription. Gated on shouldBackfill (not just run unconditionally):
+    // when it's false the watermark already equals current max, so this
+    // would be a no-op anyway, but skipping it outright keeps the "never
+    // backfill without explicit consent" invariant obvious from the control
+    // flow, not just from the watermark's incidental value.
+    if (shouldBackfill) {
+      processOutputState(useOutputStore.getState());
+      processActivityState(useActivityStore.getState());
+    }
 
     const interval = setInterval(flush, FLUSH_INTERVAL_MS);
 

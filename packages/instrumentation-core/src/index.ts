@@ -29,6 +29,16 @@ export interface TelemetryRecord {
   context?: unknown;
   namespace?: string;
   message?: string;
+  /**
+   * Explicit `false` suppresses the Toast sink for this record while
+   * leaving Activity-panel and telemetry-shipper visibility untouched.
+   * Undefined (the default) preserves the original behavior of a
+   * namespace-tagged call: both Toast and Activity render it. Use this
+   * for calls that are activity/telemetry-worthy but not something a user
+   * should see a popup for on every invocation (e.g. a background
+   * connection-establish span that fires on every reconnect).
+   */
+  toast?: boolean;
   ts: number;
 }
 
@@ -183,6 +193,14 @@ export interface InstrumentationOptions {
    * back to `op` when absent — most call sites should leave this unset.
    */
   message?: string;
+  /**
+   * Set to `false` to keep a namespace-tagged call out of the Toast sink
+   * while it still reaches the Activity panel and telemetry-shipper.
+   * Undefined (the default) means "toast-eligible", matching every
+   * existing namespace-tagged call site's current behavior. See
+   * TelemetryRecord.toast's doc comment for the rationale.
+   */
+  toast?: boolean;
 }
 
 let threshold: Level = 'info';
@@ -214,13 +232,20 @@ function errorLevelFor(opts: InstrumentationOptions): Level {
 // context to error records the same way success records do. `dispatch`
 // defaults to the normal full fan-out (emitRecord); the notify-only fast
 // path below passes emitToAdditionalSinksOnly instead, reusing this exact
-// signature/context-extraction logic without duplicating it.
+// signature/context-extraction logic without duplicating it. `durationMs` is
+// optional (callers that never captured a start time, e.g. legacy callers of
+// this internal function, simply omit it) but every real call site in this
+// module now passes the real elapsed time — a 100%-sampled failure span
+// with no duration can't distinguish an immediate rejection from one that
+// only failed after a real timeout, which defeats exactly the kind of
+// latency investigation this instrumentation exists for.
 function emitError(
   op: string,
   opts: InstrumentationOptions,
   err: unknown,
   bindingContext?: unknown,
-  dispatch: Emit = emitRecord
+  dispatch: Emit = emitRecord,
+  durationMs?: number
 ): void {
   const { signature, context } = (opts.sanitizeError ?? defaultSanitizeError)(err);
   dispatch({
@@ -231,6 +256,8 @@ function emitError(
     context: context ?? bindingContext,
     namespace: opts.namespace,
     message: opts.message,
+    toast: opts.toast,
+    durationMs,
     ts: Date.now()
   });
 }
@@ -255,6 +282,14 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
   thisArg: unknown,
   args: unknown[]
 ): ReturnType<F> {
+  // Real elapsed time, not a placeholder: this fast path skips the full
+  // wrapper's depth/threshold machinery, but a namespace-tagged call's
+  // duration is exactly what a diagnostic span (e.g. a connect-phase
+  // timing) exists to report — a hardcoded 0 here would silently defeat
+  // that for every production build, since this is the ONLY path
+  // namespace-tagged calls take in prod (see makeWithInstrumentation's
+  // IS_PROD branch above).
+  const start = performance.now();
   try {
     const result = fn.apply(thisArg, args);
     if (result instanceof Promise) {
@@ -267,16 +302,17 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
             args,
             value,
             identitySanitize,
-            0,
+            performance.now() - start,
             undefined,
             opts.namespace,
             opts.message,
-            emitToAdditionalSinksOnly
+            emitToAdditionalSinksOnly,
+            opts.toast
           );
           return value;
         },
         (err) => {
-          emitError(op, opts, err, undefined, emitToAdditionalSinksOnly);
+          emitError(op, opts, err, undefined, emitToAdditionalSinksOnly, performance.now() - start);
           throw err;
         }
       ) as ReturnType<F>;
@@ -288,15 +324,16 @@ function runNotifyOnly<F extends (...args: any[]) => any>(
       args,
       result,
       identitySanitize,
-      0,
+      performance.now() - start,
       undefined,
       opts.namespace,
       opts.message,
-      emitToAdditionalSinksOnly
+      emitToAdditionalSinksOnly,
+      opts.toast
     );
     return result;
   } catch (err) {
-    emitError(op, opts, err, undefined, emitToAdditionalSinksOnly);
+    emitError(op, opts, err, undefined, emitToAdditionalSinksOnly, performance.now() - start);
     throw err;
   }
 }
@@ -402,13 +439,15 @@ function makeWithInstrumentation(binding?: ChildBinding) {
                   performance.now() - start,
                   context,
                   opts.namespace,
-                  opts.message
+                  opts.message,
+                  undefined,
+                  opts.toast
                 );
               return value;
             },
             (err) => {
               depth--;
-              emitError(op, opts, err, context);
+              emitError(op, opts, err, context, undefined, performance.now() - start);
               throw err;
             }
           );
@@ -426,11 +465,13 @@ function makeWithInstrumentation(binding?: ChildBinding) {
             performance.now() - start,
             context,
             opts.namespace,
-            opts.message
+            opts.message,
+            undefined,
+            opts.toast
           );
         return result;
       } catch (err) {
-        emitError(op, opts, err, context);
+        emitError(op, opts, err, context, undefined, performance.now() - start);
         throw err;
       } finally {
         if (!isAsync) depth--;
@@ -475,7 +516,8 @@ function emitSuccessWithContext(
   context: unknown,
   namespace: string | undefined,
   message: string | undefined,
-  dispatch: Emit = emitRecord
+  dispatch: Emit = emitRecord,
+  toast?: boolean
 ): void {
   const record: TelemetryRecord = {
     op,
@@ -485,7 +527,8 @@ function emitSuccessWithContext(
     durationMs,
     context,
     namespace,
-    message
+    message,
+    toast
   };
   if (capture & Capture.Input) record.input = sanitize(args, 'input');
   if (capture & Capture.Output) record.output = sanitize(output, 'output');
