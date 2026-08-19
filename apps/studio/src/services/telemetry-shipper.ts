@@ -50,7 +50,23 @@ function toSpan(
   return { op, subject, durationMs: clampedDurationMs, level, opId, signature };
 }
 
-function shouldSample(level: 'info' | 'warn' | 'error'): boolean {
+// Ops that always ship at 100%, regardless of level, bypassing SAMPLE_RATE
+// entirely. Reserved for ops that are inherently low-frequency — fired at
+// most once per page load or reconnect, never per-hover/per-keystroke/
+// per-request — where full sampling doesn't meaningfully increase data
+// volume but does make the timing data usable for latency investigations
+// (a 2% sample of an event that only fires once per session means most
+// sessions ship nothing at all, as opposed to a 2% sample of a
+// high-frequency event, which still yields a steady stream of data).
+// `lsp`/`mintSessionToken`/`openPagesFunctionWs`/`connectPagesFunctionLsp`
+// are LspProvider.tsx's and transport-provider.ts's connect-establish
+// spans (rune-langium#486's connect-phase investigation). Adding a new op
+// here should be a deliberate call, not a default — most ops belong under
+// the level-based rates below.
+const FULL_SAMPLE_OPS = new Set(['lsp', 'mintSessionToken', 'openPagesFunctionWs', 'connectPagesFunctionLsp']);
+
+function shouldSample(level: 'info' | 'warn' | 'error', op: string): boolean {
+  if (FULL_SAMPLE_OPS.has(op)) return true;
   return Math.random() < SAMPLE_RATE[level];
 }
 
@@ -182,8 +198,8 @@ export const installTelemetryShipper = withInstrumentation(
       if (newLines.length === 0) return;
       for (const line of newLines) {
         if (line.severity !== 'error' && line.severity !== 'warn' && line.severity !== 'info') continue;
-        if (!shouldSample(line.severity)) continue;
         const op = line.op ?? 'output';
+        if (!shouldSample(line.severity, op)) continue;
         bufferSpan(
           toSpan(line.severity, op, safeSubject(op, line.subject), line.durationMs, line.opId, line.signature)
         );
@@ -198,7 +214,6 @@ export const installTelemetryShipper = withInstrumentation(
       if (newEntries.length === 0) return;
       for (const entry of newEntries) {
         const level = entry.ok ? 'info' : 'error';
-        if (!shouldSample(level)) continue;
         // `entry.op` (the real instrumentation op, e.g. `mintSessionToken`)
         // is the correct Span.op — `entry.tag` (the InstrumentationNamespace,
         // e.g. `lsp`) is coarser and shared across every op in that
@@ -207,6 +222,7 @@ export const installTelemetryShipper = withInstrumentation(
         // only matters for pre-existing/hand-built entries that predate
         // this field.
         const op = entry.op ?? entry.tag;
+        if (!shouldSample(level, op)) continue;
         bufferSpan(toSpan(level, op, safeSubject(op, entry.subject), entry.durationMs, entry.opId, entry.signature));
       }
       lastActivityId = maxId(entries);

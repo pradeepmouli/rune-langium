@@ -370,4 +370,54 @@ describe('installTelemetryShipper', () => {
       })
     );
   });
+
+  // Connect-phase ops (mintSessionToken/openPagesFunctionWs/
+  // connectPagesFunctionLsp/lsp) are inherently low-frequency — once per
+  // page load or reconnect, never per-hover — so they bypass the normal
+  // level-based sampling entirely (FULL_SAMPLE_OPS in telemetry-shipper.ts)
+  // rather than getting lost in the 2% 'info' rate that makes sense for
+  // high-frequency events. Math.random mocked to a value that would fail
+  // EVERY level's rate (including 'warn' at 20%) to prove these ops really
+  // bypass the random check, not just get lucky.
+  describe('FULL_SAMPLE_OPS — always-100%-sampled low-frequency connect ops', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("ships a successful (info-level) connect-phase span even when Math.random would fail every level's rate", async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+      const emit = vi.fn(async () => {});
+      uninstall = installTelemetryShipper({ emit });
+      useActivityStore.getState().addActivity('lsp', true, 'connected', { durationMs: 996, op: 'openPagesFunctionWs' });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spans: expect.arrayContaining([expect.objectContaining({ op: 'openPagesFunctionWs', level: 'info' })])
+        })
+      );
+    });
+
+    it('does NOT bypass sampling for an ordinary info-level op with the same Math.random mock', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+      const emit = vi.fn(async () => {});
+      uninstall = installTelemetryShipper({ emit });
+      useActivityStore.getState().addActivity('modelLoad', true, 'loaded', { durationMs: 12 });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(emit).not.toHaveBeenCalled();
+    });
+
+    it('ships every connect-phase op name in the allowlist', async () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+      const emit = vi.fn(async () => {});
+      uninstall = installTelemetryShipper({ emit });
+      useActivityStore.getState().addActivity('lsp', true, 'connected', { op: 'lsp' });
+      useActivityStore.getState().addActivity('lsp', true, 'minted', { op: 'mintSessionToken' });
+      useActivityStore.getState().addActivity('lsp', true, 'ws opened', { op: 'openPagesFunctionWs' });
+      useActivityStore.getState().addActivity('lsp', true, 'connected', { op: 'connectPagesFunctionLsp' });
+      await vi.advanceTimersByTimeAsync(15_000);
+      const spans = emit.mock.calls[0]?.[0]?.spans ?? [];
+      const shippedOps = spans.map((s: { op: string }) => s.op).sort();
+      expect(shippedOps).toEqual(['connectPagesFunctionLsp', 'lsp', 'mintSessionToken', 'openPagesFunctionWs']);
+    });
+  });
 });
