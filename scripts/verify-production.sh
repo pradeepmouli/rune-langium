@@ -282,57 +282,57 @@ esac
 # therefore always 404s — a false failure — so the check is removed. (Codegen
 # functional coverage lives in the package + studio test suites.)
 
-# ---------- 8. Spec 019 Pages Functions — same-origin LSP + parse ----------
-# These probes target the NEW endpoints deployed via apps/docs/.vitepress/dist/
-# functions/ (see apps/docs/scripts/build-combined.mjs). They run at the ROOT
-# of the origin (not under /rune-studio/), since CF Pages mounts functions at
-# the project root. The legacy apps/lsp-worker probe was intentionally removed:
-# production now verifies the same-origin Pages Functions directly.
+# ---------- 8. Spec 019 — LSP (direct to apps/lsp-worker) + parse (Pages Function) ----------
+# LSP probes target apps/lsp-worker's own zone route
+# (www.daikonic.dev/rune-studio/api/lsp/*), NOT a Pages Function — the earlier
+# same-origin Pages Function proxy (apps/studio/functions/api/lsp/*) was
+# deleted as a duplicate of apps/lsp-worker's own session-mint/health/WS-
+# upgrade logic. /api/parse (below) is still a Pages Function, mounted at the
+# ROOT of the origin per apps/docs/scripts/build-combined.mjs.
 #
 # Skip this section when targeting a non-daikonic.dev BASE (e.g. a staging
 # preview URL with a different routing prefix) by setting SKIP_019=1.
 
 if [ "${SKIP_019:-0}" != "1" ]; then
-  status=$(http_status GET "$ROOT_BASE/api/lsp/health")
+  status=$(http_status GET "$BASE/api/lsp/health")
   case "$status" in
     200)
-      body=$(http_body GET "$ROOT_BASE/api/lsp/health")
+      body=$(http_body GET "$BASE/api/lsp/health")
       if grep -q '"langium_loaded":true' <<<"$body"; then
-        pass "019 /api/lsp/health ($status, langium_loaded:true)"
+        pass "019 /rune-studio/api/lsp/health ($status, langium_loaded:true)"
       else
-        fail "019 /api/lsp/health" \
-             "200 but missing langium_loaded:true — Pages Function live but langium import failed (bundle regression). Body: ${body:0:160}"
+        fail "019 /rune-studio/api/lsp/health" \
+             "200 but missing langium_loaded:true — Worker live but langium import failed (bundle regression). Body: ${body:0:160}"
       fi
       ;;
     404)
-      warn "019 /api/lsp/health" \
-           "404 — Pages Function not yet deployed at $ROOT_BASE/api/lsp/health. Either the build-combined functions/ copy didn't ship, or the CF Pages project hasn't picked it up. Push to trigger autodeploy, then re-run."
+      warn "019 /rune-studio/api/lsp/health" \
+           "404 — apps/lsp-worker not yet deployed at $BASE/api/lsp/health, or its Workers Route isn't live. Push to apps/lsp-worker/** to trigger its Workers Builds autodeploy, then re-run."
       ;;
     *)
-      fail "019 /api/lsp/health" \
-           "expected 200, got $status from $ROOT_BASE/api/lsp/health"
+      fail "019 /rune-studio/api/lsp/health" \
+           "expected 200, got $status from $BASE/api/lsp/health"
       ;;
   esac
 
-  # /api/lsp/session: POST without Origin should be rejected (origin gating).
+  # /rune-studio/api/lsp/session: POST without Origin should be rejected (origin gating).
   # We expect 400/403 here — a 200 would indicate the origin allowlist is off.
-  # 404/405 both mean "no Pages Function deployed at this path" (CF Pages
-  # falls through to its static-asset 405 when the route is unhandled).
-  status=$(http_status POST "$ROOT_BASE/api/lsp/session" '{"workspaceId":"verify"}')
+  # 404/405 both mean "apps/lsp-worker not deployed / route not live at this path".
+  status=$(http_status POST "$BASE/api/lsp/session" '{"workspaceId":"verify"}')
   case "$status" in
     200)
-      fail "019 /api/lsp/session origin gate" \
-           "200 with no Origin header — token mint should reject cross-origin / null-origin requests (lsp-auth.ts). Check ALLOWED_ORIGIN var in CF dashboard."
+      fail "019 /rune-studio/api/lsp/session origin gate" \
+           "200 with no Origin header — token mint should reject cross-origin / null-origin requests (apps/lsp-worker/src/auth.ts). Check ALLOWED_ORIGIN var (apps/lsp-worker/wrangler.toml [vars])."
       ;;
     400|401|403)
-      pass "019 /api/lsp/session origin gate ($status without Origin header)"
+      pass "019 /rune-studio/api/lsp/session origin gate ($status without Origin header)"
       ;;
     404|405)
-      warn "019 /api/lsp/session" \
-           "$status — Pages Function not deployed yet at $ROOT_BASE/api/lsp/session (CF static-asset fallthrough)."
+      warn "019 /rune-studio/api/lsp/session" \
+           "$status — apps/lsp-worker not deployed yet at $BASE/api/lsp/session, or its Workers Route isn't live."
       ;;
     *)
-      fail "019 /api/lsp/session origin gate" \
+      fail "019 /rune-studio/api/lsp/session origin gate" \
            "expected 400/401/403 from no-Origin POST, got $status"
       ;;
   esac

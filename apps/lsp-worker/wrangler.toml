@@ -34,6 +34,15 @@ new_sqlite_classes = ["RuneLspSession"]
 [observability]
 enabled = true
 
+
+# `[vars]` is uploaded verbatim on every `wrangler deploy` (unlike Cloudflare
+# Pages, this Worker has no separate dashboard-managed env-var store) — so
+# ALLOWED_ORIGIN here must stay production-only. For local multi-origin dev
+# (studio at http://localhost:5173 / :8788 calling this Worker directly at
+# :8790, now that apps/studio/functions/api/lsp/* no longer proxies), copy
+# .dev.vars.example to .dev.vars (gitignored) and widen it there — `wrangler
+# dev` merges `.dev.vars` on top of `[vars]` for local runs only; it's never
+# read by `wrangler deploy`.
 [vars]
 ALLOWED_ORIGIN = "https://www.daikonic.dev"
 

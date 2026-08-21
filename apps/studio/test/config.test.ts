@@ -68,7 +68,7 @@ describe('studio config singleton (014 T009/T011)', () => {
     vi.resetModules();
   });
 
-  it('(a) production defaults route LSP same-origin to /api/lsp (base; provider appends /ws/<token>)', async () => {
+  it('(a) production defaults route LSP same-origin to /rune-studio/api/lsp (base; provider appends /ws/<token>)', async () => {
     const { config } = await loadConfig({
       DEV: false,
       PROD: true,
@@ -76,19 +76,19 @@ describe('studio config singleton (014 T009/T011)', () => {
     });
     // jsdom default origin is http://localhost:3000 in vitest's jsdom env.
     const expectedWsOrigin = window.location.origin.replace(/^http/, 'ws');
-    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp`);
+    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/rune-studio/api/lsp`);
     expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(false);
   });
 
-  it('(b) dev defaults route LSP same-origin to /api/lsp (base; provider appends /ws/<token>)', async () => {
+  it('(b) dev defaults route LSP same-origin to /rune-studio/api/lsp (base; provider appends /ws/<token>)', async () => {
     const { config } = await loadConfig({
       DEV: true,
       PROD: false,
       MODE: 'development'
     });
     const expectedWsOrigin = window.location.origin.replace(/^http/, 'ws');
-    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/api/lsp`);
+    expect(config.lspWsUrl).toBe(`${expectedWsOrigin}/rune-studio/api/lsp`);
     expect(config.lspEnabled).toBe(true);
     expect(config.devMode).toBe(true);
   });
@@ -103,13 +103,13 @@ describe('studio config singleton (014 T009/T011)', () => {
     expect(config.lspWsUrl).toBe('wss://custom.example/lsp');
   });
 
-  it('(i) lspSessionUrl defaults to same-origin /api/lsp/session', async () => {
+  it('(i) lspSessionUrl defaults to same-origin /rune-studio/api/lsp/session', async () => {
     const { config } = await loadConfig({
       DEV: false,
       PROD: true,
       MODE: 'production'
     });
-    expect(config.lspSessionUrl).toBe(`${window.location.origin}/api/lsp/session`);
+    expect(config.lspSessionUrl).toBe(`${window.location.origin}/rune-studio/api/lsp/session`);
   });
 
   it('(d) malformed URL throws at module load', async () => {
