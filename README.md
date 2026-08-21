@@ -51,6 +51,8 @@ Cloudflare Pages project settings (`daikonic-dev`):
 
 GitHub Actions in this repo verify that the combined build succeeds on push and pull request. Production deployment is driven by Cloudflare Pages' git integration, not the workflow.
 
+**Gotcha — env var changes need a manual redeploy.** Cloudflare Pages deployments triggered by a GitHub push (`deployment_trigger.type = "github:push"`) do NOT pick up changes to `deployment_configs.{production,preview}.env_vars` made via the Pages API/dashboard after the last such deployment — the new value silently doesn't reach the build, even though `GET`ting the project immediately shows it "set." Only an `ad_hoc` (manually triggered, e.g. `POST /accounts/{id}/pages/projects/{name}/deployments`) deployment actually bakes in a fresh env var value. Confirmed empirically 2026-07-31 by diffing `env_vars` on individual `GET .../deployments/{id}` responses across trigger types — not documented behavior found in Cloudflare's own docs, just observed. **After changing any Pages project env var, always trigger one `ad_hoc` deployment immediately afterward** (don't assume the next `git push` will pick it up) — this is how `VITE_ENABLE_TELEMETRY` silently reverted twice in the same session despite being confirmed "set" each time.
+
 ### Codegen service: local vs hosted
 
 Studio's **Export Code** button has two deployment paths with intentionally different trade-offs:
