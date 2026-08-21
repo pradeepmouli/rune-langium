@@ -88,11 +88,32 @@ const SessionRequestBody = z
 // Helpers
 // ────────────────────────────────────────────────────────────────────────────
 
-function jsonResponse(status: number, body: unknown): Response {
+function jsonResponse(status: number, body: unknown, extraHeaders: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...extraHeaders }
   });
+}
+
+// Only /api/lsp/session needs this: it's the one route sent with
+// `Content-Type: application/json`, which triggers a browser CORS
+// preflight for any genuinely cross-origin caller (e.g. `pnpm dev:full`,
+// where Studio runs on :5173/:8788 and this Worker runs on :8790 — see
+// apps/lsp-worker/.dev.vars.example). Production traffic is same-origin
+// (both under www.daikonic.dev) and never triggers a preflight, so this
+// is purely additive there. /api/lsp/health is a plain GET (no custom
+// headers, a CORS "simple request") and /api/lsp/ws upgrades aren't
+// subject to the fetch-preflight mechanism — the Origin check inside
+// handleWsUpgrade is what actually gates those.
+function corsHeaders(origin: string | null, allowed: string): Record<string, string> {
+  if (!origin || !isOriginAllowed(origin, allowed)) return {};
+  return {
+    'Access-Control-Allow-Origin': origin,
+    Vary: 'Origin',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '600'
+  };
 }
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -114,6 +135,7 @@ async function handleHealth(): Promise<Response> {
 async function handleSessionMint(req: Request, env: Env): Promise<Response> {
   const origin = req.headers.get('Origin');
   const ip = req.headers.get('cf-connecting-ip') ?? '0.0.0.0';
+  const cors = corsHeaders(origin, env.ALLOWED_ORIGIN);
 
   if (!isOriginAllowed(origin, env.ALLOWED_ORIGIN)) {
     return jsonResponse(403, { error: 'origin_not_allowed' });
@@ -121,22 +143,22 @@ async function handleSessionMint(req: Request, env: Env): Promise<Response> {
 
   const rl = checkSessionRateLimit(ip);
   if (!rl.allowed) {
-    return jsonResponse(429, { error: 'rate_limited', retry_after_s: rl.retryAfterS });
+    return jsonResponse(429, { error: 'rate_limited', retry_after_s: rl.retryAfterS }, cors);
   }
 
   let raw: unknown;
   try {
     raw = await req.json();
   } catch {
-    return jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' });
+    return jsonResponse(400, { error: 'schema_violation', details: 'malformed_json' }, cors);
   }
   const parsed = SessionRequestBody.safeParse(raw);
   if (!parsed.success) {
-    return jsonResponse(400, { error: 'schema_violation', details: parsed.error.issues });
+    return jsonResponse(400, { error: 'schema_violation', details: parsed.error.issues }, cors);
   }
 
   if (!env.SESSION_SIGNING_KEY) {
-    return jsonResponse(500, { error: 'signing_key_not_configured' });
+    return jsonResponse(500, { error: 'signing_key_not_configured' }, cors);
   }
 
   const issuedAt = Date.now();
@@ -150,7 +172,7 @@ async function handleSessionMint(req: Request, env: Env): Promise<Response> {
     nonce: newNonceHex()
   };
   const token = await signSessionToken(env.SESSION_SIGNING_KEY, payload);
-  return jsonResponse(200, { token, expiresAt: exp });
+  return jsonResponse(200, { token, expiresAt: exp }, cors);
 }
 
 async function handleWsUpgrade(req: Request, env: Env, token: string): Promise<Response> {
@@ -208,7 +230,12 @@ export default {
     let res: Response;
 
     try {
-      if (url.pathname.endsWith('/api/lsp/health') && req.method === 'GET') {
+      if (url.pathname.endsWith('/api/lsp/session') && req.method === 'OPTIONS') {
+        route = '/api/lsp/session';
+        // Empty headers => origin not allowed; still 204 so the browser
+        // surfaces a clear CORS rejection rather than a network error.
+        res = new Response(null, { status: 204, headers: corsHeaders(req.headers.get('Origin'), env.ALLOWED_ORIGIN) });
+      } else if (url.pathname.endsWith('/api/lsp/health') && req.method === 'GET') {
         route = '/api/lsp/health';
         res = await handleHealth();
       } else if (url.pathname.endsWith('/api/lsp/session') && req.method === 'POST') {

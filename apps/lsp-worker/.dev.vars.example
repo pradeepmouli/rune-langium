@@ -1,5 +1,12 @@
 # Copy to .dev.vars (gitignored) for local `pnpm dev:full` / `wrangler dev`
 # runs. `wrangler dev` merges this on top of wrangler.toml's [vars] for
 # local runs only — never uploaded by `wrangler deploy`, so this is safe to
-# widen without affecting production's ALLOWED_ORIGIN.
+# widen without affecting production's ALLOWED_ORIGIN or the real
+# production SESSION_SIGNING_KEY (set via `wrangler secret put`, never in
+# any file). The value below is HMAC key material for signing/verifying
+# session tokens minted and checked entirely by this local Worker instance
+# — it never needs to match production's key, so any string works; this is
+# just a placeholder to make handleSessionMint stop 500ing with
+# signing_key_not_configured out of the box.
 ALLOWED_ORIGIN=http://localhost:5173,http://localhost:8788,https://www.daikonic.dev
+SESSION_SIGNING_KEY=local-dev-only-signing-key-not-for-production-use

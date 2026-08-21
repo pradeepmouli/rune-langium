@@ -155,4 +155,48 @@ describe('apps/lsp-worker session-token mint contract (T038)', () => {
     expect(typeof body.uptime_seconds).toBe('number');
     expect(body.uptime_seconds).toBeGreaterThanOrEqual(0);
   });
+
+  it('OPTIONS /rune-studio/api/lsp/session returns 204 with CORS headers for an allowed cross-origin caller', async () => {
+    const env = makeEnv({ ALLOWED_ORIGIN: 'https://www.daikonic.dev,http://localhost:5173' });
+    const res = await worker.fetch(
+      new Request('https://www.daikonic.dev/rune-studio/api/lsp/session', {
+        method: 'OPTIONS',
+        headers: { Origin: 'http://localhost:5173' }
+      }),
+      env
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+    expect(res.headers.get('Vary')).toBe('Origin');
+    expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
+    expect(res.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+  });
+
+  it('OPTIONS /rune-studio/api/lsp/session returns 204 with no CORS headers for a disallowed origin', async () => {
+    const env = makeEnv();
+    const res = await worker.fetch(
+      new Request('https://www.daikonic.dev/rune-studio/api/lsp/session', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com' }
+      }),
+      env
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+
+  it('POST /rune-studio/api/lsp/session echoes Access-Control-Allow-Origin for an allowed cross-origin caller', async () => {
+    const env = makeEnv({ ALLOWED_ORIGIN: 'https://www.daikonic.dev,http://localhost:5173' });
+    const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID }, 'http://localhost:5173'), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+    expect(res.headers.get('Vary')).toBe('Origin');
+  });
+
+  it('POST /rune-studio/api/lsp/session 403 origin_not_allowed carries no Access-Control-Allow-Origin', async () => {
+    const env = makeEnv();
+    const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID }, 'https://evil.example.com'), env);
+    expect(res.status).toBe(403);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
 });
