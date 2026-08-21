@@ -106,7 +106,17 @@ export const createTransportProvider = withInstrumentation(
     const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
     const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
     const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
-    const preferDirectWebSocket = opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
+    // Only an explicit `wsUri` override selects the legacy direct/bare
+    // WebSocket path. Cross-origin session URLs (the documented local
+    // cross-port dev flow, and CF Pages preview builds routed at
+    // production — see apps/studio/src/config.ts's isPagesPreviewHost)
+    // are NOT a signal to try it: the bare WS route has no un-authenticated
+    // upgrade handler in apps/lsp-worker/src/index.ts (only `/ws/<token>`
+    // matches), so treating "cross-origin" as "prefer direct WS" wastes up
+    // to `backoffBase * (2^maxReconnectAttempts - 1)` ms retrying a route
+    // guaranteed to fail before falling through to the correct mint+token
+    // flow below.
+    const preferDirectWebSocket = opts?.wsUri !== undefined;
 
     let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
     let currentTransport: CloseableTransport | undefined;
@@ -399,14 +409,3 @@ export const createTransportProvider = withInstrumentation(
     }
   }
 );
-
-function isSameOriginSessionEndpoint(sessionUrl: string): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  try {
-    return new URL(sessionUrl, window.location.href).origin === window.location.origin;
-  } catch {
-    return false;
-  }
-}

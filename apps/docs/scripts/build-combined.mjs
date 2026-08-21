@@ -12,44 +12,34 @@
  * that CF Pages git-integration picks up automatically:
  *
  *   <repo>/functions/             → Pages Functions copied from
- *                                   apps/studio/functions/ (spec 019). CF
- *                                   Pages scans <Root Directory>/functions/
- *                                   for routes-based Functions; with default
- *                                   Root Directory = "/", that's the repo
- *                                   root. Placing them inside the build
- *                                   output dir does NOT work for git-
- *                                   integration deploys (only for direct
- *                                   `wrangler pages deploy` uploads).
- *   <repo>/wrangler.toml          → compat flags + LSP_SESSION DO binding +
- *                                   ALLOWED_ORIGIN var. Takes precedence
- *                                   over dashboard config for the keys it
- *                                   defines (per CF Pages docs, deploy-root
- *                                   wrangler.toml merges with dashboard
- *                                   settings).
+ *                                   apps/studio/functions/ (parse + codegen
+ *                                   + _middleware only — the LSP Functions
+ *                                   from spec 019 were deleted in favor of
+ *                                   routing straight at apps/lsp-worker's
+ *                                   own zone route; see that Worker's
+ *                                   wrangler.toml). CF Pages scans
+ *                                   <Root Directory>/functions/ for routes-
+ *                                   based Functions; with default Root
+ *                                   Directory = "/", that's the repo root.
+ *                                   Placing them inside the build output
+ *                                   dir does NOT work for git-integration
+ *                                   deploys (only for direct `wrangler
+ *                                   pages deploy` uploads).
+ *   <repo>/wrangler.toml          → compat flags + the CURATED_MIRROR
+ *                                   service binding /api/parse needs.
+ *                                   Takes precedence over dashboard config
+ *                                   for the keys it defines (per CF Pages
+ *                                   docs, deploy-root wrangler.toml merges
+ *                                   with dashboard settings).
  *
  * Both sub-builds run with CF_PAGES=1 so their configs pick the right base.
  * CF Pages' git integration points at `apps/docs/.vitepress/dist/` as the
  * output directory; no GitHub Actions workflow is required.
  *
- * REQUIRED CF Pages dashboard configuration (one-time, spec 019 Phase 1):
- *   - Durable Object namespace selection: bind LSP_SESSION → existing
- *     rune-lsp-worker Worker (class: RuneLspSession). The CF dashboard
- *     namespace picker has no CLI equivalent.
- *     See https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
- *   - Secret: SESSION_SIGNING_KEY = <random 32-byte base64> for BOTH
- *     production AND preview environments. Set via:
- *       pnpm wrangler pages secret put SESSION_SIGNING_KEY \
- *         --project-name=daikonic-dev --environment=preview
- *       pnpm wrangler pages secret put SESSION_SIGNING_KEY \
- *         --project-name=daikonic-dev --environment=production
- *
- * (Compat flag + ALLOWED_ORIGIN var + DO binding script_name come from the
- * generated <repo>/wrangler.toml; no dashboard touch needed for those.)
- *
- * apps/lsp-worker/ remains deployed even after spec 019's Phase 2 cutover —
- * CF Pages cannot host DOs. Phase 3 (deferred) was originally "delete
- * apps/lsp-worker entirely"; that's now a narrower "strip its HTTP routes;
- * keep the DO export."
+ * apps/lsp-worker/ is deployed independently (`wrangler deploy`, not this
+ * script) and owns its own Durable Object + Worker Route directly — CF
+ * Pages never binds to it. No CF Pages dashboard configuration is required
+ * for LSP.
  *
  * apps/studio/wrangler.toml is the LOCAL-DEV-only config (for `pnpm
  * dev:pages` against apps/studio/functions/); it's not used by the CF
@@ -172,15 +162,9 @@ run(
   repoRoot
 );
 
-// Generate <repo>/wrangler.toml so CF Pages picks up the compat flag, the
-// LSP_SESSION DO binding (consumed from the existing rune-lsp-worker Worker —
-// Pages cannot host DOs), and the ALLOWED_ORIGIN runtime var declaratively
-// without requiring dashboard clicks for those fields.
-//
-// We intentionally OMIT:
-//   - `[[migrations]]`          (DO migrations are owned by
-//                                apps/lsp-worker/wrangler.toml; binding
-//                                consumers must not migrate someone else's DO).
+// Generate <repo>/wrangler.toml so CF Pages picks up the compat flag and the
+// CURATED_MIRROR service binding declaratively without requiring dashboard
+// clicks for those fields.
 //
 // `name` MUST match the CF Pages dashboard project name — CF Pages refuses to
 // read a wrangler.toml that doesn't carry one ("Missing top-level field
@@ -188,34 +172,23 @@ run(
 // deploys to; override via `CF_PAGES_PROJECT_NAME` if a fork uses a different
 // project name.
 //
-// SESSION_SIGNING_KEY is intentionally NOT here — secrets must not be
-// committable. Set once per environment via:
-//   pnpm wrangler pages secret put SESSION_SIGNING_KEY \
-//     --project-name=daikonic-dev --environment=preview
-//   pnpm wrangler pages secret put SESSION_SIGNING_KEY \
-//     --project-name=daikonic-dev --environment=production
-//
 // Per CF Pages docs, wrangler.toml at the project root merges with dashboard
 // settings (wrangler.toml takes precedence for conflicts) — unrelated
 // dashboard vars/bindings the rest of the site relies on remain intact.
+//
+// No LSP_SESSION Durable Object binding or ALLOWED_ORIGIN var here — the
+// LSP Pages Functions that consumed them were deleted (Studio now routes
+// straight at apps/lsp-worker's own zone route), and nothing left under
+// apps/studio/functions/ reads either.
 const projectName = process.env.CF_PAGES_PROJECT_NAME ?? 'daikonic-dev';
 const wranglerToml = `# Auto-generated by apps/docs/scripts/build-combined.mjs — do not edit.
-# Spec 019 Phase 1: CF Pages project config (compat + LSP DO binding + vars).
+# CF Pages project config (compat flag + service bindings).
 # Edit the source script if you need to change this.
 
 name = "${projectName}"
 compatibility_date = "2025-09-23"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "apps/docs/.vitepress/dist"
-
-# Durable Object binding — DO is owned by the rune-lsp-worker Cloudflare
-# Worker (apps/lsp-worker/), not by this Pages project. CF Pages cannot
-# create DOs; it consumes them via this binding.
-# https://developers.cloudflare.com/pages/functions/bindings/#durable-objects
-[[durable_objects.bindings]]
-name = "LSP_SESSION"
-class_name = "RuneLspSession"
-script_name = "rune-lsp-worker"
 
 # Curated mirror service binding — /api/parse uses this to reach the
 # curated-mirror Worker without going through the daikonic.dev zone.
@@ -227,19 +200,9 @@ script_name = "rune-lsp-worker"
 [[services]]
 binding = "CURATED_MIRROR"
 service = "rune-curated-mirror-worker"
-
-# Allowlist for LSP session origin gating + parse-endpoint CORS.
-# Production origin first; the wildcard pattern matches CF Pages preview
-# subdomains (https://<hash>.daikonic-dev.pages.dev) so we don't need a
-# dashboard tweak per preview build. isOriginAllowed supports single
-# leading-wildcard form — see apps/studio/functions/lib/lsp-auth.ts.
-[vars]
-ALLOWED_ORIGIN = "https://www.daikonic.dev,https://*.daikonic-dev.pages.dev"
 `;
 writeFileSync(repoWranglerToml, wranglerToml);
-console.log(
-  '[build-combined] Wrote <repo>/wrangler.toml (019: compat + pages_build_output_dir + LSP DO binding + vars)'
-);
+console.log('[build-combined] Wrote <repo>/wrangler.toml (compat + pages_build_output_dir + service bindings)');
 
 rmSync(docsRawDist, { recursive: true, force: true });
 

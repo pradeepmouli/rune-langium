@@ -108,7 +108,18 @@ function jsonResponse(status: number, body: unknown, extraHeaders: Record<string
 function corsHeaders(origin: string | null, allowed: string): Record<string, string> {
   if (!origin || !isOriginAllowed(origin, allowed)) return {};
   return {
+    // mintSessionToken (apps/studio/src/services/transport-provider.ts)
+    // sends `credentials: 'include'` on this fetch, so per the Fetch spec
+    // the browser requires Access-Control-Allow-Credentials: true on the
+    // response — regardless of whether any cookie is actually sent — or it
+    // blocks the response outright even on a 200. This Worker holds no
+    // cookie-based session (auth is the HMAC-signed bearer token in the
+    // response body), so there's nothing sensitive to leak by allowing it;
+    // Access-Control-Allow-Origin already echoes the exact literal origin
+    // rather than "*", which the spec requires whenever credentials are
+    // allowed.
     'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Credentials': 'true',
     Vary: 'Origin',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',

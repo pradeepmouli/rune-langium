@@ -167,6 +167,7 @@ describe('apps/lsp-worker session-token mint contract (T038)', () => {
     );
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
     expect(res.headers.get('Vary')).toBe('Origin');
     expect(res.headers.get('Access-Control-Allow-Methods')).toBe('POST, OPTIONS');
     expect(res.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
@@ -190,6 +191,7 @@ describe('apps/lsp-worker session-token mint contract (T038)', () => {
     const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID }, 'http://localhost:5173'), env);
     expect(res.status).toBe(200);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
     expect(res.headers.get('Vary')).toBe('Origin');
   });
 
@@ -206,6 +208,7 @@ describe('apps/lsp-worker session-token mint contract (T038)', () => {
     const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID }, previewOrigin), env);
     expect(res.status).toBe(200);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe(previewOrigin);
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
     const body = (await res.json()) as { token: string };
     const verified = await verifySessionToken(SIGNING_KEY, body.token);
     expect(verified.ok).toBe(true);
