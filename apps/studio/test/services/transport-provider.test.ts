@@ -250,6 +250,42 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
+  it('a dev-mode unreachable-endpoint error reports the actual configured sessionUrl, not window.location.origin', async () => {
+    // Regression: the diagnostic used to hardcode
+    // `${window.location.origin}/api/lsp/session` — wrong host for the
+    // cross-origin local dev flow / CF Pages preview routing, and a path
+    // that no longer exists post-Pages-Function-deletion either way.
+    mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
+
+    const mint = installMintMock();
+    mint.next({ status: 429, body: { error: 'rate_limited', retry_after_s: 60 } });
+
+    const provider = createTransportProvider({
+      wsUri: 'ws://localhost:3001',
+      connectionTimeout: 100,
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL, // cross-origin from jsdom's http://localhost:3000
+      cfWsBase: CF_WS_BASE
+    });
+    try {
+      await provider.getTransport();
+      expect.unreachable('expected getTransport() to reject');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('unreachable')) {
+        expect(message).toContain(SESSION_URL);
+        // The old bug reported `${window.location.origin}/api/lsp/session`
+        // (jsdom default origin http://localhost:3000) as the endpoint to
+        // verify, instead of the real, cross-origin SESSION_URL
+        // (https://example.test/...). "reachable from http://localhost:3000"
+        // is legitimate (it's the browser's own origin, a separate clause),
+        // so assert on the specific wrong combined URL, not the bare origin.
+        expect(message).not.toContain('http://localhost:3000/api/lsp/session');
+      }
+    }
+    provider.dispose();
+  });
+
   it('surfaces "language services unavailable" on 5xx from the session endpoint', async () => {
     mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
 

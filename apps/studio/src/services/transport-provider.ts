@@ -301,14 +301,15 @@ export const createTransportProvider = withInstrumentation(
      * timing out on a no-op channel.
      */
     function createPagesFunctionUnavailableError(cause: unknown): Error {
-      // e2e-batch fix #7: prefer `window.location.origin + /api/lsp/session` over
-      // `config.lspSessionUrl` in the error message. If VITE_DEV_MODE leaks into
-      // a prod build, `config.lspSessionUrl` can be the dev default (containing
-      // `localhost:5173`) even though the actual fetch happened at the prod
-      // origin via the relative URL fallback. Showing the actual origin keeps
-      // the message accurate when env detection misfires.
-      const actualUrl =
-        typeof window !== 'undefined' ? `${window.location.origin}/api/lsp/session` : config.lspSessionUrl;
+      // Report `sessionUrl` — the exact endpoint mintSessionToken actually
+      // called (opts.sessionUrl override, else config.lspSessionUrl) — not
+      // `window.location.origin`. The local cross-port dev flow and CF
+      // Pages preview routing (apps/studio/src/config.ts's
+      // isPagesPreviewHost) both mint against a different origin than the
+      // page itself, so window.location.origin pointed contributors at the
+      // wrong host; it also hardcoded the now-deleted unprefixed
+      // `/api/lsp/session` route on top of that.
+      const actualUrl = sessionUrl;
       const errorMessage = config.devMode
         ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${actualUrl} is reachable from ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
         : 'Editor running offline — language services unavailable';
