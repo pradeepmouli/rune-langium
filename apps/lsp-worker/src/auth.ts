@@ -148,25 +148,12 @@ export async function verifySessionToken(secret: string, token: string, now = Da
 // Origin allowlist
 // ────────────────────────────────────────────────────────────────────────────
 
-// Exact string matching only — no wildcard/glob support. Known limitation
-// (tracked, not fixed, as of the 2026-08 removal of the Pages Function LSP
-// proxy in favor of this Worker's own zone route): Cloudflare Pages preview
-// deployments (`*.pages.dev`) can never reach LSP, because this Worker's
-// Workers Route is scoped to `www.daikonic.dev` — a different Cloudflare
-// zone than `pages.dev` — so no Origin value a preview build could send
-// would help even if this function supported globs. A real fix needs either
-// genuine wildcard-origin matching here (a security-sensitive change, since
-// a careless glob can accept origins it shouldn't) or a routed proxy in
-// front of this Worker for preview traffic specifically; neither is done.
-// Production and local dev (documented in .dev.vars.example) are unaffected.
-export function isOriginAllowed(origin: string | null, allowed: string): boolean {
-  if (!origin) return false;
-  if (allowed === '*') return true;
-  return allowed
-    .split(',')
-    .map((s) => s.trim())
-    .includes(origin);
-}
+// Delegates to @rune-langium/worker-core's shared implementation (also used
+// by apps/telemetry-worker) — see that module's doc comment for match
+// semantics, including the CF Pages preview wildcard form. Re-exported here
+// so existing `from './auth.js'` imports elsewhere in this Worker don't need
+// to change.
+export { isOriginAllowed } from '@rune-langium/worker-core/origin';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Nonce replay protection (per-isolate ring buffer)

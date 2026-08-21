@@ -58,14 +58,33 @@ function boolFromEnv(value: string | undefined, fallback: boolean): boolean {
 // `/ws/${token}` to reach the Worker's WS-upgrade route. SSR/Node fallback
 // uses the wrangler dev port so type-check builds without `window` don't
 // fail Zod URL validation.
+//
+// Cloudflare Pages preview deployments are the one case same-origin routing
+// can't work: each preview serves from a unique, unpredictable
+// `<hash>.daikonic-dev.pages.dev` subdomain, and apps/lsp-worker's own
+// [[routes]] pattern is scoped to the www.daikonic.dev zone — a Workers
+// Route literally cannot match a different zone, so there is no same-origin
+// URL a preview build could use. Point previews at production's Worker
+// instead; apps/lsp-worker's ALLOWED_ORIGIN allowlist carries a matching
+// `https://*.daikonic-dev.pages.dev` wildcard entry (see
+// apps/lsp-worker/wrangler.toml) so the resulting cross-origin request and
+// WS upgrade are accepted.
+const PRODUCTION_ORIGIN = 'https://www.daikonic.dev';
+
+function isPagesPreviewHost(hostname: string): boolean {
+  return hostname.endsWith('.pages.dev');
+}
+
 function defaultLspWsUrl(): string {
   if (typeof window === 'undefined') return 'ws://localhost:8788/rune-studio/api/lsp';
-  return window.location.origin.replace(/^http/, 'ws') + '/rune-studio/api/lsp';
+  const origin = isPagesPreviewHost(window.location.hostname) ? PRODUCTION_ORIGIN : window.location.origin;
+  return origin.replace(/^http/, 'ws') + '/rune-studio/api/lsp';
 }
 
 function defaultLspSessionUrl(): string {
   if (typeof window === 'undefined') return 'http://localhost:8788/rune-studio/api/lsp/session';
-  return window.location.origin + '/rune-studio/api/lsp/session';
+  const origin = isPagesPreviewHost(window.location.hostname) ? PRODUCTION_ORIGIN : window.location.origin;
+  return origin + '/rune-studio/api/lsp/session';
 }
 
 // ────────────────────────────────────────────────────────────────────────────

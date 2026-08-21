@@ -199,4 +199,16 @@ describe('apps/lsp-worker session-token mint contract (T038)', () => {
     expect(res.status).toBe(403);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
+
+  it('200 for a Cloudflare Pages preview origin matched by the production wildcard allowlist', async () => {
+    const env = makeEnv({ ALLOWED_ORIGIN: 'https://www.daikonic.dev,https://*.daikonic-dev.pages.dev' });
+    const previewOrigin = 'https://5d29507c.daikonic-dev.pages.dev';
+    const res = await worker.fetch(makeSessionReq({ workspaceId: VALID_ULID }, previewOrigin), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe(previewOrigin);
+    const body = (await res.json()) as { token: string };
+    const verified = await verifySessionToken(SIGNING_KEY, body.token);
+    expect(verified.ok).toBe(true);
+    if (verified.ok) expect(verified.token.origin).toBe(previewOrigin);
+  });
 });
