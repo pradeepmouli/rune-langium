@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: FSL-1.1-ALv2
 // Copyright (c) 2026 Pradeep Mouli
 
+// Workers Builds auto-deploy smoke test (2026-08-21) — no functional change.
+
 /**
  * Curated-mirror Worker entry.
  *
