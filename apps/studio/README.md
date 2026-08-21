@@ -95,7 +95,7 @@ The studio will connect to `ws://localhost:3001` automatically. If no server is 
 
 ### Environment Variables
 
-Studio loads its build-time configuration from `import.meta.env` and validates the result with Zod in `src/config.ts`; a malformed value crashes the bundle at module-init rather than degrading silently. Copy `.env.example` to `.env.local` and uncomment the fields you want to override. The deployment-facing vars are `VITE_LSP_WS_URL` (LSP host base, defaults to `ws://localhost:3001` in dev / `wss://www.daikonic.dev/rune-studio/api/lsp` in prod), `VITE_LSP_SESSION_URL` (token-mint endpoint, derived from the WS URL when unset), `VITE_ENABLE_LSP` (deployment-level switch for remote language services; defaults `true`), `VITE_TELEMETRY_ENDPOINT` (defaults to `${location.origin}/api/telemetry/v1/event`), `VITE_ENABLE_TELEMETRY` (deployment-level telemetry switch; defaults `false`), `VITE_ENABLE_GITHUB_AUTH` (deployment-level switch for the GitHub Device Flow-backed workspace flow; defaults `true`), `VITE_ENABLE_CURATED_MIRROR` (deployment-level switch for built-in curated reference models; defaults `true`), and `VITE_DEV_MODE` (gates dev-only status copy; defaults to `import.meta.env.DEV`). See [`specs/014-studio-prod-ready/contracts/studio-config.md`](../../specs/014-studio-prod-ready/contracts/studio-config.md) for the full contract.
+Studio loads its build-time configuration from `import.meta.env` and validates the result with Zod in `src/config.ts`; a malformed value crashes the bundle at module-init rather than degrading silently. Copy `.env.example` to `.env.local` and uncomment the fields you want to override. The deployment-facing vars are `VITE_LSP_WS_URL` (LSP host base, same-origin default `wss://www.daikonic.dev/rune-studio/api/lsp` in prod; set to `ws://localhost:8790/rune-studio/api/lsp` for `pnpm dev:full`), `VITE_LSP_SESSION_URL` (token-mint endpoint, resolved independently of the WS URL — set both together for local overrides), `VITE_ENABLE_LSP` (deployment-level switch for remote language services; defaults `true`), `VITE_TELEMETRY_ENDPOINT` (defaults to `${location.origin}/api/telemetry/v1/event`), `VITE_ENABLE_TELEMETRY` (deployment-level telemetry switch; defaults `false`), `VITE_ENABLE_GITHUB_AUTH` (deployment-level switch for the GitHub Device Flow-backed workspace flow; defaults `true`), `VITE_ENABLE_CURATED_MIRROR` (deployment-level switch for built-in curated reference models; defaults `true`), and `VITE_DEV_MODE` (gates dev-only status copy; defaults to `import.meta.env.DEV`). See [`specs/014-studio-prod-ready/contracts/studio-config.md`](../../specs/014-studio-prod-ready/contracts/studio-config.md) for the full contract.
 
 ## Export Code
 
@@ -184,7 +184,7 @@ Settings → **Diagnostics** has a single toggle. Builds also expose `VITE_ENABL
 | Editor load | < 500ms | Lazy CodeMirror initialization per tab |
 | SharedWorker memory | < 50MB | Langium ~2MB bundled, well within budget |
 | Reconnection | 3 attempts with exponential backoff | Configurable via `TransportProviderOptions` |
-| WebSocket security | Origin allowlist + signed session token | Token minted by `POST /api/lsp/session`; HMAC-SHA256 with daily-rotating server key; 24h expiry; per-isolate nonce ring buffer for replay protection |
+| WebSocket security | Origin allowlist + signed session token | Token minted by `POST /rune-studio/api/lsp/session`; HMAC-SHA256 with daily-rotating server key; 24h expiry; per-isolate nonce ring buffer for replay protection |
 
 ## Testing
 
@@ -226,9 +226,23 @@ work.
 
 One command, four processes: vite (5173) + lsp-worker (8790) +
 curated-mirror-worker (8789) + wrangler pages dev (8788). Visit
-`http://localhost:8788/rune-studio/studio/`. LSP_SESSION + CURATED_MIRROR
-service bindings show `[connected]`; `/api/lsp/session` + `/api/parse`
-work end-to-end.
+`http://localhost:8788/rune-studio/studio/`. The CURATED_MIRROR service
+binding shows `[connected]`; `/api/parse` works end-to-end.
+
+LSP now connects directly to apps/lsp-worker's own dev server at `:8790`
+(no Pages Function proxy — see apps/studio/wrangler.toml's comment and
+apps/lsp-worker/.dev.vars.example). Set in your own `.env.local`:
+
+```
+VITE_LSP_WS_URL=ws://localhost:8790/rune-studio/api/lsp
+VITE_LSP_SESSION_URL=http://localhost:8790/rune-studio/api/lsp/session
+```
+
+and copy `apps/lsp-worker/.dev.vars.example` to `apps/lsp-worker/.dev.vars`
+so the Worker's local `ALLOWED_ORIGIN` accepts the studio's dev origins
+(production's `ALLOWED_ORIGIN` in `apps/lsp-worker/wrangler.toml` stays
+locked to `https://www.daikonic.dev` — `.dev.vars` only applies to
+`wrangler dev`, never to `wrangler deploy`).
 
 > **Gotcha:** wrangler's `env.ASSETS.fetch` (used by the SPA catch-all
 > Pages Function) serves the LOCAL `dist/` directory, NOT vite's dev

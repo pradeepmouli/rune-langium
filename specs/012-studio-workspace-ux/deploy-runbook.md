@@ -226,15 +226,14 @@ done
 curl -s -X POST \
   https://www.daikonic.dev/rune-studio/api/github-auth/device-code | jq
 
-# 7. Same-origin Pages Function health probe.
+# 7. apps/lsp-worker health probe (direct — no Pages Function proxy).
 #    Returns 200 with `{ok: true, langium_loaded: true}` when the
 #    production LSP endpoint is deployed and the langium bundle loads
-#    cleanly. This now lives at the site root, not under /rune-studio/.
-curl -s https://www.daikonic.dev/api/lsp/health | jq
+#    cleanly.
+curl -s https://www.daikonic.dev/rune-studio/api/lsp/health | jq
 
-# 8. One-shot smoke battery — runs the worker checks plus the same-origin
-#    Pages Function probes above. Exits non-zero on any FAIL so cron / CI
-#    can rely on it.
+# 8. One-shot smoke battery — runs the worker checks plus the probes above.
+#    Exits non-zero on any FAIL so cron / CI can rely on it.
 pnpm run verify:prod
 # Expected: all checks PASS, or only the explicitly documented WARN cases.
 

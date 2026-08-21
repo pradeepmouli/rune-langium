@@ -5,12 +5,16 @@
  * Unit tests for transport provider / failover logic (T011 + T044 + 019 Phase 2).
  *
  * Two-tier strategy:
- *  - Tier A: direct WebSocket when wsUri is explicit OR session endpoint is
- *    cross-origin.
- *  - Tier B: Pages Function LSP (same-origin) — POST /api/lsp/session for a
- *    token, then open WebSocket(${cfWsBase}/ws/${token}). On 401 from the
- *    mint we retry once; on 429 / 5xx we surface "language services
- *    unavailable" with the dev-mode-gated copy from FR-014.
+ *  - Tier A: direct/bare WebSocket, ONLY when `wsUri` is explicitly passed.
+ *    A cross-origin `sessionUrl` (local cross-port dev, CF Pages preview
+ *    routed at production) is NOT itself a signal to try this tier — the
+ *    bare route has no un-authenticated upgrade handler on the Worker, so
+ *    it would always fail and just waste the full retry/backoff window.
+ *  - Tier B: mint+token LSP (still named "Pages Function" after its
+ *    original host; apps/lsp-worker is the real host now) — POST
+ *    /api/lsp/session for a token, then open WebSocket(${cfWsBase}/ws/${token}).
+ *    On 401 from the mint we retry once; on 429 / 5xx we surface "language
+ *    services unavailable" with the dev-mode-gated copy from FR-014.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -122,7 +126,7 @@ describe('createTransportProvider', () => {
     provider.dispose();
   });
 
-  it('skips the direct WebSocket step when the session endpoint is same-origin', async () => {
+  it('skips the direct WebSocket step when no wsUri override is given (same-origin session endpoint)', async () => {
     const cfTransport = makeFakeTransport();
     mockWsTransport.mockResolvedValueOnce(cfTransport);
 
@@ -138,6 +142,34 @@ describe('createTransportProvider', () => {
     expect(transport).toBe(cfTransport);
     expect(mockWsTransport).toHaveBeenCalledTimes(1);
     expect(mockWsTransport).toHaveBeenCalledWith('ws://localhost/api/lsp/ws/cf-token', 2000);
+    expect(mint.callCount()).toBe(1);
+    expect(provider.getState().mode).toBe('pages-function');
+
+    provider.dispose();
+  });
+
+  it('skips the direct WebSocket step for a cross-origin session endpoint when no wsUri override is given', async () => {
+    // Regression for the CF Pages preview scenario (apps/studio/src/config.ts
+    // routes preview builds' sessionUrl at production, which is genuinely
+    // cross-origin from the preview's own *.pages.dev host) and the
+    // documented local cross-port dev flow. Neither should burn through the
+    // direct-WebSocket retry/backoff window first — the bare route always
+    // fails, so treating cross-origin as "prefer direct WS" only wastes time.
+    const cfTransport = makeFakeTransport();
+    mockWsTransport.mockResolvedValueOnce(cfTransport);
+
+    const mint = installMintMock();
+    mint.next({ status: 200, body: { token: 'cf-token', expiresAt: Date.now() + 60_000 } });
+
+    const provider = createTransportProvider({
+      sessionUrl: SESSION_URL, // https://example.test/... — cross-origin from jsdom's http://localhost:3000
+      cfWsBase: CF_WS_BASE
+    });
+    const transport = await provider.getTransport();
+
+    expect(transport).toBe(cfTransport);
+    expect(mockWsTransport).toHaveBeenCalledTimes(1);
+    expect(mockWsTransport).toHaveBeenCalledWith(`${CF_WS_BASE}/ws/cf-token`, 2000);
     expect(mint.callCount()).toBe(1);
     expect(provider.getState().mode).toBe('pages-function');
 
@@ -215,6 +247,42 @@ describe('createTransportProvider', () => {
     );
     expect(provider.getState().mode).toBe('disconnected');
     expect(provider.getState().status).toBe('error');
+    provider.dispose();
+  });
+
+  it('a dev-mode unreachable-endpoint error reports the actual configured sessionUrl, not window.location.origin', async () => {
+    // Regression: the diagnostic used to hardcode
+    // `${window.location.origin}/api/lsp/session` — wrong host for the
+    // cross-origin local dev flow / CF Pages preview routing, and a path
+    // that no longer exists post-Pages-Function-deletion either way.
+    mockWsTransport.mockRejectedValueOnce(new Error('Connection refused'));
+
+    const mint = installMintMock();
+    mint.next({ status: 429, body: { error: 'rate_limited', retry_after_s: 60 } });
+
+    const provider = createTransportProvider({
+      wsUri: 'ws://localhost:3001',
+      connectionTimeout: 100,
+      maxReconnectAttempts: 0,
+      sessionUrl: SESSION_URL, // cross-origin from jsdom's http://localhost:3000
+      cfWsBase: CF_WS_BASE
+    });
+    try {
+      await provider.getTransport();
+      expect.unreachable('expected getTransport() to reject');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('unreachable')) {
+        expect(message).toContain(SESSION_URL);
+        // The old bug reported `${window.location.origin}/api/lsp/session`
+        // (jsdom default origin http://localhost:3000) as the endpoint to
+        // verify, instead of the real, cross-origin SESSION_URL
+        // (https://example.test/...). "reachable from http://localhost:3000"
+        // is legitimate (it's the browser's own origin, a separate clause),
+        // so assert on the specific wrong combined URL, not the bare origin.
+        expect(message).not.toContain('http://localhost:3000/api/lsp/session');
+      }
+    }
     provider.dispose();
   });
 

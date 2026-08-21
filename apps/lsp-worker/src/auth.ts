@@ -148,14 +148,12 @@ export async function verifySessionToken(secret: string, token: string, now = Da
 // Origin allowlist
 // ────────────────────────────────────────────────────────────────────────────
 
-export function isOriginAllowed(origin: string | null, allowed: string): boolean {
-  if (!origin) return false;
-  if (allowed === '*') return true;
-  return allowed
-    .split(',')
-    .map((s) => s.trim())
-    .includes(origin);
-}
+// Delegates to @rune-langium/worker-core's shared implementation (also used
+// by apps/telemetry-worker) — see that module's doc comment for match
+// semantics, including the CF Pages preview wildcard form. Re-exported here
+// so existing `from './auth.js'` imports elsewhere in this Worker don't need
+// to change.
+export { isOriginAllowed } from '@rune-langium/worker-core/origin';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Nonce replay protection (per-isolate ring buffer)

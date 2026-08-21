@@ -48,19 +48,43 @@ function boolFromEnv(value: string | undefined, fallback: boolean): boolean {
   return value === 'true' || value === '1';
 }
 
-// Same-origin LSP defaults (019 Phase 2): the Pages Function endpoints live
-// on the studio origin under `/api/lsp/*`. The value here is the WS BASE; the
-// transport provider appends `/ws/${token}` to reach the
-// `functions/api/lsp/ws/[token].ts` route. SSR/Node fallback uses the wrangler
-// dev port so type-check builds without `window` don't fail Zod URL validation.
+// Same-origin LSP defaults, routed directly to the standalone apps/lsp-worker
+// Worker's own zone route (www.daikonic.dev/rune-studio/api/lsp/*) rather than
+// through the now-deleted apps/studio/functions/api/lsp/* Pages Function
+// proxy — that layer duplicated apps/lsp-worker's session-mint/health/WS-
+// upgrade logic for no remaining benefit once both deploy the same way
+// (Cloudflare Workers Builds / Pages git integration, auto on push to
+// master). The value here is the WS BASE; the transport provider appends
+// `/ws/${token}` to reach the Worker's WS-upgrade route. SSR/Node fallback
+// uses the wrangler dev port so type-check builds without `window` don't
+// fail Zod URL validation.
+//
+// Cloudflare Pages preview deployments are the one case same-origin routing
+// can't work: each preview serves from a unique, unpredictable
+// `<hash>.daikonic-dev.pages.dev` subdomain, and apps/lsp-worker's own
+// [[routes]] pattern is scoped to the www.daikonic.dev zone — a Workers
+// Route literally cannot match a different zone, so there is no same-origin
+// URL a preview build could use. Point previews at production's Worker
+// instead; apps/lsp-worker's ALLOWED_ORIGIN allowlist carries a matching
+// `https://*.daikonic-dev.pages.dev` wildcard entry (see
+// apps/lsp-worker/wrangler.toml) so the resulting cross-origin request and
+// WS upgrade are accepted.
+const PRODUCTION_ORIGIN = 'https://www.daikonic.dev';
+
+function isPagesPreviewHost(hostname: string): boolean {
+  return hostname.endsWith('.pages.dev');
+}
+
 function defaultLspWsUrl(): string {
-  if (typeof window === 'undefined') return 'ws://localhost:8788/api/lsp';
-  return window.location.origin.replace(/^http/, 'ws') + '/api/lsp';
+  if (typeof window === 'undefined') return 'ws://localhost:8788/rune-studio/api/lsp';
+  const origin = isPagesPreviewHost(window.location.hostname) ? PRODUCTION_ORIGIN : window.location.origin;
+  return origin.replace(/^http/, 'ws') + '/rune-studio/api/lsp';
 }
 
 function defaultLspSessionUrl(): string {
-  if (typeof window === 'undefined') return 'http://localhost:8788/api/lsp/session';
-  return window.location.origin + '/api/lsp/session';
+  if (typeof window === 'undefined') return 'http://localhost:8788/rune-studio/api/lsp/session';
+  const origin = isPagesPreviewHost(window.location.hostname) ? PRODUCTION_ORIGIN : window.location.origin;
+  return origin + '/rune-studio/api/lsp/session';
 }
 
 // ────────────────────────────────────────────────────────────────────────────

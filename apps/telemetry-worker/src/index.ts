@@ -28,6 +28,7 @@
 
 import { z } from 'zod';
 import { CuratedModelIdSchema, ErrorCategorySchema } from '@rune-langium/curated-schema';
+import { isOriginAllowed } from '@rune-langium/worker-core/origin';
 import { logRequest, logSpan } from './log.js';
 
 export interface Env {
@@ -219,15 +220,6 @@ export function _resetSaltCacheForTesting(): void {
 }
 
 // ---------- CORS ----------
-
-function isOriginAllowed(origin: string | null, allowed: string): boolean {
-  if (!origin) return false;
-  if (allowed === '*') return true;
-  return allowed
-    .split(',')
-    .map((s) => s.trim())
-    .includes(origin);
-}
 
 function corsHeaders(origin: string | null, allowed: string): Record<string, string> {
   if (!origin || !isOriginAllowed(origin, allowed)) return {};

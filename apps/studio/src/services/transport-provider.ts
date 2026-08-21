@@ -106,7 +106,17 @@ export const createTransportProvider = withInstrumentation(
     const sessionUrl = opts?.sessionUrl ?? config.lspSessionUrl;
     const cfWsBase = opts?.cfWsBase ?? config.lspWsUrl;
     const workspaceId = opts?.workspaceId ?? DEFAULT_WORKSPACE_ID;
-    const preferDirectWebSocket = opts?.wsUri !== undefined || !isSameOriginSessionEndpoint(sessionUrl);
+    // Only an explicit `wsUri` override selects the legacy direct/bare
+    // WebSocket path. Cross-origin session URLs (the documented local
+    // cross-port dev flow, and CF Pages preview builds routed at
+    // production — see apps/studio/src/config.ts's isPagesPreviewHost)
+    // are NOT a signal to try it: the bare WS route has no un-authenticated
+    // upgrade handler in apps/lsp-worker/src/index.ts (only `/ws/<token>`
+    // matches), so treating "cross-origin" as "prefer direct WS" wastes up
+    // to `backoffBase * (2^maxReconnectAttempts - 1)` ms retrying a route
+    // guaranteed to fail before falling through to the correct mint+token
+    // flow below.
+    const preferDirectWebSocket = opts?.wsUri !== undefined;
 
     let state: TransportState = { mode: 'disconnected', status: 'disconnected' };
     let currentTransport: CloseableTransport | undefined;
@@ -291,14 +301,15 @@ export const createTransportProvider = withInstrumentation(
      * timing out on a no-op channel.
      */
     function createPagesFunctionUnavailableError(cause: unknown): Error {
-      // e2e-batch fix #7: prefer `window.location.origin + /api/lsp/session` over
-      // `config.lspSessionUrl` in the error message. If VITE_DEV_MODE leaks into
-      // a prod build, `config.lspSessionUrl` can be the dev default (containing
-      // `localhost:5173`) even though the actual fetch happened at the prod
-      // origin via the relative URL fallback. Showing the actual origin keeps
-      // the message accurate when env detection misfires.
-      const actualUrl =
-        typeof window !== 'undefined' ? `${window.location.origin}/api/lsp/session` : config.lspSessionUrl;
+      // Report `sessionUrl` — the exact endpoint mintSessionToken actually
+      // called (opts.sessionUrl override, else config.lspSessionUrl) — not
+      // `window.location.origin`. The local cross-port dev flow and CF
+      // Pages preview routing (apps/studio/src/config.ts's
+      // isPagesPreviewHost) both mint against a different origin than the
+      // page itself, so window.location.origin pointed contributors at the
+      // wrong host; it also hardcoded the now-deleted unprefixed
+      // `/api/lsp/session` route on top of that.
+      const actualUrl = sessionUrl;
       const errorMessage = config.devMode
         ? `Pages Function LSP unreachable (${describeCause(cause)}) — verify ${actualUrl} is reachable from ${typeof window !== 'undefined' ? window.location.origin : 'this origin'}`
         : 'Editor running offline — language services unavailable';
@@ -399,14 +410,3 @@ export const createTransportProvider = withInstrumentation(
     }
   }
 );
-
-function isSameOriginSessionEndpoint(sessionUrl: string): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  try {
-    return new URL(sessionUrl, window.location.href).origin === window.location.origin;
-  } catch {
-    return false;
-  }
-}

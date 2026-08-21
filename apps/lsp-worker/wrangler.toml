@@ -34,8 +34,27 @@ new_sqlite_classes = ["RuneLspSession"]
 [observability]
 enabled = true
 
+
+# `[vars]` is uploaded verbatim on every `wrangler deploy` (unlike Cloudflare
+# Pages, this Worker has no separate dashboard-managed env-var store) — so
+# ALLOWED_ORIGIN here must stay production-only. For local multi-origin dev
+# (studio at http://localhost:5173 / :8788 calling this Worker directly at
+# :8790, now that apps/studio/functions/api/lsp/* no longer proxies), copy
+# .dev.vars.example to .dev.vars (gitignored) and widen it there — `wrangler
+# dev` merges `.dev.vars` on top of `[vars]` for local runs only; it's never
+# read by `wrangler deploy`.
+#
+# The `*.daikonic-dev.pages.dev` wildcard entry admits Cloudflare Pages
+# preview deployments — this Worker's own [[routes]] pattern above is scoped
+# to the www.daikonic.dev zone, so a preview build (served from its own
+# unique pages.dev subdomain) can never reach this Worker same-origin.
+# apps/studio/src/config.ts detects a *.pages.dev host at runtime and points
+# the LSP client straight at this production Worker instead, which is why
+# this then needs to be a genuinely cross-origin allowed caller. Wildcard
+# matching is @rune-langium/worker-core/origin's isOriginAllowed (single
+# leading `*.` label, suffix-anchored — see that module's doc comment).
 [vars]
-ALLOWED_ORIGIN = "https://www.daikonic.dev"
+ALLOWED_ORIGIN = "https://www.daikonic.dev,https://*.daikonic-dev.pages.dev"
 
 # inspector_port avoids EADDRINUSE when multiple workers run in parallel.
 [dev]

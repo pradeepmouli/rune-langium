@@ -1,17 +1,15 @@
-// SPDX-License-Identifier: FSL-1.1-ALv2
+// SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * Tests for isOriginAllowed wildcard support (spec 019 Phase 1 follow-up).
- *
- * Single leading-wildcard form `https://*.example.com` is the only pattern
- * supported beyond exact match + the `*` escape hatch. Added so CF Pages
- * preview subdomains can be granted access in a single allowlist entry
- * without per-deploy dashboard touches.
+ * Ported from the now-deleted `apps/studio/functions/test/lsp-auth-origin.test.ts`
+ * (spec 019 Phase 1 follow-up, commit a82c184a) when its wildcard-origin
+ * matching moved here to be shared across Workers instead of living only in
+ * the Pages Function proxy that was later deleted.
  */
 
 import { describe, expect, it } from 'vitest';
-import { isOriginAllowed } from '../lib/lsp-auth.js';
+import { isOriginAllowed } from '../src/origin.js';
 
 describe('isOriginAllowed', () => {
   it('rejects when origin is null', () => {
