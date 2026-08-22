@@ -469,6 +469,14 @@ export const ExplorePerspective = withInstrumentation(
     const workspaceIdRef = useRef(workspaceId);
     const modelsRef = useRef(models);
     const navigationHistoryRef = useRef<string[]>([]);
+    // Forward stack for navigateForward — mirrors navigationHistoryRef.
+    // Both are refs (not state) since node visits can be frequent and the
+    // stack contents themselves never need to trigger a re-render; only the
+    // empty/non-empty boundary matters for the toolbar buttons, tracked
+    // separately below as reactive canGoBack/canGoForward.
+    const navigationForwardRef = useRef<string[]>([]);
+    const [canGoBack, setCanGoBack] = useState(false);
+    const [canGoForward, setCanGoForward] = useState(false);
     const { showToast } = useStudioToast();
     const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
       new Map()
@@ -1165,6 +1173,15 @@ export const ExplorePerspective = withInstrumentation(
       [focusMode, storeEdges]
     );
 
+    // Recomputes the reactive canGoBack/canGoForward flags from the two
+    // history refs. Called after every push/pop so the toolbar buttons'
+    // disabled state stays in sync without making the stacks themselves
+    // reactive state (see navigationForwardRef's comment above).
+    const updateHistoryFlags = useCallback(() => {
+      setCanGoBack(navigationHistoryRef.current.length > 0);
+      setCanGoForward(navigationForwardRef.current.length > 0);
+    }, []);
+
     const navigateToNode = useCallback(
       (nodeId: string) => {
         const targetNode = nodeRepository.byId(nodeId);
@@ -1183,6 +1200,11 @@ export const ExplorePerspective = withInstrumentation(
           navigationHistoryRef.current.push(current);
           if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
         }
+        // A genuinely new navigation (as opposed to navigateBack/navigateForward,
+        // which never call this) invalidates forward history — standard browser
+        // back/forward semantics.
+        navigationForwardRef.current = [];
+        updateHistoryFlags();
         storeSelectNode(nodeId, { reapplyFocusMode: true });
         const targetMeta = targetNode?.meta;
         if (targetMeta?.deferred && targetMeta.namespace) {
@@ -1201,7 +1223,7 @@ export const ExplorePerspective = withInstrumentation(
           graphRef.current?.focusNode(nodeId);
         }
       },
-      [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode]
+      [focusMode, showToast, shouldCenterNavigationTarget, nodeRepository, storeSelectNode, updateHistoryFlags]
     );
 
     const navigateBack = useCallback(() => {
@@ -1209,6 +1231,7 @@ export const ExplorePerspective = withInstrumentation(
       if (!prev) return;
       const exists = storeNodes.some((n) => n.id === prev);
       if (!exists) {
+        updateHistoryFlags();
         showToast({
           description: `Previous node "${prev}" is no longer in the graph`,
           variant: 'destructive',
@@ -1216,20 +1239,53 @@ export const ExplorePerspective = withInstrumentation(
         });
         return;
       }
+      const current = useEditorStore.getState().selectedNodeId;
+      if (current) {
+        navigationForwardRef.current.push(current);
+      }
       storeSelectNode(prev, { reapplyFocusMode: true });
+      updateHistoryFlags();
       if (!focusMode && shouldCenterNavigationTarget(prev)) {
         graphRef.current?.focusNode(prev);
       }
-    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
+    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes, updateHistoryFlags]);
+
+    const navigateForward = useCallback(() => {
+      const next = navigationForwardRef.current.pop();
+      if (!next) return;
+      const exists = storeNodes.some((n) => n.id === next);
+      if (!exists) {
+        updateHistoryFlags();
+        showToast({
+          description: `Node "${next}" is no longer in the graph`,
+          variant: 'destructive',
+          duration: 3000
+        });
+        return;
+      }
+      const current = useEditorStore.getState().selectedNodeId;
+      if (current) {
+        navigationHistoryRef.current.push(current);
+        if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+      }
+      storeSelectNode(next, { reapplyFocusMode: true });
+      updateHistoryFlags();
+      if (!focusMode && shouldCenterNavigationTarget(next)) {
+        graphRef.current?.focusNode(next);
+      }
+    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes, updateHistoryFlags]);
 
     const handleEditorPageKeyDown = useCallback(
       (e: KeyboardEvent<HTMLDivElement>) => {
         if ((e.altKey && e.key === 'ArrowLeft') || (e.metaKey && e.key === '[')) {
           e.preventDefault();
           navigateBack();
+        } else if ((e.altKey && e.key === 'ArrowRight') || (e.metaKey && e.key === ']')) {
+          e.preventDefault();
+          navigateForward();
         }
       },
-      [navigateBack]
+      [navigateBack, navigateForward]
     );
 
     const handleModelChanged = useCallback(
@@ -2072,6 +2128,10 @@ export const ExplorePerspective = withInstrumentation(
             focusPanel={focusPanelRequest}
             panelComponents={panelComponents}
             panelTabMeta={panelTabMeta}
+            onNavigateBack={navigateBack}
+            onNavigateForward={navigateForward}
+            canNavigateBack={canGoBack}
+            canNavigateForward={canGoForward}
           />
         </div>
 

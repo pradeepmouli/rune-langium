@@ -32,7 +32,7 @@ import type {
   IDockviewPanelHeaderProps,
   IDockviewPanelProps
 } from 'dockview-react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { DockLayout } from '@rune-langium/design-system/ui/dock-layout';
 import { useLatestRef } from '@rune-langium/visual-editor';
 import { FileTreePanel } from './panels/FileTreePanel.js';
@@ -54,6 +54,8 @@ import type { PanelLayoutRecord } from '../workspace/persistence.js';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Alert, AlertDescription } from '@rune-langium/design-system/ui/alert';
 import { NumberChiclet } from '@rune-langium/design-system/ui/number-chiclet';
+import { IconButtonGroup } from '@rune-langium/design-system/ui/icon-button-group';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@rune-langium/design-system/ui/tooltip';
 import { UtilityTrayContext, type UtilityGroupApi } from './utility-tray-context.js';
 import { UtilityHeaderActionsContext, UtilityHeaderActionsProvider } from './utility-header-actions-context.js';
 import { PerspectiveHeading } from './perspectives/PerspectiveHeading.js';
@@ -154,6 +156,15 @@ interface DockShellProps {
   onLayoutChange?: (layout: PanelLayoutRecord) => void;
   onAction?: (action: ShellAction) => void;
   panelTabMeta?: Partial<Record<PanelComponentName, PanelTabMeta>>;
+  /**
+   * Node-visit history navigation (back/forward), owned by ExplorePerspective
+   * (navigateBack/navigateForward + navigationHistoryRef/navigationForwardRef).
+   * Both callbacks must be supplied together for the toolbar buttons to render.
+   */
+  onNavigateBack?: () => void;
+  onNavigateForward?: () => void;
+  canNavigateBack?: boolean;
+  canNavigateForward?: boolean;
 }
 
 type PanelComponentName = keyof PanelOverrides;
@@ -251,7 +262,11 @@ export const DockShell = withInstrumentation(
     panelComponents,
     onLayoutChange,
     onAction,
-    panelTabMeta
+    panelTabMeta,
+    onNavigateBack,
+    onNavigateForward,
+    canNavigateBack,
+    canNavigateForward
   }: DockShellProps): React.ReactElement {
     const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : DEFAULT_VIEWPORT_WIDTH);
     const getSanitizedLayout = useCallback(
@@ -578,6 +593,50 @@ export const DockShell = withInstrumentation(
         >
           <PerspectiveHeading perspectiveId="explore" />
           <div className="studio-layout-presets__group studio-layout-presets__group--actions">
+            {onNavigateBack && onNavigateForward ? (
+              <TooltipProvider>
+                <IconButtonGroup>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={onNavigateBack}
+                          disabled={!canNavigateBack}
+                          data-testid="navigate-back"
+                          className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                        >
+                          <ArrowLeft className="size-3.5" />
+                          <span className="sr-only">Navigate back</span>
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Navigate back</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={onNavigateForward}
+                          disabled={!canNavigateForward}
+                          data-testid="navigate-forward"
+                          className="rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                        >
+                          <ArrowRight className="size-3.5" />
+                          <span className="sr-only">Navigate forward</span>
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Navigate forward</TooltipContent>
+                  </Tooltip>
+                </IconButtonGroup>
+              </TooltipProvider>
+            ) : null}
             <Button
               type="button"
               variant="secondary"
