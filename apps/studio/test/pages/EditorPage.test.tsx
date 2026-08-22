@@ -1577,6 +1577,50 @@ describe('EditorPage workspace chrome', () => {
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
   });
 
+  it('does not record a history entry when the selected type is deleted (editor-store.ts deleteType side effect)', () => {
+    // Regression: deleteType clears selectedNodeId as a side effect when the
+    // deleted type was selected — the same store change a real user
+    // navigation produces, but not a visit worth remembering, and the
+    // deleted id can never be navigated back to anyway. Without the fix
+    // (gating the back-stack push on the departing node still existing),
+    // this would push the dead id onto history: canGoBack becomes wrongly
+    // true and Back first shows "no longer in the graph" and consumes the
+    // phantom entry instead of doing nothing (there IS no real previous
+    // node here — this is the type's first and only selection).
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // Mirrors deleteType(nodeId)'s exact real-store side effect (editor-
+    // store.ts): the node leaves `nodes` and selectedNodeId is cleared,
+    // both in the same set().
+    act(() => {
+      useEditorStore.setState({ nodes: [], selectedNodeId: undefined });
+    });
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(showToastSpy).not.toHaveBeenCalled();
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+  });
+
   it('does not treat Ctrl+Alt+Left / Shift+Alt+Left as navigate-back (those are focus-prev-panel / reorder-tab-left)', () => {
     // Regression: the handler used to check `e.altKey` alone, so it also
     // fired navigateBack for these combos — which collide with real

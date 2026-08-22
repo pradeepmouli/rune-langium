@@ -1207,6 +1207,16 @@ export const ExplorePerspective = withInstrumentation(
     // OTHER one) from every other selection change, which should push the
     // departing node onto the back stack and invalidate forward history
     // (standard browser back/forward semantics).
+    //
+    // Edit operations on the currently-selected type also change
+    // selectedNodeId as a side effect — renameType rekeys it to the new id,
+    // deleteType clears it to null (editor-store.ts) — without being a
+    // user-initiated visit. Both remove the OLD id from the node map (a
+    // rename deletes-then-reinserts under the new id; a delete just
+    // deletes), so gating the back-stack push on "the departing node still
+    // exists" excludes these for free — no separate edit-vs-navigation
+    // signal needs plumbing in from editor-store.ts, since a normal
+    // navigation's departing node is never a node the change itself deleted.
     useEffect(() => {
       let previous = useEditorStore.getState().selectedNodeId;
       return useEditorStore.subscribe((state) => {
@@ -1217,7 +1227,7 @@ export const ExplorePerspective = withInstrumentation(
           previous = current;
           return;
         }
-        if (previous) {
+        if (previous && state.nodesById.has(previous)) {
           navigationHistoryRef.current.push(previous);
           if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
         }
