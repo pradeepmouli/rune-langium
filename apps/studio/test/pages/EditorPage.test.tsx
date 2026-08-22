@@ -36,8 +36,13 @@ const {
     focusMode: true,
     layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100, engine: 'dagre' as const },
     selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean; reapplyFocusMode?: boolean }) => {
-      editorStoreState.selectedNodeId = nodeId;
-      editorStoreState.detailPanelOpen = nodeId !== null;
+      // Routes through the mocked setState (defined below) rather than
+      // mutating editorStoreState directly, so `useEditorStore.subscribe`
+      // listeners fire here exactly like the real Zustand store's `set()`
+      // does — ExplorePerspective's navigation-history subscription (the
+      // single choke point tracking node visits across Explorer/Graph/
+      // Structure selection) depends on this.
+      useEditorStore.setState({ selectedNodeId: nodeId, detailPanelOpen: nodeId !== null });
     }),
     toggleNamespace: vi.fn(),
     expandAllNamespaces: vi.fn(),
@@ -1506,6 +1511,117 @@ describe('EditorPage workspace chrome', () => {
       variant: 'destructive',
       duration: 3000
     });
+  });
+
+  it('invalidates forward history when a non-history selection (e.g. an Explorer/Structure click) changes the selected node', () => {
+    // Regression: forward history used to only get cleared inside
+    // navigateToNode. A/B navigated via cross-reference, Back to A, then
+    // selecting C via any OTHER path that reaches storeSelectNode directly
+    // (Type Explorer, StructureView, RuneTypeGraph's own internal node-click
+    // handling) must still invalidate the stale forward entry (B) — Forward
+    // should do nothing afterward, not silently jump to B.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenterTime',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenterTime', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B via cross-reference navigation.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+
+    // Back to A — B is now on the forward stack.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Select C via a non-history path — the same storeSelectNode action
+    // handleExplorerSelectNode/StructureView's onNodeSelect/RuneTypeGraph's
+    // internal click handling all call directly, bypassing navigateToNode.
+    act(() => {
+      editorStoreState.selectNode('cdm.base.datetime.BusinessCenterTime');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+
+    runeTypeGraphMockState.focusNode.mockClear();
+
+    // Forward must now be a no-op — the stale B entry was invalidated by
+    // the C selection, not silently resurrected.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowRight', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+    expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  it('does not treat Ctrl+Alt+Left / Shift+Alt+Left as navigate-back (those are focus-prev-panel / reorder-tab-left)', () => {
+    // Regression: the handler used to check `e.altKey` alone, so it also
+    // fired navigateBack for these combos — which collide with real
+    // shell/keyboard.ts bindings installed via a separate window-level
+    // listener that this handler's preventDefault() doesn't stop.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true, ctrlKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true, shiftKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    // Plain Alt+Left still works.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
   });
 
   it('updates graph config direction when responsive relayout flips orientation', async () => {
