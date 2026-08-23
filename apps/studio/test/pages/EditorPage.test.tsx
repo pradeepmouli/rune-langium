@@ -1752,6 +1752,92 @@ describe('EditorPage workspace chrome', () => {
     expect(editorStoreState.selectedNodeId).toBeUndefined();
   });
 
+  it('clears forward history when a fresh selection follows an edit-driven clear-to-null', () => {
+    // Regression: A -> B -> Back-to-A leaves forward=[B]. Deleting the now-
+    // selected A clears selectedNodeId to null (edit-driven, forward
+    // correctly preserved). But selecting C next is a GENUINE new visit —
+    // not a rekey, since there's no departing node left to have been
+    // rekeyed (previous is already null) — so it must still invalidate the
+    // stale forward=[B]. The previous fix's gate skipped this because it
+    // conditioned the forward-clear on the same "previous truthy" check as
+    // the back-stack push, which is false here for an unrelated reason.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenterTime',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenterTime', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B via cross-reference navigation.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+
+    // Back to A — B is now on the forward stack.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Mirrors deleteType(nodeId)'s exact real-store side effect: the
+    // selected node A leaves `nodes` and selectedNodeId is cleared to null,
+    // both in the same set().
+    act(() => {
+      useEditorStore.setState({
+        nodes: [
+          {
+            id: 'cdm.base.datetime.BusinessCenter',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          },
+          {
+            id: 'cdm.base.datetime.BusinessCenterTime',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenterTime', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          }
+        ],
+        selectedNodeId: undefined
+      });
+    });
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+
+    // Select C via a non-history path — a genuine new visit, not a rekey.
+    act(() => {
+      editorStoreState.selectNode('cdm.base.datetime.BusinessCenterTime');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+
+    runeTypeGraphMockState.focusNode.mockClear();
+
+    // Forward must now be a no-op — the stale B entry was invalidated by
+    // the C selection, not silently resurrected.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowRight', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+    expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
   it('does not treat Ctrl+Alt+Left / Shift+Alt+Left as navigate-back (those are focus-prev-panel / reorder-tab-left)', () => {
     // Regression: the handler used to check `e.altKey` alone, so it also
     // fired navigateBack for these combos — which collide with real

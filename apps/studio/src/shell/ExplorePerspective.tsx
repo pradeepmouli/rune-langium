@@ -1213,16 +1213,24 @@ export const ExplorePerspective = withInstrumentation(
     // deleteType clears it to null (editor-store.ts) — without being a
     // user-initiated visit. Both remove the OLD id from the node map (a
     // rename deletes-then-reinserts under the new id; a delete just
-    // deletes), so gating on "the departing node still exists" excludes
-    // these for free — no separate edit-vs-navigation signal needs
+    // deletes), so "the departing node no longer exists" identifies an
+    // edit-driven rekey — no separate edit-vs-navigation signal needs
     // plumbing in from editor-store.ts, since a normal navigation's
     // departing node is never a node the change itself deleted.
     //
-    // The forward-stack clear lives INSIDE this same gate (not run
-    // unconditionally after it) — an edit-driven rekey of the selected node
-    // is not a real visit, so it must not invalidate forward history either.
-    // E.g. A→B→Back-to-A leaves forward=[B]; renaming A afterward should
-    // leave that [B] entry intact, not silently discard it.
+    // isEditDrivenRekey and "should we push to the back stack" are
+    // deliberately NOT the same condition. A rekey requires an actual
+    // departing node that got removed (previous truthy AND missing from
+    // nodesById); a fresh pick with no departing node (previous is null —
+    // e.g. right after an edit-driven clear-to-null) can never be a rekey,
+    // since there's no node whose removal could explain the transition, so
+    // it's always a genuine new visit that must still invalidate forward
+    // history even though there's nothing to push onto the back stack.
+    // Concretely: A→B→Back-to-A→delete-A leaves forward=[B] (correctly, via
+    // the isEditDrivenRekey branch below with previous='A'); selecting C
+    // next transitions null→'C' — not a rekey (previous is null) — so this
+    // must still clear the stale forward=[B], even though there's no
+    // previous id to push onto the back stack.
     useEffect(() => {
       let previous = useEditorStore.getState().selectedNodeId;
       return useEditorStore.subscribe((state) => {
@@ -1233,9 +1241,12 @@ export const ExplorePerspective = withInstrumentation(
           previous = current;
           return;
         }
-        if (previous && state.nodesById.has(previous)) {
-          navigationHistoryRef.current.push(previous);
-          if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+        const isEditDrivenRekey = previous !== null && previous !== undefined && !state.nodesById.has(previous);
+        if (!isEditDrivenRekey) {
+          if (previous) {
+            navigationHistoryRef.current.push(previous);
+            if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+          }
           navigationForwardRef.current = [];
           updateHistoryFlags();
         }
