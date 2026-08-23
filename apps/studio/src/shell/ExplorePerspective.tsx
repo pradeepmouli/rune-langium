@@ -1242,7 +1242,28 @@ export const ExplorePerspective = withInstrumentation(
           return;
         }
         const isEditDrivenRekey = previous !== null && previous !== undefined && !state.nodesById.has(previous);
-        if (!isEditDrivenRekey) {
+        if (isEditDrivenRekey) {
+          // previous itself may already sit in EARLIER stack entries from
+          // prior real visits (e.g. A→B→A→rename-A: the initial A→B push
+          // left 'A' in the back stack, independent of the `previous`
+          // local var this rename transition sees). Leaving those entries
+          // under the obsolete id makes a later Back/Forward that reaches
+          // them show a false "no longer in the graph" toast instead of
+          // landing on the renamed node. Rename rewrites every matching
+          // entry to the new id; delete (current falsy or itself missing —
+          // the departing node is gone for good, not just renamed) drops
+          // them, since a deleted id can never be navigated back to.
+          const renamedTo = current && state.nodesById.has(current) ? current : null;
+          if (renamedTo) {
+            const rekey = (id: string) => (id === previous ? renamedTo : id);
+            navigationHistoryRef.current = navigationHistoryRef.current.map(rekey);
+            navigationForwardRef.current = navigationForwardRef.current.map(rekey);
+          } else {
+            navigationHistoryRef.current = navigationHistoryRef.current.filter((id) => id !== previous);
+            navigationForwardRef.current = navigationForwardRef.current.filter((id) => id !== previous);
+          }
+          updateHistoryFlags();
+        } else {
           if (previous) {
             navigationHistoryRef.current.push(previous);
             if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
