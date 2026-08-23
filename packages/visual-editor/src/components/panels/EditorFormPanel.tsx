@@ -7,14 +7,16 @@
  *
  * Renders:
  * - DataTypeForm / EnumForm / ChoiceForm / FunctionForm / TypeAliasForm
- *   for their respective kinds — in both editable and read-only mode.
+ *   for their respective kinds — in both editable and read-only mode
+ *   (including refOnly curated reference entries, when the kind is covered).
  * - OtherForm for kinds without a dedicated form (record, basicType,
- *   annotation, default fallback) and for refOnly curated reference entries.
+ *   annotation, default fallback) — the only case where refOnly still
+ *   falls back to it, since there's no covered form to route to.
  * - Empty state when no node is selected.
  *
  * Read-only routing: covered kinds always render their own form (with zero
- * editable controls when locked). OtherForm is used ONLY for uncovered kinds
- * and refOnly entries.
+ * editable controls when locked or refOnly, same tabs/sections as editable).
+ * OtherForm is used ONLY for kinds with no editor form implementation.
  *
  * Features:
  * - Scrollable content with sticky header (name + kind badge)
@@ -122,9 +124,10 @@ export interface EditorFormPanelProps {
   isReadOnly?: boolean;
   /**
    * True when the node's source file is a refOnly curated reference (no
-   * client-side source text). Forces the read-only fallback view and
-   * surfaces a "Reference Only" pill in the panel header so the user
-   * understands why edits are disabled.
+   * client-side source text). Forces read-only rendering — through the
+   * kind's own form when one exists, else OtherForm — and surfaces a
+   * "Reference Only" pill in the header so the user understands why edits
+   * are disabled.
    */
   refOnly?: boolean;
   /**
@@ -179,9 +182,9 @@ const EditorFormPanel = memo(function EditorFormPanel({
   onClose,
   onNavigateToNode
 }: EditorFormPanelProps) {
-  // refOnly entries always render the read-only OtherForm — there's no
-  // source text to back form edits even if the kind would otherwise have
-  // a full editor (DataTypeForm, FunctionForm, etc.).
+  // refOnly entries always force read-only — there's no source text to back
+  // form edits — but still render through their kind's own form (with
+  // fields disabled) rather than forking to the more limited OtherForm.
   const effectivelyReadOnly = isReadOnly || refOnly;
   const panelRef = useRef<HTMLElement>(null);
 
@@ -249,39 +252,23 @@ const EditorFormPanel = memo(function EditorFormPanel({
     );
   }
 
-  // ---- refOnly → OtherForm (lowest-risk: no source text, Reference Only badge) ----
-  // refOnly curated entries are truly non-editable (no source to back edits)
-  // even for covered kinds. Route them to OtherForm with the "Reference Only"
-  // pill so the user understands why the panel is non-editable.
-
-  if (refOnly) {
-    return (
-      <aside
-        ref={panelRef}
-        data-slot="editor-form-panel"
-        aria-label={`Details for ${(nodeData as any).name}`}
-        className="flex flex-col h-full overflow-hidden"
-        tabIndex={-1}
-      >
-        <OtherForm
-          nodeData={nodeData}
-          meta={nodeMeta}
-          nodeId={nodeId}
-          onNavigateToNode={onNavigateToNode}
-          allNodeIds={allNodeIds}
-          refOnly={refOnly}
-        />
-      </aside>
-    );
-  }
-
   // ---- Dispatch by $type → kind --------------------------------------------
-  // Covered kinds render their own form (read-only when locked).
-  // OtherForm is used only for uncovered kinds (record/basicType/annotation/default).
+  // Covered kinds (data/enum/choice/func/typeAlias) render their own form —
+  // read-only (fields disabled, same tabs/sections as the editable case) when
+  // locked OR refOnly, rather than forking to the much more limited OtherForm.
+  // OtherForm is reserved for kinds with no editor form implementation at all
+  // (record/basicType/annotation/default) — those have nowhere else to go
+  // regardless of refOnly/readOnly status.
 
   const kind = resolveNodeKind(nodeData);
-  // Combined lock: panel-prop lock OR node-data flag.
+  // Combined lock: panel-prop lock (isReadOnly/refOnly) OR node-data flag.
   const readOnly = effectivelyReadOnly || Boolean(nodeMeta?.isReadOnly);
+  // Panel aria-label tracks which component actually renders, not
+  // readOnly-ness — a covered kind is always "Edit X" (fields merely
+  // disabled when read-only/refOnly), matching its own dedicated form;
+  // only an uncovered kind's OtherForm render is "Details for X".
+  const hasEditableForm =
+    kind === 'data' || kind === 'enum' || kind === 'choice' || kind === 'func' || kind === 'typeAlias';
 
   function renderForm() {
     switch (kind) {
@@ -300,6 +287,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}
+            refOnly={refOnly}
           />
         );
 
@@ -317,6 +305,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}
+            refOnly={refOnly}
           />
         );
 
@@ -333,6 +322,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}
+            refOnly={refOnly}
           />
         );
 
@@ -350,6 +340,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}
+            refOnly={refOnly}
           />
         );
 
@@ -366,11 +357,12 @@ const EditorFormPanel = memo(function EditorFormPanel({
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
             readOnly={readOnly}
+            refOnly={refOnly}
           />
         );
 
-      // record, basicType, and annotation are currently view-only;
-      // full editor forms for these kinds are tracked for a future iteration.
+      // record, basicType, and annotation have no editor form implementation
+      // at all — OtherForm is the only rendering regardless of refOnly status.
       case 'record':
       case 'basicType':
       case 'annotation':
@@ -381,6 +373,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             nodeId={nodeId}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            refOnly={refOnly}
           />
         );
 
@@ -392,6 +385,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
             nodeId={nodeId}
             onNavigateToNode={onNavigateToNode}
             allNodeIds={allNodeIds}
+            refOnly={refOnly}
           />
         );
     }
@@ -401,7 +395,7 @@ const EditorFormPanel = memo(function EditorFormPanel({
     <aside
       ref={panelRef}
       data-slot="editor-form-panel"
-      aria-label={`Edit ${(nodeData as any).name}`}
+      aria-label={hasEditableForm ? `Edit ${(nodeData as any).name}` : `Details for ${(nodeData as any).name}`}
       className="flex flex-col h-full overflow-hidden"
       tabIndex={-1}
     >

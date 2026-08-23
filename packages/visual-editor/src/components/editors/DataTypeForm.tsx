@@ -23,6 +23,7 @@ import { FormProvider, useFieldArray, type Control } from 'react-hook-form';
 import type { GhostRow, GhostRowContext } from '@zod-to-form/core';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
@@ -87,6 +88,14 @@ export interface DataTypeFormProps {
    */
   readOnly?: boolean;
   /**
+   * True when the node's source file is a refOnly curated reference (no
+   * client-side source text). Surfaces a "Reference Only" pill in the
+   * header, matching OtherForm's treatment, so a read-only render here
+   * (vs. a locked-but-editable-source node) reads the same as it always
+   * has for curated types.
+   */
+  refOnly?: boolean;
+  /**
    * UI/editor metadata for the node (namespace, isReadOnly, errors,
    * comments, ...). Required — `data` is the pure domain payload and no
    * longer carries any UI metadata (Phase 3 step 3).
@@ -109,6 +118,7 @@ function DataTypeForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
+  refOnly,
   meta: nodeMeta
 }: DataTypeFormProps) {
   // ---- Form setup (useZodForm + useExternalSync per R11 / R4) -------------
@@ -407,6 +417,13 @@ function DataTypeForm({
             nameAriaLabel="Data type name"
             className={INSPECTOR_FORM_HEADER_CLASS}
             onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+            trailing={
+              refOnly ? (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Reference Only
+                </Badge>
+              ) : undefined
+            }
           />
 
           {/* Inheritance — always visible above tabs */}
