@@ -499,7 +499,17 @@ function FunctionForm({
                   <span className="text-xs font-medium text-muted-foreground">
                     {isAdd ? 'add' : 'set'} {assignTarget}
                   </span>
-                  {renderExpressionEditor ? (
+                  {isReadOnly ? (
+                    // Read-only (including refOnly): render static text, same as
+                    // ConditionSection's own readOnly branch — renderExpressionEditor's
+                    // rich editor (e.g. ExpressionBuilder) has no readOnly awareness of
+                    // its own, so calling it here would let the user type into a
+                    // fully-interactive-looking editor whose changes silently never
+                    // persist (Codex review, PR #494).
+                    <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+                      {opText || '(empty)'}
+                    </pre>
+                  ) : renderExpressionEditor ? (
                     renderExpressionEditor({
                       value: opText,
                       onChange: (val: string) => {
@@ -518,9 +528,7 @@ function FunctionForm({
                   ) : (
                     <Textarea
                       value={opText}
-                      readOnly={isReadOnly}
                       onChange={(e) => {
-                        if (isReadOnly) return;
                         form.setValue('expressionText' as never, e.target.value as never, {
                           shouldDirty: true
                         });
@@ -542,7 +550,17 @@ function FunctionForm({
                 name={'expressionText' as never}
                 render={({ field, fieldState }) => (
                   <Field>
-                    {renderExpressionEditor ? (
+                    {isReadOnly ? (
+                      // Read-only (including refOnly): render static text, same
+                      // as ConditionSection's own readOnly branch —
+                      // renderExpressionEditor's rich editor has no readOnly
+                      // awareness of its own, so calling it here would let the
+                      // user type into a fully-interactive-looking editor whose
+                      // changes silently never persist (Codex review, PR #494).
+                      <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+                        {(field.value as string | undefined) || '(empty)'}
+                      </pre>
+                    ) : renderExpressionEditor ? (
                       renderExpressionEditor({
                         value: (field.value as string | undefined) ?? '',
                         onChange: (val: string) => {
@@ -563,7 +581,6 @@ function FunctionForm({
                         data-slot="expression-editor"
                         aria-invalid={fieldState.invalid}
                         aria-label="Function expression"
-                        disabled={isReadOnly}
                         onBlur={() => {
                           field.onBlur();
                           handleExpressionBlur();
