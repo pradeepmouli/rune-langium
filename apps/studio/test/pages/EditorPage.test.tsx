@@ -36,8 +36,13 @@ const {
     focusMode: true,
     layoutOptions: { direction: 'LR', nodeSeparation: 50, rankSeparation: 100, engine: 'dagre' as const },
     selectNode: vi.fn((nodeId: string, _options?: { isolateInFocusMode?: boolean; reapplyFocusMode?: boolean }) => {
-      editorStoreState.selectedNodeId = nodeId;
-      editorStoreState.detailPanelOpen = nodeId !== null;
+      // Routes through the mocked setState (defined below) rather than
+      // mutating editorStoreState directly, so `useEditorStore.subscribe`
+      // listeners fire here exactly like the real Zustand store's `set()`
+      // does — ExplorePerspective's navigation-history subscription (the
+      // single choke point tracking node visits across Explorer/Graph/
+      // Structure selection) depends on this.
+      useEditorStore.setState({ selectedNodeId: nodeId, detailPanelOpen: nodeId !== null });
     }),
     toggleNamespace: vi.fn(),
     expandAllNamespaces: vi.fn(),
@@ -1506,6 +1511,525 @@ describe('EditorPage workspace chrome', () => {
       variant: 'destructive',
       duration: 3000
     });
+  });
+
+  it('invalidates forward history when a non-history selection (e.g. an Explorer/Structure click) changes the selected node', () => {
+    // Regression: forward history used to only get cleared inside
+    // navigateToNode. A/B navigated via cross-reference, Back to A, then
+    // selecting C via any OTHER path that reaches storeSelectNode directly
+    // (Type Explorer, StructureView, RuneTypeGraph's own internal node-click
+    // handling) must still invalidate the stale forward entry (B) — Forward
+    // should do nothing afterward, not silently jump to B.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenterTime',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenterTime', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B via cross-reference navigation.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+
+    // Back to A — B is now on the forward stack.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Select C via a non-history path — the same storeSelectNode action
+    // handleExplorerSelectNode/StructureView's onNodeSelect/RuneTypeGraph's
+    // internal click handling all call directly, bypassing navigateToNode.
+    act(() => {
+      editorStoreState.selectNode('cdm.base.datetime.BusinessCenterTime');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+
+    runeTypeGraphMockState.focusNode.mockClear();
+
+    // Forward must now be a no-op — the stale B entry was invalidated by
+    // the C selection, not silently resurrected.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowRight', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+    expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  it('preserves forward history across a rename of the currently-selected node (renameType side-effect rekey)', () => {
+    // Regression: the forward-stack clear used to run unconditionally
+    // whenever selectedNodeId changed and the departing id was gone from
+    // nodesById — which is also true for renameType's own rekey (delete old
+    // id, insert new id, reselect the new id in the same set()). That wiped
+    // legitimate forward history (B) that had nothing to do with the rename.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B via cross-reference navigation.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+
+    // Back to A — B is now on the forward stack.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Mirrors renameType(nodeId, newName)'s exact real-store side effect
+    // (editor-store.ts): the old id is removed from `nodes`, a new node is
+    // inserted under the rekeyed id, and selectedNodeId is reassigned to it
+    // — all in the same set().
+    act(() => {
+      useEditorStore.setState({
+        nodes: [
+          {
+            id: 'cdm.base.datetime.AdjustableDateRenamed',
+            data: { namespace: 'cdm.base.datetime', name: 'AdjustableDateRenamed', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          },
+          {
+            id: 'cdm.base.datetime.BusinessCenter',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          }
+        ],
+        selectedNodeId: 'cdm.base.datetime.AdjustableDateRenamed'
+      });
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDateRenamed');
+
+    // Forward must still resolve to B — the rename must not have discarded it.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowRight', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+  });
+
+  it('resets navigation history when the workspace changes (ExplorePerspective is kept mounted across switches)', () => {
+    // Regression: PerspectiveHost never unmounts ExplorePerspective across
+    // workspace switches (display:none toggling instead), so the history
+    // refs would otherwise survive into an unrelated workspace and could
+    // resolve to a stale/colliding node id there.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    const { rerenderEditorPage } = renderEditorPage({
+      workspaceId: 'ws-a',
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B — A is now on the back stack.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    // Switch workspace without unmounting — same shape PerspectiveHost
+    // produces in the real app.
+    act(() => {
+      rerenderEditorPage({
+        workspaceId: 'ws-b',
+        models: [],
+        files: [
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]
+      });
+    });
+
+    // Back must now be a no-op — the workspace switch cleared the stale
+    // back-stack entry, so there is nothing to show a toast about either.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+    expect(showToastSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not record a history entry when the selected type is deleted (editor-store.ts deleteType side effect)', () => {
+    // Regression: deleteType clears selectedNodeId as a side effect when the
+    // deleted type was selected — the same store change a real user
+    // navigation produces, but not a visit worth remembering, and the
+    // deleted id can never be navigated back to anyway. Without the fix
+    // (gating the back-stack push on the departing node still existing),
+    // this would push the dead id onto history: canGoBack becomes wrongly
+    // true and Back first shows "no longer in the graph" and consumes the
+    // phantom entry instead of doing nothing (there IS no real previous
+    // node here — this is the type's first and only selection).
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // Mirrors deleteType(nodeId)'s exact real-store side effect (editor-
+    // store.ts): the node leaves `nodes` and selectedNodeId is cleared,
+    // both in the same set().
+    act(() => {
+      useEditorStore.setState({ nodes: [], selectedNodeId: undefined });
+    });
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(showToastSpy).not.toHaveBeenCalled();
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+  });
+
+  it('clears forward history when a fresh selection follows an edit-driven clear-to-null', () => {
+    // Regression: A -> B -> Back-to-A leaves forward=[B]. Deleting the now-
+    // selected A clears selectedNodeId to null (edit-driven, forward
+    // correctly preserved). But selecting C next is a GENUINE new visit —
+    // not a rekey, since there's no departing node left to have been
+    // rekeyed (previous is already null) — so it must still invalidate the
+    // stale forward=[B]. The previous fix's gate skipped this because it
+    // conditioned the forward-clear on the same "previous truthy" check as
+    // the back-stack push, which is false here for an unrelated reason.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenterTime',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenterTime', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B via cross-reference navigation.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+
+    // Back to A — B is now on the forward stack.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Mirrors deleteType(nodeId)'s exact real-store side effect: the
+    // selected node A leaves `nodes` and selectedNodeId is cleared to null,
+    // both in the same set().
+    act(() => {
+      useEditorStore.setState({
+        nodes: [
+          {
+            id: 'cdm.base.datetime.BusinessCenter',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          },
+          {
+            id: 'cdm.base.datetime.BusinessCenterTime',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenterTime', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          }
+        ],
+        selectedNodeId: undefined
+      });
+    });
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+
+    // Select C via a non-history path — a genuine new visit, not a rekey.
+    act(() => {
+      editorStoreState.selectNode('cdm.base.datetime.BusinessCenterTime');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+
+    runeTypeGraphMockState.focusNode.mockClear();
+
+    // Forward must now be a no-op — the stale B entry was invalidated by
+    // the C selection, not silently resurrected.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowRight', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenterTime');
+    expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
+  });
+
+  it('rewrites existing history entries when the selected node is renamed (old id may still be referenced elsewhere in history)', () => {
+    // Regression: A -> B -> A -> rename(A -> A2) left the EARLIER 'A' entry
+    // (pushed onto the back stack by the initial A -> B visit) under the
+    // now-obsolete id — only the local `previous` tracking var got updated
+    // to the new id, not pre-existing stack entries. A second Back (after
+    // popping B) hit the dead 'A' id and showed a false "no longer in the
+    // graph" toast instead of landing on the renamed node (A2).
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B -> A, all real cross-reference navigations (not Back/Forward)
+    // — the back stack now holds [A, B].
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.AdjustableDate');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Mirrors renameType(nodeId, newName)'s exact real-store side effect:
+    // the old id is removed from `nodes`, a new node is inserted under the
+    // rekeyed id, and selectedNodeId is reassigned to it — all in the same
+    // set().
+    act(() => {
+      useEditorStore.setState({
+        nodes: [
+          {
+            id: 'cdm.base.datetime.AdjustableDateRenamed',
+            data: { namespace: 'cdm.base.datetime', name: 'AdjustableDateRenamed', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          },
+          {
+            id: 'cdm.base.datetime.BusinessCenter',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          }
+        ],
+        selectedNodeId: 'cdm.base.datetime.AdjustableDateRenamed'
+      });
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDateRenamed');
+
+    // First Back pops B.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+    expect(showToastSpy).not.toHaveBeenCalled();
+
+    // Second Back must land on the RENAMED id, not error on the dead old one.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(showToastSpy).not.toHaveBeenCalled();
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDateRenamed');
+  });
+
+  it('drops existing history entries for a node that is deleted (old id may still be referenced elsewhere in history)', () => {
+    // Companion to the rename-rekey test above: deleteType has no new id to
+    // rekey stale entries to, so matching entries must be dropped entirely
+    // instead — a deleted id can never be navigated back to. A -> B -> A
+    // leaves back=[A, B]; deleting the now-selected A must drop the stale
+    // 'A' entry, leaving only the real B entry navigable.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B -> A, all real cross-reference navigations — back=[A, B].
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.AdjustableDate');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Mirrors deleteType(nodeId)'s exact real-store side effect: the
+    // selected node A leaves `nodes` and selectedNodeId is cleared to null,
+    // both in the same set().
+    act(() => {
+      useEditorStore.setState({
+        nodes: [
+          {
+            id: 'cdm.base.datetime.BusinessCenter',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          }
+        ],
+        selectedNodeId: undefined
+      });
+    });
+    expect(editorStoreState.selectedNodeId).toBeUndefined();
+
+    // First Back pops the real B entry.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+    expect(showToastSpy).not.toHaveBeenCalled();
+
+    // Second Back must be a silent no-op — the dead 'A' entry was dropped
+    // at delete time, not left to trigger a "no longer in the graph" toast.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(showToastSpy).not.toHaveBeenCalled();
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+  });
+
+  it('does not treat Ctrl+Alt+Left / Shift+Alt+Left as navigate-back (those are focus-prev-panel / reorder-tab-left)', () => {
+    // Regression: the handler used to check `e.altKey` alone, so it also
+    // fired navigateBack for these combos — which collide with real
+    // shell/keyboard.ts bindings installed via a separate window-level
+    // listener that this handler's preventDefault() doesn't stop.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true, ctrlKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true, shiftKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    // Plain Alt+Left still works.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
   });
 
   it('updates graph config direction when responsive relayout flips orientation', async () => {

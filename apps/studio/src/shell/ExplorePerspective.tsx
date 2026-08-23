@@ -469,6 +469,23 @@ export const ExplorePerspective = withInstrumentation(
     const workspaceIdRef = useRef(workspaceId);
     const modelsRef = useRef(models);
     const navigationHistoryRef = useRef<string[]>([]);
+    // Forward stack for navigateForward — mirrors navigationHistoryRef.
+    // Both are refs (not state) since node visits can be frequent and the
+    // stack contents themselves never need to trigger a re-render; only the
+    // empty/non-empty boundary matters for the toolbar buttons, tracked
+    // separately below as reactive canGoBack/canGoForward.
+    const navigationForwardRef = useRef<string[]>([]);
+    const [canGoBack, setCanGoBack] = useState(false);
+    const [canGoForward, setCanGoForward] = useState(false);
+    // Set right before navigateBack/navigateForward call storeSelectNode, so
+    // the selectedNodeId subscription below (the single choke point for
+    // ALL selection changes — Explorer clicks, Structure/Graph selection,
+    // cross-reference navigation, and anything else that reaches
+    // useEditorStore's selectNode, including paths internal to
+    // packages/visual-editor this file has no callback hook into) can tell
+    // "this change IS a history navigation, don't re-record it" apart from
+    // every other selection change, which DOES need a fresh history entry.
+    const isHistoryNavigationRef = useRef(false);
     const { showToast } = useStudioToast();
     const pendingDisplayFileRef = useRef<Map<string, (view: import('@codemirror/view').EditorView | null) => void>>(
       new Map()
@@ -1165,6 +1182,111 @@ export const ExplorePerspective = withInstrumentation(
       [focusMode, storeEdges]
     );
 
+    // Recomputes the reactive canGoBack/canGoForward flags from the two
+    // history refs. Called after every push/pop so the toolbar buttons'
+    // disabled state stays in sync without making the stacks themselves
+    // reactive state (see navigationForwardRef's comment above).
+    const updateHistoryFlags = useCallback(() => {
+      setCanGoBack(navigationHistoryRef.current.length > 0);
+      setCanGoForward(navigationForwardRef.current.length > 0);
+    }, []);
+
+    // Single choke point for "was this a new visit?" — subscribes directly
+    // to useEditorStore's selectedNodeId rather than hooking every call
+    // site that can change it. That list is bigger than just navigateToNode:
+    // handleExplorerSelectNode (Type Explorer clicks), StructureView's
+    // onNodeSelect/onNavigateToEnumType, and RuneTypeGraph's own internal
+    // node-click selection (packages/visual-editor — not exposed to this
+    // file as a callback at all) all call storeSelectNode directly. Patching
+    // history bookkeeping into each of those would duplicate this exact
+    // logic at N sites; subscribing once here is the DRY fix.
+    //
+    // isHistoryNavigationRef distinguishes navigateBack/navigateForward's
+    // own storeSelectNode calls (which already manage both stacks
+    // correctly themselves — pop one, push the departing node onto the
+    // OTHER one) from every other selection change, which should push the
+    // departing node onto the back stack and invalidate forward history
+    // (standard browser back/forward semantics).
+    //
+    // Edit operations on the currently-selected type also change
+    // selectedNodeId as a side effect — renameType rekeys it to the new id,
+    // deleteType clears it to null (editor-store.ts) — without being a
+    // user-initiated visit. Both remove the OLD id from the node map (a
+    // rename deletes-then-reinserts under the new id; a delete just
+    // deletes), so "the departing node no longer exists" identifies an
+    // edit-driven rekey — no separate edit-vs-navigation signal needs
+    // plumbing in from editor-store.ts, since a normal navigation's
+    // departing node is never a node the change itself deleted.
+    //
+    // isEditDrivenRekey and "should we push to the back stack" are
+    // deliberately NOT the same condition. A rekey requires an actual
+    // departing node that got removed (previous truthy AND missing from
+    // nodesById); a fresh pick with no departing node (previous is null —
+    // e.g. right after an edit-driven clear-to-null) can never be a rekey,
+    // since there's no node whose removal could explain the transition, so
+    // it's always a genuine new visit that must still invalidate forward
+    // history even though there's nothing to push onto the back stack.
+    // Concretely: A→B→Back-to-A→delete-A leaves forward=[B] (correctly, via
+    // the isEditDrivenRekey branch below with previous='A'); selecting C
+    // next transitions null→'C' — not a rekey (previous is null) — so this
+    // must still clear the stale forward=[B], even though there's no
+    // previous id to push onto the back stack.
+    useEffect(() => {
+      let previous = useEditorStore.getState().selectedNodeId;
+      return useEditorStore.subscribe((state) => {
+        const current = state.selectedNodeId;
+        if (current === previous) return;
+        if (isHistoryNavigationRef.current) {
+          isHistoryNavigationRef.current = false;
+          previous = current;
+          return;
+        }
+        const isEditDrivenRekey = previous !== null && previous !== undefined && !state.nodesById.has(previous);
+        if (isEditDrivenRekey) {
+          // previous itself may already sit in EARLIER stack entries from
+          // prior real visits (e.g. A→B→A→rename-A: the initial A→B push
+          // left 'A' in the back stack, independent of the `previous`
+          // local var this rename transition sees). Leaving those entries
+          // under the obsolete id makes a later Back/Forward that reaches
+          // them show a false "no longer in the graph" toast instead of
+          // landing on the renamed node. Rename rewrites every matching
+          // entry to the new id; delete (current falsy or itself missing —
+          // the departing node is gone for good, not just renamed) drops
+          // them, since a deleted id can never be navigated back to.
+          const renamedTo = current && state.nodesById.has(current) ? current : null;
+          if (renamedTo) {
+            const rekey = (id: string) => (id === previous ? renamedTo : id);
+            navigationHistoryRef.current = navigationHistoryRef.current.map(rekey);
+            navigationForwardRef.current = navigationForwardRef.current.map(rekey);
+          } else {
+            navigationHistoryRef.current = navigationHistoryRef.current.filter((id) => id !== previous);
+            navigationForwardRef.current = navigationForwardRef.current.filter((id) => id !== previous);
+          }
+          updateHistoryFlags();
+        } else {
+          if (previous) {
+            navigationHistoryRef.current.push(previous);
+            if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+          }
+          navigationForwardRef.current = [];
+          updateHistoryFlags();
+        }
+        previous = current;
+      });
+    }, [updateHistoryFlags]);
+
+    // Node-visit history is workspace-scoped — PerspectiveHost keeps
+    // ExplorePerspective permanently mounted across workspace switches
+    // (display:none toggling, never unmounted), so without this reset the
+    // stacks would survive into an unrelated workspace and Back/Forward
+    // could resolve to a stale node id that happens to collide with one in
+    // the new workspace (e.g. a shared corpus type).
+    useEffect(() => {
+      navigationHistoryRef.current = [];
+      navigationForwardRef.current = [];
+      updateHistoryFlags();
+    }, [workspaceId, updateHistoryFlags]);
+
     const navigateToNode = useCallback(
       (nodeId: string) => {
         const targetNode = nodeRepository.byId(nodeId);
@@ -1178,11 +1300,8 @@ export const ExplorePerspective = withInstrumentation(
           });
           return;
         }
-        const current = useEditorStore.getState().selectedNodeId;
-        if (current) {
-          navigationHistoryRef.current.push(current);
-          if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
-        }
+        // History tracking (back-stack push + forward-stack invalidation) is
+        // handled generically by the selectedNodeId subscription above.
         storeSelectNode(nodeId, { reapplyFocusMode: true });
         const targetMeta = targetNode?.meta;
         if (targetMeta?.deferred && targetMeta.namespace) {
@@ -1209,6 +1328,7 @@ export const ExplorePerspective = withInstrumentation(
       if (!prev) return;
       const exists = storeNodes.some((n) => n.id === prev);
       if (!exists) {
+        updateHistoryFlags();
         showToast({
           description: `Previous node "${prev}" is no longer in the graph`,
           variant: 'destructive',
@@ -1216,20 +1336,64 @@ export const ExplorePerspective = withInstrumentation(
         });
         return;
       }
+      const current = useEditorStore.getState().selectedNodeId;
+      if (current) {
+        navigationForwardRef.current.push(current);
+      }
+      isHistoryNavigationRef.current = true;
       storeSelectNode(prev, { reapplyFocusMode: true });
+      updateHistoryFlags();
       if (!focusMode && shouldCenterNavigationTarget(prev)) {
         graphRef.current?.focusNode(prev);
       }
-    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes]);
+    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes, updateHistoryFlags]);
+
+    const navigateForward = useCallback(() => {
+      const next = navigationForwardRef.current.pop();
+      if (!next) return;
+      const exists = storeNodes.some((n) => n.id === next);
+      if (!exists) {
+        updateHistoryFlags();
+        showToast({
+          description: `Node "${next}" is no longer in the graph`,
+          variant: 'destructive',
+          duration: 3000
+        });
+        return;
+      }
+      const current = useEditorStore.getState().selectedNodeId;
+      if (current) {
+        navigationHistoryRef.current.push(current);
+        if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+      }
+      isHistoryNavigationRef.current = true;
+      storeSelectNode(next, { reapplyFocusMode: true });
+      updateHistoryFlags();
+      if (!focusMode && shouldCenterNavigationTarget(next)) {
+        graphRef.current?.focusNode(next);
+      }
+    }, [focusMode, showToast, shouldCenterNavigationTarget, storeSelectNode, storeNodes, updateHistoryFlags]);
 
     const handleEditorPageKeyDown = useCallback(
       (e: KeyboardEvent<HTMLDivElement>) => {
-        if ((e.altKey && e.key === 'ArrowLeft') || (e.metaKey && e.key === '[')) {
+        // Must be *exactly* Alt (no Ctrl/Meta/Shift) — Ctrl+Alt+Arrow and
+        // Cmd+Alt+Arrow are already bound to focus-prev-panel/focus-next-panel,
+        // and Shift+Alt+Arrow to reorder-tab-left/reorder-tab-right
+        // (shell/keyboard.ts). Those bindings are installed via a separate
+        // window-level listener (installShellShortcuts) that this handler's
+        // preventDefault() doesn't stop, so an altKey-only check here would
+        // fire both navigateBack/navigateForward AND the panel action on the
+        // same keydown for those combos.
+        const plainAlt = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+        if ((plainAlt && e.key === 'ArrowLeft') || (e.metaKey && e.key === '[')) {
           e.preventDefault();
           navigateBack();
+        } else if ((plainAlt && e.key === 'ArrowRight') || (e.metaKey && e.key === ']')) {
+          e.preventDefault();
+          navigateForward();
         }
       },
-      [navigateBack]
+      [navigateBack, navigateForward]
     );
 
     const handleModelChanged = useCallback(
@@ -2072,6 +2236,10 @@ export const ExplorePerspective = withInstrumentation(
             focusPanel={focusPanelRequest}
             panelComponents={panelComponents}
             panelTabMeta={panelTabMeta}
+            onNavigateBack={navigateBack}
+            onNavigateForward={navigateForward}
+            canNavigateBack={canGoBack}
+            canNavigateForward={canGoForward}
           />
         </div>
 

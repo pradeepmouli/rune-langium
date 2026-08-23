@@ -222,6 +222,41 @@ describe('DockShell — dockview integration (T065)', () => {
     expect(screen.getByTestId('reset-layout')).toBeInTheDocument();
   });
 
+  it('does not render navigate back/forward buttons when the callbacks are omitted', () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" />);
+    expect(screen.queryByTestId('navigate-back')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('navigate-forward')).not.toBeInTheDocument();
+  });
+
+  it('renders navigate back/forward buttons, disabled by default, when callbacks are supplied', () => {
+    render(<DockShell studioVersion="0.1.0" workspaceId="ws-1" onNavigateBack={vi.fn()} onNavigateForward={vi.fn()} />);
+    expect(screen.getByTestId('navigate-back')).toBeDisabled();
+    expect(screen.getByTestId('navigate-forward')).toBeDisabled();
+  });
+
+  it('navigate back/forward buttons call their callbacks and respect canNavigate* flags', () => {
+    const onNavigateBack = vi.fn();
+    const onNavigateForward = vi.fn();
+    render(
+      <DockShell
+        studioVersion="0.1.0"
+        workspaceId="ws-1"
+        onNavigateBack={onNavigateBack}
+        onNavigateForward={onNavigateForward}
+        canNavigateBack
+        canNavigateForward
+      />
+    );
+    const back = screen.getByTestId('navigate-back');
+    const forward = screen.getByTestId('navigate-forward');
+    expect(back).not.toBeDisabled();
+    expect(forward).not.toBeDisabled();
+    fireEvent.click(back);
+    fireEvent.click(forward);
+    expect(onNavigateBack).toHaveBeenCalledTimes(1);
+    expect(onNavigateForward).toHaveBeenCalledTimes(1);
+  });
+
   it('Reset Layout calls api.clear() then re-applies a fresh layout', async () => {
     const onChange = vi.fn();
     render(
