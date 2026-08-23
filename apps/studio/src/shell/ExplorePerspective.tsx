@@ -1213,10 +1213,16 @@ export const ExplorePerspective = withInstrumentation(
     // deleteType clears it to null (editor-store.ts) — without being a
     // user-initiated visit. Both remove the OLD id from the node map (a
     // rename deletes-then-reinserts under the new id; a delete just
-    // deletes), so gating the back-stack push on "the departing node still
-    // exists" excludes these for free — no separate edit-vs-navigation
-    // signal needs plumbing in from editor-store.ts, since a normal
-    // navigation's departing node is never a node the change itself deleted.
+    // deletes), so gating on "the departing node still exists" excludes
+    // these for free — no separate edit-vs-navigation signal needs
+    // plumbing in from editor-store.ts, since a normal navigation's
+    // departing node is never a node the change itself deleted.
+    //
+    // The forward-stack clear lives INSIDE this same gate (not run
+    // unconditionally after it) — an edit-driven rekey of the selected node
+    // is not a real visit, so it must not invalidate forward history either.
+    // E.g. A→B→Back-to-A leaves forward=[B]; renaming A afterward should
+    // leave that [B] entry intact, not silently discard it.
     useEffect(() => {
       let previous = useEditorStore.getState().selectedNodeId;
       return useEditorStore.subscribe((state) => {
@@ -1230,12 +1236,24 @@ export const ExplorePerspective = withInstrumentation(
         if (previous && state.nodesById.has(previous)) {
           navigationHistoryRef.current.push(previous);
           if (navigationHistoryRef.current.length > 100) navigationHistoryRef.current.shift();
+          navigationForwardRef.current = [];
+          updateHistoryFlags();
         }
-        navigationForwardRef.current = [];
-        updateHistoryFlags();
         previous = current;
       });
     }, [updateHistoryFlags]);
+
+    // Node-visit history is workspace-scoped — PerspectiveHost keeps
+    // ExplorePerspective permanently mounted across workspace switches
+    // (display:none toggling, never unmounted), so without this reset the
+    // stacks would survive into an unrelated workspace and Back/Forward
+    // could resolve to a stale node id that happens to collide with one in
+    // the new workspace (e.g. a shared corpus type).
+    useEffect(() => {
+      navigationHistoryRef.current = [];
+      navigationForwardRef.current = [];
+      updateHistoryFlags();
+    }, [workspaceId, updateHistoryFlags]);
 
     const navigateToNode = useCallback(
       (nodeId: string) => {

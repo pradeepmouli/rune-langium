@@ -1577,6 +1577,137 @@ describe('EditorPage workspace chrome', () => {
     expect(runeTypeGraphMockState.focusNode).not.toHaveBeenCalled();
   });
 
+  it('preserves forward history across a rename of the currently-selected node (renameType side-effect rekey)', () => {
+    // Regression: the forward-stack clear used to run unconditionally
+    // whenever selectedNodeId changed and the departing id was gone from
+    // nodesById — which is also true for renameType's own rekey (delete old
+    // id, insert new id, reselect the new id in the same set()). That wiped
+    // legitimate forward history (B) that had nothing to do with the rename.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    renderEditorPage({
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B via cross-reference navigation.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+
+    // Back to A — B is now on the forward stack.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDate');
+
+    // Mirrors renameType(nodeId, newName)'s exact real-store side effect
+    // (editor-store.ts): the old id is removed from `nodes`, a new node is
+    // inserted under the rekeyed id, and selectedNodeId is reassigned to it
+    // — all in the same set().
+    act(() => {
+      useEditorStore.setState({
+        nodes: [
+          {
+            id: 'cdm.base.datetime.AdjustableDateRenamed',
+            data: { namespace: 'cdm.base.datetime', name: 'AdjustableDateRenamed', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          },
+          {
+            id: 'cdm.base.datetime.BusinessCenter',
+            data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+            meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+          }
+        ],
+        selectedNodeId: 'cdm.base.datetime.AdjustableDateRenamed'
+      });
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.AdjustableDateRenamed');
+
+    // Forward must still resolve to B — the rename must not have discarded it.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowRight', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+  });
+
+  it('resets navigation history when the workspace changes (ExplorePerspective is kept mounted across switches)', () => {
+    // Regression: PerspectiveHost never unmounts ExplorePerspective across
+    // workspace switches (display:none toggling instead), so the history
+    // refs would otherwise survive into an unrelated workspace and could
+    // resolve to a stale/colliding node id there.
+    editorStoreState.nodes = [
+      {
+        id: 'cdm.base.datetime.AdjustableDate',
+        data: { namespace: 'cdm.base.datetime', name: 'AdjustableDate', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      },
+      {
+        id: 'cdm.base.datetime.BusinessCenter',
+        data: { namespace: 'cdm.base.datetime', name: 'BusinessCenter', $type: 'data' },
+        meta: { namespace: 'cdm.base.datetime', errors: [], hasExternalRefs: false }
+      }
+    ];
+    editorStoreState.selectedNodeId = 'cdm.base.datetime.AdjustableDate';
+
+    const { rerenderEditorPage } = renderEditorPage({
+      workspaceId: 'ws-a',
+      models: [],
+      files: [
+        {
+          name: 'base-datetime-type.rosetta',
+          path: 'base-datetime-type.rosetta',
+          content: 'namespace cdm.base.datetime',
+          dirty: false
+        }
+      ]
+    });
+
+    // A -> B — A is now on the back stack.
+    act(() => {
+      runeTypeGraphMockState.latestCallbacks?.onNavigateToType?.('cdm.base.datetime.BusinessCenter');
+    });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+
+    // Switch workspace without unmounting — same shape PerspectiveHost
+    // produces in the real app.
+    act(() => {
+      rerenderEditorPage({
+        workspaceId: 'ws-b',
+        models: [],
+        files: [
+          {
+            name: 'base-datetime-type.rosetta',
+            path: 'base-datetime-type.rosetta',
+            content: 'namespace cdm.base.datetime',
+            dirty: false
+          }
+        ]
+      });
+    });
+
+    // Back must now be a no-op — the workspace switch cleared the stale
+    // back-stack entry, so there is nothing to show a toast about either.
+    fireEvent.keyDown(screen.getByTestId('explore-workbench'), { key: 'ArrowLeft', altKey: true });
+    expect(editorStoreState.selectedNodeId).toBe('cdm.base.datetime.BusinessCenter');
+    expect(showToastSpy).not.toHaveBeenCalled();
+  });
+
   it('does not record a history entry when the selected type is deleted (editor-store.ts deleteType side effect)', () => {
     // Regression: deleteType clears selectedNodeId as a side effect when the
     // deleted type was selected — the same store change a real user
