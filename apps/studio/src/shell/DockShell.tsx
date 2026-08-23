@@ -593,6 +593,27 @@ export const DockShell = withInstrumentation(
         >
           <PerspectiveHeading perspectiveId="explore" />
           <div className="studio-layout-presets__group studio-layout-presets__group--actions">
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={() => toggleUtilities()}
+              data-testid="toggle-utilities"
+              aria-pressed={!utilitiesCollapsed}
+              className="studio-chrome-button"
+            >
+              {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={resetLayout}
+              data-testid="reset-layout"
+              className="studio-chrome-button"
+            >
+              Reset layout
+            </Button>
             {onNavigateBack && onNavigateForward ? (
               <TooltipProvider>
                 <IconButtonGroup>
@@ -637,27 +658,6 @@ export const DockShell = withInstrumentation(
                 </IconButtonGroup>
               </TooltipProvider>
             ) : null}
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={() => toggleUtilities()}
-              data-testid="toggle-utilities"
-              aria-pressed={!utilitiesCollapsed}
-              className="studio-chrome-button"
-            >
-              {utilitiesCollapsed ? 'Show utilities' : 'Hide utilities'}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={resetLayout}
-              data-testid="reset-layout"
-              className="studio-chrome-button"
-            >
-              Reset layout
-            </Button>
           </div>
         </div>
         {layoutNotice ? (
