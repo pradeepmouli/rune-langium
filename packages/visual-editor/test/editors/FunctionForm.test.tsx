@@ -608,7 +608,13 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
     ).toBeDefined();
   });
 
-  it('passes the bare RHS expression text to renderExpressionEditor for an alias (shortcut), with a no-op onChange', () => {
+  it('renders an alias (shortcut) as static text and never calls renderExpressionEditor for it', () => {
+    // Aliases are derived, non-editable content regardless of isReadOnly —
+    // renderExpressionEditor's rich editor has no readOnly awareness of its
+    // own, so calling it (even with a no-op onChange) let users type inside
+    // a fully-interactive-looking ExpressionBuilder whose changes silently
+    // never persisted (Codex review, PR #494). The bare RHS text must still
+    // render, just statically.
     const data = makeFuncData({
       operations: [],
       shortcuts: [
@@ -623,7 +629,7 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
     const renderExpressionEditor = vi.fn((props: any) => <div data-testid="slot-value">{props.value}</div>);
     const actions = makeActions();
 
-    render(
+    const { container } = render(
       <FunctionForm
         meta={testMeta('test.model')}
         nodeId="fn1"
@@ -634,18 +640,9 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
       />
     );
 
-    expect(renderExpressionEditor).toHaveBeenCalled();
-    const call = renderExpressionEditor.mock.calls.find((c: any) => c[0].value === 'rate * 0.9');
-    expect(
-      call,
-      'renderExpressionEditor must receive the bare alias RHS text, not "alias discountedRate: rate * 0.9"'
-    ).toBeDefined();
-
-    // Alias editing isn't implemented via ANY editor today (not a lens gap) —
-    // onChange is a deliberate no-op. Confirm it doesn't throw and doesn't
-    // reach any store action.
-    expect(() => call![0].onChange('something else')).not.toThrow();
-    expect(actions.updateExpression).not.toHaveBeenCalled();
+    expect(renderExpressionEditor).not.toHaveBeenCalled();
+    const aliasSection = container.querySelector('[data-slot="alias-section"]');
+    expect(aliasSection?.textContent).toContain('rate * 0.9');
   });
 
   it('offers an empty-state expression slot when the function has no operations yet, and its onChange reaches updateExpression via the form field on blur', () => {

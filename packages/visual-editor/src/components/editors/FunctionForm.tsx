@@ -446,28 +446,21 @@ function FunctionForm({
               Function Body
             </FieldLegend>
 
-            {/* Aliases (shortcuts) */}
+            {/* Aliases (shortcuts) — always non-editable derived content,
+                regardless of isReadOnly (mirrors the pre-existing Textarea
+                fallback's hardcoded `readOnly`). renderExpressionEditor's
+                rich editor has no readOnly awareness of its own; calling
+                it unconditionally let users type inside a fully-
+                interactive-looking ExpressionBuilder whose changes
+                silently never persist (Codex review, PR #494). */}
             {(d.shortcuts ?? []).map((shortcut: any, i: number) => {
               const aliasText = getCstText(shortcut.expression);
               return (
                 <div key={getKey(shortcut)} data-slot="alias-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">alias {shortcut.name ?? `#${i}`}</span>
-                  {renderExpressionEditor ? (
-                    renderExpressionEditor({
-                      value: aliasText,
-                      onChange: () => {},
-                      onBlur: () => {},
-                      placeholder: 'Alias expression...',
-                      expressionAst: shortcut.expression
-                    })
-                  ) : (
-                    <Textarea
-                      value={aliasText}
-                      readOnly
-                      rows={1}
-                      className="text-sm font-mono resize-none bg-muted/30"
-                    />
-                  )}
+                  <pre className="studio-scroll text-xs font-mono bg-muted/30 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+                    {aliasText || '(empty)'}
+                  </pre>
                 </div>
               );
             })}
