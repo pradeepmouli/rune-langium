@@ -10,13 +10,17 @@
  *   for their respective kinds — in both editable and read-only mode
  *   (including refOnly curated reference entries, when the kind is covered).
  * - OtherForm for kinds without a dedicated form (record, basicType,
- *   annotation, default fallback) — the only case where refOnly still
- *   falls back to it, since there's no covered form to route to.
+ *   annotation, default fallback), and as a stub-tolerant fallback for a
+ *   deferred curated node whose on-demand hydration never completed
+ *   (`meta.deferred` still true once `isHydrating` goes false) — those are
+ *   the cases where refOnly/covered-kind status still falls back to it.
  * - Empty state when no node is selected.
  *
  * Read-only routing: covered kinds always render their own form (with zero
  * editable controls when locked or refOnly, same tabs/sections as editable).
- * OtherForm is used ONLY for kinds with no editor form implementation.
+ * OtherForm is used for kinds with no editor form implementation, and for
+ * any still-`deferred` stub (whether mid-hydration or stuck after a failed
+ * hydration attempt).
  *
  * Features:
  * - Scrollable content with sticky header (name + kind badge)
@@ -252,13 +256,49 @@ const EditorFormPanel = memo(function EditorFormPanel({
     );
   }
 
+  // ---- Stuck-deferred fallback ----------------------------------------------
+  // `isHydrating` is only true while THIS namespace is actively mid-request
+  // (see `selectedNodeIsHydrating` in ExplorePerspective.tsx, gated on
+  // `pendingHydrationNamespaces`). If a hydration request for the namespace
+  // fails, `dequeuePendingHydration` removes it from that pending list
+  // WITHOUT clearing `meta.deferred` or replacing the stub `data` — so
+  // `isHydrating` flips back to false while `nodeData` is still just
+  // `{$type, name}`. Dispatching that stub into a covered kind's rich form
+  // (DataTypeForm, EnumForm, ...) below would render empty/misleading
+  // tabs and sections as if the type genuinely has no members. Fall back to
+  // OtherForm — the same stub-tolerant view refOnly nodes rendered through
+  // before this routing was broadened — until a fresh hydration attempt
+  // (re-selecting/re-expanding the namespace) replaces the stub with real
+  // data (Codex review, PR #494).
+
+  if (nodeMeta.deferred) {
+    return (
+      <aside
+        ref={panelRef}
+        data-slot="editor-form-panel"
+        aria-label={`Details for ${(nodeData as any).name}`}
+        className="flex flex-col h-full overflow-hidden"
+        tabIndex={-1}
+      >
+        <OtherForm
+          nodeData={nodeData}
+          meta={nodeMeta}
+          nodeId={nodeId}
+          onNavigateToNode={onNavigateToNode}
+          allNodeIds={allNodeIds}
+          refOnly={refOnly}
+        />
+      </aside>
+    );
+  }
+
   // ---- Dispatch by $type → kind --------------------------------------------
   // Covered kinds (data/enum/choice/func/typeAlias) render their own form —
   // read-only (fields disabled, same tabs/sections as the editable case) when
   // locked OR refOnly, rather than forking to the much more limited OtherForm.
   // OtherForm is reserved for kinds with no editor form implementation at all
-  // (record/basicType/annotation/default) — those have nowhere else to go
-  // regardless of refOnly/readOnly status.
+  // (record/basicType/annotation/default), or a stuck-deferred stub above —
+  // those have nowhere else to go regardless of refOnly/readOnly status.
 
   const kind = resolveNodeKind(nodeData);
   // Combined lock: panel-prop lock (isReadOnly/refOnly) OR node-data flag.

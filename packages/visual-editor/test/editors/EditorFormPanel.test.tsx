@@ -469,6 +469,33 @@ describe('EditorFormPanel', () => {
     expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('falls back to OtherForm for a still-deferred stub once isHydrating goes false (stuck/failed hydration)', () => {
+    // If a namespace's on-demand hydration request fails,
+    // `dequeuePendingHydration` removes it from the pending list WITHOUT
+    // clearing `meta.deferred` or replacing the stub `data` — so
+    // `isHydrating` flips back to false while `nodeData` is still just
+    // `{$type, name}` (see ExplorePerspective.tsx's `selectedNodeIsHydrating`
+    // and App.tsx's hydration-failure handler). Dispatching that stub into a
+    // covered kind's rich form would render empty/misleading tabs and
+    // sections. The panel must keep using the stub-tolerant OtherForm
+    // instead (Codex review, PR #494).
+    render(
+      <EditorFormPanel
+        nodeData={{ $type: 'Data', name: 'Trade' } as unknown as AnyGraphNode}
+        meta={testMeta('cdm.product', { deferred: true })}
+        nodeId="node-1"
+        isHydrating={false}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
+    expect(panel.querySelector('[data-slot="data-type-form"]')).toBeNull();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+  });
+
   // ---- synonymSourceOptions threading -------------------------------------
 
   it('accepts synonymSourceOptions without error and renders the DataTypeForm', () => {
