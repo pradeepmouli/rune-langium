@@ -35,6 +35,7 @@ import { FormProvider, useWatch } from 'react-hook-form';
 import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { DefinitionField } from '../DefinitionField.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
@@ -230,6 +231,16 @@ function TypeAliasForm({
               ) : undefined
             }
           />
+
+          {/* Definition — read-only display (mirrors OtherForm's own
+              `{d.definition && <DefinitionField .../>}`). TypeAliasForm has
+              no editable definition affordance today (a pre-existing,
+              unrelated gap), but a refOnly alias's `definition` text must
+              stay visible now that it routes here instead of OtherForm
+              (Codex review, PR #494). */}
+          {(data as { definition?: string }).definition && (
+            <DefinitionField value={(data as { definition?: string }).definition!} />
+          )}
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}
           <FieldSet className="gap-1.5">
