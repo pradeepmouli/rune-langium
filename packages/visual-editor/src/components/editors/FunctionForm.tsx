@@ -55,6 +55,7 @@ import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js
 import {
   getTypeRefText,
   getRefText,
+  resolveRefTextToOptionValue,
   parseCardinality,
   getExpressionDisplayText
 } from '../../adapters/model-helpers.js';
@@ -264,10 +265,15 @@ function FunctionForm({
   );
 
   const superFunctionName = getRefText(d.superFunction);
-  const parentOptions = availableTypes.filter((opt) => opt.kind === 'func' && opt.label !== d.name);
-  const parentValue = superFunctionName
-    ? (availableTypes.find((opt) => opt.label === superFunctionName)?.value ?? null)
-    : null;
+  // Exclude by canonical node id, not bare name — two functions in
+  // different namespaces may legitimately share a name, and only the
+  // node ITSELF should be excluded from its own parent options (Codex
+  // review, PR #494).
+  const parentOptions = availableTypes.filter((opt) => opt.kind === 'func' && opt.value !== nodeId);
+  // See `resolveRefTextToOptionValue`'s doc comment for why a bare-label
+  // match alone would silently fail to resolve a qualified cross-namespace
+  // parent (Codex review, PR #494).
+  const parentValue = resolveRefTextToOptionValue(superFunctionName, availableTypes);
 
   // ---- Input param helpers -------------------------------------------------
 
