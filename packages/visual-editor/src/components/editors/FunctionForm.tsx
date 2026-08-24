@@ -43,6 +43,7 @@ import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { Plus } from 'lucide-react';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { AttributeRow } from './AttributeRow.js';
@@ -619,6 +620,10 @@ function FunctionForm({
           <InheritedMembersSection groups={inheritedGroups} />
 
           <MetadataSection />
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </FormProvider>
     </EditorActionsProvider>

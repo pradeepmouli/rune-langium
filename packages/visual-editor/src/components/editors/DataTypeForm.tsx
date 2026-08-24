@@ -25,6 +25,7 @@ import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/u
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { Plus } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@rune-langium/design-system/ui/tabs';
 import { AttributeRow } from './AttributeRow.js';
@@ -447,6 +448,10 @@ function DataTypeForm({
               />
             </FieldSet>
           </div>
+
+          {/* Domain/graph-level errors — always visible above tabs (mirrors
+              OtherForm's Errors section; Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
 
           {/* Tabbed sections */}
           <Tabs defaultValue="members" className="-mx-4 flex-1 flex flex-col min-h-0">

@@ -11,7 +11,6 @@
  * using shadcn/ui primitives and lucide-react icons.
  */
 
-import { AlertCircle } from 'lucide-react';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { Separator } from '@rune-langium/design-system/ui/separator';
 import { ScrollArea } from '@rune-langium/design-system/ui/scroll-area';
@@ -20,7 +19,8 @@ import { TypeLink } from '../editors/TypeLink.js';
 import { TypeHeader } from '../TypeHeader.js';
 import { DefinitionField } from '../DefinitionField.js';
 import { ExtendsField } from '../ExtendsField.js';
-import type { AnyGraphNode, GraphNodeMeta, ValidationError, NavigateToNodeCallback, TypeKind } from '../../types.js';
+import { ErrorsSection } from '../ErrorsSection.js';
+import type { AnyGraphNode, GraphNodeMeta, NavigateToNodeCallback, TypeKind } from '../../types.js';
 
 export interface OtherFormProps {
   nodeData: AnyGraphNode | null;
@@ -101,7 +101,6 @@ export function OtherForm({ nodeData, meta: nodeMeta, nodeId, onNavigateToNode, 
   // per-render single-field read.
   const parentName = getRefText(d.superType) ?? getRefText(d.parent) ?? getRefText(d.superFunction);
   const members = extractMembers(d);
-  const errors: ValidationError[] = nodeMeta.errors;
 
   return (
     <ScrollArea className="h-full">
@@ -162,23 +161,7 @@ export function OtherForm({ nodeData, meta: nodeMeta, nodeId, onNavigateToNode, 
         )}
 
         {/* Errors */}
-        {errors.length > 0 && (
-          <>
-            <Separator />
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-destructive">Errors ({errors.length})</span>
-              {errors.map((err, i) => (
-                <div
-                  key={`${err.ruleId ?? 'err'}:${err.message}:${i}`}
-                  className="flex items-start gap-1.5 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive"
-                >
-                  <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
-                  <span>{err.message}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+        <ErrorsSection errors={nodeMeta.errors} />
       </div>
     </ScrollArea>
   );

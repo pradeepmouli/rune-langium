@@ -331,4 +331,21 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
 
     expect(container.querySelector('[data-slot="definition-field"]')).toBeNull();
   });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into TypeAliasForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <TypeAliasForm
+        meta={testMeta('test.aliases', {
+          errors: [{ nodeId: 'test.aliases.ShortText', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="test.aliases.ShortText"
+        data={makeTypeAliasNode()}
+        actions={makeActions()}
+        availableTypes={AVAILABLE_TYPES}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
 });

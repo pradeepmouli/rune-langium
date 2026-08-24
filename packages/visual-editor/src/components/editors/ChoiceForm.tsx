@@ -37,6 +37,7 @@ import { FormProvider } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -283,6 +284,10 @@ function ChoiceForm({
             onSynonymAdd={handleAddSynonym}
             onSynonymRemove={handleRemoveSynonym}
           />
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </EditorActionsProvider>
     </FormProvider>

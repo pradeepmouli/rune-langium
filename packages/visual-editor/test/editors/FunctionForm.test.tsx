@@ -683,4 +683,21 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
     fireEvent.click(screen.getByTestId('commit-blur'));
     expect(actions.updateExpression).toHaveBeenCalledWith('fn1', 'x + 1');
   });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into FunctionForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <FunctionForm
+        meta={testMeta('test.model', {
+          errors: [{ nodeId: 'fn1', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
 });

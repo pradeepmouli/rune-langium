@@ -35,6 +35,7 @@ import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/u
 import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { Plus } from 'lucide-react';
 import { EnumValueRow, InheritedEnumValueRow } from './EnumValueRow.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
@@ -348,6 +349,10 @@ function EnumForm({
               wiring needed at this site. */}
           <AnnotationSection />
           <MetadataSection synonymSourceOptions={synonymSourceOptions} />
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </EditorActionsProvider>
     </FormProvider>

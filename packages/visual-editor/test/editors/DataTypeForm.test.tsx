@@ -1163,4 +1163,21 @@ describe('DataTypeForm – Extends field drop validation (P2-b)', () => {
     );
     expect(screen.queryByLabelText('Reveal in graph')).toBeNull();
   });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into DataTypeForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <DataTypeForm
+        meta={testMeta('test.model', {
+          errors: [{ nodeId: 'test.Trade', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="test.Trade"
+        data={makeDataNode()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
 });

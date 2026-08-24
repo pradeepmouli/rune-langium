@@ -377,4 +377,21 @@ describe('ChoiceForm – US3 z2f migration contract (CT1–CT4)', () => {
     expect(addChoiceOption).toHaveBeenCalledTimes(1);
     expect(addChoiceOption).toHaveBeenCalledWith('node-1', 'Trade');
   });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into ChoiceForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <ChoiceForm
+        meta={testMeta('test.model', {
+          errors: [{ nodeId: 'node-1', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="node-1"
+        data={makeChoiceData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
 });

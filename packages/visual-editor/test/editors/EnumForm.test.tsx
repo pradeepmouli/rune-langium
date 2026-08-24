@@ -632,4 +632,21 @@ describe('EnumForm – Extends field drop validation (P2-b)', () => {
 
     expect(setEnumParent).toHaveBeenCalledWith('test.PaymentEnum', 'test.enums.CurrencyEnum');
   });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into EnumForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <EnumForm
+        meta={testMeta('test.model', {
+          errors: [{ nodeId: 'test.PaymentEnum', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="test.PaymentEnum"
+        data={makeEnumData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
 });

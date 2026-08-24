@@ -36,6 +36,7 @@ import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { DefinitionField } from '../DefinitionField.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
@@ -259,6 +260,10 @@ function TypeAliasForm({
               disabled={isReadOnly}
             />
           </FieldSet>
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </FormProvider>
     </EditorActionsProvider>
