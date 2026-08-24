@@ -230,29 +230,27 @@ export function buildEnumeration(
     annotations: [],
     references: [],
     synonyms: emitSynonyms ? [buildAttributeSynonym(sourceName, sourceEnum.sourceKey)] : [],
-    enumValues: sourceEnum.values.map(
-      (v): EnumValueNode => ({
-        $type: 'RosettaEnumValue',
-        name: escapeId(v.name),
-        // `display`/`definition` are REQUIRED keys of type `string | undefined`
-        // under `Dehydrated<T>` (same gap constraint-translator.ts documents
-        // for `Condition.definition`/`name` — an optional field on the real
-        // AST interface still needs its key present, just possibly
-        // `undefined`), so these are assigned directly rather than
-        // conditionally spread.
-        display: v.displayName,
-        definition: v.description,
-        annotations: [],
-        references: [],
-        // The synonym records the ORIGINAL SOURCE literal (v.sourceKey), never
-        // v.displayName — displayName is a presentational label (may come from
-        // the outbound emitter's own x-rune-enum-display map) and is not
-        // necessarily the value the source schema actually used (reviewer
-        // finding: emitting displayName here silently recorded the wrong
-        // value whenever a display map was present).
-        enumSynonyms: emitSynonyms ? [buildEnumValueSynonym(sourceName, v.sourceKey)] : []
-      })
-    )
+    enumValues: sourceEnum.values.map((v): EnumValueNode => ({
+      $type: 'RosettaEnumValue',
+      name: escapeId(v.name),
+      // `display`/`definition` are REQUIRED keys of type `string | undefined`
+      // under `Dehydrated<T>` (same gap constraint-translator.ts documents
+      // for `Condition.definition`/`name` — an optional field on the real
+      // AST interface still needs its key present, just possibly
+      // `undefined`), so these are assigned directly rather than
+      // conditionally spread.
+      display: v.displayName,
+      definition: v.description,
+      annotations: [],
+      references: [],
+      // The synonym records the ORIGINAL SOURCE literal (v.sourceKey), never
+      // v.displayName — displayName is a presentational label (may come from
+      // the outbound emitter's own x-rune-enum-display map) and is not
+      // necessarily the value the source schema actually used (reviewer
+      // finding: emitting displayName here silently recorded the wrong
+      // value whenever a display map was present).
+      enumSynonyms: emitSynonyms ? [buildEnumValueSynonym(sourceName, v.sourceKey)] : []
+    }))
   };
 }
 

@@ -73,3 +73,12 @@ hydrateModelDocument(services: HydrateServices, uri: string | URI, json: string,
 - `json: string`
 - `options: HydrateOptions`
 **Returns:** `{ model: RosettaModel; document: LangiumDocument }`
+
+### `hydrateModelDocuments`
+```ts
+hydrateModelDocuments(services: HydrateServices, entries: readonly { uri: string | URI; json: string }[]): { model: RosettaModel; document: LangiumDocument }[]
+```
+**Parameters:**
+- `services: HydrateServices`
+- `entries: readonly { uri: string | URI; json: string }[]`
+**Returns:** `{ model: RosettaModel; document: LangiumDocument }[]`

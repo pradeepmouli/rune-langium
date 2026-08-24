@@ -13,7 +13,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^2.7.0",
+    "@lspeasy/core": "^2.7.1",
     "@rune-langium/curated-schema": "workspace:*",
     "@rune-langium/lsp-server": "workspace:*",
     "@rune-langium/worker-core": "workspace:*",
@@ -21,9 +21,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260625.1",
-    "vitest": "^4.1.10",
-    "wrangler": "^4.105.0"
+    "@cloudflare/workers-types": "^5.20260823.1",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.125.0"
   },
   "engines": {
     "node": ">=22.13.0"

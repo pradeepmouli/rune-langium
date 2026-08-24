@@ -35,7 +35,7 @@
     "pino": "^10.3.1"
   },
   "devDependencies": {
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.13.0"

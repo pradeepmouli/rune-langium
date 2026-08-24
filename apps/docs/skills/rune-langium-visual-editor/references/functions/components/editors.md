@@ -47,10 +47,6 @@ CardinalityPicker(__namedParameters: CardinalityPickerProps): ReactNode
 **Returns:** `ReactNode`
 
 ### `MetadataSection`
-Collapsible metadata section with description, comments, and synonym fields.
-
-Reads field values from the parent `FormProvider` context. Auto-resize
-textareas for description and comments; SourceRefField picker for synonyms.
 ```ts
 MetadataSection(__namedParameters: MetadataSectionProps): ReactNode
 ```

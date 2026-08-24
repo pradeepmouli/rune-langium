@@ -26,3 +26,24 @@ are no-ops.
 - `close(): Promise<void>` — Close the transport connection and release resources.
 - `isConnected(): boolean` — Returns `true` if the transport is currently connected and able to
 send messages.
+
+## document-update-handler
+
+### `RuneDocumentUpdateHandler`
+*extends `DefaultDocumentUpdateHandler`*
+```ts
+constructor(services: LangiumSharedServices): RuneDocumentUpdateHandler
+```
+**Properties:**
+- `workspaceManager: WorkspaceManager`
+- `documentBuilder: DocumentBuilder`
+- `workspaceLock: WorkspaceLock`
+- `serviceRegistry: ServiceRegistry`
+- `onWatchedFilesChangeEmitter: Emitter<DidChangeWatchedFilesParams>`
+**Methods:**
+- `didCloseDocument(event: TextDocumentChangeEvent<TextDocument>): void`
+- `registerFileWatcher(services: LangiumSharedServices): void`
+- `getWatchers(): FileSystemWatcher[]`
+- `fireDocumentUpdate(changed: URI[], deleted: URI[]): void`
+- `didChangeContent(change: TextDocumentChangeEvent<TextDocument>): void` — A content change event was triggered by the `TextDocuments` service.
+- `didChangeWatchedFiles(params: DidChangeWatchedFilesParams): void` — The client detected changes to files and folders watched by the language client.

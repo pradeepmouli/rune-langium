@@ -40,11 +40,11 @@ deleted_classes = ["TelemetryAggregator"]
 [observability]
 enabled = true
 
-  [observability.logs]
-  invocation_logs = true
-  # 100% sampling — telemetry volume is low (opt-in, closed event schema)
-  # and every event matters for the daily digest; no reason to sample.
-  head_sampling_rate = 1
+[observability.logs]
+invocation_logs = true
+# 100% sampling — telemetry volume is low (opt-in, closed event schema)
+# and every event matters for the daily digest; no reason to sample.
+head_sampling_rate = 1
 
 [vars]
 ALLOWED_ORIGIN = "https://www.daikonic.dev"

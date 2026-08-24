@@ -49,14 +49,17 @@ function requireEnv(name) {
 }
 
 async function runQuery(accountId, apiToken, body) {
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/observability/telemetry/query`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/observability/telemetry/query`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    }
+  );
   const json = await res.json();
   if (!res.ok || json.success === false) {
     throw new Error(`Workers Observability query failed: HTTP ${res.status} — ${JSON.stringify(json.errors ?? json)}`);

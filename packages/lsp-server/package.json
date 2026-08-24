@@ -30,18 +30,18 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@lspeasy/core": "^2.7.0",
-    "@lspeasy/server": "^4.2.1",
+    "@lspeasy/core": "^2.7.1",
+    "@lspeasy/server": "^4.2.2",
     "@rune-langium/core": "workspace:*",
     "langium": "^4.3.1",
     "vscode-languageserver": "~10.1.0",
-    "ws": "8.21.1"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
-    "@lspeasy/client": "^3.1.7",
+    "@lspeasy/client": "^3.1.8",
     "@types/ws": "^8.18.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=22.13.0"
