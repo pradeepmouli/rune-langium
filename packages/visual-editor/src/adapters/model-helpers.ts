@@ -70,14 +70,22 @@ export function getRefText(ref: ReferenceShape | undefined): string | undefined 
  * flat list of `TypeOption`s, returning the matching option's canonical
  * `value`, or `null` if there's no match.
  *
- * `refText` is either a bare name (globally unique across the graph, so it
- * matches an option's `label` directly) or a namespace-qualified
- * `${namespace}.${name}` string — written by e.g. `disambiguateTypeRef` in
- * `editor-store.ts` when the bare name collides elsewhere in the graph.
- * That qualified shape is exactly `qualifiedExportPath`'s format, i.e.
- * identical to a graph-backed option's canonical `value`. Try `value`
- * first so a qualified cross-namespace ref still resolves, instead of
- * only ever matching a bare `label` (Codex review, PR #494).
+ * `refText` is either a bare name (globally unique among candidates of the
+ * SAME referenceable kind, so it matches an option's `label` directly) or a
+ * namespace-qualified `${namespace}.${name}` string — written by e.g.
+ * `disambiguateTypeRef` in `editor-store.ts` when the bare name collides
+ * elsewhere in the graph. That qualified shape is exactly
+ * `qualifiedExportPath`'s format, i.e. identical to a graph-backed option's
+ * canonical `value`. Try `value` first so a qualified cross-namespace ref
+ * still resolves, instead of only ever matching a bare `label` (Codex
+ * review, PR #494).
+ *
+ * Callers MUST pass an already-scoped `options` list (e.g. func-kind-only
+ * for a Function's `superFunction`), not the full unfiltered type list —
+ * bare-name uniqueness is only guaranteed within that scope, and matching
+ * against every kind risks an unrelated same-named option (a different
+ * kind, or a different namespace) winning the bare-label fallback (Codex
+ * review, PR #494).
  */
 export function resolveRefTextToOptionValue(refText: string | undefined, options: TypeOption[]): string | null {
   if (!refText) return null;

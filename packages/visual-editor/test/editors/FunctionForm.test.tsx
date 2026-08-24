@@ -843,5 +843,35 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
       expect(extendsTrigger).not.toBeNull();
       expect(extendsTrigger).toBeDisabled();
     });
+
+    // See Codex review, PR #494: resolving a bare superFunction ref against
+    // the FULL (unfiltered) availableTypes list risked a same-named option
+    // of a different kind winning the bare-label match instead of the real
+    // function. TypeChip's `data-kind` attribute (mapped only for
+    // Data/Choice/Enum/Record/TypeAlias/BasicType, not Func) makes this
+    // observable: if the wrong-kind decoy won, the chip would show
+    // data-kind="Data" instead of the unmapped 'Unresolved' fallback.
+    it('resolves the func-kind parent, not a same-named option of a different kind', () => {
+      const decoyAndRealOptions: TypeOption[] = [
+        // Decoy appears FIRST in array order -- with the pre-fix bug
+        // (matching against the unfiltered availableTypes list), this
+        // wrong-kind option would win the bare-label match.
+        { value: 'test.model.BaseFunction', label: 'BaseFunction', kind: 'data', namespace: 'test.model' },
+        { value: 'other.BaseFunction', label: 'BaseFunction', kind: 'func', namespace: 'other' }
+      ];
+      const { container } = render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData({ superFunction: { $refText: 'BaseFunction' } } as any)}
+          availableTypes={decoyAndRealOptions}
+          actions={makeActions()}
+        />
+      );
+
+      const extendsTrigger = container.querySelector('[data-slot="type-reference"] [data-slot="type-picker-trigger"]');
+      expect(extendsTrigger).not.toBeNull();
+      expect(extendsTrigger?.getAttribute('data-kind')).not.toBe('Data');
+    });
   });
 });

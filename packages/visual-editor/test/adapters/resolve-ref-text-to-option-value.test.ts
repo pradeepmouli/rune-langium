@@ -34,4 +34,17 @@ describe('resolveRefTextToOptionValue', () => {
     expect(resolveRefTextToOptionValue(undefined, OPTIONS)).toBeNull();
     expect(resolveRefTextToOptionValue('', OPTIONS)).toBeNull();
   });
+
+  // Documents the caller-scoping contract from the doc comment: bare-name
+  // uniqueness only holds within the caller's own scoped candidate list.
+  // Passing an unscoped, mixed-kind list can match the wrong option (Codex
+  // review, PR #494) -- callers (e.g. FunctionForm's Extends field) must
+  // pre-filter `options` to the referenceable kind before calling this.
+  it('matches whichever option comes first when given an unscoped, mixed-kind list', () => {
+    const mixedKindOptions: TypeOption[] = [
+      { value: 'test.model.BaseFunction', label: 'BaseFunction', kind: 'data', namespace: 'test.model' },
+      { value: 'other.BaseFunction', label: 'BaseFunction', kind: 'func', namespace: 'other' }
+    ];
+    expect(resolveRefTextToOptionValue('BaseFunction', mixedKindOptions)).toBe('test.model.BaseFunction');
+  });
 });

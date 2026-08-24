@@ -270,10 +270,15 @@ function FunctionForm({
   // node ITSELF should be excluded from its own parent options (Codex
   // review, PR #494).
   const parentOptions = availableTypes.filter((opt) => opt.kind === 'func' && opt.value !== nodeId);
-  // See `resolveRefTextToOptionValue`'s doc comment for why a bare-label
-  // match alone would silently fail to resolve a qualified cross-namespace
-  // parent (Codex review, PR #494).
-  const parentValue = resolveRefTextToOptionValue(superFunctionName, availableTypes);
+  // Resolve against `parentOptions` (func-kind, self-excluded), NOT the
+  // unfiltered `availableTypes` — a bare `superFunctionName` is only
+  // guaranteed unique among candidates a Function may actually extend.
+  // Matching against every kind risked a same-named Data/Enum/etc. option
+  // earlier in `availableTypes` winning over the real function (Codex
+  // review, PR #494). See `resolveRefTextToOptionValue`'s doc comment for
+  // why a bare-label match alone would also fail to resolve a qualified
+  // cross-namespace parent.
+  const parentValue = resolveRefTextToOptionValue(superFunctionName, parentOptions);
 
   // ---- Input param helpers -------------------------------------------------
 
