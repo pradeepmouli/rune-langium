@@ -357,6 +357,8 @@ export interface EditorActions {
   ): void;
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
+  /** Set (or clear, with `null`) a Function's `superFunction` parent reference. */
+  setFunctionParent(nodeId: string, parentId: string | null): void;
   updateTypeAliasType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
 
@@ -1937,6 +1939,44 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 type: { $refText: typeName },
                 arguments: []
               };
+            });
+          },
+
+          setFunctionParent(nodeId: string, parentId: string | null) {
+            // Mirrors setEnumParent (Function's superFunction, like Enum's
+            // parent, is a single scalar ref, not Data's special-cased
+            // superType). Reuses the 'extends' edge kind — ast-to-model.ts
+            // already emits `superFunction` as an 'extends' edge, so no new
+            // EdgeKind is needed (edges are scoped by source node id, so
+            // this never collides with a Data node's own 'extends' edge).
+            const state = get();
+            const parentNode = parentId ? state.nodesById.get(parentId) : null;
+            if (parentId && !parentNode) return; // stale parentId — no-op, leave state untouched
+            const parentName = parentNode?.data.name;
+            const parentNamespace = parentNode?.meta.namespace;
+            const parentRefText =
+              parentName && parentNamespace && parentNode
+                ? disambiguateTypeRef(parentNode.id, parentName, parentNamespace, state.nodes)
+                : parentName;
+            const parentRef = parentRefText ? { $refText: parentRefText } : undefined;
+            mutateGraph(set, get, (draft) => {
+              const n = draft.nodes.get(nodeId);
+              const d = n?.data;
+              if (d?.$type !== 'RosettaFunction') return;
+              (d as { superFunction?: unknown }).superFunction = parentRef;
+              for (const [id, e] of draft.edges) {
+                if (e.source === nodeId && e.data?.kind === 'extends') draft.edges.delete(id);
+              }
+              if (parentId) {
+                const edgeId = makeEdgeId('extends', { source: nodeId, target: parentId });
+                draft.edges.set(edgeId, {
+                  id: edgeId,
+                  source: nodeId,
+                  target: parentId,
+                  type: 'extends',
+                  data: { kind: 'extends' as const, label: 'extends' } as EdgeData
+                } as TypeGraphEdge);
+              }
             });
           },
 

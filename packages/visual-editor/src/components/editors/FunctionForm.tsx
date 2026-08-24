@@ -44,7 +44,6 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { ErrorsSection } from '../ErrorsSection.js';
-import { ExtendsField } from '../ExtendsField.js';
 import { Plus } from 'lucide-react';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { AttributeRow } from './AttributeRow.js';
@@ -242,14 +241,33 @@ function FunctionForm({
   const outputType = getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '';
   const outputValue = outputType ? (availableTypes.find((o) => o.label === outputType)?.value ?? '') : '';
 
-  // Read-only parent-function display: `InheritedMembersSection` alone is
-  // not an equivalent fallback for this — it renders nothing when the
-  // parent is unresolved (not yet loaded/hydrated) or has no inputs, which
-  // would silently hide the `extends` relationship that OtherForm always
-  // showed via ExtendsField (Codex review, PR #494). No editing action
-  // exists for a function's superFunction today — same as OtherForm, this
-  // is a display-only field.
+  // ---- Parent function (superFunction) --------------------------------------
+  // `InheritedMembersSection` alone is not an equivalent fallback for
+  // showing the parent relationship — it renders nothing when the parent is
+  // unresolved (not yet loaded/hydrated) or has no inputs, which would
+  // silently hide `extends` the way OtherForm never did (Codex review,
+  // PR #494). Mirrors DataTypeForm's / EnumForm's own Extends field: the
+  // displayed name comes straight off `d.superFunction`'s ref text
+  // (resolution-independent), while `parentValue`/`parentOptions` drive the
+  // editable selector.
+
+  const handleParentSelect = useCallback(
+    (value: string | null) => {
+      const label = value ? (availableTypes.find((o) => o.value === value)?.label ?? '') : '';
+      // Mirror the selection into AST-canonical `superFunction.$refText` so
+      // the form stays consistent until the external graph push round-trips
+      // back through `useExternalSync`.
+      form.setValue('superFunction.$refText' as never, label as never, { shouldDirty: true });
+      actions.setFunctionParent(nodeId, value);
+    },
+    [nodeId, actions, availableTypes, form]
+  );
+
   const superFunctionName = getRefText(d.superFunction);
+  const parentOptions = availableTypes.filter((opt) => opt.kind === 'func' && opt.label !== d.name);
+  const parentValue = superFunctionName
+    ? (availableTypes.find((opt) => opt.label === superFunctionName)?.value ?? null)
+    : null;
 
   // ---- Input param helpers -------------------------------------------------
 
@@ -364,11 +382,28 @@ function FunctionForm({
             }
           />
 
-          {/* Extends (superFunction) — read-only, mirrors OtherForm's
-              ExtendsField; see superFunctionName's doc comment above. */}
-          {superFunctionName && (
-            <ExtendsField parentName={superFunctionName} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
-          )}
+          {/* Extends (superFunction) — mirrors DataTypeForm's / EnumForm's
+              own editable Extends FieldSet; see superFunctionName's doc
+              comment above for why InheritedMembersSection alone isn't
+              sufficient. */}
+          <FieldSet className="gap-1.5">
+            <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+              Extends
+            </FieldLegend>
+            <TypeReferenceField
+              value={parentValue}
+              displayName={superFunctionName}
+              options={parentOptions}
+              onSelect={handleParentSelect}
+              placeholder="Select parent function..."
+              allowClear
+              emptyLabel="No parent function"
+              filterKinds={['func']}
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
+              disabled={isReadOnly}
+            />
+          </FieldSet>
 
           {/* Input Parameters — editable AttributeRow list via useFieldArray,
               mirrors the Members section in DataTypeForm (DRY / R-func-input). */}
