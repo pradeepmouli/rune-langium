@@ -116,8 +116,8 @@ test.describe('production checkout smoke', () => {
     //
     // This test navigates directly to cdm.base.staticdata.party.Counterparty
     // without first visiting any other namespace, then asserts that the Inspector
-    // shows a populated "Members (N)" list. An empty inspector would mean the bug
-    // regressed.
+    // shows a populated "Attributes (N)" list. An empty inspector would mean the
+    // bug regressed.
     await loadCdm(page);
     const centerStack = page.getByTestId('center-stack');
 
@@ -133,10 +133,11 @@ test.describe('production checkout smoke', () => {
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
-    // /Members \([1-9]/ ensures at least one member — OtherForm's guard
-    // `{members.length > 0 && ...}` means "Members (0)" is never rendered, but
-    // being explicit here documents the intent clearly.
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    // Counterparty is a Data kind, so refOnly routes it through DataTypeForm
+    // (not OtherForm) since PR #494 — its guard renders "Attributes (N)" only
+    // when fields.length + inheritedCount > 0, so /Attributes \([1-9]/ ensures
+    // at least one attribute; being explicit here documents the intent clearly.
+    await expect(centerStack.getByText(/Attributes \([1-9]/)).toBeVisible({ timeout: 30_000 });
   });
 
   test('graph node shows a hydrating spinner while a never-hydrated namespace loads', async ({ page }) => {
@@ -163,10 +164,11 @@ test.describe('production checkout smoke', () => {
 
     await expect(page.getByTestId('rune-node-hydrating-spinner')).toBeVisible({ timeout: 5_000 });
 
-    // The spinner clears once hydration completes and members populate.
+    // The spinner clears once hydration completes and attributes populate
+    // (DataTypeForm's "Attributes (N)" — see the previous test for why).
     const centerStack = page.getByTestId('center-stack');
     await page.getByRole('button', { name: 'Inspector' }).click();
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expect(centerStack.getByText(/Attributes \([1-9]/)).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId('rune-node-hydrating-spinner')).toHaveCount(0);
   });
 });
