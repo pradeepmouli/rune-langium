@@ -13,6 +13,20 @@ useAutoSave<T>(onCommit: (value: T) => void, delay: number): (value: T) => void
 - `delay: number` — default: `500` — Debounce delay in milliseconds (default 500).
 **Returns:** `(value: T) => void` — A debounced setter function.
 
+### `useLatestRef`
+```ts
+useLatestRef<T>(value: T): RefObject<T>
+```
+**Parameters:**
+- `value: T`
+**Returns:** `RefObject<T>`
+
+### `useStableKey`
+```ts
+useStableKey(): (item: object) => string
+```
+**Returns:** `(item: object) => string`
+
 ### `useExpressionAutocomplete`
 ```ts
 useExpressionAutocomplete(availableTypes: TypeOption[], inputParams?: { name: string; typeName?: string }[]): UseExpressionAutocompleteResult

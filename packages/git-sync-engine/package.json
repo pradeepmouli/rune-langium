@@ -27,10 +27,10 @@
     "isomorphic-git": "^1.37.6"
   },
   "devDependencies": {
-    "@types/node": "^26.1.2",
-    "isomorphic-git": "^1.40.0",
+    "@types/node": "^26.2.0",
+    "isomorphic-git": "^1.41.9",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "publishConfig": {
     "access": "public"

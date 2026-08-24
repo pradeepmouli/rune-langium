@@ -89,7 +89,13 @@ export const WorkspaceSwitcher = withInstrumentation(
         ) : (
           <ul className="space-y-1.5">
             {rows.map((row) => (
-              <li key={row.id} className="studio-fade-in" data-testid="workspace-row" data-id={row.id} data-kind={row.kind}>
+              <li
+                key={row.id}
+                className="studio-fade-in"
+                data-testid="workspace-row"
+                data-id={row.id}
+                data-kind={row.kind}
+              >
                 <div className="group flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm hover:bg-accent/50 transition-colors">
                   <button
                     type="button"

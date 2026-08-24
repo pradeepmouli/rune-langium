@@ -27,9 +27,10 @@ allowBuilds:
   workerd: false
 
 minimumReleaseAgeExclude:
-  - langium-zod@0.11.2
-  - '@zod-to-form/react@0.11.1'
-  - '@zod-to-form/vite@0.4.6'
+  - langium-zod@0.12.0
+  - '@zod-to-form/core@0.11.3'
+  - '@zod-to-form/react@0.11.2'
+  - '@zod-to-form/vite@0.4.7'
   # PR #353: @lspeasy/client 3.1.5 pulls in @lspeasy/core 2.6.0 as a new
   # transitive resolution; both were too freshly-published for the age gate,
   # which blocked `pnpm install` (not a real breaking change in the bump).
@@ -55,10 +56,10 @@ overrides:
   # to one version regardless of the peer ranges.
   react: 19.2.8
   react-dom: 19.2.8
-  langium-zod: 0.11.2
+  langium-zod: 0.12.0
   x-to-zod: ^0.8.0
-  '@zod-to-form/core': 0.11.2
-  '@zod-to-form/react': 0.11.1
+  '@zod-to-form/core': 0.11.3
+  '@zod-to-form/react': 0.11.2
   codemirror: 6.0.2
   '@radix-ui/react-compose-refs': 1.1.2
   '@radix-ui/react-primitive': 2.1.4

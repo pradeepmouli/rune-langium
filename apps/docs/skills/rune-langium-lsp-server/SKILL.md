@@ -25,13 +25,14 @@ into the same server lifecycle.
 - Creating multiple servers in the same process — each server maintains its own Langium workspace index; sharing a workspace across servers requires custom `ServiceRegistry` wiring. (`createRuneLspServer`)
 - Normal usage — prefer `createRuneLspServer()` which calls this internally. (`createConnectionAdapter`)
 
-API surface: 2 functions, 1 classes, 1 types
+API surface: 2 functions, 2 classes, 1 types
 
 ## Quick Reference
 
 **LSP Server:** `createRuneLspServer` (Create a fully-wired Rune DSL LSP server backed by `@lspeasy/server`), `createConnectionAdapter` (Create a `vscode-languageserver`-compatible `Connection` backed by an
 `@lspeasy/server` `LSPServer`), `RuneLspServer` (A fully-wired Rune DSL LSP server instance)
 **cf-durable-object-transport:** `DurableObjectWebSocketTransport`
+**document-update-handler:** `RuneDocumentUpdateHandler`
 
 ## References
 
