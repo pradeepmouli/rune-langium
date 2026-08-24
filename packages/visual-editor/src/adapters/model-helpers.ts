@@ -11,6 +11,7 @@
  */
 
 import { RAW_DSL_TYPE } from '@rune-langium/codegen/rosetta';
+import type { TypeOption } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Cardinality
@@ -62,6 +63,33 @@ export function getTypeRefText(typeCall: TypeCallShape | undefined): string | un
 /** Get display text from a Reference-like object. */
 export function getRefText(ref: ReferenceShape | undefined): string | undefined {
   return ref?.$refText;
+}
+
+/**
+ * Resolve a (possibly namespace-qualified) reference-text ref against a
+ * flat list of `TypeOption`s, returning the matching option's canonical
+ * `value`, or `null` if there's no match.
+ *
+ * `refText` is either a bare name (globally unique among candidates of the
+ * SAME referenceable kind, so it matches an option's `label` directly) or a
+ * namespace-qualified `${namespace}.${name}` string — written by e.g.
+ * `disambiguateTypeRef` in `editor-store.ts` when the bare name collides
+ * elsewhere in the graph. That qualified shape is exactly
+ * `qualifiedExportPath`'s format, i.e. identical to a graph-backed option's
+ * canonical `value`. Try `value` first so a qualified cross-namespace ref
+ * still resolves, instead of only ever matching a bare `label` (Codex
+ * review, PR #494).
+ *
+ * Callers MUST pass an already-scoped `options` list (e.g. func-kind-only
+ * for a Function's `superFunction`), not the full unfiltered type list —
+ * bare-name uniqueness is only guaranteed within that scope, and matching
+ * against every kind risks an unrelated same-named option (a different
+ * kind, or a different namespace) winning the bare-label fallback (Codex
+ * review, PR #494).
+ */
+export function resolveRefTextToOptionValue(refText: string | undefined, options: TypeOption[]): string | null {
+  if (!refText) return null;
+  return options.find((opt) => opt.value === refText || opt.label === refText)?.value ?? null;
 }
 
 // ---------------------------------------------------------------------------

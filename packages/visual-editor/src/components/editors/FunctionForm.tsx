@@ -41,7 +41,9 @@ import { Field, FieldError, FieldGroup, FieldLegend, FieldSet } from '@rune-lang
 import { Input } from '@rune-langium/design-system/ui/input';
 import { Textarea } from '@rune-langium/design-system/ui/textarea';
 import { Button } from '@rune-langium/design-system/ui/button';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { Plus } from 'lucide-react';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { AttributeRow } from './AttributeRow.js';
@@ -50,7 +52,13 @@ import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
-import { getTypeRefText, parseCardinality, getExpressionDisplayText } from '../../adapters/model-helpers.js';
+import {
+  getTypeRefText,
+  getRefText,
+  resolveRefTextToOptionValue,
+  parseCardinality,
+  getExpressionDisplayText
+} from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useStableKey } from '../../hooks/useStableKey.js';
@@ -113,6 +121,12 @@ export interface FunctionFormProps {
    */
   readOnly?: boolean;
   /**
+   * True when the node's source file is a refOnly curated reference.
+   * Surfaces a "Reference Only" pill in the header, matching OtherForm's
+   * treatment.
+   */
+  refOnly?: boolean;
+  /**
    * UI/editor metadata for the node (namespace, isReadOnly, errors,
    * comments, ...). Required — `data` is the pure domain payload and no
    * longer carries any UI metadata (Phase 3 step 3).
@@ -134,6 +148,7 @@ function FunctionForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
+  refOnly,
   meta: nodeMeta
 }: FunctionFormProps) {
   const d = data as any;
@@ -226,6 +241,44 @@ function FunctionForm({
 
   const outputType = getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '';
   const outputValue = outputType ? (availableTypes.find((o) => o.label === outputType)?.value ?? '') : '';
+
+  // ---- Parent function (superFunction) --------------------------------------
+  // `InheritedMembersSection` alone is not an equivalent fallback for
+  // showing the parent relationship — it renders nothing when the parent is
+  // unresolved (not yet loaded/hydrated) or has no inputs, which would
+  // silently hide `extends` the way OtherForm never did (Codex review,
+  // PR #494). Mirrors DataTypeForm's / EnumForm's own Extends field: the
+  // displayed name comes straight off `d.superFunction`'s ref text
+  // (resolution-independent), while `parentValue`/`parentOptions` drive the
+  // editable selector.
+
+  const handleParentSelect = useCallback(
+    (value: string | null) => {
+      const label = value ? (availableTypes.find((o) => o.value === value)?.label ?? '') : '';
+      // Mirror the selection into AST-canonical `superFunction.$refText` so
+      // the form stays consistent until the external graph push round-trips
+      // back through `useExternalSync`.
+      form.setValue('superFunction.$refText' as never, label as never, { shouldDirty: true });
+      actions.setFunctionParent(nodeId, value);
+    },
+    [nodeId, actions, availableTypes, form]
+  );
+
+  const superFunctionName = getRefText(d.superFunction);
+  // Exclude by canonical node id, not bare name — two functions in
+  // different namespaces may legitimately share a name, and only the
+  // node ITSELF should be excluded from its own parent options (Codex
+  // review, PR #494).
+  const parentOptions = availableTypes.filter((opt) => opt.kind === 'func' && opt.value !== nodeId);
+  // Resolve against `parentOptions` (func-kind, self-excluded), NOT the
+  // unfiltered `availableTypes` — a bare `superFunctionName` is only
+  // guaranteed unique among candidates a Function may actually extend.
+  // Matching against every kind risked a same-named Data/Enum/etc. option
+  // earlier in `availableTypes` winning over the real function (Codex
+  // review, PR #494). See `resolveRefTextToOptionValue`'s doc comment for
+  // why a bare-label match alone would also fail to resolve a qualified
+  // cross-namespace parent.
+  const parentValue = resolveRefTextToOptionValue(superFunctionName, parentOptions);
 
   // ---- Input param helpers -------------------------------------------------
 
@@ -331,7 +384,37 @@ function FunctionForm({
             nameAriaLabel="Function type name"
             className={INSPECTOR_FORM_HEADER_CLASS}
             onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+            trailing={
+              refOnly ? (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Reference Only
+                </Badge>
+              ) : undefined
+            }
           />
+
+          {/* Extends (superFunction) — mirrors DataTypeForm's / EnumForm's
+              own editable Extends FieldSet; see superFunctionName's doc
+              comment above for why InheritedMembersSection alone isn't
+              sufficient. */}
+          <FieldSet className="gap-1.5">
+            <FieldLegend variant="label" className="mb-0 text-muted-foreground">
+              Extends
+            </FieldLegend>
+            <TypeReferenceField
+              value={parentValue}
+              displayName={superFunctionName}
+              options={parentOptions}
+              onSelect={handleParentSelect}
+              placeholder="Select parent function..."
+              allowClear
+              emptyLabel="No parent function"
+              filterKinds={['func']}
+              onNavigateToNode={onNavigateToNode}
+              allNodeIds={allNodeIds}
+              disabled={isReadOnly}
+            />
+          </FieldSet>
 
           {/* Input Parameters — editable AttributeRow list via useFieldArray,
               mirrors the Members section in DataTypeForm (DRY / R-func-input). */}
@@ -431,28 +514,21 @@ function FunctionForm({
               Function Body
             </FieldLegend>
 
-            {/* Aliases (shortcuts) */}
+            {/* Aliases (shortcuts) — always non-editable derived content,
+                regardless of isReadOnly (mirrors the pre-existing Textarea
+                fallback's hardcoded `readOnly`). renderExpressionEditor's
+                rich editor has no readOnly awareness of its own; calling
+                it unconditionally let users type inside a fully-
+                interactive-looking ExpressionBuilder whose changes
+                silently never persist (Codex review, PR #494). */}
             {(d.shortcuts ?? []).map((shortcut: any, i: number) => {
               const aliasText = getCstText(shortcut.expression);
               return (
                 <div key={getKey(shortcut)} data-slot="alias-section" className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-muted-foreground">alias {shortcut.name ?? `#${i}`}</span>
-                  {renderExpressionEditor ? (
-                    renderExpressionEditor({
-                      value: aliasText,
-                      onChange: () => {},
-                      onBlur: () => {},
-                      placeholder: 'Alias expression...',
-                      expressionAst: shortcut.expression
-                    })
-                  ) : (
-                    <Textarea
-                      value={aliasText}
-                      readOnly
-                      rows={1}
-                      className="text-sm font-mono resize-none bg-muted/30"
-                    />
-                  )}
+                  <pre className="studio-scroll text-xs font-mono bg-muted/30 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+                    {aliasText || '(empty)'}
+                  </pre>
                 </div>
               );
             })}
@@ -484,7 +560,17 @@ function FunctionForm({
                   <span className="text-xs font-medium text-muted-foreground">
                     {isAdd ? 'add' : 'set'} {assignTarget}
                   </span>
-                  {renderExpressionEditor ? (
+                  {isReadOnly ? (
+                    // Read-only (including refOnly): render static text, same as
+                    // ConditionSection's own readOnly branch — renderExpressionEditor's
+                    // rich editor (e.g. ExpressionBuilder) has no readOnly awareness of
+                    // its own, so calling it here would let the user type into a
+                    // fully-interactive-looking editor whose changes silently never
+                    // persist (Codex review, PR #494).
+                    <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+                      {opText || '(empty)'}
+                    </pre>
+                  ) : renderExpressionEditor ? (
                     renderExpressionEditor({
                       value: opText,
                       onChange: (val: string) => {
@@ -503,9 +589,7 @@ function FunctionForm({
                   ) : (
                     <Textarea
                       value={opText}
-                      readOnly={isReadOnly}
                       onChange={(e) => {
-                        if (isReadOnly) return;
                         form.setValue('expressionText' as never, e.target.value as never, {
                           shouldDirty: true
                         });
@@ -527,7 +611,17 @@ function FunctionForm({
                 name={'expressionText' as never}
                 render={({ field, fieldState }) => (
                   <Field>
-                    {renderExpressionEditor ? (
+                    {isReadOnly ? (
+                      // Read-only (including refOnly): render static text, same
+                      // as ConditionSection's own readOnly branch —
+                      // renderExpressionEditor's rich editor has no readOnly
+                      // awareness of its own, so calling it here would let the
+                      // user type into a fully-interactive-looking editor whose
+                      // changes silently never persist (Codex review, PR #494).
+                      <pre className="studio-scroll text-xs font-mono bg-muted/50 rounded p-2 whitespace-pre-wrap overflow-auto max-h-40">
+                        {(field.value as string | undefined) || '(empty)'}
+                      </pre>
+                    ) : renderExpressionEditor ? (
                       renderExpressionEditor({
                         value: (field.value as string | undefined) ?? '',
                         onChange: (val: string) => {
@@ -548,7 +642,6 @@ function FunctionForm({
                         data-slot="expression-editor"
                         aria-invalid={fieldState.invalid}
                         aria-label="Function expression"
-                        disabled={isReadOnly}
                         onBlur={() => {
                           field.onBlur();
                           handleExpressionBlur();
@@ -594,6 +687,10 @@ function FunctionForm({
           <InheritedMembersSection groups={inheritedGroups} />
 
           <MetadataSection />
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </FormProvider>
     </EditorActionsProvider>

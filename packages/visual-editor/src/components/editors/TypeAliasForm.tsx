@@ -33,7 +33,10 @@
 import { useCallback } from 'react';
 import { FormProvider, useWatch } from 'react-hook-form';
 import { FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { DefinitionField } from '../DefinitionField.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
@@ -79,6 +82,12 @@ export interface TypeAliasFormProps {
    */
   readOnly?: boolean;
   /**
+   * True when the node's source file is a refOnly curated reference.
+   * Surfaces a "Reference Only" pill in the header, matching OtherForm's
+   * treatment.
+   */
+  refOnly?: boolean;
+  /**
    * UI/editor metadata for the node (namespace, isReadOnly, errors,
    * comments, ...). Required — `data` is the pure domain payload and no
    * longer carries any UI metadata (Phase 3 step 3).
@@ -98,6 +107,7 @@ function TypeAliasForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
+  refOnly,
   meta: nodeMeta
 }: TypeAliasFormProps) {
   // ---- Form setup (useZodForm + upstream useExternalSync, R11 / R4) -------
@@ -214,7 +224,24 @@ function TypeAliasForm({
             nameAriaLabel="Type alias name"
             className={INSPECTOR_FORM_HEADER_CLASS}
             onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+            trailing={
+              refOnly ? (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Reference Only
+                </Badge>
+              ) : undefined
+            }
           />
+
+          {/* Definition — read-only display (mirrors OtherForm's own
+              `{d.definition && <DefinitionField .../>}`). TypeAliasForm has
+              no editable definition affordance today (a pre-existing,
+              unrelated gap), but a refOnly alias's `definition` text must
+              stay visible now that it routes here instead of OtherForm
+              (Codex review, PR #494). */}
+          {(data as { definition?: string }).definition && (
+            <DefinitionField value={(data as { definition?: string }).definition!} />
+          )}
 
           {/* Wrapped type — the TypeAlias-specific primary affordance */}
           <FieldSet className="gap-1.5">
@@ -233,6 +260,10 @@ function TypeAliasForm({
               disabled={isReadOnly}
             />
           </FieldSet>
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </FormProvider>
     </EditorActionsProvider>

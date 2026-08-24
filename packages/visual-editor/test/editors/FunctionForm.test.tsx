@@ -19,12 +19,14 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FunctionForm } from '../../src/components/editors/FunctionForm.js';
 import type { AnyGraphNode, TypeOption, EditorFormActions } from '../../src/types.js';
 import { testMeta } from '../helpers/node-meta.js';
+import { TYPE_REF_PAYLOAD_MIME, typeRefMimeForKind } from '../../src/types/structure-view.js';
+import type { TypeRefPayload } from '../../src/types/structure-view.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeActions(): EditorFormActions<'func'> {
+function makeActions(overrides: Partial<EditorFormActions<'func'>> = {}): EditorFormActions<'func'> {
   return {
     renameType: vi.fn(),
     deleteType: vi.fn(),
@@ -37,8 +39,10 @@ function makeActions(): EditorFormActions<'func'> {
     updateInputParam: vi.fn(),
     reorderInputParam: vi.fn(),
     updateOutputType: vi.fn(),
+    setFunctionParent: vi.fn(),
     updateExpression: vi.fn(),
-    validate: vi.fn().mockReturnValue([])
+    validate: vi.fn().mockReturnValue([]),
+    ...overrides
   };
 }
 
@@ -47,6 +51,26 @@ const AVAILABLE_TYPES: TypeOption[] = [
   { value: 'test.model.Price', label: 'Price', kind: 'data', namespace: 'test.model' },
   { value: 'builtin::number', label: 'number', kind: 'builtin' },
   { value: 'builtin::string', label: 'string', kind: 'builtin' }
+];
+
+// Extends field's TypeReferenceField drop target — see the
+// 'FunctionForm – Extends (superFunction)' describe block below.
+function buildDataTransfer(payload: TypeRefPayload): DataTransfer {
+  const store = new Map<string, string>();
+  store.set(TYPE_REF_PAYLOAD_MIME, JSON.stringify(payload));
+  store.set(typeRefMimeForKind(payload.kind), '');
+  return {
+    types: Array.from(store.keys()),
+    getData: (mime: string) => store.get(mime) ?? '',
+    setData: () => {},
+    dropEffect: '' as DataTransfer['dropEffect'],
+    effectAllowed: 'link' as DataTransfer['effectAllowed']
+  } as unknown as DataTransfer;
+}
+
+const EXTENDS_TYPES: TypeOption[] = [
+  ...AVAILABLE_TYPES,
+  { value: 'test.model.BaseFunction', label: 'BaseFunction', kind: 'func', namespace: 'test.model' }
 ];
 
 function makeFuncData(overrides: Partial<AnyGraphNode> = {}): AnyGraphNode {
@@ -608,7 +632,13 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
     ).toBeDefined();
   });
 
-  it('passes the bare RHS expression text to renderExpressionEditor for an alias (shortcut), with a no-op onChange', () => {
+  it('renders an alias (shortcut) as static text and never calls renderExpressionEditor for it', () => {
+    // Aliases are derived, non-editable content regardless of isReadOnly —
+    // renderExpressionEditor's rich editor has no readOnly awareness of its
+    // own, so calling it (even with a no-op onChange) let users type inside
+    // a fully-interactive-looking ExpressionBuilder whose changes silently
+    // never persisted (Codex review, PR #494). The bare RHS text must still
+    // render, just statically.
     const data = makeFuncData({
       operations: [],
       shortcuts: [
@@ -623,7 +653,7 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
     const renderExpressionEditor = vi.fn((props: any) => <div data-testid="slot-value">{props.value}</div>);
     const actions = makeActions();
 
-    render(
+    const { container } = render(
       <FunctionForm
         meta={testMeta('test.model')}
         nodeId="fn1"
@@ -634,18 +664,9 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
       />
     );
 
-    expect(renderExpressionEditor).toHaveBeenCalled();
-    const call = renderExpressionEditor.mock.calls.find((c: any) => c[0].value === 'rate * 0.9');
-    expect(
-      call,
-      'renderExpressionEditor must receive the bare alias RHS text, not "alias discountedRate: rate * 0.9"'
-    ).toBeDefined();
-
-    // Alias editing isn't implemented via ANY editor today (not a lens gap) —
-    // onChange is a deliberate no-op. Confirm it doesn't throw and doesn't
-    // reach any store action.
-    expect(() => call![0].onChange('something else')).not.toThrow();
-    expect(actions.updateExpression).not.toHaveBeenCalled();
+    expect(renderExpressionEditor).not.toHaveBeenCalled();
+    const aliasSection = container.querySelector('[data-slot="alias-section"]');
+    expect(aliasSection?.textContent).toContain('rate * 0.9');
   });
 
   it('offers an empty-state expression slot when the function has no operations yet, and its onChange reaches updateExpression via the form field on blur', () => {
@@ -685,5 +706,172 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
 
     fireEvent.click(screen.getByTestId('commit-blur'));
     expect(actions.updateExpression).toHaveBeenCalledWith('fn1', 'x + 1');
+  });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into FunctionForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <FunctionForm
+        meta={testMeta('test.model', {
+          errors: [{ nodeId: 'fn1', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
+
+  // See Codex review, PR #494: InheritedMembersSection alone isn't an
+  // equivalent fallback for a refOnly Function's superFunction -- it
+  // renders nothing when the parent is unresolved or has no inputs. The
+  // Extends field must show the ref text regardless of resolution, and
+  // (per follow-up: function inheritance was never editable at all,
+  // unlike Data/Enum's own Extends fields) must be a real editable
+  // selector, not a static display.
+  describe('FunctionForm – Extends (superFunction)', () => {
+    it('shows the superFunction ref text even when the parent cannot be resolved', () => {
+      render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData({ superFunction: { $refText: 'BaseFunction' } } as any)}
+          availableTypes={AVAILABLE_TYPES}
+          actions={makeActions()}
+          // No `allNodes`/nodeRepository supplied -- superFunction is
+          // unresolvable, so InheritedMembersSection's own groups are empty.
+        />
+      );
+
+      expect(screen.getByText('Extends')).toBeDefined();
+      expect(screen.getByText('BaseFunction')).toBeDefined();
+    });
+
+    it('shows the empty-state placeholder when the function has no superFunction', () => {
+      render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData()}
+          availableTypes={AVAILABLE_TYPES}
+          actions={makeActions()}
+        />
+      );
+
+      expect(screen.getByText('No parent function')).toBeDefined();
+    });
+
+    it('accepts a Func drop on the Extends TypeReferenceField (calls setFunctionParent)', () => {
+      const setFunctionParent = vi.fn();
+      const { container } = render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData()}
+          availableTypes={EXTENDS_TYPES}
+          actions={makeActions({ setFunctionParent })}
+        />
+      );
+
+      // The Extends TypeReferenceField is the first [data-slot="type-reference"]
+      // drop target -- it appears before the per-input AttributeRow fields.
+      const dropTargets = container.querySelectorAll('[data-slot="type-reference"]');
+      expect(dropTargets.length).toBeGreaterThan(0);
+      const extendsDropTarget = dropTargets[0]!;
+
+      const funcPayload: TypeRefPayload = {
+        rune: 'type-ref',
+        namespaceUri: 'test.model',
+        typeId: 'test.model.BaseFunction',
+        typeName: 'BaseFunction',
+        kind: 'Func'
+      };
+
+      act(() => {
+        fireEvent.drop(extendsDropTarget, { dataTransfer: buildDataTransfer(funcPayload) });
+      });
+
+      expect(setFunctionParent).toHaveBeenCalledWith('fn1', 'test.model.BaseFunction');
+    });
+
+    it('rejects a Data drop on the Extends TypeReferenceField (does not call setFunctionParent)', () => {
+      const setFunctionParent = vi.fn();
+      const { container } = render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData()}
+          availableTypes={EXTENDS_TYPES}
+          actions={makeActions({ setFunctionParent })}
+        />
+      );
+
+      const dropTargets = container.querySelectorAll('[data-slot="type-reference"]');
+      const extendsDropTarget = dropTargets[0]!;
+
+      const dataPayload: TypeRefPayload = {
+        rune: 'type-ref',
+        namespaceUri: 'test.model',
+        typeId: 'test.model.Trade',
+        typeName: 'Trade',
+        kind: 'Data'
+      };
+
+      act(() => {
+        fireEvent.drop(extendsDropTarget, { dataTransfer: buildDataTransfer(dataPayload) });
+      });
+
+      expect(setFunctionParent).not.toHaveBeenCalled();
+    });
+
+    it('disables the Extends field when the function is read-only', () => {
+      const { container } = render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData()}
+          availableTypes={EXTENDS_TYPES}
+          actions={makeActions()}
+          readOnly
+        />
+      );
+
+      const extendsTrigger = container.querySelector('[data-slot="type-reference"] [data-slot="type-picker-trigger"]');
+      expect(extendsTrigger).not.toBeNull();
+      expect(extendsTrigger).toBeDisabled();
+    });
+
+    // See Codex review, PR #494: resolving a bare superFunction ref against
+    // the FULL (unfiltered) availableTypes list risked a same-named option
+    // of a different kind winning the bare-label match instead of the real
+    // function. TypeChip's `data-kind` attribute (mapped only for
+    // Data/Choice/Enum/Record/TypeAlias/BasicType, not Func) makes this
+    // observable: if the wrong-kind decoy won, the chip would show
+    // data-kind="Data" instead of the unmapped 'Unresolved' fallback.
+    it('resolves the func-kind parent, not a same-named option of a different kind', () => {
+      const decoyAndRealOptions: TypeOption[] = [
+        // Decoy appears FIRST in array order -- with the pre-fix bug
+        // (matching against the unfiltered availableTypes list), this
+        // wrong-kind option would win the bare-label match.
+        { value: 'test.model.BaseFunction', label: 'BaseFunction', kind: 'data', namespace: 'test.model' },
+        { value: 'other.BaseFunction', label: 'BaseFunction', kind: 'func', namespace: 'other' }
+      ];
+      const { container } = render(
+        <FunctionForm
+          meta={testMeta('test.model')}
+          nodeId="fn1"
+          data={makeFuncData({ superFunction: { $refText: 'BaseFunction' } } as any)}
+          availableTypes={decoyAndRealOptions}
+          actions={makeActions()}
+        />
+      );
+
+      const extendsTrigger = container.querySelector('[data-slot="type-reference"] [data-slot="type-picker-trigger"]');
+      expect(extendsTrigger).not.toBeNull();
+      expect(extendsTrigger?.getAttribute('data-kind')).not.toBe('Data');
+    });
   });
 });

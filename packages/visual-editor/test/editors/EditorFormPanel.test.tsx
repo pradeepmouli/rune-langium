@@ -375,9 +375,11 @@ describe('EditorFormPanel', () => {
 
   // ---- refOnly routing -------------------------------------------------------
 
-  it('renders OtherForm with "Details for" label for a refOnly covered type (data)', () => {
-    // refOnly entries (curated reference-only, no source text) always route to
-    // OtherForm with the "Reference Only" pill regardless of their kind.
+  it('renders DataTypeForm read-only (not OtherForm) for a refOnly covered type (data)', () => {
+    // refOnly entries (curated reference-only, no source text) route through
+    // their kind's own form — same tabs/sections as the editable case, with
+    // every field disabled — rather than forking to the much more limited
+    // OtherForm. OtherForm is reserved for kinds with no form at all.
     render(
       <EditorFormPanel
         nodeData={makeNodeData({ $type: 'Data' })}
@@ -390,13 +392,42 @@ describe('EditorFormPanel', () => {
     );
 
     const panel = screen.getByRole('complementary');
-    expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
-    // OtherForm renders [data-slot="type-header-namespace"], DataTypeForm does not.
+    // aria-label tracks which component renders (DataTypeForm here), not
+    // readOnly-ness — matches the established "Edit X" convention for any
+    // covered-kind render (see the isReadOnly-only test above).
+    expect(panel.getAttribute('aria-label')).toBe('Edit Trade');
     const nsSpan = panel.querySelector('[data-slot="type-header-namespace"]');
     expect(nsSpan).not.toBeNull();
     expect(nsSpan!.textContent).toBe('test.model');
-    // DataTypeForm must NOT be rendered for refOnly entries.
+    // DataTypeForm (not OtherForm) renders for a refOnly covered kind.
+    expect(panel.querySelector('[data-slot="data-type-form"]')).not.toBeNull();
+    // The "Reference Only" pill still surfaces, now via DataTypeForm's own
+    // TypeHeader trailing slot instead of OtherForm's.
+    expect(screen.getByText('Reference Only')).toBeDefined();
+    // Read-only: the name renders as static text, not an editable input, and
+    // the "Add attribute" control is hidden.
+    expect(panel.querySelector('[data-slot="type-name-input"]')).toBeNull();
+    expect(panel.querySelector('[data-slot="add-attribute-btn"]')).toBeNull();
+  });
+
+  it('renders OtherForm with "Reference Only" pill for a refOnly uncovered kind (record)', () => {
+    // record/basicType/annotation have no editor form implementation at all,
+    // so refOnly still falls back to OtherForm for these kinds.
+    render(
+      <EditorFormPanel
+        nodeData={makeNodeData({ $type: 'RosettaRecordType' })}
+        meta={testMeta('test.model')}
+        nodeId="node-1"
+        refOnly={true}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
     expect(panel.querySelector('[data-slot="data-type-form"]')).toBeNull();
+    expect(screen.getByText('Reference Only')).toBeDefined();
   });
 
   // ---- isHydrating loading state -------------------------------------------
@@ -436,6 +467,33 @@ describe('EditorFormPanel', () => {
 
     expect(screen.queryByLabelText('Loading namespace')).toBeNull();
     expect(screen.getAllByText('Data').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('falls back to OtherForm for a still-deferred stub once isHydrating goes false (stuck/failed hydration)', () => {
+    // If a namespace's on-demand hydration request fails,
+    // `dequeuePendingHydration` removes it from the pending list WITHOUT
+    // clearing `meta.deferred` or replacing the stub `data` — so
+    // `isHydrating` flips back to false while `nodeData` is still just
+    // `{$type, name}` (see ExplorePerspective.tsx's `selectedNodeIsHydrating`
+    // and App.tsx's hydration-failure handler). Dispatching that stub into a
+    // covered kind's rich form would render empty/misleading tabs and
+    // sections. The panel must keep using the stub-tolerant OtherForm
+    // instead (Codex review, PR #494).
+    render(
+      <EditorFormPanel
+        nodeData={{ $type: 'Data', name: 'Trade' } as unknown as AnyGraphNode}
+        meta={testMeta('cdm.product', { deferred: true })}
+        nodeId="node-1"
+        isHydrating={false}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    const panel = screen.getByRole('complementary');
+    expect(panel.getAttribute('aria-label')).toBe('Details for Trade');
+    expect(panel.querySelector('[data-slot="data-type-form"]')).toBeNull();
+    expect(screen.queryByText(/Loading/)).toBeNull();
   });
 
   // ---- synonymSourceOptions threading -------------------------------------

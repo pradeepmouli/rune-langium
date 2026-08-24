@@ -24,7 +24,7 @@ import { resolveNodeId } from './TypeLink.js';
 import { NamespaceTreePicker } from './NamespaceTreePicker.js';
 import { TypeChip, type TypeChipKind } from './structure/TypeChip.js';
 import { useTypeRefDrop } from '../../hooks/useTypeRefDrop.js';
-import type { TypeRefPayload } from '../../types/structure-view.js';
+import { TYPE_REF_KINDS, type TypeRefPayload } from '../../types/structure-view.js';
 import type { NavigateToNodeCallback, TypeKind, TypeOption } from '../../types.js';
 
 export interface TypeReferenceFieldProps {
@@ -60,8 +60,10 @@ function toChipKind(kind: TypeOption['kind'] | undefined): TypeChipKind {
   return (kind && KIND_TO_CHIP[kind]) ?? 'Unresolved';
 }
 
-// Valid attribute type-ref kinds for the whole-field drop target. Func and
-// Annotation are draggable from the explorer but never valid here.
+// Default whole-field drop kinds when a caller supplies no `filterKinds` —
+// the historical attribute-type-ref set (an attribute can never be typed
+// as a Func or Annotation). Callers that DO supply `filterKinds` are not
+// capped by this list — see `acceptKinds` below.
 const ATTR_DROP_KINDS: ReadonlyArray<TypeRefPayload['kind']> = [
   'Data',
   'Choice',
@@ -130,7 +132,13 @@ export function TypeReferenceField({
     if (!filterKinds || filterKinds.length === 0) return ATTR_DROP_KINDS;
     const toTypeKind = (k: TypeRefPayload['kind']): TypeKind =>
       k === 'BasicType' ? 'basicType' : k === 'TypeAlias' ? 'typeAlias' : (k.toLowerCase() as TypeKind);
-    return ATTR_DROP_KINDS.filter((k) => filterKinds.includes(toTypeKind(k)));
+    // An explicit `filterKinds` is the caller's own authorization for which
+    // drop kinds are semantically valid on THIS field — it must not be
+    // capped by ATTR_DROP_KINDS's attribute-type-ref default (which
+    // deliberately excludes Func/Annotation). Derive from the full
+    // TYPE_REF_KINDS set instead, so e.g. FunctionForm's Extends field
+    // (filterKinds: ['func']) can accept a dropped Function.
+    return TYPE_REF_KINDS.filter((k) => filterKinds.includes(toTypeKind(k)));
   }, [disabled, readOnly, filterKinds]);
 
   const handleDrop = useCallback((payload: TypeRefPayload) => onSelect(payload.typeId), [onSelect]);

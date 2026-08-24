@@ -35,7 +35,9 @@
 import { useCallback } from 'react';
 import { FormProvider } from 'react-hook-form';
 import { FieldGroup, FieldLegend, FieldSet } from '@rune-langium/design-system/ui/field';
+import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
+import { ErrorsSection } from '../ErrorsSection.js';
 import { ChoiceOptionRow } from './ChoiceOptionRow.js';
 import { TypeSelector } from './TypeSelector.js';
 import { MetadataSection } from './MetadataSection.js';
@@ -81,6 +83,12 @@ export interface ChoiceFormProps {
    */
   readOnly?: boolean;
   /**
+   * True when the node's source file is a refOnly curated reference.
+   * Surfaces a "Reference Only" pill in the header, matching OtherForm's
+   * treatment.
+   */
+  refOnly?: boolean;
+  /**
    * UI/editor metadata for the node (namespace, isReadOnly, errors,
    * comments, ...). Required — `data` is the pure domain payload and no
    * longer carries any UI metadata (Phase 3 step 3).
@@ -103,6 +111,7 @@ function ChoiceForm({
   onNavigateToNode,
   allNodeIds,
   readOnly: readOnlyProp,
+  refOnly,
   meta: nodeMeta
 }: ChoiceFormProps) {
   const d = data as any;
@@ -224,6 +233,13 @@ function ChoiceForm({
             nameAriaLabel="Choice type name"
             className={INSPECTOR_FORM_HEADER_CLASS}
             onReveal={onNavigateToNode ? () => onNavigateToNode(nodeId) : undefined}
+            trailing={
+              refOnly ? (
+                <Badge variant="outline" className="text-xs text-muted-foreground">
+                  Reference Only
+                </Badge>
+              ) : undefined
+            }
           />
 
           {/* Options */}
@@ -268,6 +284,10 @@ function ChoiceForm({
             onSynonymAdd={handleAddSynonym}
             onSynonymRemove={handleRemoveSynonym}
           />
+
+          {/* Domain/graph-level errors (mirrors OtherForm's Errors section;
+              Codex review, PR #494) */}
+          <ErrorsSection errors={nodeMeta.errors} />
         </div>
       </EditorActionsProvider>
     </FormProvider>

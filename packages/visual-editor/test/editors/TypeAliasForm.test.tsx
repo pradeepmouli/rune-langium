@@ -297,4 +297,55 @@ describe('TypeAliasForm – Phase 5d / US3 z2f migration contract', () => {
     const argsSlot = container.querySelector('[data-slot="typecall-arguments"]');
     expect(argsSlot).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // Definition display (read-only) — see Codex review, PR #494: a refOnly
+  // TypeAlias's `definition` was silently hidden once it routed here instead
+  // of OtherForm, which always displayed `d.definition` when present.
+  // -------------------------------------------------------------------------
+
+  it('renders the definition text when present on the node', () => {
+    render(
+      <TypeAliasForm
+        meta={testMeta('test.aliases')}
+        nodeId="test.aliases.ShortText"
+        data={makeTypeAliasNode({ definition: 'A short text alias' })}
+        actions={makeActions()}
+        availableTypes={AVAILABLE_TYPES}
+      />
+    );
+
+    expect(screen.getByText('A short text alias')).toBeDefined();
+  });
+
+  it('renders no definition field when the node has no definition', () => {
+    const { container } = render(
+      <TypeAliasForm
+        meta={testMeta('test.aliases')}
+        nodeId="test.aliases.ShortText"
+        data={makeTypeAliasNode({ definition: undefined })}
+        actions={makeActions()}
+        availableTypes={AVAILABLE_TYPES}
+      />
+    );
+
+    expect(container.querySelector('[data-slot="definition-field"]')).toBeNull();
+  });
+
+  // See Codex review, PR #494: a refOnly node's domain/graph-level errors
+  // must stay visible once it routes into TypeAliasForm instead of OtherForm.
+  it('renders domain/graph-level validation errors from node meta', () => {
+    render(
+      <TypeAliasForm
+        meta={testMeta('test.aliases', {
+          errors: [{ nodeId: 'test.aliases.ShortText', severity: 'error', message: 'Circular inheritance detected' }]
+        })}
+        nodeId="test.aliases.ShortText"
+        data={makeTypeAliasNode()}
+        actions={makeActions()}
+        availableTypes={AVAILABLE_TYPES}
+      />
+    );
+    expect(screen.getByText('Circular inheritance detected')).toBeDefined();
+  });
 });

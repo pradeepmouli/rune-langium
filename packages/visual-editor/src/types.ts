@@ -270,6 +270,8 @@ export interface FuncFormActions extends CommonFormActions {
   reorderInputParam(nodeId: string, fromIndex: number, toIndex: number): void;
   updateOutputType(nodeId: string, typeName: string): void;
   updateExpression(nodeId: string, expressionText: string): void;
+  /** Set (or clear, with `null`) a Function's `superFunction` parent reference. */
+  setFunctionParent(nodeId: string, parentId: string | null): void;
 }
 
 /** TypeAlias-specific editor actions. */
