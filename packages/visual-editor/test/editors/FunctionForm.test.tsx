@@ -700,4 +700,40 @@ describe('FunctionForm – renderExpressionEditor slot contract (Phase 2 verific
     );
     expect(screen.getByText('Circular inheritance detected')).toBeDefined();
   });
+
+  // See Codex review, PR #494: InheritedMembersSection alone isn't an
+  // equivalent fallback for a refOnly Function's superFunction -- it
+  // renders nothing when the parent is unresolved or has no inputs. A
+  // dedicated read-only Extends field must show the ref text regardless.
+  it('renders a read-only Extends field for superFunction even when the parent cannot be resolved', () => {
+    render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData({ superFunction: { $refText: 'BaseFunction' } } as any)}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+        // No `allNodes`/nodeRepository supplied -- superFunction is
+        // unresolvable, so InheritedMembersSection's own groups are empty.
+      />
+    );
+
+    const extendsField = screen.getByText('Extends').closest('[data-slot="extends-field"]');
+    expect(extendsField).not.toBeNull();
+    expect(extendsField?.textContent).toContain('BaseFunction');
+  });
+
+  it('renders no Extends field when the function has no superFunction', () => {
+    const { container } = render(
+      <FunctionForm
+        meta={testMeta('test.model')}
+        nodeId="fn1"
+        data={makeFuncData()}
+        availableTypes={AVAILABLE_TYPES}
+        actions={makeActions()}
+      />
+    );
+
+    expect(container.querySelector('[data-slot="extends-field"]')).toBeNull();
+  });
 });

@@ -44,6 +44,7 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Badge } from '@rune-langium/design-system/ui/badge';
 import { TypeHeader, INSPECTOR_FORM_HEADER_CLASS } from '../TypeHeader.js';
 import { ErrorsSection } from '../ErrorsSection.js';
+import { ExtendsField } from '../ExtendsField.js';
 import { Plus } from 'lucide-react';
 import { TypeReferenceField } from './TypeReferenceField.js';
 import { AttributeRow } from './AttributeRow.js';
@@ -52,7 +53,12 @@ import { AnnotationSection } from './AnnotationSection.js';
 import { ConditionSection } from './ConditionSection.js';
 import { InheritedMembersSection } from './InheritedMembersSection.js';
 import { EditorActionsProvider } from '../forms/sections/EditorActionsContext.js';
-import { getTypeRefText, parseCardinality, getExpressionDisplayText } from '../../adapters/model-helpers.js';
+import {
+  getTypeRefText,
+  getRefText,
+  parseCardinality,
+  getExpressionDisplayText
+} from '../../adapters/model-helpers.js';
 import { useAutoSave } from '../../hooks/useAutoSave.js';
 import { useLatestRef } from '../../hooks/useLatestRef.js';
 import { useStableKey } from '../../hooks/useStableKey.js';
@@ -236,6 +242,15 @@ function FunctionForm({
   const outputType = getTypeRefText(d.output?.typeCall) ?? d.outputType ?? '';
   const outputValue = outputType ? (availableTypes.find((o) => o.label === outputType)?.value ?? '') : '';
 
+  // Read-only parent-function display: `InheritedMembersSection` alone is
+  // not an equivalent fallback for this — it renders nothing when the
+  // parent is unresolved (not yet loaded/hydrated) or has no inputs, which
+  // would silently hide the `extends` relationship that OtherForm always
+  // showed via ExtendsField (Codex review, PR #494). No editing action
+  // exists for a function's superFunction today — same as OtherForm, this
+  // is a display-only field.
+  const superFunctionName = getRefText(d.superFunction);
+
   // ---- Input param helpers -------------------------------------------------
 
   // Derive the read-only display projection for useExpressionAutocomplete.
@@ -348,6 +363,12 @@ function FunctionForm({
               ) : undefined
             }
           />
+
+          {/* Extends (superFunction) — read-only, mirrors OtherForm's
+              ExtendsField; see superFunctionName's doc comment above. */}
+          {superFunctionName && (
+            <ExtendsField parentName={superFunctionName} onNavigateToNode={onNavigateToNode} allNodeIds={allNodeIds} />
+          )}
 
           {/* Input Parameters — editable AttributeRow list via useFieldArray,
               mirrors the Members section in DataTypeForm (DRY / R-func-input). */}
