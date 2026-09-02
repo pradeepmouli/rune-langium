@@ -71,6 +71,17 @@ overrides:
   # GHSA-ph9p-34f9-6g65 / CVE-2026-44705: path traversal via unsanitized prefix/postfix
   # in tmp < 0.2.6; purely transitive (no first-party imports).
   tmp: '>=0.2.6'
+  # GHSA-4cwx-7wf7-3272 / GHSA-8xcm-r25x-g524 / GHSA-m8rv-5g2x-5cg5 / GHSA-jr45-8vmc-qm54 /
+  # GHSA-v3r7-h72x-cjcm: five undici < 7.29.0 CVEs, pulled in transitively via
+  # miniflare (a deliberately-pinned stable version — see the minimumReleaseAgeExclude
+  # comment history; do not resolve by bumping miniflare to the 5.x-alpha line).
+  # Scoped to miniflare's own dependency, NOT a blanket `undici: '>=7.29.0'` override:
+  # an unbounded override unifies every undici consumer (including jsdom/vitest, which
+  # independently needs 8.x) onto one globally-resolved version, silently major-bumping
+  # undici to 8.10.1 under miniflare too — which requires Node >=22.19.0, above this
+  # workspace's own >=22.13.0 floor (caught via PR #504 Copilot review). Purely
+  # transitive (no first-party imports).
+  'miniflare>undici': '7.29.0'
 
 patchedDependencies:
   '@radix-ui/react-slot@1.2.4': patches/@radix-ui__react-slot@1.2.4.patch

@@ -45,12 +45,18 @@ When reporting a vulnerability, please include:
 We use:
 
 - **Dependabot/Renovate:** Automated dependency updates
-- **npm audit:** Regular security audits in CI/CD
+- **npm audit:** Automated audits in CI/CD (`.github/workflows/security-audit.yml`),
+  scoped to `--prod` — the blocking gate only fails on vulnerabilities reachable
+  from a production dependency. Dev-only tooling (e.g. build/test tooling used
+  solely for local development) never ships or runs in production, so a
+  dev-only finding doesn't block merges, though it's still visible via
+  GitHub's Dependabot alerts and a plain `pnpm audit` (no `--prod`) locally.
 - **GitHub Security:** Code scanning and secret scanning
 
 ### Keeping Dependencies Updated
 
-- Run `pnpm audit` regularly
+- Run `pnpm audit` regularly for the full picture (prod + dev); run
+  `pnpm audit --prod` to see only what would fail CI
 - Update dependencies with `pnpm update -r --latest`
 - Review security advisories on dependencies
 

@@ -58,14 +58,14 @@
     "@vscode/tree-sitter-wasm": "0.3.1",
     "commander": "^15.0.0",
     "exceljs": "^4.4.0",
-    "fast-xml-parser": "^5.11.0",
+    "fast-xml-parser": "^5.11.1",
     "langium": "^4.3.1",
-    "web-tree-sitter": "^0.26.13",
+    "web-tree-sitter": "^0.27.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.1",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "node-sql-parser": "^5.4.0",
@@ -73,7 +73,7 @@
     "typescript": "^7.0.2",
     "typescript-classic": "npm:typescript@6.0.3",
     "vitest": "^4.1.11",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "homepage": "https://github.com/pradeepmouli/rune-langium/tree/master/packages/codegen",
   "repository": {
