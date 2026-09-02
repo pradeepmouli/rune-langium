@@ -46,8 +46,12 @@ jobs:
       - name: Run security audit
         id: audit
         run: |
-          # Run audit and capture output
-          pnpm audit --audit-level moderate --json > audit-report.json || audit_exit_code=$?
+          # --prod: only fail the build for vulnerabilities reachable from a
+          # production dependency. Dev-only tooling (miniflare, wrangler, etc.)
+          # never ships or runs in production, so a vuln reachable only through
+          # devDependencies shouldn't block merges — it's still visible via
+          # `pnpm audit` locally and GitHub's Dependabot alerts either way.
+          pnpm audit --audit-level moderate --prod --json > audit-report.json || audit_exit_code=$?
           audit_exit_code=${audit_exit_code:-0}
 
           # If pnpm audit failed for reasons other than "vulnerabilities found",
@@ -71,8 +75,8 @@ jobs:
       - name: Display audit results
         if: steps.audit.outputs.found_vulnerabilities == 'true'
         run: |
-          echo "⚠️ Found ${{ steps.audit.outputs.vulnerability_count }} security vulnerabilities"
-          pnpm audit --audit-level moderate
+          echo "⚠️ Found ${{ steps.audit.outputs.vulnerability_count }} production-reachable security vulnerabilities"
+          pnpm audit --audit-level moderate --prod
 
       - name: Comment on PR
         if: github.event_name == 'pull_request' && steps.audit.outputs.found_vulnerabilities == 'true'
@@ -85,11 +89,11 @@ jobs:
 
             const comment = `## ⚠️ Security Audit Warning
 
-            Found ${{ steps.audit.outputs.vulnerability_count }} security vulnerabilities in dependencies.
+            Found ${{ steps.audit.outputs.vulnerability_count }} security vulnerabilities reachable from production dependencies.
 
             Please review the audit results and update vulnerable packages before merging.
 
-            Run \`pnpm audit\` locally for detailed information.`;
+            Run \`pnpm audit --prod\` locally for detailed information. (Dev-only vulnerabilities don't block this check — see \`pnpm audit\` without \`--prod\` for the full picture.)`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
