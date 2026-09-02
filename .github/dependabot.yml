@@ -45,6 +45,34 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+    ignore:
+      # apps/docs is deliberately held at typescript 6.x. typedoc 0.28.x
+      # declares a `typescript` peer of 5.0.x-6.0.x and reads the compiler's
+      # internal AST surface directly; against typescript 7 (the Go-ported
+      # native compiler) it dies at load with
+      #   TypeError: Cannot read properties of undefined
+      #   (reading 'PropertyDeclaration')   [ts4.SyntaxKind.PropertyDeclaration]
+      # taking `pnpm run build` down with it.
+      #
+      # Without this rule dependabot re-proposes the major every cycle, and
+      # this repo's auto-merge workflow can take it without waiting for a
+      # completed CI run on the resulting merge commit — silently reverting
+      # the pin and breaking the docs build.
+      #
+      # Scoped to the 7.x version range, NOT `update-types:
+      # version-update:semver-major`: dependabot's `ignore` rules apply to
+      # this whole (ecosystem, directory) update job, not to the specific
+      # manifest a dependency is declared in — a single pnpm workspace has
+      # one npm update job rooted at `/` covering every package.json. An
+      # update-types-scoped rule would silently suppress every future major
+      # bump of `typescript` workspace-wide (root, packages/core, etc. are
+      # already on 7.x), not just the 6.x->7.x bump this rule exists to
+      # block. A version-range rule blocks only that one transition.
+      #
+      # Lift this (or extend the range) once typedoc ships a release whose
+      # peer range admits typescript 7.
+      - dependency-name: 'typescript'
+        versions: ['>= 7.0.0, < 8.0.0']
     labels:
       - 'dependencies'
       - 'automated'
