@@ -19,7 +19,7 @@ overrides:
   ws: '>=8.21.0'
   uuid: '>=11.1.1'
   tmp: '>=0.2.6'
-  undici: '>=7.29.0'
+  miniflare>undici: 7.29.0
 
 patchedDependencies:
   '@radix-ui/react-compose-refs@1.1.2': 8e5e08a1552a2380c169c4af7c0682cf3baf9bfc4462c2a5d1bd75d28519128c
@@ -7788,7 +7788,7 @@ snapshots:
       open: 8.4.2
       picomatch: 4.0.7
       systeminformation: 5.33.7
-      undici: 8.10.1
+      undici: 7.29.0
       which: 4.0.0
       yocto-spinner: 1.2.2
 
@@ -11374,7 +11374,7 @@ snapshots:
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.2
-      undici: 8.10.1
+      undici: 7.29.0
       workerd: 1.20260730.1
       ws: 8.21.3
       youch: 4.1.0-beta.10
@@ -11386,7 +11386,7 @@ snapshots:
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       sharp: 0.35.2
-      undici: 8.10.1
+      undici: 7.29.0
       workerd: 1.20260831.1
       ws: 8.21.3
       youch: 4.1.0-beta.10
