@@ -57,10 +57,13 @@ unresolved reference throws instead of producing a field wrapper without a value
 Collection membership and distinct operations use structural value keys, so
 separately allocated records with the same values compare equally.
 `distinct` compares metadata payloads and retains the first matching wrapper.
-Deep navigation preserves collections at intermediate path segments. Switch cases
+Deep navigation preserves collections at intermediate path segments, including
+collection-valued `default` receivers. Switch cases
 and defaults bind `item` to the selected value. Two empty collections or two absent
 optional scalars compare equal and do not compare unequal; an empty collection
 and an absent scalar remain distinct.
+Data switch guards compare linked declaration identity and explicit supertypes,
+keeping same-named types in different namespaces distinct.
 Data subtype switch cases require a populated distinguishing field when the
 selector's declared type does not already establish that subtype. Inherited
 fields alone do not distinguish a subtype from its parent.

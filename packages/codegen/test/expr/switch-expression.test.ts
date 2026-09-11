@@ -70,17 +70,21 @@ function renderExpression(expression: RosettaExpression, options: { selfName?: s
   return 'undefined';
 }
 
-async function parseFunctions() {
+async function parseFunctions(sources: string[] = [SOURCE]) {
   const { RuneDsl } = createRuneDslServices();
-  const document = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-    SOURCE,
-    URI.parse('inmemory:///switch-expression.rosetta')
+  const documents = sources.map((source, index) =>
+    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      source,
+      URI.parse(`inmemory:///switch-expression-${index}.rosetta`)
+    )
   );
-  await RuneDsl.shared.workspace.DocumentBuilder.build([document]);
-  expect(document.parseResult.parserErrors).toEqual([]);
-  const model = document.parseResult.value;
-  if (!isRosettaModel(model)) throw new Error('expected a RosettaModel');
-  return model.elements.filter((element) => element.$type === 'RosettaFunction');
+  await RuneDsl.shared.workspace.DocumentBuilder.build(documents);
+  return documents.flatMap((document) => {
+    expect(document.parseResult.parserErrors).toEqual([]);
+    const model = document.parseResult.value;
+    if (!isRosettaModel(model)) throw new Error('expected a RosettaModel');
+    return model.elements.filter((element) => element.$type === 'RosettaFunction');
+  });
 }
 
 function execute(source: string, functionName: string): (input: Record<string, unknown>) => unknown {
@@ -122,6 +126,51 @@ function emittedFunction(functionNode: { name: string; operations: Array<{ expre
 }
 
 describe('linked switch expression rendering', () => {
+  it.each([false, true])('distinguishes same-named types across namespaces (reverse=%s)', async (reverse) => {
+    const sources = [
+      `namespace alpha
+type Foo:
+ shared int (1..1)
+type Child extends Foo:
+ own string (0..1)
+`,
+      `namespace beta
+type Foo:
+ shared int (1..1)
+`,
+      `namespace consumer
+func Cross:
+ inputs: foo alpha.Foo (1..1)
+ output: result int (1..1)
+ set result: foo switch beta.Foo then 1, default 0
+func Exact:
+ inputs: foo beta.Foo (1..1)
+ output: result int (1..1)
+ set result: foo switch beta.Foo then 1, default 0
+func Parent:
+ inputs: foo alpha.Child (1..1)
+ output: result int (1..1)
+ set result: foo switch alpha.Foo then 1, default 0`
+    ];
+    const funcs = await parseFunctions(reverse ? [...sources].reverse() : sources);
+    const compiled = new Map(
+      funcs.map((func) => {
+        const expression = renderSwitchExpression(func.operations[0]!.expression, { renderExpression });
+        if (!expression) throw new Error('expected a switch expression');
+        return [
+          func.name,
+          execute(
+            `export function ${func.name}(input: {foo: {shared: number; own?: string}}): number | undefined { return ${expression}; }`,
+            func.name
+          )
+        ];
+      })
+    );
+    expect(compiled.get('Cross')!({ foo: { shared: 4 } })).toBe(0);
+    expect(compiled.get('Exact')!({ foo: { shared: 4 } })).toBe(1);
+    expect(compiled.get('Parent')!({ foo: { shared: 4, own: 'child' } })).toBe(1);
+  });
+
   it('selects Choice option paths and binds item for plain-object runtime shapes', async () => {
     const functions = await parseFunctions();
     const node = functions.find((func) => func.name === 'PickChoice')!;

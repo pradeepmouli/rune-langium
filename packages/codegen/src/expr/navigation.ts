@@ -17,6 +17,7 @@ import {
   isShortcutDeclaration,
   isRosettaOnlyElement,
   isRosettaConditionalExpression,
+  isDefaultOperation,
   isInlineFunction,
   isFilterOperation,
   isMapOperation,
@@ -123,6 +124,7 @@ export function expressionIsMany(expr: RosettaExpression | undefined): boolean {
     return expr.function ? expressionIsMany(expr.function.body) : expressionIsMany(expr.argument);
   }
   if (isRosettaConditionalExpression(expr)) return expressionIsMany(expr.ifthen) || expressionIsMany(expr.elsethen);
+  if (isDefaultOperation(expr)) return expressionIsMany(expr.left) || expressionIsMany(expr.right);
   if (isSwitchOperation(expr))
     return expr.cases.some(
       (branch) =>
@@ -241,7 +243,7 @@ export function typeMatches(
   seen = new Set<RosettaType>()
 ): boolean {
   if (!candidate || seen.has(candidate)) return false;
-  if (candidate === goal || candidate.name === goal.name) return true;
+  if (candidate === goal) return true;
   seen.add(candidate);
   return isData(candidate) && typeMatches(candidate.superType?.ref, goal, seen);
 }

@@ -45,6 +45,57 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['', 'scheme', 'reference'])(
+    'projects collection-valued defaults through navigation (metadata=%s)',
+    async (annotation) => {
+      const metadata = annotation ? `[metadata ${annotation}]` : '';
+      const funcs = await compile(`namespace test.defaultNavigation
+type Child:
+ value int (1..1)
+func Values:
+ inputs:
+  primary Child (0..*)
+   ${metadata}
+  fallback Child (0..*)
+   ${metadata}
+ output: result int (0..*)
+ set result: (primary default fallback) -> value
+func LeftMany:
+ inputs:
+  primary Child (0..*)
+  fallback Child (0..1)
+ output: result int (0..*)
+ set result: (primary default fallback) -> value
+func RightMany:
+ inputs:
+  primary Child (0..1)
+  fallback Child (0..*)
+ output: result int (0..*)
+ set result: (primary default fallback) -> value
+func Scalar:
+ inputs:
+  primary Child (0..1)
+  fallback Child (0..1)
+ output: result int (0..1)
+ set result: (primary default fallback) -> value`);
+      const children = [{ value: 1 }, { value: 2 }];
+      const wrap = (value: { value: number }) =>
+        annotation === 'scheme' ? { value, meta: {} } : annotation === 'reference' ? { value } : value;
+      const primary = children.map(wrap);
+      const fallback = [wrap({ value: 3 })];
+      expect(funcs.Values!({ primary, fallback })).toEqual([1, 2]);
+      expect(funcs.Values!({ primary: [], fallback })).toEqual([3]);
+      expect(funcs.Values!({ primary: [], fallback: [] })).toEqual([]);
+      expect(funcs.Scalar!({ primary: children[0], fallback: children[1] })).toBe(1);
+      expect(funcs.Scalar!({ fallback: children[1] })).toBe(2);
+      expect(funcs.Scalar!({})).toBeUndefined();
+      expect(funcs.LeftMany!({ primary: children, fallback: { value: 3 } })).toEqual([1, 2]);
+      expect(funcs.LeftMany!({ primary: [], fallback: { value: 3 } })).toEqual([3]);
+      expect(funcs.RightMany!({ fallback: children })).toEqual([1, 2]);
+      expect(funcs.RightMany!({ primary: { value: 3 }, fallback: children })).toEqual([3]);
+    }
+  );
+
   it.each(['scheme', 'reference'])('normalizes switch branches for %s outputs', async (annotation) => {
     const funcs = await compile(`namespace test.switchMetadata
 func Select:
