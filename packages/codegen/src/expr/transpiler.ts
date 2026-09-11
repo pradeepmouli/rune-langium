@@ -75,6 +75,7 @@ import {
   isSwitchOperation,
   isRosettaSuperCall,
   isAttribute,
+  isChoiceOption,
   type Attribute,
   type Condition,
   type RosettaExpression,
@@ -978,8 +979,8 @@ export function transpileConstructor(expr: RosettaExpression, ctx: ExpressionTra
   }
   const pairs = expr.values
     .map((kv) => {
-      const key = kv.key.$refText ?? '?';
       const field = kv.key.ref;
+      const key = isChoiceOption(field) ? featureName(field) : (kv.key.$refText ?? '?');
       const val = isAttribute(field)
         ? prepareFunctionArgument(
             transpileExpression(kv.value, {

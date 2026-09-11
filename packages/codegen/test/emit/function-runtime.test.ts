@@ -45,6 +45,41 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['constructor', 'assignment'])('uses emitted Choice keys in %s expressions', async (mode) => {
+    const funcs = await compile(`namespace test.choiceKeys
+type Cash:
+ value int (1..1)
+type XMLTrade:
+ value int (1..1)
+choice Box:
+ Cash
+ XMLTrade
+func MakeCash:
+ inputs: amount int (1..1)
+ output: result Box (1..1)
+ ${mode === 'constructor' ? 'set result: Box { Cash: Cash { value: amount } }' : 'set result -> Cash -> value: amount'}
+func MakeTrade:
+ inputs: amount int (1..1)
+ output: result Box (1..1)
+ ${mode === 'constructor' ? 'set result: Box { XMLTrade: XMLTrade { value: amount } }' : 'set result -> XMLTrade: XMLTrade { value: amount }'}
+func MakeWrapped:
+ inputs: amount int (1..1)
+ output: result Box (0..*)
+  [metadata scheme]
+ ${mode === 'constructor' ? 'set result: Box { Cash: Cash { value: amount } }' : 'set result -> Cash -> value: amount'}
+func Read:
+ inputs: box Box (1..1)
+ output: result int (1..1)
+ set result: box switch Cash then item -> value, XMLTrade then item -> value, default 0`);
+    const cash = funcs.MakeCash!({ amount: 7 });
+    const trade = funcs.MakeTrade!({ amount: 9 });
+    expect(cash).toEqual({ cash: { value: 7 } });
+    expect(trade).toEqual({ xMLTrade: { value: 9 } });
+    expect(funcs.MakeWrapped!({ amount: 11 })).toEqual([{ value: { cash: { value: 11 } }, meta: {} }]);
+    expect(funcs.Read!({ box: cash })).toBe(7);
+    expect(funcs.Read!({ box: trade })).toBe(9);
+  });
+
   it.each(['scheme', 'reference'])('retains %s selector metadata through switch item branches', async (annotation) => {
     const funcs = await compile(`namespace test.switchSelectorMetadata
 enum Kind:

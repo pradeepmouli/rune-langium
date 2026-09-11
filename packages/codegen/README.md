@@ -50,6 +50,10 @@ retain the original metadata wrapper. Choice branches bind the projected option.
 conversions, predicates, and collection comparison keys read payloads even when
 the enclosing output requires metadata. Filters, sorting, and min/max retain the
 selected values' wrappers.
+
+Choice constructors, navigation, and assignment paths share emitted option names.
+Nested assignments select the declared Choice arm when building its value, including
+through collection and metadata boundaries.
 Mixed list literals normalize each element separately. Reducers track accumulator
 and item metadata independently, normalize the initial accumulator, and omit
 unresolved references when reducing payloads. Empty reductions return no value.

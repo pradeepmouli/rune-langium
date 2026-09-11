@@ -3,6 +3,7 @@
 
 import type { AstNode } from 'langium';
 import { fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
+import { featureName } from '../expr/navigation.js';
 import {
   getFunctionSignature as functionSignature,
   isRosettaModel,
@@ -10,6 +11,7 @@ import {
   isAttribute,
   isData,
   isChoice,
+  isChoiceOption,
   isRosettaTypeAlias,
   type RosettaFunction,
   type Attribute,
@@ -58,6 +60,7 @@ export interface RuneFuncAlias {
 export interface RuneFuncAssignmentPathSegment {
   name: string;
   many: boolean;
+  choiceOption?: boolean;
   metadataKind?: FieldMetadataKind;
 }
 
@@ -478,7 +481,10 @@ export function extractFuncs(
         for (let segment = operation.path; segment; segment = segment.next) {
           target = segment.feature.ref;
           path.push({
-            name: segment.feature.ref?.name ?? segment.feature.$refText,
+            name: isChoiceOption(target)
+              ? featureName(target)
+              : (segment.feature.ref?.name ?? segment.feature.$refText),
+            ...(isChoiceOption(target) ? { choiceOption: true } : {}),
             many: isAttribute(target) && (target.card.unbounded || (target.card.sup ?? 1) > 1),
             metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined
           });

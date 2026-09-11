@@ -52,6 +52,11 @@ export function renderFuncAssignment(
         target += '.value';
         lines.push(`  ${target} ??= {} as NonNullable<typeof ${target}>;`);
       }
+      if (segment.choiceOption) {
+        const choice = freshLocal(ctx, `__assignmentChoice${index}`);
+        lines.push(`  const ${choice} = ${target} as Extract<typeof ${target}, { ${segment.name}: unknown }>;`);
+        target = choice;
+      }
       target += `.${segment.name}`;
       many = segment.many;
       metadataKind = segment.metadataKind;
