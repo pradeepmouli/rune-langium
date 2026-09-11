@@ -499,7 +499,7 @@ export function extractFuncs(
         dispatchValue: node.dispatchValue?.value.ref?.name ?? node.dispatchValue?.value.$refText,
         superFunc: parent?.name ?? node.superFunction?.$refText,
         superFunction: parent
-          ? { name: parent.name, inputs: functionInputs(parent), output: functionOutput(parent) }
+          ? { name: parent.name, inputs: functionInputs(parent), output: functionOutput(parent), source: parent }
           : undefined,
         aliases: node.shortcuts.map((alias) => ({ name: alias.name, exprNode: alias.expression })),
         assignments,

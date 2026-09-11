@@ -87,6 +87,7 @@ import {
   type ExpressionTranspilerContext
 } from '../expr/transpiler.js';
 import { typescriptProfile, TS_LIBRARY_RUNTIME_SOURCE, TS_RUNTIME_SIDECAR_PATH } from './typescript-profile.js';
+import { CallableNames, callableExportName, type CallableDeclaration } from './callable-names.js';
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import {
   extractFuncs,
@@ -254,6 +255,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   private readonly sections: string[] = [];
   private readonly relativePath: string;
   private readonly generatedFuncs: GeneratedFunc[] = [];
+  private readonly callableNames: CallableNames;
+  private readonly singleFile: boolean;
+  private readonly localCallableAliases = new Map<string, string>();
 
   constructor(
     model: NamespaceWalkResult,
@@ -264,7 +268,25 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     this.ctx = buildEmissionContext(model, registry, this.diagnostics);
     this.typeIndex = toTypeIndexLookup(this.ctx);
     this.relativePath = getTargetRelativePath(model.namespace, 'typescript');
+    this.callableNames = new CallableNames(registry);
+    this.singleFile = options.typescript?.layout === 'single-file';
   }
+
+  private callableName = (declaration: CallableDeclaration, forceAlias = false): string => {
+    const namespace = getElementNamespace(declaration) ?? this.model.namespace;
+    const name = callableExportName(declaration);
+    const emitted = this.singleFile
+      ? this.callableNames.bundled(namespace, name)
+      : namespace === this.model.namespace
+        ? name
+        : this.callableNames.alias(namespace, name);
+    if (forceAlias && namespace === this.model.namespace) {
+      const alias = this.callableNames.alias(namespace, name);
+      if (alias !== emitted) this.localCallableAliases.set(alias, emitted);
+      return alias;
+    }
+    return emitted;
+  };
 
   emitHeader(): void {
     this.sections.push(this.buildFileHeader());
@@ -380,20 +402,26 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     for (const func of sortedFuncs) {
       const isHoisted = cyclicNames.has(func.name);
-      const funcCtx = TsNamespaceEmitter.buildFuncBodyContext(func, callGraph, this.ctx.diagnostics);
-      const group = groupsByName.get(func.name)!;
+      const funcCtx = {
+        ...TsNamespaceEmitter.buildFuncBodyContext(func, callGraph, this.ctx.diagnostics),
+        callableName: this.callableName
+      };
+      const group = groupsByName.get(func.name)!.map((variant) => ({
+        ...variant,
+        name: this.singleFile ? this.callableNames.bundled(variant.namespace, variant.name) : variant.name
+      }));
       const funcText =
         group.length === 1
-          ? TsNamespaceEmitter.emitFunc(func, funcCtx, isHoisted)
+          ? TsNamespaceEmitter.emitFunc(group[0]!, funcCtx, isHoisted)
           : renderFuncDispatchGroup(group, {
               renderSignature: (base) =>
                 `export function ${base.name}(input: ${TsNamespaceEmitter.buildFuncInputType(base)}): ${TsNamespaceEmitter.buildFuncOutputType(base)}`,
               renderSelector: (_base, attribute) => attrAccessExpr(attribute, funcCtx),
               renderBody: (variant) =>
-                TsNamespaceEmitter.emitFuncBody(
-                  variant,
-                  TsNamespaceEmitter.buildFuncBodyContext(variant, callGraph, this.ctx.diagnostics)
-                )
+                TsNamespaceEmitter.emitFuncBody(variant, {
+                  ...TsNamespaceEmitter.buildFuncBodyContext(variant, callGraph, this.ctx.diagnostics),
+                  callableName: this.callableName
+                })
             });
 
       this.sections.push('');
@@ -414,7 +442,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     }
     return {
       relativePath: this.relativePath,
-      content: this.sections.join('\n') + '\n',
+      content:
+        [...this.sections, ...[...this.localCallableAliases].map(([alias, name]) => `const ${alias} = ${name};`)].join(
+          '\n'
+        ) + '\n',
       sourceMap: this.ctx.sourceMap,
       diagnostics: this.ctx.diagnostics,
       funcs: this.generatedFuncs
@@ -443,6 +474,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         imports.set(ns, symbols);
       }
       symbols.add(symbolName);
+    };
+    const trackCallable = (declaration: CallableDeclaration) => {
+      const name = callableExportName(declaration);
+      const namespace = getElementNamespace(declaration) ?? this.model.namespace;
+      const exported = this.singleFile ? this.callableNames.bundled(namespace, name) : name;
+      const local = this.callableName(declaration);
+      trackRef(declaration, exported === local ? exported : `${exported} as ${local}`);
     };
 
     // Route every import-candidate scan through the same `resolveTypeCallTarget`
@@ -582,8 +620,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       for (const node of AstUtils.streamAllContents(doc.parseResult.value)) {
         if (isRosettaSymbolReference(node)) {
           const ref = node.symbol?.ref;
-          if (isRosettaFunction(ref) || isRosettaExternalFunction(ref)) trackRef(ref, ref.name);
-          if (isRosettaRule(ref)) trackRef(ref, `${ref.eligibility ? 'validate' : 'extract'}${ref.name}`);
+          if (isRosettaFunction(ref) || isRosettaExternalFunction(ref) || isRosettaRule(ref)) trackCallable(ref);
         }
         if (isRosettaFunction(node)) {
           const output = functionOutput(node);
@@ -594,7 +631,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
               trackRef(type, type.name);
           }
           const parent = node.superFunction?.ref;
-          if (parent) trackRef(parent, parent.name);
+          if (parent) trackCallable(parent);
         }
       }
     }
@@ -1262,6 +1299,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       attributeTypes,
       diagnostics: this.ctx.diagnostics,
       attrAccessorNames,
+      callableName: this.callableName,
       metadataAttributes: new Set(
         typeFeatures(data)
           .filter(isAttribute)
@@ -1314,7 +1352,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * Renamed from emitReportMetadata to avoid collision with the public interface method.
    */
   private buildReportMetadataText(): string {
-    const lines = buildReportRulesLines(this.ctx.rulesByName);
+    const name = this.singleFile
+      ? this.callableNames.bundled(this.model.namespace, 'runeReportRules')
+      : 'runeReportRules';
+    const lines = buildReportRulesLines(this.ctx.rulesByName, name);
     return lines.length === 0 ? '' : lines.join('\n');
   }
 
@@ -1343,15 +1384,16 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       conditionName: name,
       typeName: inputTypeName ?? name,
       attributeTypes,
-      diagnostics: this.ctx.diagnostics
+      diagnostics: this.ctx.diagnostics,
+      callableName: this.callableName
     };
 
     const exprStr = transpileExpression(rule.expression, transpilerCtx);
 
     if (rule.eligibility) {
-      return `export function validate${name}(${paramName}: ${paramType}): boolean {\n  return ${exprStr};\n}`;
+      return `export function ${this.callableName(rule)}(${paramName}: ${paramType}): boolean {\n  return ${exprStr};\n}`;
     } else {
-      return `export function extract${name}(${paramName}: ${paramType}) {\n  return ${exprStr};\n}`;
+      return `export function ${this.callableName(rule)}(${paramName}: ${paramType}) {\n  return ${exprStr};\n}`;
     }
   }
 
@@ -1359,13 +1401,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * Emit a TypeScript callable-type alias for a Rune library function declaration.
    */
   private emitLibraryFunc(func: RosettaExternalFunction): string {
-    const name = func.name;
+    const name = this.callableName(func);
 
     const params = func.parameters.map(
       (parameter) => `${parameter.name}: ${resolveFuncValueTypeTs(parameter)}${parameter.isArray ? '[]' : ''}`
     );
     const returnType = resolveFuncValueTypeTs(func);
-    const binding = typescriptProfile.libraryFuncMap[name];
+    const binding = typescriptProfile.libraryFuncMap[func.name];
     if (binding?.expr) {
       return [
         `export type ${name} = (${params.join(', ')}) => ${returnType};`,

@@ -41,6 +41,42 @@ describe('codegen-worker parsed/emitted function execution', () => {
     vi.unstubAllGlobals();
   });
 
+  it('executes qualified calls when both namespaces declare the same function name', async () => {
+    const { scope, dispatch } = await loadRealWorker();
+    dispatch({
+      type: 'preview:setFiles',
+      requestId: 'qualified:files',
+      files: [
+        {
+          uri: 'file:///alpha.rosetta',
+          content: `namespace alpha
+func Echo:
+ inputs: value int (1..1)
+ output: result int (1..1)
+ set result: value + 1`
+        },
+        {
+          uri: 'file:///beta.rosetta',
+          content: `namespace beta
+func Echo:
+ inputs: value int (1..1)
+ output: result int (1..1)
+ alias Echo: value + 10
+ set result: alpha.Echo(value) + Echo`
+        }
+      ]
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    dispatch({ type: 'preview:execute', funcName: 'beta.Echo', inputs: { value: 4 }, requestId: 'qualified:execute' });
+    await waitForMessage(scope, 'preview:execute-result');
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:execute-result',
+      funcName: 'beta.Echo',
+      requestId: 'qualified:execute',
+      output: 19
+    });
+  }, 15_000);
+
   it('executes a parsed and emitted function using generated generic set helpers', async () => {
     const { scope, dispatch } = await loadRealWorker();
     dispatch({

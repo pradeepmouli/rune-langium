@@ -43,6 +43,100 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['scheme', 'reference'])(
+    'deduplicates %s collections by payload and keeps the first wrapper',
+    async (annotation) => {
+      const funcs = await compile(`namespace test.distinctMetadata
+type Item:
+ value int (1..1)
+func Unique:
+ inputs:
+  values Item (0..*)
+   [metadata ${annotation}]
+ output: result Item (0..*)
+  [metadata ${annotation}]
+ set result: values distinct`);
+      const first = {
+        value: { value: 4 },
+        meta: { scheme: 'first' },
+        ...(annotation === 'reference' ? { externalReference: 'first' } : {})
+      };
+      const second = { value: { value: 4 }, meta: { scheme: 'second' } };
+      const third = { value: { value: 5 }, meta: { scheme: 'third' } };
+      expect(funcs.Unique!({ values: [first, second, third] })).toEqual([first, third]);
+      expect((funcs.Unique!({ values: [first, second] }) as unknown[])[0]).toBe(first);
+      expect(funcs.Unique!({ values: [] })).toEqual([]);
+    }
+  );
+
+  it.each(['scheme', 'reference'])('normalizes each mixed list element for %s outputs', async (annotation) => {
+    const funcs = await compile(`namespace test.listMetadata
+func Mixed:
+ inputs:
+  field int (1..1)
+   [metadata scheme]
+  reference int (1..1)
+   [metadata reference]
+  raw int (1..1)
+ output: result int (0..*)
+  [metadata ${annotation}]
+ alias saved: [field, raw, reference]
+ set result: saved
+func Raw:
+ inputs:
+  field int (1..1)
+   [metadata scheme]
+  raw int (1..1)
+ output: result int (0..*)
+ set result: [field, raw]`);
+    const field = { value: 2, meta: { scheme: 'field' } };
+    const reference = { value: 4, externalReference: 'ref' };
+    const expected =
+      annotation === 'scheme'
+        ? [field, { value: 3, meta: {} }, { value: 4, meta: {} }]
+        : [field, { value: 3 }, reference];
+    expect(funcs.Mixed!({ field, reference, raw: 3 })).toEqual(expected);
+    expect(funcs.Raw!({ field, raw: 3 })).toEqual([2, 3]);
+  });
+
+  it.each(['scheme', 'reference'])('normalizes reducer accumulators for %s outputs', async (annotation) => {
+    const funcs = await compile(`namespace test.reduceMetadata
+func Total:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output: result int (0..1)
+  [metadata ${annotation}]
+ set result: values reduce a, b [a + b]
+func Last:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output: result int (0..1)
+  [metadata ${annotation}]
+ set result: values reduce a, b [b]
+func Offset:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+  offset int (1..1)
+ output: result int (0..1)
+ set result: values reduce a, b [a + b + offset]`);
+    const field = (value: number) => ({ value, meta: { scheme: String(value) } });
+    const wrapped = (value: number) => ({ value, ...(annotation === 'scheme' ? { meta: {} } : {}) });
+    expect(funcs.Total!({ values: [field(1), field(2), field(3)] })).toEqual(wrapped(6));
+    expect(funcs.Total!({ values: [field(1)] })).toEqual(wrapped(1));
+    expect(funcs.Total!({ values: [] })).toBeUndefined();
+    const last = annotation === 'scheme' ? field(3) : { value: 3, externalReference: 'last' };
+    expect(funcs.Last!({ values: [field(1), field(2), last] })).toBe(last);
+    expect(funcs.Last!({ values: [last] })).toBe(last);
+    expect(funcs.Offset!({ values: [field(1), field(2), field(3)], offset: 10 })).toBe(26);
+    if (annotation === 'reference') {
+      expect(funcs.Total!({ values: [{ externalReference: 'unresolved' }, field(2), field(3)] })).toEqual(wrapped(5));
+      expect(funcs.Total!({ values: [{ externalReference: 'unresolved' }] })).toBeUndefined();
+    }
+  });
+
   it('compares collection payloads while retaining selected metadata', async () => {
     const operations = [
       ['Sorted', 'int', '0..*', 'values sort'],

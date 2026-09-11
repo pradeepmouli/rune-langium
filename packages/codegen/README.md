@@ -20,7 +20,12 @@ collection inputs and outputs use arrays. An optional scalar output returns
 arrays do not encode every Rune minimum or maximum cardinality.
 
 Function bodies preserve calls, aliases, assignments, conditions, inheritance,
-and dispatch. Metadata-annotated parameters use `RuneFieldWithMeta<T>` or
+and dispatch. Qualified calls retain their resolved namespace through imports,
+implicit calls, and `super`. Per-namespace files keep their original exported
+function names; conflicting callable names in barrel and single-file output use
+`__rune$namespace$Name` exports (namespace dots become `$`). Internal aliases use
+`$` so Rune inputs and aliases cannot shadow them.
+Metadata-annotated parameters use `RuneFieldWithMeta<T>` or
 `RuneReferenceWithMeta<T>`; ordinary value expressions unwrap field metadata,
 while calls and assignments retain wrappers where their declarations require them.
 Aliases retain metadata wrappers, including through chained bindings; value reads
@@ -35,11 +40,15 @@ wrapper kind while evaluating only the selected branch. Arithmetic, aggregation,
 conversions, predicates, and collection comparison keys read payloads even when
 the enclosing output requires metadata. Filters, sorting, and min/max retain the
 selected values' wrappers.
+Mixed list literals normalize each element separately. Reducers track accumulator
+and item metadata independently, normalize the initial accumulator, and omit
+unresolved references when reducing payloads. Empty reductions return no value.
 Dispatch compares the selector's value without changing the wrapper used by its body.
 Converting reference metadata to field metadata requires a payload value; an
 unresolved reference throws instead of producing a field wrapper without a value.
 Collection membership and distinct operations use structural value keys, so
 separately allocated records with the same values compare equally.
+`distinct` compares metadata payloads and retains the first matching wrapper.
 Deep navigation preserves collections at intermediate path segments. Switch cases
 and defaults bind `item` to the selected value. Two empty collections or two absent
 optional scalars compare equal and do not compare unequal; an empty collection

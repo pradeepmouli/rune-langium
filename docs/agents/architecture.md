@@ -40,6 +40,7 @@ and CLI/codegen/LSP → core.
 - `getTargetRelativePath` centralizes output paths. Keep TypeScript-only function extraction in `ts-emitter.ts` unless intentionally changing other targets.
 - Studio function preview transpiles complete generated modules with Sucrase and resolves imports only among generated outputs. Keep the worker execution restrictions and test real parsed/emitted functions when changing this path.
 - Function expression helpers live in `packages/codegen/src/expr/`; preserve cardinality and metadata across call and assignment boundaries. Validate changed semantics with parsed Rune, strict compilation of generated modules, and runtime assertions. See the codegen README.
+- TypeScript callable bindings use `packages/codegen/src/emit/callable-names.ts` across imports, expressions, and bundled exports. Resolve calls from declaration identity; preserve original Rune names in function metadata used by Studio.
 - Reuse `@rune-langium/worker-core/log` (`createWorkerLogger`, `REDACT_PATHS_BASELINE`) in Cloudflare Workers. Send raw structured objects to `console.log` for field indexing. The shared logger implements redaction explicitly because `pino/browser` does not apply its `redact` option. Pages Functions and the Node container are distinct runtime surfaces.
 
 ## Deployment and Verification

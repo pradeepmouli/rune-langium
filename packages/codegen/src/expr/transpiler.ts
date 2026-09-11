@@ -21,6 +21,7 @@ import { renderNavigation, expressionType, expressionIsMany, typeFeatures, featu
 
 import { renderResolvedFunctionCall } from './function-call.js';
 import { renderCollectionOperation } from './collection-operations.js';
+import { callableExportName, type CallableDeclaration } from '../emit/callable-names.js';
 import {
   isOneOfOperation,
   isChoiceOperation,
@@ -119,6 +120,7 @@ export interface ExpressionTranspilerContext {
   localMetadata?: ReadonlyMap<string, { kind: FieldMetadataKind; many: boolean } | undefined>;
   metadataAttributes?: ReadonlySet<string>;
   preserveMetadata?: boolean;
+  callableName?: (declaration: CallableDeclaration, forceAlias?: boolean) => string;
   /**
    * How to emit errors.
    * 'zod-refine': predicate returns a boolean.
@@ -127,7 +129,12 @@ export interface ExpressionTranspilerContext {
    */
   emitMode: 'zod-refine' | 'zod-superRefine' | 'ts-method' | 'ts-expression';
   /** Value expression context for a generated Rune function. */
-  superFunction?: { name: string; inputs: readonly FunctionCallParameter[]; output?: Attribute };
+  superFunction?: {
+    name: string;
+    inputs: readonly FunctionCallParameter[];
+    output?: Attribute;
+    source?: CallableDeclaration;
+  };
   /**
    * The name of the condition being transpiled (for error messages).
    */
@@ -887,7 +894,9 @@ export function transpileAggregation(expr: RosettaExpression, ctx: ExpressionTra
   if (isDistinctOperation(expr)) {
     const arr = getArg(expr.argument);
     const seen = freshLocal(ctx, '__seen');
-    return `(() => { const ${seen} = new Set${ctx.emitMode.startsWith('ts-') ? '<string>' : ''}(); return (${arr} ?? []).filter((value) => { const key = runeValueKey(value); if (${seen}.has(key)) return false; ${seen}.add(key); return true; }); })()`;
+    const kind = ctx.preserveMetadata ? expressionMetadataKind(expr.argument) : undefined;
+    const value = kind ? unwrapMetadata('value', false) : 'value';
+    return `(() => { const ${seen} = new Set${ctx.emitMode.startsWith('ts-') ? '<string>' : ''}(); return (${arr} ?? []).filter((value) => { const key = runeValueKey(${value}); if (${seen}.has(key)) return false; ${seen}.add(key); return true; }); })()`;
   }
   if (isFirstOperation(expr)) {
     const arr = getArg(expr.argument);
@@ -997,8 +1006,10 @@ export function transpileListLiteral(expr: RosettaExpression, ctx: ExpressionTra
   if (!isListLiteral(expr)) {
     return diagnosticFallback('Invalid expression: not ListLiteral');
   }
-  const elements = (expr.elements ?? []).map((e) => transpileExpression(e, ctx));
-  return `[${elements.join(', ')}]`;
+  const kind = ctx.preserveMetadata ? expressionMetadataKind(expr) : undefined;
+  const elements = expr.elements.map((element) => transpileMetadataBranch(element, kind, ctx));
+  const list = `[${elements.join(', ')}]`;
+  return kind ? `${list}.filter((value) => value != null)` : list;
 }
 
 /** Preserve metadata wrappers when the receiving context requires them. */
@@ -1062,22 +1073,43 @@ export function transpileReduce(expr: RosettaExpression, ctx: ExpressionTranspil
   if (!isReduceOperation(expr)) {
     return diagnosticFallback('Invalid expression: not ReduceOperation');
   }
-  const arr = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
   const fn = expr.function;
+  const argumentCtx = fn && ctx.emitMode.startsWith('ts-') ? { ...ctx, preserveMetadata: true } : ctx;
+  const arr = expr.argument ? transpileExpression(expr.argument, argumentCtx) : ctx.selfName;
   if (!fn) {
     return `(${arr} ?? [])`;
   }
-  const [accName = 'a', itemName = 'b'] = fn.parameters?.map((p) => p.name) ?? [];
-  // Both closure params are plain locals (not `selfName`-qualified attribute
-  // access) — bind both via localBindings rather than reusing selfName like
-  // filter/map's single-param case does.
-  const localBindings = new Map(ctx.localBindings);
-  localBindings.set(accName, accName);
-  localBindings.set(itemName, itemName);
-  const childCtx: ExpressionTranspilerContext = { ...ctx, localBindings };
-  const body = transpileExpression(fn.body, childCtx);
+  const inputKind = argumentCtx.preserveMetadata ? expressionMetadataKind(expr.argument) : undefined;
+  const resultKind = argumentCtx.preserveMetadata ? expressionMetadataKind(fn.body) : undefined;
+  const accName = freshLocal(ctx, fn.parameters[0]?.name ?? 'a');
+  const itemName = freshLocal({ ...ctx, selfName: accName }, fn.parameters[1]?.name ?? 'b');
+  const childCtx = inlineContext(
+    fn,
+    { ...ctx, preserveMetadata: argumentCtx.preserveMetadata },
+    [accName, itemName],
+    inputKind ? { kind: inputKind, many: false } : undefined
+  );
+  const localMetadata = new Map(childCtx.localMetadata);
+  if (fn.parameters[0])
+    localMetadata.set(fn.parameters[0].name, resultKind ? { kind: resultKind, many: false } : undefined);
+  const body = transpileExpression(fn.body, {
+    ...childCtx,
+    localMetadata,
+    implicitMetadata: resultKind ? { kind: resultKind, many: false } : undefined
+  });
   const values = freshLocal(ctx, '__reduce');
-  return `((${values}) => ${values}.length === 0 ? undefined : ${values}.reduce((${accName}, ${itemName}) => ${body}))(${arr} ?? [])`;
+  let initial = `${values}[0]`;
+  if (inputKind !== resultKind) {
+    initial = resultKind
+      ? `${resultKind === 'reference' ? 'runeToReference' : 'runeToField'}(${initial}, ${JSON.stringify(inputKind ?? 'value')})`
+      : unwrapMetadata(initial, false);
+  }
+  const input =
+    inputKind === 'reference' && !resultKind
+      ? `(${arr} ?? []).filter((value): value is typeof value & { value: NonNullable<typeof value.value> } => value.value != null)`
+      : `(${arr} ?? [])`;
+  const reduced = `((${values}) => ${values}.length === 0 ? undefined : ${values}.slice(1).reduce((${accName}, ${itemName}) => ${body}, ${initial}))(${input})`;
+  return resultKind && !ctx.preserveMetadata ? unwrapMetadata(reduced, false) : reduced;
 }
 
 /**
@@ -1243,7 +1275,11 @@ export function transpileSuperCall(expr: RosettaExpression, ctx: ExpressionTrans
         ? prepareFunctionArgument(transpileExpression(arg, argumentCtx), input, ctx, arg)
         : attrAccessExpr(input.name, argumentCtx);
     });
-    const call = `${parent.name}({ ${parent.inputs.map((input, i) => `${input.name}: ${args[i]}`).join(', ')} })`;
+    const name = parent.source
+      ? (ctx.callableName?.(parent.source, ctx.localBindings?.has(parent.name) || ctx.selfName === parent.name) ??
+        parent.name)
+      : parent.name;
+    const call = `${name}({ ${parent.inputs.map((input, i) => `${input.name}: ${args[i]}`).join(', ')} })`;
     const output = parent.output;
     return output && hasFieldMetadata(output) && !ctx.preserveMetadata && ctx.emitMode.startsWith('ts-')
       ? unwrapMetadata(call, output.card.unbounded || (output.card.sup ?? 1) > 1)
@@ -1299,7 +1335,8 @@ export function transpileExpression(
           failure = message;
         },
         ctx.selfName,
-        (value, parameter, argument) => prepareFunctionArgument(value, parameter, ctx, argument)
+        (value, parameter, argument) => prepareFunctionArgument(value, parameter, ctx, argument),
+        ctx.callableName?.(target, ctx.localBindings?.has(target.name) || ctx.selfName === target.name)
       );
       if (call !== undefined) {
         const output = functionOutput(target);
@@ -1325,8 +1362,9 @@ export function transpileExpression(
         ctx.diagnostics.push({ severity: 'error', code: 'invalid-function-call', message });
         return diagnosticFallback(message);
       }
+      const exported = callableExportName(target);
       const callable =
-        target.$type === 'RosettaRule' ? `${target.eligibility ? 'validate' : 'extract'}${target.name}` : target.name;
+        ctx.callableName?.(target, ctx.localBindings?.has(exported) || ctx.selfName === exported) ?? exported;
       return `${callable}(${args.join(', ')})`;
     }
     if (target?.$type === 'RosettaEnumeration') return target.name;

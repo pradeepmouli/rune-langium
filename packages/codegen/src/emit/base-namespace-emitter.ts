@@ -223,10 +223,13 @@ export function mergeProfileTypeMaps<T>(profile: {
 }
 
 /** Build sorted emit lines for a `runeReportRules` const object body. */
-export function buildReportRulesLines(rulesByName: ReadonlyMap<string, RosettaRule>): string[] {
+export function buildReportRulesLines(
+  rulesByName: ReadonlyMap<string, RosettaRule>,
+  exportedName = 'runeReportRules'
+): string[] {
   const ruleNames = Array.from(rulesByName.keys()).sort();
   if (ruleNames.length === 0) return [];
-  const lines = ['export const runeReportRules = {'];
+  const lines = [`export const ${exportedName} = {`];
   for (const name of ruleNames) {
     const rule = rulesByName.get(name)!;
     const kind = rule.eligibility ? 'eligibility' : 'reporting';

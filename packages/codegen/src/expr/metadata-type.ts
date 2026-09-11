@@ -82,8 +82,10 @@ export function expressionMetadataKind(
     case 'MaxOperation':
       return expr.argument ? expressionMetadataKind(expr.argument, next) : undefined;
     case 'ListLiteral': {
-      const kinds = expr.elements.map((element) => expressionMetadataKind(element, next));
-      return kinds.length && kinds.every((kind) => kind === kinds[0]) ? kinds[0] : undefined;
+      return expr.elements.reduce<FieldMetadataKind | undefined>(
+        (kind, element) => mergeMetadataKinds(kind, expressionMetadataKind(element, next)),
+        undefined
+      );
     }
     case 'DefaultOperation': {
       const left = expressionMetadataKind(expr.left, next);
