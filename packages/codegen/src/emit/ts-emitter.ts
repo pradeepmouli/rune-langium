@@ -4,7 +4,7 @@
 import { expressionIsMany, typeFeatures } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
-import { AstUtils } from 'langium';
+import { AstUtils, isMultiReference, type AstNode } from 'langium';
 import { renderFuncAssignment } from './func-assignment.js';
 import {
   fieldMetadataKind,
@@ -1430,26 +1430,23 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T104.
    */
   private usesMetadata(): boolean {
-    const localMetadata = this.model.docs.some((doc) =>
+    const declarationUsesMetadata = (node: AstNode | undefined): boolean =>
+      (isAttribute(node) && hasFieldMetadata(node)) ||
+      (isData(node) && hasTypeMetadata(node)) ||
+      (isRosettaFunction(node) &&
+        (functionInputs(node).some(hasFieldMetadata) || hasFieldMetadata(functionOutput(node))));
+    return this.model.docs.some((doc) =>
       AstUtils.streamAllContents(doc.parseResult.value).some(
         (node) =>
           node.$type === 'WithMetaOperation' ||
           node.$type === 'AsKeyOperation' ||
-          (isAttribute(node) && hasFieldMetadata(node)) ||
-          (isData(node) && hasTypeMetadata(node))
+          declarationUsesMetadata(node) ||
+          AstUtils.streamReferences(node).some(({ reference }) =>
+            isMultiReference(reference)
+              ? reference.items.some((item) => declarationUsesMetadata(item.ref))
+              : declarationUsesMetadata(reference.ref)
+          )
       )
-    );
-    if (localMetadata) return true;
-    return this.model.docs.some((doc) =>
-      AstUtils.streamAllContents(doc.parseResult.value).some((node) => {
-        const target = isRosettaFunction(node)
-          ? node
-          : isRosettaSymbolReference(node) && isRosettaFunction(node.symbol?.ref)
-            ? node.symbol.ref
-            : undefined;
-        if (!target) return false;
-        return functionInputs(target).some(hasFieldMetadata) || hasFieldMetadata(functionOutput(target));
-      })
     );
   }
 

@@ -31,7 +31,9 @@ export function renderFuncAssignment(
     if (sourceKind !== assignment.metadataKind) {
       expr = targetMany
         ? `${helper}(${expr}, ${JSON.stringify(sourceKind ?? 'value')})`
-        : `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${expr})`;
+        : assignment.targetRequired
+          ? `((value) => { if (value == null) throw new Error('Cannot assign an absent value to a required field'); return ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}); })(${expr})`
+          : `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${expr})`;
     }
   }
 

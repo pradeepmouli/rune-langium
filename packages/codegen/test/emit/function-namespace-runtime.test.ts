@@ -30,8 +30,23 @@ reporting rule Read from int: item + ${index + 1}
 `
       );
       sources[0] += '\ntype Entry:\n value int (1..1)\n';
+      sources[0] += `type Remote:
+ amount int (1..1)
+  [metadata scheme]
+ link int (1..1)
+  [metadata reference]
+`;
       sources[1] += '\nfunc isEntry:\n inputs: value int (1..1)\n output: result int (1..1)\n set result: value + 3\n';
       sources.push(`namespace caller
+func ConstructRemote:
+ inputs: value int (1..1)
+ output: result alpha.Remote (1..1)
+ set result: alpha.Remote {amount: value, link: value}
+func AssignRemote:
+ inputs: value int (0..1)
+ output: result alpha.Remote (1..1)
+ set result -> amount: value
+ set result -> link: value
 func GuardName:
  inputs: value int (1..1)
  output: result int (1..1)
@@ -114,6 +129,10 @@ func Libraries:
         const second = layout === 'per-namespace' ? require('./beta.js').Custom : funcs.__rune$beta$Custom;
         first.implementation = (value: number) => value + 10;
         second.implementation = (value: number) => value + 20;
+        for (const name of ['ConstructRemote', 'AssignRemote']) {
+          expect(funcs[name]({ value: 4 })).toEqual({ amount: { value: 4, meta: {} }, link: { value: 4 } });
+        }
+        expect(() => funcs.AssignRemote({})).toThrow('Cannot assign an absent value to a required field');
         expect(funcs.Both({ value: 4 })).toBe(11);
         expect(funcs.GuardName({ value: 4 })).toBe(7);
         expect(funcs.Shadowed({ value: 4 })).toBe(16);

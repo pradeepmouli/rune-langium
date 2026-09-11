@@ -9,6 +9,8 @@ const runeValueKey = (value: unknown): string => {
   if (value == null) return 'null';
   if (typeof value !== 'object') return typeof value + ':' + String(value);
   if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const tag = Object.prototype.toString.call(value);
+  if (/^\[object Temporal\.(PlainDate|PlainTime|PlainDateTime|ZonedDateTime|Instant|PlainYearMonth|PlainMonthDay|Duration)\]$/.test(tag)) return tag + ':' + String(value);
   const fields = value as Record<string, unknown>;
   return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
 };

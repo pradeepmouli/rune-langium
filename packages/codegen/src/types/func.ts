@@ -74,6 +74,7 @@ export interface RuneFuncAssignment {
   rootMetadataKind?: FieldMetadataKind;
   metadataKind?: FieldMetadataKind;
   targetMany?: boolean;
+  targetRequired?: boolean;
 }
 
 /**
@@ -497,6 +498,7 @@ export function extractFuncs(
           rootMetadataKind: isAttribute(root) ? fieldMetadataKind(root) : undefined,
           metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined,
           targetMany: isAttribute(target) ? target.card.unbounded || (target.card.sup ?? 1) > 1 : undefined,
+          ...(path.length > 0 && isAttribute(target) && target.card.inf > 0 ? { targetRequired: true } : {}),
           path
         };
       });

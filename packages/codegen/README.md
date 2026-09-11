@@ -19,6 +19,8 @@ collection inputs and outputs use arrays. An optional scalar output returns
 `T | undefined`. These types describe values and collection shape; TypeScript
 arrays do not encode every Rune minimum or maximum cardinality. Generated
 functions enforce declared output bounds at runtime, including absent-only `(0..0)` outputs.
+Required metadata assignment fields reject absent values. Metadata helper discovery
+follows linked declarations, including imported constructor and assignment fields.
 
 Studio function previews resolve inherited and dispatch input signatures.
 `normalizePreviewInputs` adapts plain form values to metadata wrappers using the
@@ -54,6 +56,8 @@ selected values' wrappers.
 Deep navigation resolves types through `default` receivers and switch branch results.
 Functionless `extract` and `then` preserve item metadata for wrapped outputs and
 read payloads for raw outputs.
+Structural equality and collection keys compare Temporal values by their type and
+canonical string value, including when nested in Data records.
 
 Choice constructors, navigation, and assignment paths share emitted option names.
 Nested assignments select the declared Choice arm when building its value, including
