@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
 import { describe, expect, it } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
@@ -42,6 +43,86 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(
+    ['scheme', 'reference'].flatMap((annotation) =>
+      ['1..1', '0..1', '0..*'].map((cardinality) => ({ annotation, cardinality }))
+    )
+  )(
+    'preserves $annotation aliases at $cardinality wrapper and value boundaries',
+    async ({ annotation, cardinality }) => {
+      const funcs = await compile(`namespace test.aliasMetadata
+func Echo:
+ inputs:
+  source int (${cardinality})
+   [metadata ${annotation}]
+ output:
+  result int (${cardinality})
+   [metadata ${annotation}]
+ alias saved: source
+ set result: saved
+func Saved:
+ inputs:
+  source int (${cardinality})
+   [metadata ${annotation}]
+ output:
+  result int (${cardinality})
+   [metadata ${annotation}]
+ alias saved: source
+ alias chained: saved
+ set result: Echo(chained)
+func Plain:
+ inputs:
+  source int (${cardinality})
+   [metadata ${annotation}]
+ output: result int (${cardinality})
+ alias saved: source
+ alias chained: saved
+ set result: chained
+func PlainCall:
+ inputs:
+  source int (${cardinality})
+   [metadata ${annotation}]
+ output: result int (${cardinality})
+ alias saved: source
+ set result: Identity(saved)
+func Identity:
+ inputs: source int (${cardinality})
+ output: result int (${cardinality})
+ set result: source
+func Positive:
+ inputs:
+  source int (${cardinality})
+   [metadata ${annotation}]
+ output: result boolean (1..1)
+ alias saved: source
+ set result: saved all > 0
+`);
+      const wrapper = {
+        value: 7,
+        meta: { scheme: 'unit' },
+        ...(annotation === 'reference' ? { externalReference: 'key' } : {})
+      };
+      const source = cardinality === '0..*' ? [wrapper, { ...wrapper, value: 8 }] : wrapper;
+      const expected = cardinality === '0..*' ? [7, 8] : 7;
+      expect(funcs.Saved!({ source })).toEqual(source);
+      expect(funcs.Plain!({ source })).toEqual(expected);
+      expect(funcs.PlainCall!({ source })).toEqual(expected);
+      expect(funcs.Positive!({ source })).toBe(true);
+      expect(
+        funcs.Positive!({ source: cardinality === '0..*' ? [{ ...wrapper, value: 0 }] : { ...wrapper, value: 0 } })
+      ).toBe(false);
+      if (cardinality !== '1..1') {
+        const empty = cardinality === '0..*' ? [] : undefined;
+        for (const name of ['Saved', 'Plain', 'PlainCall']) expect(funcs[name]!({ source: empty })).toEqual(empty);
+        if (annotation === 'reference') {
+          const unresolved = cardinality === '0..*' ? [{ externalReference: 'key' }] : { externalReference: 'key' };
+          expect(funcs.Saved!({ source: unresolved })).toEqual(unresolved);
+          expect(funcs.Plain!({ source: unresolved })).toEqual(empty);
+        }
+      }
+    }
+  );
+
   it('projects deep scalar features through collection intermediates', async () => {
     const funcs = await compile(`namespace test.deepCollections
 type Child:

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
 import { expressionMetadataKind } from './metadata-type.js';
 import { inlineContext, freshLocal } from './inline-function.js';
 

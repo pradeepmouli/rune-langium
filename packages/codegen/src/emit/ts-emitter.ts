@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { typeFeatures } from '../expr/navigation.js';
+import { expressionIsMany, typeFeatures } from '../expr/navigation.js';
+import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils } from 'langium';
 import { renderFuncAssignment } from './func-assignment.js';
@@ -46,6 +47,7 @@ import {
   type Data,
   type Attribute,
   type RosettaEnumeration,
+  type RosettaExpression,
   type RosettaCardinality,
   type RosettaTypeAlias,
   type RosettaRule,
@@ -1798,6 +1800,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         [func.output.name, 'result'],
         ...aliasBindings
       ]),
+      localMetadata: new Map(
+        func.aliases.map((alias) => {
+          const expression = alias.exprNode as RosettaExpression;
+          const kind = expressionMetadataKind(expression);
+          return [alias.name, kind ? { kind, many: expressionIsMany(expression) } : undefined];
+        })
+      ),
       metadataAttributes: new Set(
         [...func.inputs, func.output]
           .filter((param) => param.metadataKind && !func.aliases.some((alias) => alias.name === param.name))
@@ -1828,8 +1837,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    */
   private static emitFuncAlias(alias: RuneFuncAlias, ctx: FuncBodyContext): string {
     const localName = ctx.aliasBindings.get(alias.name) ?? alias.name;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exprStr = transpileExpression(alias.exprNode as any, ctx);
+    const exprStr = transpileExpression(alias.exprNode as RosettaExpression, {
+      ...ctx,
+      preserveMetadata: !!ctx.localMetadata?.get(alias.name)
+    });
     return `  const ${localName} = ${exprStr};`;
   }
 

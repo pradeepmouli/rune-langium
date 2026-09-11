@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
 import type { InlineFunction } from '@rune-langium/core';
 import type { ExpressionTranspilerContext } from './transpiler.js';
 

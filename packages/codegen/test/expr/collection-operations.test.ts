@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
 import { describe, expect, it } from 'vitest';
 import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import { parseExpression } from '@rune-langium/core';

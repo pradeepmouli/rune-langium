@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
 
 /** Shared source for structural Rune value equality in TS and executable previews. */
 export function valueEqualitySource(typescript: boolean, exported = false): string {
