@@ -83,9 +83,9 @@ export function expressionMetadataKind(
       if ([...names].some((name) => name !== 'key' && name !== 'template')) return 'field';
       return argumentKind;
     }
-    case 'ThenOperation':
     case 'ReduceOperation':
       return expr.function ? expressionMetadataKind(expr.function.body, next) : undefined;
+    case 'ThenOperation':
     case 'MapOperation':
       return expressionMetadataKind(expr.function ? expr.function.body : expr.argument, next);
     case 'FilterOperation':

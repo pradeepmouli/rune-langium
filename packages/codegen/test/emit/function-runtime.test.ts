@@ -45,6 +45,39 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it('navigates deeply through Data and Choice switch results', async () => {
+    const funcs = await compile(`namespace test.switchResults
+type Detail:
+ amount int (1..1)
+type Cash:
+ detail Detail (1..1)
+type Credit:
+ fee int (1..1)
+choice Box:
+ Cash
+ Credit
+func Selected:
+ inputs: box Box (1..1)
+ output: result int (0..1)
+ set result: (box switch Cash then item, default Cash {detail: Detail {amount: 0}}) ->> amount
+func Converted:
+ inputs: box Box (1..1)
+ output: result int (0..1)
+ set result: (box switch Cash then Detail {amount: 8}, default Detail {amount: 3}) ->> amount
+func ChoiceResult:
+ inputs: box Box (1..1)
+ output: result int (0..1)
+ set result: (box switch Cash then Box {Cash: item}, default Box {Cash: Cash {detail: Detail {amount: 5}}}) ->> amount`);
+    const cash = { cash: { detail: { amount: 7 } } };
+    const credit = { credit: { fee: 2 } };
+    expect(funcs.Selected!({ box: cash })).toBe(7);
+    expect(funcs.Selected!({ box: credit })).toBe(0);
+    expect(funcs.Converted!({ box: cash })).toBe(8);
+    expect(funcs.Converted!({ box: credit })).toBe(3);
+    expect(funcs.ChoiceResult!({ box: cash })).toBe(7);
+    expect(funcs.ChoiceResult!({ box: credit })).toBe(5);
+  });
+
   it.each(['', 'scheme', 'reference'])(
     'navigates deeply through default receivers (metadata=%s)',
     async (annotation) => {
@@ -87,19 +120,36 @@ func Scalar:
     }
   );
 
-  it.each(['scheme', 'reference'])('retains %s metadata in identity extracts', async (annotation) => {
+  it.each(
+    ['scheme', 'reference'].flatMap((annotation) => ['extract', 'then'].map((operation) => ({ annotation, operation })))
+  )('retains $annotation metadata in identity $operation', async ({ annotation, operation }) => {
     const funcs = await compile(`namespace test.identityExtract
 func Retain:
  inputs: values int (0..*)
   [metadata ${annotation}]
  output: result int (0..*)
   [metadata ${annotation}]
- set result: values extract
+ set result: values ${operation}
 func Raw:
  inputs: values int (0..*)
   [metadata ${annotation}]
  output: result int (0..*)
- set result: values extract`);
+ set result: values ${operation}
+${
+  operation === 'then'
+    ? `func Scalar:
+ inputs: value int (0..1)
+  [metadata ${annotation}]
+ output: result int (0..1)
+  [metadata ${annotation}]
+ set result: value then
+func RawScalar:
+ inputs: value int (0..1)
+  [metadata ${annotation}]
+ output: result int (0..1)
+ set result: value then`
+    : ''
+}`);
     const item =
       annotation === 'scheme' ? { value: 4, meta: { scheme: 'unit' } } : { value: 4, externalReference: 'id' };
     const retained = funcs.Retain!({ values: [item] });
@@ -108,6 +158,12 @@ func Raw:
     expect(funcs.Raw!({ values: [item] })).toEqual([4]);
     expect(funcs.Retain!({ values: [] })).toEqual([]);
     expect(funcs.Raw!({ values: [] })).toEqual([]);
+    if (operation === 'then') {
+      expect(funcs.Scalar!({ value: item })).toBe(item);
+      expect(funcs.RawScalar!({ value: item })).toBe(4);
+      expect(funcs.Scalar!({})).toBeUndefined();
+      expect(funcs.RawScalar!({})).toBeUndefined();
+    }
   });
 
   it.each(['constructor', 'assignment'])('uses emitted Choice keys in %s expressions', async (mode) => {
