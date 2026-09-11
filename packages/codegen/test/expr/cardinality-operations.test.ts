@@ -31,6 +31,13 @@ describe('cardinality operations', () => {
   it.each([
     ['items = other', { items: [], other: [] }, true],
     ['items <> other', { items: [], other: [1] }, true],
+    ['items <> other', { items: [], other: [] }, false],
+    ['items all <> other', { items: [], other: [] }, false],
+    ['items any <> other', { items: [], other: [] }, false],
+    ['items all <> other', { items: [1], other: [] }, true],
+    ['items any <> other', { items: [], other: [1] }, true],
+    ['items = value', { items: [] }, false],
+    ['items <> value', { items: [] }, true],
     ['items all = other', { items: [{ a: 1 }], other: [{ a: 1 }] }, true],
     ['items all > 0', { items: [1, 2] }, true],
     ['items all > 0', { items: [0, 2] }, false],

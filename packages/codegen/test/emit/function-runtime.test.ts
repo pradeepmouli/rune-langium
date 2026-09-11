@@ -42,6 +42,89 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it('projects deep scalar features through collection intermediates', async () => {
+    const funcs = await compile(`namespace test.deepCollections
+type Child:
+ value int (1..1)
+type Parent:
+ children Child (0..*)
+ other Child (0..1)
+type Root:
+ parents Parent (0..*)
+func Collect:
+ inputs: parent Parent (1..1)
+ output: result int (0..*)
+ set result: parent ->> value
+func CollectNested:
+ inputs: source Root (1..1)
+ output: result int (0..*)
+ set result: source ->> value
+func CollectRoots:
+ inputs: parents Parent (0..*)
+ output: result int (0..*)
+ set result: parents ->> value
+`);
+    const parents = [{ children: [{ value: 1 }, { value: 2 }] }, { children: [] }, { children: [{ value: 3 }] }];
+    expect(funcs.Collect!({ parent: parents[0] })).toEqual([1, 2]);
+    expect(funcs.Collect!({ parent: parents[1] })).toEqual([]);
+    expect(funcs.Collect!({ parent: { ...parents[0], other: { value: 4 } } })).toEqual([1, 2, 4]);
+    expect(funcs.CollectNested!({ source: { parents } })).toEqual([1, 2, 3]);
+    expect(funcs.CollectNested!({ source: { parents: [] } })).toEqual([]);
+    expect(funcs.CollectRoots!({ parents })).toEqual([1, 2, 3]);
+  });
+
+  it('binds item to switch selectors in primitive cases and object defaults', async () => {
+    const funcs = await compile(`namespace test.switchItem
+enum Kind:
+ Cash
+ Credit
+ Other
+type Entry:
+ value int (1..1)
+type SpecialEntry extends Entry:
+ marker string (1..1)
+func EnumItem:
+ inputs: kind Kind (1..1)
+ output: result Kind (1..1)
+ set result: kind switch Cash then item, Credit then item, default item
+func LiteralItem:
+ inputs: value int (1..1)
+ output: result int (1..1)
+ set result: value switch 1 then item, default item
+func ObjectItem:
+ inputs: entry Entry (1..1)
+ output: result int (1..1)
+ set result: entry switch SpecialEntry then item -> value, default item -> value
+`);
+    for (const kind of ['Cash', 'Credit', 'Other']) expect(funcs.EnumItem!({ kind })).toBe(kind);
+    for (const value of [1, 2]) expect(funcs.LiteralItem!({ value })).toBe(value);
+    expect(funcs.ObjectItem!({ entry: { value: 3 } })).toBe(3);
+    expect(funcs.ObjectItem!({ entry: { value: 4, marker: 'special' } })).toBe(4);
+  });
+
+  it.each(['0..1', '0..*'])('distinguishes both empty from one empty in %s inequality', async (cardinality) => {
+    const funcs = await compile(`namespace test.emptyInequality
+func Equal:
+ inputs:
+  left int (${cardinality})
+  right int (${cardinality})
+ output: result boolean (1..1)
+ set result: left = right
+func Unequal:
+ inputs:
+  left int (${cardinality})
+  right int (${cardinality})
+ output: result boolean (1..1)
+ set result: left <> right
+`);
+    const empty = cardinality === '0..*' ? [] : undefined;
+    const value = cardinality === '0..*' ? [1] : 1;
+    expect(funcs.Equal!({ left: empty, right: empty })).toBe(true);
+    expect(funcs.Unequal!({ left: empty, right: empty })).toBe(false);
+    expect(funcs.Unequal!({ left: empty, right: value })).toBe(true);
+    expect(funcs.Unequal!({ left: value, right: empty })).toBe(true);
+  });
+
   it.each(['1..1', '0..1', '0..*'])(
     'converts metadata wrappers at %s calls and assignments without nesting payloads',
     async (cardinality) => {

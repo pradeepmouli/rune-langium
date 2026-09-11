@@ -62,19 +62,18 @@ function primitiveSwitch(
   let fallback = 'undefined';
   const cases: string[] = [];
   for (const currentCase of operation.cases) {
+    const branch = options.renderExpression(currentCase.expression, { selfName: '__sw' });
     if (!currentCase.guard) {
-      fallback = options.renderExpression(currentCase.expression);
+      fallback = branch;
       continue;
     }
     if (currentCase.guard.literalGuard) {
-      cases.push(
-        `(__sw === ${options.renderExpression(currentCase.guard.literalGuard)}) ? ${options.renderExpression(currentCase.expression)}`
-      );
+      cases.push(`(__sw === ${options.renderExpression(currentCase.guard.literalGuard)}) ? ${branch}`);
       continue;
     }
     const target = currentCase.guard.referenceGuard?.ref;
     if (isRosettaEnumValue(target)) {
-      cases.push(`(__sw === ${JSON.stringify(target.name)}) ? ${options.renderExpression(currentCase.expression)}`);
+      cases.push(`(__sw === ${JSON.stringify(target.name)}) ? ${branch}`);
       continue;
     }
     const targetName = referenceName(currentCase.guard.referenceGuard);
@@ -82,7 +81,7 @@ function primitiveSwitch(
     // name comparison as the legacy renderer. Once linking supplies a Data or
     // Choice target, objectSwitch above takes the structural path instead.
     if (targetName !== undefined) {
-      cases.push(`(__sw === ${JSON.stringify(targetName)}) ? ${options.renderExpression(currentCase.expression)}`);
+      cases.push(`(__sw === ${JSON.stringify(targetName)}) ? ${branch}`);
     } else {
       options.report?.(`Unsupported ${typeName(inputType)} switch guard`);
     }
@@ -133,7 +132,9 @@ function objectSwitch(
     lines.push('  }');
   }
   const fallbackCase = operation.cases.find((currentCase) => !currentCase.guard);
-  lines.push(`  return ${fallbackCase ? options.renderExpression(fallbackCase.expression) : 'undefined'};`);
+  lines.push(
+    `  return ${fallbackCase ? options.renderExpression(fallbackCase.expression, { selfName: '__sw' }) : 'undefined'};`
+  );
   lines.push(`})(${argument})`);
   return lines.join('\n');
 }

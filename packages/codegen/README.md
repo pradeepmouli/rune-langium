@@ -30,6 +30,10 @@ Converting reference metadata to field metadata requires a payload value; an
 unresolved reference throws instead of producing a field wrapper without a value.
 Collection membership and distinct operations use structural value keys, so
 separately allocated records with the same values compare equally.
+Deep navigation preserves collections at intermediate path segments. Switch cases
+and defaults bind `item` to the selected value. Two empty collections or two absent
+optional scalars compare equal and do not compare unequal; an empty collection
+and an absent scalar remain distinct.
 
 Abstract functions and library declarations require implementations. A generated
 library callable exposes a typed `.implementation` property for the host to supply.

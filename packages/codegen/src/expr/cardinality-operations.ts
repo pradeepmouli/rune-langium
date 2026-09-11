@@ -54,7 +54,7 @@ export function renderCardinalityOperation(
   const op = binary.operator;
   const compare = (left: string, right: string) => `${op === '<>' ? '!' : ''}runeValueEquals(${left}, ${right})`;
   const quantifier = binary.cardMod ?? (binary.operator === '<>' ? 'any' : 'all');
-  // Mapper runtime evaluates operands once, rejects empty operands, and for
+  // Mapper runtime evaluates operands once and for
   // ordered comparisons reduces the RHS to its extremum before comparing all
   // or any LHS items. Equality compares paired items (or broadcasts scalar).
   const rv = isEqualityOperation(binary)
@@ -67,5 +67,7 @@ export function renderCardinalityOperation(
     : quantifier === 'all'
       ? `l.every((a) => a ${op} rv)`
       : `l.some((a) => a ${op} rv)`;
-  return `((__l, __r) => { const l = Array.isArray(__l) ? __l : __l == null ? [] : [__l]; const r = Array.isArray(__r) ? __r : __r == null ? [] : [__r]; if (l.length === 0 || r.length === 0) return ${isEqualityOperation(binary) ? (op === '<>' ? 'true' : 'Array.isArray(__l) === Array.isArray(__r) && l.length === r.length') : 'false'}; const rv = ${rv}; return ${result}; })(${left}, ${right})`;
+  const emptyEqual = 'Array.isArray(__l) === Array.isArray(__r) && l.length === r.length';
+  const emptyResult = isEqualityOperation(binary) ? (op === '<>' ? `!(${emptyEqual})` : emptyEqual) : 'false';
+  return `((__l, __r) => { const l = Array.isArray(__l) ? __l : __l == null ? [] : [__l]; const r = Array.isArray(__r) ? __r : __r == null ? [] : [__r]; if (l.length === 0 || r.length === 0) return ${emptyResult}; const rv = ${rv}; return ${result}; })(${left}, ${right})`;
 }

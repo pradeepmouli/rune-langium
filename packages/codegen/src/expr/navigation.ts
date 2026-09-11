@@ -26,6 +26,7 @@ import {
   isListLiteral,
   isThenOperation,
   isSwitchOperation,
+  type RosettaDeepFeatureCall,
   type RosettaExpression,
   type RosettaType,
   type TypeCall,
@@ -105,7 +106,10 @@ export function expressionIsMany(expr: RosettaExpression | undefined): boolean {
     isListLiteral(expr)
   )
     return true;
-  if (isRosettaFeatureCall(expr) || isRosettaDeepFeatureCall(expr)) {
+  if (isRosettaDeepFeatureCall(expr)) {
+    return expressionIsMany(expr.receiver) || deepNavigationPaths(expr).some((path) => path.some(featureIsMany));
+  }
+  if (isRosettaFeatureCall(expr)) {
     return featureIsMany(expr.feature?.ref as Feature | undefined) || expressionIsMany(expr.receiver);
   }
   if (isRosettaSymbolReference(expr)) {
@@ -202,21 +206,26 @@ export function deepFeaturePaths(
   name: string,
   seen: Set<RosettaType> = new Set(),
   target?: Feature
-): string[][] {
+): Feature[][] {
   if (!type || seen.has(type)) return [];
   const features = typeFeatures(type);
   const direct = features.filter(
     (feature) => featureName(feature) === name && (!target || featureMatches(feature, target))
   );
-  if (direct.length > 0) return direct.map(() => [name]);
+  if (direct.length > 0) return direct.map((feature) => [feature]);
   const nextSeen = new Set(seen).add(type);
   const paths = features.flatMap((feature) =>
-    deepFeaturePaths(resolveType(feature.typeCall), name, nextSeen, target).map((path) => [
-      featureName(feature),
-      ...path
-    ])
+    deepFeaturePaths(resolveType(feature.typeCall), name, nextSeen, target).map((path) => [feature, ...path])
   );
-  return [...new Map(paths.map((path) => [path.join('\u0000'), path])).values()];
+  return [...new Map(paths.map((path) => [path.map(featureName).join('\u0000'), path])).values()];
+}
+
+function deepNavigationPaths(expr: RosettaDeepFeatureCall): Feature[][] {
+  const feature = expr.feature?.ref;
+  const target =
+    isAttribute(feature) || isChoiceOption(feature) || isRosettaRecordFeature(feature) ? feature : undefined;
+  const name = target ? featureName(target) : expr.feature?.$refText;
+  return name ? deepFeaturePaths(expressionType(expr.receiver), name, new Set(), target) : [];
 }
 
 function typeMatches(candidate: RosettaType | undefined, goal: RosettaType, seen = new Set<RosettaType>()): boolean {
@@ -282,12 +291,10 @@ export function renderNavigation(
   if (!name || !expr.receiver) return undefined;
   const receiver = render(expr.receiver);
   if (isRosettaDeepFeatureCall(expr)) {
-    const target =
-      isAttribute(feature) || isChoiceOption(feature) || isRosettaRecordFeature(feature) ? feature : undefined;
-    const paths = deepFeaturePaths(expressionType(expr.receiver), name, new Set(), target);
+    const paths = deepNavigationPaths(expr);
     if (paths.length === 0) return undefined;
     const many = expressionIsMany(expr);
-    const projections = paths.map((path) => renderFeaturePath('__root', path, many));
+    const projections = paths.map((path) => renderFeaturePath('__root', path.map(featureName), many));
     const projected = many ? `[${projections.map((value) => `...${value}`).join(', ')}]` : projections.join(' ?? ');
     return `((__root) => ${projected})(${receiver})`;
   }
