@@ -1,10 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Pradeep Mouli
+
 import { typeFeatures } from '../expr/navigation.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils } from 'langium';
 import { renderFuncAssignment } from './func-assignment.js';
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2026 Pradeep Mouli
-
 import {
   fieldMetadataKind,
   hasFieldMetadata,
@@ -64,7 +64,8 @@ import type {
 } from '../types.js';
 import { resolveImportPath, type NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
-import { BaseNamespaceEmitter,
+import {
+  BaseNamespaceEmitter,
   decodeCardinality,
   buildAttributeTypesMap,
   buildAttrAccessorNamesMap,
@@ -72,7 +73,8 @@ import { BaseNamespaceEmitter,
   mergeProfileTypeMaps,
   buildReportRulesLines,
   buildCrossNsImportLines,
-  choiceOptionFieldName } from './base-namespace-emitter.js';
+  choiceOptionFieldName
+} from './base-namespace-emitter.js';
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { debug } from '../instrument.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
