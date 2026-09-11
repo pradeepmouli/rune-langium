@@ -111,8 +111,10 @@ export const runeReportRules = {
 
 type RuneFuncData<T> = T extends readonly (infer I)[]
   ? RuneFuncData<I>[]
-  : T extends (...args: never[]) => unknown
-    ? never
-    : T extends object
-      ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
-      : T;
+  : T extends { readonly [Symbol.toStringTag]: `Temporal.${string}` }
+    ? string
+    : T extends (...args: never[]) => unknown
+      ? never
+      : T extends object
+        ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
+        : T;

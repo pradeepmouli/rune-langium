@@ -30,6 +30,19 @@ reporting rule Read from int: item + ${index + 1}
 `
       );
       sources[0] += '\ntype Entry:\n value int (1..1)\n';
+      sources[0] += '\ntype Foo:\n alphaValue int (1..1)\n';
+      sources[1] += '\ntype Foo:\n betaValue string (1..1)\n';
+      for (let index = 0; index < 2; index++) {
+        sources[index] += `
+type Derived extends Foo:
+ extra int (1..1)
+typeAlias FooAlias: Foo
+choice Selection:
+ Foo
+enum Side:
+ ${index === 0 ? 'Alpha' : 'Beta'} displayName "${index === 0 ? 'Alpha' : 'Beta'}"
+`;
+      }
       sources[0] += `type Remote:
  amount int (1..1)
   [metadata scheme]
@@ -38,6 +51,22 @@ reporting rule Read from int: item + ${index + 1}
 `;
       sources[1] += '\nfunc isEntry:\n inputs: value int (1..1)\n output: result int (1..1)\n set result: value + 3\n';
       sources.push(`namespace caller
+func KeepAlias:
+ inputs: value alpha.FooAlias (1..1)
+ output: result alpha.FooAlias (1..1)
+ set result: value
+func KeepChoice:
+ inputs: value beta.Selection (1..1)
+ output: result beta.Selection (1..1)
+ set result: value
+func KeepSide:
+ inputs: value alpha.Side (1..1)
+ output: result alpha.Side (1..1)
+ set result: value
+func ConvertFoo:
+ inputs: value alpha.Foo (1..1)
+ output: result beta.Foo (1..1)
+ set result: beta.Foo {betaValue: "converted"}
 func ConstructRemote:
  inputs: value int (1..1)
  output: result alpha.Remote (1..1)
@@ -129,6 +158,15 @@ func Libraries:
         const second = layout === 'per-namespace' ? require('./beta.js').Custom : funcs.__rune$beta$Custom;
         first.implementation = (value: number) => value + 10;
         second.implementation = (value: number) => value + 20;
+        expect(funcs.KeepAlias({ value: { alphaValue: 7 } })).toEqual({ alphaValue: 7 });
+        expect(funcs.KeepChoice({ value: { foo: { betaValue: 'beta' } } })).toEqual({ foo: { betaValue: 'beta' } });
+        expect(funcs.KeepSide({ value: 'Alpha' })).toBe('Alpha');
+        const alphaDerived = layout === 'per-namespace' ? require('./alpha.js').Derived : funcs.__rune$alpha$Derived;
+        const betaDerived = layout === 'per-namespace' ? require('./beta.js').Derived : funcs.__rune$beta$Derived;
+        expect(alphaDerived.from({ alphaValue: 7, extra: 1 })).toMatchObject({ alphaValue: 7, extra: 1 });
+        expect(betaDerived.from({ betaValue: 'beta', extra: 2 })).toMatchObject({ betaValue: 'beta', extra: 2 });
+        expect(() => alphaDerived.from({ betaValue: 'beta', extra: 1 })).toThrow('not a Derived');
+        expect(funcs.ConvertFoo({ value: { alphaValue: 7 } })).toEqual({ betaValue: 'converted' });
         for (const name of ['ConstructRemote', 'AssignRemote']) {
           expect(funcs[name]({ value: 4 })).toEqual({ amount: { value: 4, meta: {} }, link: { value: 4 } });
         }

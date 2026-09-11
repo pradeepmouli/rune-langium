@@ -25,6 +25,8 @@ import type { GeneratorDiagnostic } from '../types.js';
 // T118 — RuneFunc type definitions
 // ---------------------------------------------------------------------------
 
+export type FuncTypeNameResolver = (declaration: AstNode & { name: string }, exportedName: string) => string;
+
 /**
  * A single input or output parameter of a Rune func declaration.
  * Extracted from the Langium Attribute AST node (RosettaFunction.inputs / output).
@@ -32,7 +34,7 @@ import type { GeneratorDiagnostic } from '../types.js';
 export interface RuneFuncParam {
   /** The parameter name as declared in the Rune model. */
   name: string;
-  /** Resolved Rune type name (e.g., 'int', 'string', a data type name). */
+  /** Resolved type name; a target emitter may qualify declaration bindings. */
   typeName: string;
   /** Structural Shape type used by emitted TS funcs for plain Data values. */
   shapeTypeName?: string;
@@ -401,7 +403,8 @@ export function resolveFuncTypeTs(typeName: string): string {
  */
 function funcTypeInfo(
   typeCall: TypeCall | undefined,
-  plainDataTypeNames?: ReadonlySet<string>
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
 ): { typeName: string; shapeTypeName?: string } {
   const ref = typeCall?.type?.ref;
   const typeName = ref?.name ?? typeCall?.type?.$refText ?? 'unknown';
@@ -411,11 +414,18 @@ function funcTypeInfo(
       : isRosettaTypeAlias(ref)
         ? typeName
         : undefined;
-  return { typeName, shapeTypeName };
+  return {
+    typeName: ref && typeNameResolver ? typeNameResolver(ref, typeName) : typeName,
+    shapeTypeName: ref && shapeTypeName && typeNameResolver ? typeNameResolver(ref, shapeTypeName) : shapeTypeName
+  };
 }
 
-function extractParam(attr: Attribute, plainDataTypeNames?: ReadonlySet<string>): RuneFuncParam {
-  const { typeName, shapeTypeName } = funcTypeInfo(attr.typeCall, plainDataTypeNames);
+function extractParam(
+  attr: Attribute,
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
+): RuneFuncParam {
+  const { typeName, shapeTypeName } = funcTypeInfo(attr.typeCall, plainDataTypeNames, typeNameResolver);
   const card = attr.card;
   const lower = card?.inf ?? 1;
   const upper: number | null = card?.unbounded ? null : (card?.sup ?? lower);
@@ -431,9 +441,10 @@ function extractParam(attr: Attribute, plainDataTypeNames?: ReadonlySet<string>)
 /** Resolve an Attribute's plain-data TypeScript value type at a func boundary. */
 export function resolveFuncValueTypeTs(
   attr: { typeCall?: TypeCall },
-  plainDataTypeNames?: ReadonlySet<string>
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
 ): string {
-  const param = funcTypeInfo(attr.typeCall, plainDataTypeNames);
+  const param = funcTypeInfo(attr.typeCall, plainDataTypeNames, typeNameResolver);
   return param.shapeTypeName ? `RuneFuncData<${param.shapeTypeName}>` : resolveFuncTypeTs(param.typeName);
 }
 
@@ -449,7 +460,8 @@ export function extractFuncs(
   docs: { parseResult?: { value?: unknown } }[],
   namespace: string,
   diagnostics: GeneratorDiagnostic[],
-  plainDataTypeNames?: ReadonlySet<string>
+  plainDataTypeNames?: ReadonlySet<string>,
+  typeNameResolver?: FuncTypeNameResolver
 ): RuneFunc[] {
   const funcs: RuneFunc[] = [];
   const declarations = docs.flatMap((doc) => {
@@ -462,7 +474,7 @@ export function extractFuncs(
     for (const node of model.elements) {
       if (!isRosettaFunction(node)) continue;
       const signature = functionSignature(node, declarations);
-      const inputs = functionInputs(signature).map((attr) => extractParam(attr, plainDataTypeNames));
+      const inputs = functionInputs(signature).map((attr) => extractParam(attr, plainDataTypeNames, typeNameResolver));
       const outputNode = functionOutput(signature);
       if (!outputNode) {
         diagnostics.push({
@@ -472,7 +484,7 @@ export function extractFuncs(
         });
       }
       const output = outputNode
-        ? extractParam(outputNode, plainDataTypeNames)
+        ? extractParam(outputNode, plainDataTypeNames, typeNameResolver)
         : { name: 'result', typeName: 'unknown', cardinality: { lower: 1, upper: 1 } };
       const parent = node.superFunction?.ref;
       const assignments = node.operations.map((operation): RuneFuncAssignment => {

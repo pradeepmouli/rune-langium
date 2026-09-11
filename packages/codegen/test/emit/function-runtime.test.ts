@@ -46,6 +46,36 @@ async function compile(source: string | string[], typeAssertions = '') {
 
 describe('generated TypeScript function execution', () => {
   it.each([
+    ['date', '2026-09-11', 'to-date'],
+    ['time', '12:30:00', 'to-time'],
+    ['dateTime', '2026-09-11T12:30:00', 'to-date-time'],
+    ['zonedDateTime', '2026-09-11T12:30:00Z', 'to-zoned-date-time']
+  ])('uses string wire values for %s fields in function data', async (type, value, conversion) => {
+    const funcs = await compile(
+      `namespace test.temporalWire
+type Event:
+ eventDate ${type} (0..1)
+type Envelope:
+ events Event (0..*)
+func Create:
+ inputs: text string (1..1)
+ output: result Envelope (1..1)
+ set result: Envelope {events: [Event {eventDate: text ${conversion}}]}
+func Retain:
+ inputs: value Envelope (1..1)
+ output: result Envelope (1..1)
+ set result: value`,
+      `import { Temporal } from '@js-temporal/polyfill';
+const input: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: ${JSON.stringify(value)}}]}};
+// @ts-expect-error Temporal objects are not wire values.
+const invalid: Parameters<typeof Retain>[0] = {value: {events: [{eventDate: {} as Temporal.${type === 'date' ? 'PlainDate' : type === 'time' ? 'PlainTime' : type === 'dateTime' ? 'PlainDateTime' : 'ZonedDateTime'}}]}};`
+    );
+    expect(funcs.Create!({ text: value })).toEqual({ events: [{ eventDate: value }] });
+    const envelope = { events: [{ eventDate: value }] };
+    expect(funcs.Retain!({ value: envelope })).toBe(envelope);
+  });
+
+  it.each([
     'parents filter [item -> active]',
     'parents sort [item -> detail -> value]',
     'parents extract [item]',

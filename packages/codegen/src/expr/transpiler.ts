@@ -10,7 +10,7 @@ import {
 } from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
 import { expressionMetadataKind } from './metadata-type.js';
-import { functionOutput, resolveFuncValueTypeTs } from '../types/func.js';
+import { functionOutput, resolveFuncValueTypeTs, type FuncTypeNameResolver } from '../types/func.js';
 import { renderSwitchExpression } from './switch-expression.js';
 import { renderOnlyExists } from './only-exists.js';
 import { freshLocal, inlineContext } from './inline-function.js';
@@ -121,6 +121,7 @@ export interface ExpressionTranspilerContext {
   localMetadata?: ReadonlyMap<string, { kind: FieldMetadataKind; many: boolean } | undefined>;
   metadataAttributes?: ReadonlySet<string>;
   preserveMetadata?: boolean;
+  typeNameResolver?: FuncTypeNameResolver;
   callableName?: (declaration: CallableDeclaration, forceAlias?: boolean) => string;
   /**
    * How to emit errors.
@@ -804,7 +805,7 @@ export function transpileNavigation(expr: RosettaExpression, ctx: ExpressionTran
             : key === 'address'
               ? `(${value})?.reference?.reference`
               : `(${value})?.meta?.[${JSON.stringify(property)}]`;
-        return `(${access} as ${resolveFuncValueTypeTs(feature)} | undefined)`;
+        return `(${access} as ${resolveFuncValueTypeTs(feature, undefined, ctx.typeNameResolver)} | undefined)`;
       };
       if (expr.receiver ? expressionIsMany(expr.receiver) : ctx.implicitMetadata?.many) {
         const item = freshLocal(ctx, '__metadataItem');

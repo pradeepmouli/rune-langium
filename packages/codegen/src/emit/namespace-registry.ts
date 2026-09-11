@@ -5,6 +5,7 @@ import type { LangiumDocument } from 'langium';
 import {
   isAnnotation,
   isData,
+  isChoice,
   isRosettaEnumeration,
   isRosettaExternalFunction,
   isRosettaFunction,
@@ -16,6 +17,7 @@ import {
 
 export interface NamespaceManifest {
   namespace: string;
+  /** Structured Data and Choice declarations, including their Shape and guard exports. */
   exportedDataNames: Set<string>;
   exportedEnumNames: Set<string>;
   exportedFuncNames: Set<string>;
@@ -51,7 +53,7 @@ export function buildNamespaceRegistry(groupedDocs: Map<string, LangiumDocument[
       if (!model || !isRosettaModel(model)) continue;
 
       for (const element of model.elements) {
-        if (isData(element)) {
+        if (isData(element) || isChoice(element)) {
           manifest.exportedDataNames.add(element.name);
         } else if (isRosettaEnumeration(element)) {
           manifest.exportedEnumNames.add(element.name);
