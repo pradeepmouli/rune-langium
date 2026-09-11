@@ -4,6 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createRuneDslServices,
+  isData,
+  isRosettaFunction,
   isRosettaFeatureCall,
   isRosettaDeepFeatureCall,
   isRosettaImplicitVariable,
@@ -13,7 +15,7 @@ import {
 } from '@rune-langium/core';
 import { URI } from 'langium';
 import ts from 'typescript-classic';
-import { expressionIsMany, renderNavigation } from '../../src/expr/navigation.js';
+import { deepFeaturePaths, featureName, expressionIsMany, renderNavigation } from '../../src/expr/navigation.js';
 
 const SOURCE = `namespace test.navigation
 type Child:
@@ -114,6 +116,69 @@ function functionSource(
 }
 
 describe('linked navigation runtime rendering', () => {
+  it.each(['alpha', 'beta'].flatMap((namespace) => [false, true].map((many) => ({ namespace, many }))))(
+    'projects only the linked $namespace feature (many=$many)',
+    async ({ namespace, many }) => {
+      const { RuneDsl } = createRuneDslServices();
+      const sources = ['alpha', 'beta'].map(
+        (name) => `namespace ${name}
+type Foo:
+ ${name}Value string (1..1)
+typeAlias FooAlias: Foo
+type Leaf:
+ value FooAlias (0..1)`
+      );
+      sources.push(`namespace caller
+type Root:
+ left alpha.Leaf (0..${many ? '*' : '1'})
+ right beta.Leaf (0..${many ? '*' : '1'})
+func Read:
+ inputs: source Root (1..1)
+ output: result ${namespace}.Foo (0..${many ? '*' : '1'})
+ set result: source ->> value`);
+      const docs = sources.map((source, index) =>
+        RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+          source,
+          URI.parse(`inmemory:///deep-identity-${index}.rosetta`)
+        )
+      );
+      await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
+      expect(docs.flatMap((doc) => doc.parseResult.parserErrors)).toEqual([]);
+      const targetModel = docs[namespace === 'alpha' ? 0 : 1]!.parseResult.value;
+      const caller = docs[2]!.parseResult.value;
+      if (!isRosettaModel(targetModel) || !isRosettaModel(caller)) throw new Error('expected Rune models');
+      const leaf = targetModel.elements.filter(isData).find((node) => node.name === 'Leaf')!;
+      const source = caller.elements.find(isData)!;
+      const func = caller.elements.find(isRosettaFunction)!;
+      const expression = func.operations[0]!.expression;
+      if (!isRosettaDeepFeatureCall(expression)) throw new Error('expected deep navigation');
+      const target = leaf.attributes[0]!;
+      const linked = { ...expression, feature: { ...expression.feature, $refText: target.name, ref: target } };
+      const side = namespace === 'alpha' ? 'left' : 'right';
+      expect(deepFeaturePaths(source, 'value', new Set(), target).map((path) => path.map(featureName))).toEqual([
+        [side, 'value']
+      ]);
+      const read = compile(
+        `
+type Alpha = { alphaValue: string };
+type Beta = { betaValue: string };
+export function Read(input: { source: { left?: { value?: Alpha }${many ? '[]' : ''}; right?: { value?: Beta }${many ? '[]' : ''} } }): ${namespace === 'alpha' ? 'Alpha' : 'Beta'}${many ? '[]' : ' | undefined'} {
+ return ${renderExpression(linked)};
+}`,
+        'Read'
+      );
+      const alpha = { alphaValue: 'alpha' };
+      const beta = { betaValue: 'beta' };
+      const container = (value: unknown) => (many ? [{ value }] : { value });
+      expect(read({ source: { left: container(alpha), right: container(beta) } })).toEqual(
+        many ? [namespace === 'alpha' ? alpha : beta] : namespace === 'alpha' ? alpha : beta
+      );
+      expect(read({ source: namespace === 'alpha' ? { right: container(beta) } : { left: container(alpha) } })).toEqual(
+        many ? [] : undefined
+      );
+    }
+  );
+
   it('reports collection cardinality for navigation and higher-order operations', async () => {
     const functions = await parseFunctions();
     expect(expressionIsMany(functions.find((func) => func.name === 'Collect')!.operations[0]!.expression)).toBe(true);

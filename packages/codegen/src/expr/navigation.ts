@@ -62,7 +62,7 @@ function featureMatches(candidate: Feature, target: Feature): boolean {
   if (featureName(candidate) !== featureName(target)) return false;
   const candidateType = resolveType(candidate.typeCall);
   const targetType = resolveType(target.typeCall);
-  if (candidateType?.name !== targetType?.name) return false;
+  if (!candidateType || candidateType !== targetType) return false;
   const candidateCard = 'card' in candidate ? candidate.card : undefined;
   const targetCard = 'card' in target ? target.card : undefined;
   return (
