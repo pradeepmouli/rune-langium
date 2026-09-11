@@ -65,6 +65,7 @@ export { getOptions, getEffectiveConditions } from './utils/choice-utils.js';
 export {
   hasGeneratedInput,
   setGeneratedInputIfAbsent,
+  getFunctionSignature,
   getFunctionInputs,
   getFunctionOutput
 } from './utils/expression-utils.js';

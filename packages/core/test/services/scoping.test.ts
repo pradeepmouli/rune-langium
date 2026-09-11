@@ -2,9 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { parse, parseWorkspace } from '../../src/index.js';
+import { parse, parseWorkspace, isRosettaFunction, getFunctionSignature,createRuneDslServices } from '../../src/index.js';
 import type { Data, RosettaFunction, RosettaEnumeration, RosettaModel } from '../../src/index.js';
-import { createRuneDslServices } from '../../src/index.js';
 import { URI } from 'langium';
 import type { Diagnostic } from 'langium';
 
@@ -50,6 +49,47 @@ async function parseAndValidateWorkspace(entries: Array<{ uri: string; content: 
 }
 
 describe('Scoping', () => {
+  it.each([false, true])('links split dispatch signatures within their namespace (reverse=%s)', async (reverse) => {
+    const sources = [
+      `namespace builtins
+basicType string
+basicType int`,
+      `namespace other
+enum Shadow:
+ amount
+func Compute:
+ inputs: wrong string (1..1)
+ output: result string (1..1)
+ set result: wrong`,
+      `namespace split
+enum Kind:
+ Cash
+ Credit
+func Compute:
+ inputs:
+  kind Kind (1..1)
+  amount int (1..1)
+ output: result int (1..1)
+ set result: amount`,
+      `namespace split
+func Compute(kind: Kind -> Cash):
+ set result: amount + 1`
+    ];
+    const docs = await parseAndValidateWorkspace(
+      (reverse ? [...sources].reverse() : sources).map((content, i) => ({
+        uri: `inmemory:///split-${i}.rosetta`,
+        content
+      }))
+    );
+    expect(docs.flatMap((doc) => doc.errors)).toEqual([]);
+    const funcs = docs.flatMap((doc) => doc.value.elements.filter(isRosettaFunction));
+    const overload = funcs.find((func) => func.dispatchAttribute)!;
+    const base = funcs.find((func) => !func.dispatchAttribute && func.$container.name === 'split')!;
+    expect(getFunctionSignature(overload)).toBe(base);
+    expect(overload.dispatchAttribute?.ref).toBe(base.inputs[0]);
+    expect(overload.operations[0]?.assignRoot.ref).toBe(base.output);
+  });
+
   describe('Feature call scope (T067, T077)', () => {
     it('should resolve attribute references within a data type', async () => {
       const result = await parseOk(`

@@ -4,6 +4,7 @@
 import type { AstNode } from 'langium';
 import { fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
 import {
+  getFunctionSignature as functionSignature,
   isRosettaModel,
   isRosettaFunction,
   isAttribute,
@@ -447,12 +448,16 @@ export function extractFuncs(
   plainDataTypeNames?: ReadonlySet<string>
 ): RuneFunc[] {
   const funcs: RuneFunc[] = [];
+  const declarations = docs.flatMap((doc) => {
+    const model = doc.parseResult?.value;
+    return isRosettaModel(model) ? model.elements.filter(isRosettaFunction) : [];
+  });
   for (const doc of docs) {
     const model = doc.parseResult?.value;
     if (!isRosettaModel(model)) continue;
     for (const node of model.elements) {
       if (!isRosettaFunction(node)) continue;
-      const signature = functionSignature(node);
+      const signature = functionSignature(node, declarations);
       const inputs = functionInputs(signature).map((attr) => extractParam(attr, plainDataTypeNames));
       const outputNode = functionOutput(signature);
       if (!outputNode) {
@@ -468,7 +473,7 @@ export function extractFuncs(
       const parent = node.superFunction?.ref;
       const assignments = node.operations.map((operation): RuneFuncAssignment => {
         const path: RuneFuncAssignmentPathSegment[] = [];
-        const root = operation.assignRoot.ref ?? functionAttribute(node, operation.assignRoot.$refText);
+        const root = operation.assignRoot.ref ?? functionAttribute(signature, operation.assignRoot.$refText);
         let target: AstNode | undefined = root;
         for (let segment = operation.path; segment; segment = segment.next) {
           target = segment.feature.ref;
@@ -528,15 +533,7 @@ export function functionOutput(node: RosettaFunction, seen: Set<RosettaFunction>
   return parent ? functionOutput(parent, seen) : signature !== node ? functionOutput(signature, seen) : undefined;
 }
 
-export function functionSignature(node: RosettaFunction): RosettaFunction {
-  if (!node.dispatchAttribute) return node;
-  return (
-    node.$container.elements.find(
-      (element): element is RosettaFunction =>
-        isRosettaFunction(element) && element.name === node.name && !element.dispatchAttribute
-    ) ?? node
-  );
-}
+export { functionSignature };
 
 /** Resolve a signature attribute, including inherited inputs and output. */
 export function functionAttribute(func: RosettaFunction, name: string): Attribute | undefined {

@@ -1214,10 +1214,14 @@ export function transpileToZonedDateTime(expr: RosettaExpression, ctx: Expressio
 
 /** Select a declared switch branch and bind its implicit item. */
 export function transpileSwitch(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
+  const kind = ctx.preserveMetadata ? expressionMetadataKind(expr) : undefined;
   const result = renderSwitchExpression(expr, {
     selfName: ctx.selfName,
-    renderExpression: (node, options) =>
-      transpileExpression(node, options?.selfName ? { ...ctx, selfName: options.selfName } : ctx),
+    renderExpression: (node, options) => {
+      if (!options?.selfName) return transpileExpression(node, { ...ctx, preserveMetadata: false });
+      if (isListLiteral(node) && node.elements.length === 0 && !expressionIsMany(expr)) return 'undefined';
+      return transpileMetadataBranch(node, kind, { ...ctx, selfName: options.selfName });
+    },
     report: (message) => ctx.diagnostics.push({ severity: 'error', code: 'unresolved-switch-guard', message })
   });
   return result ?? diagnosticFallback(`Invalid switch expression in '${ctx.conditionName}'`);

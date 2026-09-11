@@ -123,6 +123,12 @@ export function expressionIsMany(expr: RosettaExpression | undefined): boolean {
     return expr.function ? expressionIsMany(expr.function.body) : expressionIsMany(expr.argument);
   }
   if (isRosettaConditionalExpression(expr)) return expressionIsMany(expr.ifthen) || expressionIsMany(expr.elsethen);
+  if (isSwitchOperation(expr))
+    return expr.cases.some(
+      (branch) =>
+        !(isListLiteral(branch.expression) && branch.expression.elements.length === 0) &&
+        expressionIsMany(branch.expression)
+    );
   return false;
 }
 

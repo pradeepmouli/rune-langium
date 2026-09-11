@@ -26,7 +26,8 @@ shared type resolver and runtime helpers, including nested and recursive values
 beyond the form renderer's expansion depth.
 
 Function bodies preserve calls, aliases, assignments, conditions, inheritance,
-and dispatch. Qualified calls retain their resolved namespace through imports,
+and dispatch, including overloads split across namespace files. Core and codegen
+share the base-signature resolver. Qualified calls retain their resolved namespace through imports,
 implicit calls, and `super`. Per-namespace files keep their original exported
 function names; conflicting callable names in barrel and single-file output use
 `__rune$namespace$Name` exports (namespace dots become `$`). Internal aliases use
@@ -42,7 +43,8 @@ containers; collection intermediates select or create the first element, matchin
 the Java generator's builder semantics.
 Implicit collection and pipeline calls retain the item's metadata. Conditional
 and `default` branches normalize mixed raw, field, and reference values to a common
-wrapper kind while evaluating only the selected branch. Arithmetic, aggregation,
+wrapper kind while evaluating only the selected branch. Switches use the same
+branch normalization and preserve scalar, collection, and empty results. Arithmetic, aggregation,
 conversions, predicates, and collection comparison keys read payloads even when
 the enclosing output requires metadata. Filters, sorting, and min/max retain the
 selected values' wrappers.

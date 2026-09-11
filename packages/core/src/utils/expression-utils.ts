@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { RosettaExpression, RosettaFunction } from '../generated/ast.js';
+import { isRosettaFunction, type RosettaExpression, type RosettaFunction } from '../generated/ast.js';
+import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 
 /**
  * Tracks which expression nodes have a generated (synthetic) input.
@@ -42,4 +43,18 @@ export function getFunctionInputs(func: RosettaFunction) {
  */
 export function getFunctionOutput(func: RosettaFunction) {
   return func.output;
+}
+
+/** Resolve a dispatch overload to its namespace's base declaration. */
+export function getFunctionSignature(func: RosettaFunction, declarations?: Iterable<RosettaFunction>): RosettaFunction {
+  if (!func.dispatchAttribute) return func;
+  const name = qualifiedExportPath(func.$container.name, func.name);
+  for (const candidate of declarations ?? func.$container.elements.filter(isRosettaFunction)) {
+    if (!candidate.dispatchAttribute && qualifiedExportPath(candidate.$container.name, candidate.name) === name)
+      return candidate;
+  }
+  // Scope construction supplies declarations explicitly to avoid recursively resolving its own selector.
+  if (declarations) return func;
+  const owner = func.dispatchAttribute.ref?.$container;
+  return isRosettaFunction(owner) ? owner : func;
 }

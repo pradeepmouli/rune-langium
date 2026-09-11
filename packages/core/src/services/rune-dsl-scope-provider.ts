@@ -3,6 +3,8 @@
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
+import { getFunctionSignature } from '../utils/expression-utils.js';
+import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 import {
   isData,
   isRosettaFunction,
@@ -72,6 +74,7 @@ import type {
   TypeCallArgument,
   Operation,
   RosettaRecordType,
+  RosettaFunction,
   RosettaRecordFeature,
   Choice,
   ChoiceOption,
@@ -145,8 +148,13 @@ class AliasResolvingScope implements Scope {
  * - Cases 13-21: Annotation paths, external refs, etc.
  */
 export class RuneDslScopeProvider extends DefaultScopeProvider {
+  private readonly documents: LangiumCoreServices['shared']['workspace']['LangiumDocuments'];
+  private readonly locator: LangiumCoreServices['workspace']['AstNodeLocator'];
+
   constructor(services: LangiumCoreServices) {
     super(services);
+    this.documents = services.shared.workspace.LangiumDocuments;
+    this.locator = services.workspace.AstNodeLocator;
   }
 
   override getScope(context: ReferenceInfo): Scope {
@@ -978,25 +986,24 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
    * e.g. `func YearFraction(dayCountFractionEnum: DayCountFractionEnum -> _1_1):`
    * looks up `dayCountFractionEnum` from the base `func YearFraction:` inputs.
    */
+  private dispatchSignature(func: RosettaFunction): RosettaFunction {
+    const name = qualifiedExportPath(func.$container.name, func.name);
+    const declarations = func.$container.elements.filter(isRosettaFunction);
+    const local = getFunctionSignature(func, declarations);
+    if (local !== func) return local;
+    for (const description of this.indexManager.allElements('RosettaFunction')) {
+      if (description.name !== name) continue;
+      const root = this.documents.getDocument(description.documentUri)?.parseResult.value;
+      const node = description.node ?? (root ? this.locator.getAstNode(root, description.path) : undefined);
+      if (isRosettaFunction(node)) declarations.push(node);
+    }
+    return getFunctionSignature(func, declarations);
+  }
+
   private getDispatchAttributeScope(node: AstNode): Scope {
     if (!isRosettaFunction(node)) return EMPTY_SCOPE;
-    const model = AstUtils.getContainerOfType(node, (n): n is RosettaModel => n.$type === 'RosettaModel');
-    if (!model) return EMPTY_SCOPE;
-
-    // Collect inputs from all functions with the same name (base + other overloads)
-    const descriptions: AstNodeDescription[] = [];
-    const seen = new Set<string>();
-    for (const element of model.elements) {
-      if (isRosettaFunction(element) && element.name === node.name) {
-        for (const input of element.inputs) {
-          if (!seen.has(input.name)) {
-            descriptions.push(this.createDescription(input, input.name));
-            seen.add(input.name);
-          }
-        }
-      }
-    }
-    return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
+    const signature = this.dispatchSignature(node);
+    return this.createScopeForNodes(signature.inputs);
   }
 
   /**
@@ -1025,16 +1032,11 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     if (func.output) addAttr(func.output);
     for (const shortcut of func.shortcuts) addAttr(shortcut);
 
-    // For dispatch overloads, also pull in inputs/outputs from sibling functions
-    if (func.dispatchAttribute && func.$container) {
-      const model = func.$container;
-      for (const element of model.elements) {
-        if (isRosettaFunction(element) && element.name === func.name && element !== func) {
-          for (const input of element.inputs) addAttr(input);
-          if (element.output) addAttr(element.output);
-          for (const shortcut of element.shortcuts) addAttr(shortcut);
-        }
-      }
+    if (func.dispatchAttribute) {
+      const signature = this.dispatchSignature(func);
+      for (const input of signature.inputs) addAttr(input);
+      if (signature.output) addAttr(signature.output);
+      for (const shortcut of signature.shortcuts) addAttr(shortcut);
     }
 
     return descriptions.length > 0 ? new MapScope(descriptions) : EMPTY_SCOPE;
@@ -1134,6 +1136,17 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       }
     }
 
+    const func = AstUtils.getContainerOfType(node, isRosettaFunction);
+    if (func?.dispatchAttribute) {
+      const signature = this.dispatchSignature(func);
+      const attributes = [...signature.inputs, ...(signature.output ? [signature.output] : []), ...signature.shortcuts];
+      for (const attribute of attributes) {
+        const existing = baseScope.getElement(attribute.name)?.node;
+        if (!existing || AstUtils.getContainerOfType(existing, isRosettaFunction) !== func) {
+          extra.unshift(this.createDescription(attribute, attribute.name));
+        }
+      }
+    }
     return extra.length > 0 ? new MapScope(extra, baseScope) : baseScope;
   }
 

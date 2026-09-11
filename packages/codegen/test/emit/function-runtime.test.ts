@@ -7,15 +7,17 @@ import ts from 'typescript-classic';
 import { resolve } from 'node:path';
 import { generate } from '../../src/export.js';
 
-async function compile(source: string, typeAssertions = '') {
+async function compile(source: string | string[], typeAssertions = '') {
   const { RuneDsl } = createRuneDslServices();
-  const doc = RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-    source,
-    URI.parse('inmemory:///functions.rosetta')
+  const docs = (Array.isArray(source) ? source : [source]).map((content, index) =>
+    RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+      content,
+      URI.parse(`inmemory:///functions-${index}.rosetta`)
+    )
   );
-  await RuneDsl.shared.workspace.DocumentBuilder.build([doc]);
-  expect(doc.parseResult.parserErrors).toEqual([]);
-  const outputs = await generate(doc, { target: 'typescript' });
+  await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
+  for (const doc of docs) expect(doc.parseResult.parserErrors).toEqual([]);
+  const outputs = await generate(docs, { target: 'typescript' });
   expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
   const code = outputs[0]!.content;
   const fileName = resolve('generated-function-runtime.ts');
@@ -43,6 +45,74 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['scheme', 'reference'])('normalizes switch branches for %s outputs', async (annotation) => {
+    const funcs = await compile(`namespace test.switchMetadata
+func Select:
+ inputs:
+  selector int (1..1)
+  field int (1..1)
+   [metadata scheme]
+  reference int (1..1)
+   [metadata reference]
+ output: result int (0..1)
+  [metadata ${annotation}]
+ set result: selector switch 1 then field, 2 then reference, 3 then 9, default empty
+func Many:
+ inputs:
+  selector int (1..1)
+  fields int (0..*)
+   [metadata scheme]
+ output: result int (0..*)
+  [metadata ${annotation}]
+ set result: selector switch 1 then fields, default [9]
+func Raw:
+ inputs:
+  selector int (1..1)
+  field int (1..1)
+   [metadata scheme]
+ output: result int (1..1)
+ set result: selector switch 1 then field, default 9`);
+    const field = { value: 4, meta: { scheme: 'unit' } };
+    const reference = { value: 6, externalReference: 'id' };
+    const input = { field, reference };
+    expect(funcs.Select!({ ...input, selector: 1 })).toMatchObject({ value: 4, meta: { scheme: 'unit' } });
+    expect(funcs.Select!({ ...input, selector: 2 })).toMatchObject({ value: 6 });
+    expect(funcs.Select!({ ...input, selector: 3 })).toMatchObject({ value: 9 });
+    expect(funcs.Select!({ ...input, selector: 4 })).toBeUndefined();
+    expect(funcs.Many!({ selector: 1, fields: [field] })).toMatchObject([{ value: 4 }]);
+    expect(funcs.Many!({ selector: 2, fields: [field] })).toMatchObject([{ value: 9 }]);
+    expect(funcs.Raw!({ selector: 1, field })).toBe(4);
+  });
+
+  it.each([false, true])('resolves dispatch signatures across files (reverse=%s)', async (reverse) => {
+    const sources = [
+      `namespace test.splitDispatch
+enum Kind:
+ Cash
+ Credit
+func Retain:
+ inputs:
+  kind Kind (1..1)
+  values int (0..*)
+   [metadata scheme]
+ output: result int (0..2)
+  [metadata reference]
+ set result: values
+`,
+      `namespace test.splitDispatch
+func Retain(kind: Kind -> Cash):
+ set result: values
+`
+    ];
+    const funcs = await compile(reverse ? [...sources].reverse() : sources);
+    const field = { value: 4, meta: { scheme: 'unit' } };
+    for (const kind of ['Cash', 'Credit']) {
+      expect(funcs.Retain!({ kind, values: [field] })).toMatchObject([{ value: 4, meta: { scheme: 'unit' } }]);
+      expect(funcs.Retain!({ kind, values: [] })).toEqual([]);
+      expect(() => funcs.Retain!({ kind, values: [field, field, field] })).toThrow('too many results');
+    }
+  });
+
   it.each(['set', 'add'])('enforces finite output bounds for %s assignments', async (operation) => {
     const funcs = await compile(`namespace test.outputBounds
 func Limited:

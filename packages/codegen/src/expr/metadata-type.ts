@@ -81,6 +81,11 @@ export function expressionMetadataKind(
     case 'MinOperation':
     case 'MaxOperation':
       return expr.argument ? expressionMetadataKind(expr.argument, next) : undefined;
+    case 'SwitchOperation':
+      return expr.cases.reduce<FieldMetadataKind | undefined>(
+        (kind, branch) => mergeMetadataKinds(kind, expressionMetadataKind(branch.expression, next)),
+        undefined
+      );
     case 'ListLiteral': {
       return expr.elements.reduce<FieldMetadataKind | undefined>(
         (kind, element) => mergeMetadataKinds(kind, expressionMetadataKind(element, next)),
