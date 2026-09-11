@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { isAttribute, isRosettaFunction, isShortcutDeclaration, type RosettaExpression } from '@rune-langium/core';
-import { functionOutput } from '../types/func.js';
+import { AstUtils } from 'langium';
+import { functionAttribute, functionOutput } from '../types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './metadata-runtime.js';
 
 /** Identify wrappers from declarations, without inspecting ambiguous `value` fields. */
@@ -14,7 +15,8 @@ export function expressionMetadataKind(
   const next = new Set(seen).add(expr);
   switch (expr.$type) {
     case 'RosettaSymbolReference': {
-      const target = expr.symbol.ref;
+      const func = AstUtils.getContainerOfType(expr, isRosettaFunction);
+      const target = expr.symbol.ref ?? (func ? functionAttribute(func, expr.symbol.$refText) : undefined);
       if (isAttribute(target)) return fieldMetadataKind(target);
       if (isRosettaFunction(target)) return fieldMetadataKind(functionOutput(target));
       if (isShortcutDeclaration(target)) return expressionMetadataKind(target.expression, next);
@@ -24,6 +26,10 @@ export function expressionMetadataKind(
     case 'RosettaDeepFeatureCall': {
       const feature = expr.feature?.ref;
       return isAttribute(feature) ? fieldMetadataKind(feature) : undefined;
+    }
+    case 'RosettaSuperCall': {
+      const parent = AstUtils.getContainerOfType(expr, isRosettaFunction)?.superFunction?.ref;
+      return parent ? fieldMetadataKind(functionOutput(parent)) : undefined;
     }
     case 'AsKeyOperation':
       return 'reference';

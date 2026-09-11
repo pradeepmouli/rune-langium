@@ -23,6 +23,8 @@ Function bodies preserve calls, aliases, assignments, conditions, inheritance,
 and dispatch. Metadata-annotated parameters use `RuneFieldWithMeta<T>` or
 `RuneReferenceWithMeta<T>`; ordinary value expressions unwrap field metadata,
 while calls and assignments retain wrappers where their declarations require them.
+Converting reference metadata to field metadata requires a payload value; an
+unresolved reference throws instead of producing a field wrapper without a value.
 Collection membership and distinct operations use structural value keys, so
 separately allocated records with the same values compare equally.
 

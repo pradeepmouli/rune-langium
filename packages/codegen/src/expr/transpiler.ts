@@ -68,6 +68,7 @@ import {
   isSwitchOperation,
   isRosettaSuperCall,
   isAttribute,
+  type Attribute,
   type Condition,
   type RosettaExpression,
   type ThenOperation
@@ -118,7 +119,7 @@ export interface ExpressionTranspilerContext {
    */
   emitMode: 'zod-refine' | 'zod-superRefine' | 'ts-method' | 'ts-expression';
   /** Value expression context for a generated Rune function. */
-  superFunction?: { name: string; inputs: readonly { name: string }[] };
+  superFunction?: { name: string; inputs: readonly FunctionCallParameter[]; output?: Attribute };
   /**
    * The name of the condition being transpiled (for error messages).
    */
@@ -611,7 +612,12 @@ export function transpileCondition(cond: Condition, ctx: ExpressionTranspilerCon
   }
 
   if (isRosettaOnlyExistsExpression(expr)) {
-    const predicate = renderOnlyExists(expr, ctx, (node) => transpileExpression(node, ctx));
+    const predicate = renderOnlyExists(
+      expr,
+      ctx,
+      (node) => transpileExpression(node, ctx),
+      (name) => attrAccessExpr(name, ctx)
+    );
     if (predicate !== undefined) return wrapBoolExprForMode(predicate, ctx);
   }
 
@@ -1147,6 +1153,29 @@ export function transpileSwitch(expr: RosettaExpression, ctx: ExpressionTranspil
   return result ?? diagnosticFallback(`Invalid switch expression in '${ctx.conditionName}'`);
 }
 
+type FunctionCallParameter = Pick<Attribute, 'name'> & Partial<Pick<Attribute, 'annotations' | 'card'>>;
+
+function prepareFunctionArgument(
+  value: string,
+  parameter: FunctionCallParameter,
+  ctx: ExpressionTranspilerContext,
+  argument?: RosettaExpression
+): string {
+  const kind = ctx.emitMode.startsWith('ts-') ? fieldMetadataKind(parameter) : undefined;
+  const many = parameter.card?.unbounded || (parameter.card?.sup ?? 1) > 1;
+  if (many) value = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${value})`;
+  const sourceKind = argument ? expressionMetadataKind(argument) : undefined;
+  if (kind && sourceKind !== kind) {
+    const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
+    const inputKind = JSON.stringify(sourceKind ?? 'value');
+    value =
+      !many && parameter.card?.inf === 0
+        ? `((value) => value == null ? undefined : ${helper}(value, ${inputKind}))(${value})`
+        : `${helper}(${value}, ${inputKind})`;
+  }
+  return value;
+}
+
 /** Call the enclosing function's parent with explicit or forwarded arguments. */
 export function transpileSuperCall(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isRosettaSuperCall(expr)) {
@@ -1154,15 +1183,23 @@ export function transpileSuperCall(expr: RosettaExpression, ctx: ExpressionTrans
   }
   if (ctx.superFunction) {
     const parent = ctx.superFunction;
-    const args = expr.explicitArguments
-      ? expr.rawArgs.map((arg) => transpileExpression(arg, ctx))
-      : parent.inputs.map((input) => attrAccessExpr(input.name, ctx));
-    if (args.length === parent.inputs.length) {
-      return `${parent.name}({ ${parent.inputs.map((input, i) => `${input.name}: ${args[i]}`).join(', ')} })`;
+    if (expr.explicitArguments && expr.rawArgs.length !== parent.inputs.length) {
+      const message = `super() expects ${parent.inputs.length} arguments, received ${expr.rawArgs.length}`;
+      ctx.diagnostics.push({ severity: 'error', code: 'invalid-super-call', message });
+      return diagnosticFallback(message);
     }
-    const message = `super() expects ${parent.inputs.length} arguments, received ${args.length}`;
-    ctx.diagnostics.push({ severity: 'error', code: 'invalid-super-call', message });
-    return diagnosticFallback(message);
+    const args = parent.inputs.map((input, index) => {
+      const argumentCtx = { ...ctx, preserveMetadata: ctx.emitMode.startsWith('ts-') && hasFieldMetadata(input) };
+      const arg = expr.rawArgs[index];
+      return expr.explicitArguments && arg
+        ? prepareFunctionArgument(transpileExpression(arg, argumentCtx), input, ctx, arg)
+        : attrAccessExpr(input.name, argumentCtx);
+    });
+    const call = `${parent.name}({ ${parent.inputs.map((input, i) => `${input.name}: ${args[i]}`).join(', ')} })`;
+    const output = parent.output;
+    return output && hasFieldMetadata(output) && !ctx.preserveMetadata && ctx.emitMode.startsWith('ts-')
+      ? unwrapMetadata(call, output.card.unbounded || (output.card.sup ?? 1) > 1)
+      : call;
   }
   ctx.diagnostics.push({
     severity: 'error',
@@ -1214,21 +1251,7 @@ export function transpileExpression(
           failure = message;
         },
         ctx.selfName,
-        (value, parameter, argument) => {
-          const kind = ctx.emitMode.startsWith('ts-') ? fieldMetadataKind(parameter) : undefined;
-          const many = parameter.card.unbounded || (parameter.card.sup ?? 1) > 1;
-          if (many) value = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${value})`;
-          const sourceKind = argument ? expressionMetadataKind(argument) : undefined;
-          if (kind && sourceKind !== kind) {
-            const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
-            value = many
-              ? `${helper}(${value}, ${sourceKind !== undefined})`
-              : parameter.card.inf === 0
-                ? `((value) => value == null ? undefined : ${helper}(value, ${sourceKind !== undefined}))(${value})`
-                : `${helper}(${value}, ${sourceKind !== undefined})`;
-          }
-          return value;
-        }
+        (value, parameter, argument) => prepareFunctionArgument(value, parameter, ctx, argument)
       );
       if (call !== undefined) {
         const output = functionOutput(target);
@@ -1376,7 +1399,12 @@ export function transpileExpression(
   // (attribute existence was already checked when this expression's
   // attributeTypes were built at the top-level dispatch).
   if (isRosettaOnlyExistsExpression(expr)) {
-    const predicate = renderOnlyExists(expr, ctx, (node) => transpileExpression(node, ctx));
+    const predicate = renderOnlyExists(
+      expr,
+      ctx,
+      (node) => transpileExpression(node, ctx),
+      (name) => attrAccessExpr(name, ctx)
+    );
     if (predicate !== undefined) return predicate;
     const message = `only-exists requires fields of a common parent in '${ctx.conditionName}'`;
     ctx.diagnostics.push({ severity: 'error', code: 'invalid-only-exists', message });

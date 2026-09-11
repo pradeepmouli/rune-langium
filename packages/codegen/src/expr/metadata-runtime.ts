@@ -116,8 +116,10 @@ ${prefix}type RuneToReferenceInput<T> = T extends readonly (infer I)[] ? T | Run
   const returnValue = typescript ? ' as RuneWithMetaResult<T, K, S>' : '';
   const keyResultType = typescript ? ': RuneReferenceWithMeta<unknown>' : '';
   const keyReturn = typescript ? " as RuneAsKeyResult<S extends 'value' ? T : RuneUnwrapMeta<T>>" : '';
-  const normalizerReturn = typescript ? ' as (W extends true ? T : RuneToFieldResult<T>)' : '';
-  const referenceNormalizerReturn = typescript ? ' as (W extends true ? T : RuneToReferenceResult<T>)' : '';
+  const normalizerReturn = typescript ? " as RuneToFieldResult<S extends 'value' ? T : RuneUnwrapMeta<T>>" : '';
+  const referenceNormalizerReturn = typescript
+    ? " as RuneToReferenceResult<S extends 'value' ? T : RuneUnwrapMeta<T>>"
+    : '';
 
   return `${types}
 const runeTypeMetaNames = new Set(['key', 'template']);
@@ -125,20 +127,18 @@ const runeReferenceMetaNames = new Set(['address', 'reference']);
 const runeMetadataNames${metadataNamesType} = { address: 'reference', id: 'externalKey', key: 'externalKey', location: 'scopedKey', reference: 'externalReference', scheme: 'scheme', template: 'template' };
 const runeIsMetaValue = (value${unknownType})${typeGuard} =>
   typeof value === 'object' && value !== null && (('value' in value && ('meta' in value || 'reference' in value || 'externalReference' in value || 'globalReference' in value)) || 'reference' in value || 'externalReference' in value || 'globalReference' in value);
-const runeIsFieldMetaValue = (value${unknownType}) =>
-  typeof value === 'object' && value !== null && 'value' in value && 'meta' in value;
-const runeIsReferenceMetaValue = (value${unknownType}) =>
-  typeof value === 'object' && value !== null && ('reference' in value || 'externalReference' in value || 'globalReference' in value);
-${prefix}const runeToField = ${typescript ? '<T, W extends boolean = false>(value: T, wrapped?: W): W extends true ? T : RuneToFieldResult<T>' : '(value, wrapped)'} => {
-  if (Array.isArray(value)) return value.map((item) => runeToField(item, wrapped))${normalizerReturn};
-  if (wrapped ?? runeIsFieldMetaValue(value)) return value${normalizerReturn};
-  return { value, meta: {} }${normalizerReturn};
+const runeNormalizeMetadata = (value${unknownType}, inputKind${typescript ? ': RuneMetadataInputKind' : ''}, targetKind${typescript ? ": 'field' | 'reference'" : ''})${returnType} => {
+  if (Array.isArray(value)) return value.map((item) => runeNormalizeMetadata(item, inputKind, targetKind));
+  const existing = inputKind !== 'value' && value != null ? value${typescript ? ' as RuneReferenceWithMeta<unknown>' : ''} : undefined;
+  const rawValue = existing ? existing.value : value;
+  if (targetKind === 'reference') return existing ? { ...existing } : { value: rawValue };
+  if (inputKind === 'reference' && rawValue == null) throw new Error('Cannot convert reference metadata to field metadata without a value');
+  return { value: rawValue, meta: existing?.meta ?? {} };
 };
-${prefix}const runeToReference = ${typescript ? '<T, W extends boolean = false>(value: T, wrapped?: W): W extends true ? T : RuneToReferenceResult<T>' : '(value, wrapped)'} => {
-  if (Array.isArray(value)) return value.map((item) => runeToReference(item, wrapped))${referenceNormalizerReturn};
-  if (wrapped ?? runeIsReferenceMetaValue(value)) return value${referenceNormalizerReturn};
-  return { value }${referenceNormalizerReturn};
-};
+${prefix}const runeToField = ${typescript ? "<T, S extends RuneMetadataInputKind = 'value'>(value: T, inputKind: S = 'value' as S): RuneToFieldResult<S extends 'value' ? T : RuneUnwrapMeta<T>>" : "(value, inputKind = 'value')"} =>
+  runeNormalizeMetadata(value, inputKind, 'field')${normalizerReturn};
+${prefix}const runeToReference = ${typescript ? "<T, S extends RuneMetadataInputKind = 'value'>(value: T, inputKind: S = 'value' as S): RuneToReferenceResult<S extends 'value' ? T : RuneUnwrapMeta<T>>" : "(value, inputKind = 'value')"} =>
+  runeNormalizeMetadata(value, inputKind, 'reference')${referenceNormalizerReturn};
 const runeWithMetaOne = (item${unknownType}, entries${metadataType}, inputKind${typescript ? '?: RuneMetadataInputKind' : ''})${returnType} => {
   const wrapped = inputKind === undefined ? runeIsMetaValue(item) : inputKind !== 'value';
   const existing = wrapped && item != null ? item${typescript ? ' as RuneReferenceWithMeta<unknown>' : ''} : undefined;

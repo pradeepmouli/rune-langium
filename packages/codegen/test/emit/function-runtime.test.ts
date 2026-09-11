@@ -42,6 +42,102 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['1..1', '0..1', '0..*'])(
+    'converts metadata wrappers at %s calls and assignments without nesting payloads',
+    async (cardinality) => {
+      const funcs = await compile(
+        `namespace test.metadataConversion
+func Field:
+ inputs:
+  source int (1..1)
+   [metadata scheme]
+ output:
+  result int (1..1)
+   [metadata scheme]
+ set result: source
+func FieldSuper extends Field:
+ set result: super(source)
+func FieldForward extends Field:
+ set result: super
+func RefToFieldCall:
+ inputs:
+  source int (1..1)
+   [metadata reference]
+ output:
+  result int (1..1)
+   [metadata scheme]
+ set result: Field(source)
+func RefToFieldAssign:
+ inputs:
+  source int (1..1)
+   [metadata reference]
+ output:
+  result int (1..1)
+   [metadata scheme]
+ set result: source
+func FieldToRefAssign:
+ inputs:
+  source int (1..1)
+   [metadata scheme]
+ output:
+  result int (1..1)
+   [metadata reference]
+ set result: source
+func Reference:
+ inputs:
+  source int (1..1)
+   [metadata reference]
+ output:
+  result int (1..1)
+   [metadata reference]
+ set result: source
+func FieldToRefCall:
+ inputs:
+  source int (1..1)
+   [metadata scheme]
+ output:
+  result int (1..1)
+   [metadata reference]
+ set result: Reference(source)
+`.replace(/\(1\.\.1\)/g, `(${cardinality})`)
+      );
+      const input = (value: unknown) => (cardinality === '0..*' ? [value] : value);
+      if (cardinality !== '1..1') {
+        for (const name of ['RefToFieldCall', 'RefToFieldAssign', 'FieldToRefCall', 'FieldToRefAssign']) {
+          expect(funcs[name]!({})).toEqual(cardinality === '0..*' ? [] : undefined);
+        }
+      }
+      const field = { value: 7, meta: { scheme: 'unit' } };
+      const reference = { value: 7, externalReference: 'key', meta: { scheme: 'unit' } };
+      for (const name of ['RefToFieldCall', 'RefToFieldAssign']) {
+        expect(funcs[name]!({ source: input(reference) })).toEqual(input(field));
+        expect(funcs[name]!({ source: input({ value: 0 }) })).toEqual(input({ value: 0, meta: {} }));
+        expect(() => funcs[name]!({ source: input({ externalReference: 'key' }) })).toThrow(/value/i);
+      }
+      for (const name of ['FieldToRefCall', 'FieldToRefAssign', 'FieldSuper', 'FieldForward']) {
+        expect(funcs[name]!({ source: input(field) })).toEqual(input(field));
+      }
+    }
+  );
+
+  it('checks only-exists allow-lists on optional parent values', async () => {
+    const funcs = await compile(`namespace test.onlyExists
+ type Item:
+  a string (0..1)
+  b string (0..1)
+  c string (0..1)
+ func Check:
+  inputs: source Item (0..1)
+  output: result boolean (1..1)
+  set result: (source -> a, source -> b) only exists
+`);
+    expect(funcs.Check!({})).toBe(true);
+    expect(funcs.Check!({ source: {} })).toBe(true);
+    expect(funcs.Check!({ source: { a: 'a' } })).toBe(true);
+    expect(funcs.Check!({ source: { a: 'a', b: 'b' } })).toBe(true);
+    expect(funcs.Check!({ source: { c: 'c' } })).toBe(false);
+  });
+
   it('executes resolved calls and both conditional branches', async () => {
     const funcs = await compile(`namespace test.runtime
 func Double:

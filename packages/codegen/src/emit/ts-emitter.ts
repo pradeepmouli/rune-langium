@@ -1385,8 +1385,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     if (localMetadata) return true;
     return this.model.docs.some((doc) =>
       AstUtils.streamAllContents(doc.parseResult.value).some((node) => {
-        if (!isRosettaSymbolReference(node) || !isRosettaFunction(node.symbol?.ref)) return false;
-        const target = node.symbol.ref;
+        const target = isRosettaFunction(node)
+          ? node
+          : isRosettaSymbolReference(node) && isRosettaFunction(node.symbol?.ref)
+            ? node.symbol.ref
+            : undefined;
+        if (!target) return false;
         return functionInputs(target).some(hasFieldMetadata) || hasFieldMetadata(functionOutput(target));
       })
     );

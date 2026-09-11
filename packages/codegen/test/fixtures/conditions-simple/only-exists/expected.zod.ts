@@ -46,8 +46,5 @@ export const HasABCSchema = z
     b: z.string().optional(),
     c: z.string().optional()
   })
-  .refine(
-    (data) => (runeAttrExists(data.a) && runeAttrExists(data.b) && !runeAttrExists(data.c)),
-    'OnlyAB: only [a, b] may exist in HasABC'
-  );
+  .refine((data) => (!runeAttrExists(data.c)), 'OnlyAB: only [a, b] may exist in HasABC');
 export type HasABC = z.infer<typeof HasABCSchema>;

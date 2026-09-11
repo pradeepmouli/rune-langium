@@ -151,10 +151,12 @@ Build({ value: 'wrong' });
     expect(funcs.RefRaw!({ text: 'A' })).toEqual({ value: { value: 'A' } });
   });
 
-  it('compiles data, alias, and metadata function boundaries across namespaces and layouts', async () => {
-    const { RuneDsl } = createRuneDslServices();
-    const sources = [
-      `namespace typed.models
+  it.each(['per-namespace', 'barrel', 'single-file'] as const)(
+    'compiles data, alias, and inherited metadata boundaries in %s layout',
+    async (layout) => {
+      const { RuneDsl } = createRuneDslServices();
+      const sources = [
+        `namespace typed.models
 type Child:
  value int (1..1)
  condition Positive: value > 0
@@ -167,8 +169,16 @@ func Read:
    [metadata reference]
  output: result int (1..1)
  set result: source -> child -> value
+func MetaEcho:
+ inputs:
+  source Parent (1..1)
+   [metadata scheme]
+ output:
+  result Parent (1..1)
+   [metadata scheme]
+ set result: source
 `,
-      `namespace typed.functions
+        `namespace typed.functions
 import typed.models.*
 func Echo:
  inputs: source ParentAlias (1..1)
@@ -179,23 +189,29 @@ func Build:
  output: result Parent (1..1)
  set result: Parent {child: Child {value: value}}
 `,
-      `namespace typed.bridge
+        `namespace typed.inherited
+import typed.models.*
+func InheritedRead extends Read:
+ set result: source -> child -> value
+func InheritedEcho extends MetaEcho:
+ set result: super(source)
+`,
+        `namespace typed.bridge
 import typed.models.*
 func ReadValue:
  inputs: value int (1..1)
  output: result int (1..1)
  set result: Read(Parent {child: Child {value: value}})
 `
-    ];
-    const docs = sources.map((source, index) =>
-      RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
-        source,
-        URI.parse(`inmemory:///typed-${index}.rosetta`)
-      )
-    );
-    await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
-    expect(docs.flatMap((doc) => doc.parseResult.parserErrors)).toEqual([]);
-    for (const layout of ['per-namespace', 'barrel', 'single-file'] as const) {
+      ];
+      const docs = sources.map((source, index) =>
+        RuneDsl.shared.workspace.LangiumDocumentFactory.fromString(
+          source,
+          URI.parse(`inmemory:///typed-${index}.rosetta`)
+        )
+      );
+      await RuneDsl.shared.workspace.DocumentBuilder.build(docs);
+      expect(docs.flatMap((doc) => doc.parseResult.parserErrors)).toEqual([]);
       const outputs = await generate(docs, { target: 'typescript', typescript: { layout } });
       expect(outputs.flatMap((out) => out.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
       const directory = mkdtempSync(join(tmpdir(), 'rune-function-types-'));
@@ -216,13 +232,22 @@ func ReadValue:
           types: []
         });
         expect(
-          ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+          ts
+            .getPreEmitDiagnostics(program)
+            .map(
+              (d) =>
+                ts.flattenDiagnosticMessageText(d.messageText, '\n') +
+                '\n' +
+                (d.file && d.start !== undefined
+                  ? d.file.text.split('\n')[d.file.getLineAndCharacterOfPosition(d.start).line]
+                  : '')
+            )
         ).toEqual([]);
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
     }
-  });
+  );
 
   it('keeps the recursive helper single in a bundled multi-namespace module', async () => {
     const docs = await Promise.all([

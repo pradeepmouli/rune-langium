@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import {
+  isChoiceOption,
   isListLiteral,
   isRosettaFeatureCall,
   isRosettaSymbolReference,
@@ -12,7 +13,8 @@ import type { ExpressionTranspilerContext } from './transpiler.js';
 export function renderOnlyExists(
   expr: RosettaOnlyExistsExpression,
   ctx: ExpressionTranspilerContext,
-  render: (node: RosettaExpression) => string
+  render: (node: RosettaExpression) => string,
+  renderAttribute: (name: string) => string
 ): string | undefined {
   const args = expr.args.length
     ? expr.args
@@ -28,16 +30,14 @@ export function renderOnlyExists(
   const names: string[] = [];
   for (const arg of args) {
     if (parent && isRosettaFeatureCall(arg) && arg.receiver && render(arg.receiver) === parentText)
-      names.push(arg.feature?.$refText ?? '');
+      names.push(isChoiceOption(arg.feature?.ref) ? featureName(arg.feature.ref) : (arg.feature?.$refText ?? ''));
     else if (!parent && isRosettaSymbolReference(arg)) names.push(arg.symbol.$refText);
     else return undefined;
   }
   const attributes = parent ? typeFeatures(expressionType(parent)).map(featureName) : [...ctx.attributeTypes.keys()];
-  const access = (name: string) =>
-    parent ? `__parent[${JSON.stringify(name)}]` : (ctx.localBindings?.get(name) ?? `${ctx.selfName}.${name}`);
-  const checks = names.map((name) => `runeAttrExists(${access(name)})`);
-  for (const name of attributes) if (!names.includes(name)) checks.push(`!runeAttrExists(${access(name)})`);
-  return parent
-    ? `((__parent) => __parent != null && ${checks.join(' && ')})(${parentText})`
-    : `(${checks.join(' && ')})`;
+  const allowed = new Set(names);
+  const access = (name: string) => (parent ? `__parent?.[${JSON.stringify(name)}]` : renderAttribute(name));
+  const checks = attributes.filter((name) => !allowed.has(name)).map((name) => `!runeAttrExists(${access(name)})`);
+  const predicate = checks.join(' && ') || 'true';
+  return parent ? `((__parent) => ${predicate})(${parentText})` : `(${predicate})`;
 }

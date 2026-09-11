@@ -145,10 +145,20 @@ describe('metadata expression rendering', () => {
     expect(evaluateMissing({ value: undefined })).toEqual({});
   });
 
+  it('converts wrapper kinds in the JavaScript runtime and rejects unresolved field payloads', () => {
+    const field = Function('value', `${metadataRuntimeSource(false)}; return runeToField(value, 'reference')`);
+    const reference = Function('value', `${metadataRuntimeSource(false)}; return runeToReference(value, 'field')`);
+    const values = [{ value: 0 }, { value: 2, meta: { scheme: 'unit' } }];
+    expect(field(values)).toEqual([{ value: 0, meta: {} }, values[1]]);
+    expect(reference([{ value: 0, meta: {} }, values[1]])).toEqual([{ value: 0, meta: {} }, values[1]]);
+    expect(() => field({ externalReference: 'key' })).toThrow(/without a value/);
+    expect(() => field([{ value: 0 }, { externalReference: 'key' }])).toThrow(/without a value/);
+  });
+
   it('normalizes values for field and reference metadata attributes', () => {
     const evaluate = Function(
       'input',
-      `${metadataRuntimeSource(false)}; return [runeToField(input.field), runeToReference(input.reference), runeToReference(input.pure), runeToField(input.pure)]`
+      `${metadataRuntimeSource(false)}; return [runeToField(input.field, 'field'), runeToReference(input.reference), runeToReference(input.pure, 'reference'), runeToField(input.pure)]`
     ) as (input: { field: string; reference: number; pure: { externalReference: string } }) => unknown;
     const existingField = { value: 'existing', meta: { scheme: 'urn:x' } };
     const existingReference = { externalReference: 'ref' };

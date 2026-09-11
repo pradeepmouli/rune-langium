@@ -48,13 +48,28 @@ function parse(src: string) {
 }
 
 describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`', () => {
-  it('requires the listed fields and rejects other populated fields', () => {
+  it('allows absent listed fields and rejects other populated fields', () => {
     const expr = parse('(a, b) only exists');
     const ctx = makeCtx();
     const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
     expect(evaluate({ a: 1, b: 2 }, runeAttrExists)).toBe(true);
-    expect(evaluate({ a: 1 }, runeAttrExists)).toBe(false);
+    expect(evaluate({ a: 1 }, runeAttrExists)).toBe(true);
     expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(false);
+  });
+
+  it('reads forbidden Choice arms using their emitted field names', () => {
+    const expr = parse('(a, b) only exists');
+    const ctx = makeCtx({
+      attributeTypes: new Map([
+        ['a', 'string'],
+        ['b', 'string'],
+        ['Cash', 'Cash']
+      ]),
+      attrAccessorNames: new Map([['Cash', 'cash']])
+    });
+    const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({}, runeAttrExists)).toBe(true);
+    expect(evaluate({ cash: {} }, runeAttrExists)).toBe(false);
   });
 
   it('does not fall through to DIAGNOSTIC', () => {
@@ -63,15 +78,15 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
     expect(transpileExpression(expr, ctx)).not.toContain('DIAGNOSTIC');
   });
 
-  it('all attrs listed: every listed field must be present', () => {
+  it('all attrs listed: no fields are required', () => {
     const expr = parse('(a, b, c) only exists');
     const ctx = makeCtx();
     const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({}, runeAttrExists)).toBe(false);
+    expect(evaluate({}, runeAttrExists)).toBe(true);
     expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(true);
   });
 
-  it('requires listed fields even without forbidden fields', () => {
+  it('allows absent fields when no declared fields are forbidden', () => {
     const expr = parse('(a, b) only exists');
     const ctx = makeCtx({
       attributeTypes: new Map([
@@ -80,7 +95,7 @@ describe('RosettaOnlyExistsExpression — paren-tuple form `(a, b) only exists`'
       ])
     });
     const evaluate = Function('data', 'runeAttrExists', `return ${transpileExpression(expr, ctx)}`);
-    expect(evaluate({}, runeAttrExists)).toBe(false);
+    expect(evaluate({}, runeAttrExists)).toBe(true);
     expect(evaluate({ a: 1, b: 2, c: 3 }, runeAttrExists)).toBe(true);
   });
 

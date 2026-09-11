@@ -30,8 +30,8 @@ export function renderFuncAssignment(
       : undefined;
     if (sourceKind !== assignment.metadataKind) {
       expr = targetMany
-        ? `${helper}(${expr}, ${sourceKind !== undefined})`
-        : `((value) => value == null ? undefined : ${helper}(value, ${sourceKind !== undefined}))(${expr})`;
+        ? `${helper}(${expr}, ${JSON.stringify(sourceKind ?? 'value')})`
+        : `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${expr})`;
     }
   }
 

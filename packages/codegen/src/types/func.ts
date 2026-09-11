@@ -85,7 +85,7 @@ export interface RuneFunc {
   dispatchAttribute?: string;
   dispatchValue?: string;
   superFunc?: string;
-  superFunction?: { name: string; inputs: readonly { name: string }[] };
+  superFunction?: ExpressionTranspilerContext['superFunction'];
   /** Alias (shortcut) declarations in declaration order. */
   aliases: RuneFuncAlias[];
   /** Body assignments (set/add) in declaration order. */
@@ -463,7 +463,8 @@ export function extractFuncs(
       const parent = node.superFunction?.ref;
       const assignments = node.operations.map((operation): RuneFuncAssignment => {
         const path: string[] = [];
-        let target: AstNode | undefined = operation.assignRoot.ref;
+        let target: AstNode | undefined =
+          operation.assignRoot.ref ?? functionAttribute(node, operation.assignRoot.$refText);
         for (let segment = operation.path; segment; segment = segment.next) {
           path.push(segment.feature.ref?.name ?? segment.feature.$refText);
           target = segment.feature.ref;
@@ -487,7 +488,9 @@ export function extractFuncs(
         dispatchAttribute: node.dispatchAttribute?.ref?.name ?? node.dispatchAttribute?.$refText,
         dispatchValue: node.dispatchValue?.value.ref?.name ?? node.dispatchValue?.value.$refText,
         superFunc: parent?.name ?? node.superFunction?.$refText,
-        superFunction: parent ? { name: parent.name, inputs: functionInputs(parent) } : undefined,
+        superFunction: parent
+          ? { name: parent.name, inputs: functionInputs(parent), output: functionOutput(parent) }
+          : undefined,
         aliases: node.shortcuts.map((alias) => ({ name: alias.name, exprNode: alias.expression })),
         assignments,
         preConditions: node.conditions,
@@ -523,4 +526,10 @@ function functionSignature(node: RosettaFunction): RosettaFunction {
         isRosettaFunction(element) && element.name === node.name && !element.dispatchAttribute
     ) ?? node
   );
+}
+
+/** Resolve a signature attribute, including inherited inputs and output. */
+export function functionAttribute(func: RosettaFunction, name: string): Attribute | undefined {
+  const output = functionOutput(func);
+  return output?.name === name ? output : functionInputs(func).find((input) => input.name === name);
 }
