@@ -5,7 +5,7 @@ import { expressionIsMany, typeFeatures } from '../expr/navigation.js';
 import { expressionMetadataKind } from '../expr/metadata-type.js';
 import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
 import { AstUtils, isMultiReference, type AstNode } from 'langium';
-import { renderFuncAssignment } from './func-assignment.js';
+import { renderFuncAssignment, renderCardinalityChecks } from './func-assignment.js';
 import {
   fieldMetadataKind,
   hasFieldMetadata,
@@ -1661,7 +1661,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     }
 
     if (upper === 1 && lower === 1) return `${fieldName}: ${baseType}`;
-    if (upper === 1 && lower === 0) return `${fieldName}?: ${baseType}`;
+    if ((upper === 0 || upper === 1) && lower === 0) return `${fieldName}?: ${baseType}`;
 
     return `${fieldName}: ${baseType}[]`;
   }
@@ -2000,30 +2000,15 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       bodyLines.push(TsNamespaceEmitter.emitFuncSet(assignment, ctx));
     }
 
-    if (ctx.outputAccumulator === 'scalar' && func.output.cardinality.lower > 0) {
-      bodyLines.push(
-        `  if (result == null) throw new Error(${JSON.stringify(`Function '${func.name}' produced no result`)});`
-      );
-    }
-    if (ctx.outputAccumulator === 'array' && func.output.cardinality.lower > 0) {
-      bodyLines.push(
-        `  if (result.length < ${func.output.cardinality.lower}) throw new Error(${JSON.stringify(`Function '${func.name}' produced too few results`)});`
-      );
-    }
-
-    if (func.output.cardinality.upper !== null) {
-      const exceedsUpperBound =
-        ctx.outputAccumulator === 'array'
-          ? `result.length > ${func.output.cardinality.upper}`
-          : func.output.cardinality.upper === 0
-            ? 'result != null'
-            : undefined;
-      if (exceedsUpperBound) {
-        bodyLines.push(
-          `  if (${exceedsUpperBound}) throw new Error(${JSON.stringify(`Function '${func.name}' produced too many results`)});`
-        );
-      }
-    }
+    bodyLines.push(
+      ...renderCardinalityChecks(
+        'result',
+        func.output.cardinality,
+        ctx.outputAccumulator === 'array',
+        `Function '${func.name}' produced ${ctx.outputAccumulator === 'array' ? 'too few results' : 'no result'}`,
+        `Function '${func.name}' produced too many results`
+      ).map((line) => `  ${line}`)
+    );
 
     const postConds = TsNamespaceEmitter.emitFuncConditions(func.postConditions, func, ctx);
     for (const block of postConds) {

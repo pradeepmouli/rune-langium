@@ -20,7 +20,7 @@ async function compile(source: string | string[], typeAssertions = '') {
   const outputs = await generate(docs, { target: 'typescript' });
   expect(outputs.flatMap((output) => output.diagnostics.filter((d) => d.severity === 'error'))).toEqual([]);
   const code = outputs[0]!.content;
-  const fileName = resolve('generated-function-runtime.ts');
+  const fileName = resolve(import.meta.dirname, 'generated-function-runtime.ts');
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,
@@ -45,6 +45,66 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(
+    ['', 'scheme', 'reference'].flatMap((annotation) =>
+      [
+        [1, 2],
+        [2, 3],
+        [0, 2],
+        [2, null],
+        [1, 1],
+        [0, 1],
+        [0, 0]
+      ].map(([lower, upper]) => ({ annotation, lower: lower!, upper }))
+    )
+  )('checks nested assignment bounds lower=$lower upper=$upper ($annotation)', async ({ annotation, lower, upper }) => {
+    const many = upper === null || upper! > 1;
+    const funcs = await compile(`namespace test.nestedBounds
+type Result:
+ values int (${lower}..${upper ?? '*'})
+ ${annotation ? `[metadata ${annotation}]` : ''}
+func SetValues:
+ inputs: values int (0..${many ? '*' : '1'})
+ output: result Result (1..1)
+ set result -> values: values
+${
+  many
+    ? `func AppendValues:
+ inputs:
+  initial Result (1..1)
+  values int (0..*)
+ output: result Result (1..1)
+ set result: initial
+ add result -> values: values`
+    : ''
+}`);
+    const wrap = (value: number) =>
+      annotation === 'scheme' ? { value, meta: {} } : annotation === 'reference' ? { value } : value;
+    if (upper === 0) {
+      expect(funcs.SetValues!({})).toEqual({ values: undefined });
+      expect(() => funcs.SetValues!({ values: 1 })).toThrow();
+      return;
+    }
+    const values = many ? Array.from({ length: Math.max(lower, 1) }, (_, i) => i + 1) : 1;
+    expect(funcs.SetValues!({ values })).toEqual({ values: Array.isArray(values) ? values.map(wrap) : wrap(values) });
+    if (lower > 0) {
+      expect(() => funcs.SetValues!({})).toThrow();
+      if (many) expect(() => funcs.SetValues!({ values: Array(lower - 1).fill(1) })).toThrow();
+    } else expect(funcs.SetValues!({})).toEqual({ values: many ? [] : undefined });
+    if (many) {
+      const initial = { values: Array(Math.max(lower, 1)).fill(1).map(wrap) };
+      expect(funcs.AppendValues!({ initial, values: [2] })).toEqual({
+        values: [...Array(Math.max(lower, 1)).fill(1).map(wrap), wrap(2)]
+      });
+      if (upper !== null) {
+        expect(() => funcs.SetValues!({ values: Array(upper! + 1).fill(1) })).toThrow();
+        const full = { values: Array(upper).fill(1).map(wrap) };
+        expect(() => funcs.AppendValues!({ initial: full, values: [2] })).toThrow();
+        expect(full.values).toHaveLength(upper!);
+      }
+    }
+  });
+
   it.each([
     ['date', '2026-09-11', 'to-date'],
     ['time', '12:30:00', 'to-time'],
@@ -242,7 +302,9 @@ func Scalar:
   );
 
   it.each(
-    ['scheme', 'reference'].flatMap((annotation) => ['extract', 'then'].map((operation) => ({ annotation, operation })))
+    ['scheme', 'reference'].flatMap((annotation) =>
+      ['extract', 'then', 'reduce'].map((operation) => ({ annotation, operation }))
+    )
   )('retains $annotation metadata in identity $operation', async ({ annotation, operation }) => {
     const funcs = await compile(`namespace test.identityExtract
 func Retain:
