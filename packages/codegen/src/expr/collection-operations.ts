@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
+import { unwrapMetadata } from './metadata-runtime.js';
 import { expressionMetadataKind } from './metadata-type.js';
 import { inlineContext, freshLocal } from './inline-function.js';
 
@@ -34,8 +35,15 @@ export function renderCollectionOperation(
   const metadata = kind ? { kind, many: false } : undefined;
   const fn = 'function' in expr ? expr.function : undefined;
   const param = freshLocal(ctx, fn?.parameters?.[0]?.name ?? 'item');
+  const valueCtx = { ...ctx, preserveMetadata: false };
+  const key = (name: string) =>
+    fn ? render(fn.body, inlineContext(fn, valueCtx, [name], metadata)) : metadata ? unwrapMetadata(name, false) : name;
   if (isFilterOperation(expr) || isMapOperation(expr)) {
-    const body = fn ? render(fn.body, inlineContext(fn, ctx, [param], metadata)) : param;
+    const body = isFilterOperation(expr)
+      ? key(param)
+      : fn
+        ? render(fn.body, inlineContext(fn, ctx, [param], metadata))
+        : param;
     return `(${argument} ?? []).${isFilterOperation(expr) ? 'filter' : 'map'}((${param}) => ${body})`;
   }
   if (isSortOperation(expr)) {
@@ -43,16 +51,16 @@ export function renderCollectionOperation(
     const b = freshLocal(ctx, '__sortB');
     const keyA = freshLocal(ctx, '__keyA');
     const keyB = freshLocal(ctx, '__keyB');
-    const ka = fn ? render(fn.body, inlineContext(fn, ctx, [a], metadata)) : a;
-    const kb = fn ? render(fn.body, inlineContext(fn, ctx, [b], metadata)) : b;
+    const ka = key(a);
+    const kb = key(b);
     return `[...(${argument} ?? [])].sort((${a}, ${b}) => { const ${keyA} = (${ka}); const ${keyB} = (${kb}); return ${keyA} < ${keyB} ? -1 : ${keyA} > ${keyB} ? 1 : 0; })`;
   }
   if (isMinOperation(expr) || isMaxOperation(expr)) {
     const item = freshLocal(ctx, '__item');
     const best = freshLocal(ctx, '__best');
     const values = freshLocal(ctx, '__values');
-    const itemKey = fn ? render(fn.body, inlineContext(fn, ctx, [item], metadata)) : item;
-    const bestKey = fn ? render(fn.body, inlineContext(fn, ctx, [best], metadata)) : best;
+    const itemKey = key(item);
+    const bestKey = key(best);
     const sign = isMinOperation(expr) ? '<' : '>';
     return `(() => { const ${values} = (${argument} ?? []); if (${values}.length === 0) return undefined; return ${values}.slice(1).reduce((${best}, ${item}) => (${itemKey}) ${sign} (${bestKey}) ? ${item} : ${best}, ${values}[0]); })()`;
   }

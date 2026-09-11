@@ -29,8 +29,12 @@ Constructor fields use the same declared metadata and cardinality normalization
 as function parameters. Nested assignments enter wrapper values and create missing
 containers; collection intermediates select or create the first element, matching
 the Java generator's builder semantics.
-Implicit collection and pipeline calls retain the item's metadata, and `default`
-preserves the selected wrapper while converting raw fallbacks when needed.
+Implicit collection and pipeline calls retain the item's metadata. Conditional
+and `default` branches normalize mixed raw, field, and reference values to a common
+wrapper kind while evaluating only the selected branch. Arithmetic, aggregation,
+conversions, predicates, and collection comparison keys read payloads even when
+the enclosing output requires metadata. Filters, sorting, and min/max retain the
+selected values' wrappers.
 Dispatch compares the selector's value without changing the wrapper used by its body.
 Converting reference metadata to field metadata requires a payload value; an
 unresolved reference throws instead of producing a field wrapper without a value.
@@ -44,8 +48,11 @@ Data subtype switch cases require a populated distinguishing field when the
 selector's declared type does not already establish that subtype. Inherited
 fields alone do not distinguish a subtype from its parent.
 
-Abstract functions and library declarations require implementations. A generated
-library callable exposes a typed `.implementation` property for the host to supply.
+Mapped TypeScript library functions use the bindings in `typescriptProfile`:
+`Min` and `Max` use `Math.min` and `Math.max`, and `IsLeapYear` uses the shared
+runtime implementation in every output layout. Unmapped library callables expose
+a typed `.implementation` property for the host to supply. Abstract functions
+still require implementations.
 Invalid or unknown expression nodes emit diagnostics and throw when evaluated.
 
 `test/emit/function-runtime.test.ts` parses Rune, generates complete modules,

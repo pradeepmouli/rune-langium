@@ -17,8 +17,8 @@ export type BuiltinMapping = string | Record<string, unknown>;
 /**
  * Binding for a builtin library function.
  * - `expr` — a host expression to substitute (e.g. `'Math.min'`).
- * - `importFrom` — a sidecar module path to import the implementation from.
- * - `null` — the function is intentionally not emitted (no binding known).
+ * - `importFrom` — a sidecar module path; when paired with `expr`, that names its exported binding.
+ * - `null` — no builtin binding is known; the emitter determines external-function behavior.
  */
 export type LibraryFuncMapping = { importFrom?: string; expr?: string } | null;
 

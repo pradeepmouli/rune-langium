@@ -24,6 +24,10 @@ export interface MetadataAnnotatedNode {
 
 export type FieldMetadataKind = 'field' | 'reference';
 
+export function unwrapMetadata(value: string, many: boolean): string {
+  return many ? `(${value} ?? []).map((field) => field.value).filter((value) => value != null)` : `(${value})?.value`;
+}
+
 /** Whether a data type stores keys or template metadata on the value itself. */
 export function hasTypeMetadata(node: MetadataAnnotatedNode | undefined): boolean {
   return (

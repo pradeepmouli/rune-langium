@@ -13,6 +13,13 @@ import { AstUtils } from 'langium';
 import { functionAttribute, functionOutput } from '../types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './metadata-runtime.js';
 
+function mergeMetadataKinds(
+  left: FieldMetadataKind | undefined,
+  right: FieldMetadataKind | undefined
+): FieldMetadataKind | undefined {
+  return left === 'reference' || right === 'reference' ? 'reference' : (left ?? right);
+}
+
 /** Identify wrappers from declarations, without inspecting ambiguous `value` fields. */
 export function expressionMetadataKind(
   expr: RosettaExpression | undefined,
@@ -81,11 +88,10 @@ export function expressionMetadataKind(
     case 'DefaultOperation': {
       const left = expressionMetadataKind(expr.left, next);
       const right = expressionMetadataKind(expr.right, next);
-      return left === 'reference' || right === 'reference' ? 'reference' : (left ?? right);
+      return mergeMetadataKinds(left, right);
     }
     case 'RosettaConditionalExpression': {
-      const consequent = expressionMetadataKind(expr.ifthen, next);
-      return !expr.elsethen || expressionMetadataKind(expr.elsethen, next) === consequent ? consequent : undefined;
+      return mergeMetadataKinds(expressionMetadataKind(expr.ifthen, next), expressionMetadataKind(expr.elsethen, next));
     }
     default:
       return undefined;

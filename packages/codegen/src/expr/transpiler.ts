@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { fieldMetadataKind, hasFieldMetadata, metadataName, type FieldMetadataKind } from './metadata-runtime.js';
+import {
+  fieldMetadataKind,
+  hasFieldMetadata,
+  metadataName,
+  unwrapMetadata,
+  type FieldMetadataKind
+} from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
 import { expressionMetadataKind } from './metadata-type.js';
 import { functionOutput } from '../types/func.js';
@@ -213,10 +219,6 @@ export function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): 
   return ctx.metadataAttributes?.has(name) && !ctx.preserveMetadata
     ? unwrapMetadata(raw, ctx.attributeTypes.get(name)?.includes('[]') ?? false)
     : raw;
-}
-
-function unwrapMetadata(value: string, many: boolean): string {
-  return many ? `(${value} ?? []).map((field) => field.value).filter((value) => value != null)` : `(${value})?.value`;
 }
 
 /**
@@ -946,10 +948,11 @@ export function transpileConditional(expr: RosettaExpression, ctx: ExpressionTra
   if (!isRosettaConditionalExpression(expr)) {
     return diagnosticFallback('Expected a conditional expression');
   }
-  const antecedent = transpileExpression(expr.if, ctx);
-  const consequent = transpileExpression(expr.ifthen, ctx);
+  const kind = ctx.preserveMetadata ? expressionMetadataKind(expr) : undefined;
+  const antecedent = transpileExpression(expr.if, { ...ctx, preserveMetadata: false });
+  const consequent = transpileMetadataBranch(expr.ifthen, kind, ctx);
   const alternative = expr.elsethen
-    ? transpileExpression(expr.elsethen, ctx)
+    ? transpileMetadataBranch(expr.elsethen, kind, ctx)
     : ctx.emitMode === 'ts-expression'
       ? 'undefined'
       : 'true';
@@ -1014,21 +1017,26 @@ export function transpilePassthrough(expr: RosettaExpression, ctx: ExpressionTra
   return fieldMetadata && !ctx.preserveMetadata ? unwrapMetadata(value, expressionIsMany(expr.argument)) : value;
 }
 
+function transpileMetadataBranch(
+  node: RosettaExpression | undefined,
+  kind: FieldMetadataKind | undefined,
+  ctx: ExpressionTranspilerContext
+): string {
+  const value = node ? transpileExpression(node, ctx) : ctx.selfName;
+  const sourceKind = node ? expressionMetadataKind(node) : ctx.implicitMetadata?.kind;
+  if (!kind || kind === sourceKind) return value;
+  const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
+  return `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${value})`;
+}
+
 /** Use the right operand lazily when the left operand is absent or empty. */
 export function transpileDefault(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   if (!isDefaultOperation(expr)) {
     return diagnosticFallback('Invalid expression: not DefaultOperation');
   }
   const kind = ctx.preserveMetadata ? expressionMetadataKind(expr) : undefined;
-  const branch = (node: RosettaExpression | undefined): string => {
-    const value = node ? transpileExpression(node, ctx) : ctx.selfName;
-    const sourceKind = node ? expressionMetadataKind(node) : ctx.implicitMetadata?.kind;
-    if (!kind || kind === sourceKind) return value;
-    const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
-    return `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${value})`;
-  };
-  const left = branch(expr.left);
-  const right = branch(expr.right);
+  const left = transpileMetadataBranch(expr.left, kind, ctx);
+  const right = transpileMetadataBranch(expr.right, kind, ctx);
   const value = freshLocal(ctx, '__default');
   return `((${value}) => ${value} == null || (Array.isArray(${value}) && ${value}.length === 0) ? ${right} : ${value})(${left})`;
 }
@@ -1343,13 +1351,14 @@ export function transpileExpression(
   );
   if (collection !== undefined) return collection;
 
-  const cardinality = renderCardinalityOperation(expr, ctx, transpileExpression);
+  const valueCtx = ctx.preserveMetadata ? { ...ctx, preserveMetadata: false } : ctx;
+  const cardinality = renderCardinalityOperation(expr, valueCtx, transpileExpression);
   if (cardinality !== undefined) return cardinality;
 
   if (isOneOfOperation(expr)) {
-    if (!expr.argument) return emitOneOf([...ctx.attributeTypes.keys()], { ...ctx, emitMode: 'zod-refine' });
-    if (isListLiteral(expr.argument)) return `runeCheckOneOf(${transpileExpression(expr.argument, ctx)})`;
-    const argument = transpileExpression(expr.argument, ctx);
+    if (!expr.argument) return emitOneOf([...ctx.attributeTypes.keys()], { ...valueCtx, emitMode: 'zod-refine' });
+    if (isListLiteral(expr.argument)) return `runeCheckOneOf(${transpileExpression(expr.argument, valueCtx)})`;
+    const argument = transpileExpression(expr.argument, valueCtx);
     const fields = typeFeatures(expressionType(expr.argument)).map(featureName);
     if (fields.length)
       return `((__one) => __one != null && runeCheckOneOf([${fields.map((name) => `__one[${JSON.stringify(name)}]`).join(', ')}]))(${argument})`;
@@ -1359,9 +1368,9 @@ export function transpileExpression(
     const names = expr.attributes
       .map((attribute) => attribute.$refText ?? attribute.ref?.name)
       .filter((name): name is string => name !== undefined);
-    const value = expr.argument ? transpileExpression(expr.argument, ctx) : undefined;
+    const value = expr.argument ? transpileExpression(expr.argument, valueCtx) : undefined;
     const values = names
-      .map((name) => (value ? `__choice[${JSON.stringify(name)}]` : attrAccessExpr(name, ctx)))
+      .map((name) => (value ? `__choice[${JSON.stringify(name)}]` : attrAccessExpr(name, valueCtx)))
       .join(', ');
     const predicate =
       expr.necessity === 'optional'
@@ -1372,22 +1381,22 @@ export function transpileExpression(
 
   // Arithmetic (T069)
   if (isArithmeticOperation(expr)) {
-    return transpileArithmetic(expr, ctx);
+    return transpileArithmetic(expr, valueCtx);
   }
 
   // Comparison and equality (T069)
   if (isComparisonOperation(expr) || isEqualityOperation(expr)) {
-    return transpileComparison(expr, ctx);
+    return transpileComparison(expr, valueCtx);
   }
 
   // Boolean logical (T070)
   if (isLogicalOperation(expr)) {
-    return transpileBoolean(expr, ctx);
+    return transpileBoolean(expr, valueCtx);
   }
 
   // Set operations (T071)
   if (isRosettaContainsExpression(expr) || isRosettaDisjointExpression(expr)) {
-    return transpileSetOps(expr, ctx);
+    return transpileSetOps(expr, valueCtx);
   }
 
   // Aggregations (T072)
@@ -1403,7 +1412,7 @@ export function transpileExpression(
     isFlattenOperation(expr) ||
     isReverseOperation(expr)
   ) {
-    return transpileAggregation(expr, ctx);
+    return transpileAggregation(expr, isSumOperation(expr) || isRosettaCountOperation(expr) ? valueCtx : ctx);
   }
 
   // Higher-order (T073)
@@ -1420,7 +1429,7 @@ export function transpileExpression(
   if (isRosettaExistsExpression(expr)) {
     const arg = expr.argument;
     if (arg) {
-      const argStr = transpileExpression(arg, ctx);
+      const argStr = transpileExpression(arg, valueCtx);
       return `runeAttrExists(${argStr})`;
     }
     return `runeAttrExists(${ctx.selfName})`;
@@ -1429,7 +1438,7 @@ export function transpileExpression(
   if (isRosettaAbsentExpression(expr)) {
     const arg = expr.argument;
     if (arg) {
-      const argStr = transpileExpression(arg, ctx);
+      const argStr = transpileExpression(arg, valueCtx);
       return `!runeAttrExists(${argStr})`;
     }
     return `!runeAttrExists(${ctx.selfName})`;
@@ -1446,9 +1455,9 @@ export function transpileExpression(
   if (isRosettaOnlyExistsExpression(expr)) {
     const predicate = renderOnlyExists(
       expr,
-      ctx,
-      (node) => transpileExpression(node, ctx),
-      (name) => attrAccessExpr(name, ctx)
+      valueCtx,
+      (node) => transpileExpression(node, valueCtx),
+      (name) => attrAccessExpr(name, valueCtx)
     );
     if (predicate !== undefined) return predicate;
     const message = `only-exists requires fields of a common parent in '${ctx.conditionName}'`;
@@ -1481,7 +1490,7 @@ export function transpileExpression(
     return transpileDefault(expr, ctx);
   }
   if (isJoinOperation(expr)) {
-    return transpileJoin(expr, ctx);
+    return transpileJoin(expr, valueCtx);
   }
   if (isRosettaOnlyElement(expr)) {
     return transpileOnlyElement(expr, ctx);
@@ -1492,28 +1501,28 @@ export function transpileExpression(
 
   // Value conversions.
   if (isToStringOperation(expr)) {
-    return transpileToString(expr, ctx);
+    return transpileToString(expr, valueCtx);
   }
   if (isToNumberOperation(expr)) {
-    return transpileToNumber(expr, ctx);
+    return transpileToNumber(expr, valueCtx);
   }
   if (isToIntOperation(expr)) {
-    return transpileToInt(expr, ctx);
+    return transpileToInt(expr, valueCtx);
   }
   if (isToEnumOperation(expr)) {
-    return transpileToEnum(expr, ctx);
+    return transpileToEnum(expr, valueCtx);
   }
   if (isToDateOperation(expr)) {
-    return transpileToDate(expr, ctx);
+    return transpileToDate(expr, valueCtx);
   }
   if (isToTimeOperation(expr)) {
-    return transpileToTime(expr, ctx);
+    return transpileToTime(expr, valueCtx);
   }
   if (isToDateTimeOperation(expr)) {
-    return transpileToDateTime(expr, ctx);
+    return transpileToDateTime(expr, valueCtx);
   }
   if (isToZonedDateTimeOperation(expr)) {
-    return transpileToZonedDateTime(expr, ctx);
+    return transpileToZonedDateTime(expr, valueCtx);
   }
 
   // Switch expressions.

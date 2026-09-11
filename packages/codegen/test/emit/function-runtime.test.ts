@@ -43,6 +43,120 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it('compares collection payloads while retaining selected metadata', async () => {
+    const operations = [
+      ['Sorted', 'int', '0..*', 'values sort'],
+      ['SortedKey', 'int', '0..*', 'values sort x [x]'],
+      ['Minimum', 'int', '0..1', 'values min'],
+      ['MaximumKey', 'int', '0..1', 'values max x [x]'],
+      ['Filtered', 'boolean', '0..*', 'values filter x [x]']
+    ];
+    const funcs = await compile(`namespace test.collectionMetadata
+${operations
+  .map(
+    ([name, type, card, expr]) => `func ${name}:
+ inputs:
+  values ${type} (0..*)
+   [metadata scheme]
+ output: result ${type} (${card})
+  [metadata scheme]
+ set result: ${expr}`
+  )
+  .join('\n')}`);
+    const field = (value: unknown) => ({ value, meta: { scheme: String(value) } });
+    const values = [field(10), field(2), field(1)];
+    expect(funcs.Sorted!({ values })).toEqual([values[2], values[1], values[0]]);
+    expect(funcs.SortedKey!({ values })).toEqual([values[2], values[1], values[0]]);
+    expect(funcs.Minimum!({ values })).toBe(values[2]);
+    expect(funcs.MaximumKey!({ values })).toBe(values[0]);
+    expect(funcs.Filtered!({ values: [field(false), field(true)] })).toEqual([field(true)]);
+    expect(funcs.Minimum!({ values: [] })).toBeUndefined();
+    expect(values).toEqual([field(10), field(2), field(1)]);
+  });
+
+  it.each(['scheme', 'reference'])('computes payloads before wrapping %s outputs', async (annotation) => {
+    const operations = [
+      ['Arithmetic', 'n int (1..1)', 'int', 'n + 1'],
+      ['Total', 'numbers int (0..*)', 'int', 'numbers sum'],
+      ['Convert', 'text string (1..1)', 'int', 'text to-int'],
+      ['Compare', 'n int (1..1)', 'boolean', 'n > 0'],
+      ['Logic', 'flag boolean (1..1)', 'boolean', 'flag and True'],
+      ['Count', 'numbers int (0..*)', 'int', 'numbers count'],
+      ['Join', 'texts string (0..*)', 'string', 'texts join "-"']
+    ];
+    const funcs = await compile(
+      `namespace test.computedMetadata\n${operations
+        .map(
+          ([name, input, output, expression]) => `func ${name}:
+ inputs:
+  ${input}
+   [metadata scheme]
+ output: result ${output} (1..1)
+  [metadata ${annotation}]
+ set result: ${expression}`
+        )
+        .join('\n')}`
+    );
+    const field = (value: unknown) => ({ value, meta: { scheme: 'input' } });
+    const wrap = (value: unknown) => ({ value, ...(annotation === 'scheme' ? { meta: {} } : {}) });
+    expect(funcs.Arithmetic!({ n: field(3) })).toEqual(wrap(4));
+    expect(funcs.Total!({ numbers: [field(2), field(3)] })).toEqual(wrap(5));
+    expect(funcs.Convert!({ text: field('12') })).toEqual(wrap(12));
+    expect(funcs.Compare!({ n: field(-1) })).toEqual(wrap(false));
+    expect(funcs.Logic!({ flag: field(false) })).toEqual(wrap(false));
+    expect(funcs.Count!({ numbers: [field(2), field(3)] })).toEqual(wrap(2));
+    expect(funcs.Join!({ texts: [field('a'), field('b')] })).toEqual(wrap('a-b'));
+  });
+
+  it.each(
+    ['scheme', 'reference'].flatMap((annotation) =>
+      ['1..1', '0..1', '0..*'].map((cardinality) => ({ annotation, cardinality }))
+    )
+  )(
+    'normalizes mixed conditional branches for $annotation $cardinality outputs',
+    async ({ annotation, cardinality }) => {
+      const funcs = await compile(`namespace test.conditionalMetadata
+${['FieldOrRaw', 'RefOrField']
+  .map(
+    (name) => `func ${name}:
+ inputs:
+  flag boolean (1..1)
+   [metadata scheme]
+  raw int (${cardinality})
+  field int (${cardinality})
+   [metadata scheme]
+  reference int (${cardinality})
+   [metadata reference]
+ output: result int (${cardinality})
+  [metadata ${annotation}]
+ set result: if flag then ${name === 'FieldOrRaw' ? 'field else raw' : 'reference else field'}`
+  )
+  .join('\n')}
+`);
+      const list = (value: unknown) => (cardinality === '0..*' ? [value] : value);
+      const field = { value: 3, meta: { scheme: 'field' } };
+      const reference = { value: 4, externalReference: 'key', meta: { scheme: 'ref' } };
+      const args = { raw: list(5), field: list(field), reference: list(reference) };
+      expect(funcs.FieldOrRaw!({ ...args, flag: { value: true, meta: {} } })).toEqual(list(field));
+      expect(funcs.FieldOrRaw!({ ...args, flag: { value: false, meta: {} } })).toEqual(list({ value: 5, meta: {} }));
+      expect(funcs.RefOrField!({ ...args, flag: { value: true, meta: {} } })).toEqual(
+        list(annotation === 'scheme' ? { value: 4, meta: reference.meta } : reference)
+      );
+      expect(funcs.RefOrField!({ ...args, flag: { value: false, meta: {} } })).toEqual(list(field));
+      expect(
+        funcs.RefOrField!({
+          ...args,
+          reference: list({ externalReference: 'unresolved' }),
+          flag: { value: false, meta: {} }
+        })
+      ).toEqual(list(field));
+      if (cardinality !== '1..1') {
+        const empty = cardinality === '0..*' ? [] : undefined;
+        expect(funcs.FieldOrRaw!({ raw: empty, field: empty, flag: { value: false, meta: {} } })).toEqual(empty);
+      }
+    }
+  );
+
   it.each(['scheme', 'reference'])('normalizes %s constructor fields from their declarations', async (annotation) => {
     const funcs = await compile(`namespace test.constructorMetadata
 type Container:
