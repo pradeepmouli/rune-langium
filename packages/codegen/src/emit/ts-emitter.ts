@@ -1989,6 +1989,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       );
     }
 
+    if (ctx.outputAccumulator === 'array' && func.output.cardinality.upper !== null) {
+      bodyLines.push(
+        `  if (result.length > ${func.output.cardinality.upper}) throw new Error(${JSON.stringify(`Function '${func.name}' produced too many results`)});`
+      );
+    }
+
     const postConds = TsNamespaceEmitter.emitFuncConditions(func.postConditions, func, ctx);
     for (const block of postConds) {
       bodyLines.push(block);

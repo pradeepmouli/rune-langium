@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { LangiumDocument } from 'langium';
+import { AstUtils, type LangiumDocument } from 'langium';
 import {
   isChoice,
   isData,
@@ -16,6 +16,7 @@ import {
   type RosettaEnumeration,
   type RosettaFunction,
   type RosettaTypeAlias,
+  type TypeCall,
   qualifiedExportPath
 } from '@rune-langium/core';
 import type {
@@ -28,6 +29,8 @@ import type {
 import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
 import { buildTypeReferenceGraph, findCyclicTypes } from './cycle-detector.js';
 import { resolveTypeCallTarget } from './emit/type-ref-resolver.js';
+import { functionInputs, functionSignature } from './types/func.js';
+import { fieldMetadataKind, type FieldMetadataKind } from './expr/metadata-runtime.js';
 
 function humanizeLabel(name: string): string {
   return name
@@ -176,7 +179,7 @@ export function generatePreviewSchemas(
       const func = namespace.funcByName.get(name)!;
       const targetId = `${namespace.namespace}.${name}`;
       if (options.targetId && options.targetId !== targetId) continue;
-      schemas.push(buildFunctionSchema(func.node, func.sourceUri, namespace, targetId, cyclicTypes));
+      schemas.push(buildFunctionSchema(func.node, namespace, targetId, cyclicTypes));
     }
   }
 
@@ -226,7 +229,14 @@ export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[]
         }
         index.choiceByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
       } else if (isRosettaFunction(element)) {
-        index.funcByName.set(element.name, { node: element, sourceUri: doc.uri.toString() });
+        const signature = functionSignature(element);
+        const existing = index.funcByName.get(element.name);
+        if (!existing || !signature.dispatchAttribute) {
+          index.funcByName.set(element.name, {
+            node: signature,
+            sourceUri: AstUtils.getDocument(signature).uri.toString()
+          });
+        }
       }
     }
   }
@@ -967,7 +977,6 @@ function buildChoiceOptionField(
 
 function buildFunctionSchema(
   func: RosettaFunction,
-  sourceUri: string,
   namespace: NamespaceIndex,
   targetId: string,
   cyclicTypes: ReadonlySet<string>
@@ -975,12 +984,12 @@ function buildFunctionSchema(
   const unsupportedFeatures = new Set<string>();
   const sourceMap: PreviewSourceMapEntry[] = [];
 
-  const inputFields = (func.inputs ?? []).map((attr) =>
+  const inputFields = functionInputs(func).map((attr) =>
     buildField(attr, {
       namespace,
       unsupportedFeatures,
       sourceMap,
-      sourceUri,
+      sourceUri: AstUtils.getDocument(attr).uri.toString(),
       maxDepth: DEFAULT_MAX_DEPTH,
       depth: 0,
       path: attr.name,
@@ -1378,4 +1387,96 @@ function addSourceMapEntry(
     sourceLine: start.line + 1,
     sourceChar: start.character + 1
   });
+}
+
+/** Adapt plain form values to the generated function's metadata-bearing input contract. */
+export function normalizePreviewInputs(
+  documents: LangiumDocument[],
+  targetId: string,
+  inputs: Record<string, unknown>,
+  wrappers: Record<FieldMetadataKind, (value: unknown) => unknown>
+): Record<string, unknown> {
+  const namespaces = buildNamespaceIndexes(documents);
+  const namespace = namespaces.find(
+    (entry) =>
+      targetId.startsWith(`${entry.namespace}.`) && entry.funcByName.has(targetId.slice(entry.namespace.length + 1))
+  );
+  const func = namespace?.funcByName.get(targetId.slice(namespace.namespace.length + 1))?.node;
+  if (!namespace || !func) throw new Error(`Function '${targetId}' has no input signature.`);
+  const typeIndex = namespace;
+  const activeValues = new Set<object>();
+
+  function normalizeObject(value: unknown, fields: ReadonlyMap<string, (value: unknown) => unknown>): unknown {
+    if (value == null) return undefined;
+    if (typeof value !== 'object' || Array.isArray(value))
+      throw new Error('Expected an object in function preview inputs.');
+    if (activeValues.has(value)) throw new Error('Cyclic function preview input values are not supported.');
+    activeValues.add(value);
+    try {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, child]) => {
+          const normalize = fields.get(key);
+          return [key, normalize ? normalize(child) : child];
+        })
+      );
+    } finally {
+      activeValues.delete(value);
+    }
+  }
+
+  function attributeFields(attributes: readonly Attribute[]): Map<string, (value: unknown) => unknown> {
+    return new Map(
+      attributes.map((attr) => [
+        attr.name,
+        (value: unknown) => {
+          if (value == null) return undefined;
+          const kind = fieldMetadataKind(attr);
+          const normalizeItem = (item: unknown) => {
+            if (item == null) return undefined;
+            const normalized = normalizeType(attr.typeCall, item);
+            return kind ? wrappers[kind](normalized) : normalized;
+          };
+          return isArrayCardinality(decodeCardinality(attr.card)) && Array.isArray(value)
+            ? value.map(normalizeItem)
+            : normalizeItem(value);
+        }
+      ])
+    );
+  }
+
+  function choiceFields(choice: Choice): Map<string, (value: unknown) => unknown> {
+    return new Map(
+      choice.attributes.map((option) => [
+        choiceOptionFieldName(option.typeCall.type?.ref?.name ?? option.typeCall.type?.$refText ?? ''),
+        (value: unknown) => normalizeType(option.typeCall, value)
+      ])
+    );
+  }
+
+  function normalizeType(typeCall: TypeCall | undefined, value: unknown): unknown {
+    if (value == null) return undefined;
+    return resolveTypeCallTarget(
+      typeCall,
+      typeIndex,
+      {
+        onPrimitive: () => value,
+        onEnum: () => value,
+        onData: (node) => {
+          const { attributes, choiceAncestor } = collectInheritedAttributes(node);
+          const fields = new Map([
+            ...(choiceAncestor ? choiceFields(choiceAncestor) : []),
+            ...attributeFields(attributes)
+          ]);
+          return normalizeObject(value, fields);
+        },
+        onChoice: (node) => normalizeObject(value, choiceFields(node)),
+        onUnresolved: (name) => {
+          throw new Error(`Cannot resolve function input type '${name}'.`);
+        }
+      },
+      ''
+    );
+  }
+
+  return normalizeObject(inputs, attributeFields(functionInputs(func))) as Record<string, unknown>;
 }

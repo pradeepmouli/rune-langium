@@ -103,7 +103,8 @@ vi.mock('@rune-langium/codegen/export', () => ({
   generate: generateMock,
   generatePreviewSchemas: generatePreviewSchemasMock,
   emitStandaloneZodSchema: emitStandaloneZodSchemaMock,
-  RUNTIME_HELPER_JS_SOURCE: ''
+  RUNTIME_HELPER_JS_SOURCE: 'const runeToField = undefined; const runeToReference = undefined;',
+  normalizePreviewInputs: (_documents: unknown, _targetId: string, inputs: unknown) => inputs
 }));
 
 const getActiveConditionPredicatesMock = vi.fn(() => []);

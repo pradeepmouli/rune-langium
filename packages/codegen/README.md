@@ -17,7 +17,13 @@ return type. Data values use `RuneFuncData<TypeShape>`, which preserves nested
 fields while excluding class validation methods. Required inputs are required properties; optional inputs use `?`;
 collection inputs and outputs use arrays. An optional scalar output returns
 `T | undefined`. These types describe values and collection shape; TypeScript
-arrays do not encode every Rune minimum or maximum cardinality.
+arrays do not encode every Rune minimum or maximum cardinality. Generated
+functions enforce declared output bounds at runtime.
+
+Studio function previews resolve inherited and dispatch input signatures.
+`normalizePreviewInputs` adapts plain form values to metadata wrappers using the
+shared type resolver and runtime helpers, including nested and recursive values
+beyond the form renderer's expansion depth.
 
 Function bodies preserve calls, aliases, assignments, conditions, inheritance,
 and dispatch. Qualified calls retain their resolved namespace through imports,

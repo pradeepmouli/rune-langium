@@ -39,7 +39,8 @@ import {
   generate,
   generatePreviewSchemas,
   emitStandaloneZodSchema,
-  RUNTIME_HELPER_JS_SOURCE
+  RUNTIME_HELPER_JS_SOURCE,
+  normalizePreviewInputs
 } from '@rune-langium/codegen/export';
 import type { Target, FormPreviewSchema, GeneratorOutput, GeneratorDiagnostic } from '@rune-langium/codegen/export';
 import { findDataNode, getActiveConditionPredicates } from '@rune-langium/codegen/instances';
@@ -869,11 +870,13 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
   // for callers (tests, `instance:execute`-style future callers) that don't
   // have a namespace-qualified name to give.
   let selectedModulePath: string | undefined;
+  let selectedTargetId = funcName;
   for (const result of results) {
     const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
     const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
     if (func) {
       selectedModulePath = result.relativePath;
+      selectedTargetId = `${ns}.${func.name}`;
       break;
     }
   }
@@ -903,8 +906,8 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
     const output = runInWorkerSandbox(
       '',
       '__functionRuntime',
-      { functionValue, inputs },
-      '__functionRuntime.functionValue(__functionRuntime.inputs)'
+      { functionValue, inputs, documents, targetId: selectedTargetId, normalizePreviewInputs },
+      '__functionRuntime.functionValue(__functionRuntime.normalizePreviewInputs(__functionRuntime.documents, __functionRuntime.targetId, __functionRuntime.inputs, { field: runeToField, reference: runeToReference }))'
     );
 
     scope.postMessage({

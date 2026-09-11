@@ -41,6 +41,82 @@ describe('codegen-worker parsed/emitted function execution', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([undefined, 5])(
+    'adapts raw inherited metadata inputs, including recursive fields (optional=%s)',
+    async (maybe) => {
+      const { scope, dispatch } = await loadRealWorker();
+      dispatch({
+        type: 'preview:setFiles',
+        requestId: 'metadata:files',
+        files: [
+          {
+            uri: 'file:///metadata.rosetta',
+            content: `namespace forms
+type Payload:
+ next Payload (0..1)
+ value int (1..1)
+ items int (0..*)
+  [metadata scheme]
+type Result:
+ amount int (1..1)
+ maybe int (0..1)
+ values int (0..*)
+ payload Payload (1..1)
+func Base:
+ inputs:
+  amount int (1..1)
+   [metadata scheme]
+  maybe int (0..1)
+   [metadata reference]
+  values int (0..*)
+   [metadata reference]
+  payload Payload (1..1)
+   [metadata scheme]
+ output: result Result (1..1)
+ set result: Result { amount: amount, maybe: maybe, values: values, payload: payload }
+func Derived extends Base:
+ set result: super(amount, maybe, values, payload)`
+          }
+        ]
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const tail = { value: 9, items: [6] };
+      const inputs = {
+        amount: 0,
+        maybe,
+        values: [0, 2],
+        payload: { value: 7, items: [3, 4], next: { value: 8, items: [], next: { value: 8, items: [], next: tail } } }
+      };
+      const original = structuredClone(inputs);
+      dispatch({ type: 'preview:execute', funcName: 'forms.Derived', inputs, requestId: 'metadata:execute' });
+      await waitForMessage(scope, 'preview:execute-result');
+      expect(scope.postMessage).toHaveBeenLastCalledWith({
+        type: 'preview:execute-result',
+        funcName: 'forms.Derived',
+        requestId: 'metadata:execute',
+        output: {
+          amount: 0,
+          maybe,
+          values: [0, 2],
+          payload: {
+            value: 7,
+            items: [
+              { value: 3, meta: {} },
+              { value: 4, meta: {} }
+            ],
+            next: {
+              value: 8,
+              items: [],
+              next: { value: 8, items: [], next: { value: 9, items: [{ value: 6, meta: {} }] } }
+            }
+          }
+        }
+      });
+      expect(inputs).toEqual(original);
+    },
+    15_000
+  );
+
   it('executes qualified calls when both namespaces declare the same function name', async () => {
     const { scope, dispatch } = await loadRealWorker();
     dispatch({

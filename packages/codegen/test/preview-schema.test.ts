@@ -52,6 +52,53 @@ async function parseModels(sources: readonly string[]) {
 }
 
 describe('FormPreviewSchema generation', () => {
+  it.each([false, true])(
+    'uses inherited and dispatch signatures regardless of document order (reverse=%s)',
+    async (reverse) => {
+      const sources = [
+        `namespace preview.base
+enum Mode:
+ First
+ Second
+func Base:
+ inputs:
+  amount int (1..1)
+   [metadata scheme]
+  values int (0..*)
+   [metadata reference]
+ output: result int (1..1)
+ set result: amount
+func Dispatch:
+ inputs:
+  mode Mode (1..1)
+  amount int (1..1)
+ output: result int (1..1)
+ set result: amount
+`,
+        `namespace preview.base
+func Dispatch(mode: Mode -> First):
+ set result: amount + 1
+`,
+        `namespace preview.child
+import preview.base.*
+func Derived extends Base:
+ set result: super(amount, values)
+`
+      ];
+      const docs = await parseModels(reverse ? [...sources].reverse() : sources);
+      const schemas = generatePreviewSchemas(docs);
+      const derived = schemas.find((schema) => schema.targetId === 'preview.child.Derived')!;
+      expect(derived.fields.map((field) => field.path)).toEqual(['amount', 'values']);
+      expect(derived.fields[0]).toMatchObject({ kind: 'number', required: true });
+      expect(derived.fields[1]).toMatchObject({ kind: 'array', children: [{ kind: 'number' }] });
+      const baseUri = docs[reverse ? 2 : 0]!.uri.toString();
+      expect(derived.sourceMap?.find((entry) => entry.fieldPath === 'amount')?.sourceUri).toBe(baseUri);
+      const dispatch = schemas.find((schema) => schema.targetId === 'preview.base.Dispatch')!;
+      expect(dispatch.fields.map((field) => field.path)).toEqual(['mode', 'amount']);
+      expect(dispatch.fields[0]).toMatchObject({ kind: 'enum', enumValues: [{ value: 'First' }, { value: 'Second' }] });
+    }
+  );
+
   skipIfNodeLt22('serializes scalar, optional, array, enum, and nested fields', async () => {
     const doc = await parseModel(`
       namespace "test.preview"

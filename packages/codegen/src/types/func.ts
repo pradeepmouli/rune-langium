@@ -528,7 +528,7 @@ export function functionOutput(node: RosettaFunction, seen: Set<RosettaFunction>
   return parent ? functionOutput(parent, seen) : signature !== node ? functionOutput(signature, seen) : undefined;
 }
 
-function functionSignature(node: RosettaFunction): RosettaFunction {
+export function functionSignature(node: RosettaFunction): RosettaFunction {
   if (!node.dispatchAttribute) return node;
   return (
     node.$container.elements.find(

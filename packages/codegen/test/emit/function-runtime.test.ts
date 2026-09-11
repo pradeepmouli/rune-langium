@@ -43,6 +43,28 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['set', 'add'])('enforces finite output bounds for %s assignments', async (operation) => {
+    const funcs = await compile(`namespace test.outputBounds
+func Limited:
+ inputs: values int (0..*)
+ output: result int (1..2)
+ ${operation} result: values
+func Optional:
+ inputs: values int (0..*)
+ output: result int (0..2)
+ ${operation} result: values
+func Unbounded:
+ inputs: values int (0..*)
+ output: result int (0..*)
+ ${operation} result: values`);
+    expect(funcs.Limited!({ values: [1, 2] })).toEqual([1, 2]);
+    expect(() => funcs.Limited!({ values: [] })).toThrow('too few results');
+    expect(() => funcs.Limited!({ values: [1, 2, 3] })).toThrow('too many results');
+    expect(funcs.Optional!({ values: [] })).toEqual([]);
+    expect(() => funcs.Optional!({ values: [1, 2, 3] })).toThrow('too many results');
+    expect(funcs.Unbounded!({ values: [1, 2, 3] })).toEqual([1, 2, 3]);
+  });
+
   it.each(['scheme', 'reference'])(
     'deduplicates %s collections by payload and keeps the first wrapper',
     async (annotation) => {

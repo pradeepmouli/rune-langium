@@ -35,6 +35,7 @@ import { runGenerate, IMPLEMENTED_TARGETS } from './generator.js';
 import { generatePreviewSchemas as runGeneratePreviewSchemas } from './preview-schema.js';
 
 export { IMPLEMENTED_TARGETS };
+export { normalizePreviewInputs } from './preview-schema.js';
 
 export type {
   FormPreviewKind,
