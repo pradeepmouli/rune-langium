@@ -51,6 +51,9 @@ conversions, predicates, and collection comparison keys read payloads even when
 the enclosing output requires metadata. Filters, sorting, and min/max retain the
 selected values' wrappers.
 
+Deep navigation resolves Data types through `default` receivers. Functionless
+`extract` preserves item metadata for wrapped outputs and reads payloads for raw outputs.
+
 Choice constructors, navigation, and assignment paths share emitted option names.
 Nested assignments select the declared Choice arm when building its value, including
 through collection and metadata boundaries.

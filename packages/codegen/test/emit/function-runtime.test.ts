@@ -45,6 +45,71 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['', 'scheme', 'reference'])(
+    'navigates deeply through default receivers (metadata=%s)',
+    async (annotation) => {
+      const metadata = annotation ? `[metadata ${annotation}]` : '';
+      const funcs = await compile(`namespace test.deepDefault
+type Detail:
+ amount int (1..1)
+type Entry:
+ detail Detail (1..1)
+func Many:
+ inputs:
+  primary Entry (0..*)
+   ${metadata}
+  fallback Entry (0..*)
+   ${metadata}
+ output: result int (0..*)
+ set result: (primary default fallback) ->> amount
+func Scalar:
+ inputs:
+  primary Entry (0..1)
+   ${metadata}
+  fallback Entry (0..1)
+   ${metadata}
+ output: result int (0..1)
+ set result: (primary default fallback) ->> amount`);
+      const wrap = (amount: number) => {
+        const value = { detail: { amount } };
+        return annotation === 'scheme'
+          ? { value, meta: { scheme: 'unit' } }
+          : annotation === 'reference'
+            ? { value, externalReference: 'id' }
+            : value;
+      };
+      expect(funcs.Many!({ primary: [wrap(1), wrap(2)], fallback: [wrap(3)] })).toEqual([1, 2]);
+      expect(funcs.Many!({ primary: [], fallback: [wrap(3)] })).toEqual([3]);
+      expect(funcs.Many!({ primary: [], fallback: [] })).toEqual([]);
+      expect(funcs.Scalar!({ primary: wrap(1), fallback: wrap(2) })).toBe(1);
+      expect(funcs.Scalar!({ fallback: wrap(2) })).toBe(2);
+      expect(funcs.Scalar!({})).toBeUndefined();
+    }
+  );
+
+  it.each(['scheme', 'reference'])('retains %s metadata in identity extracts', async (annotation) => {
+    const funcs = await compile(`namespace test.identityExtract
+func Retain:
+ inputs: values int (0..*)
+  [metadata ${annotation}]
+ output: result int (0..*)
+  [metadata ${annotation}]
+ set result: values extract
+func Raw:
+ inputs: values int (0..*)
+  [metadata ${annotation}]
+ output: result int (0..*)
+ set result: values extract`);
+    const item =
+      annotation === 'scheme' ? { value: 4, meta: { scheme: 'unit' } } : { value: 4, externalReference: 'id' };
+    const retained = funcs.Retain!({ values: [item] });
+    expect(retained).toEqual([item]);
+    expect((retained as unknown[])[0]).toBe(item);
+    expect(funcs.Raw!({ values: [item] })).toEqual([4]);
+    expect(funcs.Retain!({ values: [] })).toEqual([]);
+    expect(funcs.Raw!({ values: [] })).toEqual([]);
+  });
+
   it.each(['constructor', 'assignment'])('uses emitted Choice keys in %s expressions', async (mode) => {
     const funcs = await compile(`namespace test.choiceKeys
 type Cash:

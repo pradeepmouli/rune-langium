@@ -29,7 +29,8 @@ export function renderCollectionOperation(
     isMinOperation(expr) ||
     isMaxOperation(expr);
   if (!owned) return undefined;
-  const argumentCtx = isMapOperation(expr) && ctx.emitMode.startsWith('ts-') ? { ...ctx, preserveMetadata: true } : ctx;
+  const argumentCtx =
+    isMapOperation(expr) && expr.function && ctx.emitMode.startsWith('ts-') ? { ...ctx, preserveMetadata: true } : ctx;
   const argument = expr.argument ? render(expr.argument, argumentCtx) : ctx.selfName;
   const kind = argumentCtx.preserveMetadata ? expressionMetadataKind(expr.argument) : undefined;
   const metadata = kind ? { kind, many: false } : undefined;

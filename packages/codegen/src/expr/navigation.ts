@@ -148,6 +148,7 @@ export function expressionType(expr: RosettaExpression | undefined): RosettaType
   if (isRosettaConditionalExpression(expr)) {
     return expressionType(expr.ifthen) ?? expressionType(expr.elsethen);
   }
+  if (isDefaultOperation(expr)) return expressionType(expr.left) ?? expressionType(expr.right);
   if (expr.$type === 'RosettaImplicitVariable') {
     // `item` is commonly wrapped by one or more feature calls before it is
     // consumed. Walk the linked containment chain to recover the switch case

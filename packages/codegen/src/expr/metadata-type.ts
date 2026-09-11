@@ -84,9 +84,10 @@ export function expressionMetadataKind(
       return argumentKind;
     }
     case 'ThenOperation':
-    case 'MapOperation':
     case 'ReduceOperation':
       return expr.function ? expressionMetadataKind(expr.function.body, next) : undefined;
+    case 'MapOperation':
+      return expressionMetadataKind(expr.function ? expr.function.body : expr.argument, next);
     case 'FilterOperation':
     case 'FirstOperation':
     case 'LastOperation':
