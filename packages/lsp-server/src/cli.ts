@@ -58,7 +58,7 @@ async function main(): Promise<void> {
     // The socket is already open (from wss 'connection' event), but
     // WebSocketTransport only sets `connected = true` on the 'open' event.
     // Re-emit 'open' so the transport recognises the connection.
-    const transport = new WebSocketTransport({ socket: ws as any });
+    const transport = new WebSocketTransport({ socket: ws });
     ws.emit('open');
 
     // Bind and start processing messages

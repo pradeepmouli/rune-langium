@@ -3,10 +3,19 @@
 // Source namespace: test.rules
 
 // --- rune-codegen runtime helpers (inlined) ---
-const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null).length === 1;
+const runeValueKey = (value: unknown): string => {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return typeof value + ':' + String(value);
+  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const fields = value as Record<string, unknown>;
+  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+};
+const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
 
-const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
+
+const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
 
 const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
@@ -36,8 +45,8 @@ export class Trade implements TradeShape {
   active: boolean;
 
   constructor(data: TradeShape) {
-    this.notional = data.notional as typeof this.notional;
-    this.active = data.active as typeof this.active;
+    this.notional = data.notional;
+    this.active = data.active;
   }
 
   static from(json: unknown): Trade {
@@ -56,11 +65,18 @@ export function isTrade(x: unknown): x is Trade {
 }
 
 
-export function validateIsLargeTrade(trade: TradeShape): boolean {
+export function validateIsLargeTrade(trade: RuneFuncData<TradeShape>): boolean {
   return trade.Trade?.notional > 1000000;
 }
 
 export const runeReportRules = {
   'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' },
 } as const;
-// (functions emitted by Phase 8b appear below this line)
+
+type RuneFuncData<T> = T extends readonly (infer I)[]
+  ? RuneFuncData<I>[]
+  : T extends (...args: never[]) => unknown
+    ? never
+    : T extends object
+      ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
+      : T;

@@ -1,0 +1,8 @@
+id: comment-audit-javascript
+valid:
+  - 'const pattern = /\/\* spec #123 \*\//;'
+invalid:
+  - |-
+    // First line.
+    // Second line.
+    const value = 1;

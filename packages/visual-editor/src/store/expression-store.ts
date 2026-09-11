@@ -103,7 +103,7 @@ export function replaceInTree(tree: ExpressionNode, targetId: string, replacemen
  */
 function updateLiteralInTree(tree: ExpressionNode, targetId: string, value: unknown): ExpressionNode {
   if (tree.id === targetId) {
-    return { ...tree, value } as ExpressionNode;
+    return { ...tree, value };
   }
   return mapChildren(tree, (child) => updateLiteralInTree(child, targetId, value));
 }
@@ -126,13 +126,13 @@ function findNode(tree: ExpressionNode, nodeId: string): ExpressionNode | null {
  */
 function deepCloneWithNewIds(tree: ExpressionNode): ExpressionNode {
   const newId = crypto.randomUUID();
-  const cloned = mapChildren({ ...tree, id: newId } as ExpressionNode, (child) => deepCloneWithNewIds(child));
+  const cloned = mapChildren({ ...tree, id: newId }, (child) => deepCloneWithNewIds(child));
   return cloned;
 }
 
 /** Check if a value is an ExpressionNode (has $type). */
 function isExprNode(v: unknown): v is ExpressionNode {
-  return v != null && typeof v === 'object' && '$type' in (v as object);
+  return v != null && typeof v === 'object' && '$type' in v;
 }
 
 /** Get a field from a record via bracket access. */
@@ -300,7 +300,7 @@ function mapChildren(node: ExpressionNode, fn: (child: ExpressionNode) => Expres
     }
   }
 
-  return changed ? (n as unknown as ExpressionNode) : node;
+  return changed ? n : node;
 }
 
 // ---------------------------------------------------------------------------
@@ -340,7 +340,7 @@ export function createExpressionStore(
           const placeholder: ExpressionNode = {
             $type: 'Placeholder',
             id: crypto.randomUUID()
-          } as unknown as ExpressionNode;
+          };
           const tree = get().tree;
           set({ tree: replaceInTree(tree, nodeId, placeholder) });
         },

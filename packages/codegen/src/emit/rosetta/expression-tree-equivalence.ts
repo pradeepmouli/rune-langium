@@ -64,8 +64,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
     return a.every((v, i) => deepEqual(v, b[i]));
   }
   if (a !== null && b !== null && typeof a === 'object' && typeof b === 'object') {
-    const ak = Object.keys(a as object).sort();
-    const bk = Object.keys(b as object).sort();
+    const ak = Object.keys(a).sort();
+    const bk = Object.keys(b).sort();
     if (ak.length !== bk.length || ak.some((k, i) => k !== bk[i])) return false;
     return ak.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
   }

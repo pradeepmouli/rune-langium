@@ -2,10 +2,8 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { DefaultScopeComputation } from 'langium';
-import type { AstNode, AstNodeDescription, LangiumDocument } from 'langium';
-import type { MultiMap } from 'langium';
+import type { AstNode, AstNodeDescription, LangiumDocument, MultiMap } from 'langium';
 import { isRosettaFunction, isRosettaEnumeration } from '../generated/ast.js';
-import type { RosettaModel } from '../generated/ast.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 
 /**
@@ -79,7 +77,7 @@ export class RuneDslScopeComputation extends DefaultScopeComputation {
     // overload's local symbol map.  We do this once per overload function node
     // by checking whether the overload has a dispatchAttribute.
     if (isRosettaFunction(node) && node.dispatchAttribute) {
-      const model = node.$container as RosettaModel;
+      const model = node.$container;
       if (!model || model.$type !== 'RosettaModel') return;
 
       for (const element of model.elements) {

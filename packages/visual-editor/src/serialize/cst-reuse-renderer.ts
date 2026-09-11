@@ -223,7 +223,7 @@ export function renderNamespace(args: RenderArgs): string {
   for (const { n, range } of placed) {
     if (range.offset > cursor) parts.push(copyGapExcluding(originalSource, cursor, range.offset, sortedRemoved));
     const render = makeRender(n.id);
-    parts.push(render(n.data as unknown as DehydratedNode, []));
+    parts.push(render(n.data, []));
     cursor = range.end;
   }
   if (cursor < originalSource.length)
@@ -239,7 +239,7 @@ export function renderNamespace(args: RenderArgs): string {
     const additions: string[] = [];
     for (const n of fresh) {
       const render = makeRender(n.id);
-      const rendered = render(n.data as unknown as DehydratedNode, []);
+      const rendered = render(n.data, []);
       if (rendered !== '') additions.push(rendered);
     }
     if (additions.length > 0) {

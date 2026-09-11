@@ -33,6 +33,7 @@
 
 import type { LangiumDocument } from 'langium';
 import { URI } from 'langium';
+import { transform } from 'sucrase';
 import { createRuneDslServices, hydrateModelDocuments } from '@rune-langium/core';
 import {
   generate,
@@ -623,45 +624,22 @@ async function runInstanceSchema(typeFqn: string, requestId: string): Promise<vo
 }
 
 // ---------------------------------------------------------------------------
-// TS → JS stripping for @rune-langium/codegen output
+// TypeScript → JavaScript transpilation for @rune-langium/codegen output
 // ---------------------------------------------------------------------------
 
-function stripTypeAnnotations(tsCode: string): string {
-  const lines = tsCode.split('\n');
-  const output: string[] = [];
-
-  for (const line of lines) {
-    // Drop the export keyword — functions cached from func.fileContents are
-    // declared at top scope and will be referenced by name after the body.
-    let cleaned = line.replace(/^export\s+/, '');
-
-    // Strip object literal type annotations in parameters:
-    // (param: { field: Type })  →  (param)
-    cleaned = cleaned.replace(/(\w+)\??\s*:\s*\{[^{}]*\}\s*(?=[,)])/g, '$1');
-
-    // Strip union/intersection/array/generic type annotations in parameters:
-    // (param: TypeA | TypeB[], param2?: Generic<T>)  →  (param, param2)
-    cleaned = cleaned.replace(/(\w+)\??\s*:\s*[\w.<>()[\] |&?,]+\s*(?=[,)])/g, '$1');
-
-    // Strip arrow function return type: ): ReturnType =>  →  ) =>
-    cleaned = cleaned.replace(/\)\s*:\s*[\w.<>()[\] |&?,]+\s*=>/g, ') =>');
-
-    // Strip regular function/method return type: ): ReturnType {  →  ) {
-    cleaned = cleaned.replace(/\)\s*:\s*[\w.<>()[\] |&?| ]+\s*\{/g, ') {');
-    cleaned = cleaned.replace(/\)\s*:\s*\w+\s+is\s+\w+\s*\{/g, ') {');
-
-    // Strip variable type annotations: let/const x: Type = or let x: Type;
-    cleaned = cleaned.replace(/((?:const|let|var)\s+\w+)\s*:\s*[\w.<>()[\] |&?,]+\s*(=|;)/g, '$1 $2');
-
-    // Strip type casts
-    cleaned = cleaned.replace(/\s+as\s+typeof\s+this\.\w+/g, '');
-    cleaned = cleaned.replace(/\s+as\s+const/g, '');
-    cleaned = cleaned.replace(/\s+as\s+\w+/g, '');
-
-    output.push(cleaned);
+/** Parse and erase TypeScript syntax without using a host module resolver. */
+function transpileGeneratedTypeScript(tsCode: string, moduleName: string): string {
+  try {
+    return transform(tsCode, {
+      transforms: ['typescript', 'imports'],
+      filePath: moduleName,
+      disableESTransforms: true
+    }).code;
+  } catch (error) {
+    throw new Error(
+      `Unable to transpile generated module '${moduleName}': ${error instanceof Error ? error.message : String(error)}`
+    );
   }
-
-  return output.join('\n');
 }
 
 // Balanced-brace scan (not regex — a cyclic type's interface body could in
@@ -716,16 +694,10 @@ function stripInterfaceBlocks(tsCode: string): string {
  * type annotation (`export const XSchema: z.ZodType<X> = ...` — the
  * cyclic-type case, per zod-emitter.ts's `emitCyclicInterface` pairing).
  *
- * Deliberately NOT `stripTypeAnnotations`'s per-line regex passes: those are
- * scoped to FUNCTION-signature shapes (`executeFunction`'s isolated
- * function bodies) — their parameter-annotation regexes match any
- * `identifier: <paren-containing-expression>` followed by `,`/`)`, which is
- * exactly the shape of every field inside a Zod schema's own
- * `z.object({ id: z.string().min(1) })` — reusing them here corrupted real
- * schema bodies (e.g. `id: z.string().min(1)` → `id)`). The variable-
- * annotation regex below is anchored to the START of the line
- * (`const`/`let`/`var NAME:`), so it can never match a field deeper inside
- * an object literal.
+ * This schema-only path deliberately remains separate from the TypeScript
+ * compiler path above: it binds the worker's explicit `z` parameter and
+ * removes only standalone schema declarations that cannot be evaluated by
+ * `new Function`.
  */
 function stripModuleTypeAnnotations(tsCode: string): string {
   const withoutInterfaces = stripInterfaceBlocks(tsCode);
@@ -771,7 +743,13 @@ function stripModuleTypeAnnotations(tsCode: string): string {
  * react-doctor false positive: this is `new Function`, not `eval`, but the rule
  * flags both. Disable comment preserved.
  */
-function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown, returnExpr: string): unknown {
+function runInWorkerSandbox(
+  jsSource: string,
+  argName: string,
+  argValue: unknown,
+  returnExpr: string,
+  includeRuntimeHelpers = true
+): unknown {
   // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
   // react-doctor-disable-next-line react-doctor/no-eval
   const wrapper = new Function(
@@ -780,9 +758,81 @@ function runInWorkerSandbox(jsSource: string, argName: string, argValue: unknown
     'WebSocket',
     'XMLHttpRequest',
     'importScripts',
-    `${RUNTIME_HELPER_JS_SOURCE}\n\n${jsSource}\nreturn ${returnExpr};`
+    `${includeRuntimeHelpers ? `${RUNTIME_HELPER_JS_SOURCE}\n\n` : ''}${jsSource}\nreturn ${returnExpr};`
   );
   return wrapper(argValue, undefined, undefined, undefined, undefined);
+}
+
+interface GeneratedModuleRecord {
+  exports: Record<string, unknown>;
+}
+
+interface GeneratedModuleRuntime {
+  module: GeneratedModuleRecord;
+  require: (specifier: string) => Record<string, unknown>;
+}
+
+function normalizeGeneratedModulePath(path: string): string {
+  const segments: string[] = [];
+  for (const segment of path.replace(/\\/g, '/').split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') segments.pop();
+    else segments.push(segment);
+  }
+  return segments.join('/');
+}
+
+function resolveGeneratedModulePath(importer: string, specifier: string): string {
+  if (!specifier.startsWith('.')) {
+    throw new Error(`Generated preview module '${importer}' requested unsupported dependency '${specifier}'.`);
+  }
+  const lastSlash = importer.lastIndexOf('/');
+  const directory = lastSlash === -1 ? '' : importer.slice(0, lastSlash);
+  const joined = normalizeGeneratedModulePath(`${directory}/${specifier}`);
+  return joined.replace(/\.js$/, '.ts');
+}
+
+/** Evaluate generated modules with a require closure over generated outputs. */
+function createGeneratedModuleLoader(outputs: readonly GeneratorOutput[]): {
+  load: (relativePath: string) => Record<string, unknown>;
+} {
+  const sources = new Map<string, string>();
+  for (const output of outputs) {
+    const path = normalizeGeneratedModulePath(output.relativePath);
+    // Content is the complete emitted module. Snippets cannot resolve imports
+    // or sibling calls and are therefore not a valid execution source.
+    const source = output.content;
+    if (source) sources.set(path, source);
+  }
+  const modules = new Map<string, GeneratedModuleRecord>();
+
+  const load = (relativePath: string): Record<string, unknown> => {
+    const path = normalizeGeneratedModulePath(relativePath).replace(/\.js$/, '.ts');
+    const existing = modules.get(path);
+    if (existing) return existing.exports;
+    const source = sources.get(path);
+    if (source === undefined) throw new Error(`Generated preview module '${path}' was not emitted.`);
+
+    const module: GeneratedModuleRecord = { exports: {} };
+    // Cache before evaluation so generated recursive functions/modules can
+    // observe the same CommonJS export object during a cycle.
+    modules.set(path, module);
+    const runtime: GeneratedModuleRuntime = {
+      module,
+      require: (specifier) => load(resolveGeneratedModulePath(path, specifier))
+    };
+    const javascript = transpileGeneratedTypeScript(source, path);
+    runInWorkerSandbox(
+      `const __module = __generatedRuntime.module;\nconst exports = __module.exports;\nconst require = __generatedRuntime.require;\n${javascript}`,
+      '__generatedRuntime',
+      runtime,
+      '__generatedRuntime.module.exports',
+      false
+    );
+    return module.exports;
+  };
+
+  return { load };
 }
 
 // ---------------------------------------------------------------------------
@@ -818,17 +868,17 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
   // disambiguates which one to run; the bare-name branch here exists only
   // for callers (tests, `instance:execute`-style future callers) that don't
   // have a namespace-qualified name to give.
-  let code: string | undefined;
+  let selectedModulePath: string | undefined;
   for (const result of results) {
     const ns = result.relativePath.replace(/\//g, '.').replace(/\.ts$/, '');
     const func = result.funcs.find((f) => f.name === funcName || `${ns}.${f.name}` === funcName);
     if (func) {
-      code = func.fileContents;
+      selectedModulePath = result.relativePath;
       break;
     }
   }
 
-  if (code === undefined) {
+  if (selectedModulePath === undefined) {
     scope.postMessage({
       type: 'preview:execute-error',
       requestId,
@@ -839,20 +889,22 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
   }
 
   try {
-    // Strip TS type annotations from the isolated function body stored in
-    // func.fileContents. This contains only the function declaration — no
-    // imports, interface blocks, or helper declarations — so stripTypeAnnotations
-    // only needs to handle inline type syntax. Execution goes through
-    // runInWorkerSandbox — see its threat-model comment.
-    // `code`'s declaration is always the BARE function name regardless of
-    // whether `funcName` (the caller's request) was qualified — the return
-    // expression below must call by that same bare name.
+    // Load the complete generated module so function calls, metadata helpers,
+    // and imports from sibling generated modules share one module graph.
+    // Execution still goes through runInWorkerSandbox — see its threat-model
+    // comment.
+    const modules = createGeneratedModuleLoader(results);
+    const exports = modules.load(selectedModulePath);
     const bareName = funcName.includes('.') ? funcName.slice(funcName.lastIndexOf('.') + 1) : funcName;
+    const functionValue = exports[bareName];
+    if (typeof functionValue !== 'function') {
+      throw new Error(`Generated module '${selectedModulePath}' does not export function '${bareName}'.`);
+    }
     const output = runInWorkerSandbox(
-      stripTypeAnnotations(code),
-      'input',
-      inputs,
-      `typeof ${bareName} === 'function' ? ${bareName}(input) : undefined`
+      '',
+      '__functionRuntime',
+      { functionValue, inputs },
+      '__functionRuntime.functionValue(__functionRuntime.inputs)'
     );
 
     scope.postMessage({

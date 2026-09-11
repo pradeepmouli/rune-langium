@@ -658,7 +658,7 @@ function AppContent() {
     const nextBindings = deriveCuratedBindings(loadedModels);
     const prevBindings = restoredWorkspace.curatedModels ?? [];
     if (curatedBindingsEqual(prevBindings, nextBindings)) return;
-    const nextWorkspace = { ...restoredWorkspace, curatedModels: nextBindings } as WorkspaceRecord;
+    const nextWorkspace = { ...restoredWorkspace, curatedModels: nextBindings };
     void persistence.saveWorkspace(nextWorkspace).catch((err) => {
       reportWorkspaceError('Failed to save curated bundle bindings to browser storage', err);
     });

@@ -164,7 +164,7 @@ export async function importModel(source: string, options: ImportOptions): Promi
         : Promise.resolve(readJsonSchema(parseJsonSchemaSource(source) as never, readerOptions)));
 
   const built = buildModel(model, { emitSynonyms: options.synonyms ?? true });
-  const rendered = renderModel({ name: model.namespace, version: '0.0.0', elements: built.elements as never[] });
+  const rendered = renderModel({ name: model.namespace, version: '0.0.0', elements: built.elements });
   const text = splice(rendered, [built.synonymSourceDeclaration, built.operationAnnotationDeclaration]);
 
   return { text, model, diagnostics: [...readerDiagnostics, ...built.diagnostics] };

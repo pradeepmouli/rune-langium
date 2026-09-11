@@ -333,20 +333,7 @@ describe('cdm-smoke: typescript target', () => {
     expect(exitCode).toBe(0);
   }, 30_000);
 
-  /**
-   * T130: TypeScript target func assertion.
-   *
-   * After `--target typescript`, the generator must:
-   * (a) emit the Phase 8b marker in every output file.
-   * (b) for the US6 func fixtures, the funcs[] array must be non-empty.
-   *
-   * The US1 fixture documents contain no func declarations, so funcs[] is
-   * empty for those. We verify the marker is always present.
-   * The func-specific assertions use the US6 fixtures (see us6-funcs.test.ts).
-   *
-   * T130, FR-028.
-   */
-  it('typescript target output includes Phase 8b marker in every file (T130)', async () => {
+  it('typescript output without functions has no placeholder marker', async () => {
     const fixtureNames = ['basic-types', 'cardinality', 'enums', 'inheritance'];
     const services = createRuneDslServices();
     const docs = await Promise.all(fixtureNames.map((name) => parseFixture(name, services)));
@@ -354,9 +341,8 @@ describe('cdm-smoke: typescript target', () => {
     const outputs = await generate(docs, { target: 'typescript' });
     expect(outputs.length).toBeGreaterThan(0);
 
-    // Every output file must contain the Phase 8b marker
     for (const output of outputs) {
-      expect(output.content).toContain('// (functions emitted by Phase 8b appear below this line)');
+      expect(output.content).not.toContain('functions emitted by Phase 8b');
     }
 
     // For US1 fixtures (no funcs), funcs[] is empty

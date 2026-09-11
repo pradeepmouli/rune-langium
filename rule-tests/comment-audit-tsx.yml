@@ -1,0 +1,5 @@
+id: comment-audit-tsx
+valid:
+  - 'const view = <div title="// PR #123">spec #123</div>;'
+invalid:
+  - 'const view = <div>{/* issue #123 */}</div>;'

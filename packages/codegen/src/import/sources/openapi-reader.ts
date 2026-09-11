@@ -2,63 +2,21 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * openapi-reader — OpenAPI 3.0.x / 3.1 documents (JSON or YAML) → `SourceModel`
- * (spec 021 Phase 2 Addendum item 5, the reordered "OpenAPI reader FIRST"
- * task).
+ * Normalizes OpenAPI 3.0/3.1 JSON or YAML into a $defs document, then delegates
+ * schema translation to readJsonSchema. Constraint translation, enums, allOf,
+ * and oneOf handling remain shared with the JSON Schema reader.
  *
- * `components.schemas` ARE JSON Schema (with dialect differences per OAS
- * version — see below), so this reader's only real job is NORMALIZATION:
- * turn an OpenAPI document into a plain `{ $defs: {...} }` JSON-Schema-
- * shaped document, then delegate the whole thing to the EXISTING, shipped,
- * corpus-tested `readJsonSchema` (json-schema-reader.ts) — per the brief's
- * explicit instruction: "the reader normalizes, the json-schema-reader
- * translates." Nothing about constraint translation, enum detection, `allOf`
- * composition, or `oneOf`+`discriminator`→condition handling is reimplemented
- * here.
+ * Normalization:
+ * - OAS 3.0 nullable properties are removed from required to make them optional.
+ * - Discriminator mapping keys define branch identities. Referenced schemas'
+ *   properties/required fields are inlined into oneOf branches for the shared
+ *   reader's branch-merging logic.
+ * - allOf inheritance and boolean exclusiveMinimum/exclusiveMaximum use the
+ *   shared reader unchanged. OAS 3.1 type arrays also use its existing handling.
  *
- * OAS 3.0 dialect normalization (this reader's actual work):
- *  - `nullable: true` → optionality floor (this reader clears
- *    `required`-membership for that property rather than mutating
- *    cardinality directly — `readJsonSchema` already derives `(0..1)` vs
- *    `(1..1)` purely from `required` membership, so "floor to 0..1" is
- *    just "don't mark it required").
- *  - `discriminator: { propertyName, mapping }` — an OBJECT in both OAS 3.0
- *    and 3.1 (matching `json-schema-reader.ts`'s `JsonSchemaNode.
- *    discriminator` shape already, added in T3 specifically for this reuse).
- *    When `mapping` is present, MAPPING KEYS win as the branch identity
- *    over a `$ref`'s own path segment — this reader resolves each `oneOf`
- *    branch's referenced `components.schemas` entry via the mapping's
- *    `$ref` value and inlines that schema's `properties`/`required` into
- *    the branch object `readJsonSchema`'s `mergeOneOfBranchAttributes`
- *    already knows how to merge (Phase 1 built that machinery for INLINE
- *    oneOf branches; the common real-world OpenAPI idiom is `oneOf` of
- *    pure `$ref`s to named component schemas, which this reader bridges by
- *    inlining rather than teaching the shared translator a second oneOf
- *    branch shape).
- *  - `allOf` composition — identical rule to the JSON Schema path (a
- *    `$ref` base + inline `properties` branch → `extends`); no OAS-specific
- *    normalization needed, `readJsonSchema`'s existing `readAllOfType`
- *    handles it unchanged.
- *  - `exclusiveMinimum`/`exclusiveMaximum` BOOLEAN form (OAS 3.0's own
- *    keyword shape, matching Draft 4/6) — already handled unmodified by
- *    `json-schema-reader.ts`'s T3 `JsonSchemaNode` extension (`number |
- *    boolean`); no separate normalization needed here.
- *
- * OAS 3.1: near-passthrough. 3.1's `SchemaObject` IS 2020-12 JSON Schema
- * (`nullable` was REMOVED in favor of `type: [T, 'null']`, which
- * `readJsonSchema`'s `BUILTIN_TYPE_MAP`/`resolveTypeName` already handle via
- * `Array.isArray(node.type) ? node.type[0] : node.type` — the `'null'`
- * member is simply not selected, matching "first non-null type wins",
- * itself an acceptable MVP simplification consistent with how the reader
- * already treats a `type` array generally).
- *
- * Synonym source name: `OpenApi` (spec.md Phase 2 Addendum item 5).
- * Namespace derivation: `info.title` (sanitized) preferred; falls back to
- * the first `servers[]` entry's URL (reverse-DNS-ish, reusing the exact
- * same host+path convention `json-schema-reader.ts`'s `namespaceFromId`
- * already implements for a JSON Schema `$id` — delegated via
- * `options.namespace` so no logic is duplicated); `--namespace` always wins
- * when supplied (same precedence rule as the JSON Schema reader).
+ * Synonyms use the source name OpenApi. Namespace precedence is an explicit
+ * option, sanitized info.title, then the first server URL's host/path through
+ * the shared JSON Schema namespace convention.
  */
 
 import { parse as parseYaml } from 'yaml';
@@ -125,7 +83,7 @@ export function readOpenApi(
   const namespace = options.namespace ?? deriveNamespaceFromDocument(document, diagnostics);
 
   const shimmed: LooseSchema = { $defs: defs };
-  const { model, diagnostics: readerDiagnostics } = readJsonSchema(shimmed as never, {
+  const { model, diagnostics: readerDiagnostics } = readJsonSchema(shimmed, {
     namespace,
     ...(options.skipConditions !== undefined && { skipConditions: options.skipConditions }),
     ...(options.includeUnreferencedDefs !== undefined && { includeUnreferencedDefs: options.includeUnreferencedDefs })
@@ -275,7 +233,7 @@ function readOperations(paths: Record<string, Record<string, unknown>>, diagnost
   for (const [path, methods] of Object.entries(paths)) {
     if (!methods || typeof methods !== 'object') continue;
     for (const method of HTTP_METHODS) {
-      const op = (methods as Record<string, unknown>)[method] as LooseSchema | undefined;
+      const op = methods[method] as LooseSchema | undefined;
       if (!op || typeof op !== 'object') continue;
 
       const operationId = op['operationId'];

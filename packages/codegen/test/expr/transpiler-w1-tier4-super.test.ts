@@ -11,6 +11,7 @@
  * §Tier 4 and §"The one exception".
  */
 
+import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import { describe, it, expect } from 'vitest';
 import { parseExpression, type RosettaEnumeration, type RosettaEnumValue } from '@rune-langium/core';
 import { transpileExpression, type ExpressionTranspilerContext } from '../../src/expr/transpiler.js';
@@ -40,6 +41,11 @@ function parse(src: string) {
   return result.value;
 }
 
+function execute(expr: ReturnType<typeof parse>, data: unknown, ctx = makeCtx()): unknown {
+  const code = transpileExpression(expr, ctx);
+  return Function(ctx.selfName, `${RUNTIME_HELPER_JS_SOURCE}\nreturn ${code}`)(data);
+}
+
 function fakeEnumeration(name: string, memberNames: string[]): RosettaEnumeration {
   const enumValues = memberNames.map(
     (n) =>
@@ -55,17 +61,16 @@ describe('W1 Tier 4 — SwitchOperation', () => {
   it('literal guards: chained ternaries with a default else', () => {
     const expr = parse('a switch 1 then "one", 2 then "two", default "other"');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe(
-      "((__sw) => (1 === __sw ? 'one' : 2 === __sw ? 'two' : 'other'))(data.a)"
-    );
+    expect(execute(expr, { a: 1 }, ctx)).toBe('one');
+    expect(execute(expr, { a: 2 }, ctx)).toBe('two');
+    expect(execute(expr, { a: 3 }, ctx)).toBe('other');
   });
 
   it('no default case: final else is undefined', () => {
     const expr = parse('a switch 1 then "one", 2 then "two"');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe(
-      "((__sw) => (1 === __sw ? 'one' : 2 === __sw ? 'two' : undefined))(data.a)"
-    );
+    expect(execute(expr, { a: 2 }, ctx)).toBe('two');
+    expect(execute(expr, { a: 3 }, ctx)).toBeUndefined();
   });
 
   it('reference guard resolves against the emitted enum member (string value)', () => {
@@ -77,13 +82,15 @@ describe('W1 Tier 4 — SwitchOperation', () => {
       firstGuard.referenceGuard = { ref: colorEnum.enumValues[0], $refText: 'Red' };
     }
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe("((__sw) => ('Red' === __sw ? 1 : 0))(data.color)");
+    expect(execute(expr, { color: 'Red' }, ctx)).toBe(1);
+    expect(execute(expr, { color: 'Blue' }, ctx)).toBe(0);
   });
 
   it('argument-less switch uses ctx.selfName (implicit item), matching sibling argument-less conventions', () => {
     const expr = parse('switch 1 then "one", default "other"');
     const ctx = makeCtx({ selfName: 'item' });
-    expect(transpileExpression(expr, ctx)).toBe("((__sw) => (1 === __sw ? 'one' : 'other'))(item)");
+    expect(execute(expr, 1, ctx)).toBe('one');
+    expect(execute(expr, 2, ctx)).toBe('other');
   });
 
   it('does not fall through to DIAGNOSTIC', () => {
@@ -98,7 +105,7 @@ describe('RosettaSuperCall — deliberate loud diagnostic (NOT silent fall-throu
     const expr = parse('super');
     const ctx = makeCtx();
     const out = transpileExpression(expr, ctx);
-    expect(out).toBe('true /* DIAGNOSTIC: super() is not supported in transpiled conditions */');
+    expect(() => Function(`return ${out}`)()).toThrow('calls super()');
   });
 
   it('pushes a diagnostic to ctx.diagnostics with a super-specific code', () => {
@@ -115,19 +122,22 @@ describe('P4 regression debt — chained same-tier comparisons', () => {
   it('(a > b) = c: different-tier LEFT child needs no parens (comparison binds tighter than equality)', () => {
     const expr = parse('(a > b) = c');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('data.a > data.b === data.c');
+    expect(execute(expr, { a: 2, b: 1, c: true }, ctx)).toBe(true);
+    expect(execute(expr, { a: 0, b: 1, c: true }, ctx)).toBe(false);
   });
 
   it('a = (b = c): same-tier RIGHT child of a non-associative operator (=) MUST keep parens — dropping them silently changes meaning ((a===b)===c vs a===(b===c))', () => {
     const expr = parse('a = (b = c)');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('data.a === (data.b === data.c)');
+    expect(execute(expr, { a: true, b: 1, c: 1 }, ctx)).toBe(true);
+    expect(execute(expr, { a: true, b: 1, c: 2 }, ctx)).toBe(false);
   });
 
   it('(a = b) = (a = c): same-tier LEFT child needs no parens, RIGHT child keeps parens', () => {
     const expr = parse('(a = b) = (a = c)');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('data.a === data.b === (data.a === data.c)');
+    expect(execute(expr, { a: 1, b: 1, c: 1 }, ctx)).toBe(true);
+    expect(execute(expr, { a: 1, b: 1, c: 2 }, ctx)).toBe(false);
   });
 
   it('a > (b > c): same-tier RIGHT child of a non-associative comparison operator keeps parens', () => {

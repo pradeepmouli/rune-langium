@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
+import { metadataRuntimeSource } from './expr/metadata-runtime.js';
+import { valueEqualitySource } from './expr/value-equality.js';
+
 /**
- * The exact source text of the three runtime helper functions that are
+ * Source text of the runtime helper functions that are
  * inlined at the top of every emitted file (Zod and TypeScript targets).
  *
  * Per contracts/runtime-helpers.md §Inlined source text.
@@ -10,10 +13,12 @@
  */
 export const RUNTIME_HELPER_SOURCE: string =
   `// --- rune-codegen runtime helpers (inlined) ---\n` +
-  `const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>\n` +
-  `  values.filter((v) => v !== undefined && v !== null).length === 1;\n` +
+  valueEqualitySource(true) +
+  '\n\n' +
+  `const runeCheckOneOf = (values: unknown[]): boolean =>\n` +
+  `  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;\n` +
   `\n` +
-  `const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;\n` +
+  `const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;\n` +
   `\n` +
   `const runeAttrExists = (v: unknown): boolean =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
@@ -42,11 +47,15 @@ export const RUNTIME_HELPER_SOURCE: string =
  * also need to be annotation-free so no TypeScript constructs reach the JS engine.
  */
 export const RUNTIME_HELPER_JS_SOURCE: string =
+  metadataRuntimeSource(false) +
+  '\n\n' +
   `// --- rune-codegen runtime helpers (inlined) ---\n` +
+  valueEqualitySource(false) +
+  '\n\n' +
   `const runeCheckOneOf = (values) =>\n` +
-  `  values.filter((v) => v !== undefined && v !== null).length === 1;\n` +
+  `  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;\n` +
   `\n` +
-  `const runeCount = (arr) => arr?.length ?? 0;\n` +
+  `const runeCount = (value) => Array.isArray(value) ? value.length : value == null ? 0 : 1;\n` +
   `\n` +
   `const runeAttrExists = (v) =>\n` +
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);\n` +
@@ -73,17 +82,17 @@ export const RUNTIME_HELPER_JS_SOURCE: string =
  * Used for: one-of, choice conditions.
  * FR-021, SC-003.
  */
-export const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null).length === 1;
+export const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
 
 /**
- * Returns the length of an array attribute, treating null/undefined as 0.
+ * Counts collection items or a present scalar, treating null/undefined as 0.
  *
  * Parity: matches Python rune_count(collection) semantics.
  * Used for: count expressions, (1..*) condition assertions.
  * FR-021, SC-003.
  */
-export const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+export const runeCount = (value: unknown): number => (Array.isArray(value) ? value.length : value == null ? 0 : 1);
 
 /**
  * Returns true iff the value is "present" in the Rune sense:
@@ -131,7 +140,7 @@ export const runeToZonedDateTime = (v: unknown): string | undefined =>
     : undefined;
 
 /**
- * The seven z-free runtime helper names, in the fixed order they're
+ * The z-free runtime helper names, in the fixed order they're
  * declared/imported everywhere (inlined source, sidecar exports, and the
  * `import { ... } from './runtime(.zod).js'` line emitted by both
  * `ts-emitter.ts` and `zod-emitter.ts` when `suppressBoilerplate: true`).
@@ -143,6 +152,8 @@ export const runeToZonedDateTime = (v: unknown): string | undefined =>
 export const RUNE_HELPER_NAMES = [
   'runeCheckOneOf',
   'runeCount',
+  'runeValueEquals',
+  'runeValueKey',
   'runeAttrExists',
   'runeToDate',
   'runeToTime',
@@ -162,10 +173,12 @@ export const RUNE_HELPER_NAMES = [
  * exact and independent of how this module's own source is written.
  */
 export const RUNTIME_SIDECAR_HELPER_LINES: readonly string[] = [
-  `export const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>`,
-  `  values.filter((v) => v !== undefined && v !== null).length === 1;`,
+  valueEqualitySource(true, true),
+  '',
+  `export const runeCheckOneOf = (values: unknown[]): boolean =>`,
+  `  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;`,
   ``,
-  `export const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;`,
+  `export const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;`,
   ``,
   `export const runeAttrExists = (v: unknown): boolean =>`,
   `  v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);`,

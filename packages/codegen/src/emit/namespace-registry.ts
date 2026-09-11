@@ -11,8 +11,7 @@ import {
   isRosettaModel,
   isRosettaReport,
   isRosettaRule,
-  isRosettaTypeAlias,
-  type RosettaModel
+  isRosettaTypeAlias
 } from '@rune-langium/core';
 
 export interface NamespaceManifest {
@@ -51,7 +50,7 @@ export function buildNamespaceRegistry(groupedDocs: Map<string, LangiumDocument[
       const model = doc.parseResult?.value;
       if (!model || !isRosettaModel(model)) continue;
 
-      for (const element of (model as RosettaModel).elements) {
+      for (const element of model.elements) {
         if (isData(element)) {
           manifest.exportedDataNames.add(element.name);
         } else if (isRosettaEnumeration(element)) {

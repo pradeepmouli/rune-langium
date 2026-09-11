@@ -233,10 +233,10 @@ export function findParentOf(tree: ExpressionNode, targetId: string): ParentInfo
   // Check single-value children
   for (const key of CHILD_FIELDS) {
     const child = n[key];
-    if (child && typeof child === 'object' && '$type' in (child as object)) {
+    if (child && typeof child === 'object' && '$type' in child) {
       const c = child as Record<string, unknown>;
       if (c['id'] === targetId) return { parent: tree, slot: key };
-      const found = findParentOf(child as ExpressionNode, targetId);
+      const found = findParentOf(child, targetId);
       if (found) return found;
     }
   }
@@ -245,10 +245,10 @@ export function findParentOf(tree: ExpressionNode, targetId: string): ParentInfo
   const func = n['function'] as Record<string, unknown> | undefined;
   if (func) {
     const body = func['body'];
-    if (body && typeof body === 'object' && '$type' in (body as object)) {
+    if (body && typeof body === 'object' && '$type' in body) {
       const b = body as Record<string, unknown>;
       if (b['id'] === targetId) return { parent: tree, slot: 'body' };
-      const found = findParentOf(body as ExpressionNode, targetId);
+      const found = findParentOf(body, targetId);
       if (found) return found;
     }
   }
@@ -258,10 +258,10 @@ export function findParentOf(tree: ExpressionNode, targetId: string): ParentInfo
   if (Array.isArray(cases)) {
     for (const c of cases as Record<string, unknown>[]) {
       const expr = c['expression'];
-      if (expr && typeof expr === 'object' && '$type' in (expr as object)) {
+      if (expr && typeof expr === 'object' && '$type' in expr) {
         const e = expr as Record<string, unknown>;
         if (e['id'] === targetId) return { parent: tree, slot: 'expression' };
-        const found = findParentOf(expr as ExpressionNode, targetId);
+        const found = findParentOf(expr, targetId);
         if (found) return found;
       }
     }
@@ -272,10 +272,10 @@ export function findParentOf(tree: ExpressionNode, targetId: string): ParentInfo
   if (Array.isArray(values)) {
     for (const v of values as Record<string, unknown>[]) {
       const val = v['value'];
-      if (val && typeof val === 'object' && '$type' in (val as object)) {
+      if (val && typeof val === 'object' && '$type' in val) {
         const vv = val as Record<string, unknown>;
         if (vv['id'] === targetId) return { parent: tree, slot: 'value' };
-        const found = findParentOf(val as ExpressionNode, targetId);
+        const found = findParentOf(val, targetId);
         if (found) return found;
       }
     }
@@ -332,7 +332,7 @@ export function useContextFilter(
   return useMemo(() => {
     if (!targetNodeId) {
       return {
-        context: 'any' as TypeContext,
+        context: 'any',
         categories: OPERATOR_CATALOG.map((cat) => ({
           ...cat,
           operators: cat.operators.map((op) => ({ ...op, recommended: true }))

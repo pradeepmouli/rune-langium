@@ -92,7 +92,7 @@ export function renderClassSynonymValue(v: unknown): string {
  * (path)? (maps)?`).
  */
 export function renderMetaSynonymValue(v: unknown): string {
-  return renderSynonymValue((v ?? {}) as SynonymValueBase);
+  return renderSynonymValue(v ?? {});
 }
 
 // --- mapping primary (RosettaMapPrimaryExpression) --------------------------

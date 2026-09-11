@@ -95,7 +95,7 @@ export class HydrationOrchestrator {
     const hydrated = new Set(this.deps.getHydratedNamespaces());
     const pending = new Set(this.deps.getPendingHydrationNamespaces());
     const firing = new Map<string, HydrationRetryTarget>();
-    for (const [namespace, waiters] of [...this.waitingByNamespace.entries()]) {
+    for (const [namespace, waiters] of this.waitingByNamespace) {
       if (hydrated.has(namespace)) {
         this.waitingByNamespace.delete(namespace);
         for (const [targetId, target] of waiters) firing.set(targetId, target);

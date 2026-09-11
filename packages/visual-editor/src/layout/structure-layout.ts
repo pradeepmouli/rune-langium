@@ -957,7 +957,7 @@ export function layoutStructureGraph(input: StructureGraphInput): LayoutResult {
       initialWidth: sz.width,
       initialHeight: sz.height,
       style: { width: sz.width, height: sz.height }
-    } as Node);
+    });
 
     const nextAncestors = new Set(ancestors);
     nextAncestors.add(instanceId);

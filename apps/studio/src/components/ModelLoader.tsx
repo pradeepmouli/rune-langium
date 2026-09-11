@@ -12,7 +12,7 @@ import { Button } from '@rune-langium/design-system/ui/button';
 import { Input } from '@rune-langium/design-system/ui/input';
 import { getModelRegistry, createCustomModelSource } from '../services/model-registry.js';
 import { useModelStore } from '../store/model-store.js';
-import type { ModelSource, LoadProgress, ModelLoadErrorCode } from '../types/model-types.js';
+import type { ModelSource, LoadProgress } from '../types/model-types.js';
 import { CuratedLoadErrorPanel } from './CuratedLoadErrorPanel.js';
 import { ErrorCategorySchema, type ErrorCategory } from '@rune-langium/curated-schema';
 import { config } from '../config.js';
@@ -22,7 +22,7 @@ import { withInstrumentation } from '../services/instrumentation/core.js';
  * Map either a legacy `ModelLoadErrorCode` (git-clone path) or an already-
  * narrow `ErrorCategory` (curated path) to the panel's category enum.
  */
-function mapToCategory(code: ModelLoadErrorCode | string | undefined): ErrorCategory {
+function mapToCategory(code: string | undefined): ErrorCategory {
   switch (code) {
     case 'NETWORK':
       return 'network';

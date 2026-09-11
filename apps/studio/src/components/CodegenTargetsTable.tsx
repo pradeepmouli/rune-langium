@@ -55,7 +55,7 @@ export interface CodegenTargetsTableProps {
 // IMPLEMENTED_TARGETS itself (which is keyed by EMITTER_CLASSES
 // declaration order — an implementation detail that could change).
 const TARGET_KEYS = (Object.keys(TARGET_DESCRIPTORS) as Target[]).filter((t) =>
-  (IMPLEMENTED_TARGETS as readonly Target[]).includes(t)
+  IMPLEMENTED_TARGETS.includes(t)
 ) as readonly Target[];
 
 export const CodegenTargetsTable = withInstrumentation(

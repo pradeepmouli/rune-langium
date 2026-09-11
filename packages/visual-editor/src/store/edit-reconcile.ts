@@ -73,8 +73,8 @@ function readPath(root: GraphDraft, path: ReadonlyArray<string | number>): { fou
   for (const key of path) {
     if (cur == null) return { found: false, value: undefined };
     if (cur instanceof Map) {
-      if (!cur.has(key as string)) return { found: false, value: undefined };
-      cur = cur.get(key as string);
+      if (!cur.has(key)) return { found: false, value: undefined };
+      cur = cur.get(key);
     } else if (Array.isArray(cur)) {
       const i = key as number;
       if (typeof i !== 'number' || i < 0 || i >= cur.length) return { found: false, value: undefined };
@@ -137,7 +137,7 @@ export function reconcileParse(
   }
 
   try {
-    const replayed = apply(parse, unsatisfied) as GraphDraft;
+    const replayed = apply(parse, unsatisfied);
     return { nodesById: replayed.nodes, edgesById: replayed.edges, remainingPatches: unsatisfied };
   } catch {
     // Fallback: parse verbatim, patches cleared.

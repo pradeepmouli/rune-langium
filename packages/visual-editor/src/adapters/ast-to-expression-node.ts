@@ -118,7 +118,7 @@ function convertChild(ast: unknown, sourceText: string): ExpressionNode | undefi
 /** Convert a required child expression. */
 function convertChildRequired(ast: unknown, sourceText: string): ExpressionNode {
   if (ast == null) {
-    return { $type: 'Placeholder', id: uid() } as unknown as ExpressionNode;
+    return { $type: 'Placeholder', id: uid() };
   }
   return convertNode(ast as Record<string, unknown>, sourceText);
 }
@@ -204,7 +204,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
       $type: 'Unsupported',
       id: uid(),
       rawText: unsupportedRawText(ast, sourceText)
-    } as unknown as ExpressionNode;
+    };
   }
 
   const id = uid();
@@ -219,7 +219,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         left: convertChildRequired(g(ast, 'left'), sourceText),
         right: convertChildRequired(g(ast, 'right'), sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     case 'ComparisonOperation':
     case 'EqualityOperation':
@@ -233,7 +233,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         cardMod: g(ast, 'cardMod'),
         left: convertChild(g(ast, 'left'), sourceText),
         right: convertChildRequired(g(ast, 'right'), sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     case 'JoinOperation':
       return {
@@ -242,7 +242,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         left: convertChild(g(ast, 'left'), sourceText),
         right: convertChild(g(ast, 'right'), sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     // Grammar: exists carries an optional modifier (single/multiple) not
     // present on any other unary postfix operation.
@@ -253,7 +253,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
         modifier: g(ast, 'modifier')
-      } as unknown as ExpressionNode;
+      };
 
     // Unary postfix
     case 'RosettaAbsentExpression':
@@ -278,7 +278,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     // Grammar: `argument` XOR `args[]` (multi-arg form: `(a, b) only exists`).
     case 'RosettaOnlyExistsExpression':
@@ -290,7 +290,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         args: g(ast, 'args')
           ? (g(ast, 'args') as unknown[]).map((a) => convertNode(a as Record<string, unknown>, sourceText))
           : undefined
-      } as unknown as ExpressionNode;
+      };
 
     case 'ToEnumOperation':
       return {
@@ -299,7 +299,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
         enumeration: resolveRef(g(ast, 'enumeration')) ?? ''
-      } as unknown as ExpressionNode;
+      };
 
     // Navigation
     case 'RosettaFeatureCall':
@@ -308,7 +308,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         receiver: convertChildRequired(g(ast, 'receiver'), sourceText),
         feature: resolveRef(g(ast, 'feature'))
-      } as unknown as ExpressionNode;
+      };
 
     case 'RosettaDeepFeatureCall':
       return {
@@ -316,7 +316,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         receiver: convertChildRequired(g(ast, 'receiver'), sourceText),
         feature: resolveRef(g(ast, 'feature'))
-      } as unknown as ExpressionNode;
+      };
 
     // Lambda operations
     case 'FilterOperation':
@@ -331,7 +331,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
         function: convertInlineFunction(g(ast, 'function') as Record<string, unknown> | undefined, sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     case 'ThenOperation':
       return {
@@ -340,7 +340,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         argument: convertChildRequired(g(ast, 'argument'), sourceText),
         function: convertInlineFunction(g(ast, 'function') as Record<string, unknown> | undefined, sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     // Control flow
     case 'RosettaConditionalExpression':
@@ -351,7 +351,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         ifthen: convertChild(g(ast, 'ifthen'), sourceText),
         full: g(ast, 'full'),
         elsethen: convertChild(g(ast, 'elsethen'), sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     case 'SwitchOperation':
       return {
@@ -360,7 +360,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         operator: g(ast, 'operator'),
         argument: convertChild(g(ast, 'argument'), sourceText),
         cases: ((g(ast, 'cases') as Record<string, unknown>[]) ?? []).map((c) => convertSwitchCase(c, sourceText))
-      } as unknown as ExpressionNode;
+      };
 
     // Constructor
     case 'RosettaConstructorExpression': {
@@ -384,7 +384,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         ),
         implicitEmpty: g(ast, 'implicitEmpty'),
         values: ((g(ast, 'values') as Record<string, unknown>[]) ?? []).map((v) => convertKVP(v, sourceText))
-      } as unknown as ExpressionNode;
+      };
     }
 
     // Literals
@@ -392,7 +392,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
     case 'RosettaIntLiteral':
     case 'RosettaNumberLiteral':
     case 'RosettaStringLiteral':
-      return { $type, id, value: g(ast, 'value') } as unknown as ExpressionNode;
+      return { $type, id, value: g(ast, 'value') };
 
     // References
     case 'RosettaSymbolReference':
@@ -404,10 +404,10 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         rawArgs: g(ast, 'rawArgs')
           ? (g(ast, 'rawArgs') as unknown[]).map((a) => convertChildRequired(a, sourceText))
           : undefined
-      } as unknown as ExpressionNode;
+      };
 
     case 'RosettaImplicitVariable':
-      return { $type, id, name: g(ast, 'name') } as unknown as ExpressionNode;
+      return { $type, id, name: g(ast, 'name') };
 
     // Collection
     case 'ListLiteral':
@@ -415,7 +415,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         $type,
         id,
         elements: ((g(ast, 'elements') as unknown[]) ?? []).map((e) => convertChildRequired(e, sourceText))
-      } as unknown as ExpressionNode;
+      };
 
     // Other
     case 'ChoiceOperation':
@@ -426,7 +426,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         argument: convertChild(g(ast, 'argument'), sourceText),
         attributes: ((g(ast, 'attributes') as unknown[]) ?? []).map((a) => resolveRef(a) ?? ''),
         necessity: g(ast, 'necessity')
-      } as unknown as ExpressionNode;
+      };
 
     case 'AsKeyOperation':
       return {
@@ -434,7 +434,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         id,
         operator: g(ast, 'operator'),
         argument: convertChildRequired(g(ast, 'argument'), sourceText)
-      } as unknown as ExpressionNode;
+      };
 
     case 'WithMetaOperation':
       return {
@@ -445,7 +445,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         entries: ((g(ast, 'entries') as Record<string, unknown>[]) ?? []).map((e) =>
           convertWithMetaEntry(e, sourceText)
         )
-      } as unknown as ExpressionNode;
+      };
 
     case 'RosettaSuperCall':
       return {
@@ -456,14 +456,14 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
         rawArgs: g(ast, 'rawArgs')
           ? (g(ast, 'rawArgs') as unknown[]).map((a) => convertChildRequired(a, sourceText))
           : undefined
-      } as unknown as ExpressionNode;
+      };
 
     default:
       return {
         $type: 'Unsupported',
         id: uid(),
         rawText: unsupportedRawText(ast, sourceText)
-      } as unknown as ExpressionNode;
+      };
   }
 }
 
@@ -472,7 +472,7 @@ function convertNode(ast: Record<string, unknown>, sourceText: string): Expressi
  */
 export function astToExpressionNode(ast: unknown, sourceText: string): ExpressionNode {
   if (!ast || typeof ast !== 'object') {
-    return { $type: 'Unsupported', id: uid(), rawText: sourceText } as unknown as ExpressionNode;
+    return { $type: 'Unsupported', id: uid(), rawText: sourceText };
   }
   return convertNode(ast as Record<string, unknown>, sourceText);
 }

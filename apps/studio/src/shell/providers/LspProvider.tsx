@@ -48,11 +48,7 @@ export const LspProvider = withInstrumentation(
       const unsub = provider.onStateChange((state) => {
         setTransportState(state);
         if (state.status === 'connected') {
-          // Only the FIRST connected transition after mount is the "initial
-          // connect" — later connected transitions (a reconnect() call, or the
-          // transport auto-reconnecting) are attributed to their own span
-          // (reconnect's own opId/startedAt), not this mount-time one, so we
-          // don't double-log a reconnect with a stale/inflated durationMs.
+          // Reconnects have their own operation IDs and timing spans.
           if (!hasConnectedOnceRef.current) {
             hasConnectedOnceRef.current = true;
             const durationMs = performance.now() - connectStartedAt;
@@ -70,13 +66,7 @@ export const LspProvider = withInstrumentation(
       const client = createLspClientService({ transportProvider: provider });
       lspClientRef.current = client;
       client.connect().catch((err) => {
-        // Close the initial-connect span on failure, exactly like a successful
-        // connect does. Otherwise, if a LATER connected transition arrives via
-        // reconnect() (which re-fires this still-subscribed mount-time
-        // onStateChange listener) or the transport's own retry, this listener
-        // would still treat it as the "first" connected transition and log a
-        // stale entry using this failed attempt's connectOpId/connectStartedAt
-        // alongside the reconnect callback's own correct log — double-logging.
+        // End the initial span so reconnects cannot log it again.
         hasConnectedOnceRef.current = true;
         const msg = err instanceof Error ? err.message : String(err);
         const durationMs = performance.now() - connectStartedAt;
@@ -104,12 +94,8 @@ export const LspProvider = withInstrumentation(
 
     const activeEditorFile = useExploreFileNavStore((s) => s.activeEditorFile);
 
-    // Doc-set re-sync when the active file or its content changes — NOT a
-    // reconnect. Scoped to the single active editor document (not the whole
-    // loaded workspace) to bound the DO's Langium index to what one tab has
-    // open — see docs/superpowers/plans/2026-08-08-lsp-do-wiring.md Task 6
-    // for what this trades away (cross-file hover/go-to-def into non-active
-    // files won't resolve) and why.
+    // Bound the server index to the active document. References into other
+    // workspace files will not resolve through this LSP session.
     useEffect(() => {
       const active = files.filter(
         (f) => f.path === activeEditorFile && !f.path.endsWith(BUNDLE_MARKER_SUFFIX) && !f.refOnly
@@ -150,10 +136,7 @@ export const LspProvider = withInstrumentation(
       })();
     }, [showToast]);
 
-    // Memoized so LspContext consumers don't re-render on every LspProvider
-    // render — only when transportState or reconnect actually change.
-    // lspClientRef.current changes are always accompanied by a transportState
-    // update in this file, so that's a sufficient trigger for staying fresh.
+    // Client ref changes also update transportState, refreshing this value.
     const value: LspContextValue = useMemo(
       () => ({ lspClient: lspClientRef.current, transportState, reconnect }),
       [transportState, reconnect]

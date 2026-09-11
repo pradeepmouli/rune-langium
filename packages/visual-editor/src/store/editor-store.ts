@@ -250,7 +250,7 @@ export interface DeferredExportEntry {
 
 export interface EditorActions {
   // --- Data loading ---
-  loadModels(models: unknown | unknown[], layoutOpts?: LayoutOptions): void;
+  loadModels(models: unknown, layoutOpts?: LayoutOptions): void;
   /** Register deferred corpus types as graph nodes without full AST models. */
   loadDeferredExports(entries: DeferredExportEntry[]): void;
 
@@ -438,7 +438,7 @@ function isInheritanceEdgeKind(kind: EdgeKind | undefined): boolean {
 }
 
 function getEdgeKind(edge: TypeGraphEdge): EdgeKind | undefined {
-  return (edge.data as EdgeData | undefined)?.kind;
+  return edge.data?.kind;
 }
 
 function buildNodeMap(nodes: TypeGraphNode[]): Map<string, TypeGraphNode> {
@@ -1279,7 +1279,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                       kind: 'attribute-ref' as const,
                       label: attrName,
                       cardinality: formatCardinalityString(cardinality)
-                    } as EdgeData
+                    }
                   }
                 : null;
 
@@ -1381,7 +1381,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                       source: nodeId,
                       target: targetTypeId,
                       type: 'choice-option',
-                      data: { kind: 'choice-option' as const, label: refText } as EdgeData
+                      data: { kind: 'choice-option' as const, label: refText }
                     }
                   : {
                       id: makeEdgeId('attribute-ref', { source: nodeId, target: targetTypeId, label: attrName }),
@@ -1392,7 +1392,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                         kind: 'attribute-ref' as const,
                         label: attrName,
                         cardinality: preservedCardinality
-                      } as EdgeData
+                      }
                     };
 
             mutateGraph(set, get, (draft) => {
@@ -1439,7 +1439,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                 : e.id.replace(`--attribute-ref--${oldName}--`, `--attribute-ref--${newName}--`); // fallback (should not occur post-3A)
               edgeRewrites.push({
                 oldId: e.id,
-                newEdge: { ...e, id: newId, data: { ...e.data, label: newName } } as TypeGraphEdge
+                newEdge: { ...e, id: newId, data: { ...e.data, label: newName } }
               });
             }
 
@@ -1512,8 +1512,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   source: childId,
                   target: parentId,
                   type: 'inheritance',
-                  data: { kind: 'extends' as const, label: 'extends' } as EdgeData
-                } as TypeGraphEdge);
+                  data: { kind: 'extends' as const, label: 'extends' }
+                });
               }
             });
           },
@@ -1553,7 +1553,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                       kind: 'attribute-ref' as const,
                       label: newName,
                       cardinality: formatCardinalityString(cardinality)
-                    } as EdgeData
+                    }
                   }
                 : null;
 
@@ -1720,8 +1720,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   data: {
                     kind: 'enum-extends' as const,
                     label: 'extends'
-                  } as EdgeData
-                } as TypeGraphEdge);
+                  }
+                });
               }
             });
           },
@@ -1757,8 +1757,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   source: nodeId,
                   target: targetId,
                   type: 'choice-option',
-                  data: { kind: 'choice-option' as const, label: typeName } as EdgeData
-                } as TypeGraphEdge);
+                  data: { kind: 'choice-option' as const, label: typeName }
+                });
               }
             });
           },
@@ -1866,7 +1866,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                       kind: 'attribute-ref' as const,
                       label: newName,
                       cardinality: formatCardinalityString(cardinality)
-                    } as EdgeData
+                    }
                   }
                 : null;
 
@@ -1974,8 +1974,8 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
                   source: nodeId,
                   target: parentId,
                   type: 'extends',
-                  data: { kind: 'extends' as const, label: 'extends' } as EdgeData
-                } as TypeGraphEdge);
+                  data: { kind: 'extends' as const, label: 'extends' }
+                });
               }
             });
           },
@@ -1985,7 +1985,7 @@ export const createEditorStore = (overrides?: Partial<EditorState>) => {
               const n = draft.nodes.get(nodeId);
               if (!n || n.data.$type !== 'RosettaTypeAlias') return;
               const d = n.data as { typeCall?: { type?: { $refText?: string }; arguments?: unknown[] } };
-              if (!d.typeCall) d.typeCall = { type: { $refText: typeName }, arguments: [] } as never;
+              if (!d.typeCall) d.typeCall = { type: { $refText: typeName }, arguments: [] };
               else if (!d.typeCall.type) d.typeCall.type = { $refText: typeName };
               else d.typeCall.type.$refText = typeName;
             });

@@ -333,7 +333,7 @@ export const ChoiceNode = memo(function ChoiceNode({ data, selected, id }: NodeP
   // and per-arm expansion chevrons (when the target is Data or Choice).
   // -------------------------------------------------------------------------
   if (isStructureChoice(data)) {
-    const options = data.options as ReadonlyArray<StructureChoiceArm>;
+    const options = data.options;
     const {
       cellComponents,
       expansionMap,

@@ -14,8 +14,8 @@
  */
 
 import type { AstNode } from 'langium';
-import type { Dehydrated } from '@rune-langium/core';
 import type {
+  Dehydrated,
   Data,
   Attribute,
   Choice,
@@ -181,11 +181,11 @@ function renderData(d: Dehydrated<Data>, renderChild: RenderChild): string {
     lines.push(indentBlock(renderChild(child)));
   }
   for (const attr of d.attributes ?? []) {
-    lines.push(indentBlock(renderChild(attr as DehydratedNode)));
+    lines.push(indentBlock(renderChild(attr)));
   }
   for (const cond of d.conditions ?? []) {
     lines.push('');
-    lines.push(indentBlock(renderChild(cond as DehydratedNode)));
+    lines.push(indentBlock(renderChild(cond)));
   }
   return lines.join('\n');
 }
@@ -198,7 +198,7 @@ function renderChoice(c: Dehydrated<Choice>, renderChild: RenderChild): string {
     lines.push(indentBlock(renderChild(child)));
   }
   for (const opt of c.attributes ?? []) {
-    lines.push(indentBlock(renderChild(opt as DehydratedNode)));
+    lines.push(indentBlock(renderChild(opt)));
   }
   return lines.join('\n');
 }
@@ -215,7 +215,7 @@ function renderEnum(e: Dehydrated<RosettaEnumeration>, renderChild: RenderChild)
     lines.push(indentBlock(renderChild(child)));
   }
   for (const val of e.enumValues ?? []) {
-    lines.push(indentBlock(renderChild(val as DehydratedNode)));
+    lines.push(indentBlock(renderChild(val)));
   }
   return lines.join('\n');
 }

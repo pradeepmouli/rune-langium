@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import type { AstNode, AstNodeDescription, ReferenceInfo, Scope } from 'langium';
+import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
-import type { LangiumCoreServices } from 'langium';
 import {
   isData,
   isRosettaFunction,
@@ -1028,7 +1027,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
 
     // For dispatch overloads, also pull in inputs/outputs from sibling functions
     if (func.dispatchAttribute && func.$container) {
-      const model = func.$container as RosettaModel;
+      const model = func.$container;
       for (const element of model.elements) {
         if (isRosettaFunction(element) && element.name === func.name && element !== func) {
           for (const input of element.inputs) addAttr(input);
@@ -1357,7 +1356,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
     for (const imp of imports) {
       const alias = imp.namespaceAlias;
       if (!alias) continue;
-      let ns = imp.importedNamespace as string;
+      let ns = imp.importedNamespace;
       if (ns.endsWith('.*')) ns = ns.slice(0, -2);
       const existing = map.get(alias);
       if (existing) {

@@ -623,7 +623,7 @@ function FunctionForm({
                       </pre>
                     ) : renderExpressionEditor ? (
                       renderExpressionEditor({
-                        value: (field.value as string | undefined) ?? '',
+                        value: field.value ?? '',
                         onChange: (val: string) => {
                           field.onChange(val);
                           if (expressionError) setExpressionError(null);
@@ -638,7 +638,7 @@ function FunctionForm({
                     ) : (
                       <Textarea
                         {...field}
-                        value={(field.value as string | undefined) ?? ''}
+                        value={field.value ?? ''}
                         data-slot="expression-editor"
                         aria-invalid={fieldState.invalid}
                         aria-label="Function expression"

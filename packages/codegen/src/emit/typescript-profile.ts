@@ -10,6 +10,8 @@
  * generated funcs), so the sidecar pattern applies here too.
  */
 
+import { stripBundledImports } from './bundle-imports.js';
+import { metadataRuntimeSource, runeFuncDataSource } from '../expr/metadata-runtime.js';
 import type { GeneratorOutput } from '../types.js';
 import type { LanguageProfile } from './language-profile.js';
 import { RUNTIME_HELPER_SOURCE, RUNTIME_SIDECAR_HELPER_LINES, RUNE_HELPER_NAMES } from '../helpers.js';
@@ -22,6 +24,7 @@ const RUNTIME_SIDECAR_SOURCE = [
   `// Note: record types use Temporal.* — requires a polyfill or 'lib: esnext'.`,
   ``,
   ...RUNTIME_SIDECAR_HELPER_LINES,
+  metadataRuntimeSource(true, true),
   ``,
   `/**`,
   ` * Returns true if the given year is a leap year (builtin com.rosetta.model`,
@@ -76,16 +79,31 @@ function makeSingleFileContent(perNs: ReadonlyArray<GeneratorOutput>): string {
     `// Single-file bundle for namespaces: ${namespaces}`,
     ``,
     RUNTIME_HELPER_SOURCE,
+    ...(perNs.some((output) => output.content.includes('runeWithMeta')) ? [metadataRuntimeSource(true)] : []),
+    ...(perNs.some((output) => output.content.includes('type RuneFuncData<')) ? [runeFuncDataSource()] : []),
     ``
   ];
   for (const out of perNs) {
-    const body = stripPerNamespaceHeader(out.content);
+    const body = stripBundledImports(
+      stripPerNamespaceFuncDataType(stripPerNamespaceHeader(out.content)),
+      out.relativePath,
+      perNs.map((output) => output.relativePath),
+      '.ts'
+    );
     if (body.length > 0) {
       sections.push(`// --- namespace: ${out.relativePath} ---`);
       sections.push(body);
     }
   }
   return sections.join('\n');
+}
+
+function stripPerNamespaceFuncDataType(content: string): string {
+  const marker = 'type RuneFuncData<T> = T extends readonly (infer I)[]';
+  const start = content.indexOf(marker);
+  if (start < 0) return content;
+  const end = content.indexOf('\n\n', start);
+  return end < 0 ? content.slice(0, start).trimEnd() : `${content.slice(0, start)}${content.slice(end + 2)}`.trim();
 }
 
 /**

@@ -110,19 +110,19 @@ export const mergeImportedText = withInstrumentation(
       }
 
       if (options.onCollision === 'skip') {
-        skipped.push(name!);
+        skipped.push(name);
         continue;
       }
 
       if (options.onCollision === 'overwrite') {
-        const existingEl = existingByName.get(name!)!;
+        const existingEl = existingByName.get(name)!;
         const existingCst = existingEl.$cstNode!;
         existingEdits.push({
           start: existingCst.offset,
           end: existingCst.offset + existingCst.length,
           replacement: spanText
         });
-        overwritten.push(name!);
+        overwritten.push(name);
         continue;
       }
 
@@ -132,12 +132,12 @@ export const mergeImportedText = withInstrumentation(
       // still point at the original name, so renaming would corrupt them.
       // Treat a non-renamable collision as a skip instead.
       if (!DECL_NAME_RE.test(spanText)) {
-        skipped.push(name!);
+        skipped.push(name);
         continue;
       }
-      const newName = uniqueDeclarationName(name!, allNames);
+      const newName = uniqueDeclarationName(name, allNames);
       allNames.add(newName);
-      renamed.push({ from: name!, to: newName });
+      renamed.push({ from: name, to: newName });
       appendSpans.push(renameDeclaration(spanText, newName));
     }
 

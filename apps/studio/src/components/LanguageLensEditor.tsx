@@ -209,7 +209,7 @@ export const LanguageLensEditor = withInstrumentation(
         )}
 
         {outOfSubset && (
-          <p className="text-xs text-muted-foreground italic">This expression can't be shown in {descriptor!.label}.</p>
+          <p className="text-xs text-muted-foreground italic">This expression can't be shown in {descriptor.label}.</p>
         )}
         {foreignError && <p className="text-xs text-destructive">{foreignError}</p>}
         {!foreignError && error && <p className="text-xs text-destructive">{error}</p>}

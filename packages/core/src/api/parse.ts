@@ -109,7 +109,7 @@ export async function parse(input: string, uri?: string): Promise<ParseResult> {
 
   await RuneDsl.shared.workspace.DocumentBuilder.build([document]);
 
-  const model = document.parseResult.value as RosettaModel;
+  const model = document.parseResult.value;
   const lexerErrors = document.parseResult.lexerErrors.map((e) => ({
     message: e.message,
     offset: e.offset,

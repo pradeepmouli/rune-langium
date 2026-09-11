@@ -35,7 +35,7 @@ export const closeNamespacesFromManifest = withInstrumentation(
       const ns = queue.shift()!;
       if (!allNs.has(ns) || visited.has(ns)) continue;
       visited.add(ns);
-      for (const raw of namespaces[ns]!.deps) {
+      for (const raw of namespaces[ns].deps) {
         for (const target of expandWildcard(raw, allNs)) {
           if (!visited.has(target)) queue.push(target);
         }

@@ -2,57 +2,29 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 /**
- * sql-reader — SQL DDL (`CREATE TABLE`) → `SourceModel` (spec.md User Story
- * 3 + Phase 2c Addendum, this effort's active importer).
+ * Parses SQL CREATE TABLE DDL into SourceModel using web-tree-sitter and the
+ * prebuilt @l1xnan/tree-sitter-sql grammar from sql-grammar-loader.ts.
+ * Rune AST construction and constraint translation are handled downstream.
  *
- * Parser: `web-tree-sitter` + `@l1xnan/tree-sitter-sql`'s prebuilt wasm
- * grammar (see `sql-grammar-loader.ts` and `.superpowers/sdd/
- * sql-reader-report.md`'s T0 spike for the viability evidence and the real,
- * bounded dialect gaps this reader works around: bracket-quoted identifiers
- * and `NVARCHAR(MAX)` are not tolerated by the grammar at all; a
- * column-level `CHECK (... BETWEEN ...)` parses into an `ERROR` node that
- * still wraps a valid `between_expression` subtree, handled explicitly
- * below rather than treated as an unrecoverable parse failure).
+ * Grammar limits: bracket-quoted identifiers and NVARCHAR(MAX) are unsupported.
+ * A column CHECK containing BETWEEN can wrap a valid between_expression in an
+ * ERROR node; recover that subtree instead of rejecting the entire statement.
  *
- * Scope (per spec.md's Phase 2c Addendum item 3's constraint-gap table):
- *  - `CREATE TABLE` → `SourceType`; `snake_case` table name → PascalCase
- *    Rune type name; `snake_case` column name → camelCase attribute name.
- *    Originals always retained via `sourceKey` (the synonym-builder reads
- *    this the same way every other reader's `sourceKey` does).
- *  - `NOT NULL` / nullable → cardinality (never a condition).
- *  - Column type → Rune builtin (`INT`/`BIGINT`→`int`,
- *    `NUMERIC`/`DECIMAL`→`number`, `TEXT`/`VARCHAR`/`CHAR`/`NVARCHAR`→
- *    `string`, `BOOLEAN`→`boolean`, `DATE`→`date`,
- *    `TIMESTAMP`/`DATETIME`→`dateTime` — grounded against `sql-dialect.ts`'s
- *    `POSTGRES_TYPES`/`SQLSERVER_TYPES` column-type maps, the outbound
- *    emitter's own builtin vocabulary, read in reverse).
- *  - `CHECK (col >= n)` and every comparison operator → `comparison`/`range`
- *    ConstraintIR (T2).
- *  - `CHECK (col BETWEEN a AND b)` → `range` (inclusive both bounds).
- *  - `CHECK (col IN (...))` → a Rune `enum`, with the attribute retyped to
- *    it (NOT a condition) — the exact inverse of the outbound emitter's
- *    `enumStrategy: 'check'` default.
- *  - `VARCHAR(n)`/`CHAR(n)`/`NVARCHAR(n)` → `length { max: n }`;
- *    `char_length(col) >= n` / `LEN(col) >= n` (dialect functions) →
- *    `length`.
- *  - `CHECK (col LIKE ...)` → `pattern` (always stub + diagnostic, per the
- *    established rule — no expression-level regex/LIKE operator in Rune).
- *  - `FOREIGN KEY (col) REFERENCES Other(id)` → a typed attribute
- *    referencing `Other`; the special case `FOREIGN KEY (id) REFERENCES
- *    Parent(id)` (the shared-identity/inheritance convention the outbound
- *    emitter's `table-per-type` mode itself emits) → `extends`, and the
- *    `id` column is consumed as the inheritance marker, not re-emitted as
- *    a regular attribute.
- *  - A join table (`{parent}_{attr}`, an owner FK + an element FK, optional
- *    position column) → the owner type gains a `(0..*)` attribute of the
- *    element type; the join table itself is never emitted as a `SourceType`.
- *  - `PRIMARY KEY` / `UNIQUE` / `DEFAULT` → diagnostics-level notes (no
- *    Rune equivalent in scope), never silently dropped.
- *  - An unrecognized `CHECK` expression shape → `custom` stub + diagnostic.
- *
- * This module has zero Rune-AST awareness — its only job is
- * `SQL DDL text → SourceModel`. `ast-builder.ts` / `constraint-translator.ts`
- * do the Rune-specific work, exactly as for every other reader.
+ * Mapping:
+ * - Table/column names become PascalCase/camelCase; sourceKey retains originals.
+ * - NOT NULL/nullable sets cardinality, not a condition.
+ * - INT/BIGINT → int; NUMERIC/DECIMAL → number; TEXT/VARCHAR/CHAR/NVARCHAR →
+ *   string; BOOLEAN → boolean; DATE → date; TIMESTAMP/DATETIME → dateTime.
+ * - CHECK comparisons become comparison/range constraints; BETWEEN has inclusive
+ *   bounds. IN becomes an enum and retypes the attribute.
+ * - VARCHAR/CHAR/NVARCHAR lengths and char_length/LEN comparisons become length
+ *   constraints. LIKE becomes a pattern stub with a diagnostic.
+ * - Foreign keys become typed references. The shared-identity id → Parent(id)
+ *   convention becomes extends and consumes the id column.
+ * - Join tables named {parent}_{attr}, with owner/element foreign keys and an
+ *   optional position column, become a (0..*) owner attribute rather than a type.
+ * - PRIMARY KEY, UNIQUE, and DEFAULT produce diagnostic notes. Unrecognized
+ *   CHECK expressions produce custom stubs with diagnostics.
  */
 
 import type { Node, Parser } from 'web-tree-sitter';
@@ -645,7 +617,7 @@ function readTableConstraint(
     const orderedCols = node.namedChildren.find((n) => n?.type === 'ordered_columns');
     const localCols = (orderedCols?.namedChildren ?? [])
       .filter((n) => n?.type === 'column')
-      .map((n) => stripQuotes((n!.namedChildren.find((c) => c?.type === 'identifier') ?? n!).text));
+      .map((n) => stripQuotes((n.namedChildren.find((c) => c?.type === 'identifier') ?? n).text));
     const refTableRef = node.namedChildren.find((n) => n?.type === 'object_reference');
     const refTable = refTableRef ? lastIdentifierSegment(refTableRef) : undefined;
     // The referenced column is the bare identifier inside the trailing `(...)`.
@@ -1000,7 +972,7 @@ function buildEnumFromCheck(
   }
   const used = new Set<string>();
   const values = literals.map((lit) => {
-    const original = unquoteSqlLiteral(lit!.text);
+    const original = unquoteSqlLiteral(lit.text);
     const name = dedupeIdentifier(sanitizeEnumValue(original), used);
     return {
       name,

@@ -1,0 +1,11 @@
+id: comment-audit-typescript
+valid:
+  - 'const text = "/* spec #123 */";'
+  - 'const text = `// issue #123`;'
+invalid:
+  - '// PR #123'
+  - |-
+    /**
+     * Public API contract.
+     */
+    export function parse() {}

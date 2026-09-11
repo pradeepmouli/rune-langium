@@ -182,7 +182,7 @@ export function MetadataSection({
           sources: [{ $refText: refText }],
           ...(value ? { value: { name: value } } : {})
         };
-    appendSynonym(entry as any);
+    appendSynonym(entry);
 
     // Commit to graph
     effectiveOnSynonymAdd(refText, value);
@@ -241,7 +241,7 @@ export function MetadataSection({
                     focus:ring-1 focus:ring-ring focus:outline-none
                     disabled:opacity-50 disabled:cursor-not-allowed
                     resize-y"
-                  style={{ fieldSizing: 'content' } as React.CSSProperties}
+                  style={{ fieldSizing: 'content' }}
                 />
               </Field>
             )}
@@ -271,7 +271,7 @@ export function MetadataSection({
                     focus:ring-1 focus:ring-ring focus:outline-none
                     disabled:opacity-50 disabled:cursor-not-allowed
                     resize-y"
-                  style={{ fieldSizing: 'content' } as React.CSSProperties}
+                  style={{ fieldSizing: 'content' }}
                 />
               </Field>
             )}

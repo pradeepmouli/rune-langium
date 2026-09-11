@@ -3,10 +3,19 @@
 // Source namespace: test.reports
 
 // --- rune-codegen runtime helpers (inlined) ---
-const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null).length === 1;
+const runeValueKey = (value: unknown): string => {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return typeof value + ':' + String(value);
+  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const fields = value as Record<string, unknown>;
+  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+};
+const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
 
-const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
+
+const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
 
 const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
@@ -36,8 +45,8 @@ export class Trade implements TradeShape {
   notional: number;
 
   constructor(data: TradeShape) {
-    this.tradeDate = data.tradeDate as typeof this.tradeDate;
-    this.notional = data.notional as typeof this.notional;
+    this.tradeDate = data.tradeDate;
+    this.notional = data.notional;
   }
 
   static from(json: unknown): Trade {
@@ -65,8 +74,8 @@ export class TradeReport implements TradeReportShape {
   amount: number;
 
   constructor(data: TradeReportShape) {
-    this.date = data.date as typeof this.date;
-    this.amount = data.amount as typeof this.amount;
+    this.date = data.date;
+    this.amount = data.amount;
   }
 
   static from(json: unknown): TradeReport {
@@ -85,11 +94,11 @@ export function isTradeReport(x: unknown): x is TradeReport {
 }
 
 
-export function extractExtractDate(trade: TradeShape): unknown {
+export function extractExtractDate(trade: RuneFuncData<TradeShape>) {
   return trade.Trade?.tradeDate;
 }
 
-export function validateIsLargeTrade(trade: TradeShape): boolean {
+export function validateIsLargeTrade(trade: RuneFuncData<TradeShape>): boolean {
   return trade.Trade?.notional > 1000000;
 }
 
@@ -97,4 +106,11 @@ export const runeReportRules = {
   'ExtractDate': { kind: 'reporting' as const, inputType: 'Trade' },
   'IsLargeTrade': { kind: 'eligibility' as const, inputType: 'Trade' },
 } as const;
-// (functions emitted by Phase 8b appear below this line)
+
+type RuneFuncData<T> = T extends readonly (infer I)[]
+  ? RuneFuncData<I>[]
+  : T extends (...args: never[]) => unknown
+    ? never
+    : T extends object
+      ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
+      : T;

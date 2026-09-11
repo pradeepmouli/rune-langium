@@ -244,7 +244,7 @@ export const onRequestPost: PagesFunction<Env> = withInstrumentation(
               const window = closureNs.slice(i, i + FETCH_CONCURRENCY);
               const fetchedPerNs = await Promise.all(
                 window.map((ns) =>
-                  fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns]!.artifact, curatedFetcher)
+                  fetchCuratedNamespace(bundle.id, bundle.version, nsGraph[ns].artifact, curatedFetcher)
                 )
               );
               for (const nsDocs of fetchedPerNs) {

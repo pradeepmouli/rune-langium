@@ -198,8 +198,8 @@ export const saveWorkspace = withInstrumentation(
     const existing = await wsStore.get(ws.id);
     const { structureView: _ignoredCaller, ...rest } = ws;
     const toWrite: WorkspaceRecord = existing?.structureView
-      ? ({ ...rest, structureView: existing.structureView } as WorkspaceRecord)
-      : (rest as WorkspaceRecord);
+      ? { ...rest, structureView: existing.structureView }
+      : rest;
     await wsStore.put(toWrite);
     await tx.objectStore('recents').put({
       id: ws.id,

@@ -69,7 +69,7 @@ export function deriveUiSchema<T extends LooseObjectSchema>(
 
   // Step 1: Pick (if specified, select only these fields from source)
   let schema: z.ZodObject<z.ZodRawShape, any> = pick
-    ? (source.pick(Object.fromEntries(pick.map((k) => [k, true])) as Record<string, true>) as any)
+    ? (source.pick(Object.fromEntries(pick.map((k) => [k, true]))) as any)
     : source;
 
   // Step 2: Omit $type if requested (form schemas don't need it)

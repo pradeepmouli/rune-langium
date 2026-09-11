@@ -3,10 +3,19 @@
 // Source namespace: test.funcs.constructor
 
 // --- rune-codegen runtime helpers (inlined) ---
-const runeCheckOneOf = (values: (unknown | undefined | null)[]): boolean =>
-  values.filter((v) => v !== undefined && v !== null).length === 1;
+const runeValueKey = (value: unknown): string => {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return typeof value + ':' + String(value);
+  if (Array.isArray(value)) return 'array:' + JSON.stringify(value.map(runeValueKey));
+  const fields = value as Record<string, unknown>;
+  return 'object:' + JSON.stringify(Object.keys(fields).sort().filter((key) => fields[key] != null).map((key) => [key, runeValueKey(fields[key])]));
+};
+const runeValueEquals = (left: unknown, right: unknown): boolean => runeValueKey(left) === runeValueKey(right);
 
-const runeCount = (arr: unknown[] | undefined | null): number => arr?.length ?? 0;
+const runeCheckOneOf = (values: unknown[]): boolean =>
+  values.filter((v) => v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0)).length === 1;
+
+const runeCount = (value: unknown): number => Array.isArray(value) ? value.length : value == null ? 0 : 1;
 
 const runeAttrExists = (v: unknown): boolean =>
   v !== undefined && v !== null && !(Array.isArray(v) && v.length === 0);
@@ -36,8 +45,8 @@ export class Point implements PointShape {
   y: number;
 
   constructor(data: PointShape) {
-    this.x = data.x as typeof this.x;
-    this.y = data.y as typeof this.y;
+    this.x = data.x;
+    this.y = data.y;
   }
 
   static from(json: unknown): Point {
@@ -65,8 +74,8 @@ export class Box implements BoxShape {
   width: number;
 
   constructor(data: BoxShape) {
-    this.origin = data.origin as typeof this.origin;
-    this.width = data.width as typeof this.width;
+    this.origin = data.origin;
+    this.width = data.width;
   }
 
   static from(json: unknown): Box {
@@ -84,16 +93,25 @@ export function isBox(x: unknown): x is Box {
   return true;
 }
 
-// (functions emitted by Phase 8b appear below this line)
 
-export function MakePoint(input: { x: number; y: number }): Point {
-  let result: Point;
+type RuneFuncData<T> = T extends readonly (infer I)[]
+  ? RuneFuncData<I>[]
+  : T extends (...args: never[]) => unknown
+    ? never
+    : T extends object
+      ? { [K in keyof T as T[K] extends (...args: never[]) => unknown ? never : K]: RuneFuncData<T[K]> }
+      : T;
+
+export function MakePoint(input: { x: number; y: number }): RuneFuncData<PointShape> {
+  let result: RuneFuncData<PointShape> | undefined;
   result = { x: input.x, y: input.y };
+  if (result == null) throw new Error("Function 'MakePoint' produced no result");
   return result;
 }
 
-export function MakeEmptyBox(input: { w: number }): Box {
-  let result: Box;
+export function MakeEmptyBox(input: { w: number }): RuneFuncData<BoxShape> {
+  let result: RuneFuncData<BoxShape> | undefined;
   result = { origin: {}, width: input.w };
+  if (result == null) throw new Error("Function 'MakeEmptyBox' produced no result");
   return result;
 }

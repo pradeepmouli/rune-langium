@@ -3,7 +3,7 @@ import type { LangiumDocument } from 'langium';
 import { sha256Hex } from './fingerprint.js';
 
 export interface InstanceProvenance {
-  codec: 'json' | 'function' | string;
+  codec: string;
   source?: string;
   inputs?: string[];
   importedAt: number;

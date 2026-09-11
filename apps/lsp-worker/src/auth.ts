@@ -84,7 +84,7 @@ async function hmacSign(secret: string, data: Uint8Array): Promise<Uint8Array> {
   // CryptoKey.sign expects BufferSource. Pass the typed array directly —
   // `Uint8Array` is a `BufferSource` and avoids the `SharedArrayBuffer`
   // narrowing issue on `.buffer` under `--lib ES2023`.
-  const sig = await crypto.subtle.sign('HMAC', key, data as BufferSource);
+  const sig = await crypto.subtle.sign('HMAC', key, data);
   return new Uint8Array(sig);
 }
 

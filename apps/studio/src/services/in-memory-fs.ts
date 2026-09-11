@@ -122,7 +122,7 @@ export class InMemoryFs {
           ? new TextEncoder().encode(data)
           : data instanceof Uint8Array
             ? data
-            : new Uint8Array(data as ArrayBufferLike);
+            : new Uint8Array(data);
       this.nodes.set(p, { type: 'file', data: bytes, mode: fileMode, mtimeMs: Date.now() });
     },
     mkdir: async (path, opts) => {

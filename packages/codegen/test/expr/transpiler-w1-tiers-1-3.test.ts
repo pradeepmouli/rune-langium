@@ -92,10 +92,13 @@ describe('W1 Tier 1 — passthrough', () => {
 });
 
 describe('W1 Tier 2 — simple mappings', () => {
-  it('DefaultOperation: (L ?? R)', () => {
+  it('DefaultOperation falls back for null and empty collections', () => {
     const expr = parse('a default b');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('(data.a ?? data.b)');
+    const evaluate = Function('data', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({ a: [], b: [2] })).toEqual([2]);
+    expect(evaluate({ a: 0, b: 2 })).toBe(0);
+    expect(evaluate({ a: null, b: 2 })).toBe(2);
   });
 
   it('JoinOperation: (L ?? []).join(R) when right is present', () => {
@@ -121,7 +124,9 @@ describe('W1 Tier 2 — simple mappings', () => {
   it('ReduceOperation: .reduce with two-parameter lambda plumbing', () => {
     const expr = parse('items reduce a, b [a + b]');
     const ctx = makeCtx();
-    expect(transpileExpression(expr, ctx)).toBe('(data.items ?? []).reduce((a, b) => a + b)');
+    const evaluate = Function('data', `return ${transpileExpression(expr, ctx)}`);
+    expect(evaluate({ items: [1, 2, 3] })).toBe(6);
+    expect(evaluate({ items: [] })).toBeUndefined();
   });
 });
 

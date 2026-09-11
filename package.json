@@ -73,7 +73,10 @@
     "verify:prod": "bash scripts/verify-production.sh",
     "verify:prod:ui": "pnpm --filter @rune-langium/studio run test:prod-smoke",
     "verify:prod:all": "pnpm run verify:prod && pnpm run verify:prod:ui",
-    "doctor": "react-doctor"
+    "doctor": "react-doctor",
+    "audit:comments": "node scripts/audit-comments.mjs",
+    "test:comment-audit": "ast-grep test --filter comment-audit --skip-snapshot-tests && node --test scripts/audit-comments.test.mjs",
+    "audit:source": "oxlint --config oxlint.audit.config.ts --disable-nested-config apps packages"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
@@ -87,6 +90,7 @@
     "lint-staged": "^17.4.1",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",
+    "oxlint-tsgolint": "7.0.2001",
     "react-doctor": "^0.9.12",
     "simple-git-hooks": "^2.14.0",
     "typescript": "^7.0.2",

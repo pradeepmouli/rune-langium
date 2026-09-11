@@ -185,14 +185,14 @@ function EnumForm({
 
   const handleOverrideInheritedValue = useCallback(
     (name: string, displayName: string) => {
-      append({ $type: 'RosettaEnumValue', name, display: displayName } as any);
+      append({ $type: 'RosettaEnumValue', name, display: displayName });
       actions.addEnumValue(nodeId, name, displayName || undefined);
     },
     [nodeId, actions, append]
   );
 
   const handleAddValue = useCallback(() => {
-    append({ $type: 'RosettaEnumValue', name: '', display: '' } as any);
+    append({ $type: 'RosettaEnumValue', name: '', display: '' });
     actions.addEnumValue(nodeId, '', undefined);
   }, [nodeId, actions, append]);
 

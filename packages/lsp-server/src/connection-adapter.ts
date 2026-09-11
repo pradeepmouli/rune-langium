@@ -19,8 +19,7 @@
  *    `telemetry`, `tracer`, `notebooks`) are provided as stubs or delegates.
  */
 
-import type { LSPServer } from '@lspeasy/server';
-import { ServerState, type ServerCapabilities } from '@lspeasy/server';
+import { type LSPServer, ServerState, type ServerCapabilities } from '@lspeasy/server';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Method-name → LSP-method-string maps
@@ -297,7 +296,7 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
       if (method === 'initialize') {
         return registerInitializeHandler(server, h);
       }
-      return server.onRequest(method as any, async (params: any, token: any) => {
+      return server.onRequest(method, async (params: any, token: any) => {
         return h(params, token);
       });
     },
@@ -305,7 +304,7 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
     // ── Generic sendRequest ──────────────────────────────────────────
     sendRequest(typeOrMethod: any, ...args: any[]) {
       const method = typeof typeOrMethod === 'string' ? typeOrMethod : typeOrMethod?.method;
-      return server.sendRequest(method as any, args[0]);
+      return server.sendRequest(method, args[0]);
     },
 
     // ── Generic onNotification ───────────────────────────────────────
@@ -313,13 +312,13 @@ export function createConnectionAdapter(server: LSPServer<ServerCapabilities>): 
       const method = typeof typeOrMethod === 'string' ? typeOrMethod : typeOrMethod?.method;
       const h = typeof handler === 'function' ? handler : typeOrMethod;
       if (!method || typeof h !== 'function') return NOOP_DISPOSABLE;
-      return server.onNotification(method as any, (params: any) => h(params));
+      return server.onNotification(method, (params: any) => h(params));
     },
 
     // ── Generic sendNotification ─────────────────────────────────────
     sendNotification(typeOrMethod: any, params?: any) {
       const method = typeof typeOrMethod === 'string' ? typeOrMethod : typeOrMethod?.method;
-      return server.sendNotification(method as any, params);
+      return server.sendNotification(method, params);
     },
 
     // ── Lifecycle ────────────────────────────────────────────────────

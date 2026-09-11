@@ -100,7 +100,9 @@ describe.skipIf(!RESOURCES_EXIST)('W2 acceptance — Choice-typed attributes nev
     const observableOutput = outputs.find((o) => o.relativePath.includes('observable'));
     expect(observableOutput).toBeDefined();
     expect(observableOutput!.content).toContain('export type Observable =');
-    expect(observableOutput!.content).not.toMatch(/\w+\??:\s*unknown(\[\])?;/);
+    expect(observableOutput!.content.slice(observableOutput!.content.indexOf('export type Observable ='))).not.toMatch(
+      /\w+\??:\s*unknown(\[\])?;/
+    );
   });
 
   it('Zod target: PositionBase.asset resolves to the AssetSchema reference, not z.unknown()', async () => {

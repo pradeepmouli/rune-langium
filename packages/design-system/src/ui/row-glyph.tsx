@@ -81,7 +81,7 @@ export function RowGlyph<E extends React.ElementType = 'span'>({
   style,
   ...props
 }: RowGlyphProps<E>) {
-  const Component = (as ?? 'span') as React.ElementType;
+  const Component = as ?? 'span';
   return (
     <Component
       data-slot="row-glyph"

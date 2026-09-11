@@ -99,9 +99,9 @@ describe('US6 funcs: accumulator (T115)', () => {
     expect(actual).toBe(expected);
   });
 
-  it('emitted output uses const result: number[] = [] for array output', async () => {
+  it('emitted output uses let result: number[] = [] for array output', async () => {
     const actual = await generateFuncFixture('accumulator');
-    expect(actual).toContain('const result: number[] = []');
+    expect(actual).toContain('let result: number[] = []');
     expect(actual).toContain('result.push(');
   });
 });

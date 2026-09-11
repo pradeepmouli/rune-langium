@@ -33,7 +33,7 @@ export function useExpressionBuilder({
   defaultMode = 'builder'
 }: UseExpressionBuilderOptions) {
   const defaultTree = useMemo<ExpressionNode>(
-    () => initialTree ?? ({ $type: 'Placeholder', id: crypto.randomUUID() } as unknown as ExpressionNode),
+    () => initialTree ?? { $type: 'Placeholder', id: crypto.randomUUID() },
     [initialTree]
   );
 

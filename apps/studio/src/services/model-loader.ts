@@ -233,7 +233,7 @@ async function discoverRosettaFiles(fs: InMemoryFs, baseDir: string, patterns: s
 /** Recursively walk a directory tree and collect all file paths. */
 async function walkDirectory(fs: InMemoryFs, baseDir: string, relativePath: string): Promise<string[]> {
   const fullPath = relativePath ? `${baseDir}/${relativePath}` : baseDir;
-  const entries = (await fs.promises.readdir(fullPath)) as string[];
+  const entries = await fs.promises.readdir(fullPath);
 
   // Each entry's stat (and any subdirectory recursion) is independent of its
   // siblings, so run them concurrently instead of walking one at a time.

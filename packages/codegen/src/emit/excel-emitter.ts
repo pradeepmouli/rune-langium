@@ -193,11 +193,9 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
           typesSheet?.addRow({
             namespace,
             name,
-            superType: ExcelWholeModelEmitter.superTypeName(
-              data as { superType?: { ref?: { name?: unknown } | null } | null }
-            ),
-            attrCount: ExcelWholeModelEmitter.attributeCount(data as { attributes?: { length?: number } }),
-            condCount: ExcelWholeModelEmitter.conditionCount(data as { conditions?: { length?: number } })
+            superType: ExcelWholeModelEmitter.superTypeName(data),
+            attrCount: ExcelWholeModelEmitter.attributeCount(data),
+            condCount: ExcelWholeModelEmitter.conditionCount(data)
           });
           if (conditionsSheet) {
             const conditions = (
@@ -224,9 +222,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
 
       if (enumsSheet) {
         for (const [name, enumNode] of walk.enumByName) {
-          const members = ExcelWholeModelEmitter.enumMemberNames(
-            enumNode as { enumValues?: ReadonlyArray<{ name?: unknown }> }
-          );
+          const members = ExcelWholeModelEmitter.enumMemberNames(enumNode);
           enumsSheet.addRow({
             namespace,
             name,
@@ -241,9 +237,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
           aliasSheet.addRow({
             namespace,
             name,
-            baseType: ExcelWholeModelEmitter.typeAliasBaseName(
-              alias as { typeCall?: { type?: { ref?: { name?: unknown } | null } | null } | null }
-            )
+            baseType: ExcelWholeModelEmitter.typeAliasBaseName(alias)
           });
         }
       }
@@ -254,7 +248,7 @@ export class ExcelWholeModelEmitter implements WholeModelEmitter {
     // Normalize to Uint8Array so `GeneratorOutput.binary` has a
     // consistent runtime shape across environments.
     const buffer = await workbook.xlsx.writeBuffer();
-    const bytes = new Uint8Array(buffer as ArrayBuffer);
+    const bytes = new Uint8Array(buffer);
 
     return [
       {

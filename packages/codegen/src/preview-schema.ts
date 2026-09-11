@@ -15,8 +15,8 @@ import {
   type Data,
   type RosettaEnumeration,
   type RosettaFunction,
-  type RosettaModel,
-  type RosettaTypeAlias
+  type RosettaTypeAlias,
+  qualifiedExportPath
 } from '@rune-langium/core';
 import type {
   FormPreviewSchema,
@@ -26,7 +26,6 @@ import type {
   PreviewSourceMapEntry
 } from './types.js';
 import { choiceOptionFieldName, decodeCardinality } from './emit/base-namespace-emitter.js';
-import { qualifiedExportPath } from '@rune-langium/core';
 import { buildTypeReferenceGraph, findCyclicTypes } from './cycle-detector.js';
 import { resolveTypeCallTarget } from './emit/type-ref-resolver.js';
 
@@ -191,7 +190,7 @@ export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[]
     const model = doc.parseResult?.value;
     if (!model || !isRosettaModel(model)) continue;
 
-    const namespace = normalizeNamespace((model as RosettaModel).name);
+    const namespace = normalizeNamespace(model.name);
     if (!namespace) continue;
 
     let index = byNamespace.get(namespace);
@@ -209,7 +208,7 @@ export function buildNamespaceIndexes(docs: LangiumDocument[]): NamespaceIndex[]
       byNamespace.set(namespace, index);
     }
 
-    for (const element of (model as RosettaModel).elements) {
+    for (const element of model.elements) {
       if (isData(element)) {
         if (index.dataByName.has(element.name)) {
           index.duplicateDataNames.add(element.name);

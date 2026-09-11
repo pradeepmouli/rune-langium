@@ -67,7 +67,7 @@ export default {
     const sources = parseSources(env);
     await publishCuratedMirrors({
       sources,
-      bucket: env.rune_curated_mirror as unknown as Parameters<typeof publishCuratedMirrors>[0]['bucket'],
+      bucket: env.rune_curated_mirror,
       retention: readRetention(env)
     });
   },

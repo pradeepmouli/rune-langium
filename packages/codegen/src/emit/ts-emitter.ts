@@ -1,5 +1,17 @@
+import { typeFeatures } from '../expr/navigation.js';
+import { groupFuncDispatches, renderFuncDispatchGroup } from './func-dispatch.js';
+import { AstUtils } from 'langium';
+import { renderFuncAssignment } from './func-assignment.js';
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
+
+import {
+  fieldMetadataKind,
+  hasFieldMetadata,
+  hasTypeMetadata,
+  metadataRuntimeSource,
+  runeFuncDataSource
+} from '../expr/metadata-runtime.js';
 
 /**
  * TypeScript class target emitter for the Rune code generator.
@@ -17,14 +29,20 @@
  *   - export function is<TypeName>(x: unknown): x is <TypeName> type guard
  *   - export function is<Child>(x: <Parent>): x is <Child> discriminator predicates
  *   - validate<ConditionName>(): { valid: boolean; errors: string[] } instance methods
- *   - // (functions emitted by Phase 8b appear below this line)  [marker for Phase 8b]
+ *   - export function declarations for Rune functions
  */
 
 import {
   isChoice,
+  isAttribute,
+  isRosettaFunction,
+  isRosettaExternalFunction,
+  isRosettaRule,
+  isRosettaSymbolReference,
   isData,
   isRosettaBasicType,
   type Choice,
+  type Condition,
   type Data,
   type Attribute,
   type RosettaEnumeration,
@@ -34,7 +52,8 @@ import {
   type RosettaReport,
   type Annotation,
   type RosettaExternalFunction,
-  type TypeCall
+  type TypeCall,
+  getElementNamespace
 } from '@rune-langium/core';
 import type {
   GeneratorOptions,
@@ -43,14 +62,9 @@ import type {
   GeneratorDiagnostic,
   GeneratedFunc
 } from '../types.js';
-import type { NamespaceRegistry } from './namespace-registry.js';
+import { resolveImportPath, type NamespaceRegistry } from './namespace-registry.js';
 import { emitNamespaceWithContract, type NamespaceEmitterOptions } from './namespace-emitter.js';
-import { BaseNamespaceEmitter } from './base-namespace-emitter.js';
-import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
-import { getElementNamespace } from '@rune-langium/core';
-import { debug } from '../instrument.js';
-import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
-import {
+import { BaseNamespaceEmitter,
   decodeCardinality,
   buildAttributeTypesMap,
   buildAttrAccessorNamesMap,
@@ -58,17 +72,22 @@ import {
   mergeProfileTypeMaps,
   buildReportRulesLines,
   buildCrossNsImportLines,
-  choiceOptionFieldName
-} from './base-namespace-emitter.js';
+  choiceOptionFieldName } from './base-namespace-emitter.js';
+import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
+import { debug } from '../instrument.js';
+import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
 import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import {
   extractFuncs,
+  functionInputs,
+  functionOutput,
   buildFuncCallGraph,
   findCyclicFuncs,
   topoSortFuncs,
   resolveFuncTypeTs,
+  resolveFuncValueTypeTs,
   type RuneFunc,
   type RuneFuncAssignment,
   type RuneFuncAlias,
@@ -324,17 +343,48 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   }
 
   emitFunctions(): void {
-    const runeFuncs = extractFuncs(Array.from(this.model.docs), this.model.namespace, this.ctx.diagnostics);
+    const runeFuncs = extractFuncs(
+      Array.from(this.model.docs),
+      this.model.namespace,
+      this.ctx.diagnostics,
+      new Set(this.ctx.dataByName.keys())
+    );
+    if (
+      runeFuncs.some((func) => [...func.inputs, func.output].some((param) => param.shapeTypeName)) ||
+      [...this.ctx.libraryFuncsByName.values()].some((func) =>
+        [...func.parameters, func].some((parameter) => resolveFuncValueTypeTs(parameter).startsWith('RuneFuncData<'))
+      ) ||
+      [...this.ctx.rulesByName.values()].some((rule) =>
+        resolveFuncValueTypeTs({ typeCall: rule.input }).startsWith('RuneFuncData<')
+      )
+    ) {
+      this.sections.push('', runeFuncDataSource());
+    }
     const callGraph = buildFuncCallGraph(runeFuncs);
     const cyclicNames = findCyclicFuncs(callGraph);
-    const sortedFuncs = topoSortFuncs(runeFuncs, callGraph);
-
-    this.sections.push('// (functions emitted by Phase 8b appear below this line)');
+    const groups = groupFuncDispatches(runeFuncs);
+    const groupsByName = new Map(groups.map((group) => [group[0]!.name, group]));
+    const sortedFuncs = topoSortFuncs(
+      groups.map((group) => group.find((func) => !func.dispatchAttribute) ?? group[0]!),
+      callGraph
+    );
 
     for (const func of sortedFuncs) {
       const isHoisted = cyclicNames.has(func.name);
       const funcCtx = TsNamespaceEmitter.buildFuncBodyContext(func, callGraph, this.ctx.diagnostics);
-      const funcText = TsNamespaceEmitter.emitFunc(func, funcCtx, isHoisted);
+      const group = groupsByName.get(func.name)!;
+      const funcText =
+        group.length === 1
+          ? TsNamespaceEmitter.emitFunc(func, funcCtx, isHoisted)
+          : renderFuncDispatchGroup(group, {
+              renderSignature: (base) =>
+                `export function ${base.name}(input: ${TsNamespaceEmitter.buildFuncInputType(base)}): ${TsNamespaceEmitter.buildFuncOutputType(base)}`,
+              renderBody: (variant) =>
+                TsNamespaceEmitter.emitFuncBody(
+                  variant,
+                  TsNamespaceEmitter.buildFuncBodyContext(variant, callGraph, this.ctx.diagnostics)
+                )
+            });
 
       this.sections.push('');
       this.sections.push(funcText);
@@ -374,7 +424,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     const trackRef = (typeRef: unknown, symbolName: string): void => {
       if (!typeRef || typeof typeRef !== 'object') return;
-      const ns = getElementNamespace(typeRef as { $container?: unknown });
+      const ns = getElementNamespace(typeRef);
       if (!ns || ns === this.ctx.namespace) return;
 
       let symbols = imports.get(ns);
@@ -432,7 +482,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       // when the immediate parent is a Data — the ancestor may live in a
       // third namespace the immediate-parent tracking above never sees.
       if (parentRef && isData(parentRef)) {
-        const choiceAncestor = TsNamespaceEmitter.findChoiceAncestor(parentRef as Data);
+        const choiceAncestor = TsNamespaceEmitter.findChoiceAncestor(parentRef);
         if (choiceAncestor) {
           trackRef(choiceAncestor, `${choiceAncestor.name}Shape`);
         }
@@ -510,6 +560,35 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       }
     }
 
+    for (const func of this.ctx.libraryFuncsByName.values()) {
+      for (const parameter of [...func.parameters, func]) {
+        const type = parameter.typeCall?.type?.ref;
+        if (isData(type) || isChoice(type)) trackRef(type, `${type.name}Shape`);
+        else if (type?.$type === 'RosettaTypeAlias' || type?.$type === 'RosettaEnumeration') trackRef(type, type.name);
+      }
+    }
+
+    for (const doc of this.model.docs) {
+      for (const node of AstUtils.streamAllContents(doc.parseResult.value)) {
+        if (isRosettaSymbolReference(node)) {
+          const ref = node.symbol?.ref;
+          if (isRosettaFunction(ref) || isRosettaExternalFunction(ref)) trackRef(ref, ref.name);
+          if (isRosettaRule(ref)) trackRef(ref, `${ref.eligibility ? 'validate' : 'extract'}${ref.name}`);
+        }
+        if (isRosettaFunction(node)) {
+          const output = functionOutput(node);
+          for (const parameter of [...functionInputs(node), ...(output ? [output] : [])]) {
+            const type = parameter.typeCall?.type?.ref;
+            if (isData(type) || isChoice(type)) trackRef(type, `${type.name}Shape`);
+            else if (type?.$type === 'RosettaTypeAlias' || type?.$type === 'RosettaEnumeration')
+              trackRef(type, type.name);
+          }
+          const parent = node.superFunction?.ref;
+          if (parent) trackRef(parent, parent.name);
+        }
+      }
+    }
+
     return buildCrossNsImportLines(imports, this.ctx.namespace, this.ctx.registry, '.js');
   }
 
@@ -518,7 +597,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T105.
    */
   private resolveTypeExprAsTs(attr: Attribute): string {
-    return resolveTypeCallTarget(
+    const type = resolveTypeCallTarget(
       attr.typeCall,
       this.typeIndex,
       {
@@ -552,6 +631,8 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       },
       this.ctx.namespace
     );
+    const metadata = fieldMetadataKind(attr);
+    return metadata ? `${metadata === 'reference' ? 'RuneReferenceWithMeta' : 'RuneFieldWithMeta'}<${type}>` : type;
   }
 
   /**
@@ -560,6 +641,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T108.
    */
   private resolveTypeofStr(attr: Attribute): string | undefined {
+    if (hasFieldMetadata(attr)) return 'object';
     return resolveTypeCallTarget<string | undefined>(
       attr.typeCall,
       this.typeIndex,
@@ -670,7 +752,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const interfaceName = `${name}Shape`;
 
     const parentRef = data.superType?.ref;
-    const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
+    const choiceParent = parentRef && isChoice(parentRef) ? parentRef : undefined;
     // Item 2 (docs/superpowers/specs/2026-07-02-emitter-crossns-hardening-
     // design.md): NOT gated on `this.ctx.dataByName.has(...)` — that map
     // only holds THIS namespace's own Data nodes, so a parent Data in
@@ -682,11 +764,11 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     // namespace they live in — the same reasoning that already applies to
     // cross-ns Data-extends-Choice (collectCrossNamespaceImports's own doc
     // comment).
-    const parentData = parentRef && isData(parentRef) ? (parentRef as Data) : undefined;
+    const parentData = parentRef && isData(parentRef) ? parentRef : undefined;
     const inheritedChoiceAncestor = parentData ? TsNamespaceEmitter.findChoiceAncestor(parentData) : undefined;
 
     // Own attribute field declarations — identical across all branches.
-    const fields: string[] = [];
+    const fields: string[] = hasTypeMetadata(data) ? ['  meta?: RuneMetadata;'] : [];
     for (const attr of data.attributes) {
       const baseType = this.resolveTypeExprAsTs(attr);
       const fieldDecl = TsNamespaceEmitter.applyCardinalityTs(attr.card, baseType, attr.name);
@@ -755,9 +837,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const parentRef = data.superType?.ref;
     // Item 2: NOT gated on `dataByName.has` — see emitInterface's doc
     // comment for the full cross-namespace rationale.
-    const parentData = parentRef && isData(parentRef) ? (parentRef as Data) : undefined;
+    const parentData = parentRef && isData(parentRef) ? parentRef : undefined;
     const parentName = parentData?.name;
-    const choiceParent = parentRef && isChoice(parentRef) ? (parentRef as Choice) : undefined;
+    const choiceParent = parentRef && isChoice(parentRef) ? parentRef : undefined;
     // Multi-level (Data extends Data extends Choice, per T105's
     // emitInterface): once the PARENT's own Shape is itself the generic
     // intersection alias, THIS Data's Shape (bare, default `T`) is also
@@ -780,6 +862,8 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     const lines: string[] = [`${classHeader} {`];
 
+    if (hasTypeMetadata(data)) lines.push('  meta?: RuneMetadata;');
+
     // Own instance fields
     for (const attr of data.attributes) {
       const baseType = this.resolveTypeExprAsTs(attr);
@@ -794,8 +878,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     } else if (parentName) {
       ctorBodyLines.push(`    super(data);`);
     }
+    if (hasTypeMetadata(data)) ctorBodyLines.push('    this.meta = data.meta;');
     for (const attr of data.attributes) {
-      ctorBodyLines.push(`    this.${attr.name} = data.${attr.name} as typeof this.${attr.name};`);
+      ctorBodyLines.push(`    this.${attr.name} = data.${attr.name};`);
     }
 
     const hasOwnFields = data.attributes.length > 0;
@@ -900,7 +985,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const allAttrs: Attribute[] = [];
     const parentRef = data.superType?.ref;
     if (parentRef && isData(parentRef)) {
-      const parent = parentRef as Data;
+      const parent = parentRef;
       for (const attr of parent.attributes) {
         allAttrs.push(attr);
       }
@@ -955,7 +1040,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const parentRef = data.superType?.ref;
     // Item 2: NOT gated on `dataByName.has` — see emitInterface's doc
     // comment for the full cross-namespace rationale.
-    const parentName = parentRef && isData(parentRef) ? (parentRef as Data).name : undefined;
+    const parentName = parentRef && isData(parentRef) ? parentRef.name : undefined;
 
     const checkLines = this.buildTypeGuardChecks(data);
 
@@ -1166,7 +1251,13 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       typeName: data.name,
       attributeTypes,
       diagnostics: this.ctx.diagnostics,
-      attrAccessorNames
+      attrAccessorNames,
+      metadataAttributes: new Set(
+        typeFeatures(data)
+          .filter(isAttribute)
+          .filter(hasFieldMetadata)
+          .map((attr) => attr.name)
+      )
     };
   }
 
@@ -1225,7 +1316,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     const name = rule.name;
     const inputTypeRef = rule.input?.type?.ref;
     const inputTypeName = inputTypeRef ? inputTypeRef.name : undefined;
-    const paramType = inputTypeName ? `${inputTypeName}Shape` : 'Record<string, unknown>';
+    const paramType = rule.input ? resolveFuncValueTypeTs({ typeCall: rule.input }) : 'Record<string, unknown>';
     const paramName = inputTypeName ? inputTypeName.charAt(0).toLowerCase() + inputTypeName.slice(1) : 'input';
 
     const attributeTypes = new Map<string, string>();
@@ -1238,19 +1329,19 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     const transpilerCtx: ExpressionTranspilerContext = {
       selfName: paramName,
-      emitMode: 'ts-method',
+      emitMode: rule.eligibility ? 'ts-method' : 'ts-expression',
       conditionName: name,
       typeName: inputTypeName ?? name,
       attributeTypes,
       diagnostics: this.ctx.diagnostics
     };
 
-    const exprStr = transpileExpression(rule.expression as any, transpilerCtx);
+    const exprStr = transpileExpression(rule.expression, transpilerCtx);
 
     if (rule.eligibility) {
       return `export function validate${name}(${paramName}: ${paramType}): boolean {\n  return ${exprStr};\n}`;
     } else {
-      return `export function extract${name}(${paramName}: ${paramType}): unknown {\n  return ${exprStr};\n}`;
+      return `export function extract${name}(${paramName}: ${paramType}) {\n  return ${exprStr};\n}`;
     }
   }
 
@@ -1260,31 +1351,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
   private emitLibraryFunc(func: RosettaExternalFunction): string {
     const name = func.name;
 
-    const params = (func.parameters ?? []).map((p) => {
-      const typeRef = p.typeCall?.type?.ref;
-      const refText = p.typeCall?.type?.$refText;
+    const params = func.parameters.map(
+      (parameter) => `${parameter.name}: ${resolveFuncValueTypeTs(parameter)}${parameter.isArray ? '[]' : ''}`
+    );
+    const returnType = resolveFuncValueTypeTs(func);
 
-      let typeName = 'unknown';
-      if (typeRef && isRosettaBasicType(typeRef)) {
-        typeName = this.ctx.builtinTypeMap[typeRef.name] ?? 'unknown';
-      } else if (refText) {
-        typeName = this.ctx.builtinTypeMap[refText] ?? refText;
-      }
-
-      const arraySuffix = p.isArray ? '[]' : '';
-      return `${p.name}: ${typeName}${arraySuffix}`;
-    });
-
-    const returnTypeRef = func.typeCall?.type?.ref;
-    const returnRefText = func.typeCall?.type?.$refText;
-    let returnType = 'unknown';
-    if (returnTypeRef && isRosettaBasicType(returnTypeRef)) {
-      returnType = this.ctx.builtinTypeMap[returnTypeRef.name] ?? 'unknown';
-    } else if (returnRefText) {
-      returnType = this.ctx.builtinTypeMap[returnRefText] ?? returnRefText;
-    }
-
-    return `export type ${name} = (${params.join(', ')}) => ${returnType};`;
+    return [
+      `export type ${name} = (${params.join(', ')}) => ${returnType};`,
+      `export const ${name}: ${name} & { implementation?: ${name} } = (${params.join(', ')}): ${returnType} => {`,
+      `  if (!${name}.implementation) throw new Error(${JSON.stringify(`Library function '${name}' requires an implementation`)});`,
+      `  return ${name}.implementation(${func.parameters.map((p) => p.name).join(', ')});`,
+      `};`
+    ].join('\n');
   }
 
   /**
@@ -1292,13 +1370,51 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * No `import { z } from 'zod'` — zero Zod dependency.
    * T104.
    */
+  private usesMetadata(): boolean {
+    const localMetadata = this.model.docs.some((doc) =>
+      AstUtils.streamAllContents(doc.parseResult.value).some(
+        (node) =>
+          node.$type === 'WithMetaOperation' ||
+          node.$type === 'AsKeyOperation' ||
+          (isAttribute(node) && hasFieldMetadata(node)) ||
+          (isData(node) && hasTypeMetadata(node))
+      )
+    );
+    if (localMetadata) return true;
+    return this.model.docs.some((doc) =>
+      AstUtils.streamAllContents(doc.parseResult.value).some((node) => {
+        if (!isRosettaSymbolReference(node) || !isRosettaFunction(node.symbol?.ref)) return false;
+        const target = node.symbol.ref;
+        return functionInputs(target).some(hasFieldMetadata) || hasFieldMetadata(functionOutput(target));
+      })
+    );
+  }
+
   private buildFileHeader(): string {
     return [
       `// SPDX-License-Identifier: MIT`,
       `// Generated by @rune-langium/codegen — do not edit`,
       `// Source namespace: ${this.model.namespace}`,
       ``,
-      ...(this.suppressBoilerplate ? [buildRuntimeHelperImportLine('./runtime.js'), ``] : [RUNTIME_HELPER_SOURCE, ''])
+      ...(this.suppressBoilerplate
+        ? [
+            buildRuntimeHelperImportLine(
+              `${resolveImportPath(this.model.namespace, 'runtime', this.registry)}.js`,
+              this.usesMetadata()
+                ? [
+                    'runeWithMeta',
+                    'runeAsKey',
+                    'runeToField',
+                    'runeToReference',
+                    'type RuneFieldWithMeta',
+                    'type RuneReferenceWithMeta',
+                    'type RuneMetadata'
+                  ]
+                : []
+            ),
+            ``
+          ]
+        : [RUNTIME_HELPER_SOURCE, ...(this.usesMetadata() ? [metadataRuntimeSource(true)] : []), ''])
     ].join('\n');
   }
 
@@ -1600,11 +1716,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * Build the TypeScript input object type for a func's input parameters.
    * T120, FR-028.
    */
+  private static funcParamType(param: RuneFunc['output']): string {
+    const type = param.shapeTypeName ? `RuneFuncData<${param.shapeTypeName}>` : resolveFuncTypeTs(param.typeName);
+    return param.metadataKind
+      ? `${param.metadataKind === 'reference' ? 'RuneReferenceWithMeta' : 'RuneFieldWithMeta'}<${type}>`
+      : type;
+  }
+
   private static buildFuncInputType(func: RuneFunc): string {
     if (func.inputs.length === 0) return 'Record<string, never>';
     const fields = func.inputs
       .map((p) => {
-        const tsType = resolveFuncTypeTs(p.typeName);
+        const tsType = TsNamespaceEmitter.funcParamType(p);
         const isArray = p.cardinality.upper === null || p.cardinality.upper > 1;
         const isOpt = p.cardinality.lower === 0;
         if (isArray) {
@@ -1621,9 +1744,9 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T120, FR-028.
    */
   private static buildFuncOutputType(func: RuneFunc): string {
-    const tsType = resolveFuncTypeTs(func.output.typeName);
+    const tsType = TsNamespaceEmitter.funcParamType(func.output);
     const isArray = func.output.cardinality.upper === null || func.output.cardinality.upper > 1;
-    return isArray ? `${tsType}[]` : tsType;
+    return isArray ? `${tsType}[]` : func.output.cardinality.lower === 0 ? `${tsType} | undefined` : tsType;
   }
 
   /**
@@ -1646,18 +1769,29 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
 
     const attributeTypes = new Map<string, string>();
     for (const p of func.inputs) {
-      attributeTypes.set(p.name, p.typeName);
+      const many = p.cardinality.upper === null || p.cardinality.upper > 1;
+      attributeTypes.set(p.name, p.typeName + (many ? '[]' : p.cardinality.lower === 0 ? ' | undefined' : ''));
     }
-    attributeTypes.set(func.output.name, func.output.typeName);
+    attributeTypes.set(func.output.name, TsNamespaceEmitter.buildFuncOutputType(func));
 
     return {
       selfName: 'input',
-      emitMode: 'ts-method',
+      emitMode: 'ts-expression',
       conditionName: func.name,
       typeName: func.name,
       attributeTypes,
       diagnostics,
-      localBindings: aliasBindings,
+      localBindings: new Map([
+        ...func.inputs.map((input) => [input.name, `input.${input.name}`] as const),
+        [func.output.name, 'result'],
+        ...aliasBindings
+      ]),
+      metadataAttributes: new Set(
+        [...func.inputs, func.output]
+          .filter((param) => param.metadataKind && !func.aliases.some((alias) => alias.name === param.name))
+          .map((param) => param.name)
+      ),
+      superFunction: func.superFunction,
       currentFunc: func,
       outputAccumulator: isArray ? 'array' : 'scalar',
       aliasBindings,
@@ -1669,12 +1803,12 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
    * T120: Emit a single set or add assignment statement.
    */
   private static emitFuncSet(assignment: RuneFuncAssignment, ctx: FuncBodyContext): string {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const exprStr = transpileExpression(assignment.exprNode as any, ctx);
-    if (assignment.kind === 'add') {
-      return `  result.push(${exprStr});`;
-    }
-    return `  result = ${exprStr};`;
+    return renderFuncAssignment(assignment, ctx, (expr) =>
+      transpileExpression(expr as Parameters<typeof transpileExpression>[0], {
+        ...ctx,
+        preserveMetadata: !!assignment.metadataKind
+      })
+    ).join('\n');
   }
 
   /**
@@ -1687,14 +1821,10 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
     return `  const ${localName} = ${exprStr};`;
   }
 
-  /**
-   * T122: Emit pre-condition validation checks at function entry.
-   */
-  private static emitFuncPreConditions(func: RuneFunc, ctx: FuncBodyContext): string[] {
+  private static emitFuncConditions(conditions: readonly unknown[], func: RuneFunc, ctx: FuncBodyContext): string[] {
     const lines: string[] = [];
-    for (const cond of func.preConditions) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const condNode = cond as any;
+    for (const cond of conditions) {
+      const condNode = cond as Condition;
       const condName = condNode.name ?? func.name;
       const condCtx: ExpressionTranspilerContext = {
         ...ctx,
@@ -1702,36 +1832,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
         typeName: func.name,
         emitMode: 'ts-method'
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body = transpileCondition(cond as any, condCtx);
-      const throwForm = body
-        .replace(/errors\.push\('(.+?)'\);/g, `throw new Error('Diagnostic: $1');`)
-        .replace(/if \(!/g, 'if (!')
-        .split('\n')
-        .map((line) => `  ${line}`)
-        .join('\n');
-      lines.push(throwForm);
-    }
-    return lines;
-  }
-
-  /**
-   * T123: Emit post-condition validation checks before return.
-   */
-  private static emitFuncPostConditions(func: RuneFunc, ctx: FuncBodyContext): string[] {
-    const lines: string[] = [];
-    for (const cond of func.postConditions) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const condNode = cond as any;
-      const condName = condNode.name ?? func.name;
-      const condCtx: ExpressionTranspilerContext = {
-        ...ctx,
-        conditionName: condName,
-        typeName: func.name,
-        emitMode: 'ts-method'
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body = transpileCondition(cond as any, condCtx);
+      const body = transpileCondition(condNode, condCtx);
       const throwForm = body
         .replace(/errors\.push\('(.+?)'\);/g, `throw new Error('Diagnostic: $1');`)
         .split('\n')
@@ -1755,7 +1856,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       for (const alias of func.aliases) {
         bodyLines.push(TsNamespaceEmitter.emitFuncAlias(alias, ctx));
       }
-      const preConds = TsNamespaceEmitter.emitFuncPreConditions(func, ctx);
+      const preConds = TsNamespaceEmitter.emitFuncConditions(func.preConditions, func, ctx);
       for (const block of preConds) {
         bodyLines.push(block);
       }
@@ -1768,11 +1869,11 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       return bodyLines;
     }
 
-    const outputTs = resolveFuncTypeTs(func.output.typeName);
+    const outputTs = TsNamespaceEmitter.funcParamType(func.output);
     if (ctx.outputAccumulator === 'array') {
-      bodyLines.push(`  const result: ${outputTs}[] = [];`);
+      bodyLines.push(`  let result: ${outputTs}[] = [];`);
     } else {
-      bodyLines.push(`  let result: ${outputTs};`);
+      bodyLines.push(`  let result: ${outputTs} | undefined;`);
     }
 
     // Aliases before pre-conditions: the grammar (rune-dsl.langium's
@@ -1787,7 +1888,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       bodyLines.push(TsNamespaceEmitter.emitFuncAlias(alias, ctx));
     }
 
-    const preConds = TsNamespaceEmitter.emitFuncPreConditions(func, ctx);
+    const preConds = TsNamespaceEmitter.emitFuncConditions(func.preConditions, func, ctx);
     for (const block of preConds) {
       bodyLines.push(block);
     }
@@ -1796,7 +1897,18 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
       bodyLines.push(TsNamespaceEmitter.emitFuncSet(assignment, ctx));
     }
 
-    const postConds = TsNamespaceEmitter.emitFuncPostConditions(func, ctx);
+    if (ctx.outputAccumulator === 'scalar' && func.output.cardinality.lower > 0) {
+      bodyLines.push(
+        `  if (result == null) throw new Error(${JSON.stringify(`Function '${func.name}' produced no result`)});`
+      );
+    }
+    if (ctx.outputAccumulator === 'array' && func.output.cardinality.lower > 0) {
+      bodyLines.push(
+        `  if (result.length < ${func.output.cardinality.lower}) throw new Error(${JSON.stringify(`Function '${func.name}' produced too few results`)});`
+      );
+    }
+
+    const postConds = TsNamespaceEmitter.emitFuncConditions(func.postConditions, func, ctx);
     for (const block of postConds) {
       bodyLines.push(block);
     }
