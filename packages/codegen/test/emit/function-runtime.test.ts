@@ -43,6 +43,142 @@ async function compile(source: string, typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['scheme', 'reference'])('normalizes %s constructor fields from their declarations', async (annotation) => {
+    const funcs = await compile(`namespace test.constructorMetadata
+type Container:
+ amount int (1..1)
+  [metadata ${annotation}]
+ values int (0..*)
+  [metadata ${annotation}]
+ maybeAmount int (0..1)
+  [metadata ${annotation}]
+ plain int (1..1)
+func Build:
+ inputs:
+  amount int (1..1)
+  maybeAmount int (0..1)
+ output: result Container (1..1)
+ set result: Container { amount: amount with-meta { scheme: "x" }, values: [amount], maybeAmount: maybeAmount, plain: amount with-meta { scheme: "discard" } }
+`);
+    expect(funcs.Build!({ amount: 4 })).toEqual({
+      amount: { value: 4, meta: { scheme: 'x' } },
+      values: [annotation === 'scheme' ? { value: 4, meta: {} } : { value: 4 }],
+      maybeAmount: undefined,
+      plain: 4
+    });
+    expect(funcs.Build!({ amount: 4, maybeAmount: 7 })).toMatchObject({
+      maybeAmount: annotation === 'scheme' ? { value: 7, meta: {} } : { value: 7 }
+    });
+  });
+
+  it.each(['scheme', 'reference'])(
+    'initializes nested assignment paths through a %s output wrapper',
+    async (annotation) => {
+      const funcs = await compile(`namespace test.rootMetadata
+type Inner:
+ value int (1..1)
+type Outer:
+ nested Inner (1..1)
+func Build:
+ inputs: amount int (1..1)
+ output: result Outer (1..1)
+  [metadata ${annotation}]
+ set result -> nested -> value: amount
+`);
+      expect(funcs.Build!({ amount: 4 })).toEqual({
+        value: { nested: { value: 4 } },
+        ...(annotation === 'scheme' ? { meta: {} } : {})
+      });
+    }
+  );
+
+  it('uses distinguishing optional fields for subtype switch guards', async () => {
+    const funcs = await compile(`namespace test.subtypeSwitch
+type Base:
+ value int (1..1)
+type Child extends Base:
+ marker string (0..1)
+type GrandChild extends Child:
+ detail string (0..1)
+type Sibling extends Base:
+ siblingMarker string (0..1)
+func Select:
+ inputs: source Base (1..1)
+ output: result string (1..1)
+ set result: source switch GrandChild then "grandchild", Child then "child", Sibling then "sibling", default "base"
+func KnownChild:
+ inputs: source Child (1..1)
+ output: result boolean (1..1)
+ set result: source switch Child then True, default False
+func KnownAncestor:
+ inputs: source Child (1..1)
+ output: result boolean (1..1)
+ set result: source switch Base then True, default False
+`);
+    expect(funcs.Select!({ source: { value: 1 } })).toBe('base');
+    expect(funcs.Select!({ source: { value: 1, marker: undefined } })).toBe('base');
+    expect(funcs.Select!({ source: { value: 1, marker: 'x' } })).toBe('child');
+    expect(funcs.Select!({ source: { value: 1, siblingMarker: 'x' } })).toBe('sibling');
+    expect(funcs.Select!({ source: { value: 1, detail: 'x' } })).toBe('grandchild');
+    expect(funcs.KnownChild!({ source: { value: 1 } })).toBe(true);
+    expect(funcs.KnownAncestor!({ source: { value: 1 } })).toBe(true);
+  });
+
+  it.each(['scheme', 'reference'])(
+    'crosses %s wrappers and collections in the same assignment path',
+    async (annotation) => {
+      const funcs = await compile(`namespace test.wrappedCollectionAssignment
+type Leaf:
+ value int (1..1)
+ values int (0..*)
+type Branch:
+ leaves Leaf (0..*)
+  [metadata ${annotation}]
+type Container:
+ branch Branch (1..1)
+  [metadata ${annotation}]
+func Build:
+ inputs: amount int (1..1)
+ output: result Container (0..*)
+  [metadata ${annotation}]
+ set result -> branch -> leaves -> value: amount
+ add result -> branch -> leaves -> values: amount
+`);
+      const wrap = (value: unknown) => ({ value, ...(annotation === 'scheme' ? { meta: {} } : {}) });
+      expect(funcs.Build!({ amount: 4 })).toEqual([
+        wrap({ branch: wrap({ leaves: [wrap({ value: 4, values: [4] })] }) })
+      ]);
+    }
+  );
+
+  it('creates and updates the first element of collection assignment intermediates', async () => {
+    const funcs = await compile(`namespace test.collectionAssignment
+type Child:
+ value int (1..1)
+ values int (0..*)
+type Parent:
+ children Child (0..*)
+func Build:
+ inputs: amount int (1..1)
+ output: result Parent (1..1)
+ set result -> children -> value: amount
+ add result -> children -> values: [amount, amount + 1]
+func Update:
+ inputs: amount int (1..1)
+ output: result Parent (1..1)
+ set result: Parent { children: [Child { value: 1, values: [] }, Child { value: 2, values: [] }] }
+ set result -> children -> value: amount
+ add result -> children -> values: amount
+`);
+    expect(funcs.Build!({ amount: 4 })).toEqual({ children: [{ value: 4, values: [4, 5] }] });
+    expect(funcs.Update!({ amount: 4 })).toEqual({
+      children: [
+        { value: 4, values: [4] },
+        { value: 2, values: [] }
+      ]
+    });
+  });
+
   it.each(
     ['scheme', 'reference'].flatMap((annotation) =>
       ['1..1', '0..1', '0..*'].map((cardinality) => ({ annotation, cardinality }))

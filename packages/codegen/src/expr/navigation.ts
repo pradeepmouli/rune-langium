@@ -229,7 +229,11 @@ function deepNavigationPaths(expr: RosettaDeepFeatureCall): Feature[][] {
   return name ? deepFeaturePaths(expressionType(expr.receiver), name, new Set(), target) : [];
 }
 
-function typeMatches(candidate: RosettaType | undefined, goal: RosettaType, seen = new Set<RosettaType>()): boolean {
+export function typeMatches(
+  candidate: RosettaType | undefined,
+  goal: RosettaType,
+  seen = new Set<RosettaType>()
+): boolean {
   if (!candidate || seen.has(candidate)) return false;
   if (candidate === goal || candidate.name === goal.name) return true;
   seen.add(candidate);

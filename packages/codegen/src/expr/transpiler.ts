@@ -967,7 +967,18 @@ export function transpileConstructor(expr: RosettaExpression, ctx: ExpressionTra
   const pairs = expr.values
     .map((kv) => {
       const key = kv.key.$refText ?? '?';
-      const val = transpileExpression(kv.value, ctx);
+      const field = kv.key.ref;
+      const val = isAttribute(field)
+        ? prepareFunctionArgument(
+            transpileExpression(kv.value, {
+              ...ctx,
+              preserveMetadata: ctx.emitMode.startsWith('ts-') && hasFieldMetadata(field)
+            }),
+            field,
+            ctx,
+            kv.value
+          )
+        : transpileExpression(kv.value, ctx);
       return `${key}: ${val}`;
     })
     .join(', ');

@@ -16,6 +16,7 @@ import {
   featureIsRequired,
   featureName,
   renderFeaturePath,
+  typeMatches,
   typeFeatures
 } from './navigation.js';
 
@@ -40,11 +41,28 @@ function isObject(value: string): string {
   return `${value} != null && typeof ${value} === 'object' && !Array.isArray(${value})`;
 }
 
-function dataGuard(value: string, data: RosettaType): string {
-  const required = typeFeatures(data)
-    .filter(featureIsRequired)
-    .map((feature) => JSON.stringify(featureName(feature)));
-  return [isObject(value), ...required.map((key) => `${key} in ${value}`)].join(' && ');
+function dataGuard(value: string, data: RosettaType, inputType: RosettaType): string {
+  const features = typeFeatures(data);
+  const required = features.filter(featureIsRequired).map((feature) => JSON.stringify(featureName(feature)));
+  const checks = [isObject(value), ...required.map((key) => `${key} in ${value}`)];
+  if (!typeMatches(inputType, data)) {
+    const inputFields = new Set([
+      ...typeFeatures(inputType).map(featureName),
+      ...typeFeatures(isData(data) ? data.superType?.ref : undefined).map(featureName)
+    ]);
+    const distinguishing = features.filter((feature) => !inputFields.has(featureName(feature)));
+    checks.push(
+      distinguishing.length === 0
+        ? 'false'
+        : `(${distinguishing
+            .map((feature) => {
+              const key = JSON.stringify(featureName(feature));
+              return `(${key} in ${value} && ${value}[${key}] != null)`;
+            })
+            .join(' || ')})`
+    );
+  }
+  return checks.join(' && ');
 }
 
 function choiceGuard(value: string, choice: RosettaType): string {
@@ -123,7 +141,7 @@ function objectSwitch(
       paths.length > 0
         ? `${selected} != null`
         : isData(target)
-          ? dataGuard('__sw', target)
+          ? dataGuard('__sw', target, inputType)
           : choiceGuard('__sw', target);
     const branch = options.renderExpression(currentCase.expression, { selfName: '__item' });
     lines.push(`  if (${guard}) {`);
@@ -143,8 +161,8 @@ function objectSwitch(
  * Render a linked Rune `switch` expression.
  *
  * Choice cases follow declared option paths and bind the selected value to
- * the callback's implicit-variable name. Data cases use required Shape keys,
- * allowing the generated code to consume plain objects as well as instances.
+ * the callback's implicit-variable name. Data cases check required Shape keys
+ * and distinguishing subtype fields on plain objects as well as instances.
  * Enum and literal cases retain the compact equality semantics used by the
  * existing expression renderer.
  */

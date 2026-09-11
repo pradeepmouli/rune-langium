@@ -13,7 +13,7 @@ export function renderFuncAssignment(
 ): string[] {
   const root = ctx.localBindings?.get(assignment.target ?? '') ?? assignment.target ?? 'result';
   const path = assignment.path ?? [];
-  const target = [root, ...path].join('.');
+  let target = root;
   const lines: string[] = [];
   const targetMany = assignment.targetMany ?? (path.length === 0 && ctx.outputAccumulator === 'array');
   let expr =
@@ -36,9 +36,25 @@ export function renderFuncAssignment(
   }
 
   if (path.length > 0) {
-    for (let i = 0; i < path.length; i++) {
-      const prefix = [root, ...path.slice(0, i)].join('.');
-      lines.push(`  ${prefix} ??= {} as NonNullable<typeof ${prefix}>;`);
+    let many = assignment.rootMany ?? ctx.outputAccumulator === 'array';
+    let metadataKind = assignment.rootMetadataKind;
+    for (const [index, segment] of path.entries()) {
+      const initial = metadataKind === 'field' ? '{ meta: {} }' : '{}';
+      if (many) {
+        lines.push(`  ${target} ??= [];`);
+        const item = freshLocal(ctx, `__assignmentItem${index}`);
+        lines.push(`  const ${item} = ${target}[0] ??= ${initial} as NonNullable<(typeof ${target})[number]>;`);
+        target = item;
+      } else {
+        lines.push(`  ${target} ??= ${initial} as NonNullable<typeof ${target}>;`);
+      }
+      if (metadataKind) {
+        target += '.value';
+        lines.push(`  ${target} ??= {} as NonNullable<typeof ${target}>;`);
+      }
+      target += `.${segment.name}`;
+      many = segment.many;
+      metadataKind = segment.metadataKind;
     }
   }
 
@@ -53,5 +69,5 @@ export function renderFuncAssignment(
   } else {
     lines.push(`  ${target} = ${expr};`);
   }
-  return lines;
+  return path.length > 0 ? ['  {', ...lines.map((line) => `  ${line}`), '  }'] : lines;
 }

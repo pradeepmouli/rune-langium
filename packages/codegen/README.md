@@ -25,6 +25,10 @@ and dispatch. Metadata-annotated parameters use `RuneFieldWithMeta<T>` or
 while calls and assignments retain wrappers where their declarations require them.
 Aliases retain metadata wrappers, including through chained bindings; value reads
 unwrap them using the alias's metadata kind and cardinality.
+Constructor fields use the same declared metadata and cardinality normalization
+as function parameters. Nested assignments enter wrapper values and create missing
+containers; collection intermediates select or create the first element, matching
+the Java generator's builder semantics.
 Implicit collection and pipeline calls retain the item's metadata, and `default`
 preserves the selected wrapper while converting raw fallbacks when needed.
 Dispatch compares the selector's value without changing the wrapper used by its body.
@@ -36,6 +40,9 @@ Deep navigation preserves collections at intermediate path segments. Switch case
 and defaults bind `item` to the selected value. Two empty collections or two absent
 optional scalars compare equal and do not compare unequal; an empty collection
 and an absent scalar remain distinct.
+Data subtype switch cases require a populated distinguishing field when the
+selector's declared type does not already establish that subtype. Inherited
+fields alone do not distinguish a subtype from its parent.
 
 Abstract functions and library declarations require implementations. A generated
 library callable exposes a typed `.implementation` property for the host to supply.

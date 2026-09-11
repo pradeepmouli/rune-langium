@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import type { AstNode } from 'langium';
-import { fieldMetadataKind, hasFieldMetadata, type FieldMetadataKind } from '../expr/metadata-runtime.js';
+import { fieldMetadataKind, type FieldMetadataKind } from '../expr/metadata-runtime.js';
 import {
   isRosettaModel,
   isRosettaFunction,
@@ -53,16 +53,21 @@ export interface RuneFuncAlias {
   exprNode: unknown;
 }
 
-/**
- * A single `set <out>: <expr>` or `add <out>: <expr>` assignment in a func body.
- * Corresponds to Operation in the Langium AST.
- * Supports direct outputs and nested assignment paths; add appends each supplied value.
- */
+/** A declared assignment feature, retaining its collection and wrapper boundaries. */
+export interface RuneFuncAssignmentPathSegment {
+  name: string;
+  many: boolean;
+  metadataKind?: FieldMetadataKind;
+}
+
+/** A function's set/add operation, including the root and every explicit path segment. */
 export interface RuneFuncAssignment {
   kind: 'set' | 'add';
   exprNode: unknown;
   target?: string;
-  path?: string[];
+  path?: RuneFuncAssignmentPathSegment[];
+  rootMany?: boolean;
+  rootMetadataKind?: FieldMetadataKind;
   metadataKind?: FieldMetadataKind;
   targetMany?: boolean;
 }
@@ -462,18 +467,23 @@ export function extractFuncs(
         : { name: 'result', typeName: 'unknown', cardinality: { lower: 1, upper: 1 } };
       const parent = node.superFunction?.ref;
       const assignments = node.operations.map((operation): RuneFuncAssignment => {
-        const path: string[] = [];
-        let target: AstNode | undefined =
-          operation.assignRoot.ref ?? functionAttribute(node, operation.assignRoot.$refText);
+        const path: RuneFuncAssignmentPathSegment[] = [];
+        const root = operation.assignRoot.ref ?? functionAttribute(node, operation.assignRoot.$refText);
+        let target: AstNode | undefined = root;
         for (let segment = operation.path; segment; segment = segment.next) {
-          path.push(segment.feature.ref?.name ?? segment.feature.$refText);
           target = segment.feature.ref;
-          if (segment.next && isAttribute(target) && hasFieldMetadata(target)) path.push('value');
+          path.push({
+            name: segment.feature.ref?.name ?? segment.feature.$refText,
+            many: isAttribute(target) && (target.card.unbounded || (target.card.sup ?? 1) > 1),
+            metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined
+          });
         }
         return {
           kind: operation.add ? 'add' : 'set',
           exprNode: operation.expression,
           target: operation.assignRoot.ref?.name ?? operation.assignRoot.$refText,
+          rootMany: isAttribute(root) && (root.card.unbounded || (root.card.sup ?? 1) > 1),
+          rootMetadataKind: isAttribute(root) ? fieldMetadataKind(root) : undefined,
           metadataKind: isAttribute(target) ? fieldMetadataKind(target) : undefined,
           targetMany: isAttribute(target) ? target.card.unbounded || (target.card.sup ?? 1) > 1 : undefined,
           path
