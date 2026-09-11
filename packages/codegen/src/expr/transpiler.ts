@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { fieldMetadataKind, hasFieldMetadata, metadataName } from './metadata-runtime.js';
+import { fieldMetadataKind, hasFieldMetadata, metadataName, type FieldMetadataKind } from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
 import { expressionMetadataKind } from './metadata-type.js';
 import { functionOutput } from '../types/func.js';
@@ -109,6 +109,8 @@ export interface ExpressionTranspilerContext {
    * In ts-method mode: `this` (the class instance).
    */
   selfName: string;
+  implicitMetadata?: { kind: FieldMetadataKind; many: boolean };
+  localMetadata?: ReadonlyMap<string, { kind: FieldMetadataKind; many: boolean } | undefined>;
   metadataAttributes?: ReadonlySet<string>;
   preserveMetadata?: boolean;
   /**
@@ -197,13 +199,17 @@ function diagnosticFallback(message: string): string {
  * `runeExtendChoice`-derived union) already carries the option keys
  * structurally and need no cast.
  */
-function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): string {
+export function attrAccessExpr(name: string, ctx: ExpressionTranspilerContext): string {
   const accessor = ctx.attrAccessorNames?.get(name);
   const raw =
     ctx.localBindings?.get(name) ??
     (accessor !== undefined && ctx.emitMode === 'ts-method'
       ? `(${ctx.selfName} as unknown as Record<string, unknown>).${accessor}`
       : `${ctx.selfName}.${accessor ?? name}`);
+  if (ctx.localMetadata?.has(name)) {
+    const metadata = ctx.localMetadata.get(name);
+    return metadata && !ctx.preserveMetadata ? unwrapMetadata(raw, metadata.many) : raw;
+  }
   return ctx.metadataAttributes?.has(name) && !ctx.preserveMetadata
     ? unwrapMetadata(raw, ctx.attributeTypes.get(name)?.includes('[]') ?? false)
     : raw;
@@ -923,10 +929,15 @@ export function transpileHigherOrder(expr: RosettaExpression, ctx: ExpressionTra
  *   With function → `((param) => body)(arg)`
  */
 export function transpileThenOperation(expr: ThenOperation, ctx: ExpressionTranspilerContext): string {
-  const argument = expr.argument ? transpileExpression(expr.argument, ctx) : ctx.selfName;
+  const argumentCtx = expr.function && ctx.emitMode.startsWith('ts-') ? { ...ctx, preserveMetadata: true } : ctx;
+  const argument = expr.argument ? transpileExpression(expr.argument, argumentCtx) : ctx.selfName;
   if (!expr.function) return argument;
+  const kind = argumentCtx.preserveMetadata ? expressionMetadataKind(expr.argument) : undefined;
   const parameter = freshLocal(ctx, '__pipe');
-  const body = transpileExpression(expr.function.body, inlineContext(expr.function, ctx, [parameter]));
+  const body = transpileExpression(
+    expr.function.body,
+    inlineContext(expr.function, ctx, [parameter], kind ? { kind, many: expressionIsMany(expr.argument) } : undefined)
+  );
   return `((${parameter}) => (${body}))(${argument})`;
 }
 
@@ -997,8 +1008,16 @@ export function transpileDefault(expr: RosettaExpression, ctx: ExpressionTranspi
   if (!isDefaultOperation(expr)) {
     return diagnosticFallback('Invalid expression: not DefaultOperation');
   }
-  const left = expr.left ? transpileExpression(expr.left, ctx) : ctx.selfName;
-  const right = transpileExpression(expr.right, ctx);
+  const kind = ctx.preserveMetadata ? expressionMetadataKind(expr) : undefined;
+  const branch = (node: RosettaExpression | undefined): string => {
+    const value = node ? transpileExpression(node, ctx) : ctx.selfName;
+    const sourceKind = node ? expressionMetadataKind(node) : ctx.implicitMetadata?.kind;
+    if (!kind || kind === sourceKind) return value;
+    const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
+    return `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${value})`;
+  };
+  const left = branch(expr.left);
+  const right = branch(expr.right);
   const value = freshLocal(ctx, '__default');
   return `((${value}) => ${value} == null || (Array.isArray(${value}) && ${value}.length === 0) ? ${right} : ${value})(${left})`;
 }
@@ -1163,8 +1182,18 @@ function prepareFunctionArgument(
 ): string {
   const kind = ctx.emitMode.startsWith('ts-') ? fieldMetadataKind(parameter) : undefined;
   const many = parameter.card?.unbounded || (parameter.card?.sup ?? 1) > 1;
+  const sourceKind = argument
+    ? isRosettaImplicitVariable(argument)
+      ? ctx.implicitMetadata?.kind
+      : isRosettaSymbolReference(argument) && ctx.localMetadata?.has(argument.symbol.$refText)
+        ? ctx.localMetadata.get(argument.symbol.$refText)?.kind
+        : expressionMetadataKind(argument)
+    : ctx.implicitMetadata?.kind;
+  if (!argument && sourceKind && !kind) value = unwrapMetadata(value, ctx.implicitMetadata?.many ?? false);
+  if (sourceKind === 'reference' && !kind && !many && (parameter.card?.inf ?? 1) > 0) {
+    value = `((value) => { if (value == null) throw new Error(${JSON.stringify(`Argument '${parameter.name}' requires a value`)}); return value; })(${value})`;
+  }
   if (many) value = `((value) => value == null ? [] : Array.isArray(value) ? value : [value])(${value})`;
-  const sourceKind = argument ? expressionMetadataKind(argument) : undefined;
   if (kind && sourceKind !== kind) {
     const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
     const inputKind = JSON.stringify(sourceKind ?? 'value');
@@ -1264,11 +1293,14 @@ export function transpileExpression(
     }
     if (target?.$type === 'RosettaExternalFunction' || target?.$type === 'RosettaRule') {
       const inputCount = target.$type === 'RosettaRule' ? (target.input ? 1 : 0) : target.parameters.length;
-      const args = expr.explicitArguments
-        ? expr.rawArgs.map((arg) => transpileExpression(arg, ctx))
-        : inputCount === 1
-          ? [ctx.selfName]
-          : [];
+      const prepare = (argument: RosettaExpression | undefined, index: number) =>
+        prepareFunctionArgument(
+          argument ? transpileExpression(argument, { ...ctx, preserveMetadata: false }) : ctx.selfName,
+          { name: target.$type === 'RosettaExternalFunction' ? (target.parameters[index]?.name ?? 'input') : 'input' },
+          ctx,
+          argument
+        );
+      const args = expr.explicitArguments ? expr.rawArgs.map(prepare) : inputCount === 1 ? [prepare(undefined, 0)] : [];
       if (args.length !== inputCount) {
         const message = `Function '${target.name}' expects ${inputCount} arguments, received ${args.length}`;
         ctx.diagnostics.push({ severity: 'error', code: 'invalid-function-call', message });
@@ -1285,7 +1317,9 @@ export function transpileExpression(
 
   // Implicit variable (lambda parameter 'item')
   if (isRosettaImplicitVariable(expr)) {
-    return ctx.selfName;
+    return ctx.implicitMetadata && !ctx.preserveMetadata
+      ? unwrapMetadata(ctx.selfName, ctx.implicitMetadata.many)
+      : ctx.selfName;
   }
 
   // Navigation (T068)

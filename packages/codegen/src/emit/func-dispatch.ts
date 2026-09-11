@@ -17,6 +17,8 @@ export interface FuncDispatchMetadata {
 export interface FuncDispatchRenderOptions<TFunc extends FuncDispatchMetadata> {
   /** Render the complete exported function signature for the base function. */
   renderSignature: (base: TFunc) => string;
+  /** Render the selector value using the target emitter's attribute access rules. */
+  renderSelector?: (base: TFunc, attribute: string) => string;
   /** Render the complete body, including its final return, for one variant. */
   renderBody: (func: TFunc) => string | readonly string[];
 }
@@ -111,7 +113,9 @@ export function renderFuncDispatchGroup<TFunc extends FuncDispatchMetadata>(
   if (cases.length === 0) {
     lines.push(...indent(renderBlock(base, options), 2));
   } else {
-    lines.push(`  switch (input[${JSON.stringify(selectorAttribute)}]) {`);
+    const selector =
+      options.renderSelector?.(base, selectorAttribute!) ?? `input[${JSON.stringify(selectorAttribute)}]`;
+    lines.push(`  switch (${selector}) {`);
     for (const { func } of cases) {
       lines.push(`    case ${JSON.stringify(func.dispatchValue)}:`);
       lines.push(...indent(renderBlock(func, options), 6));

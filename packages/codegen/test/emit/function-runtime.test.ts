@@ -138,6 +138,181 @@ func FieldToRefCall:
     expect(funcs.Check!({ source: { c: 'c' } })).toBe(false);
   });
 
+  it.each(['scheme', 'reference'])(
+    'preserves %s metadata in implicit collection calls and pipelines',
+    async (annotation) => {
+      const funcs = await compile(`namespace test.implicitMetadata
+func Echo:
+ inputs:
+  source int (1..1)
+   [metadata ${annotation}]
+ output:
+  result int (1..1)
+   [metadata ${annotation}]
+ set result: source
+func MapEcho:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output:
+  result int (0..*)
+   [metadata ${annotation}]
+ set result: values extract [Echo]
+library function External(source int) int
+func ExternalMap:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output: result int (0..*)
+ set result: values extract [External]
+func Read:
+ inputs:
+  source int (1..1)
+   [metadata ${annotation}]
+ output: result int (1..1)
+ set result: source
+func Plain:
+ inputs: source int (1..1)
+ output: result int (1..1)
+ set result: source + 1
+func ReadMap:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output: result int (0..*)
+ set result: values extract [Read]
+func PlainMap:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output: result int (0..*)
+ set result: values extract [Plain]
+func ExplicitMap:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output:
+  result int (0..*)
+   [metadata ${annotation}]
+ set result: values extract v [Echo(v)]
+func IdentityMap:
+ inputs:
+  values int (0..*)
+   [metadata ${annotation}]
+ output:
+  result int (0..*)
+   [metadata ${annotation}]
+ set result: values extract [item]
+func PipeEcho:
+ inputs:
+  source int (1..1)
+   [metadata ${annotation}]
+ output:
+  result int (1..1)
+   [metadata ${annotation}]
+ set result: source then Echo
+`);
+      const value =
+        annotation === 'scheme' ? { value: 7, meta: { scheme: 'unit' } } : { value: 7, externalReference: 'id' };
+      expect(funcs.MapEcho!({ values: [value] })).toEqual([value]);
+      expect(funcs.MapEcho!({ values: [] })).toEqual([]);
+      expect(funcs.PipeEcho!({ source: value })).toEqual(value);
+      Object.assign(funcs.External!, { implementation: (source: number) => source + 2 });
+      expect(funcs.ExternalMap!({ values: [value] })).toEqual([9]);
+      expect(funcs.ReadMap!({ values: [value] })).toEqual([7]);
+      expect(funcs.PlainMap!({ values: [value] })).toEqual([8]);
+      expect(funcs.ExplicitMap!({ values: [value] })).toEqual([value]);
+      expect(funcs.IdentityMap!({ values: [value] })).toEqual([value]);
+      if (annotation === 'reference') {
+        expect(() => funcs.PlainMap!({ values: [{ externalReference: 'id' }] })).toThrow(/requires a value/);
+      }
+    }
+  );
+
+  it.each(['scheme', 'reference'])('preserves %s metadata selected by default expressions', async (annotation) => {
+    const funcs = await compile(`namespace test.defaultMetadata
+func Choose:
+ inputs:
+  primary int (0..1)
+   [metadata ${annotation}]
+  fallback int (1..1)
+   [metadata ${annotation}]
+ output:
+  result int (1..1)
+   [metadata ${annotation}]
+ set result: primary default fallback
+func RawFallback:
+ inputs:
+  primary int (0..1)
+   [metadata ${annotation}]
+  fallback int (1..1)
+ output:
+  result int (1..1)
+   [metadata ${annotation}]
+ set result: primary default fallback
+func Many:
+ inputs:
+  primary int (0..*)
+   [metadata ${annotation}]
+  fallback int (0..*)
+   [metadata ${annotation}]
+ output:
+  result int (0..*)
+   [metadata ${annotation}]
+ set result: primary default fallback
+`);
+    const primary =
+      annotation === 'scheme' ? { value: 0, meta: { scheme: 'first' } } : { value: 0, externalReference: 'first' };
+    const fallback =
+      annotation === 'scheme' ? { value: 2, meta: { scheme: 'second' } } : { value: 2, externalReference: 'second' };
+    expect(funcs.Choose!({ primary, fallback })).toEqual(primary);
+    expect(funcs.Choose!({ fallback })).toEqual(fallback);
+    expect(funcs.RawFallback!({ primary, fallback: 3 })).toEqual(primary);
+    expect(funcs.RawFallback!({ fallback: 3 })).toEqual(
+      annotation === 'scheme' ? { value: 3, meta: {} } : { value: 3 }
+    );
+    expect(funcs.Many!({ primary: [], fallback: [fallback] })).toEqual([fallback]);
+    expect(funcs.Many!({ primary: [primary], fallback: [fallback] })).toEqual([primary]);
+  });
+
+  it.each(['scheme', 'reference'])(
+    'dispatches on %s metadata values and retains the wrapper in the selected body',
+    async (annotation) => {
+      const funcs = await compile(`namespace test.dispatchMetadata
+enum Kind:
+ Cash
+ Credit
+func Compute:
+ inputs:
+  kind Kind (0..1)
+   [metadata ${annotation}]
+ output: result int (1..1)
+ set result: 0
+func Compute(kind: Kind -> Cash):
+ set result: 1
+func Compute(kind: Kind -> Credit):
+ set result: 2
+func Retain:
+ inputs:
+  kind Kind (1..1)
+   [metadata ${annotation}]
+ output:
+  result Kind (1..1)
+   [metadata ${annotation}]
+ set result: kind
+func Retain(kind: Kind -> Cash):
+ set result: kind
+`);
+      const wrap = (value: string) =>
+        annotation === 'scheme' ? { value, meta: { scheme: 'unit' } } : { value, externalReference: 'id' };
+      expect(funcs.Compute!({ kind: wrap('Cash') })).toBe(1);
+      expect(funcs.Compute!({ kind: wrap('Credit') })).toBe(2);
+      expect(funcs.Compute!({})).toBe(0);
+      const cash = wrap('Cash');
+      expect(funcs.Retain!({ kind: cash })).toEqual(cash);
+    }
+  );
+
   it('executes resolved calls and both conditional branches', async () => {
     const funcs = await compile(`namespace test.runtime
 func Double:

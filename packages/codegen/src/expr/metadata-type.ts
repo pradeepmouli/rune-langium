@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { isAttribute, isRosettaFunction, isShortcutDeclaration, type RosettaExpression } from '@rune-langium/core';
+import {
+  isAttribute,
+  isInlineFunction,
+  isClosureParameter,
+  isRosettaFunction,
+  isShortcutDeclaration,
+  type RosettaExpression
+} from '@rune-langium/core';
 import { AstUtils } from 'langium';
 import { functionAttribute, functionOutput } from '../types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './metadata-runtime.js';
@@ -18,6 +25,10 @@ export function expressionMetadataKind(
       const func = AstUtils.getContainerOfType(expr, isRosettaFunction);
       const target = expr.symbol.ref ?? (func ? functionAttribute(func, expr.symbol.$refText) : undefined);
       if (isAttribute(target)) return fieldMetadataKind(target);
+      if (isClosureParameter(target)) {
+        const operation = target.$container.$container;
+        return 'argument' in operation ? expressionMetadataKind(operation.argument, next) : undefined;
+      }
       if (isRosettaFunction(target)) return fieldMetadataKind(functionOutput(target));
       if (isShortcutDeclaration(target)) return expressionMetadataKind(target.expression, next);
       return undefined;
@@ -26,6 +37,10 @@ export function expressionMetadataKind(
     case 'RosettaDeepFeatureCall': {
       const feature = expr.feature?.ref;
       return isAttribute(feature) ? fieldMetadataKind(feature) : undefined;
+    }
+    case 'RosettaImplicitVariable': {
+      const operation = AstUtils.getContainerOfType(expr, isInlineFunction)?.$container;
+      return operation && 'argument' in operation ? expressionMetadataKind(operation.argument, next) : undefined;
     }
     case 'RosettaSuperCall': {
       const parent = AstUtils.getContainerOfType(expr, isRosettaFunction)?.superFunction?.ref;
@@ -62,6 +77,11 @@ export function expressionMetadataKind(
     case 'ListLiteral': {
       const kinds = expr.elements.map((element) => expressionMetadataKind(element, next));
       return kinds.length && kinds.every((kind) => kind === kinds[0]) ? kinds[0] : undefined;
+    }
+    case 'DefaultOperation': {
+      const left = expressionMetadataKind(expr.left, next);
+      const right = expressionMetadataKind(expr.right, next);
+      return left === 'reference' || right === 'reference' ? 'reference' : (left ?? right);
     }
     case 'RosettaConditionalExpression': {
       const consequent = expressionMetadataKind(expr.ifthen, next);

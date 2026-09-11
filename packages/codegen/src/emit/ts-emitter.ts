@@ -78,7 +78,12 @@ import {
 import { getTargetRelativePath, type NamespaceWalkResult } from './namespace-walker.js';
 import { debug } from '../instrument.js';
 import { RUNTIME_HELPER_SOURCE, buildRuntimeHelperImportLine } from '../helpers.js';
-import { transpileCondition, transpileExpression, type ExpressionTranspilerContext } from '../expr/transpiler.js';
+import {
+  attrAccessExpr,
+  transpileCondition,
+  transpileExpression,
+  type ExpressionTranspilerContext
+} from '../expr/transpiler.js';
 import { typescriptProfile } from './typescript-profile.js';
 import { resolveTypeCallTarget, type TypeIndexEntry, type TypeIndexLookup } from './type-ref-resolver.js';
 import {
@@ -381,6 +386,7 @@ export class TsNamespaceEmitter extends BaseNamespaceEmitter {
           : renderFuncDispatchGroup(group, {
               renderSignature: (base) =>
                 `export function ${base.name}(input: ${TsNamespaceEmitter.buildFuncInputType(base)}): ${TsNamespaceEmitter.buildFuncOutputType(base)}`,
+              renderSelector: (_base, attribute) => attrAccessExpr(attribute, funcCtx),
               renderBody: (variant) =>
                 TsNamespaceEmitter.emitFuncBody(
                   variant,

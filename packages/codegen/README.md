@@ -23,6 +23,9 @@ Function bodies preserve calls, aliases, assignments, conditions, inheritance,
 and dispatch. Metadata-annotated parameters use `RuneFieldWithMeta<T>` or
 `RuneReferenceWithMeta<T>`; ordinary value expressions unwrap field metadata,
 while calls and assignments retain wrappers where their declarations require them.
+Implicit collection and pipeline calls retain the item's metadata, and `default`
+preserves the selected wrapper while converting raw fallbacks when needed.
+Dispatch compares the selector's value without changing the wrapper used by its body.
 Converting reference metadata to field metadata requires a payload value; an
 unresolved reference throws instead of producing a field wrapper without a value.
 Collection membership and distinct operations use structural value keys, so

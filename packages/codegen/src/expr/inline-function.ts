@@ -13,10 +13,15 @@ export function freshLocal(ctx: ExpressionTranspilerContext, preferred: string):
 export function inlineContext(
   fn: InlineFunction,
   ctx: ExpressionTranspilerContext,
-  names: readonly string[]
+  names: readonly string[],
+  implicitMetadata?: ExpressionTranspilerContext['implicitMetadata']
 ): ExpressionTranspilerContext {
   const bindings = new Map([...ctx.attributeTypes.keys()].map((name) => [name, `${ctx.selfName}.${name}`]));
   for (const [name, value] of ctx.localBindings ?? []) bindings.set(name, value);
-  fn.parameters.forEach((parameter, index) => bindings.set(parameter.name, names[index] ?? names[0]!));
-  return { ...ctx, selfName: names[0]!, localBindings: bindings };
+  const localMetadata = new Map(ctx.localMetadata);
+  fn.parameters.forEach((parameter, index) => {
+    bindings.set(parameter.name, names[index] ?? names[0]!);
+    localMetadata.set(parameter.name, implicitMetadata);
+  });
+  return { ...ctx, selfName: names[0]!, localBindings: bindings, localMetadata, implicitMetadata };
 }
