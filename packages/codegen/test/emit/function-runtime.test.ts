@@ -45,6 +45,71 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each([
+    'parents filter [item -> active]',
+    'parents sort [item -> detail -> value]',
+    'parents extract [item]',
+    'parents extract',
+    'parents then filter [item -> active]',
+    '(parents extract [[item]]) flatten',
+    'parents then',
+    'parents reverse',
+    'parents distinct'
+  ])('navigates deeply through %s', async (operation) => {
+    const funcs = await compile(`namespace test.collectionNavigation
+type Detail:
+ value int (1..1)
+type Parent:
+ active boolean (1..1)
+ detail Detail (1..1)
+func Read:
+ inputs: parents Parent (0..*)
+ output: result int (0..*)
+ set result: (${operation}) ->> value`);
+    const parents = [
+      { active: true, detail: { value: 2 } },
+      { active: false, detail: { value: 1 } }
+    ];
+    const expected = operation.includes('filter')
+      ? [2]
+      : operation.includes('sort') || operation.includes('reverse')
+        ? [1, 2]
+        : [2, 1];
+    expect(funcs.Read!({ parents })).toEqual(expected);
+    expect(funcs.Read!({ parents: [] })).toEqual([]);
+  });
+
+  it.each(['reference', 'address', 'scheme'])('projects %s metadata over collection receivers', async (key) => {
+    const funcs = await compile(`namespace test.metadataNavigation
+annotation metadata:
+ reference string (0..1)
+ address string (0..1)
+ scheme string (0..1)
+type Thing:
+ value int (1..1)
+func Read:
+ inputs: values Thing (0..*)
+  [metadata ${key}]
+ output: result string (0..*)
+ set result: values -> ${key}
+func Scalar:
+ inputs: value Thing (0..1)
+  [metadata ${key}]
+ output: result string (0..1)
+ set result: value -> ${key}`);
+    const wrap = (text: string) =>
+      key === 'reference'
+        ? { externalReference: text }
+        : key === 'address'
+          ? { reference: { reference: text } }
+          : { value: { value: 1 }, meta: { scheme: text } };
+    const empty = key === 'scheme' ? { value: { value: 2 }, meta: {} } : {};
+    expect(funcs.Read!({ values: [wrap('a'), empty, wrap('b')] })).toEqual(['a', 'b']);
+    expect(funcs.Read!({ values: [] })).toEqual([]);
+    expect(funcs.Scalar!({ value: wrap('a') })).toBe('a');
+    expect(funcs.Scalar!({})).toBeUndefined();
+  });
+
   it.each(['', 'scheme', 'reference'])('enforces zero output cardinality (metadata=%s)', async (annotation) => {
     const metadata = annotation ? `[metadata ${annotation}]` : '';
     const funcs = await compile(`namespace test.zeroOutput

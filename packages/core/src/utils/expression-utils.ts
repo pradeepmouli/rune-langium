@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 
-import { isRosettaFunction, type RosettaExpression, type RosettaFunction } from '../generated/ast.js';
+import {
+  isInlineFunction,
+  isRosettaExpression,
+  isRosettaFunction,
+  type RosettaExpression,
+  type RosettaFunction
+} from '../generated/ast.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
+import type { AstNode } from 'langium';
 
 /**
  * Tracks which expression nodes have a generated (synthetic) input.
@@ -57,4 +64,63 @@ export function getFunctionSignature(func: RosettaFunction, declarations?: Itera
   if (declarations) return func;
   const owner = func.dispatchAttribute.ref?.$container;
   return isRosettaFunction(owner) ? owner : func;
+}
+
+/** Resolve an explicit operation input or the input of its enclosing pipeline. */
+export function getOperationArgument(expr: RosettaExpression): RosettaExpression | undefined {
+  if ('argument' in expr && expr.argument) return expr.argument;
+  let owner: AstNode | undefined = expr.$container;
+  while (owner) {
+    if (isInlineFunction(owner) && isRosettaExpression(owner.$container)) {
+      const operation = owner.$container;
+      if ('argument' in operation && operation.argument) return operation.argument;
+    }
+    owner = owner.$container;
+  }
+  return undefined;
+}
+
+/** Shared operator result-type propagation; symbol lookup belongs to the caller. */
+export function resolveOperationType<T>(
+  expr: RosettaExpression,
+  resolve: (expression: RosettaExpression) => T | undefined
+): T | undefined {
+  const from = (expression: RosettaExpression | undefined) => (expression ? resolve(expression) : undefined);
+  switch (expr.$type) {
+    case 'FilterOperation':
+    case 'SortOperation':
+    case 'DistinctOperation':
+    case 'ReverseOperation':
+    case 'FlattenOperation':
+    case 'FirstOperation':
+    case 'LastOperation':
+    case 'MinOperation':
+    case 'MaxOperation':
+    case 'RosettaOnlyElement':
+    case 'AsKeyOperation':
+    case 'WithMetaOperation':
+      return from(getOperationArgument(expr));
+    case 'MapOperation':
+    case 'ThenOperation':
+    case 'ReduceOperation':
+      return from(expr.function?.body ?? getOperationArgument(expr));
+    case 'DefaultOperation':
+      return from(expr.left) ?? from(expr.right);
+    case 'RosettaConditionalExpression':
+      return from(expr.ifthen) ?? from(expr.elsethen);
+    case 'SwitchOperation':
+      for (const branch of expr.cases) {
+        const type = from(branch.expression);
+        if (type !== undefined) return type;
+      }
+      return undefined;
+    case 'ListLiteral':
+      for (const element of expr.elements) {
+        const type = from(element);
+        if (type !== undefined) return type;
+      }
+      return undefined;
+    default:
+      return undefined;
+  }
 }

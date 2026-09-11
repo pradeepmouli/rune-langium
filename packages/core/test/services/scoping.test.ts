@@ -55,6 +55,32 @@ async function parseAndValidateWorkspace(entries: Array<{ uri: string; content: 
 }
 
 describe('Scoping', () => {
+  it.each([
+    'parents filter [item -> active]',
+    'parents extract [item]',
+    'parents then filter [item -> active]',
+    'parents sort [item -> detail -> value]',
+    '(parents extract [[item]]) flatten'
+  ])('links deep features after %s', async (operation) => {
+    const results = await parseAndValidateWorkspace([
+      { uri: 'inmemory:///builtins.rosetta', content: 'namespace builtins\nbasicType int\nbasicType boolean' },
+      {
+        uri: 'inmemory:///operators.rosetta',
+        content: `namespace operators
+type Detail:
+ value int (1..1)
+type Parent:
+ active boolean (1..1)
+ detail Detail (1..1)
+func Read:
+ inputs: parents Parent (0..*)
+ output: result int (0..*)
+ set result: (${operation}) ->> value`
+      }
+    ]);
+    expect(results.flatMap((result) => result.errors)).toEqual([]);
+  });
+
   it.each([false, true])('links split dispatch signatures within their namespace (reverse=%s)', async (reverse) => {
     const sources = [
       `namespace builtins

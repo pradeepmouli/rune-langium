@@ -66,6 +66,8 @@ export {
   hasGeneratedInput,
   setGeneratedInputIfAbsent,
   getFunctionSignature,
+  getOperationArgument,
+  resolveOperationType,
   getFunctionInputs,
   getFunctionOutput
 } from './utils/expression-utils.js';

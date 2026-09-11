@@ -3,7 +3,7 @@
 
 import type { AstNode, AstNodeDescription, ReferenceInfo, Scope, LangiumCoreServices } from 'langium';
 import { AstUtils, EMPTY_SCOPE, DefaultScopeProvider, MapScope } from 'langium';
-import { getFunctionSignature } from '../utils/expression-utils.js';
+import { getFunctionSignature, resolveOperationType } from '../utils/expression-utils.js';
 import { qualifiedExportPath } from '../naming/qualified-export-path.js';
 import {
   isData,
@@ -419,84 +419,7 @@ export class RuneDslScopeProvider extends DefaultScopeProvider {
       return undefined;
     }
 
-    // Passthrough operations: the output type equals the input (argument) type.
-    // only-element, distinct, reverse, first, last, sort — all preserve the element type.
-    if (
-      isRosettaOnlyElement(expr) ||
-      isDistinctOperation(expr) ||
-      isReverseOperation(expr) ||
-      isFirstOperation(expr) ||
-      isLastOperation(expr) ||
-      isSortOperation(expr)
-    ) {
-      return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
-    }
-
-    // Collection operations — resolve element type by propagating through the chain.
-    // Headless forms (argument=null) arise inside ImplicitInlineFunction bodies after `then`.
-    if (isFilterOperation(expr)) {
-      // filter preserves element type — use the argument if present
-      return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
-    }
-    if (isFlattenOperation(expr)) {
-      return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
-    }
-    // MapOperation element type = what the mapping function produces
-    if (isMapOperation(expr) && expr.function?.body) {
-      return this.resolveExpressionType(expr.function.body);
-    }
-    // ThenOperation: output type depends on what the body does to each element.
-    if (isThenOperation(expr)) {
-      const body = expr.function?.body;
-      if (!body) return undefined;
-      // Headless filter/flatten/distinct/reverse/sort/first/last preserve the argument's element type
-      if (
-        (isFilterOperation(body) ||
-          isFlattenOperation(body) ||
-          isDistinctOperation(body) ||
-          isReverseOperation(body) ||
-          isSortOperation(body) ||
-          isFirstOperation(body) ||
-          isLastOperation(body)) &&
-        !body.argument
-      ) {
-        return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
-      }
-      // Headless only-element: same element type as argument (de-lists the collection)
-      if (isRosettaOnlyElement(body) && !body.argument) {
-        return expr.argument ? this.resolveExpressionType(expr.argument) : undefined;
-      }
-      // Headless MapOperation needs item context — let the walk-up in getSymbolReferenceScope handle it
-      if (isMapOperation(body) && !body.argument) {
-        return undefined;
-      }
-      return this.resolveExpressionType(body);
-    }
-
-    // Switch operation: resolve the type of the first non-default case expression.
-    // e.g. `fpmlTrade -> product switch EquitySwapTransactionSupplement then item, ReturnSwap then item`
-    // Both cases return `item` which narrows to the guard type; use the first case's guard as the result type.
-    if (isSwitchOperation(expr)) {
-      for (const c of expr.cases) {
-        if (c.guard?.referenceGuard) {
-          const guardType = c.guard.referenceGuard.ref;
-          if (guardType && isData(guardType)) return guardType;
-          if (guardType && isChoice(guardType)) return guardType;
-        }
-      }
-      return undefined;
-    }
-
-    // Conditional expression: `if cond then A else B` — try then-branch first, then else-branch.
-    // Used for shortcuts like `alias tradeLot: if ... then ... else trade -> tradeLot only-element`.
-    if (isRosettaConditionalExpression(expr)) {
-      return (
-        (expr.ifthen ? this.resolveExpressionType(expr.ifthen) : undefined) ??
-        (expr.elsethen ? this.resolveExpressionType(expr.elsethen) : undefined)
-      );
-    }
-
-    return undefined;
+    return resolveOperationType(expr, (expression) => this.resolveExpressionType(expression));
   }
 
   /**

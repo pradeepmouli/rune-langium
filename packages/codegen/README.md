@@ -54,6 +54,8 @@ the enclosing output requires metadata. Filters, sorting, and min/max retain the
 selected values' wrappers.
 
 Deep navigation resolves types through `default` receivers and switch branch results.
+Collection and pipeline result types use the same core operator propagation as language-service scopes.
+Metadata navigation projects over collections and omits absent metadata values.
 Functionless `extract` and `then` preserve item metadata for wrapped outputs and
 read payloads for raw outputs.
 Structural equality and collection keys compare Temporal values by their type and

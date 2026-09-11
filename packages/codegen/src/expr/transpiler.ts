@@ -10,7 +10,7 @@ import {
 } from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
 import { expressionMetadataKind } from './metadata-type.js';
-import { functionOutput } from '../types/func.js';
+import { functionOutput, resolveFuncValueTypeTs } from '../types/func.js';
 import { renderSwitchExpression } from './switch-expression.js';
 import { renderOnlyExists } from './only-exists.js';
 import { freshLocal, inlineContext } from './inline-function.js';
@@ -797,9 +797,20 @@ export function transpileNavigation(expr: RosettaExpression, ctx: ExpressionTran
         : ctx.selfName;
       const key = feature.name;
       const property = key in metadataName ? metadataName[key as keyof typeof metadataName] : key;
-      if (key === 'reference') return `(${receiver})?.externalReference`;
-      if (key === 'address') return `(${receiver})?.reference?.reference`;
-      return `(${receiver})?.meta?.[${JSON.stringify(property)}]`;
+      const read = (value: string) => {
+        const access =
+          key === 'reference'
+            ? `(${value})?.externalReference`
+            : key === 'address'
+              ? `(${value})?.reference?.reference`
+              : `(${value})?.meta?.[${JSON.stringify(property)}]`;
+        return `(${access} as ${resolveFuncValueTypeTs(feature)} | undefined)`;
+      };
+      if (expr.receiver ? expressionIsMany(expr.receiver) : ctx.implicitMetadata?.many) {
+        const item = freshLocal(ctx, '__metadataItem');
+        return `(${receiver} ?? []).map((${item}) => ${read(item)}).filter((value) => value != null)`;
+      }
+      return read(receiver);
     }
   }
   const rendered = renderNavigation(expr, (child) => transpileExpression(child, { ...ctx, preserveMetadata: false }));

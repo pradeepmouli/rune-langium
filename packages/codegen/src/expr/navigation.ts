@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Pradeep Mouli
 import {
+  getOperationArgument,
+  resolveOperationType,
   isAttribute,
   isChoice,
   isChoiceOption,
@@ -144,17 +146,6 @@ export function expressionType(expr: RosettaExpression | undefined): RosettaType
     if (isRosettaFunction(ref)) return resolveType(functionOutput(ref)?.typeCall);
     if (isShortcutDeclaration(ref)) return expressionType(ref.expression);
   }
-  if (isRosettaOnlyElement(expr)) return expressionType(expr.argument);
-  if (isRosettaConditionalExpression(expr)) {
-    return expressionType(expr.ifthen) ?? expressionType(expr.elsethen);
-  }
-  if (isDefaultOperation(expr)) return expressionType(expr.left) ?? expressionType(expr.right);
-  if (isSwitchOperation(expr)) {
-    for (const branch of expr.cases) {
-      const type = expressionType(branch.expression);
-      if (type) return type;
-    }
-  }
   if (expr.$type === 'RosettaImplicitVariable') {
     // `item` is commonly wrapped by one or more feature calls before it is
     // consumed. Walk the linked containment chain to recover the switch case
@@ -187,7 +178,7 @@ export function expressionType(expr: RosettaExpression | undefined): RosettaType
       if (isInlineFunction(owner)) {
         const parent = owner.$container;
         if (parent && typeof parent === 'object' && 'argument' in parent) {
-          return expressionType((parent as { argument?: RosettaExpression }).argument);
+          return expressionType(getOperationArgument(parent));
         }
       }
       owner = (owner as { $container?: unknown }).$container;
@@ -197,7 +188,7 @@ export function expressionType(expr: RosettaExpression | undefined): RosettaType
     const ref = expr.feature?.ref;
     if (isAttribute(ref) || isChoiceOption(ref) || isRosettaRecordFeature(ref)) return resolveType(ref.typeCall);
   }
-  return undefined;
+  return resolveOperationType(expr, expressionType);
 }
 
 export function typeFeatures(type: RosettaType | undefined, seen: Set<RosettaType> = new Set()): Feature[] {
