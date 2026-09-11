@@ -45,6 +45,32 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['', 'scheme', 'reference'])('enforces zero output cardinality (metadata=%s)', async (annotation) => {
+    const metadata = annotation ? `[metadata ${annotation}]` : '';
+    const funcs = await compile(`namespace test.zeroOutput
+func NoResult:
+ inputs: value int (0..1)
+  ${metadata}
+ output: result int (0..0)
+  ${metadata}
+ set result: value
+func Empty:
+ output: result int (0..0)
+  ${metadata}
+ set result: empty`);
+    expect(funcs.NoResult!({})).toBeUndefined();
+    expect(funcs.Empty!({})).toBeUndefined();
+    for (const value of [0, 4]) {
+      const input =
+        annotation === 'scheme'
+          ? { value, meta: { scheme: 'unit' } }
+          : annotation === 'reference'
+            ? { value, externalReference: 'id' }
+            : value;
+      expect(() => funcs.NoResult!({ value: input })).toThrow('too many results');
+    }
+  });
+
   it('navigates deeply through Data and Choice switch results', async () => {
     const funcs = await compile(`namespace test.switchResults
 type Detail:

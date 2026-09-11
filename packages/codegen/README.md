@@ -18,7 +18,7 @@ fields while excluding class validation methods. Required inputs are required pr
 collection inputs and outputs use arrays. An optional scalar output returns
 `T | undefined`. These types describe values and collection shape; TypeScript
 arrays do not encode every Rune minimum or maximum cardinality. Generated
-functions enforce declared output bounds at runtime.
+functions enforce declared output bounds at runtime, including absent-only `(0..0)` outputs.
 
 Studio function previews resolve inherited and dispatch input signatures.
 `normalizePreviewInputs` adapts plain form values to metadata wrappers using the
