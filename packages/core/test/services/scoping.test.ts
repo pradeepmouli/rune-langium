@@ -2,7 +2,13 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { describe, it, expect } from 'vitest';
-import { parse, parseWorkspace, isRosettaFunction, getFunctionSignature,createRuneDslServices } from '../../src/index.js';
+import {
+  parse,
+  parseWorkspace,
+  isRosettaFunction,
+  getFunctionSignature,
+  createRuneDslServices
+} from '../../src/index.js';
 import type { Data, RosettaFunction, RosettaEnumeration, RosettaModel } from '../../src/index.js';
 import { URI } from 'langium';
 import type { Diagnostic } from 'langium';
