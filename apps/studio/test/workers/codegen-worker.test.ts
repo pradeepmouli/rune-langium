@@ -1659,6 +1659,56 @@ describe('codegen-worker validateInstance (real standalone Zod validator)', () =
     expect(call.diagnostics[0].message).toMatch(/^Structural validation unavailable:/);
   });
 
+  it('keeps structural paths when a condition shares the field name', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: `import { z } from 'zod';
+export const TradeSchema = z.object({ trade: z.object({ amount: z.number().min(1) }) })
+  .superRefine((_data, ctx) => { ctx.addIssue({ code: 'custom', message: 'trade: condition failed', path: ['trade'] }); });`,
+      diagnostics: []
+    });
+    findDataNodeMock.mockReturnValue({ name: 'Trade' });
+    getActiveConditionPredicatesMock.mockReturnValue([{ name: 'trade', predicate: 'false' }]);
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'beta.Trade',
+      data: { trade: { amount: 0 } },
+      requestId: 'collision'
+    });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'collision',
+      diagnostics: [
+        { path: 'trade.amount', message: expect.any(String) },
+        { path: 'trade', message: 'trade: condition failed', conditionName: 'trade' }
+      ]
+    });
+  });
+
+  it('formats every array index in nested structural paths', async () => {
+    emitStandaloneZodSchemaMock.mockReturnValue({
+      code: `import { z } from 'zod';
+export const TradeSchema = z.object({ orders: z.array(z.object({ lines: z.array(z.object({ amount: z.number() })) })) });`,
+      diagnostics: []
+    });
+    const { scope, dispatch } = await loadWorkerModule();
+    await setFilesAndFlush(dispatch, flushWorker);
+    dispatch({
+      type: 'instance:validate',
+      typeFqn: 'beta.Trade',
+      data: { orders: [{ lines: [{ amount: 1 }, { amount: 'invalid' }] }] },
+      requestId: 'nested'
+    });
+    await flushWorker();
+    expect(scope.postMessage).toHaveBeenLastCalledWith({
+      type: 'instance:validateResult',
+      requestId: 'nested',
+      diagnostics: [{ path: 'orders[0].lines[1].amount', message: expect.any(String) }]
+    });
+  });
+
   it('attributes a multi-condition superRefine issue to its condition name via path', async () => {
     emitStandaloneZodSchemaMock.mockReturnValue({
       code: [

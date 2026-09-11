@@ -930,34 +930,18 @@ async function executeFunction(funcName: string, inputs: Record<string, unknown>
 // Instance validation
 // ---------------------------------------------------------------------------
 
-// Translates issue path back to the Rune-idiomatic dotted/bracketed form
-// preview-validator.ts's original formatIssuePath used — presentation logic
-// only, not part of the deleted structural validator.
 function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
   return path
     .filter((segment): segment is string | number => typeof segment === 'string' || typeof segment === 'number')
     .map((segment) => (typeof segment === 'number' ? `[${segment}]` : segment))
     .join('.')
-    .replace('.[', '[');
+    .replace(/\.\[/g, '[');
 }
 
 /**
- * Translates real Zod issues into ValidationDiagnostic[], attributing an
- * issue back to a named Rune condition when possible:
- *  - path.length >= 1 and path[0] matches an active condition's name → the
- *    multi-condition .superRefine() case (zod-emitter.ts's emitOneOf/
- *    emitChoice/etc. always emit `path: [conditionName]`).
- *  - path.length === 0, there is exactly one active condition, AND the
- *    issue's own message starts with that condition's name → the
- *    single-condition .refine() case (Zod's shorthand form carries no path;
- *    buildConditionMessage (transpiler.ts) always prefixes its message with
- *    the condition name, in every branch). The message check is required,
- *    not just the empty path: an unrelated root-path structural issue (e.g.
- *    a Data-extends-Choice's runeExtendChoice union, or any other
- *    `z.strictObject`-flavored `unrecognized_keys` issue surfacing at the
- *    root) would otherwise be silently mislabeled as the condition's own
- *    failure just because it happens to share the sole condition's target.
- *  - everything else → an ordinary field-structural diagnostic.
+ * Attribute condition issues only when the message matches the active condition
+ * selected by the issue path, or the sole active condition for a root-path issue.
+ * Preserve full structural paths so the form can attach errors to their controls.
  */
 function translateValidationIssues(
   issues: z.ZodError['issues'],
@@ -967,11 +951,14 @@ function translateValidationIssues(
   const soleConditionName = activeConditionNames.length === 1 ? activeConditionNames[0] : undefined;
   return issues.map((issue) => {
     const first = issue.path[0];
-    if (issue.path.length >= 1 && typeof first === 'string' && conditionNameSet.has(first)) {
-      return { path: first, message: issue.message, conditionName: first };
-    }
-    if (issue.path.length === 0 && soleConditionName && issue.message.startsWith(soleConditionName)) {
-      return { path: soleConditionName, message: issue.message, conditionName: soleConditionName };
+    const conditionName =
+      issue.path.length === 0
+        ? soleConditionName
+        : typeof first === 'string' && conditionNameSet.has(first)
+          ? first
+          : undefined;
+    if (conditionName && issue.message.startsWith(conditionName)) {
+      return { path: conditionName, message: issue.message, conditionName };
     }
     return { path: formatIssuePath(issue.path), message: issue.message };
   });
