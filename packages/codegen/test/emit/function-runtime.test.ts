@@ -45,6 +45,67 @@ async function compile(source: string | string[], typeAssertions = '') {
 }
 
 describe('generated TypeScript function execution', () => {
+  it.each(['scheme', 'reference'])('retains %s selector metadata through switch item branches', async (annotation) => {
+    const funcs = await compile(`namespace test.switchSelectorMetadata
+enum Kind:
+ Cash
+ Credit
+type Entry:
+ value int (1..1)
+type Special extends Entry:
+ extra int (0..1)
+choice Box:
+ Entry
+func Retain:
+ inputs: kind Kind (1..1)
+  [metadata ${annotation}]
+ output: result Kind (1..1)
+  [metadata ${annotation}]
+ set result: kind switch Cash then item, default item
+func Nested:
+ inputs: kind Kind (1..1)
+  [metadata ${annotation}]
+ output: result Kind (1..1)
+  [metadata ${annotation}]
+ set result: kind switch Cash then (item switch Cash then item, default item), default item
+func Read:
+ inputs: kind Kind (1..1)
+  [metadata ${annotation}]
+ output: result Kind (1..1)
+ set result: kind switch Cash then item, default item
+func RetainData:
+ inputs: entry Entry (1..1)
+  [metadata ${annotation}]
+ output: result Entry (1..1)
+  [metadata ${annotation}]
+ set result: entry switch Special then item, default item
+func ReadData:
+ inputs: entry Entry (1..1)
+  [metadata ${annotation}]
+ output: result int (1..1)
+ set result: entry switch Special then item -> value, default item -> value
+func Project:
+ inputs: box Box (1..1)
+  [metadata ${annotation}]
+ output: result Entry (1..1)
+ set result: box switch Entry then item, default Entry {value: 0}`);
+    const wrap = (value: unknown) =>
+      annotation === 'scheme' ? { value, meta: { scheme: 'retained' } } : { value, externalReference: 'retained' };
+    for (const value of ['Cash', 'Credit']) {
+      const kind = wrap(value);
+      expect(funcs.Retain!({ kind })).toBe(kind);
+      expect(funcs.Nested!({ kind })).toBe(kind);
+      expect(funcs.Read!({ kind })).toBe(value);
+    }
+    for (const value of [{ value: 4 }, { value: 5, extra: 1 }]) {
+      const entry = wrap(value);
+      expect(funcs.RetainData!({ entry })).toBe(entry);
+      expect(funcs.ReadData!({ entry })).toBe(value.value);
+    }
+    const selected = { value: 6 };
+    expect(funcs.Project!({ box: wrap({ entry: selected }) })).toBe(selected);
+  });
+
   it.each(['', 'scheme', 'reference'])(
     'projects collection-valued defaults through navigation (metadata=%s)',
     async (annotation) => {

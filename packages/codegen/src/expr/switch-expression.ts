@@ -22,7 +22,9 @@ import {
 
 export interface SwitchExpressionRenderOptions {
   /** Render an expression, optionally rebinding the implicit `item`. */
-  renderExpression: (expression: RosettaExpression, options?: { selfName?: string }) => string;
+  renderExpression: (expression: RosettaExpression, options?: { selfName?: string; projected?: boolean }) => string;
+  /** Compare an unwrapped payload while retaining the original selector for branch binding. */
+  selector?: { name: string; unwrap: (selector: string) => string };
   /** Report an unsupported or unresolved switch case. */
   report?: (message: string) => void;
   /** Rendering scope used when a switch omits its explicit argument. */
@@ -80,7 +82,7 @@ function primitiveSwitch(
   let fallback = 'undefined';
   const cases: string[] = [];
   for (const currentCase of operation.cases) {
-    const branch = options.renderExpression(currentCase.expression, { selfName: '__sw' });
+    const branch = options.renderExpression(currentCase.expression, { selfName: options.selector?.name ?? '__sw' });
     if (!currentCase.guard) {
       fallback = branch;
       continue;
@@ -123,7 +125,7 @@ function objectSwitch(
       if (targetName !== undefined) {
         const branch = options.renderExpression(currentCase.expression, { selfName: '__item' });
         lines.push(`  if (__sw === ${JSON.stringify(targetName)}) {`);
-        lines.push(`    const __item = __sw;`);
+        lines.push(`    const __item = ${options.selector?.name ?? '__sw'};`);
         lines.push(`    return ${branch};`);
         lines.push('  }');
       } else {
@@ -143,15 +145,16 @@ function objectSwitch(
         : isData(target)
           ? dataGuard('__sw', target, inputType)
           : choiceGuard('__sw', target);
-    const branch = options.renderExpression(currentCase.expression, { selfName: '__item' });
+    const projected = paths.length > 0 && paths.every((path) => path.length > 0);
+    const branch = options.renderExpression(currentCase.expression, { selfName: '__item', projected });
     lines.push(`  if (${guard}) {`);
-    lines.push(`    const __item = ${selected};`);
+    lines.push(`    const __item = ${!projected && options.selector?.name ? options.selector?.name : selected};`);
     lines.push(`    return ${branch};`);
     lines.push('  }');
   }
   const fallbackCase = operation.cases.find((currentCase) => !currentCase.guard);
   lines.push(
-    `  return ${fallbackCase ? options.renderExpression(fallbackCase.expression, { selfName: '__sw' }) : 'undefined'};`
+    `  return ${fallbackCase ? options.renderExpression(fallbackCase.expression, { selfName: options.selector?.name ?? '__sw' }) : 'undefined'};`
   );
   lines.push(`})(${argument})`);
   return lines.join('\n');
@@ -175,7 +178,10 @@ export function renderSwitchExpression(
     ? options.renderExpression(expression.argument)
     : (options.selfName ?? 'undefined');
   const inputType = expressionType(expression.argument);
-  if (inputType && (isChoice(inputType) || isData(inputType)))
-    return objectSwitch(expression, argument, inputType, options);
-  return primitiveSwitch(expression, argument, options, inputType);
+  const selector = options.selector ? options.selector.unwrap(options.selector.name) : argument;
+  const result =
+    inputType && (isChoice(inputType) || isData(inputType))
+      ? objectSwitch(expression, selector, inputType, options)
+      : primitiveSwitch(expression, selector, options, inputType);
+  return options.selector ? `((${options.selector.name}) => (${result}))(${argument})` : result;
 }

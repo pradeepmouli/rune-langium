@@ -153,22 +153,19 @@ func Parent:
  set result: foo switch alpha.Foo then 1, default 0`
     ];
     const funcs = await parseFunctions(reverse ? [...sources].reverse() : sources);
-    const compiled = new Map(
-      funcs.map((func) => {
+    const source = funcs
+      .map((func) => {
         const expression = renderSwitchExpression(func.operations[0]!.expression, { renderExpression });
         if (!expression) throw new Error('expected a switch expression');
-        return [
-          func.name,
-          execute(
-            `export function ${func.name}(input: {foo: {shared: number; own?: string}}): number | undefined { return ${expression}; }`,
-            func.name
-          )
-        ];
+        return `function ${func.name}(input: {foo: {shared: number; own?: string}}): number | undefined { return ${expression}; }`;
       })
+      .join('\n');
+    const compare = execute(
+      `${source}\nexport function Compare(input: {foo: {shared: number; own?: string}}) { return [Cross(input), Exact(input), Parent(input)]; }`,
+      'Compare'
     );
-    expect(compiled.get('Cross')!({ foo: { shared: 4 } })).toBe(0);
-    expect(compiled.get('Exact')!({ foo: { shared: 4 } })).toBe(1);
-    expect(compiled.get('Parent')!({ foo: { shared: 4, own: 'child' } })).toBe(1);
+    expect(compare({ foo: { shared: 4 } })).toEqual([0, 1, 1]);
+    expect(compare({ foo: { shared: 4, own: 'child' } })).toEqual([0, 1, 1]);
   });
 
   it('selects Choice option paths and binds item for plain-object runtime shapes', async () => {

@@ -44,7 +44,9 @@ the Java generator's builder semantics.
 Implicit collection and pipeline calls retain the item's metadata. Conditional
 and `default` branches normalize mixed raw, field, and reference values to a common
 wrapper kind while evaluating only the selected branch. Switches use the same
-branch normalization and preserve scalar, collection, and empty results. Arithmetic, aggregation,
+branch normalization and preserve scalar, collection, and empty results.
+Switch comparisons use selector payloads while whole-selector `item` branches
+retain the original metadata wrapper. Choice branches bind the projected option. Arithmetic, aggregation,
 conversions, predicates, and collection comparison keys read payloads even when
 the enclosing output requires metadata. Filters, sorting, and min/max retain the
 selected values' wrappers.

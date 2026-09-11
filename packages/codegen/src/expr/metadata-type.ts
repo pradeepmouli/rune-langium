@@ -4,6 +4,10 @@
 import {
   isAttribute,
   isInlineFunction,
+  isSwitchCaseOrDefault,
+  isSwitchOperation,
+  isChoice,
+  isData,
   isClosureParameter,
   isRosettaFunction,
   isShortcutDeclaration,
@@ -12,6 +16,7 @@ import {
 import { AstUtils } from 'langium';
 import { functionAttribute, functionOutput } from '../types/func.js';
 import { fieldMetadataKind, type FieldMetadataKind } from './metadata-runtime.js';
+import { choiceOptionPaths, expressionType } from './navigation.js';
 
 function mergeMetadataKinds(
   left: FieldMetadataKind | undefined,
@@ -46,7 +51,19 @@ export function expressionMetadataKind(
       return isAttribute(feature) ? fieldMetadataKind(feature) : undefined;
     }
     case 'RosettaImplicitVariable': {
-      const operation = AstUtils.getContainerOfType(expr, isInlineFunction)?.$container;
+      const owner = AstUtils.getContainerOfType(expr, (node) => isInlineFunction(node) || isSwitchCaseOrDefault(node));
+      const operation = owner?.$container;
+      if (isSwitchCaseOrDefault(owner) && isSwitchOperation(operation)) {
+        const inputType = expressionType(operation.argument);
+        const target = owner.guard?.referenceGuard?.ref;
+        if (
+          isChoice(inputType) &&
+          (isData(target) || isChoice(target)) &&
+          !choiceOptionPaths(inputType, target).some((path) => path.length === 0)
+        )
+          return undefined;
+        return expressionMetadataKind(operation.argument, next);
+      }
       return operation && 'argument' in operation ? expressionMetadataKind(operation.argument, next) : undefined;
     }
     case 'RosettaSuperCall': {

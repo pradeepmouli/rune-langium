@@ -1215,12 +1215,28 @@ export function transpileToZonedDateTime(expr: RosettaExpression, ctx: Expressio
 /** Select a declared switch branch and bind its implicit item. */
 export function transpileSwitch(expr: RosettaExpression, ctx: ExpressionTranspilerContext): string {
   const kind = ctx.preserveMetadata ? expressionMetadataKind(expr) : undefined;
+  const argument = isSwitchOperation(expr) ? expr.argument : undefined;
+  const selectorKind = ctx.emitMode.startsWith('ts-') ? expressionMetadataKind(argument) : undefined;
+  const selectorMany = expressionIsMany(argument);
   const result = renderSwitchExpression(expr, {
     selfName: ctx.selfName,
+    ...(selectorKind
+      ? {
+          selector: {
+            name: freshLocal(ctx, '__switchSource'),
+            unwrap: (selector: string) => unwrapMetadata(selector, selectorMany)
+          }
+        }
+      : {}),
     renderExpression: (node, options) => {
-      if (!options?.selfName) return transpileExpression(node, { ...ctx, preserveMetadata: false });
+      if (!options?.selfName)
+        return transpileExpression(node, { ...ctx, preserveMetadata: node === argument && !!selectorKind });
       if (isListLiteral(node) && node.elements.length === 0 && !expressionIsMany(expr)) return 'undefined';
-      return transpileMetadataBranch(node, kind, { ...ctx, selfName: options.selfName });
+      return transpileMetadataBranch(node, kind, {
+        ...ctx,
+        selfName: options.selfName,
+        implicitMetadata: selectorKind && !options.projected ? { kind: selectorKind, many: selectorMany } : undefined
+      });
     },
     report: (message) => ctx.diagnostics.push({ severity: 'error', code: 'unresolved-switch-guard', message })
   });
