@@ -29,16 +29,29 @@ function mergeMetadataKinds(
   return left === 'reference' || right === 'reference' ? 'reference' : (left ?? right);
 }
 
-export function choiceSelectionMetadata(choice: Choice, target: RosettaType): FieldMetadataKind | undefined {
-  return choiceOptionPaths(choice, target).reduce<FieldMetadataKind | undefined>((kind, path) => {
+/** Keep each declared path's representation alongside the common selection kind. */
+export function choiceSelection(choice: Choice, target: RosettaType, exact = false) {
+  const paths = choiceOptionPaths(choice, target, exact).map((path) => {
     let type: RosettaType | undefined = choice;
-    let selected;
-    for (const name of path) {
-      selected = typeFeatures(type).find((feature) => featureName(feature) === name);
-      type = resolveType(selected?.typeCall);
-    }
-    return mergeMetadataKinds(kind, selected && 'annotations' in selected ? fieldMetadataKind(selected) : undefined);
-  }, undefined);
+    return path.map((name) => {
+      const feature = typeFeatures(type).find((feature) => featureName(feature) === name);
+      type = resolveType(feature?.typeCall);
+      return { name, metadataKind: feature && 'annotations' in feature ? fieldMetadataKind(feature) : undefined };
+    });
+  });
+  const metadataKind = paths.reduce<FieldMetadataKind | undefined>(
+    (kind, path) => mergeMetadataKinds(kind, path[path.length - 1]?.metadataKind),
+    undefined
+  );
+  return { paths, metadataKind };
+}
+
+export function choiceSelectionMetadata(
+  choice: Choice,
+  target: RosettaType,
+  exact = false
+): FieldMetadataKind | undefined {
+  return choiceSelection(choice, target, exact).metadataKind;
 }
 
 /** Identify wrappers from declarations, without inspecting ambiguous `value` fields. */
@@ -55,7 +68,7 @@ export function expressionMetadataKind(
       if (!isChoice(input)) return expressionMetadataKind(argument, next);
       const target = expr.type.ref;
       if (!target) return undefined;
-      return choiceSelectionMetadata(input, target);
+      return choiceSelectionMetadata(input, target, true);
     }
     case 'RosettaSymbolReference': {
       const func = AstUtils.getContainerOfType(expr, isRosettaFunction);

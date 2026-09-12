@@ -28,7 +28,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { createRuneDslServices } from '@rune-langium/core';
 import { URI } from 'langium';
 import { generate } from '../src/export.js';
@@ -59,8 +59,16 @@ async function loadCdmDocs() {
 }
 
 describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', () => {
+  let corpus: Awaited<ReturnType<typeof loadCdmDocs>>;
+  let typescriptOutputs: Awaited<ReturnType<typeof generate>>;
+
+  beforeAll(async () => {
+    corpus = await loadCdmDocs();
+    typescriptOutputs = await generate(corpus.docs, { target: 'typescript' });
+  }, 120_000);
+
   it('parses all CDM .rosetta files without errors', async () => {
-    const { docs, fileCount } = await loadCdmDocs();
+    const { docs, fileCount } = corpus;
     expect(fileCount).toBeGreaterThan(100);
 
     const parseErrors = docs.flatMap((d) => d.parseResult.parserErrors);
@@ -71,9 +79,7 @@ describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', 
   }, 60_000);
 
   it('generates TypeScript output for CDM namespaces (documents all error codes)', async () => {
-    const { docs } = await loadCdmDocs();
-
-    const outputs = await generate(docs, { target: 'typescript' });
+    const outputs = typescriptOutputs;
     expect(outputs.length).toBeGreaterThan(0);
 
     const errors = outputs.flatMap((o) => o.diagnostics.filter((d) => d.severity === 'error'));
@@ -100,7 +106,7 @@ describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', 
   }, 60_000);
 
   it('generates Zod output for CDM namespaces (documents all error codes)', async () => {
-    const { docs } = await loadCdmDocs();
+    const { docs } = corpus;
 
     const outputs = await generate(docs, { target: 'zod' });
     expect(outputs.length).toBeGreaterThan(0);
@@ -127,9 +133,7 @@ describe.skipIf(!CDM_EXISTS)('US12: CDM Corpus Cross-Namespace Codegen (T082)', 
   }, 60_000);
 
   it('CDM output includes cross-namespace type references', async () => {
-    const { docs } = await loadCdmDocs();
-
-    const outputs = await generate(docs, { target: 'typescript' });
+    const outputs = typescriptOutputs;
     // CDM uses inheritance across namespaces extensively — at least some outputs
     // must contain exported class/interface declarations.
     const outputsWithTypes = outputs.filter(

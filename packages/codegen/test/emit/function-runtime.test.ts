@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { Temporal } from '@js-temporal/polyfill';
 import { generate } from '../../src/export.js';
+import { mixedChoiceSource, mixedChoiceCases } from '../helpers/mixed-choice.js';
 
 async function compile(source: string | string[], typeAssertions = '') {
   const { RuneDsl } = createRuneDslServices();
@@ -430,6 +431,80 @@ func Optional:
     expect(funcs.Plain!({ value })).toBe('A');
     expect(funcs.Many!({ values: [value, { other: 'B' }] })).toEqual([code]);
     expect(funcs.Pipe!({ value: { value, meta: { scheme: 'urn:outer' } } })).toEqual(code);
+  });
+
+  it('normalizes each matching Choice path before combining mixed metadata selections', async () => {
+    const funcs = await compile(`${mixedChoiceSource}
+func Pick:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+  [metadata reference]
+ set result: value as Payload
+func Plain:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value as Payload
+func Many:
+ inputs: values Outer (0..*)
+ output: result Payload (0..*)
+  [metadata reference]
+ set result: values as Payload
+func Pipe:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value then as Payload
+func Read:
+ inputs: value Outer (0..1)
+ output: result int (0..1)
+ set result: (value as Payload) -> amount
+func SwitchPlain:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value switch Payload then item, default empty
+func SwitchPick:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+  [metadata reference]
+ set result: value switch Payload then item, default empty
+`);
+    for (const { input, wrapped } of mixedChoiceCases) {
+      expect(funcs.Pick!({ value: input })).toEqual(wrapped);
+      expect(funcs.SwitchPick!({ value: input })).toEqual(wrapped);
+      expect(funcs.Plain!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.SwitchPlain!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.Pipe!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.Read!({ value: input })).toEqual(wrapped.value?.amount);
+    }
+    expect(funcs.Many!({ values: mixedChoiceCases.map(({ input }) => input) })).toEqual(
+      mixedChoiceCases.map(({ wrapped }) => wrapped)
+    );
+    for (const value of [
+      undefined,
+      { other: { string: 'unmatched' } },
+      { wrapped: { externalReference: 'missing intermediate' } }
+    ]) {
+      expect(funcs.Pick!({ value })).toBeUndefined();
+      expect(funcs.SwitchPick!({ value })).toBeUndefined();
+    }
+  });
+
+  it('combines raw and field-only Choice paths without reading payload value fields as metadata', async () => {
+    const funcs = await compile(`${mixedChoiceSource.replace('\n Referenced\n', '\n')}
+func Plain:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+ set result: value as Payload
+func Pick:
+ inputs: value Outer (0..1)
+ output: result Payload (0..1)
+  [metadata scheme]
+ set result: value as Payload
+`);
+    for (const { input, wrapped } of mixedChoiceCases.slice(0, 2)) {
+      expect(funcs.Plain!({ value: input })).toEqual(wrapped.value);
+      expect(funcs.Pick!({ value: input })).toEqual({ value: wrapped.value, meta: wrapped.meta ?? {} });
+    }
+    expect(funcs.Pick!({})).toBeUndefined();
   });
 
   it('narrows nested choice arms with as, filters collections, and preserves pipeline inputs', async () => {

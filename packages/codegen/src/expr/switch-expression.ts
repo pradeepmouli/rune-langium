@@ -14,10 +14,9 @@ import {
   type RosettaType,
   type SwitchOperation
 } from '@rune-langium/core';
-import { fieldMetadataKind, unwrapMetadata } from './metadata-runtime.js';
+import { normalizeMetadataExpression, unwrapMetadata } from './metadata-runtime.js';
+import { choiceSelection } from './metadata-type.js';
 import {
-  resolveType,
-  choiceOptionPaths,
   expressionType,
   expressionIsMany,
   featureIsRequired,
@@ -87,7 +86,9 @@ function choiceGuard(value: string, choice: RosettaType): string {
 
 /** Select declared choice arms or narrow a data value using the shared runtime guards. */
 function typeSelection(value: string, inputType: RosettaType, target: RosettaType, exactChoice = false) {
-  const paths = isChoice(inputType) ? choiceOptionPaths(inputType, target, exactChoice) : [];
+  const { paths, metadataKind } = isChoice(inputType)
+    ? choiceSelection(inputType, target, exactChoice)
+    : { paths: [], metadataKind: undefined };
   if (isChoice(inputType) && paths.length === 0) return undefined;
   const narrowedType = resolveTypeAliases(target) ?? target;
   if (exactChoice && isData(inputType) && (!isData(narrowedType) || !typeMatches(narrowedType, inputType)))
@@ -96,16 +97,12 @@ function typeSelection(value: string, inputType: RosettaType, target: RosettaTyp
     paths.length > 0
       ? paths
           .map((path) => {
-            let type: RosettaType | undefined = inputType;
             let result = value;
-            path.forEach((name, index) => {
-              const feature = typeFeatures(type).find((field) => featureName(field) === name);
-              result = renderFeaturePath(result, [name]);
-              if (index < path.length - 1 && feature && 'annotations' in feature && fieldMetadataKind(feature))
-                result = unwrapMetadata(result, false);
-              type = resolveType(feature?.typeCall);
+            path.forEach((step, index) => {
+              result = renderFeaturePath(result, [step.name]);
+              if (index < path.length - 1 && step.metadataKind) result = unwrapMetadata(result, false);
             });
-            return result;
+            return normalizeMetadataExpression(result, path[path.length - 1]?.metadataKind, metadataKind);
           })
           .join(' ?? ')
       : value;

@@ -45,6 +45,17 @@ export function unwrapMetadata(value: string, many: boolean): string {
   return many ? `(${value} ?? []).map((field) => field.value).filter((value) => value != null)` : `(${value})?.value`;
 }
 
+/** Normalize a present expression using declaration metadata rather than payload shape. */
+export function normalizeMetadataExpression(
+  value: string,
+  sourceKind: FieldMetadataKind | undefined,
+  targetKind: FieldMetadataKind | undefined
+): string {
+  if (!targetKind || targetKind === sourceKind) return value;
+  const helper = targetKind === 'reference' ? 'runeToReference' : 'runeToField';
+  return `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${value})`;
+}
+
 /** Whether a data type stores keys or template metadata on the value itself. */
 export function hasTypeMetadata(node: MetadataAnnotatedNode | undefined): boolean {
   return (

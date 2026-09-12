@@ -4,6 +4,7 @@
 import { Temporal } from '@js-temporal/polyfill';
 import { describe, it, expect } from 'vitest';
 import { parseWorkspace, isData, type Data } from '@rune-langium/core';
+import { mixedChoiceSource, mixedChoiceCases } from '../helpers/mixed-choice.js';
 import { RUNTIME_HELPER_JS_SOURCE } from '../../src/helpers.js';
 import { getActiveConditionPredicates } from '../../src/instances/condition-predicates.js';
 
@@ -72,6 +73,24 @@ type Event:
     const event = { start: '2026-01-01T00:30:00+05:30', end: '2025-12-31T20:00:00Z' };
     expect(checks.map((check) => check(event, Temporal))).toEqual([true, true]);
     expect(checks[1]!({ ...event, end: '2025-12-31T18:00:00Z' }, Temporal)).toBe(false);
+  });
+
+  it('reads raw and wrapped Choice selections in JavaScript validators', async () => {
+    const types = await parseSingleNamespaceDataByName(`${mixedChoiceSource}
+type Event:
+ selection Outer (1..1)
+ condition Positive: (selection as Payload) -> amount > 0
+ condition Switched: selection switch Payload then item -> amount > 0, default False
+`);
+    const checks = getActiveConditionPredicates(types.get('Event')!).map(
+      ({ predicate }) => new Function('data', `${RUNTIME_HELPER_JS_SOURCE}\nreturn (${predicate});`)
+    );
+    for (const { input, wrapped } of mixedChoiceCases) {
+      expect(checks.map((check) => check({ selection: input }))).toEqual([!!wrapped.value, !!wrapped.value]);
+    }
+    expect(
+      checks.map((check) => check({ selection: { raw: { payload: { value: 'negative', amount: -1 } } } }))
+    ).toEqual([false, false]);
   });
 
   it('returns an empty array for a type with no conditions', async () => {

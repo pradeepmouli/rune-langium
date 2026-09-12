@@ -74,6 +74,7 @@ import {
   metadataPropertyPath,
   metadataType,
   unwrapMetadata,
+  normalizeMetadataExpression,
   type FieldMetadataKind
 } from './metadata-runtime.js';
 import { renderMetadataOperation } from './metadata-operation.js';
@@ -1100,9 +1101,7 @@ function transpileMetadataBranch(
 ): string {
   const value = node ? transpileExpression(node, ctx) : ctx.selfName;
   const sourceKind = node ? expressionMetadataKind(node) : ctx.implicitMetadata?.kind;
-  if (!kind || kind === sourceKind) return value;
-  const helper = kind === 'reference' ? 'runeToReference' : 'runeToField';
-  return `((value) => value == null ? undefined : ${helper}(value, ${JSON.stringify(sourceKind ?? 'value')}))(${value})`;
+  return normalizeMetadataExpression(value, sourceKind, kind);
 }
 
 /** Use the right operand lazily when the left operand is absent or empty. */
