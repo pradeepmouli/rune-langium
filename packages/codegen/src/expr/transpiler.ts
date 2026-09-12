@@ -898,8 +898,9 @@ export function transpileComparison(expr: RosettaExpression, ctx: ExpressionTran
     };
     const name = expressionType(expr.left)?.name;
     const kind = name && name in temporal ? temporal[name as keyof typeof temporal] : undefined;
+    const parser = kind === 'ZonedDateTime' ? 'runeParseZonedDateTime' : `Temporal.${kind}.from`;
     const comparison = kind
-      ? `Temporal.${kind}.compare(Temporal.${kind}.from(String(a)), Temporal.${kind}.from(String(b))) ${expr.operator} 0`
+      ? `Temporal.${kind}.compare(${parser}(String(a)), ${parser}(String(b))) ${expr.operator} 0`
       : `a ${expr.operator} b`;
     return `runeCompare(${left}, ${right}, (a, b) => ${comparison}, ${JSON.stringify(expr.cardMod ?? 'all')})`;
   }

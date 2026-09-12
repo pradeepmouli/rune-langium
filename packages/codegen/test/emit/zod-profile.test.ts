@@ -74,7 +74,7 @@ describe('Zod LanguageProfile (019 Phase 0.5.2)', () => {
     // import it from the sidecar.
     const fooOutput = outputs.find((o) => o.relativePath === 'foo.zod.ts');
     expect(fooOutput?.content).toContain(
-      `import { runeList, runeSingle, runeBinary, runeCompare, runeOrder, runeDateField, runeDateConstruct, runeToFuncData, runeCheckOneOf, runeCount, runeValueEquals, runeValueKey, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, type RuneFuncData, runeExtendChoice } from './runtime.zod.js';`
+      `import { runeList, runeSingle, runeBinary, runeCompare, runeOrder, runeParseZonedDateTime, runeDateField, runeDateConstruct, runeToFuncData, runeCheckOneOf, runeCount, runeValueEquals, runeValueKey, runeAttrExists, runeToDate, runeToTime, runeToDateTime, runeToZonedDateTime, type RuneFuncData, runeExtendChoice } from './runtime.zod.js';`
     );
     expect(fooOutput?.content).not.toContain('// --- rune-codegen runtime helpers (inlined) ---');
 

@@ -289,6 +289,53 @@ func Reference:
     expect(event.validateCurrent().valid).toBe(true);
   });
 
+  it('reads and compares offset-only zoned inputs without losing their local calendar', async () => {
+    const funcs = await compile(`namespace test.offset
+recordType date { year int month int day int }
+recordType zonedDateTime { date date time time timezone string }
+func Day:
+ inputs: value zonedDateTime (0..1)
+ output: result date (0..1)
+ set result: value -> date
+func Year:
+ inputs: value zonedDateTime (0..1)
+ output: result int (0..1)
+ set result: value -> date -> year
+func Clock:
+ inputs: value zonedDateTime (0..1)
+ output: result time (0..1)
+ set result: value -> time
+func Zone:
+ inputs: value zonedDateTime (0..1)
+ output: result string (0..1)
+ set result: value -> timezone
+func Before:
+ inputs: left zonedDateTime (1..1) right zonedDateTime (1..1)
+ output: result boolean (1..1)
+ set result: left < right
+func Parse:
+ inputs: value string (1..1)
+ output: result zonedDateTime (0..1)
+ set result: value to-zoned-date-time
+`);
+    for (const [value, date, time, zone] of [
+      ['2026-09-11T12:30:00Z', '2026-09-11', '12:30:00', 'UTC'],
+      ['2026-01-01T00:30:00.123+05:30', '2026-01-01', '00:30:00.123', '+05:30'],
+      ['2026-12-31T23:30:00-04:00', '2026-12-31', '23:30:00', '-04:00'],
+      ['2026-07-01T12:00:00-04:00[America/New_York]', '2026-07-01', '12:00:00', 'America/New_York']
+    ]) {
+      expect(funcs.Day!({ value })).toBe(date);
+      expect(funcs.Year!({ value })).toBe(2026);
+      expect(funcs.Clock!({ value })).toBe(time);
+      expect(funcs.Zone!({ value })).toBe(zone);
+      expect(funcs.Day!({ value: funcs.Parse!({ value }) })).toBe(date);
+    }
+    expect(funcs.Day!({})).toBeUndefined();
+    expect(() => funcs.Day!({ value: '2026-02-30T12:00:00Z' })).toThrow();
+    expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T20:00:00Z' })).toBe(true);
+    expect(funcs.Before!({ left: '2026-01-01T00:30:00+05:30', right: '2025-12-31T19:00:00Z' })).toBe(false);
+  });
+
   it('narrows optional values and unwraps metadata collections in validators', async () => {
     const funcs = await compile(`namespace test.validator
 type Values:

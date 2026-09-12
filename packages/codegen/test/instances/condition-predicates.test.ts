@@ -55,6 +55,25 @@ type Event:
     expect(check({ date: '2025-09-12' }, Temporal)).toBe(false);
   });
 
+  it('uses offset-aware calendar reads and comparisons in JavaScript predicates', async () => {
+    const types = await parseSingleNamespaceDataByName(`namespace test.offset
+recordType date {year int month int day int}
+recordType zonedDateTime {date date time time timezone string}
+type Event:
+ start zonedDateTime (1..1)
+ end zonedDateTime (1..1)
+ condition Current: start -> date -> year = 2026
+ condition Ordered: start < end
+`);
+    const predicates = getActiveConditionPredicates(types.get('Event')!);
+    const checks = predicates.map(
+      ({ predicate }) => new Function('data', 'Temporal', `${RUNTIME_HELPER_JS_SOURCE}\nreturn (${predicate});`)
+    );
+    const event = { start: '2026-01-01T00:30:00+05:30', end: '2025-12-31T20:00:00Z' };
+    expect(checks.map((check) => check(event, Temporal))).toEqual([true, true]);
+    expect(checks[1]!({ ...event, end: '2025-12-31T18:00:00Z' }, Temporal)).toBe(false);
+  });
+
   it('returns an empty array for a type with no conditions', async () => {
     const dataByName = await parseSingleNamespaceDataByName(`
 namespace test.conditions

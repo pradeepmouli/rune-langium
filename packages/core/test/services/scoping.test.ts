@@ -6,6 +6,7 @@ import {
   parse,
   parseWorkspace,
   isRosettaFunction,
+  isRosettaSymbolReference,
   getFunctionSignature,
   createRuneDslServices
 } from '../../src/index.js';
@@ -120,6 +121,62 @@ func Compute(kind: Kind -> Cash):
     expect(getFunctionSignature(overload)).toBe(base);
     expect(overload.dispatchAttribute?.ref).toBe(base.inputs[0]);
     expect(overload.operations[0]?.assignRoot.ref).toBe(base.output);
+  });
+
+  it('retains overloads and alias candidates while deduplicating simple and qualified exports', async () => {
+    const { RuneDsl } = createRuneDslServices();
+    const sources = [
+      `namespace builtins
+basicType int`,
+      `namespace split
+enum Kind:
+ Cash
+func Compute:
+ inputs: kind Kind (1..1) amount int (1..1)
+ output: result int (1..1)
+ set result: amount`,
+      `namespace split
+func Compute(kind: Kind -> Cash):
+ set result: amount + 1`,
+      `namespace other
+func Compute:
+ inputs: amount int (1..1)
+ output: result int (1..1)
+ set result: amount`,
+      `namespace split
+import split.* as pick
+import other.* as pick
+func Call:
+ inputs: kind Kind (1..1)
+ output: result int (1..1)
+ set result: Compute(kind, 1)`
+    ];
+    const documents = sources.map((source, i) =>
+      RuneDsl.shared.workspace.LangiumDocumentFactory.fromString<RosettaModel>(
+        source,
+        URI.parse(`inmemory:///overloads-${i}.rosetta`)
+      )
+    );
+    await RuneDsl.shared.workspace.DocumentBuilder.build(documents, { validation: true });
+    expect(documents.flatMap((doc) => doc.parseResult.parserErrors)).toEqual([]);
+    const caller = documents.at(-1)!.parseResult.value.elements.find(isRosettaFunction)!;
+    const expression = caller.operations[0]!.expression!;
+    expect(isRosettaSymbolReference(expression)).toBe(true);
+    if (!isRosettaSymbolReference(expression)) throw new Error('Expected function call');
+    const scope = RuneDsl.references.ScopeProvider.getScope({
+      container: expression,
+      property: 'symbol',
+      reference: expression.symbol
+    });
+    const identity = (description: import('langium').AstNodeDescription) =>
+      `${description.documentUri}#${description.path}`;
+    const simple = scope.getElements('Compute').toArray();
+    expect(simple).toHaveLength(3);
+    expect(new Set(simple.map(identity)).size).toBe(3);
+    expect(identity(simple[0]!)).toBe(identity(scope.getElement('Compute')!));
+    expect(scope.getElements('split.Compute').toArray()).toHaveLength(2);
+    expect(scope.getElements('pick.Compute').toArray().map(identity)).toEqual(simple.map(identity));
+    expect(scope.getElements('missing').toArray()).toEqual([]);
   });
 
   describe('Feature call scope (T067, T077)', () => {

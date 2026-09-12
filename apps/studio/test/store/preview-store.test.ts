@@ -528,10 +528,16 @@ describe('preview-store dispatchValidate/receiveValidateResult', () => {
     usePreviewStore.getState().dispatchValidate('alpha.Trade', { value: 'ab' });
     const secondRequestId = postMessage.mock.calls[1]![0].requestId as string;
 
+    usePreviewStore.getState().receiveValidateResult(firstRequestId, []);
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')?.validationPending).toBe(true);
     usePreviewStore.getState().receiveValidateResult(secondRequestId, []);
     usePreviewStore.getState().receiveValidateResult(firstRequestId, [{ path: 'value', message: 'stale' }]);
 
-    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({ errors: {}, valid: true });
+    expect(usePreviewStore.getState().samples.get('alpha.Trade')).toMatchObject({
+      errors: {},
+      valid: true,
+      validationPending: false
+    });
   });
 
   it('updateSampleValues clears prior errors/valid immediately so stale errors never linger against new values', () => {

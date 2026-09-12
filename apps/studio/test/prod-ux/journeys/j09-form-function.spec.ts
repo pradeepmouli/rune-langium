@@ -49,8 +49,9 @@ test.describe('J9 — Form preview & function execution', () => {
 
       await quantityField.fill('2');
       await quantityField.blur();
+      // This summary is shown only after the latest worker validation completes.
+      await expect(formPanel.getByText('Valid sample', { exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(alert).toHaveCount(0);
-      await expect(formPanel.getByText('Valid sample', { exact: true })).toBeVisible();
       await evidence.checkpoint('scratch-form-preview');
 
       if (curatedFormRenderMs > 5000 || scratchFormRenderMs > 5000) {

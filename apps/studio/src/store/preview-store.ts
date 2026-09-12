@@ -46,6 +46,7 @@ export interface PreviewSampleState {
   errors: Record<string, string>;
   valid: boolean;
   validated: boolean;
+  validationPending?: boolean;
   updatedAt: number;
 }
 
@@ -411,14 +412,10 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     set({ samples });
   },
 
-  // Updates values immediately (optimistic — no wait for the worker) and
-  // clears errors/valid to the "nothing wrong yet" state, so a still-in-
-  // flight validate response for the PREVIOUS values can never be
-  // displayed against these NEW values once it arrives late (see
-  // receiveValidateResult's staleness guard for the complementary half of
-  // this invariant). The real errors/valid land asynchronously via
-  // dispatchValidate → receiveValidateResult.
+  // Edits invalidate previous diagnostics; only the latest worker response
+  // can mark the new values as validated.
   updateSampleValues(targetId, values, validated) {
+    latestValidateRequestForTarget.delete(targetId);
     const samples = new Map(get().samples);
     samples.set(targetId, {
       targetId,
@@ -427,6 +424,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
       errors: {},
       valid: true,
       validated,
+      validationPending: validated,
       updatedAt: Date.now()
     });
     const currentStatus = get().status;
@@ -461,7 +459,7 @@ export const usePreviewStore = create<PreviewStore>((set, get) => ({
     const errors: Record<string, string> = Object.fromEntries(diagnostics.map((d) => [d.path, d.message]));
     const valid = diagnostics.length === 0;
     const samples = new Map(get().samples);
-    samples.set(targetId, { ...sample, errors, valid });
+    samples.set(targetId, { ...sample, errors, valid, validationPending: false });
     const currentStatus = get().status;
     const nextStatus: PreviewStatus =
       currentStatus.state === 'stale' || currentStatus.state === 'unavailable'

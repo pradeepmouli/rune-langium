@@ -15,6 +15,7 @@
  * line so the SC-008 observability claim is verifiable.
  */
 
+import { isOriginAllowed } from '@rune-langium/worker-core';
 import type { Env } from './index.js';
 import { CURATED_MODEL_IDS } from '@rune-langium/curated-schema';
 import { logger, logRead } from './log.js';
@@ -22,13 +23,9 @@ import { logger, logRead } from './log.js';
 const ALLOWED_MODEL_IDS = new Set<string>(CURATED_MODEL_IDS);
 const PATH_RE = /^\/curated\/([^/]+)\/(.+)$/;
 
-const DEV_ORIGINS = ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:4321'];
-
 function resolveOrigin(req: Request, env: Env): string {
   const reqOrigin = req.headers.get('Origin') ?? '';
-  if (reqOrigin === env.ALLOWED_ORIGIN) return reqOrigin;
-  if (DEV_ORIGINS.includes(reqOrigin)) return reqOrigin;
-  return env.ALLOWED_ORIGIN;
+  return isOriginAllowed(reqOrigin, env.ALLOWED_ORIGIN) ? reqOrigin : env.ALLOWED_ORIGIN.split(',')[0]!.trim();
 }
 
 export async function handleCuratedRead(req: Request, env: Env): Promise<Response> {

@@ -177,6 +177,7 @@ export const RUNE_HELPER_NAMES = [
   'runeBinary',
   'runeCompare',
   'runeOrder',
+  'runeParseZonedDateTime',
   'runeDateField',
   'runeDateConstruct',
   'runeToFuncData',

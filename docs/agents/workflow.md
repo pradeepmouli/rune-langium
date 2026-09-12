@@ -112,3 +112,5 @@ entry is preserved and requires `rust-analyzer` on PATH.
 After changing the config, exit and relaunch Copilot CLI, then run `/lsp` to
 check status. This config does not add an LSP tool to an already-running Codex
 session. The native server can also be queried over standard LSP stdio.
+
+Curated publication changes: run `node --test scripts/upload-serialized-artifacts.test.mjs`. The tests use a temporary artifact tree and mocked uploads to verify dependency ordering and failure behavior without writing to R2.

@@ -72,6 +72,9 @@ jobs:
         run: pnpm run format:check
         continue-on-error: true
 
+      - name: Test curated publication ordering
+        run: node --test scripts/upload-serialized-artifacts.test.mjs
+
       - name: Test
         run: pnpm run test
 

@@ -29,14 +29,22 @@ upload_object() {
   "${WRANGLER[@]}" r2 object put "$BUCKET/$key" --file "$file" --content-type "$content_type" --remote
 }
 
-for model_dir in "$ARTIFACT_DIR"/*/; do
+shopt -s nullglob
+model_dirs=("$ARTIFACT_DIR"/*/)
+if (( ${#model_dirs[@]} == 0 )); then
+  echo "No artifacts found in $ARTIFACT_DIR" >&2
+  exit 1
+fi
+
+# Prepare every manifest before uploading; failures must leave published pointers alone.
+for model_dir in "${model_dirs[@]}"; do
   model_id=$(basename "$model_dir")
   artifact_file="$model_dir/latest.serialized.json.gz"
   meta_file="$model_dir/artifact-meta.json"
 
   if [[ ! -f "$artifact_file" || ! -f "$meta_file" ]]; then
-    echo "⚠ Skipping $model_id: missing artifact or meta file"
-    continue
+    echo "Missing artifact or meta file for $model_id" >&2
+    exit 1
   fi
 
   echo "=== $model_id ==="
@@ -48,23 +56,12 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
   size_bytes=$(jq -r '.sizeBytes' "$meta_file")
   doc_count=$(jq -r '.documentCount' "$meta_file")
 
-  # Upload versioned + latest artifact
-  echo "  Uploading artifact ($size_bytes bytes, $doc_count documents)..."
-  upload_object "curated/$model_id/artifacts/$version.serialized.json.gz" "$artifact_file" application/gzip
-  upload_object "curated/$model_id/latest.serialized.json.gz" "$artifact_file" application/gzip
-
-  # Upload per-namespace artifacts (if the ns/ dir was built)
-  ns_dir="$model_dir/ns"
-  if [[ -d "$ns_dir" ]]; then
-    ns_count=0
-    for ns_file in "$ns_dir"/*.json.gz; do
-      [[ -e "$ns_file" ]] || continue  # guard: skip if glob matched nothing
-      ns_name=$(basename "$ns_file")
-      upload_object "curated/$model_id/artifacts/$version/ns/$ns_name" "$ns_file" application/gzip
-      ns_count=$((ns_count + 1))
-    done
-    echo "  Uploaded $ns_count per-namespace artifact(s)"
-  fi
+  while IFS= read -r dependency; do
+    if [[ ! -f "$ARTIFACT_DIR/$dependency/artifact-meta.json" || ! -f "$ARTIFACT_DIR/$dependency/latest.serialized.json.gz" ]]; then
+      echo "Missing dependency bundle $dependency required by $model_id" >&2
+      exit 1
+    fi
+  done < <(jq -r '.dependencies // {} | keys[]' "$meta_file")
 
   # Fetch current manifest, patch in the artifact reference + namespaces, re-upload
   echo "  Patching manifest.json..."
@@ -93,10 +90,24 @@ for model_dir in "$ARTIFACT_DIR"/*/; do
       .schemaVersion = 2 | .namespaces = $meta[0].namespaces
     else . end' > "$manifest_file"
 
-  upload_object "curated/$model_id/manifest.json" "$manifest_file" 'application/json; charset=utf-8'
-
-  echo "  ✓ Done"
 done
 
-echo ""
+# Upload all versioned blobs across the dependency set before advancing any pointer.
+for model_dir in "${model_dirs[@]}"; do
+  model_id=$(basename "$model_dir")
+  version=$(jq -r '.version' "$model_dir/artifact-meta.json")
+  upload_object "curated/$model_id/artifacts/$version.serialized.json.gz" "$model_dir/latest.serialized.json.gz" application/gzip
+  for ns_file in "$model_dir/ns/"*.json.gz; do
+    upload_object "curated/$model_id/artifacts/$version/ns/$(basename "$ns_file")" "$ns_file" application/gzip
+  done
+done
+
+# Each pointer write is atomic in R2; the group of manifests is not a transaction.
+for model_dir in "${model_dirs[@]}"; do
+  model_id=$(basename "$model_dir")
+  upload_object "curated/$model_id/latest.serialized.json.gz" "$model_dir/latest.serialized.json.gz" application/gzip
+  upload_object "curated/$model_id/manifest.json" "$TMP_DIR/$model_id.json" 'application/json; charset=utf-8'
+  echo "  Published $model_id"
+done
+
 echo "All artifacts uploaded."

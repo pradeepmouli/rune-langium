@@ -90,46 +90,38 @@ class AliasResolvingScope implements Scope {
   ) {}
 
   getElement(name: string): AstNodeDescription | undefined {
-    if (!name.includes('.')) {
-      const explicit = this.imports.get(name);
-      if (explicit) {
-        const result = this.base.getElement(explicit);
-        if (result) return result;
-      }
-      for (const namespace of this.namespaces) {
-        const result = this.base.getElement(`${namespace}.${name}`);
-        if (result) return result;
-      }
+    for (const candidate of this.candidateNames(name)) {
+      const result = this.base.getElement(candidate);
+      if (result) return result;
     }
-    const direct = this.base.getElement(name);
-    if (direct) return direct;
-    return this.resolveViaAlias(name, (expanded) => this.base.getElement(expanded));
+    return undefined;
   }
 
   getElements(name: string): import('langium').Stream<AstNodeDescription> {
-    const result = this.getElement(name);
-    return stream(result ? [result] : []);
+    return stream(this.candidateNames(name))
+      .flatMap((candidate) => this.base.getElements(candidate))
+      .distinct((description) => JSON.stringify([description.documentUri.toString(), description.path]));
   }
 
   getAllElements(): import('langium').Stream<AstNodeDescription> {
     return this.base.getAllElements();
   }
 
-  private resolveViaAlias(
-    name: string,
-    lookup: (expanded: string) => AstNodeDescription | undefined
-  ): AstNodeDescription | undefined {
-    const dot = name.indexOf('.');
-    if (dot === -1) return undefined;
-    const prefix = name.slice(0, dot);
-    const rest = name.slice(dot + 1);
-    const namespaces = this.aliasMap.get(prefix);
-    if (!namespaces) return undefined;
-    for (const ns of namespaces) {
-      const result = lookup(`${ns}.${rest}`);
-      if (result) return result;
+  private candidateNames(name: string): Set<string> {
+    const candidates = new Set<string>();
+    if (!name.includes('.')) {
+      const explicit = this.imports.get(name);
+      if (explicit) candidates.add(explicit);
+      for (const namespace of this.namespaces) candidates.add(`${namespace}.${name}`);
     }
-    return undefined;
+    candidates.add(name);
+    const dot = name.indexOf('.');
+    if (dot !== -1) {
+      const prefix = name.slice(0, dot);
+      const rest = name.slice(dot + 1);
+      for (const namespace of this.aliasMap.get(prefix) ?? []) candidates.add(`${namespace}.${rest}`);
+    }
+    return candidates;
   }
 }
 
