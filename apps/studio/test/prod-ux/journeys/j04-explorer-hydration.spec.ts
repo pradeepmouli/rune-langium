@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { expectPopulatedAttributes } from '../readiness.js';
 
 import {
   ANCHOR_ENUM as ENUM_NODE_ID,
@@ -48,18 +49,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     page,
     evidence
   }) => {
-    // Regression for fix/source-parse-recovery (resolveNodeFileRef, commit f6a64029).
-    //
-    // Before the fix: the hydration relink effect captured a stale resolveNodeFile
-    // closure. On the first navigation to an unvisited namespace, linkDocument
-    // received the synthetic ${bundleId}/${namespace} path instead of the real
-    // deferred-model path, returned newModels:[], and Inspector stayed as a bare
-    // header stub with no members.
-    //
-    // This test navigates directly to cdm.base.staticdata.party.Counterparty
-    // without first visiting any other namespace, then asserts that the Inspector
-    // shows a populated "Members (N)" list. An empty inspector would mean the bug
-    // regressed.
+    // First navigation must hydrate attributes without visiting another namespace first.
     await loadCdm(page);
     const centerStack = page.getByTestId('center-stack');
 
@@ -75,10 +65,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     await page.getByRole('button', { name: 'Inspector' }).click();
     await expect(centerStack.getByRole('heading', { name: 'Counterparty' })).toBeVisible({ timeout: 10_000 });
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
-    // /Members \([1-9]/ ensures at least one member — OtherForm's guard
-    // `{members.length > 0 && ...}` means "Members (0)" is never rendered, but
-    // being explicit here documents the intent clearly.
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expectPopulatedAttributes(centerStack);
     await evidence.checkpoint('hydration-complete');
   });
 
@@ -113,7 +100,7 @@ test.describe('J04 — explorer navigation & on-demand hydration', () => {
     // The spinner clears once hydration completes and members populate.
     const centerStack = page.getByTestId('center-stack');
     await page.getByRole('button', { name: 'Inspector' }).click();
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 30_000 });
+    await expectPopulatedAttributes(centerStack);
     await expect(page.getByTestId('rune-node-hydrating-spinner')).toHaveCount(0);
     await evidence.checkpoint('hydration-complete');
   });

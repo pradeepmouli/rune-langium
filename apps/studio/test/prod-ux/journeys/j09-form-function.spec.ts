@@ -15,100 +15,40 @@ test.describe('J9 — Form preview & function execution', () => {
       await page.getByTestId('rail-explore').click();
       await expect(page.getByTestId('explore-workbench')).toBeVisible({ timeout: 20000 });
 
-      // Navigate to ANCHOR_DATA (cdm.base.datetime.BusinessCenters), matching
-      // J04's namespace-search + ns-type-nav pattern.
       const namespaceSearch = page.getByTestId('namespace-search');
       await namespaceSearch.fill('BusinessCenters');
       const curatedFormStartedAt = Date.now();
       await page.getByTestId(`ns-type-nav-${ANCHOR_DATA}`).click();
-      // "Form" is a tab (role="tab"), not a button, and is already the
-      // default-active sub-tab of the right-hand dock panel on node
-      // selection (confirmed live this session) — no click needed.
-      await expect(page.getByTestId('panel-formPreview')).toBeVisible({ timeout: 20000 });
-      const curatedFormRenderMs = Date.now() - curatedFormStartedAt;
-
-      // FINDING (this session): ANCHOR_DATA's every attribute (businessCenter,
-      // commodityBusinessCalendar, businessCentersReference) is optional
-      // (0..*/0..*/0..1) and either an unresolved Data reference (kind
-      // 'unknown', never renders a FieldError) or an Enum select (Radix Select
-      // only offers valid values — there is no way to type an "invalid" one).
-      // The type's own `condition BusinessCentersChoice: required choice ...`
-      // cross-field rule is a Rune business-rule condition, not a Zod
-      // structural constraint — apps/studio/src/services/preview-validator.ts's
-      // validatePreviewSample only enforces per-field required/kind rules plus
-      // Choice-arm presence (schema.kind === 'choice' or schema.choiceArmPaths,
-      // neither of which apply to a plain `type` with a `condition` block), so
-      // this schema can NEVER produce a role="alert" FieldError regardless of
-      // what's filled in. The panel does render its own "Limited preview"
-      // schema-level status instead (schema.status === 'unsupported'), which
-      // this asserts. The full invalid→alert→valid round trip is exercised
-      // below on the scratch type, which — unlike ANCHOR_DATA — has a real
-      // required scalar attribute; per the harness's own curated/scratch
-      // disambiguation convention (see the J9 spec's "Curated-side failures
-      // classify as corpus-drift candidates" note), a scratch-side failure
-      // would be the unambiguous regression signal here.
       const formPanel = page.getByTestId('panel-formPreview');
-      await expect(formPanel.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible();
-      await expect(page.getByText('Limited preview', { exact: false })).toBeVisible();
-      evidence.softFinding(
-        'KI-anchor-data-no-field-validation',
-        'ANCHOR_DATA (cdm.base.datetime.BusinessCenters) has no required scalar/enum field and no choice-arm ' +
-          'condition enforcement in the client preview validator, so it cannot produce a role="alert" field ' +
-          'validation message; the invalid/valid round trip is only exercised on the scratch type below.'
-      );
+      await expect(formPanel.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible({ timeout: 30_000 });
+      await expect(formPanel.getByText('Generating preview', { exact: false })).toHaveCount(0);
+      const curatedFormRenderMs = Date.now() - curatedFormStartedAt;
       await evidence.checkpoint('curated-form-preview');
 
-      // Attribute name deliberately NOT 'label' — that's a reserved keyword in
-      // the Rune DSL grammar (`[label "..."]` LabelAnnotation syntax in
-      // rune-dsl.langium), so `label string (1..1)` is a genuine parse error,
-      // not a form-preview issue (confirmed this session: it left the type
-      // permanently stuck on "Generating preview…" with a real "1 err" — a
-      // finding worth recording in case another attribute name collides with
-      // one of this grammar's other reserved words: add/alias/all/and/
-      // annotation/any/as/basicType/body/choice/condition/contains/corpus/
-      // count/default/definition/disjoint/displayName/distinct/else/empty/
-      // enum/exists/extends/extract/filter/first/flatten/for/from/func/
-      // function/hint/if/import/in/inputs/is/item/join/last/library/mapper/
-      // maps/max/merge/meta/metaType/min/multiple/namespace/only/optional/or/
-      // output/override/path/pattern/prefix/rationale/recordType/reduce/
-      // report/required/reverse/root/rule/scope/segment/set/single/sort/
-      // source/standard/sum/super/switch/synonym/tag/then/to/type/typeAlias/
-      // using/value/version/when/with).
+      // Generated Zod accepts empty strings; a fractional int is structurally invalid.
       await authorScratchType(page, {
         name: 'ScratchWidget',
         namespace: 'scratch.j9form',
-        attributes: [{ name: 'title', typeName: 'string', cardinality: '(1..1)' }]
+        attributes: [{ name: 'quantity', typeName: 'int', cardinality: '(1..1)' }]
       });
-      // authorScratchType only asserts the nav row is visible — it doesn't
-      // navigate into it (matches J8's established pattern: the caller clicks
-      // ns-type-nav-<fqn> itself after authoring).
       const scratchFormStartedAt = Date.now();
       await page.getByTestId('ns-type-nav-scratch.j9form.ScratchWidget').click();
-      await expect(page.getByTestId('panel-formPreview')).toBeVisible({ timeout: 20000 });
+      const quantityField = formPanel.getByLabel('Quantity', { exact: true });
+      await expect(quantityField).toBeVisible({ timeout: 20_000 });
       const scratchFormRenderMs = Date.now() - scratchFormStartedAt;
 
-      // ScratchWidget.title is required (1..1) — leaving it empty and blurring
-      // triggers apps/studio/src/services/preview-validator.ts's
-      // `z.string().trim().min(1, '${field.label} is required')`, rendered by
-      // FormPreviewPanel.tsx's FieldError as <p role="alert" class="... text-
-      // destructive">. `role=alert` alone is ambiguous — the panel's own
-      // schema-level status paragraph (`role={status.state === 'invalid' ?
-      // 'alert' : 'status'}`) ALSO becomes role="alert" once the sample is
-      // invalid, and dockview renders its own empty live-region alert div —
-      // scope to FieldError's distinguishing `text-destructive` class
-      // (confirmed live this session: exactly 3 role="alert" elements exist
-      // once the sample goes invalid).
-      const titleField = page.getByLabel('Title', { exact: true });
-      await titleField.click();
-      await titleField.blur();
-      const alert = page.locator('p.text-destructive[role="alert"]');
-      await expect(alert).toBeVisible({ timeout: 10000 });
-      await expect(alert).toContainText(/required/i);
+      await quantityField.fill('1.5');
+      await quantityField.blur();
+      const alert = formPanel.locator('p.text-destructive[role="alert"]');
+      await expect(alert).toBeVisible({ timeout: 10_000 });
+      await expect(alert).toContainText(/integer|int/i);
+      await expect(formPanel.getByText('Invalid sample', { exact: false })).toBeVisible();
+      await evidence.checkpoint('scratch-form-invalid');
 
-      // A valid value clears the alert.
-      await titleField.fill('Widget A');
-      await titleField.blur();
+      await quantityField.fill('2');
+      await quantityField.blur();
       await expect(alert).toHaveCount(0);
+      await expect(formPanel.getByText('Valid sample', { exact: true })).toBeVisible();
       await evidence.checkpoint('scratch-form-preview');
 
       if (curatedFormRenderMs > 5000 || scratchFormRenderMs > 5000) {

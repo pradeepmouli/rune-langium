@@ -83,6 +83,18 @@ and runs the `prod-ux-review` skill against it (see that skill's `SKILL.md`
 for the review procedure); it files a GitHub issue when it finds a genuine
 regression, as distinct from a corpus-drift or known-issue finding.
 
+For focused triage, pass Playwright's `--grep` and `--reporter=list` options
+to `test:prod-ux`. Archive the current report first: each run resets its
+manifest, including a filtered run. Review screenshots and failure snapshots
+alongside assertions before attributing a timeout to product behavior.
+
+Inspector hydration checks share `test/prod-ux/readiness.ts` and require a
+populated **Attributes (N)** group. Accessibility sweeps use the same module
+to wait for finite entrance animations before scanning; perpetual spinners
+remain active and serious/critical contrast violations still fail. Form
+validation checks use generated Zod semantics: a fractional `int` is invalid,
+while an empty `string` is valid unless the model adds a length constraint.
+
 ### Operational note
 
 If we want a published status page later, the clean next step is to have

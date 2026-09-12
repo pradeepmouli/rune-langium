@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Pradeep Mouli
 
 import { checkout as test, expect, loadCdm } from '../fixtures.js';
+import { expectPopulatedAttributes } from '../readiness.js';
 import { ANCHOR_DATA } from '../anchors.js';
 
 test.describe('J05 — Inspector pane', () => {
@@ -23,7 +24,7 @@ test.describe('J05 — Inspector pane', () => {
     await expect(centerStack.getByRole('heading', { name: 'BusinessCenters' })).toBeVisible();
     await expect(centerStack.getByText('cdm.base.datetime', { exact: true })).toBeVisible();
     await expect(centerStack.getByText('Reference Only', { exact: true })).toBeVisible();
-    await expect(centerStack.getByText(/Members \([1-9]/)).toBeVisible({ timeout: 15000 });
+    await expectPopulatedAttributes(centerStack);
     await evidence.checkpoint('inspector-populated');
   });
 });
